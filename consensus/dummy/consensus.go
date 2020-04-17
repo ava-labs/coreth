@@ -1,12 +1,16 @@
+// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package dummy
 
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"runtime"
 	"time"
+
+	"golang.org/x/crypto/sha3"
 
 	myparams "github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/go-ethereum/common"

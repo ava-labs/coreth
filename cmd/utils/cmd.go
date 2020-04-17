@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+
 // Copyright 2014 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
@@ -27,15 +37,15 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/ava-labs/coreth/internal/debug"
+	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/go-ethereum/common"
 	"github.com/ava-labs/go-ethereum/core"
 	"github.com/ava-labs/go-ethereum/core/rawdb"
 	"github.com/ava-labs/go-ethereum/core/types"
 	"github.com/ava-labs/go-ethereum/crypto"
 	"github.com/ava-labs/go-ethereum/ethdb"
-	"github.com/ava-labs/coreth/internal/debug"
 	"github.com/ava-labs/go-ethereum/log"
-	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/go-ethereum/rlp"
 )
 

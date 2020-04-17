@@ -1,8 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package main
 
 import (
 	"crypto/rand"
 	"fmt"
+	"math/big"
+
 	"github.com/ava-labs/coreth"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
@@ -11,7 +16,6 @@ import (
 	"github.com/ava-labs/go-ethereum/core/types"
 	"github.com/ava-labs/go-ethereum/log"
 	"github.com/ava-labs/go-ethereum/params"
-	"math/big"
 )
 
 func checkError(err error) {

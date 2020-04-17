@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+
 // Copyright 2014 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
@@ -27,18 +37,18 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/elastic/gosigar"
 	"github.com/ava-labs/coreth/cmd/utils"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/internal/debug"
+	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/go-ethereum/common"
 	"github.com/ava-labs/go-ethereum/console"
-	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/go-ethereum/eth/downloader"
 	"github.com/ava-labs/go-ethereum/ethclient"
-	"github.com/ava-labs/coreth/internal/debug"
 	"github.com/ava-labs/go-ethereum/les"
 	"github.com/ava-labs/go-ethereum/log"
 	"github.com/ava-labs/go-ethereum/metrics"
-	"github.com/ava-labs/coreth/node"
+	"github.com/elastic/gosigar"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -380,11 +390,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
-        etherBase := &common.Address {
-            1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        }
-        ethereum.SetEtherbase(*etherBase)
+		etherBase := &common.Address{
+			1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		}
+		ethereum.SetEtherbase(*etherBase)
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerLegacyGasPriceFlag.Name)
 		if ctx.IsSet(utils.MinerGasPriceFlag.Name) {

@@ -1,3 +1,6 @@
+// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package main
 
 import (
@@ -5,6 +8,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go/build"
+	"math/big"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
 	"github.com/ava-labs/coreth"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
@@ -14,13 +25,6 @@ import (
 	"github.com/ava-labs/go-ethereum/crypto"
 	"github.com/ava-labs/go-ethereum/log"
 	"github.com/ava-labs/go-ethereum/params"
-	"go/build"
-	"math/big"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-	"time"
 )
 
 func checkError(err error) {
