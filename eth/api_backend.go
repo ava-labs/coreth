@@ -170,7 +170,7 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	err := b.eth.txPool.AddLocal(signedTx)
+	err := b.eth.txPool.AddRemote(signedTx)
 	select {
 	case b.eth.txSubmitChan <- struct{}{}:
 	default:
