@@ -639,6 +639,12 @@ func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
 	return status
 }
 
+// SaveBlock persists a block to the database.
+// Right now this is a no-op and is only here to satisfy the ChainVM interface.
+func (vm *VM) SaveBlock(snowman.Block) error {
+	return nil
+}
+
 func (vm *VM) getBlock(id ids.ID) *Block {
 	if blockIntf, ok := vm.blockCache.Get(id); ok {
 		return blockIntf.(*Block)

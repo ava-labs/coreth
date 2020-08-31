@@ -12,8 +12,6 @@ import (
 
 	"github.com/ava-labs/gecko/ids"
 	"github.com/ava-labs/gecko/snow/choices"
-	"github.com/ava-labs/gecko/snow/consensus/snowman"
-	"github.com/ava-labs/gecko/vms/components/missing"
 )
 
 // Block implements the snowman.Block interface
@@ -62,14 +60,19 @@ func (b *Block) Status() choices.Status {
 }
 
 // Parent implements the snowman.Block interface
-func (b *Block) Parent() snowman.Block {
+func (b *Block) Parent() ids.ID {
+	return ids.NewID(b.ethBlock.ParentHash())
+}
+
+// ParentBlock returns [b]'s parent
+func (b *Block) parentBlock() (*Block, error) {
 	parentID := ids.NewID(b.ethBlock.ParentHash())
 	if block := b.vm.getBlock(parentID); block != nil {
 		b.vm.ctx.Log.Verbo("Parent(%s) has status: %s", parentID, block.Status())
-		return block
+		return block, nil
 	}
 	b.vm.ctx.Log.Verbo("Parent(%s) has status: %s", parentID, choices.Unknown)
-	return &missing.Block{BlkID: parentID}
+	return nil, fmt.Errorf("couldn't find block %s", parentID)
 }
 
 // Verify implements the snowman.Block interface
@@ -92,19 +95,25 @@ func (b *Block) Verify() error {
 			if b.ethBlock.Hash() == vm.genesisHash {
 				return nil
 			}
-			p := b.Parent()
+			p, err := b.parentBlock()
+			if err != nil {
+				return fmt.Errorf("couldn't get %s, parent of %s", b.Parent(), p.ID())
+			}
 			path := []*Block{}
 			inputs := new(ids.Set)
 			for {
-				if p.Status() == choices.Accepted || p.(*Block).ethBlock.Hash() == vm.genesisHash {
+				if p.Status() == choices.Accepted || p.ethBlock.Hash() == vm.genesisHash {
 					break
 				}
 				if ret, hit := vm.blockAtomicInputCache.Get(p.ID()); hit {
 					inputs = ret.(*ids.Set)
 					break
 				}
-				path = append(path, p.(*Block))
-				p = p.Parent().(*Block)
+				path = append(path, p)
+				p, err = p.parentBlock()
+				if err != nil {
+					return fmt.Errorf("couldn't get %s, parent of %s", p.Parent(), p.ID())
+				}
 			}
 			for i := len(path) - 1; i >= 0; i-- {
 				inputsCopy := new(ids.Set)
