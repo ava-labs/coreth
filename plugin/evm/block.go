@@ -10,8 +10,8 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/go-ethereum/rlp"
 
-	"github.com/ava-labs/gecko/ids"
-	"github.com/ava-labs/gecko/snow/choices"
+	"github.com/ava-labs/avalanche-go/ids"
+	"github.com/ava-labs/avalanche-go/snow/choices"
 )
 
 // Block implements the snowman.Block interface

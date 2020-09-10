@@ -15,11 +15,11 @@ import (
 	"github.com/ava-labs/coreth"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/gecko/api"
-	"github.com/ava-labs/gecko/utils/constants"
-	"github.com/ava-labs/gecko/utils/crypto"
-	"github.com/ava-labs/gecko/utils/formatting"
-	"github.com/ava-labs/gecko/utils/json"
+	"github.com/ava-labs/avalanche-go/api"
+	"github.com/ava-labs/avalanche-go/utils/constants"
+	"github.com/ava-labs/avalanche-go/utils/crypto"
+	"github.com/ava-labs/avalanche-go/utils/formatting"
+	"github.com/ava-labs/avalanche-go/utils/json"
 	"github.com/ava-labs/go-ethereum/common"
 	"github.com/ava-labs/go-ethereum/common/hexutil"
 	ethcrypto "github.com/ava-labs/go-ethereum/crypto"
@@ -44,7 +44,8 @@ type SnowmanAPI struct{ vm *VM }
 // NetAPI offers network related API methods
 type NetAPI struct{ vm *VM }
 
-type AvaAPI struct{ vm *VM }
+// AvaxAPI offers Avalanche network related API methods
+type AvaxAPI struct{ vm *VM }
 
 // NewNetAPI creates a new net API instance.
 func NewNetAPI(vm *VM) *NetAPI { return &NetAPI{vm} }
@@ -144,21 +145,27 @@ type ExportKeyReply struct {
 }
 
 // ExportKey returns a private key from the provided user
-func (service *AvaAPI) ExportKey(r *http.Request, args *ExportKeyArgs, reply *ExportKeyReply) error {
+func (service *AvaxAPI) ExportKey(r *http.Request, args *ExportKeyArgs, reply *ExportKeyReply) error {
 	service.vm.ctx.Log.Info("Platform: ExportKey called")
+
+	address, err := service.vm.ParseEthAddress(args.Address)
+	if err != nil {
+		return fmt.Errorf("couldn't parse %s to address: %s", args.Address, err)
+	}
+
 	db, err := service.vm.ctx.Keystore.GetDatabase(args.Username, args.Password)
 	if err != nil {
 		return fmt.Errorf("problem retrieving user '%s': %w", args.Username, err)
 	}
+	defer db.Close()
+
 	user := user{db: db}
-	if address, err := service.vm.ParseEthAddress(args.Address); err != nil {
-		return fmt.Errorf("couldn't parse %s to address: %s", args.Address, err)
-	} else if sk, err := user.getKey(address); err != nil {
+	sk, err := user.getKey(address)
+	if err != nil {
 		return fmt.Errorf("problem retrieving private key: %w", err)
-	} else {
-		reply.PrivateKey = constants.SecretKeyPrefix + formatting.CB58{Bytes: sk.Bytes()}.String()
-		return nil
 	}
+	reply.PrivateKey = constants.SecretKeyPrefix + formatting.CB58{Bytes: sk.Bytes()}.String()
+	return nil
 }
 
 // ImportKeyArgs are arguments for ImportKey
@@ -168,44 +175,41 @@ type ImportKeyArgs struct {
 }
 
 // ImportKey adds a private key to the provided user
-func (service *AvaAPI) ImportKey(r *http.Request, args *ImportKeyArgs, reply *api.JsonAddress) error {
+func (service *AvaxAPI) ImportKey(r *http.Request, args *ImportKeyArgs, reply *api.JsonAddress) error {
 	service.vm.ctx.Log.Info("Platform: ImportKey called for user '%s'", args.Username)
-	if service.vm.ctx.Keystore == nil {
-		return fmt.Errorf("oh no")
-	}
-	fmt.Sprintf("good")
-	db, err := service.vm.ctx.Keystore.GetDatabase(args.Username, args.Password)
-	if err != nil {
-		return fmt.Errorf("problem retrieving data: %w", err)
-	}
-
-	user := user{db: db}
-
-	factory := crypto.FactorySECP256K1R{}
 
 	if !strings.HasPrefix(args.PrivateKey, constants.SecretKeyPrefix) {
 		return fmt.Errorf("private key missing %s prefix", constants.SecretKeyPrefix)
 	}
+
 	trimmedPrivateKey := strings.TrimPrefix(args.PrivateKey, constants.SecretKeyPrefix)
 	formattedPrivateKey := formatting.CB58{}
 	if err := formattedPrivateKey.FromString(trimmedPrivateKey); err != nil {
 		return fmt.Errorf("problem parsing private key: %w", err)
 	}
 
+	factory := crypto.FactorySECP256K1R{}
 	skIntf, err := factory.ToPrivateKey(formattedPrivateKey.Bytes)
 	if err != nil {
 		return fmt.Errorf("problem parsing private key: %w", err)
 	}
 	sk := skIntf.(*crypto.PrivateKeySECP256K1R)
 
-	if err := user.putAddress(sk); err != nil {
-		return fmt.Errorf("problem saving key %w", err)
-	}
-
 	// TODO: return eth address here
 	reply.Address, err = service.vm.FormatEthAddress(GetEthAddress(sk))
 	if err != nil {
 		return fmt.Errorf("problem formatting address: %w", err)
+	}
+
+	db, err := service.vm.ctx.Keystore.GetDatabase(args.Username, args.Password)
+	if err != nil {
+		return fmt.Errorf("problem retrieving data: %w", err)
+	}
+	defer db.Close()
+
+	user := user{db: db}
+	if err := user.putAddress(sk); err != nil {
+		return fmt.Errorf("problem saving key %w", err)
 	}
 	return nil
 }
@@ -223,7 +227,7 @@ type ImportAVAXArgs struct {
 
 // ImportAVAX issues a transaction to import AVAX from the X-chain. The AVAX
 // must have already been exported from the X-Chain.
-func (service *AvaAPI) ImportAVAX(_ *http.Request, args *ImportAVAXArgs, response *api.JsonTxID) error {
+func (service *AvaxAPI) ImportAVAX(_ *http.Request, args *ImportAVAXArgs, response *api.JsonTxID) error {
 	service.vm.ctx.Log.Info("Platform: ImportAVAX called")
 
 	chainID, err := service.vm.ctx.BCLookup.Lookup(args.SourceChain)
@@ -231,18 +235,19 @@ func (service *AvaAPI) ImportAVAX(_ *http.Request, args *ImportAVAXArgs, respons
 		return fmt.Errorf("problem parsing chainID %q: %w", args.SourceChain, err)
 	}
 
-	// Get the user's info
-	db, err := service.vm.ctx.Keystore.GetDatabase(args.Username, args.Password)
-	if err != nil {
-		return fmt.Errorf("couldn't get user '%s': %w", args.Username, err)
-	}
-	user := user{db: db}
-
 	to, err := service.vm.ParseEthAddress(args.To)
 	if err != nil { // Parse address
 		return fmt.Errorf("couldn't parse argument 'to' to an address: %w", err)
 	}
 
+	// Get the user's info
+	db, err := service.vm.ctx.Keystore.GetDatabase(args.Username, args.Password)
+	if err != nil {
+		return fmt.Errorf("couldn't get user '%s': %w", args.Username, err)
+	}
+	defer db.Close()
+
+	user := user{db: db}
 	privKeys, err := user.getKeys()
 	if err != nil { // Get keys
 		return fmt.Errorf("couldn't get keys controlled by the user: %w", err)
@@ -271,7 +276,7 @@ type ExportAVAXArgs struct {
 
 // ExportAVAX exports AVAX from the P-Chain to the X-Chain
 // It must be imported on the X-Chain to complete the transfer
-func (service *AvaAPI) ExportAVAX(_ *http.Request, args *ExportAVAXArgs, response *api.JsonTxID) error {
+func (service *AvaxAPI) ExportAVAX(_ *http.Request, args *ExportAVAXArgs, response *api.JsonTxID) error {
 	service.vm.ctx.Log.Info("Platform: ExportAVAX called")
 
 	if args.Amount == 0 {
@@ -288,6 +293,8 @@ func (service *AvaAPI) ExportAVAX(_ *http.Request, args *ExportAVAXArgs, respons
 	if err != nil {
 		return fmt.Errorf("problem retrieving user '%s': %w", args.Username, err)
 	}
+	defer db.Close()
+
 	user := user{db: db}
 	privKeys, err := user.getKeys()
 	if err != nil {
