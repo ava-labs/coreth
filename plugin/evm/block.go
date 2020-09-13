@@ -10,8 +10,8 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/go-ethereum/rlp"
 
-	"github.com/ava-labs/avalanche-go/ids"
-	"github.com/ava-labs/avalanche-go/snow/choices"
+	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/choices"
 )
 
 // Block implements the snowman.Block interface
@@ -28,8 +28,11 @@ func (b *Block) ID() ids.ID { return b.id }
 func (b *Block) Accept() error {
 	vm := b.vm
 
-	vm.ctx.Log.Verbo("Block %s is accepted", b.ID())
-	vm.updateStatus(b.ID(), choices.Accepted)
+	vm.ctx.Log.Verbo("Block %s is accepted", b.id)
+	vm.updateStatus(b.id, choices.Accepted)
+	if err := vm.acceptedDB.Put(b.ethBlock.Number().Bytes(), b.id.Bytes()); err != nil {
+		return err
+	}
 
 	tx := vm.getAtomicTx(b.ethBlock)
 	if tx == nil {
