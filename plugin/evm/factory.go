@@ -4,7 +4,7 @@
 package evm
 
 import (
-	"github.com/ava-labs/gecko/ids"
+	"github.com/ava-labs/avalanchego/ids"
 )
 
 // ID this VM should be referenced by
