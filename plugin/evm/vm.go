@@ -627,7 +627,7 @@ func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
 		} else {
 			blkStatus = choices.Rejected
 		}
-	} else if vm.lastAccepted.ethBlock.Number().Cmp(blkNumber) <= 0 {
+	} else if vm.lastAccepted.ethBlock.Number().Cmp(blkNumber) > 0 {
 		blkStatus = choices.Rejected
 	}
 	// Otherwise, the block height is larger than the last accepted block,
