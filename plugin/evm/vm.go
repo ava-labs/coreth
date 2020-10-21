@@ -609,79 +609,32 @@ func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
 		return choices.Unknown
 	}
 	blk := wrappedBlk.ethBlock
+	blkNumber := blk.Number()
+	blkStatus := choices.Processing
 
-	heightKey := blk.Number().Bytes()
+	heightKey := blkNumber.Bytes()
 	acceptedIDBytes, err := vm.acceptedDB.Get(heightKey)
 	if err == nil {
-		if acceptedID, err := ids.ToID(acceptedIDBytes); err != nil {
-			log.Error(fmt.Sprintf("snowman-eth: acceptedID bytes didn't match expected value: %s", err))
-		} else {
-			if acceptedID.Equals(blockID) {
-				vm.blockStatusCache.Put(blockID, choices.Accepted)
-				return choices.Accepted
-			}
-			vm.blockStatusCache.Put(blockID, choices.Rejected)
-			return choices.Rejected
-		}
-	}
-
-	status := vm.getUncachedStatus(blk)
-	if status == choices.Accepted {
-		err := vm.acceptedDB.Put(heightKey, blockID.Bytes())
+		acceptedID, err := ids.ToID(acceptedIDBytes)
 		if err != nil {
-			log.Error(fmt.Sprintf("snowman-eth: failed to write back acceptedID bytes: %s", err))
+			// If an illegitimate value is stored here, then
+			// there is an invalid blockID in acceptedDB
+			panic(fmt.Sprintf("snowman-eth: acceptedID bytes could not be converted to an ID: %w", err))
 		}
 
-		tempBlock := wrappedBlk
-		for tempBlock.ethBlock != nil {
-			parentID := ids.NewID(tempBlock.ethBlock.ParentHash())
-			tempBlock = vm.getBlock(parentID)
-			if tempBlock == nil || tempBlock.ethBlock == nil {
-				break
-			}
-
-			heightKey := tempBlock.ethBlock.Number().Bytes()
-			_, err := vm.acceptedDB.Get(heightKey)
-			if err == nil {
-				break
-			}
-
-			if err := vm.acceptedDB.Put(heightKey, parentID.Bytes()); err != nil {
-				log.Error(fmt.Sprintf("snowman-eth: failed to write back acceptedID bytes: %s", err))
-			}
+		if acceptedID.Equals(blockID) {
+			blkStatus = choices.Accepted
+		} else {
+			blkStatus = choices.Rejected
 		}
+	} else if vm.lastAccepted.ethBlock.Number().Cmp(blkNumber) <= 0 {
+		blkStatus = choices.Rejected
 	}
+	// Otherwise, the block height is larger than the last accepted block,
+	// such that it must still be in processing.
 
-	vm.blockStatusCache.Put(blockID, status)
-	return status
-}
-
-func (vm *VM) getUncachedStatus(blk *types.Block) choices.Status {
-	acceptedBlk := vm.lastAccepted.ethBlock
-
-	// TODO: There must be a better way of doing this.
-	// Traverse up the chain from the lower block until the indices match
-	highBlock := blk
-	lowBlock := acceptedBlk
-	if highBlock.Number().Cmp(lowBlock.Number()) < 0 {
-		highBlock, lowBlock = lowBlock, highBlock
-	}
-	for highBlock.Number().Cmp(lowBlock.Number()) > 0 {
-		parentBlock := vm.getBlock(ids.NewID(highBlock.ParentHash()))
-		if parentBlock == nil {
-			return choices.Processing
-		}
-		highBlock = parentBlock.ethBlock
-	}
-
-	if highBlock.Hash() != lowBlock.Hash() { // on different branches
-		return choices.Rejected
-	}
-	// on the same branch
-	if blk.Number().Cmp(acceptedBlk.Number()) <= 0 {
-		return choices.Accepted
-	}
-	return choices.Processing
+	vm.blockStatusCache.Put(blockID, blkStatus)
+	return blkStatus
 }
 
 func (vm *VM) getBlock(id ids.ID) *Block {
