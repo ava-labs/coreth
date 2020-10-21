@@ -66,6 +66,7 @@ var (
 const (
 	lastAcceptedKey = "snowman_lastAccepted"
 	acceptedPrefix  = "snowman_accepted"
+	ethDBPrefix     = "ethdb_prefix"
 )
 
 const (
@@ -234,7 +235,7 @@ func (vm *VM) Initialize(
 	}
 
 	vm.ctx = ctx
-	vm.chaindb = Database{db}
+	vm.chaindb = Database{prefixdb.New([]byte(ethDBPrefix), db)}
 	g := new(core.Genesis)
 	err := json.Unmarshal(b, g)
 	if err != nil {
