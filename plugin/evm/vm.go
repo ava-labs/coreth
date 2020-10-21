@@ -376,6 +376,9 @@ func (vm *VM) Initialize(
 	if lastAccepted == nil {
 		log.Debug("lastAccepted is unavailable, setting to the genesis block")
 		lastAccepted = chain.GetGenesisBlock()
+		if err := vm.acceptedDB.Put(lastAccepted.Number().Bytes(), lastAccepted.Hash().Bytes()); err != nil {
+			return err
+		}
 	}
 	vm.lastAccepted = &Block{
 		id:       ids.NewID(lastAccepted.Hash()),
