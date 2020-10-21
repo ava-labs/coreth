@@ -611,31 +611,56 @@ func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
 	if wrappedBlk == nil {
 		return choices.Unknown
 	}
+
 	blk := wrappedBlk.ethBlock
 	blkNumber := blk.Number()
 	blkStatus := choices.Processing
+	lastAccepted := vm.lastAccepted
+	lastAcceptedHeight := lastAccepted.ethBlock.Number()
+	lastAcceptedCmp := blkNumber.Cmp(lastAcceptedHeight)
 
-	heightKey := blkNumber.Bytes()
-	acceptedIDBytes, err := vm.acceptedDB.Get(heightKey)
-	if err == nil {
-		acceptedID, err := ids.ToID(acceptedIDBytes)
-		if err != nil {
-			// If an illegitimate value is stored here, then
-			// there is an invalid blockID in acceptedDB
-			panic(fmt.Sprintf("snowman-eth: acceptedID bytes could not be converted to an ID: %w", err))
-		}
-
-		if acceptedID.Equals(blockID) {
+	// If this block is at the same height is the same as the last
+	// accepted block check if it's the same block (avoid extra db lookup)
+	if lastAcceptedCmp == 0 {
+		if lastAccepted.ID().Equals(blockID) {
 			blkStatus = choices.Accepted
 		} else {
 			blkStatus = choices.Rejected
 		}
-	} else if vm.lastAccepted.ethBlock.Number().Cmp(blkNumber) > 0 {
-		blkStatus = choices.Rejected
+	} else if lastAcceptedCmp < 0 {
+		// If this block is at a lower height than the last accepted block
+		// check the acceptedDB to see if this is the block we've accepted
+		// at that height.
+		heightKey := blkNumber.Bytes()
+		acceptedIDBytes, err := vm.acceptedDB.Get(heightKey)
+		if err == nil {
+			acceptedID, err := ids.ToID(acceptedIDBytes)
+			if err != nil {
+				// If an illegitimate value is stored here, then
+				// there is an invalid blockID in acceptedDB
+				panic(fmt.Sprintf("snowman-eth: acceptedID bytes could not be converted to an ID: %w", err))
+			}
+
+			if acceptedID.Equals(blockID) {
+				blkStatus = choices.Accepted
+			} else {
+				blkStatus = choices.Rejected
+			}
+		}
+		// If the error is not nil, then we report the block as Processing
+		// but this should only happen due to a fatal database error since
+		// we guarantee that the last accepted block height is larger
+		// than the requested block height.
+		log.Error(
+			fmt.Sprintf("Could not find accepted block at height below last accepted height: %s", err),
+			"LastAccepted", lastAccepted.ID(),
+			"LastAcceptedHeight", lastAcceptedHeight,
+			"Height", blkNumber,
+		)
 	}
+
 	// Otherwise, the block height is larger than the last accepted block,
 	// such that it must still be in processing.
-
 	vm.blockStatusCache.Put(blockID, blkStatus)
 	return blkStatus
 }
