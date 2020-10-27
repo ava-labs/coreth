@@ -22,7 +22,7 @@ func init() {
 	errs := wrappers.Errs{}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 
-	config := fs.String("coreth-config", "default", "Pass in CLI Config to set runtime attributes for Coreth")
+	config := fs.String("config", "default", "Pass in CLI Config to set runtime attributes for Coreth")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		errs.Add(err)
@@ -31,6 +31,7 @@ func init() {
 
 	if *config == "default" {
 		cliConfig.EthAPIEnabled = true
+		cliConfig.PersonalAPIEnabled = true
 		cliConfig.TxPoolAPIEnabled = true
 		cliConfig.RPCGasCap = 2500000000 // 25000000 x 100
 		cliConfig.RPCTxFeeCap = 100      // 100 AVAX
