@@ -12,7 +12,9 @@ import (
 	"strings"
 
 	"github.com/ava-labs/avalanchego/api"
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
@@ -21,6 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	errNilTxID = errors.New("nil transaction ID")
 )
 
 const (
@@ -469,4 +475,54 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 
 	response.TxID = tx.ID()
 	return service.vm.issueTx(tx)
+}
+
+// GetTxStatusReply defines the GetTxStatus replies returned from the API
+type GetTxStatusReply struct {
+	Status choices.Status `json:"status"`
+}
+
+// GetTxStatus returns the status of the specified transaction
+func (service *AvaxAPI) GetTxStatus(r *http.Request, args *api.JSONTxID, reply *GetTxStatusReply) error {
+	log.Info("EVM: GetTxStatus called with %s", args.TxID)
+
+	if args.TxID == ids.Empty {
+		return errNilTxID
+	}
+
+	_, err := service.vm.getAtomicTx(args.TxID)
+	if err == nil {
+		reply.Status = choices.Accepted
+		return nil
+	}
+
+	if err == database.ErrNotFound {
+		reply.Status = choices.Unknown
+		return nil
+	}
+
+	return err
+}
+
+// GetTx returns the specified transaction
+func (service *AvaxAPI) GetTx(r *http.Request, args *api.GetTxArgs, reply *api.FormattedTx) error {
+	log.Info("EVM: GetTx called with %s", args.TxID)
+
+	if args.TxID == ids.Empty {
+		return errNilTxID
+	}
+
+	encoding, err := service.vm.encodingManager.GetEncoding(args.Encoding)
+	if err != nil {
+		return fmt.Errorf("problem getting encoding formatter for '%s': %w", args.Encoding, err)
+	}
+
+	tx, err := service.vm.getAtomicTx(args.TxID)
+	if err != nil {
+		return fmt.Errorf("problem getting atomic tx: %w", err)
+	}
+
+	reply.Tx = encoding.ConvertBytes(tx.Bytes())
+	reply.Encoding = encoding.Encoding()
+	return nil
 }

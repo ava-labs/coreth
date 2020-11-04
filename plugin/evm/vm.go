@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/coreth"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
@@ -59,9 +60,11 @@ var (
 	x2cRate = big.NewInt(1000000000)
 )
 
-const (
-	lastAcceptedKey = "snowman_lastAccepted"
-	acceptedPrefix  = "snowman_accepted"
+var (
+	ethPrefix              = []byte("eth")
+	lastAcceptedKey        = []byte("snowman_last_accepted")
+	acceptedBlockPrefix    = []byte("snowman_accepted_block")
+	acceptedAtomicTxPrefix = []byte("snowman_accepted_atomic_tx")
 )
 
 const (
@@ -142,6 +145,8 @@ type VM struct {
 	CLIConfig       CommandLineConfig
 	encodingManager formatting.EncodingManager
 
+	baseDB *versiondb.Database
+
 	chainID          *big.Int
 	networkID        uint64
 	genesisHash      common.Hash
@@ -151,7 +156,9 @@ type VM struct {
 	networkChan      chan<- commonEng.Message
 	newMinedBlockSub *event.TypeMuxSubscription
 
-	acceptedDB database.Database
+	acceptedDB         database.Database
+	acceptedAtomicTxDB database.Database
+	lastAcceptedDB     database.Database
 
 	txPoolStabilizedHead         common.Hash
 	txPoolStabilizedOk           chan struct{}
@@ -184,7 +191,7 @@ type VM struct {
 	fx secp256k1fx.Fx
 }
 
-func (vm *VM) getAtomicTx(block *types.Block) *Tx {
+func (vm *VM) extractAtomicTx(block *types.Block) *Tx {
 	extdata := block.ExtraData()
 	atx := new(Tx)
 	if err := vm.codec.Unmarshal(extdata, atx); err != nil {
@@ -232,13 +239,15 @@ func (vm *VM) Initialize(
 	}
 
 	vm.ctx = ctx
-	vm.chaindb = Database{db}
+	vm.baseDB = versiondb.New(db)
+	vm.chaindb = Database{prefixdb.New(ethPrefix, vm.baseDB)}
+	vm.acceptedDB = prefixdb.New(acceptedBlockPrefix, vm.baseDB)
+	vm.acceptedAtomicTxDB = prefixdb.New(acceptedAtomicTxPrefix, vm.baseDB)
+
 	g := new(core.Genesis)
 	if err := json.Unmarshal(b, g); err != nil {
 		return err
 	}
-
-	vm.acceptedDB = prefixdb.New([]byte(acceptedPrefix), db)
 
 	vm.chainID = g.Config.ChainID
 	vm.txFee = txFee
@@ -318,7 +327,7 @@ func (vm *VM) Initialize(
 		return vm.getLastAccepted().ethBlock
 	})
 	chain.SetOnExtraStateChange(func(block *types.Block, state *state.StateDB) error {
-		tx := vm.getAtomicTx(block)
+		tx := vm.extractAtomicTx(block)
 		if tx == nil {
 			return nil
 		}
@@ -360,7 +369,7 @@ func (vm *VM) Initialize(
 	chain.Start()
 
 	var lastAccepted *types.Block
-	if b, err := vm.chaindb.Get([]byte(lastAcceptedKey)); err == nil {
+	if b, err := vm.baseDB.Get(lastAcceptedKey); err == nil {
 		var hash common.Hash
 		if err = rlp.DecodeBytes(b, &hash); err == nil {
 			if block := chain.GetBlockByHash(hash); block == nil {
@@ -373,6 +382,9 @@ func (vm *VM) Initialize(
 	if lastAccepted == nil {
 		log.Debug("lastAccepted is unavailable, setting to the genesis block")
 		lastAccepted = chain.GetGenesisBlock()
+		if err := vm.acceptedDB.Put(lastAccepted.Number().Bytes(), lastAccepted.Hash().Bytes()); err != nil {
+			return err
+		}
 	}
 	vm.lastAccepted = &Block{
 		id:       ids.ID(lastAccepted.Hash()),
@@ -607,7 +619,7 @@ func (vm *VM) tryBlockGen() error {
 	return nil
 }
 
-func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
+func (vm *VM) getBlockStatus(blockID ids.ID) choices.Status {
 	vm.metalock.Lock()
 	defer vm.metalock.Unlock()
 
@@ -619,80 +631,58 @@ func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
 	if wrappedBlk == nil {
 		return choices.Unknown
 	}
+
 	blk := wrappedBlk.ethBlock
+	blkNumber := blk.Number()
+	blkStatus := choices.Processing
+	lastAccepted := vm.lastAccepted
+	lastAcceptedHeight := lastAccepted.ethBlock.Number()
+	lastAcceptedCmp := blkNumber.Cmp(lastAcceptedHeight)
 
-	heightKey := blk.Number().Bytes()
-	acceptedIDBytes, err := vm.acceptedDB.Get(heightKey)
-	if err == nil {
-		if acceptedID, err := ids.ToID(acceptedIDBytes); err != nil {
-			log.Error(fmt.Sprintf("snowman-eth: acceptedID bytes didn't match expected value: %s", err))
+	// If this block is at the same height is the same as the last
+	// accepted block check if it's the same block (avoid extra db lookup)
+	if lastAcceptedCmp == 0 {
+		if lastAccepted.ID() == blockID {
+			blkStatus = choices.Accepted
 		} else {
+			blkStatus = choices.Rejected
+		}
+	} else if lastAcceptedCmp < 0 {
+		// If this block is at a lower height than the last accepted block
+		// check the acceptedDB to see if this is the block we've accepted
+		// at that height.
+		heightKey := blkNumber.Bytes()
+		acceptedIDBytes, err := vm.acceptedDB.Get(heightKey)
+		if err == nil {
+			acceptedID, err := ids.ToID(acceptedIDBytes)
+			if err != nil {
+				// If an illegitimate value is stored here, then
+				// there is an invalid blockID in acceptedDB
+				panic(fmt.Sprintf("snowman-eth: acceptedID bytes could not be converted to an ID: %w", err))
+			}
+
 			if acceptedID == blockID {
-				vm.blockStatusCache.Put(blockID, choices.Accepted)
-				return choices.Accepted
-			}
-			vm.blockStatusCache.Put(blockID, choices.Rejected)
-			return choices.Rejected
-		}
-	}
-
-	status := vm.getUncachedStatus(blk)
-	if status == choices.Accepted {
-		err := vm.acceptedDB.Put(heightKey, blockID[:])
-		if err != nil {
-			log.Error(fmt.Sprintf("snowman-eth: failed to write back acceptedID bytes: %s", err))
-		}
-
-		tempBlock := wrappedBlk
-		for tempBlock.ethBlock != nil {
-			parentID := ids.ID(tempBlock.ethBlock.ParentHash())
-			tempBlock = vm.getBlock(parentID)
-			if tempBlock == nil || tempBlock.ethBlock == nil {
-				break
-			}
-
-			heightKey := tempBlock.ethBlock.Number().Bytes()
-			_, err := vm.acceptedDB.Get(heightKey)
-			if err == nil {
-				break
-			}
-
-			if err := vm.acceptedDB.Put(heightKey, parentID[:]); err != nil {
-				log.Error(fmt.Sprintf("snowman-eth: failed to write back acceptedID bytes: %s", err))
+				blkStatus = choices.Accepted
+			} else {
+				blkStatus = choices.Rejected
 			}
 		}
+		// If the error is not nil, then we report the block as Processing
+		// but this should only happen due to a fatal database error since
+		// we guarantee that the last accepted block height is higher
+		// than the requested block height.
+		log.Error(
+			fmt.Sprintf("Could not find accepted block at height below last accepted height: %s", err),
+			"LastAccepted", lastAccepted.ID(),
+			"LastAcceptedHeight", lastAcceptedHeight,
+			"Height", blkNumber,
+		)
 	}
 
-	vm.blockStatusCache.Put(blockID, status)
-	return status
-}
-
-func (vm *VM) getUncachedStatus(blk *types.Block) choices.Status {
-	acceptedBlk := vm.lastAccepted.ethBlock
-
-	// TODO: There must be a better way of doing this.
-	// Traverse up the chain from the lower block until the indices match
-	highBlock := blk
-	lowBlock := acceptedBlk
-	if highBlock.Number().Cmp(lowBlock.Number()) < 0 {
-		highBlock, lowBlock = lowBlock, highBlock
-	}
-	for highBlock.Number().Cmp(lowBlock.Number()) > 0 {
-		parentBlock := vm.getBlock(ids.ID(highBlock.ParentHash()))
-		if parentBlock == nil {
-			return choices.Processing
-		}
-		highBlock = parentBlock.ethBlock
-	}
-
-	if highBlock.Hash() != lowBlock.Hash() { // on different branches
-		return choices.Rejected
-	}
-	// on the same branch
-	if blk.Number().Cmp(acceptedBlk.Number()) <= 0 {
-		return choices.Accepted
-	}
-	return choices.Processing
+	// Otherwise, the block height is larger than the last accepted block,
+	// such that it must still be in processing.
+	vm.blockStatusCache.Put(blockID, blkStatus)
+	return blkStatus
 }
 
 func (vm *VM) getBlock(id ids.ID) *Block {
@@ -712,6 +702,33 @@ func (vm *VM) getBlock(id ids.ID) *Block {
 	return block
 }
 
+func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, error) {
+	txBytes, err := vm.acceptedAtomicTxDB.Get(txID[:])
+	if err != nil {
+		return nil, err
+	}
+
+	tx := &Tx{}
+	if err := vm.codec.Unmarshal(txBytes, tx); err != nil {
+		return nil, fmt.Errorf("problem parsing transaction from db: %w", err)
+	}
+	if err := tx.Sign(vm.codec, nil); err != nil {
+		return nil, fmt.Errorf("problem initializing transaction from db: %w", err)
+	}
+
+	return tx, nil
+}
+
+func (vm *VM) issueRemoteTxs(txs []*types.Transaction) error {
+	errs := vm.chain.AddRemoteTxs(txs)
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return vm.tryBlockGen()
+}
+
 func (vm *VM) writeBackMetadata() {
 	vm.metalock.Lock()
 	defer vm.metalock.Unlock()
@@ -722,7 +739,7 @@ func (vm *VM) writeBackMetadata() {
 		return
 	}
 	log.Debug("writing back metadata")
-	vm.chaindb.Put([]byte(lastAcceptedKey), b)
+	vm.baseDB.Put(lastAcceptedKey, b)
 	atomic.StoreUint32(&vm.writingMetadata, 0)
 }
 

@@ -38,16 +38,27 @@ func (b *Block) Accept() error {
 		return err
 	}
 
-	tx := vm.getAtomicTx(b.ethBlock)
+	tx := vm.extractAtomicTx(b.ethBlock)
 	if tx == nil {
-		return nil
+		return vm.baseDB.Commit()
 	}
 	utx, ok := tx.UnsignedTx.(UnsignedAtomicTx)
 	if !ok {
 		return errors.New("unknown tx type")
 	}
 
-	return utx.Accept(vm.ctx, nil)
+	if err := utx.Accept(vm.ctx, nil); err != nil {
+		return err
+	}
+
+	utxID := utx.ID()
+	if err := vm.acceptedAtomicTxDB.Put(utxID[:], utx.Bytes()); err != nil {
+		return err
+	}
+
+	// Commit all db changes on block accept to maintain
+	// consistent state
+	return vm.baseDB.Commit()
 }
 
 // Reject implements the snowman.Block interface
@@ -59,7 +70,7 @@ func (b *Block) Reject() error {
 
 // Status implements the snowman.Block interface
 func (b *Block) Status() choices.Status {
-	status := b.vm.getCachedStatus(b.ID())
+	status := b.vm.getBlockStatus(b.ID())
 	if status == choices.Unknown && b.ethBlock != nil {
 		return choices.Processing
 	}
@@ -88,7 +99,7 @@ func (b *Block) Verify() error {
 	}
 
 	vm := b.vm
-	tx := vm.getAtomicTx(b.ethBlock)
+	tx := vm.extractAtomicTx(b.ethBlock)
 	if tx != nil {
 		pState, err := b.vm.chain.BlockState(b.Parent().(*Block).ethBlock)
 		if err != nil {
@@ -116,7 +127,7 @@ func (b *Block) Verify() error {
 			for i := len(path) - 1; i >= 0; i-- {
 				inputsCopy := new(ids.Set)
 				p := path[i]
-				atx := vm.getAtomicTx(p.ethBlock)
+				atx := vm.extractAtomicTx(p.ethBlock)
 				if atx != nil {
 					inputs.Union(atx.UnsignedTx.(UnsignedAtomicTx).InputUTXOs())
 					inputsCopy.Union(*inputs)
