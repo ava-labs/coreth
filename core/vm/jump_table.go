@@ -49,6 +49,7 @@ type operation struct {
 }
 
 var (
+	apricotInstructionSet          = newApricotInstructionSet()
 	frontierInstructionSet         = newFrontierInstructionSet()
 	homesteadInstructionSet        = newHomesteadInstructionSet()
 	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
@@ -1042,4 +1043,14 @@ func newFrontierInstructionSet() JumpTable {
 			writes:     true,
 		},
 	}
+}
+
+// newApricotInstructionSet returns a new instruction set
+// compatible with the Apricot release, which deprecates
+// added instructions: CALLEX and BALANCEMC
+func newApricotInstructionSet() JumpTable {
+	instructionSet := newFrontierInstructionSet()
+	instructionSet[CALLEX] = nil
+	instructionSet[BALANCEMC] = nil
+	return instructionSet
 }

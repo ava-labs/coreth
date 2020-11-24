@@ -34,19 +34,23 @@ var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 type (
 	// CanTransferFunc is the signature of a transfer guard function
-	CanTransferFunc   func(StateDB, common.Address, *big.Int) bool
+	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
+	// CanTransferMCFunc is the signature of a transfer native asset function
 	CanTransferMCFunc func(StateDB, common.Address, common.Address, *common.Hash, *big.Int) int
 	// TransferFunc is the signature of a transfer function
-	TransferFunc   func(StateDB, common.Address, common.Address, *big.Int)
+	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
+	// TransferMCFunc is the signature of a transfer native asset function
 	TransferMCFunc func(StateDB, common.Address, common.Address, *common.Hash, *big.Int)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
 )
 
-func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
-	var precompiles map[common.Address]PrecompiledContract
+func (evm *EVM) precompile(addr common.Address) (StatefulPrecompiledContract, bool) {
+	var precompiles map[common.Address]StatefulPrecompiledContract
 	switch {
+	case evm.chainRules.IsApricot:
+		precompiles = PrecompiledContractsApricot
 	case evm.chainRules.IsYoloV1:
 		precompiles = PrecompiledContractsYoloV1
 	case evm.chainRules.IsIstanbul:
@@ -222,7 +226,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), addr, value)
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug && evm.depth == 0 {
@@ -233,8 +236,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = p.Run(evm, caller, addr, value, input, gas, false)
 	} else {
+		evm.Transfer(evm.StateDB, caller.Address(), addr, value)
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
@@ -371,7 +375,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = p.Run(evm, caller, addr, value, input, gas, false)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -407,7 +411,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = p.Run(evm, caller, addr, big0, input, gas, false)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
@@ -451,7 +455,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	evm.StateDB.AddBalance(addr, big0)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = p.Run(evm, caller, addr, big0, input, gas, true)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'

@@ -26,6 +26,7 @@ import (
 )
 
 var (
+	// BuiltinAddr ...
 	BuiltinAddr = common.Address{
 		1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -106,6 +107,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	if cfg.JumpTable[STOP] == nil {
 		var jt JumpTable
 		switch {
+		case evm.chainRules.IsApricot:
+			jt = apricotInstructionSet
 		case evm.chainRules.IsYoloV1:
 			jt = yoloV1InstructionSet
 		case evm.chainRules.IsIstanbul:
@@ -146,6 +149,15 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	// TODO remove after Apricot network upgrade.
+	// [BuiltinAddr] is overridden by a precompile in Apricot.
+	// This makes any call to [BuiltinAddr] a no-op once the network
+	// upgrade occurs. Then in the upgrade after the hard fork, this
+	// code can be safely removed.
+	// This can't occur before the hard fork because it would change
+	// the behavior of upgraded nodes before the hard fork occurs
+	// since there is no mechanism to change this code based on the
+	// block height.
 	if contract.Address() == BuiltinAddr {
 		self := AccountRef(contract.Caller())
 		if _, ok := contract.caller.(*Contract); ok {

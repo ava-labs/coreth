@@ -239,6 +239,15 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	// Set the Apricot Fork Block on the ChainConfig
+	// TODO switch to correct block number of the fork
+	switch {
+	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
+		g.Config.ApricotBlock = nil
+	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
+		g.Config.ApricotBlock = nil
+	}
+
 	vm.acceptedDB = prefixdb.New([]byte(acceptedPrefix), db)
 
 	vm.chainID = g.Config.ChainID
