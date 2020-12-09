@@ -209,6 +209,10 @@ func TestIssueTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := blk.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
 	if status := blk.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
@@ -239,6 +243,10 @@ func TestIssueTxs(t *testing.T) {
 
 	blk2, err := vm.BuildBlock()
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk2.Verify(); err != nil {
 		t.Fatal(err)
 	}
 

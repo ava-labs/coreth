@@ -34,7 +34,7 @@ type UnsignedImportTx struct {
 	// Inputs that consume UTXOs produced on the chain
 	ImportedInputs []*avax.TransferableInput `serialize:"true" json:"importedInputs"`
 	// Outputs
-	Outs []EVMOutput `serialize:"true" json:"outputs"`
+	Outs []AtomicEVMOutput `serialize:"true" json:"outputs"`
 }
 
 // InputUTXOs returns the UTXOIDs of the imported funds
@@ -217,7 +217,7 @@ func (vm *VM) newImportTx(
 	}
 	avax.SortTransferableInputsWithSigners(importedInputs, signers)
 	//importedAVAXAmount := importedAmount[vm.ctx.AVAXAssetID.Key()]
-	outs := []EVMOutput{}
+	outs := []AtomicEVMOutput{}
 
 	//if importedAVAXAmount == 0 {
 	//	return nil, errNoFunds // No imported UTXOs were spendable
@@ -228,7 +228,7 @@ func (vm *VM) newImportTx(
 	//	// TODO: spend EVM balance to compensate vm.txFee-importedAmount
 	//	return nil, errNoFunds
 	//} else if importedAVAXAmount > vm.txFee {
-	//	outs = append(outs, EVMOutput{
+	//	outs = append(outs, AtomicEVMOutput{
 	//		Address: to,
 	//		Amount:  importedAVAXAmount - vm.txFee,
 	//		AssetID: vm.ctx.AVAXAssetID,
@@ -242,14 +242,14 @@ func (vm *VM) newImportTx(
 		if amount == 0 {
 			continue
 		}
-		outs = append(outs, EVMOutput{
+		outs = append(outs, AtomicEVMOutput{
 			Address: to,
 			Amount:  amount,
 			AssetID: assetID,
 		})
 	}
 
-	SortEVMOutputs(outs)
+	SortAtomicEVMOutputs(outs)
 
 	// Create the transaction
 	utx := &UnsignedImportTx{
@@ -267,7 +267,7 @@ func (vm *VM) newImportTx(
 }
 
 // EVMStateTransfer performs the state transfer to increase the balances of
-// accounts accordingly with the imported EVMOutputs
+// accounts accordingly with the imported AtomicEVMOutputs
 func (tx *UnsignedImportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error {
 	for _, to := range tx.Outs {
 		log.Info("crosschain X->C", "addr", to.Address, "amount", to.Amount)

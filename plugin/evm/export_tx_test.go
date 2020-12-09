@@ -25,7 +25,7 @@ func TestExportTxVerify(t *testing.T) {
 		NetworkID:        testNetworkID,
 		BlockchainID:     testCChainID,
 		DestinationChain: testXChainID,
-		Ins: []EVMInput{
+		Ins: []AtomicEVMInput{
 			{
 				Address: testEthAddrs[0],
 				Amount:  exportAmount,
@@ -70,7 +70,7 @@ func TestExportTxVerify(t *testing.T) {
 	// Pass in a list of signers here with the appropriate length
 	// to avoid causing a nil-pointer error in the helper method
 	emptySigners := make([][]*crypto.PrivateKeySECP256K1R, 2)
-	SortEVMInputsAndSigners(exportTx.Ins, emptySigners)
+	SortAtomicEVMInputsAndSigners(exportTx.Ins, emptySigners)
 
 	ctx := NewContext()
 

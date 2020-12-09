@@ -55,7 +55,7 @@ func TestImportTxVerify(t *testing.T) {
 				},
 			},
 		},
-		Outs: []EVMOutput{
+		Outs: []AtomicEVMOutput{
 			{
 				Address: testEthAddrs[0],
 				Amount:  importAmount,
@@ -73,7 +73,7 @@ func TestImportTxVerify(t *testing.T) {
 
 	// // Sort the inputs and outputs to ensure the transaction is canonical
 	avax.SortTransferableInputs(importTx.ImportedInputs)
-	SortEVMOutputs(importTx.Outs)
+	SortAtomicEVMOutputs(importTx.Outs)
 
 	// Test Valid ImportTx
 	if err := importTx.Verify(testXChainID, ctx, testTxFee, testAvaxAssetID); err != nil {
@@ -158,7 +158,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	evmOutput := EVMOutput{
+	evmOutput := AtomicEVMOutput{
 		Address: testEthAddrs[0],
 		Amount:  importAmount,
 		AssetID: vm.ctx.AVAXAssetID,
@@ -175,7 +175,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				Input: secp256k1fx.Input{SigIndices: []uint32{0}},
 			},
 		}},
-		Outs: []EVMOutput{evmOutput},
+		Outs: []AtomicEVMOutput{evmOutput},
 	}
 
 	state, err := vm.chain.CurrentState()
@@ -220,7 +220,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 	}
 
 	// Check that SemanticVerify does not pass if an additional output is added in
-	unsignedImportTx.Outs = append(unsignedImportTx.Outs, EVMOutput{
+	unsignedImportTx.Outs = append(unsignedImportTx.Outs, AtomicEVMOutput{
 		Address: testEthAddrs[1],
 		Amount:  importAmount,
 		AssetID: vm.ctx.AVAXAssetID,
@@ -230,7 +230,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 		t.Fatal("Semantic verification should have failed due to insufficient funds")
 	}
 
-	unsignedImportTx.Outs = []EVMOutput{evmOutput}
+	unsignedImportTx.Outs = []AtomicEVMOutput{evmOutput}
 
 	if err := vm.Bootstrapping(); err != nil {
 		t.Fatal(err)

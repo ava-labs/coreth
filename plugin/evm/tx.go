@@ -11,11 +11,11 @@ import (
 
 	"github.com/ava-labs/coreth/core/state"
 
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/avalanchego/utils/codec"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
@@ -29,15 +29,15 @@ var (
 	errNilTx             = errors.New("tx is nil")
 )
 
-// EVMOutput defines an output from EVM State created from export transactions
-type EVMOutput struct {
+// AtomicEVMOutput defines an output from EVM State created from export transactions
+type AtomicEVMOutput struct {
 	Address common.Address `serialize:"true" json:"address"`
 	Amount  uint64         `serialize:"true" json:"amount"`
 	AssetID ids.ID         `serialize:"true" json:"assetID"`
 }
 
-// EVMInput defines an input for the EVM State to be used in import transactions
-type EVMInput struct {
+// AtomicEVMInput defines an input for the EVM State to be used in import transactions
+type AtomicEVMInput struct {
 	Address common.Address `serialize:"true" json:"address"`
 	Amount  uint64         `serialize:"true" json:"amount"`
 	AssetID ids.ID         `serialize:"true" json:"assetID"`
@@ -45,12 +45,12 @@ type EVMInput struct {
 }
 
 // Verify ...
-func (out *EVMOutput) Verify() error {
+func (out *AtomicEVMOutput) Verify() error {
 	return nil
 }
 
 // Verify ...
-func (in *EVMInput) Verify() error {
+func (in *AtomicEVMInput) Verify() error {
 	return nil
 }
 
@@ -119,9 +119,9 @@ func (tx *Tx) Sign(c codec.Manager, signers [][]*crypto.PrivateKeySECP256K1R) er
 	return nil
 }
 
-// innerSortInputsAndSigners implements sort.Interface for EVMInput
+// innerSortInputsAndSigners implements sort.Interface for AtomicEVMInput
 type innerSortInputsAndSigners struct {
-	inputs  []EVMInput
+	inputs  []AtomicEVMInput
 	signers [][]*crypto.PrivateKeySECP256K1R
 }
 
@@ -140,23 +140,23 @@ func (ins *innerSortInputsAndSigners) Swap(i, j int) {
 	ins.signers[j], ins.signers[i] = ins.signers[i], ins.signers[j]
 }
 
-// SortEVMInputsAndSigners sorts the list of EVMInputs based on the addresses and assetIDs
-func SortEVMInputsAndSigners(inputs []EVMInput, signers [][]*crypto.PrivateKeySECP256K1R) {
+// SortAtomicEVMInputsAndSigners sorts the list of AtomicEVMInputs based on the addresses and assetIDs
+func SortAtomicEVMInputsAndSigners(inputs []AtomicEVMInput, signers [][]*crypto.PrivateKeySECP256K1R) {
 	sort.Sort(&innerSortInputsAndSigners{inputs: inputs, signers: signers})
 }
 
-// IsSortedAndUniqueEVMInputs returns true if the EVM Inputs are sorted and unique
+// IsSortedAndUniqueAtomicEVMInputs returns true if the EVM Inputs are sorted and unique
 // based on the account addresses
-func IsSortedAndUniqueEVMInputs(inputs []EVMInput) bool {
+func IsSortedAndUniqueAtomicEVMInputs(inputs []AtomicEVMInput) bool {
 	return utils.IsSortedAndUnique(&innerSortInputsAndSigners{inputs: inputs})
 }
 
-// innerSortEVMOutputs implements sort.Interface for EVMOutput
-type innerSortEVMOutputs struct {
-	outputs []EVMOutput
+// innerSortAtomicEVMOutputs implements sort.Interface for AtomicEVMOutput
+type innerSortAtomicEVMOutputs struct {
+	outputs []AtomicEVMOutput
 }
 
-func (outs *innerSortEVMOutputs) Less(i, j int) bool {
+func (outs *innerSortAtomicEVMOutputs) Less(i, j int) bool {
 	addrComp := bytes.Compare(outs.outputs[i].Address.Bytes(), outs.outputs[j].Address.Bytes())
 	if addrComp != 0 {
 		return addrComp < 0
@@ -164,20 +164,20 @@ func (outs *innerSortEVMOutputs) Less(i, j int) bool {
 	return bytes.Compare(outs.outputs[i].AssetID[:], outs.outputs[j].AssetID[:]) < 0
 }
 
-func (outs *innerSortEVMOutputs) Len() int { return len(outs.outputs) }
+func (outs *innerSortAtomicEVMOutputs) Len() int { return len(outs.outputs) }
 
-func (outs *innerSortEVMOutputs) Swap(i, j int) {
+func (outs *innerSortAtomicEVMOutputs) Swap(i, j int) {
 	outs.outputs[j], outs.outputs[i] = outs.outputs[i], outs.outputs[j]
 }
 
-// SortEVMOutputs sorts the list of EVMOutputs based on the addresses and assetIDs
+// SortAtomicEVMOutputs sorts the list of AtomicEVMOutputs based on the addresses and assetIDs
 // of the outputs
-func SortEVMOutputs(outputs []EVMOutput) {
-	sort.Sort(&innerSortEVMOutputs{outputs: outputs})
+func SortAtomicEVMOutputs(outputs []AtomicEVMOutput) {
+	sort.Sort(&innerSortAtomicEVMOutputs{outputs: outputs})
 }
 
-// IsSortedAndUniqueEVMOutputs returns true if the EVMOutputs are sorted and unique
+// IsSortedAndUniqueAtomicEVMOutputs returns true if the AtomicEVMOutputs are sorted and unique
 // based on the account addresses and assetIDs
-func IsSortedAndUniqueEVMOutputs(outputs []EVMOutput) bool {
-	return utils.IsSortedAndUnique(&innerSortEVMOutputs{outputs: outputs})
+func IsSortedAndUniqueAtomicEVMOutputs(outputs []AtomicEVMOutput) bool {
+	return utils.IsSortedAndUnique(&innerSortAtomicEVMOutputs{outputs: outputs})
 }

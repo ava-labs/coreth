@@ -33,7 +33,7 @@ type UnsignedExportTx struct {
 	// Which chain to send the funds to
 	DestinationChain ids.ID `serialize:"true" json:"destinationChain"`
 	// Inputs
-	Ins []EVMInput `serialize:"true" json:"inputs"`
+	Ins []AtomicEVMInput `serialize:"true" json:"inputs"`
 	// Outputs that are exported to the chain
 	ExportedOutputs []*avax.TransferableOutput `serialize:"true" json:"exportedOutputs"`
 }
@@ -219,7 +219,7 @@ func (vm *VM) newExportTx(
 	}}
 
 	avax.SortTransferableOutputs(exportOuts, vm.codec)
-	SortEVMInputsAndSigners(ins, signers)
+	SortAtomicEVMInputsAndSigners(ins, signers)
 
 	// Create the transaction
 	utx := &UnsignedExportTx{
