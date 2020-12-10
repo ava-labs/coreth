@@ -163,9 +163,6 @@ type VM struct {
 	txPoolStabilizedLock         sync.Mutex
 	txPoolStabilizedShutdownChan chan struct{}
 
-	metalock     sync.Mutex
-	lastAccepted *Block
-
 	bdlock          sync.Mutex
 	blockDelayTimer *timer.Timer
 	bdTimerState    int8

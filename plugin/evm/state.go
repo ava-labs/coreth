@@ -82,9 +82,7 @@ func NewChainState(baseDB *versiondb.Database, genesisBlock snowman.Block, getBl
 		if err := baseDB.Put(LastAcceptedKey, genesisID[:]); err != nil {
 			return nil, err
 		}
-		heightKey := make([]byte, 8)
-		binary.BigEndian.PutUint64(heightKey, genesisBlock.Height())
-		if err := acceptedBlocksByHeightDB.Put(heightKey, genesisID[:]); err != nil {
+		if err := acceptedBlocksByHeightDB.Put(heightKey(genesisBlock.Height()), genesisID[:]); err != nil {
 			return nil, err
 		}
 		lastAcceptedBlock = &BlockWrapper{
@@ -133,6 +131,27 @@ func (c *ChainState) GetBlock(blkID ids.ID) (snowman.Block, error) {
 	}
 
 	return c.AddBlock(blk)
+}
+
+// GetBlockIDAtHeight ..
+func (c *ChainState) GetBlockIDAtHeight(height uint64) (ids.ID, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if height > c.lastAcceptedBlock.Height() {
+		return ids.ID{}, fmt.Errorf("no block has been accepted at height: %d", height)
+	}
+
+	blkIDBytes, err := c.acceptedBlocksByHeight.Get(heightKey(height))
+	if err != nil {
+		return ids.ID{}, err
+	}
+
+	blkID, err := ids.ToID(blkIDBytes)
+	if err != nil {
+		return ids.ID{}, fmt.Errorf("failed to convert accepted blockID bytes to an ID type: %w", err)
+	}
+	return blkID, nil
 }
 
 // ParseBlock ...
@@ -235,9 +254,7 @@ func (c *ChainState) getStatus(blk snowman.Block) (choices.Status, error) {
 		return choices.Processing, nil
 	}
 
-	heightKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightKey, blk.Height())
-	blkIDAtHeight, err := c.acceptedBlocksByHeight.Get(heightKey)
+	blkIDAtHeight, err := c.acceptedBlocksByHeight.Get(heightKey(blk.Height()))
 	if err != nil {
 		return choices.Unknown, fmt.Errorf("failed to get acceptedID at height %d, below last accepted height: %w", blk.Height(), err)
 	}
@@ -251,6 +268,12 @@ func (c *ChainState) getStatus(blk snowman.Block) (choices.Status, error) {
 	}
 
 	return choices.Rejected, nil
+}
+
+func heightKey(height uint64) []byte {
+	heightKey := make([]byte, 8)
+	binary.BigEndian.PutUint64(heightKey, height)
+	return heightKey
 }
 
 // BlockWrapper wraps a snowman Block and adds a caching layer
@@ -277,10 +300,7 @@ func (bw *BlockWrapper) Accept() error {
 		return err
 	}
 
-	heightKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightKey, bw.Height())
-
-	if err := bw.state.acceptedBlocksByHeight.Put(heightKey, blkID[:]); err != nil {
+	if err := bw.state.acceptedBlocksByHeight.Put(heightKey(bw.Height()), blkID[:]); err != nil {
 		return err
 	}
 	if err := bw.Block.Accept(); err != nil {
