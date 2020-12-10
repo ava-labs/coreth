@@ -77,7 +77,7 @@ type GetAcceptedFrontReply struct {
 
 // GetAcceptedFront returns the last accepted block's hash and height
 func (api *SnowmanAPI) GetAcceptedFront(ctx context.Context) (*GetAcceptedFrontReply, error) {
-	blk := api.vm.getLastAccepted().ethBlock
+	blk := api.vm.getLastAcceptedEthBlock()
 	return &GetAcceptedFrontReply{
 		Hash:   blk.Hash(),
 		Number: blk.Number(),

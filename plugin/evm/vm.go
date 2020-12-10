@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/coreth"
@@ -38,9 +37,9 @@ import (
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
@@ -63,6 +62,7 @@ var (
 const (
 	lastAcceptedKey = "snowman_lastAccepted"
 	acceptedPrefix  = "snowman_accepted"
+	ethPrefix       = "ethDB"
 )
 
 const (
@@ -70,7 +70,7 @@ const (
 	maxBlockTime    = 1000 * time.Millisecond
 	batchSize       = 250
 	maxUTXOsToFetch = 1024
-	blockCacheSize  = 1 << 10 // 1024
+	cacheSize       = 1 << 10 // 1024
 	codecVersion    = uint16(0)
 )
 
@@ -123,7 +123,7 @@ func init() {
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
 	)
-	c.SkipRegistrations(3)
+	c.SkipRegistations(3)
 	errs.Add(
 		c.RegisterType(&secp256k1fx.TransferInput{}),
 		c.RegisterType(&secp256k1fx.MintOutput{}),
@@ -155,17 +155,16 @@ type VM struct {
 	networkChan      chan<- commonEng.Message
 	newMinedBlockSub *event.TypeMuxSubscription
 
-	acceptedDB database.Database
+	*ChainState
+	baseDB *versiondb.Database
 
 	txPoolStabilizedHead         common.Hash
 	txPoolStabilizedOk           chan struct{}
 	txPoolStabilizedLock         sync.Mutex
 	txPoolStabilizedShutdownChan chan struct{}
 
-	metalock                     sync.Mutex
-	blockCache, blockStatusCache cache.LRU
-	lastAccepted                 *Block
-	writingMetadata              uint32
+	metalock     sync.Mutex
+	lastAccepted *Block
 
 	bdlock          sync.Mutex
 	blockDelayTimer *timer.Timer
@@ -177,7 +176,7 @@ type VM struct {
 	txSubmitChan          <-chan struct{}
 	atomicTxSubmitChan    chan struct{}
 	shutdownSubmitChan    chan struct{}
-	baseCodec             codec.Codec
+	baseCodec             codec.Registry
 	codec                 codec.Manager
 	clock                 timer.Clock
 	txFee                 uint64
@@ -234,13 +233,13 @@ func (vm *VM) Initialize(
 	}
 
 	vm.ctx = ctx
-	vm.chaindb = Database{db}
 	g := new(core.Genesis)
 	if err := json.Unmarshal(b, g); err != nil {
 		return err
 	}
 
-	vm.acceptedDB = prefixdb.New([]byte(acceptedPrefix), db)
+	vm.baseDB = versiondb.New(db)
+	vm.chaindb = Database{prefixdb.New([]byte(ethPrefix), vm.baseDB)}
 
 	vm.chainID = g.Config.ChainID
 	vm.txFee = txFee
@@ -268,10 +267,90 @@ func (vm *VM) Initialize(
 		panic(err)
 	}
 	nodecfg := node.Config{NoUSB: true}
-	chain := coreth.NewETHChain(&config, &nodecfg, nil, vm.chaindb)
-	vm.chain = chain
+	vm.chain = coreth.NewETHChain(&config, &nodecfg, nil, vm.chaindb)
 	vm.networkID = config.NetworkId
-	chain.SetOnHeaderNew(func(header *types.Header) {
+
+	vm.blockAtomicInputCache = cache.LRU{Size: cacheSize}
+	vm.newBlockChan = make(chan *Block)
+	vm.networkChan = toEngine
+
+	vm.bdTimerState = bdTimerStateLong
+	vm.bdGenWaitFlag = true
+	vm.txPoolStabilizedOk = make(chan struct{}, 1)
+	vm.txPoolStabilizedShutdownChan = make(chan struct{}, 1) // Signal goroutine to shutdown
+	// TODO: read size from options
+	vm.pendingAtomicTxs = make(chan *Tx, 1024)
+	vm.atomicTxSubmitChan = make(chan struct{}, 1)
+	vm.shutdownSubmitChan = make(chan struct{}, 1)
+	vm.newMinedBlockSub = vm.chain.SubscribeNewMinedBlockEvent()
+	vm.setChainCallbacks()
+	if err := vm.initializeState(); err != nil {
+		return err
+	}
+
+	vm.codec = Codec
+	// The Codec explicitly registers the types it requires from the secp256k1fx
+	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
+	// interface. The fx will register all of its types, which can be safely
+	// ignored by the VM's codec.
+	vm.baseCodec = linearcodec.NewDefault()
+
+	if err := vm.fx.Initialize(vm); err != nil {
+		return err
+	}
+
+	vm.start()
+	return nil
+}
+
+func (vm *VM) initializeState() error {
+	ethGenesisBlock := vm.chain.GetGenesisBlock()
+	genesisBlock := &Block{
+		id:       ids.ID(ethGenesisBlock.Hash()),
+		ethBlock: ethGenesisBlock,
+		vm:       vm,
+	}
+	vm.genesisHash = ethGenesisBlock.Hash()
+	chainState, err := NewChainState(vm.baseDB, genesisBlock, vm.getBlock, vm.parseBlock, vm.buildBlock, cacheSize)
+	vm.ChainState = chainState
+	return err
+}
+
+// start triggers the go routines to be run on initialization
+// and starts the Eth Chain process
+func (vm *VM) start() {
+	// TODO stop timer on Shutdown
+	vm.blockDelayTimer = timer.NewTimer(func() {
+		vm.bdlock.Lock()
+		switch vm.bdTimerState {
+		case bdTimerStateMin:
+			vm.bdTimerState = bdTimerStateMax
+			vm.blockDelayTimer.SetTimeoutIn(maxDuration(maxBlockTime-minBlockTime, 0))
+		case bdTimerStateMax:
+			vm.bdTimerState = bdTimerStateLong
+		}
+		tryAgain := vm.bdGenWaitFlag
+		vm.bdlock.Unlock()
+		if tryAgain {
+			vm.tryBlockGen()
+		}
+	})
+	go vm.ctx.Log.RecoverAndPanic(vm.blockDelayTimer.Dispatch)
+
+	vm.shutdownWg.Add(1)
+	go vm.ctx.Log.RecoverAndPanic(vm.awaitTxPoolStabilized)
+
+	vm.shutdownWg.Add(1)
+	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
+
+	vm.chain.Start()
+}
+
+// setChainCallbacks configures the chain callbacks to be called
+// by the Eth Chain throughout the process of building and verifying
+// blocks
+func (vm *VM) setChainCallbacks() {
+	vm.chain.SetOnHeaderNew(func(header *types.Header) {
 		hid := make([]byte, 32)
 		_, err := rand.Read(hid)
 		if err != nil {
@@ -279,7 +358,7 @@ func (vm *VM) Initialize(
 		}
 		header.Extra = append(header.Extra, hid...)
 	})
-	chain.SetOnFinalizeAndAssemble(func(state *state.StateDB, txs []*types.Transaction) ([]byte, error) {
+	vm.chain.SetOnFinalizeAndAssemble(func(state *state.StateDB, txs []*types.Transaction) ([]byte, error) {
 		select {
 		case atx := <-vm.pendingAtomicTxs:
 			if err := atx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state); err != nil {
@@ -297,7 +376,7 @@ func (vm *VM) Initialize(
 		}
 		return nil, nil
 	})
-	chain.SetOnSealFinish(func(block *types.Block) error {
+	vm.chain.SetOnSealFinish(func(block *types.Block) error {
 		log.Trace("EVM sealed a block")
 
 		blk := &Block{
@@ -310,90 +389,22 @@ func (vm *VM) Initialize(
 			return errInvalidBlock
 		}
 		vm.newBlockChan <- blk
-		vm.updateStatus(ids.ID(block.Hash()), choices.Processing)
+		vm.ChainState.AddBlock(blk)
 		vm.txPoolStabilizedLock.Lock()
 		vm.txPoolStabilizedHead = block.Hash()
 		vm.txPoolStabilizedLock.Unlock()
 		return nil
 	})
-	chain.SetOnQueryAcceptedBlock(func() *types.Block {
-		return vm.getLastAccepted().ethBlock
+	vm.chain.SetOnQueryAcceptedBlock(func() *types.Block {
+		return vm.getLastAcceptedEthBlock()
 	})
-	chain.SetOnExtraStateChange(func(block *types.Block, state *state.StateDB) error {
+	vm.chain.SetOnExtraStateChange(func(block *types.Block, state *state.StateDB) error {
 		tx := vm.getAtomicTx(block)
 		if tx == nil {
 			return nil
 		}
 		return tx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state)
 	})
-	vm.blockCache = cache.LRU{Size: blockCacheSize}
-	vm.blockStatusCache = cache.LRU{Size: blockCacheSize}
-	vm.blockAtomicInputCache = cache.LRU{Size: blockCacheSize}
-	vm.newBlockChan = make(chan *Block)
-	vm.networkChan = toEngine
-	vm.blockDelayTimer = timer.NewTimer(func() {
-		vm.bdlock.Lock()
-		switch vm.bdTimerState {
-		case bdTimerStateMin:
-			vm.bdTimerState = bdTimerStateMax
-			vm.blockDelayTimer.SetTimeoutIn(maxDuration(maxBlockTime-minBlockTime, 0))
-		case bdTimerStateMax:
-			vm.bdTimerState = bdTimerStateLong
-		}
-		tryAgain := vm.bdGenWaitFlag
-		vm.bdlock.Unlock()
-		if tryAgain {
-			vm.tryBlockGen()
-		}
-	})
-	go ctx.Log.RecoverAndPanic(vm.blockDelayTimer.Dispatch)
-
-	vm.bdTimerState = bdTimerStateLong
-	vm.bdGenWaitFlag = true
-	vm.txPoolStabilizedOk = make(chan struct{}, 1)
-	vm.txPoolStabilizedShutdownChan = make(chan struct{}, 1) // Signal goroutine to shutdown
-	// TODO: read size from options
-	vm.pendingAtomicTxs = make(chan *Tx, 1024)
-	vm.atomicTxSubmitChan = make(chan struct{}, 1)
-	vm.shutdownSubmitChan = make(chan struct{}, 1)
-	vm.newMinedBlockSub = vm.chain.SubscribeNewMinedBlockEvent()
-	vm.shutdownWg.Add(1)
-	go ctx.Log.RecoverAndPanic(vm.awaitTxPoolStabilized)
-	chain.Start()
-
-	var lastAccepted *types.Block
-	if b, err := vm.chaindb.Get([]byte(lastAcceptedKey)); err == nil {
-		var hash common.Hash
-		if err = rlp.DecodeBytes(b, &hash); err == nil {
-			if block := chain.GetBlockByHash(hash); block == nil {
-				log.Debug("lastAccepted block not found in chaindb")
-			} else {
-				lastAccepted = block
-			}
-		}
-	}
-	if lastAccepted == nil {
-		log.Debug("lastAccepted is unavailable, setting to the genesis block")
-		lastAccepted = chain.GetGenesisBlock()
-	}
-	vm.lastAccepted = &Block{
-		id:       ids.ID(lastAccepted.Hash()),
-		ethBlock: lastAccepted,
-		vm:       vm,
-	}
-	vm.genesisHash = chain.GetGenesisBlock().Hash()
-	log.Info(fmt.Sprintf("lastAccepted = %s", vm.lastAccepted.ethBlock.Hash().Hex()))
-
-	vm.shutdownWg.Add(1)
-	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
-	vm.codec = Codec
-	// The Codec explicitly registers the types it requires from the secp256k1fx
-	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
-	// interface. The fx will register all of its types, which can be safely
-	// ignored by the VM's codec.
-	vm.baseCodec = linearcodec.NewDefault()
-
-	return vm.fx.Initialize(vm)
 }
 
 // Bootstrapping notifies this VM that the consensus engine is performing
@@ -410,7 +421,7 @@ func (vm *VM) Shutdown() error {
 		return nil
 	}
 
-	vm.writeBackMetadata()
+	// vm.writeBackMetadata()
 	close(vm.txPoolStabilizedShutdownChan)
 	close(vm.shutdownSubmitChan)
 	vm.chain.Stop()
@@ -418,8 +429,8 @@ func (vm *VM) Shutdown() error {
 	return nil
 }
 
-// BuildBlock implements the snowman.ChainVM interface
-func (vm *VM) BuildBlock() (snowman.Block, error) {
+// buildBlock implements the snowman.ChainVM interface
+func (vm *VM) buildBlock() (snowman.Block, error) {
 	vm.chain.GenBlock()
 	block := <-vm.newBlockChan
 	if block == nil {
@@ -439,11 +450,7 @@ func (vm *VM) BuildBlock() (snowman.Block, error) {
 	return block, nil
 }
 
-// ParseBlock implements the snowman.ChainVM interface
-func (vm *VM) ParseBlock(b []byte) (snowman.Block, error) {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
+func (vm *VM) parseBlock(b []byte) (snowman.Block, error) {
 	ethBlock := new(types.Block)
 	if err := rlp.DecodeBytes(b, ethBlock); err != nil {
 		return nil, err
@@ -456,39 +463,17 @@ func (vm *VM) ParseBlock(b []byte) (snowman.Block, error) {
 	if blockHash != vm.genesisHash && ethBlock.Coinbase() != coreth.BlackholeAddr {
 		return nil, errInvalidBlock
 	}
-	block := &Block{
+	return &Block{
 		id:       ids.ID(blockHash),
 		ethBlock: ethBlock,
 		vm:       vm,
-	}
-	vm.blockCache.Put(block.ID(), block)
-	return block, nil
-}
-
-// GetBlock implements the snowman.ChainVM interface
-func (vm *VM) GetBlock(id ids.ID) (snowman.Block, error) {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
-	block := vm.getBlock(id)
-	if block == nil {
-		return nil, errUnknownBlock
-	}
-	return block, nil
+	}, nil
 }
 
 // SetPreference sets what the current tail of the chain is
 func (vm *VM) SetPreference(blkID ids.ID) {
 	err := vm.chain.SetTail(common.Hash(blkID))
 	vm.ctx.Log.AssertNoError(err)
-}
-
-// LastAccepted returns the ID of the block that was last accepted
-func (vm *VM) LastAccepted() ids.ID {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
-	return vm.lastAccepted.ID()
 }
 
 // NewHandler returns a new Handler for a service where:
@@ -558,21 +543,6 @@ func (vm *VM) CreateStaticHandlers() map[string]*commonEng.HTTPHandler {
  *********************************** Helpers **********************************
  ******************************************************************************
  */
-
-func (vm *VM) updateStatus(blockID ids.ID, status choices.Status) {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
-	if status == choices.Accepted {
-		vm.lastAccepted = vm.getBlock(blockID)
-		// TODO: improve this naive implementation
-		if atomic.SwapUint32(&vm.writingMetadata, 1) == 0 {
-			go vm.ctx.Log.RecoverAndPanic(vm.writeBackMetadata)
-		}
-	}
-	vm.blockStatusCache.Put(blockID, status)
-}
-
 func (vm *VM) tryBlockGen() error {
 	vm.bdlock.Lock()
 	defer vm.bdlock.Unlock()
@@ -613,123 +583,16 @@ func (vm *VM) tryBlockGen() error {
 	return nil
 }
 
-func (vm *VM) getCachedStatus(blockID ids.ID) choices.Status {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
-	if statusIntf, ok := vm.blockStatusCache.Get(blockID); ok {
-		return statusIntf.(choices.Status)
-	}
-
-	wrappedBlk := vm.getBlock(blockID)
-	if wrappedBlk == nil {
-		return choices.Unknown
-	}
-	blk := wrappedBlk.ethBlock
-
-	heightKey := blk.Number().Bytes()
-	acceptedIDBytes, err := vm.acceptedDB.Get(heightKey)
-	if err == nil {
-		if acceptedID, err := ids.ToID(acceptedIDBytes); err != nil {
-			log.Error(fmt.Sprintf("snowman-eth: acceptedID bytes didn't match expected value: %s", err))
-		} else {
-			if acceptedID == blockID {
-				vm.blockStatusCache.Put(blockID, choices.Accepted)
-				return choices.Accepted
-			}
-			vm.blockStatusCache.Put(blockID, choices.Rejected)
-			return choices.Rejected
-		}
-	}
-
-	status := vm.getUncachedStatus(blk)
-	if status == choices.Accepted {
-		err := vm.acceptedDB.Put(heightKey, blockID[:])
-		if err != nil {
-			log.Error(fmt.Sprintf("snowman-eth: failed to write back acceptedID bytes: %s", err))
-		}
-
-		tempBlock := wrappedBlk
-		for tempBlock.ethBlock != nil {
-			parentID := ids.ID(tempBlock.ethBlock.ParentHash())
-			tempBlock = vm.getBlock(parentID)
-			if tempBlock == nil || tempBlock.ethBlock == nil {
-				break
-			}
-
-			heightKey := tempBlock.ethBlock.Number().Bytes()
-			_, err := vm.acceptedDB.Get(heightKey)
-			if err == nil {
-				break
-			}
-
-			if err := vm.acceptedDB.Put(heightKey, parentID[:]); err != nil {
-				log.Error(fmt.Sprintf("snowman-eth: failed to write back acceptedID bytes: %s", err))
-			}
-		}
-	}
-
-	vm.blockStatusCache.Put(blockID, status)
-	return status
-}
-
-func (vm *VM) getUncachedStatus(blk *types.Block) choices.Status {
-	acceptedBlk := vm.lastAccepted.ethBlock
-
-	// TODO: There must be a better way of doing this.
-	// Traverse up the chain from the lower block until the indices match
-	highBlock := blk
-	lowBlock := acceptedBlk
-	if highBlock.Number().Cmp(lowBlock.Number()) < 0 {
-		highBlock, lowBlock = lowBlock, highBlock
-	}
-	for highBlock.Number().Cmp(lowBlock.Number()) > 0 {
-		parentBlock := vm.getBlock(ids.ID(highBlock.ParentHash()))
-		if parentBlock == nil {
-			return choices.Processing
-		}
-		highBlock = parentBlock.ethBlock
-	}
-
-	if highBlock.Hash() != lowBlock.Hash() { // on different branches
-		return choices.Rejected
-	}
-	// on the same branch
-	if blk.Number().Cmp(acceptedBlk.Number()) <= 0 {
-		return choices.Accepted
-	}
-	return choices.Processing
-}
-
-func (vm *VM) getBlock(id ids.ID) *Block {
-	if blockIntf, ok := vm.blockCache.Get(id); ok {
-		return blockIntf.(*Block)
-	}
+func (vm *VM) getBlock(id ids.ID) (snowman.Block, error) {
 	ethBlock := vm.chain.GetBlockByHash(common.Hash(id))
 	if ethBlock == nil {
-		return nil
+		return nil, errUnknownBlock
 	}
-	block := &Block{
+	return &Block{
 		id:       ids.ID(ethBlock.Hash()),
 		ethBlock: ethBlock,
 		vm:       vm,
-	}
-	vm.blockCache.Put(id, block)
-	return block
-}
-
-func (vm *VM) writeBackMetadata() {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
-	b, err := rlp.EncodeToBytes(vm.lastAccepted.ethBlock.Hash())
-	if err != nil {
-		log.Error("snowman-eth: error while writing back metadata")
-		return
-	}
-	log.Debug("writing back metadata")
-	vm.chaindb.Put([]byte(lastAcceptedKey), b)
-	atomic.StoreUint32(&vm.writingMetadata, 0)
+	}, nil
 }
 
 // awaitTxPoolStabilized waits for a txPoolHead channel event
@@ -776,11 +639,8 @@ func (vm *VM) awaitSubmittedTxs() {
 	}
 }
 
-func (vm *VM) getLastAccepted() *Block {
-	vm.metalock.Lock()
-	defer vm.metalock.Unlock()
-
-	return vm.lastAccepted
+func (vm *VM) getLastAcceptedEthBlock() *types.Block {
+	return vm.ChainState.LastAcceptedBlock().Block.(*Block).ethBlock
 }
 
 // ParseAddress takes in an address and produces the ID of the chain it's for
@@ -871,17 +731,17 @@ func (vm *VM) GetAtomicUTXOs(
 	return utxos, lastAddrID, lastUTXOID, nil
 }
 
-// GetSpendableFunds returns a list of EVMInputs and keys (in corresponding order)
+// GetSpendableFunds returns a list of AtomicEVMInputs and keys (in corresponding order)
 // to total [amount] of [assetID] owned by [keys]
 // TODO switch to returning a list of private keys
 // since there are no multisig inputs in Ethereum
-func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids.ID, amount uint64) ([]EVMInput, [][]*crypto.PrivateKeySECP256K1R, error) {
+func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids.ID, amount uint64) ([]AtomicEVMInput, [][]*crypto.PrivateKeySECP256K1R, error) {
 	// NOTE: should we use HEAD block or lastAccepted?
-	state, err := vm.chain.BlockState(vm.lastAccepted.ethBlock)
+	state, err := vm.chain.BlockState(vm.getLastAcceptedEthBlock())
 	if err != nil {
 		return nil, nil, err
 	}
-	inputs := []EVMInput{}
+	inputs := []AtomicEVMInput{}
 	signers := [][]*crypto.PrivateKeySECP256K1R{}
 	// NOTE: we assume all keys correspond to distinct accounts here (so the
 	// nonce handling in export_tx.go is correct)
@@ -906,7 +766,7 @@ func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids
 		if err != nil {
 			return nil, nil, err
 		}
-		inputs = append(inputs, EVMInput{
+		inputs = append(inputs, AtomicEVMInput{
 			Address: addr,
 			Amount:  balance,
 			AssetID: assetID,
@@ -925,7 +785,7 @@ func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids
 
 // GetAcceptedNonce returns the nonce associated with the address at the last accepted block
 func (vm *VM) GetAcceptedNonce(address common.Address) (uint64, error) {
-	state, err := vm.chain.BlockState(vm.lastAccepted.ethBlock)
+	state, err := vm.chain.BlockState(vm.getLastAcceptedEthBlock())
 	if err != nil {
 		return 0, err
 	}

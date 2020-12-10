@@ -5,7 +5,6 @@ package evm
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/hashing"
+	"github.com/ava-labs/avalanchego/vms/components/missing"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -123,7 +123,7 @@ func (c *ChainState) GetBlock(blkID ids.ID) (snowman.Block, error) {
 	}
 
 	if _, ok := c.missingBlocks.Get(blkID); ok {
-		return nil, errors.New("unknown block")
+		return nil, errUnknownBlock
 	}
 
 	blk, err := c.getBlock(blkID)
@@ -299,6 +299,16 @@ func (bw *BlockWrapper) Reject() error {
 	bw.state.decidedBlocks.Put(bw.ID(), bw)
 	bw.status = choices.Rejected
 	return bw.Block.Reject()
+}
+
+// Parent ...
+func (bw *BlockWrapper) Parent() snowman.Block {
+	parentID := bw.Block.Parent().ID()
+	blk, err := bw.state.GetBlock(parentID)
+	if err == nil {
+		return blk
+	}
+	return &missing.Block{BlkID: parentID}
 }
 
 // Status ...

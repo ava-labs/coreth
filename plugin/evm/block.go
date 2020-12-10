@@ -21,6 +21,7 @@ import (
 // Block implements the snowman.Block interface
 type Block struct {
 	id       ids.ID
+	status   choices.Status
 	ethBlock *types.Block
 	vm       *VM
 }
@@ -30,13 +31,13 @@ func (b *Block) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
 func (b *Block) Accept() error {
+	b.vm.metalock.Lock()
+	defer b.vm.metalock.Unlock()
+
 	vm := b.vm
+	b.status = choices.Accepted
 
 	log.Trace(fmt.Sprintf("Block %s is accepted", b.ID()))
-	vm.updateStatus(b.id, choices.Accepted)
-	if err := vm.acceptedDB.Put(b.ethBlock.Number().Bytes(), b.id[:]); err != nil {
-		return err
-	}
 
 	tx := vm.getAtomicTx(b.ethBlock)
 	if tx == nil {
@@ -52,24 +53,23 @@ func (b *Block) Accept() error {
 
 // Reject implements the snowman.Block interface
 func (b *Block) Reject() error {
+	b.status = choices.Rejected
 	log.Trace(fmt.Sprintf("Block %s is rejected", b.ID()))
-	b.vm.updateStatus(b.ID(), choices.Rejected)
 	return nil
 }
 
 // Status implements the snowman.Block interface
 func (b *Block) Status() choices.Status {
-	status := b.vm.getCachedStatus(b.ID())
-	if status == choices.Unknown && b.ethBlock != nil {
+	if b.status == choices.Unknown && b.ethBlock != nil {
 		return choices.Processing
 	}
-	return status
+	return b.status
 }
 
 // Parent implements the snowman.Block interface
 func (b *Block) Parent() snowman.Block {
 	parentID := ids.ID(b.ethBlock.ParentHash())
-	if block := b.vm.getBlock(parentID); block != nil {
+	if block, err := b.vm.getBlock(parentID); err == nil {
 		return block
 	}
 	return &missing.Block{BlkID: parentID}
@@ -81,6 +81,8 @@ func (b *Block) Height() uint64 {
 }
 
 // Verify implements the snowman.Block interface
+// Verify will only be called on a block once the block and
+// its complete ancestry is known
 func (b *Block) Verify() error {
 	// Only enforce a minimum fee when bootstrapping has finished
 	if b.vm.ctx.IsBootstrapped() {
@@ -128,6 +130,9 @@ func (b *Block) Verify() error {
 				}
 				vm.blockAtomicInputCache.Put(p.ID(), inputsCopy)
 			}
+			// if atx.InputUTXOs().Overlaps(inputs) {
+			// 	return errInvalidBlock
+			// }
 			for _, in := range atx.InputUTXOs().List() {
 				if inputs.Contains(in) {
 					return errInvalidBlock
