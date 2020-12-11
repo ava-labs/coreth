@@ -126,3 +126,5 @@ func TestExportTxVerify(t *testing.T) {
 		t.Fatal("ExportTx should have failed verification due to invalid output")
 	}
 }
+
+// Test semantic verify of export tx

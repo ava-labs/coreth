@@ -267,3 +267,10 @@ func TestIssueTxs(t *testing.T) {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
 	}
 }
+
+// Test conflicting import transactions/blocks spending the same atomic UTXOs
+// Test issuing Ethereum blocks
+
+// Test invalid block does not halt the chain
+
+// Test new API calls
