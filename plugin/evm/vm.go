@@ -125,7 +125,7 @@ func init() {
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
 	)
-	c.SkipRegistations(3)
+	c.SkipRegistrations(3)
 	errs.Add(
 		c.RegisterType(&secp256k1fx.TransferInput{}),
 		c.RegisterType(&secp256k1fx.MintOutput{}),
