@@ -36,13 +36,17 @@ func (b *Block) Accept() error {
 
 	log.Trace(fmt.Sprintf("Block %s is accepted", b.ID()))
 
-	tx := vm.getAtomicTx(b.ethBlock)
+	tx := vm.extractAtomicTx(b.ethBlock)
 	if tx == nil {
 		return nil
 	}
 	utx, ok := tx.UnsignedTx.(UnsignedAtomicTx)
 	if !ok {
 		return errors.New("unknown tx type")
+	}
+	txID := tx.ID()
+	if err := vm.acceptedAtomicTxDB.Put(txID[:], tx.Bytes()); err != nil {
+		return err
 	}
 
 	return utx.Accept(vm.ctx, nil)
@@ -96,7 +100,7 @@ func (b *Block) Verify() error {
 		}
 	}
 
-	tx := b.vm.getAtomicTx(b.ethBlock)
+	tx := b.vm.extractAtomicTx(b.ethBlock)
 	if tx != nil {
 		pState, err := b.vm.chain.BlockState(b.Parent().(*Block).ethBlock)
 		if err != nil {
@@ -129,7 +133,7 @@ func (b *Block) Verify() error {
 			for i := len(path) - 1; i >= 0; i-- {
 				inputsCopy := ids.Set{}
 				p := path[i]
-				atx := b.vm.getAtomicTx(p.ethBlock)
+				atx := b.vm.extractAtomicTx(p.ethBlock)
 				if atx != nil {
 					inputs.Union(atx.UnsignedTx.(UnsignedAtomicTx).InputUTXOs())
 					inputsCopy.Union(inputs)

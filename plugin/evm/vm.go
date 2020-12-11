@@ -63,6 +63,7 @@ const (
 	lastAcceptedKey = "snowman_lastAccepted"
 	acceptedPrefix  = "snowman_accepted"
 	ethPrefix       = "ethDB"
+	atomicTxPrefix  = "atomicTx"
 )
 
 const (
@@ -83,6 +84,7 @@ const (
 var (
 	txFee = units.MilliAvax
 
+	errNilTxID                    = errors.New("nil txID")
 	errEmptyBlock                 = errors.New("empty block")
 	errCreateBlock                = errors.New("couldn't create block")
 	errUnknownBlock               = errors.New("unknown block")
@@ -156,7 +158,8 @@ type VM struct {
 	newMinedBlockSub *event.TypeMuxSubscription
 
 	*ChainState
-	baseDB *versiondb.Database
+	acceptedAtomicTxDB database.Database
+	baseDB             *versiondb.Database
 
 	txPoolStabilizedHead         common.Hash
 	txPoolStabilizedOk           chan struct{}
@@ -185,7 +188,7 @@ type VM struct {
 	fx secp256k1fx.Fx
 }
 
-func (vm *VM) getAtomicTx(block *types.Block) *Tx {
+func (vm *VM) extractAtomicTx(block *types.Block) *Tx {
 	extdata := block.ExtraData()
 	atx := new(Tx)
 	if _, err := vm.codec.Unmarshal(extdata, atx); err != nil {
@@ -193,6 +196,23 @@ func (vm *VM) getAtomicTx(block *types.Block) *Tx {
 	}
 	atx.Sign(vm.codec, nil)
 	return atx
+}
+
+func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, error) {
+	txBytes, err := vm.acceptedAtomicTxDB.Get(txID[:])
+	if err != nil {
+		return nil, err
+	}
+
+	tx := &Tx{}
+	if _, err := vm.codec.Unmarshal(txBytes, tx); err != nil {
+		return nil, fmt.Errorf("problem parsing transaction from db: %w", err)
+	}
+	if err := tx.Sign(vm.codec, nil); err != nil {
+		return nil, fmt.Errorf("problem initializing transaction from db: %w", err)
+	}
+
+	return tx, nil
 }
 
 // Codec implements the secp256k1fx interface
@@ -237,6 +257,7 @@ func (vm *VM) Initialize(
 
 	vm.baseDB = versiondb.New(db)
 	vm.chaindb = Database{prefixdb.New([]byte(ethPrefix), vm.baseDB)}
+	vm.acceptedAtomicTxDB = prefixdb.New([]byte(atomicTxPrefix), vm.baseDB)
 
 	vm.chainID = g.Config.ChainID
 	vm.txFee = txFee
@@ -398,7 +419,7 @@ func (vm *VM) setChainCallbacks() {
 		return vm.getLastAcceptedEthBlock()
 	})
 	vm.chain.SetOnExtraStateChange(func(block *types.Block, state *state.StateDB) error {
-		tx := vm.getAtomicTx(block)
+		tx := vm.extractAtomicTx(block)
 		if tx == nil {
 			return nil
 		}
