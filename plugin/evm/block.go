@@ -31,9 +31,6 @@ func (b *Block) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
 func (b *Block) Accept() error {
-	b.vm.metalock.Lock()
-	defer b.vm.metalock.Unlock()
-
 	vm := b.vm
 	b.status = choices.Accepted
 
@@ -59,6 +56,11 @@ func (b *Block) Reject() error {
 }
 
 // Status implements the snowman.Block interface
+// this internal block type is maintained on a best effort
+// basis, while the canonical status of blocks is maintained
+// by ChainState, which is called by the Consensus Engine.
+// Therefore, the Status of an internal Block should not
+// be relied upon.
 func (b *Block) Status() choices.Status {
 	if b.status == choices.Unknown && b.ethBlock != nil {
 		return choices.Processing
@@ -69,8 +71,8 @@ func (b *Block) Status() choices.Status {
 // Parent implements the snowman.Block interface
 func (b *Block) Parent() snowman.Block {
 	parentID := ids.ID(b.ethBlock.ParentHash())
-	if block, err := b.vm.getBlock(parentID); err == nil {
-		return block
+	if block, err := b.vm.GetBlock(parentID); err == nil {
+		return block.(*BlockWrapper).Block
 	}
 	return &missing.Block{BlkID: parentID}
 }
@@ -94,8 +96,7 @@ func (b *Block) Verify() error {
 		}
 	}
 
-	vm := b.vm
-	tx := vm.getAtomicTx(b.ethBlock)
+	tx := b.vm.getAtomicTx(b.ethBlock)
 	if tx != nil {
 		pState, err := b.vm.chain.BlockState(b.Parent().(*Block).ethBlock)
 		if err != nil {
@@ -103,40 +104,40 @@ func (b *Block) Verify() error {
 		}
 		switch atx := tx.UnsignedTx.(type) {
 		case *UnsignedImportTx:
-			if b.ethBlock.Hash() == vm.genesisHash {
-				return nil
+			lastBlock := b.vm.getLastAcceptedEthBlock()
+			// If this block has height less than or equal to the last block
+			// verify that it was already accepted.
+			// In practice, verify should not be called on an already Accepted
+			// block.
+			if cmp := b.ethBlock.Number().Cmp(lastBlock.Number()); cmp <= 0 {
+				return b.verifyPastBlock()
 			}
 			p := b.Parent()
 			path := []*Block{}
-			inputs := new(ids.Set)
+			inputs := ids.Set{}
 			for {
-				if p.Status() == choices.Accepted || p.(*Block).ethBlock.Hash() == vm.genesisHash {
+				if cmp := p.(*Block).ethBlock.Number().Cmp(lastBlock.Number()); cmp <= 0 {
 					break
 				}
-				if ret, hit := vm.blockAtomicInputCache.Get(p.ID()); hit {
-					inputs = ret.(*ids.Set)
+				if atomicInputs, hit := b.vm.blockAtomicInputCache.Get(p.ID()); hit {
+					inputs = atomicInputs.(ids.Set)
 					break
 				}
 				path = append(path, p.(*Block))
 				p = p.Parent().(*Block)
 			}
 			for i := len(path) - 1; i >= 0; i-- {
-				inputsCopy := new(ids.Set)
+				inputsCopy := ids.Set{}
 				p := path[i]
-				atx := vm.getAtomicTx(p.ethBlock)
+				atx := b.vm.getAtomicTx(p.ethBlock)
 				if atx != nil {
 					inputs.Union(atx.UnsignedTx.(UnsignedAtomicTx).InputUTXOs())
-					inputsCopy.Union(*inputs)
+					inputsCopy.Union(inputs)
 				}
-				vm.blockAtomicInputCache.Put(p.ID(), inputsCopy)
+				b.vm.blockAtomicInputCache.Put(p.ID(), inputsCopy)
 			}
-			// if atx.InputUTXOs().Overlaps(inputs) {
-			// 	return errInvalidBlock
-			// }
-			for _, in := range atx.InputUTXOs().List() {
-				if inputs.Contains(in) {
-					return errInvalidBlock
-				}
+			if inputUTXOs := atx.InputUTXOs(); inputUTXOs.Overlaps(inputs) {
+				return errInvalidBlock
 			}
 		case *UnsignedExportTx:
 		default:
@@ -144,17 +145,33 @@ func (b *Block) Verify() error {
 		}
 
 		utx := tx.UnsignedTx.(UnsignedAtomicTx)
-		if utx.SemanticVerify(vm, tx) != nil {
+		if err := utx.SemanticVerify(b.vm, tx); err != nil {
 			return errInvalidBlock
 		}
-		bc := vm.chain.BlockChain()
-		_, _, _, err = bc.Processor().Process(b.ethBlock, pState, *bc.GetVMConfig())
-		if err != nil {
-			return errInvalidBlock
+		bc := b.vm.chain.BlockChain()
+		if _, _, _, err = bc.Processor().Process(b.ethBlock, pState, *bc.GetVMConfig()); err != nil {
+			return fmt.Errorf("block processing failed: %w", err)
 		}
 	}
 	_, err := b.vm.chain.InsertChain([]*types.Block{b.ethBlock})
 	return err
+}
+
+func (b *Block) verifyPastBlock() error {
+	if b.ethBlock.Hash() == b.vm.genesisHash {
+		return nil
+	}
+
+	blk, err := b.vm.ChainState.GetBlock(b.ID())
+	if err != nil {
+		return fmt.Errorf("failed to get past block: %w", err)
+	}
+
+	if status := blk.Status(); status == choices.Accepted {
+		return nil
+	}
+
+	return fmt.Errorf("different block was accepted at the height of block: %s", b.ID())
 }
 
 // Bytes implements the snowman.Block interface

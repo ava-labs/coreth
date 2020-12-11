@@ -367,6 +367,7 @@ func (vm *VM) setChainCallbacks() {
 		default:
 			if len(txs) == 0 {
 				// this could happen due to the async logic of geth tx pool
+				log.Error("Failed to assemble block due to no transactions")
 				vm.newBlockChan <- nil
 				return nil, errEmptyBlock
 			}
@@ -381,12 +382,13 @@ func (vm *VM) setChainCallbacks() {
 			ethBlock: block,
 			vm:       vm,
 		}
-		if blk.Verify() != nil {
+		if err := blk.Verify(); err != nil {
+			log.Error("Block failed verification", "block", blk.ID(), "error", err)
 			vm.newBlockChan <- nil
 			return errInvalidBlock
 		}
 		vm.newBlockChan <- blk
-		vm.ChainState.AddBlock(blk)
+		// vm.ChainState.AddBlock(blk)
 		vm.txPoolStabilizedLock.Lock()
 		vm.txPoolStabilizedHead = block.Hash()
 		vm.txPoolStabilizedLock.Unlock()
@@ -600,7 +602,13 @@ func (vm *VM) awaitTxPoolStabilized() {
 	defer vm.shutdownWg.Done()
 	for {
 		select {
-		case e := <-vm.newMinedBlockSub.Chan():
+		case e, ok := <-vm.newMinedBlockSub.Chan():
+			if e == nil {
+				log.Error(fmt.Sprintf("new mined block channel returned a nil element, ok: %v", ok))
+			}
+			if !ok {
+				return
+			}
 			switch h := e.Data.(type) {
 			case core.NewMinedBlockEvent:
 				vm.txPoolStabilizedLock.Lock()

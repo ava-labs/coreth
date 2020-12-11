@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/vms/components/missing"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Define db prefixes and keys
@@ -124,7 +123,9 @@ func (c *ChainState) GetBlock(blkID ids.ID) (snowman.Block, error) {
 		return nil, errUnknownBlock
 	}
 
+	c.lock.Unlock()
 	blk, err := c.getBlock(blkID)
+	c.lock.Lock()
 	if err != nil {
 		c.missingBlocks.Put(blkID, struct{}{})
 		return nil, err
@@ -169,7 +170,9 @@ func (c *ChainState) ParseBlock(b []byte) (snowman.Block, error) {
 		return blk.(snowman.Block), nil
 	}
 
+	c.lock.Unlock()
 	blk, err := c.unmarshalBlock(b)
+	c.lock.Lock()
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +186,12 @@ func (c *ChainState) BuildBlock() (snowman.Block, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	log.Info("Calling internal buildBlock")
+	c.lock.Unlock()
 	blk, err := c.buildBlock()
+	c.lock.Lock()
 	if err != nil {
 		return nil, err
 	}
-	log.Info("buildBlock returned")
 	c.missingBlocks.Evict(blk.ID())
 
 	// Blocks built by BuildBlock are built on top of the
