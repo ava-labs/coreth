@@ -626,6 +626,7 @@ func (vm *VM) awaitTxPoolStabilized() {
 		case e, ok := <-vm.newMinedBlockSub.Chan():
 			if e == nil {
 				log.Error(fmt.Sprintf("new mined block channel returned a nil element, ok: %v", ok))
+				continue
 			}
 			if !ok {
 				return

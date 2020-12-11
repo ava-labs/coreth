@@ -127,4 +127,12 @@ func TestExportTxVerify(t *testing.T) {
 	}
 }
 
+func TestExportTxSemanticVerify(t *testing.T) {
+	// insufficient balance
+	// unsigned transaction
+	// no credentials
+	// wrong number of credentials
+	// signed transaction passes
+}
+
 // Test semantic verify of export tx
