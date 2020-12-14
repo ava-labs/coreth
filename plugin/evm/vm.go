@@ -453,9 +453,6 @@ func (vm *VM) Shutdown() error {
 func (vm *VM) buildBlock() (snowman.Block, error) {
 	vm.chain.GenBlock()
 	block := <-vm.newBlockChan
-	if block == nil {
-		return nil, errCreateBlock
-	}
 	// reset the min block time timer
 	vm.bdlock.Lock()
 	vm.bdTimerState = bdTimerStateMin
@@ -463,6 +460,10 @@ func (vm *VM) buildBlock() (snowman.Block, error) {
 	vm.bdGenFlag = false
 	vm.blockDelayTimer.SetTimeoutIn(minBlockTime)
 	vm.bdlock.Unlock()
+
+	if block == nil {
+		return nil, errCreateBlock
+	}
 
 	log.Debug(fmt.Sprintf("built block %s", block.ID()))
 	// make sure Tx Pool is updated
