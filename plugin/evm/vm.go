@@ -243,11 +243,10 @@ func (vm *VM) Initialize(
 	// TODO switch to correct block number of the fork
 	switch {
 	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
-		g.Config.ApricotBlock = nil
+		g.Config = params.AvalancheApricotMainnetChainConfig
 	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
-		g.Config.ApricotBlock = nil
+		g.Config = params.AvalancheApricotFujiChainConfig
 	}
-
 	vm.acceptedDB = prefixdb.New([]byte(acceptedPrefix), db)
 
 	vm.chainID = g.Config.ChainID

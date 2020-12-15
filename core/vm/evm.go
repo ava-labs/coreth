@@ -152,7 +152,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		StateDB:      statedb,
 		vmConfig:     vmConfig,
 		chainConfig:  chainConfig,
-		chainRules:   chainConfig.Rules(ctx.BlockNumber),
+		chainRules:   chainConfig.AvalancheRules(ctx.BlockNumber, ctx.Time),
 		interpreters: make([]Interpreter, 0, 1),
 	}
 

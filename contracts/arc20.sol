@@ -2,7 +2,7 @@
 
 pragma solidity >=0.6.0 <0.8.0;
 
-import {NativeAssets} from "./NativeAssets.sol";
+import {NativeAssets} from "./nativeAssets.sol";
 
 contract ARC20 {
 
