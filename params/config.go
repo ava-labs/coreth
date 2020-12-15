@@ -53,11 +53,18 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 	GoerliGenesisHash:  GoerliCheckpointOracle,
 }
 
+// Avalanche ChainIDs
 var (
 	// AvalancheMainnetChainID ...
 	AvalancheMainnetChainID = big.NewInt(43114)
 	// AvalancheFujiChainID ...
 	AvalancheFujiChainID = big.NewInt(43113)
+)
+
+// Network upgrade block timestamps
+var (
+	AvalancheMainnetApricotTimestamp = new(big.Int).SetUint64(uint64(time.Date(2021, 1, 7, 5, 00, 0, 0, time.UTC).Unix()))
+	AvalancheFujiApricotTimestamp    = new(big.Int).SetUint64(uint64(time.Date(2020, 12, 23, 5, 00, 0, 0, time.UTC).Unix()))
 )
 
 var (
@@ -75,7 +82,7 @@ var (
 		PetersburgBlock:       big.NewInt(0),
 		IstanbulBlock:         big.NewInt(0),
 		MuirGlacierBlock:      big.NewInt(0),
-		ApricotBlockTimestamp: new(big.Int).SetUint64(uint64(time.Date(2021, 1, 7, 5, 00, 0, 0, time.UTC).Unix())),
+		ApricotBlockTimestamp: AvalancheMainnetApricotTimestamp,
 	}
 
 	// AvalancheApricotFujiChainConfig is the configuration for the Fuji Test Network
@@ -92,7 +99,7 @@ var (
 		PetersburgBlock:       big.NewInt(0),
 		IstanbulBlock:         big.NewInt(0),
 		MuirGlacierBlock:      big.NewInt(0),
-		ApricotBlockTimestamp: new(big.Int).SetUint64(uint64(time.Date(2020, 12, 23, 5, 00, 0, 0, time.UTC).Unix())),
+		ApricotBlockTimestamp: AvalancheFujiApricotTimestamp,
 	}
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
