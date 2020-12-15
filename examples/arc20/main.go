@@ -15,8 +15,8 @@ import (
 
 var (
 	uri                    = "http://127.0.0.1:9650/ext/bc/C/rpc"
-	nativeAssetCallAddr    = common.BytesToAddress([]byte{11})
-	nativeAssetBalanceAddr = common.BytesToAddress([]byte{10})
+	nativeAssetBalanceAddr = common.HexToAddress("0x0100000000000000000000000000000000000001")
+	nativeAssetCallAddr    = common.HexToAddress("0x0100000000000000000000000000000000000002")
 	chainID                = new(big.Int).SetUint64(43112)
 	privateKey             *ecdsa.PrivateKey
 	address                common.Address
@@ -28,14 +28,23 @@ var (
 )
 
 func init() {
+	// Private Key to sign deposit transaction
+	// To export from MetaMask:
+	// 1) Click ellipsis on right hand side of account page
+	// 2) View Account Details
+	// 3) Export Private Key
 	pk, err := crypto.HexToECDSA("da777cd656c8760a7d378ae04d7dd0cd7a703c450c84e6c2faa886ca97517df7")
 	if err != nil {
 		panic(err)
 	}
 	privateKey = pk
+	// Extract From Address from the private key
 	address = crypto.PubkeyToAddress(privateKey.PublicKey)
-	erc20 = common.HexToAddress("0xea75d59faF258F1fdf2b94F158e54D7ad44359B6")
-	aID, success := new(big.Int).SetString("21556002304173297996004673107070813226981923092188601867247360128943231977558", 10)
+	// erc20 = common.HexToAddress("0xea75d59faF258F1fdf2b94F158e54D7ad44359B6")
+	// Address of ARC-20 to deposit funds in
+	erc20 = common.HexToAddress("0xC67353d203d748FC6D5E50bf44c7813C39EADea3")
+	// AssetID as a uint256 integer as displayed in Remix of the ARC-20
+	aID, success := new(big.Int).SetString("49381164258359268658146204715775898207620442222804199785202784815303309497754", 10)
 	if !success {
 		panic("Failed to read assetID")
 	}
