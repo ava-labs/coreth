@@ -27,8 +27,8 @@ var PrecompiledContractsApricot = map[common.Address]StatefulPrecompiledContract
 	common.BytesToAddress([]byte{8}):                                  newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
 	common.BytesToAddress([]byte{9}):                                  newWrappedPrecompiledContract(&blake2F{}),
 	common.HexToAddress("0x0100000000000000000000000000000000000000"): &deprecatedContract{msg: "hardcoded genesis contract has been deprecated"},
-	common.HexToAddress("0xffffffffffffffffffffffffffffffffffffff"):   &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
-	common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffe"):   &nativeAssetCall{gasCost: params.AssetCallApricot},
+	common.HexToAddress("0x0100000000000000000000000000000000000001"): &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
+	common.HexToAddress("0x0100000000000000000000000000000000000002"): &nativeAssetCall{gasCost: params.AssetCallApricot},
 }
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
