@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	version = "coreth-v0.3.17"
+	version = "coreth-v0.4.0"
 )
 
 // test constants
