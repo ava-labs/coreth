@@ -376,7 +376,7 @@ type ChainConfig struct {
 
 	// Apricot switch block timestamp (nil = no fork, 0 = already activated)
 	// Apricot rules go into effect for blocks with a timestamp >= ApricotBlockTimestamp
-	ApricotBlockTimestamp *big.Int `json:"apricotBlock,omitempty"`
+	ApricotBlockTimestamp *big.Int `json:"apricotBlockTimestamp,omitempty"`
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
