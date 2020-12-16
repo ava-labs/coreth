@@ -42,13 +42,9 @@ func init() {
 	address = crypto.PubkeyToAddress(privateKey.PublicKey)
 	// erc20 = common.HexToAddress("0xea75d59faF258F1fdf2b94F158e54D7ad44359B6")
 	// Address of ARC-20 to deposit funds in
-	erc20 = common.HexToAddress("0xC67353d203d748FC6D5E50bf44c7813C39EADea3")
+	erc20 = common.HexToAddress("0x721F9Af7631605713133ccc502E32eA4d43CDfec")
 	// AssetID as a uint256 integer as displayed in Remix of the ARC-20
-	aID, success := new(big.Int).SetString("49381164258359268658146204715775898207620442222804199785202784815303309497754", 10)
-	if !success {
-		panic("Failed to read assetID")
-	}
-	assetID = aID
+	assetID = common.HexToHash("0x42f0d24c970eb6c567ea63a68b97d8e357a7fc8d9f73489c7761f1382b295db4").Big()
 	amount = new(big.Int).SetUint64(100)
 }
 
@@ -74,6 +70,7 @@ func createDepositTransaction(nonce uint64, erc20 common.Address, assetID, amoun
 	return types.NewTransaction(nonce, nativeAssetCallAddr, new(big.Int), gasLimit, gasPrice, callData)
 }
 
+// deploy ARC-20 contract with specific assetID
 func main() {
 	client, err := ethclient.Dial(uri)
 	if err != nil {
