@@ -240,8 +240,8 @@ func (vm *VM) newExportTx(
 func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error {
 	addrs := map[[20]byte]uint64{}
 	for _, from := range tx.Ins {
-		log.Info("crosschain C->X", "addr", from.Address, "amount", from.Amount)
 		if from.AssetID == vm.ctx.AVAXAssetID {
+			log.Info("crosschain C->X", "from", from.Address, "amount", from.Amount, "assetID", "AVAX")
 			amount := new(big.Int).Mul(
 				new(big.Int).SetUint64(from.Amount), x2cRate)
 			if state.GetBalance(from.Address).Cmp(amount) < 0 {
@@ -250,6 +250,7 @@ func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error
 			state.SubBalance(from.Address, amount)
 		} else {
 			amount := new(big.Int).SetUint64(from.Amount)
+			log.Info("crosschain C->X", "from", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}

@@ -49,6 +49,7 @@ type operation struct {
 }
 
 var (
+	apricotInstructionSet          = newApricotInstructionSet()
 	frontierInstructionSet         = newFrontierInstructionSet()
 	homesteadInstructionSet        = newHomesteadInstructionSet()
 	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
@@ -61,6 +62,16 @@ var (
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newApricotInstructionSet returns a new instruction set
+// compatible with the Apricot release, which deprecates
+// added instructions: CALLEX and BALANCEMC
+func newApricotInstructionSet() JumpTable {
+	instructionSet := newIstanbulInstructionSet()
+	instructionSet[CALLEX] = nil
+	instructionSet[BALANCEMC] = nil
+	return instructionSet
+}
 
 func newYoloV1InstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()

@@ -239,6 +239,14 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	// If Mainnet or Fuji ChainID is present then switch
+	// manually set the config
+	switch {
+	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
+		g.Config.ApricotBlockTimestamp = params.AvalancheMainnetApricotTimestamp
+	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
+		g.Config.ApricotBlockTimestamp = params.AvalancheFujiApricotTimestamp
+	}
 	vm.acceptedDB = prefixdb.New([]byte(acceptedPrefix), db)
 
 	vm.chainID = g.Config.ChainID

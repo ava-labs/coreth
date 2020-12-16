@@ -28,7 +28,6 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/clique"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/ethash"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -152,7 +151,7 @@ func New(stack *node.Node, config *Config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
-		engine:            CreateConsensusEngine(stack, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb, cb),
+		engine:            CreateConsensusEngine(cb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
@@ -265,7 +264,7 @@ func makeExtraData(extra []byte) []byte {
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, cb *dummy.ConsensusCallbacks) consensus.Engine {
+func CreateConsensusEngine(cb *dummy.ConsensusCallbacks) consensus.Engine {
 	return dummy.NewDummyEngine(cb)
 }
 

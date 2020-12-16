@@ -208,6 +208,7 @@ const (
 	SWAP
 )
 
+// Constants supporting native asset operations
 const (
 	BALANCEMC = 0xcd
 	//EMC       = 0xce

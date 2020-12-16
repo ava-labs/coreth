@@ -5,6 +5,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"go/build"
+	"math/big"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+
 	"github.com/ava-labs/coreth"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -18,14 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"go/build"
-	"math/big"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"syscall"
-	"time"
 )
 
 func checkError(err error) {
