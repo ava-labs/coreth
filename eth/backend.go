@@ -559,3 +559,13 @@ func (s *Ethereum) AcceptedBlock() *types.Block {
 	}
 	return s.blockchain.CurrentBlock()
 }
+
+// SetGasPrice sets the minimum gas price to [newGasPrice]
+// sets the price on [s], [txPool], and the gas price oracle
+func (s *Ethereum) SetGasPrice(newGasPrice *big.Int) {
+	s.lock.Lock()
+	s.gasPrice = newGasPrice
+	s.lock.Unlock()
+	s.txPool.SetGasPrice(newGasPrice)
+	s.APIBackend.gpo.SetGasPrice(newGasPrice)
+}

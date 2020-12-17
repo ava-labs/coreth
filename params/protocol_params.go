@@ -152,8 +152,42 @@ var (
 	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
 	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+)
 
+// Minimum Gas Price
+var (
 	// MinGasPrice is the number of nAVAX required per gas unit for a transaction
 	// to be valid, measured in wei
-	MinGasPrice = big.NewInt(470 * GWei)
+	MinGasPrice        = big.NewInt(470 * GWei)
+	LaunchMinGasPrice  = big.NewInt(470 * GWei)
+	ApricotMinGasPrice = big.NewInt(100 * GWei)
 )
+
+// GasPrice provides an interface to get the minimum
+// gas price
+type GasPrice interface {
+	GetMin(blockTimestamp *big.Int) *big.Int
+}
+
+// NewGasPrice returns a getter for the GasPrice based on a block timestamp
+func NewGasPrice(apricotTimestamp *big.Int) GasPrice {
+	return &minGasPriceFetcher{
+		launchPrice:      LaunchMinGasPrice,
+		apricotPrice:     ApricotMinGasPrice,
+		apricotTimestamp: apricotTimestamp,
+	}
+}
+
+type minGasPriceFetcher struct {
+	apricotTimestamp          *big.Int
+	launchPrice, apricotPrice *big.Int
+}
+
+// GetMin returns the minimum gas price for a block with the given timestamp
+func (m *minGasPriceFetcher) GetMin(blockTimestamp *big.Int) *big.Int {
+	if m.apricotTimestamp == nil || blockTimestamp.Cmp(m.apricotTimestamp) >= 0 {
+		return m.apricotPrice
+	}
+
+	return m.launchPrice
+}

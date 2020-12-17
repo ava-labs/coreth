@@ -185,6 +185,8 @@ type VM struct {
 	shutdownWg   sync.WaitGroup
 
 	fx secp256k1fx.Fx
+
+	minGasPrice params.GasPrice
 }
 
 func (vm *VM) getAtomicTx(block *types.Block) *Tx {
@@ -262,13 +264,34 @@ func (vm *VM) Initialize(
 	config.Miner.ManualMining = true
 	config.Miner.DisableUncle = true
 
-	// Set minimum price for mining and default gas price oracle value to the min
-	// gas price to prevent so transactions and blocks all use the correct fees
-	config.Miner.GasPrice = params.MinGasPrice
+	// Set minimum gas price and launch goroutine to sleep until
+	// network upgrade when the gas price must be changed
+	vm.minGasPrice = params.NewGasPrice(g.Config.ApricotBlockTimestamp)
+	if g.Config.ApricotBlockTimestamp == nil {
+		config.Miner.GasPrice = params.ApricotMinGasPrice
+		config.GPO.Default = params.ApricotMinGasPrice
+		config.TxPool.PriceLimit = params.ApricotMinGasPrice.Uint64()
+	} else {
+		apricotTime := time.Unix(g.Config.ApricotBlockTimestamp.Int64(), 0)
+		if time.Now().Before(apricotTime) {
+			config.Miner.GasPrice = params.LaunchMinGasPrice
+			config.GPO.Default = params.LaunchMinGasPrice
+			config.TxPool.PriceLimit = params.LaunchMinGasPrice.Uint64()
+
+			go func() {
+				time.Sleep(time.Until(apricotTime))
+
+				vm.chain.SetGasPrice(params.ApricotMinGasPrice)
+			}()
+		} else {
+			config.Miner.GasPrice = params.ApricotMinGasPrice
+			config.GPO.Default = params.ApricotMinGasPrice
+			config.TxPool.PriceLimit = params.ApricotMinGasPrice.Uint64()
+		}
+	}
+
 	config.RPCGasCap = vm.CLIConfig.RPCGasCap
 	config.RPCTxFeeCap = vm.CLIConfig.RPCTxFeeCap
-	config.GPO.Default = params.MinGasPrice
-	config.TxPool.PriceLimit = params.MinGasPrice.Uint64()
 	config.TxPool.NoLocals = true
 
 	if err := config.SetGCMode("archive"); err != nil {

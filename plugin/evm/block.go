@@ -6,9 +6,9 @@ package evm
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
@@ -85,9 +85,11 @@ func (b *Block) Verify() error {
 	// Only enforce a minimum fee when bootstrapping has finished
 	if b.vm.ctx.IsBootstrapped() {
 		// Ensure the minimum gas price is paid for every transaction
+		timestamp := b.ethBlock.Header().Time
+		minGasPrice := b.vm.minGasPrice.GetMin(new(big.Int).SetUint64(timestamp))
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(params.MinGasPrice) < 0 {
-				return errInvalidBlock
+			if tx.GasPrice().Cmp(minGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d), timestamp: %d", tx.Hash(), tx.GasPrice(), minGasPrice, timestamp)
 			}
 		}
 	}
@@ -139,17 +141,21 @@ func (b *Block) Verify() error {
 		}
 
 		utx := tx.UnsignedTx.(UnsignedAtomicTx)
-		if utx.SemanticVerify(vm, tx) != nil {
-			return errInvalidBlock
+		if err := utx.SemanticVerify(vm, tx); err != nil {
+			return fmt.Errorf("block atomic tx failed verification due to: %w", err)
 		}
 		bc := vm.chain.BlockChain()
 		_, _, _, err = bc.Processor().Process(b.ethBlock, pState, *bc.GetVMConfig())
 		if err != nil {
-			return errInvalidBlock
+			return fmt.Errorf("block failed processing due to: %w", err)
 		}
 	}
 	_, err := b.vm.chain.InsertChain([]*types.Block{b.ethBlock})
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to insert block into chain due to: %w", err)
+	}
+
+	return nil
 }
 
 // Bytes implements the snowman.Block interface

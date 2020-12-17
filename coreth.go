@@ -3,6 +3,7 @@ package coreth
 import (
 	"crypto/ecdsa"
 	"io"
+	"math/big"
 	"os"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -211,6 +212,11 @@ func (self *ETHChain) GetTxSubmitCh() <-chan struct{} {
 
 func (self *ETHChain) GetTxPool() *core.TxPool {
 	return self.backend.TxPool()
+}
+
+// SetGasPrice sets the gas price on the backend
+func (self *ETHChain) SetGasPrice(newGasPrice *big.Int) {
+	self.backend.SetGasPrice(newGasPrice)
 }
 
 type Key struct {
