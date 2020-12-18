@@ -274,12 +274,14 @@ func (vm *VM) Initialize(
 	} else {
 		apricotTime := time.Unix(g.Config.ApricotBlockTimestamp.Int64(), 0)
 		if time.Now().Before(apricotTime) {
+			untilApricot := time.Until(apricotTime)
+			log.Info(fmt.Sprintf("Minimum gas price will be updated in %v for the Apricot upgrade", untilApricot))
 			config.Miner.GasPrice = params.LaunchMinGasPrice
 			config.GPO.Default = params.LaunchMinGasPrice
 			config.TxPool.PriceLimit = params.LaunchMinGasPrice.Uint64()
 
 			go func() {
-				time.Sleep(time.Until(apricotTime))
+				time.Sleep(untilApricot)
 
 				vm.chain.SetGasPrice(params.ApricotMinGasPrice)
 			}()
