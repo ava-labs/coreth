@@ -502,7 +502,6 @@ func (c *ChainConfig) IsApricot(blockTimestamp *big.Int) bool {
 	return isForked(c.ApricotBlockTimestamp, blockTimestamp)
 }
 
-// TODO review how this works and see if it will work for a live transition
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
@@ -542,10 +541,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "yoloV1Block", block: c.YoloV1Block},
-		// TODO figure out how Apricot fits in here.
-		// Precompiled contracts start from other end so they are compatible
-		// but it may be incompatible (and it was before Apricot as well) due
-		// to how the instruction sets are created
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number

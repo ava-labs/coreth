@@ -40,10 +40,9 @@ func init() {
 	privateKey = pk
 	// Extract From Address from the private key
 	address = crypto.PubkeyToAddress(privateKey.PublicKey)
-	// erc20 = common.HexToAddress("0xea75d59faF258F1fdf2b94F158e54D7ad44359B6")
 	// Address of ARC-20 to deposit funds in
 	erc20 = common.HexToAddress("0x721F9Af7631605713133ccc502E32eA4d43CDfec")
-	// AssetID as a uint256 integer as displayed in Remix of the ARC-20
+	// AssetID of the underlying asset
 	assetID = common.HexToHash("0x42f0d24c970eb6c567ea63a68b97d8e357a7fc8d9f73489c7761f1382b295db4").Big()
 	amount = new(big.Int).SetUint64(100)
 }
@@ -59,7 +58,7 @@ func createDepositCallData(erc20 common.Address, assetID, amount *big.Int) []byt
 	data = append(data, erc20.Bytes()...)
 	data = append(data, common.LeftPadBytes(assetID.Bytes(), 32)...)
 	data = append(data, common.LeftPadBytes(amount.Bytes(), 32)...)
-	data = append(data, functionSignature...) // Add this back in to trigger call to deposit
+	data = append(data, functionSignature...)
 	fmt.Printf("deposit callData: 0x%x\n", data)
 	return data
 }
@@ -70,7 +69,7 @@ func createDepositTransaction(nonce uint64, erc20 common.Address, assetID, amoun
 	return types.NewTransaction(nonce, nativeAssetCallAddr, new(big.Int), gasLimit, gasPrice, callData)
 }
 
-// deploy ARC-20 contract with specific assetID
+// Deposit funds into an ARC-20 Contract
 func main() {
 	client, err := ethclient.Dial(uri)
 	if err != nil {
@@ -83,14 +82,14 @@ func main() {
 	}
 	fmt.Printf("Creating deposit transaction from: %s, erc20 address: %s, assetID: %d, amount: %d, nonce: %d\n", address.Hex(), erc20.Hex(), assetID, amount, nonce)
 	// Create and sign deposit transaction from account that has been funded with sufficient AVAX to
-	// pay gas costs and sufficient amount of the native asset to make the deposit
+	// pay gas costs and sufficient amount of [assetID] to make the deposit
 	tx := createDepositTransaction(nonce, erc20, assetID, amount, gasLimit, gasPrice)
 	signer := types.NewEIP155Signer(chainID)
 	signedTx, err := types.SignTx(tx, signer, privateKey)
 	if err != nil {
 		panic(err)
 	}
-	// Send the signed transaction to the client
+	// Issue the signed transaction to the client
 	if err := client.SendTransaction(ctx, signedTx); err != nil {
 		panic(err)
 	}
