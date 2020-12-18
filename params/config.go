@@ -496,8 +496,8 @@ func (c *ChainConfig) IsEWASM(num *big.Int) bool {
 
 // Avalanche Forks:
 
-// IsApricot returns whether num represents a block with a timestamp
-// after the Apricot fork time.
+// IsApricot returns whether [blockTimestamp] represents a block
+// with a timestamp after the Apricot fork time.
 func (c *ChainConfig) IsApricot(blockTimestamp *big.Int) bool {
 	return isForked(c.ApricotBlockTimestamp, blockTimestamp)
 }

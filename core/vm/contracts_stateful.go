@@ -51,7 +51,7 @@ func newWrappedPrecompiledContract(p PrecompiledContract) StatefulPrecompiledCon
 	return &wrappedPrecompiledContract{p: p}
 }
 
-// Run ...
+// Run implements the StatefulPrecompiledContract interface
 func (w *wrappedPrecompiledContract) Run(evm *EVM, caller ContractRef, addr common.Address, value *big.Int, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// [caller.Address()] has already been verified
 	// as having a sufficient balance before the

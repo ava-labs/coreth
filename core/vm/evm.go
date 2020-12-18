@@ -36,6 +36,8 @@ type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
 	// CanTransferMCFunc is the signature of a transfer native asset function
+	// Return value 0 indicates the address can transfer the given amount of the MultiCoin
+	// Other return value indicates that it may not.
 	CanTransferMCFunc func(StateDB, common.Address, common.Address, *common.Hash, *big.Int) int
 	// TransferFunc is the signature of a transfer function
 	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
