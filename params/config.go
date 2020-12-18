@@ -560,6 +560,10 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
+
+	if c.ApricotBlockTimestamp != nil && c.YoloV1Block != nil {
+		return fmt.Errorf("apricot fork is incomatible with yoloV1 fork")
+	}
 	return nil
 }
 
