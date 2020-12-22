@@ -147,7 +147,10 @@ func (tx *UnsignedImportTx) SemanticVerify(
 			return permError{errAssetIDMismatch}
 		}
 
-		if err := vm.fx.VerifyTransfer(tx, in.In, cred, utxo.Out); err != nil {
+		if err := vm.fx.VerifyTransfer(in.In, utxo.Out); err != nil {
+			return tempError{err}
+		}
+		if err := vm.fx.VerifyPermission(tx, in.In, cred, utxo.Out); err != nil {
 			return tempError{err}
 		}
 	}

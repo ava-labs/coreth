@@ -74,7 +74,7 @@ func (tx *UnsignedExportTx) Verify(
 			return err
 		}
 	}
-	if !avax.IsSortedTransferableOutputs(tx.ExportedOutputs, Codec) {
+	if !avax.IsSortedTransferableOutputs(tx.ExportedOutputs, Codec, 0) {
 		return errOutputsNotSorted
 	}
 
@@ -218,7 +218,7 @@ func (vm *VM) newExportTx(
 		},
 	}}
 
-	avax.SortTransferableOutputs(exportOuts, vm.codec)
+	avax.SortTransferableOutputs(exportOuts, vm.codec, vm.codecVersion)
 	SortEVMInputsAndSigners(ins, signers)
 
 	// Create the transaction

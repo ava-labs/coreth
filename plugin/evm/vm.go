@@ -203,6 +203,7 @@ type VM struct {
 	atomicTxSubmitChan    chan struct{}
 	baseCodec             codec.Registry
 	codec                 codec.Manager
+	codecVersion          uint16
 	clock                 timer.Clock
 	txFee                 uint64
 	pendingAtomicTxs      chan *Tx
@@ -416,6 +417,7 @@ func (vm *VM) Initialize(
 	vm.shutdownWg.Add(1)
 	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
 	vm.codec = Codec
+	vm.codecVersion = uint16(0)
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
