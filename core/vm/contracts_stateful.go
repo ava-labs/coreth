@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -69,7 +68,8 @@ type nativeAssetBalance struct {
 func (b *nativeAssetBalance) Run(evm *EVM, caller ContractRef, addr common.Address, value *big.Int, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes)
 	if value.Sign() != 0 {
-		return nil, suppliedGas, errors.New("cannot transfer value to native asset balance pre-compiled contract")
+		log.Error("cannot call native asset balance with non-zero value", "value", value)
+		return nil, suppliedGas, ErrExecutionReverted
 	}
 
 	if suppliedGas < b.gasCost {
@@ -78,16 +78,17 @@ func (b *nativeAssetBalance) Run(evm *EVM, caller ContractRef, addr common.Addre
 	remainingGas = suppliedGas - b.gasCost
 
 	if len(input) != 52 {
-		return nil, remainingGas, fmt.Errorf("input to native asset balance must be 52 bytes, containing address [20 bytes] and assetID [32 bytes], but found length: %d", len(input))
+		log.Error("input to native asset balance must be 52 bytes, containing address [20 bytes] and assetID [32 bytes]", "input length", len(input))
+		return nil, remainingGas, ErrExecutionReverted
 	}
 	address := common.BytesToAddress(input[:20])
 	assetID := new(common.Hash)
 	assetID.SetBytes(input[20:52])
 
 	res, overflow := uint256.FromBig(evm.StateDB.GetBalanceMultiCoin(address, *assetID))
-	log.Info("nativeAssetBalance", "address", address, "assetID", assetID.Hex(), "res", res, "overflow", overflow)
+	log.Debug("native asset balance called", "address", address, "assetID", assetID.Hex(), "res", res, "overflow", overflow)
 	if overflow {
-		return nil, remainingGas, errors.New("balance overflow")
+		return nil, remainingGas, ErrExecutionReverted
 	}
 	return common.LeftPadBytes(res.Bytes(), 32), remainingGas, nil
 }
@@ -107,26 +108,28 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 	remainingGas = suppliedGas - c.gasCost
 
 	if readOnly {
-		return nil, remainingGas, errors.New("cannot execute native asset transfer within read only call")
+		log.Error("cannot execute native asset call within read only call")
+		return nil, remainingGas, ErrExecutionReverted
 	}
 
 	if len(input) < 84 {
-		return nil, remainingGas, fmt.Errorf("missing inputs to native asset transfer, expected input of length at least 84, but found %d", len(input))
+		log.Error("input to native asset call must be >= 84 bytes, containing [20 bytes] to address, [32 bytes] assetID, [32 bytes] assetAmount, [n bytes] calData", "input", fmt.Sprintf("0x%x", input), "input length", len(input))
+		return nil, remainingGas, ErrExecutionReverted
 	}
 	to := common.BytesToAddress(input[:20])
 	assetID := new(common.Hash)
 	assetID.SetBytes(input[20:52])
 	assetAmount := new(big.Int).SetBytes(input[52:84])
 	callData := input[84:]
-	log.Info("nativeAssetCall", "input", fmt.Sprintf("0x%x", input), "to", to.Hex(), "assetID", assetID.Hex(), "assetAmount", assetAmount, "callData", fmt.Sprintf("0x%x", callData))
+	log.Debug("native asset call", "caller", caller.Address().Hex(), "to", to.Hex(), "assetID", assetID.Hex(), "assetAmount", assetAmount, "callData", fmt.Sprintf("0x%x", callData))
 
 	mcerr := evm.Context.CanTransferMC(evm.StateDB, caller.Address(), to, assetID, assetAmount)
 	if mcerr == 1 {
-		log.Info("Insufficient balance for mc transfer")
-		return nil, remainingGas, ErrInsufficientBalance
+		log.Error("insufficient balance for mc transfer")
+		return nil, remainingGas, ErrExecutionReverted
 	} else if mcerr != 0 {
-		log.Info("incompatible account for mc transfer")
-		return nil, remainingGas, ErrIncompatibleAccount
+		log.Error("incompatible account for mc transfer")
+		return nil, remainingGas, ErrExecutionReverted
 	}
 
 	snapshot := evm.StateDB.Snapshot()
@@ -141,16 +144,21 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 	evm.Transfer(evm.StateDB, caller.Address(), to, value)
 	evm.TransferMultiCoin(evm.StateDB, caller.Address(), to, assetID, assetAmount)
 	ret, remainingGas, err = evm.Call(caller, to, callData, remainingGas, big.NewInt(0))
-	log.Info("Finished TransferMultiCoin and call", "return", ret, "remainingGas", remainingGas, "error", err)
+	log.Debug("native asset call result", "return", ret, "remainingGas", remainingGas, "err", err)
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
-			remainingGas = 0
-		}
+		// If there is an error, it has already been logged,
+		// so we convert it to [ErrExecutionReverted] here
+		// to prevent consuming all of the gas. This is the
+		// equivalent of adding a conditional revert.
+		err = ErrExecutionReverted
+		// if err != ErrExecutionReverted {
+		// 	remainingGas = 0
+		// }
 		// TODO: consider clearing up unused snapshots:
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
@@ -162,7 +170,8 @@ type deprecatedContract struct {
 	msg string
 }
 
-// Run ...
+// Run implements StatefulPrecompiledContract
 func (d *deprecatedContract) Run(evm *EVM, caller ContractRef, addr common.Address, value *big.Int, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	return nil, suppliedGas, errors.New(d.msg)
+	log.Error(d.msg)
+	return nil, suppliedGas, ErrExecutionReverted
 }
