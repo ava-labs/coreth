@@ -66,7 +66,7 @@ func TestExportTxVerify(t *testing.T) {
 	}
 
 	// Sort the inputs and outputs to ensure the transaction is canonical
-	avax.SortTransferableOutputs(exportTx.ExportedOutputs, Codec)
+	avax.SortTransferableOutputs(exportTx.ExportedOutputs, Codec, codecVersion)
 	// Pass in a list of signers here with the appropriate length
 	// to avoid causing a nil-pointer error in the helper method
 	emptySigners := make([][]*crypto.PrivateKeySECP256K1R, 2)
