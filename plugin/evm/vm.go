@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ava-labs/avalanchego/codec/linearcodec"
+
 	"github.com/ava-labs/coreth"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
@@ -34,13 +36,13 @@ import (
 
 	"github.com/ava-labs/avalanchego/api/admin"
 	"github.com/ava-labs/avalanchego/cache"
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	"github.com/ava-labs/avalanchego/utils/codec"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
@@ -69,19 +71,15 @@ const (
 	maxBlockTime    = 1000 * time.Millisecond
 	batchSize       = 250
 	maxUTXOsToFetch = 1024
-	blockCacheSize  = 1 << 10 // 1024
+	blockCacheSize  = 1024
 	codecVersion    = uint16(0)
 )
 
 const (
-	bdTimerStateMin = iota
-	bdTimerStateMax
-	bdTimerStateLong
+	txFee = units.MilliAvax
 )
 
 var (
-	txFee = units.MilliAvax
-
 	errEmptyBlock                 = errors.New("empty block")
 	errCreateBlock                = errors.New("couldn't create block")
 	errUnknownBlock               = errors.New("unknown block")
@@ -103,6 +101,17 @@ var (
 	errInvalidNonce               = errors.New("invalid nonce")
 )
 
+// mayBuildBlockStatus denotes whether the engine should be notified
+// that a block should be built, or whether more time has to pass
+// before doing so. See VM's [mayBuildBlock].
+type mayBuildBlockStatus uint8
+
+const (
+	waitToBuild mayBuildBlockStatus = iota
+	conditionalWaitToBuild
+	mayBuild
+)
+
 func maxDuration(x, y time.Duration) time.Duration {
 	if x > y {
 		return x
@@ -115,14 +124,14 @@ var Codec codec.Manager
 
 func init() {
 	Codec = codec.NewDefaultManager()
-	c := codec.NewDefault()
+	c := linearcodec.NewDefault()
 
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
 	)
-	c.Skip(3)
+	c.SkipRegistrations(3)
 	errs.Add(
 		c.RegisterType(&secp256k1fx.TransferInput{}),
 		c.RegisterType(&secp256k1fx.MintOutput{}),
@@ -145,14 +154,16 @@ type VM struct {
 
 	CLIConfig CommandLineConfig
 
-	chainID          *big.Int
-	networkID        uint64
-	genesisHash      common.Hash
-	chain            *coreth.ETHChain
-	chaindb          Database
-	newBlockChan     chan *Block
-	networkChan      chan<- commonEng.Message
-	newMinedBlockSub *event.TypeMuxSubscription
+	chainID      *big.Int
+	networkID    uint64
+	genesisHash  common.Hash
+	chain        *coreth.ETHChain
+	chaindb      Database
+	newBlockChan chan *Block
+	// A message is sent on this channel when a new block
+	// is ready to be build. This notifies the consensus engine.
+	notifyBuildBlockChan chan<- commonEng.Message
+	newMinedBlockSub     *event.TypeMuxSubscription
 
 	acceptedDB database.Database
 
@@ -165,16 +176,32 @@ type VM struct {
 	lastAccepted                 *Block
 	writingMetadata              uint32
 
-	bdlock          sync.Mutex
-	blockDelayTimer *timer.Timer
-	bdTimerState    int8
-	bdGenWaitFlag   bool
-	bdGenFlag       bool
+	// [buildBlockLock] must be held when accessing [mayBuildBlock],
+	// [tryToBuildBlock] or [awaitingBuildBlock].
+	buildBlockLock sync.Mutex
+	// [buildBlockTimer] periodically fires in order to update [mayBuildBlock]
+	// and to try to build a block, if applicable.
+	buildBlockTimer *timer.Timer
+	// [mayBuildBlock] == [wait] means that the next block may be built
+	// only after more time has elapsed.
+	// [mayBuildBlock] == [conditionalWait] means that the next block may be built
+	// only if it has more than [batchSize] txs in it. Otherwise, wait until more
+	// time has elapsed.
+	// [mayBuildBlock] == [build] means that the next block may be built
+	// at any time.
+	mayBuildBlock mayBuildBlockStatus
+	// If true, try to notify the engine that a block should be built.
+	// Engine may not be notified because [mayBuildBlock] says to wait.
+	tryToBuildBlock bool
+	// If true, the engine has been notified that it should build a block
+	// but has not done so yet. If this is the case, wait until it has
+	// built a block before notifying it again.
+	awaitingBuildBlock bool
 
 	genlock               sync.Mutex
 	txSubmitChan          <-chan struct{}
 	atomicTxSubmitChan    chan struct{}
-	baseCodec             codec.Codec
+	baseCodec             codec.Registry
 	codec                 codec.Manager
 	clock                 timer.Clock
 	txFee                 uint64
@@ -362,26 +389,31 @@ func (vm *VM) Initialize(
 	vm.blockStatusCache = cache.LRU{Size: blockCacheSize}
 	vm.blockAtomicInputCache = cache.LRU{Size: blockCacheSize}
 	vm.newBlockChan = make(chan *Block)
-	vm.networkChan = toEngine
-	vm.blockDelayTimer = timer.NewTimer(func() {
-		vm.bdlock.Lock()
-		switch vm.bdTimerState {
-		case bdTimerStateMin:
-			vm.bdTimerState = bdTimerStateMax
-			vm.blockDelayTimer.SetTimeoutIn(maxDuration(maxBlockTime-minBlockTime, 0))
-		case bdTimerStateMax:
-			vm.bdTimerState = bdTimerStateLong
+	vm.notifyBuildBlockChan = toEngine
+
+	// Periodically updates [vm.mayBuildBlock] and tries to notify the engine to build
+	// a new block, if applicable.
+	vm.buildBlockTimer = timer.NewTimer(func() {
+		vm.buildBlockLock.Lock()
+		switch vm.mayBuildBlock {
+		case waitToBuild:
+			// Some time has passed. Allow block to be built if it has enough txs in it.
+			vm.mayBuildBlock = conditionalWaitToBuild
+			vm.buildBlockTimer.SetTimeoutIn(maxDuration(maxBlockTime-minBlockTime, 0))
+		case conditionalWaitToBuild:
+			// More time has passed. Allow block to be built regardless of tx count.
+			vm.mayBuildBlock = mayBuild
 		}
-		tryAgain := vm.bdGenWaitFlag
-		vm.bdlock.Unlock()
-		if tryAgain {
+		tryBuildBlock := vm.tryToBuildBlock
+		vm.buildBlockLock.Unlock()
+		if tryBuildBlock {
 			vm.tryBlockGen()
 		}
 	})
-	go ctx.Log.RecoverAndPanic(vm.blockDelayTimer.Dispatch)
+	go ctx.Log.RecoverAndPanic(vm.buildBlockTimer.Dispatch)
 
-	vm.bdTimerState = bdTimerStateLong
-	vm.bdGenWaitFlag = true
+	vm.mayBuildBlock = mayBuild
+	vm.tryToBuildBlock = true
 	vm.txPoolStabilizedOk = make(chan struct{}, 1)
 	// TODO: read size from options
 	vm.pendingAtomicTxs = make(chan *Tx, 1024)
@@ -421,7 +453,7 @@ func (vm *VM) Initialize(
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
 	// ignored by the VM's codec.
-	vm.baseCodec = codec.NewDefault()
+	vm.baseCodec = linearcodec.NewDefault()
 
 	return vm.fx.Initialize(vm)
 }
@@ -444,7 +476,7 @@ func (vm *VM) Shutdown() error {
 	}
 
 	vm.writeBackMetadata()
-	vm.blockDelayTimer.Stop()
+	vm.buildBlockTimer.Stop()
 	close(vm.shutdownChan)
 	vm.chain.Stop()
 	vm.shutdownWg.Wait()
@@ -456,15 +488,13 @@ func (vm *VM) BuildBlock() (snowman.Block, error) {
 	vm.chain.GenBlock()
 	block := <-vm.newBlockChan
 
-	// reset the min block time timer
-	// after finishing attempt to build
-	// a block.
-	vm.bdlock.Lock()
-	vm.bdTimerState = bdTimerStateMin
-	vm.bdGenWaitFlag = false
-	vm.bdGenFlag = false
-	vm.blockDelayTimer.SetTimeoutIn(minBlockTime)
-	vm.bdlock.Unlock()
+	vm.buildBlockLock.Lock()
+	// Specify that we should wait before trying to build another block.
+	vm.mayBuildBlock = waitToBuild
+	vm.tryToBuildBlock = false
+	vm.awaitingBuildBlock = false
+	vm.buildBlockTimer.SetTimeoutIn(minBlockTime)
+	vm.buildBlockLock.Unlock()
 
 	if block == nil {
 		return nil, errCreateBlock
@@ -611,13 +641,14 @@ func (vm *VM) updateStatus(blockID ids.ID, status choices.Status) {
 }
 
 func (vm *VM) tryBlockGen() error {
-	vm.bdlock.Lock()
-	defer vm.bdlock.Unlock()
-	if vm.bdGenFlag {
-		// skip if one call already generates a block in this round
+	vm.buildBlockLock.Lock()
+	defer vm.buildBlockLock.Unlock()
+	if vm.awaitingBuildBlock {
+		// We notified the engine that a block should be built but it hasn't
+		// done so yet. Wait until it has done so before notifying again.
 		return nil
 	}
-	vm.bdGenWaitFlag = true
+	vm.tryToBuildBlock = true
 
 	vm.genlock.Lock()
 	defer vm.genlock.Unlock()
@@ -630,20 +661,21 @@ func (vm *VM) tryBlockGen() error {
 		return nil
 	}
 
-	switch vm.bdTimerState {
-	case bdTimerStateMin:
+	switch vm.mayBuildBlock {
+	case waitToBuild: // Wait more time before notifying engine to building a block
 		return nil
-	case bdTimerStateMax:
+	case conditionalWaitToBuild: // Notify engine only if there are enough pending txs
 		if size < batchSize {
 			return nil
 		}
-	case bdTimerStateLong:
-		// timeout; go ahead and generate a new block anyway
+	case mayBuild: // Notify engine
+	default:
+		panic(fmt.Sprintf("mayBuildBlock has unexpected value %d", vm.mayBuildBlock))
 	}
 	select {
-	case vm.networkChan <- commonEng.PendingTxs:
-		// successfully push out the notification; this round ends
-		vm.bdGenFlag = true
+	case vm.notifyBuildBlockChan <- commonEng.PendingTxs:
+		// Notify engine to build a block
+		vm.awaitingBuildBlock = true
 	default:
 		return errBlockFrequency
 	}
@@ -772,7 +804,7 @@ func (vm *VM) writeBackMetadata() {
 // awaitTxPoolStabilized waits for a txPoolHead channel event
 // and notifies the VM when the tx pool has stabilized to the
 // expected block hash
-// Waits for signal to shutdown from txPoolStabilizedShutdownChan chan
+// Waits for signal to shutdown from [vm.shutdownChan]
 func (vm *VM) awaitTxPoolStabilized() {
 	defer vm.shutdownWg.Done()
 	for {
