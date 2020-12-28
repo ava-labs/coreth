@@ -268,13 +268,10 @@ func (vm *VM) Initialize(
 		return err
 	}
 
-	// If Mainnet or Fuji ChainID is present then switch
-	// manually set the config
-	switch {
-	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
-		g.Config.ApricotBlockTimestamp = params.AvalancheMainnetApricotTimestamp
-	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
-		g.Config.ApricotBlockTimestamp = params.AvalancheFujiApricotTimestamp
+	// If ApricotBlockTimestamp is nil (as for Mainnet, Fuji, and Local Genesis)
+	// Use ctx.EpochFirstTransition as the ApricotBlockTimestamp
+	if g.Config.ApricotBlockTimestamp == nil {
+		g.Config.ApricotBlockTimestamp = big.NewInt(vm.ctx.EpochFirstTransition.Unix())
 	}
 	vm.acceptedDB = prefixdb.New([]byte(acceptedPrefix), db)
 
@@ -294,29 +291,23 @@ func (vm *VM) Initialize(
 	// Set minimum gas price and launch goroutine to sleep until
 	// network upgrade when the gas price must be changed
 	vm.minGasPrice = params.NewGasPrice(g.Config.ApricotBlockTimestamp)
-	if g.Config.ApricotBlockTimestamp == nil {
+	apricotTime := time.Unix(g.Config.ApricotBlockTimestamp.Int64(), 0)
+	if time.Now().Before(apricotTime) {
+		untilApricot := time.Until(apricotTime)
+		log.Info(fmt.Sprintf("Minimum gas price will be updated in %v for the Apricot upgrade", untilApricot))
+		config.Miner.GasPrice = params.LaunchMinGasPrice
+		config.GPO.Default = params.LaunchMinGasPrice
+		config.TxPool.PriceLimit = params.LaunchMinGasPrice.Uint64()
+
+		go func() {
+			time.Sleep(untilApricot)
+
+			vm.chain.SetGasPrice(params.ApricotMinGasPrice)
+		}()
+	} else {
 		config.Miner.GasPrice = params.ApricotMinGasPrice
 		config.GPO.Default = params.ApricotMinGasPrice
 		config.TxPool.PriceLimit = params.ApricotMinGasPrice.Uint64()
-	} else {
-		apricotTime := time.Unix(g.Config.ApricotBlockTimestamp.Int64(), 0)
-		if time.Now().Before(apricotTime) {
-			untilApricot := time.Until(apricotTime)
-			log.Info(fmt.Sprintf("Minimum gas price will be updated in %v for the Apricot upgrade", untilApricot))
-			config.Miner.GasPrice = params.LaunchMinGasPrice
-			config.GPO.Default = params.LaunchMinGasPrice
-			config.TxPool.PriceLimit = params.LaunchMinGasPrice.Uint64()
-
-			go func() {
-				time.Sleep(untilApricot)
-
-				vm.chain.SetGasPrice(params.ApricotMinGasPrice)
-			}()
-		} else {
-			config.Miner.GasPrice = params.ApricotMinGasPrice
-			config.GPO.Default = params.ApricotMinGasPrice
-			config.TxPool.PriceLimit = params.ApricotMinGasPrice.Uint64()
-		}
 	}
 
 	config.RPCGasCap = vm.CLIConfig.RPCGasCap

@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -61,45 +60,37 @@ var (
 	AvalancheFujiChainID = big.NewInt(43113)
 )
 
-// Network upgrade block timestamps
-var (
-	AvalancheMainnetApricotTimestamp = new(big.Int).SetUint64(uint64(time.Date(2021, 1, 7, 5, 00, 0, 0, time.UTC).Unix()))
-	AvalancheFujiApricotTimestamp    = new(big.Int).SetUint64(uint64(time.Date(2020, 12, 23, 5, 00, 0, 0, time.UTC).Unix()))
-)
-
 var (
 	// AvalancheApricotMainnetChainConfig is the configuration for Avalanche Main Network
 	AvalancheApricotMainnetChainConfig = &ChainConfig{
-		ChainID:               AvalancheMainnetChainID,
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          big.NewInt(0),
-		DAOForkSupport:        true,
-		EIP150Block:           big.NewInt(0),
-		EIP150Hash:            common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:           big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		ApricotBlockTimestamp: AvalancheMainnetApricotTimestamp,
+		ChainID:             AvalancheMainnetChainID,
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
 	}
 
 	// AvalancheApricotFujiChainConfig is the configuration for the Fuji Test Network
 	AvalancheApricotFujiChainConfig = &ChainConfig{
-		ChainID:               AvalancheFujiChainID,
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          big.NewInt(0),
-		DAOForkSupport:        true,
-		EIP150Block:           big.NewInt(0),
-		EIP150Hash:            common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:           big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		ApricotBlockTimestamp: AvalancheFujiApricotTimestamp,
+		ChainID:             AvalancheFujiChainID,
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
 	}
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
