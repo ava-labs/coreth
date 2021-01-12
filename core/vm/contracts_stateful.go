@@ -1,11 +1,13 @@
 package vm
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
@@ -15,19 +17,26 @@ import (
 // added for the Avalanche Apricot release.
 // Apricot is incompatible with the YoloV1 Release since it does not include the
 // BLS12-381 Curve Operations added to the set of precompiled contracts
+
+var (
+	genesisMulticoinContractAddr = common.HexToAddress("0x0100000000000000000000000000000000000000")
+	nativeAssetBalanceAddr       = common.HexToAddress("0x0100000000000000000000000000000000000001")
+	nativeAssetCallAddr          = common.HexToAddress("0x0100000000000000000000000000000000000002")
+)
+
 var PrecompiledContractsApricot = map[common.Address]StatefulPrecompiledContract{
-	common.BytesToAddress([]byte{1}):                                  newWrappedPrecompiledContract(&ecrecover{}),
-	common.BytesToAddress([]byte{2}):                                  newWrappedPrecompiledContract(&sha256hash{}),
-	common.BytesToAddress([]byte{3}):                                  newWrappedPrecompiledContract(&ripemd160hash{}),
-	common.BytesToAddress([]byte{4}):                                  newWrappedPrecompiledContract(&dataCopy{}),
-	common.BytesToAddress([]byte{5}):                                  newWrappedPrecompiledContract(&bigModExp{}),
-	common.BytesToAddress([]byte{6}):                                  newWrappedPrecompiledContract(&bn256AddIstanbul{}),
-	common.BytesToAddress([]byte{7}):                                  newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
-	common.BytesToAddress([]byte{8}):                                  newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
-	common.BytesToAddress([]byte{9}):                                  newWrappedPrecompiledContract(&blake2F{}),
-	common.HexToAddress("0x0100000000000000000000000000000000000000"): &deprecatedContract{msg: "hardcoded genesis contract has been deprecated"},
-	common.HexToAddress("0x0100000000000000000000000000000000000001"): &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
-	common.HexToAddress("0x0100000000000000000000000000000000000002"): &nativeAssetCall{gasCost: params.AssetCallApricot},
+	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
+	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
+	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
+	common.BytesToAddress([]byte{4}): newWrappedPrecompiledContract(&dataCopy{}),
+	common.BytesToAddress([]byte{5}): newWrappedPrecompiledContract(&bigModExp{}),
+	common.BytesToAddress([]byte{6}): newWrappedPrecompiledContract(&bn256AddIstanbul{}),
+	common.BytesToAddress([]byte{7}): newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
+	common.BytesToAddress([]byte{8}): newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
+	common.BytesToAddress([]byte{9}): newWrappedPrecompiledContract(&blake2F{}),
+	genesisMulticoinContractAddr:     &genesisContract{},
+	nativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
+	nativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
 }
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
@@ -121,7 +130,7 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 	assetID.SetBytes(input[20:52])
 	assetAmount := new(big.Int).SetBytes(input[52:84])
 	callData := input[84:]
-	log.Debug("native asset call", "caller", caller.Address().Hex(), "to", to.Hex(), "assetID", assetID.Hex(), "assetAmount", assetAmount, "callData", fmt.Sprintf("0x%x", callData))
+	log.Debug("nativeAssetCall", "caller", caller.Address().Hex(), "to", to.Hex(), "assetID", assetID.Hex(), "assetAmount", assetAmount, "callData", fmt.Sprintf("0x%x", callData))
 
 	mcerr := evm.Context.CanTransferMC(evm.StateDB, caller.Address(), to, assetID, assetAmount)
 	if mcerr == 1 {
@@ -135,7 +144,7 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 	snapshot := evm.StateDB.Snapshot()
 
 	if !evm.StateDB.Exist(to) {
-		log.Info("Creating account entry", "address", to.Hex())
+		log.Debug("Creating account", "address", to.Hex())
 		remainingGas -= params.CallNewAccountGas
 		evm.StateDB.CreateAccount(to)
 	}
@@ -164,6 +173,69 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, remainingGas, err
+}
+
+var (
+	transferSignature   = EncodeSignatureHash("transfer(address,uint256,uint256,uint256)")
+	getBalanceSignature = EncodeSignatureHash("getBalance(uint256)")
+)
+
+func EncodeSignatureHash(functionSignature string) []byte {
+	hash := crypto.Keccak256([]byte(functionSignature))
+	return hash[:4]
+}
+
+// genesisContract mimics the genesis contract Multicoin.sol in the original
+// coreth release. It does this by mapping function identifiers to their new
+// implementations via the native asset precompiled contracts.
+type genesisContract struct{}
+
+func (g *genesisContract) Run(evm *EVM, caller ContractRef, addr common.Address, value *big.Int, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if len(input) < 4 {
+		log.Error("missing function signature")
+		return nil, suppliedGas, ErrExecutionReverted
+	}
+
+	if value.Sign() != 0 {
+		log.Error("cannot call genesis contract with non-zero value", "value", value)
+		return nil, suppliedGas, ErrExecutionReverted
+	}
+
+	functionSignature := input[:4]
+	switch {
+	case bytes.Equal(functionSignature, transferSignature):
+		if len(input) != 132 {
+			log.Error("incorrect input length for transfer")
+			return nil, suppliedGas, ErrExecutionReverted
+		}
+
+		// address / value1 / assetID / assetAmount
+		args := input[4:]
+		addressPaddedBytes := args[:32]
+		addressBytes := common.TrimLeftZeroes(addressPaddedBytes)
+		if len(addressBytes) != common.AddressLength {
+			log.Error("address was padded incorrectly")
+			return nil, suppliedGas, ErrExecutionReverted
+		}
+		callAssetArgs := make([]byte, 84)
+		copy(callAssetArgs[:20], addressBytes)
+		newValue := new(big.Int).SetBytes(args[32:64])
+		copy(callAssetArgs[20:52], args[64:96])  // Copy the assetID bytes
+		copy(callAssetArgs[52:84], args[96:128]) // Copy the assetAmount to be transferred
+		return evm.Call(caller, nativeAssetCallAddr, callAssetArgs, suppliedGas, newValue)
+	case bytes.Equal(functionSignature, getBalanceSignature):
+		if len(input) != 36 {
+			log.Error("incorrect input length for getBalance")
+			return nil, suppliedGas, ErrExecutionReverted
+		}
+		balanceArgs := make([]byte, 52)
+		copy(balanceArgs[:20], caller.Address().Bytes())
+		copy(balanceArgs[20:52], input[4:36])
+		return evm.Call(caller, nativeAssetBalanceAddr, balanceArgs, suppliedGas, value)
+	default:
+		log.Error("incorrect function signature", "functionSignature", fmt.Sprintf("0x%x", functionSignature))
+		return nil, suppliedGas, ErrExecutionReverted
+	}
 }
 
 type deprecatedContract struct {
