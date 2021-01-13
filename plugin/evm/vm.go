@@ -292,9 +292,10 @@ func (vm *VM) Initialize(
 	// network upgrade when the gas price must be changed
 	vm.minGasPrice = params.NewGasPrice(g.Config.ApricotBlockTimestamp)
 	apricotTime := time.Unix(g.Config.ApricotBlockTimestamp.Int64(), 0)
+	log.Info(fmt.Sprintf("Apricot Upgrade Time %v.", apricotTime))
 	if time.Now().Before(apricotTime) {
 		untilApricot := time.Until(apricotTime)
-		log.Info(fmt.Sprintf("Apricot Time %v. Upgrade will occur in %v", apricotTime, untilApricot))
+		log.Info(fmt.Sprintf("Upgrade will occur in %v", untilApricot))
 		config.Miner.GasPrice = params.LaunchMinGasPrice
 		config.GPO.Default = params.LaunchMinGasPrice
 		config.TxPool.PriceLimit = params.LaunchMinGasPrice.Uint64()
