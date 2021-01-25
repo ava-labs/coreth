@@ -13,7 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/api/keystore"
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database/manager"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -106,10 +106,10 @@ func GenesisVM(t *testing.T, finishBootstrapping bool) (chan engCommon.Message, 
 	genesisBytes := BuildGenesisTest(t)
 	ctx := NewContext()
 
-	baseDB := memdb.New()
+	baseDBManager := manager.NewDefaultMemDBManager()
 
 	m := &atomic.Memory{}
-	m.Initialize(logging.NoLog{}, prefixdb.New([]byte{0}, baseDB))
+	m.Initialize(logging.NoLog{}, prefixdb.New([]byte{0}, baseDBManager.Current()))
 	ctx.SharedMemory = m.NewSharedMemory(ctx.ChainID)
 
 	// NB: this lock is intentionally left locked when this function returns.
@@ -131,8 +131,10 @@ func GenesisVM(t *testing.T, finishBootstrapping bool) (chan engCommon.Message, 
 	}
 	err = vm.Initialize(
 		ctx,
-		prefixdb.New([]byte{1}, baseDB),
+		baseDBManager.NewPrefixDBManager([]byte{1}),
 		genesisBytes,
+		nil,
+		nil,
 		issuer,
 		[]*engCommon.Fx{},
 	)
