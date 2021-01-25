@@ -145,6 +145,9 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 
 	if !evm.StateDB.Exist(to) {
 		log.Debug("Creating account", "address", to.Hex())
+		if remainingGas < params.CallNewAccountGas {
+			return nil, 0, ErrOutOfGas
+		}
 		remainingGas -= params.CallNewAccountGas
 		evm.StateDB.CreateAccount(to)
 	}
