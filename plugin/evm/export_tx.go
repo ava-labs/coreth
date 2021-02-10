@@ -241,6 +241,11 @@ func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error
 	addrs := map[[20]byte]uint64{}
 	for _, from := range tx.Ins {
 		log.Info("crosschain C->X", "addr", from.Address, "amount", from.Amount)
+		// Check the nonce first so that if invalid it will return an error before
+		// changing [state]
+		if state.GetNonce(from.Address) != from.Nonce {
+			return errInvalidNonce
+		}
 		if from.AssetID == vm.ctx.AVAXAssetID {
 			amount := new(big.Int).Mul(
 				new(big.Int).SetUint64(from.Amount), x2cRate)
@@ -254,9 +259,6 @@ func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error
 				return errInsufficientFunds
 			}
 			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
-		}
-		if state.GetNonce(from.Address) != from.Nonce {
-			return errInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
 	}

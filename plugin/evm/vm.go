@@ -82,6 +82,9 @@ const (
 
 var (
 	errEmptyBlock                 = errors.New("empty block")
+	errInsufficientGasPrice       = errors.New("block failed verification due to insufficient gas price")
+	errAtomicInputConflict        = errors.New("block failed verification due to atomic transaction input conflict")
+	errUnknownAtomicTxType        = errors.New("unknown atomic tx type")
 	errCreateBlock                = errors.New("couldn't create block")
 	errUnknownBlock               = errors.New("unknown block")
 	errBlockFrequency             = errors.New("too frequent block issuance")
@@ -207,7 +210,7 @@ type VM struct {
 	codec                 codec.Manager
 	clock                 timer.Clock
 	txFee                 uint64
-	pendingAtomicTxs      chan *Tx
+	mempool               *Mempool
 	blockAtomicInputCache cache.LRU
 
 	shutdownChan chan struct{}
@@ -309,22 +312,38 @@ func (vm *VM) Initialize(
 		header.Extra = append(header.Extra, hid...)
 	})
 	chain.SetOnFinalizeAndAssemble(func(state *state.StateDB, txs []*types.Transaction) ([]byte, error) {
-		select {
-		case atx := <-vm.pendingAtomicTxs:
-			if err := atx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state); err != nil {
-				vm.newBlockChan <- nil
-				return nil, err
+		var (
+			atomicTxBytes []byte
+			lastErr       error
+		)
+		for tx, exists := vm.mempool.Remove(); exists; tx, exists = vm.mempool.Remove() {
+			if err := tx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state); err != nil {
+				log.Error("Atomic transaction failed verification", "txID", tx.ID(), "error", err)
+				lastErr = err
+				continue
 			}
-			raw, _ := vm.codec.Marshal(codecVersion, atx)
-			return raw, nil
-		default:
-			if len(txs) == 0 {
-				// this could happen due to the async logic of geth tx pool
-				vm.newBlockChan <- nil
+			raw, err := vm.codec.Marshal(codecVersion, tx)
+			if err != nil {
+				log.Error("Failed to marshal atomic transaction", "txID", tx.ID(), "error", err)
+				lastErr = err
+				continue
+			}
+			atomicTxBytes = raw
+			lastErr = nil
+			break
+		}
+
+		if len(txs) == 0 && len(atomicTxBytes) == 0 {
+			vm.newBlockChan <- nil
+			if lastErr != nil {
+				return nil, lastErr
+			} else {
 				return nil, errEmptyBlock
 			}
 		}
-		return nil, nil
+
+		// Note: atomicTxBytes can be nil as long as there is a non-zero number of transactions
+		return atomicTxBytes, nil
 	})
 	chain.SetOnSealFinish(func(block *types.Block) error {
 		log.Trace("EVM sealed a block")
@@ -334,9 +353,10 @@ func (vm *VM) Initialize(
 			ethBlock: block,
 			vm:       vm,
 		}
-		if blk.Verify() != nil {
+		if err := blk.Verify(); err != nil {
+			log.Error("block failed verification in seal and finish", "error", err)
 			vm.newBlockChan <- nil
-			return errInvalidBlock
+			return fmt.Errorf("block failed verification due to: %w", err)
 		}
 		vm.newBlockChan <- blk
 		vm.updateStatus(ids.ID(block.Hash()), choices.Processing)
@@ -385,8 +405,8 @@ func (vm *VM) Initialize(
 	vm.mayBuildBlock = mayBuild
 	vm.tryToBuildBlock = true
 	vm.txPoolStabilizedOk = make(chan struct{}, 1)
-	// TODO: read size from options
-	vm.pendingAtomicTxs = make(chan *Tx, 1024)
+	// TODO: read size from settings
+	vm.mempool = NewMempool(1024)
 	vm.atomicTxSubmitChan = make(chan struct{}, 1)
 	vm.newMinedBlockSub = vm.chain.SubscribeNewMinedBlockEvent()
 	vm.shutdownWg.Add(1)
@@ -668,7 +688,7 @@ func (vm *VM) tryBlockGen() error {
 	if err != nil {
 		return err
 	}
-	if size == 0 && len(vm.pendingAtomicTxs) == 0 {
+	if size == 0 && vm.mempool.Len() == 0 {
 		return nil
 	}
 
@@ -896,16 +916,16 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 }
 
 func (vm *VM) issueTx(tx *Tx) error {
-	select {
-	case vm.pendingAtomicTxs <- tx:
+	added := vm.mempool.Add(tx)
+	if added {
 		select {
 		case vm.atomicTxSubmitChan <- struct{}{}:
 		default:
 		}
-	default:
-		return errTooManyAtomicTx
+		return nil
 	}
-	return nil
+
+	return errTooManyAtomicTx
 }
 
 // GetAtomicUTXOs returns the utxos that at least one of the provided addresses is

@@ -4,7 +4,6 @@
 package evm
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ava-labs/coreth/core/types"
@@ -44,16 +43,23 @@ func (b *Block) Accept() error {
 	}
 	utx, ok := tx.UnsignedTx.(UnsignedAtomicTx)
 	if !ok {
-		return errors.New("unknown tx type")
+		return errUnknownAtomicTxType
 	}
 
 	return utx.Accept(vm.ctx, nil)
 }
 
 // Reject implements the snowman.Block interface
+// If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject() error {
 	log.Trace(fmt.Sprintf("Block %s is rejected", b.ID()))
 	b.vm.updateStatus(b.ID(), choices.Rejected)
+	tx := b.vm.getAtomicTx(b.ethBlock)
+	if tx != nil {
+		if err := b.vm.issueTx(tx); err != nil {
+			log.Debug("Failed to re-issue atomic transaction", "txID", tx.ID(), "error", err)
+		}
+	}
 	return nil
 }
 
@@ -87,7 +93,7 @@ func (b *Block) Verify() error {
 		// Ensure the minimum gas price is paid for every transaction
 		for _, tx := range b.ethBlock.Transactions() {
 			if tx.GasPrice().Cmp(params.MinGasPrice) < 0 {
-				return errInvalidBlock
+				return errInsufficientGasPrice
 			}
 		}
 	}
@@ -97,7 +103,7 @@ func (b *Block) Verify() error {
 	if tx != nil {
 		pState, err := b.vm.chain.BlockState(b.Parent().(*Block).ethBlock)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to retrieve block state due to: %w", err)
 		}
 		switch atx := tx.UnsignedTx.(type) {
 		case *UnsignedImportTx:
@@ -130,22 +136,22 @@ func (b *Block) Verify() error {
 			}
 			for _, in := range atx.InputUTXOs().List() {
 				if inputs.Contains(in) {
-					return errInvalidBlock
+					return errAtomicInputConflict
 				}
 			}
 		case *UnsignedExportTx:
 		default:
-			return errors.New("unknown atomic tx type")
+			return errUnknownAtomicTxType
 		}
 
 		utx := tx.UnsignedTx.(UnsignedAtomicTx)
-		if utx.SemanticVerify(vm, tx) != nil {
-			return errInvalidBlock
+		if err := utx.SemanticVerify(vm, tx); err != nil {
+			return fmt.Errorf("block atomic transaction failed verification due to: %w", err)
 		}
 		bc := vm.chain.BlockChain()
 		_, _, _, err = bc.Processor().Process(b.ethBlock, pState, *bc.GetVMConfig())
 		if err != nil {
-			return errInvalidBlock
+			return fmt.Errorf("block failed verification during EVM processing due to: %w", err)
 		}
 	}
 	_, err := b.vm.chain.InsertChain([]*types.Block{b.ethBlock})
