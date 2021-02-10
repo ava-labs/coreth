@@ -239,10 +239,14 @@ func (vm *VM) newExportTx(
 // EVMStateTransfer executes the state update from the atomic export transaction
 func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error {
 	addrs := map[[20]byte]uint64{}
+	var balanceDeltas []struct {
+		isAVAX bool
+		amount *big.Int
+	}
+
+	// Check the nonce and balance first so that if invalid it will return an
+	// error before changing [state]
 	for _, from := range tx.Ins {
-		log.Info("crosschain C->X", "addr", from.Address, "amount", from.Amount)
-		// Check the nonce first so that if invalid it will return an error before
-		// changing [state]
 		if state.GetNonce(from.Address) != from.Nonce {
 			return errInvalidNonce
 		}
@@ -252,13 +256,37 @@ func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error
 			if state.GetBalance(from.Address).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			state.SubBalance(from.Address, amount)
+			balanceDeltas = append(balanceDeltas, struct {
+				isAVAX bool
+				amount *big.Int
+			}{
+				isAVAX: true,
+				amount: amount,
+			})
 		} else {
 			amount := new(big.Int).SetUint64(from.Amount)
 			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
+			balanceDeltas = append(balanceDeltas, struct {
+				isAVAX bool
+				amount *big.Int
+			}{
+				isAVAX: false,
+				amount: amount,
+			})
+		}
+		addrs[from.Address] = from.Nonce
+	}
+
+	// Apply the state changes
+	for i, from := range tx.Ins {
+		log.Info("crosschain C->X", "addr", from.Address, "amount", from.Amount)
+		d := balanceDeltas[i]
+		if d.isAVAX {
+			state.SubBalance(from.Address, d.amount)
+		} else {
+			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), d.amount)
 		}
 		addrs[from.Address] = from.Nonce
 	}
