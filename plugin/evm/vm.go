@@ -336,7 +336,7 @@ func (vm *VM) Initialize(
 		if len(txs) == 0 && len(atomicTxBytes) == 0 {
 			vm.newBlockChan <- nil
 			if lastErr != nil {
-				log.Error("Failed to finalize and assemble block with atomic transaction", "error", err)
+				log.Error("Failed to finalize and assemble block with atomic transaction", "error", lastErr)
 				return nil, lastErr
 			} else {
 				log.Error("Failed to finalzie and assemble block due to no transactions")
