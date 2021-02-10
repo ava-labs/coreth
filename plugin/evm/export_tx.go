@@ -238,7 +238,6 @@ func (vm *VM) newExportTx(
 
 // EVMStateTransfer executes the state update from the atomic export transaction
 func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error {
-	addrs := map[[20]byte]uint64{}
 	var balanceDeltas []struct {
 		isAVAX bool
 		amount *big.Int
@@ -276,10 +275,10 @@ func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error
 				amount: amount,
 			})
 		}
-		addrs[from.Address] = from.Nonce
 	}
 
 	// Apply the state changes
+	addrs := map[[20]byte]uint64{}
 	for i, from := range tx.Ins {
 		log.Info("crosschain C->X", "addr", from.Address, "amount", from.Amount)
 		d := balanceDeltas[i]
