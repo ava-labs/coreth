@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/manager"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -69,7 +70,7 @@ var (
 
 const (
 	minBlockTime    = 250 * time.Millisecond
-	maxBlockTime    = 1000 * time.Millisecond
+	maxBlockTime    = time.Second
 	batchSize       = 250
 	maxUTXOsToFetch = 1024
 	blockCacheSize  = 1024
@@ -250,8 +251,10 @@ func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 // Initialize implements the snowman.ChainVM interface
 func (vm *VM) Initialize(
 	ctx *snow.Context,
-	db database.Database,
-	b []byte,
+	dbManager manager.Manager,
+	genesisBytes []byte,
+	upgradeBytes []byte,
+	configBytes []byte,
 	toEngine chan<- commonEng.Message,
 	fxs []*commonEng.Fx,
 ) error {
@@ -263,12 +266,13 @@ func (vm *VM) Initialize(
 		return errUnsupportedFXs
 	}
 
+	db := dbManager.Current()
 	vm.shutdownChan = make(chan struct{}, 1)
 	vm.ctx = ctx
 	vm.db = db
 	vm.chaindb = Database{db}
 	g := new(core.Genesis)
-	if err := json.Unmarshal(b, g); err != nil {
+	if err := json.Unmarshal(genesisBytes, g); err != nil {
 		return err
 	}
 
