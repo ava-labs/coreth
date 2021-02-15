@@ -97,6 +97,7 @@ type Block struct {
 	id       ids.ID
 	ethBlock *types.Block
 	vm       *VM
+	status   choices.Status
 }
 
 // ID implements the snowman.Block interface
@@ -105,20 +106,25 @@ func (b *Block) ID() ids.ID { return b.id }
 // Accept implements the snowman.Block interface
 func (b *Block) Accept() error {
 	vm := b.vm
-
-	log.Trace(fmt.Sprintf("Block %s is accepted", b.ID()))
-	vm.updateStatus(b.id, choices.Accepted)
-	if err := vm.acceptedDB.Put(b.ethBlock.Number().Bytes(), b.id[:]); err != nil {
+	b.status = choices.Accepted
+	if err := vm.chain.SetTail(common.Hash(b.id)); err != nil {
 		return err
 	}
 
-	tx := vm.getAtomicTx(b.ethBlock)
+	log.Trace(fmt.Sprintf("Accepted block %s", b.ID()))
+
+	tx := vm.extractAtomicTx(b.ethBlock)
 	if tx == nil {
 		return nil
 	}
 	utx, ok := tx.UnsignedTx.(UnsignedAtomicTx)
 	if !ok {
 		return errUnknownAtomicTx
+	}
+
+	// Save the accepted atomic transaction
+	if err := vm.writeAtomicTx(b, tx); err != nil {
+		return err
 	}
 
 	if bonusBlocks.Contains(b.id) {
@@ -131,27 +137,29 @@ func (b *Block) Accept() error {
 
 // Reject implements the snowman.Block interface
 func (b *Block) Reject() error {
-	log.Trace(fmt.Sprintf("Block %s is rejected", b.ID()))
-	b.vm.updateStatus(b.ID(), choices.Rejected)
+	b.status = choices.Rejected
+	log.Trace(fmt.Sprintf("Rejected block %s", b.ID()))
 	return nil
 }
 
+// SetStatus implements the InternalBlock interface allowing ChainState
+// to set the status on an existing block
+func (b *Block) SetStatus(status choices.Status) { b.status = status }
+
 // Status implements the snowman.Block interface
 func (b *Block) Status() choices.Status {
-	status := b.vm.getCachedStatus(b.ID())
-	if status == choices.Unknown && b.ethBlock != nil {
-		return choices.Processing
-	}
-	return status
+	return b.status
 }
 
 // Parent implements the snowman.Block interface
 func (b *Block) Parent() snowman.Block {
 	parentID := ids.ID(b.ethBlock.ParentHash())
-	if block := b.vm.getBlock(parentID); block != nil {
-		return block
+	parentBlk, err := b.vm.GetBlockInternal(parentID)
+	if err != nil {
+		return &missing.Block{BlkID: parentID}
 	}
-	return &missing.Block{BlkID: parentID}
+
+	return parentBlk
 }
 
 // Height implements the snowman.Block interface
@@ -187,7 +195,7 @@ func (b *Block) Verify() error {
 
 	// If the tx is an atomic tx, ensure that it doesn't conflict with any of
 	// its processing ancestry.
-	tx := vm.getAtomicTx(b.ethBlock)
+	tx := vm.extractAtomicTx(b.ethBlock)
 	if tx != nil {
 		// If the ancestor is unknown, then the parent failed verification when
 		// it was called.
@@ -215,7 +223,7 @@ func (b *Block) Verify() error {
 				// processing ancestors consume the same UTXO.
 				inputs := atx.InputUTXOs()
 				for ancestor.Status() != choices.Accepted {
-					atx := vm.getAtomicTx(ancestor.ethBlock)
+					atx := vm.extractAtomicTx(ancestor.ethBlock)
 					// If the ancestor isn't an atomic block, it can't conflict with
 					// the import tx.
 					if atx != nil {
