@@ -1,10 +1,10 @@
 module github.com/ava-labs/coreth
 
-go 1.14
+go 1.15
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
-	github.com/ava-labs/avalanchego v1.1.4-0.20210125185503-f6a426e820ce
+	github.com/ava-labs/avalanchego v1.1.4-rc.1.0.20210215143356-b3f8c4101a1a
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.7.1
 	github.com/edsrzf/mmap-go v1.0.0
@@ -33,5 +33,3 @@ require (
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
-
-replace github.com/ava-labs/avalanchego => ../avalanchego
