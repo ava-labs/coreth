@@ -12,9 +12,7 @@ import (
 	"strings"
 
 	"github.com/ava-labs/avalanchego/api"
-	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
@@ -433,8 +431,8 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 
 // GetTxStatusReply defines the GetTxStatus replies returned from the API
 type GetTxStatusReply struct {
-	Status      choices.Status `json:"status"`
-	BlockHeight *uint64        `json:"blockHeight,omitempty"`
+	Status      Status  `json:"status"`
+	BlockHeight *uint64 `json:"blockHeight,omitempty"`
 }
 
 // GetTxStatus returns the status of the specified transaction
@@ -445,19 +443,13 @@ func (service *AvaxAPI) GetTxStatus(r *http.Request, args *api.JSONTxID, reply *
 		return errNilTxID
 	}
 
-	_, height, err := service.vm.getAtomicTx(args.TxID)
-	if err == nil {
-		reply.Status = choices.Accepted
+	_, status, height, _ := service.vm.getAtomicTx(args.TxID)
+
+	if status == Accepted {
 		reply.BlockHeight = &height
-		return nil
 	}
-
-	if err == database.ErrNotFound {
-		reply.Status = choices.Unknown
-		return nil
-	}
-
-	return err
+	reply.Status = status
+	return nil
 }
 
 type FormattedTx struct {
@@ -472,9 +464,10 @@ func (service *AvaxAPI) GetTx(r *http.Request, args *api.GetTxArgs, reply *Forma
 	if args.TxID == ids.Empty {
 		return errNilTxID
 	}
-	tx, height, err := service.vm.getAtomicTx(args.TxID)
-	if err != nil {
-		return fmt.Errorf("couldn't get atomic tx %s: %w", args.TxID, err)
+
+	tx, status, height, found := service.vm.getAtomicTx(args.TxID)
+	if !found {
+		return fmt.Errorf("could not find atomic tx %s", args.TxID)
 	}
 
 	txBytes, err := formatting.Encode(args.Encoding, tx.Bytes())
@@ -483,6 +476,8 @@ func (service *AvaxAPI) GetTx(r *http.Request, args *api.GetTxArgs, reply *Forma
 	}
 	reply.Tx = txBytes
 	reply.Encoding = args.Encoding
-	reply.BlockHeight = &height
+	if status == Accepted {
+		reply.BlockHeight = &height
+	}
 	return nil
 }

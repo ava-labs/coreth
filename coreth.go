@@ -93,10 +93,6 @@ func (self *ETHChain) BlockChain() *core.BlockChain {
 	return self.backend.BlockChain()
 }
 
-func (self *ETHChain) UnlockIndexing() {
-	self.backend.BlockChain().UnlockIndexing()
-}
-
 func (self *ETHChain) VerifyBlock(block *types.Block) bool {
 	txnHash := types.DeriveSha(block.Transactions(), new(trie.Trie))
 	uncleHash := types.CalcUncleHash(block.Uncles())

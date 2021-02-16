@@ -122,6 +122,9 @@ func (b *Block) Accept() error {
 		return errUnknownAtomicTx
 	}
 
+	// Remove the accepted transaction from the mempool
+	vm.mempool.RemoveTx(tx.ID())
+
 	// Save the accepted atomic transaction
 	if err := vm.writeAtomicTx(b, tx); err != nil {
 		return err
@@ -136,9 +139,15 @@ func (b *Block) Accept() error {
 }
 
 // Reject implements the snowman.Block interface
+// If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject() error {
 	b.status = choices.Rejected
 	log.Trace(fmt.Sprintf("Rejected block %s", b.ID()))
+	tx := b.vm.extractAtomicTx(b.ethBlock)
+	if tx != nil {
+		b.vm.mempool.RejectTx(tx.ID())
+	}
+
 	return nil
 }
 
@@ -211,7 +220,7 @@ func (b *Block) Verify() error {
 
 		parentState, err := vm.chain.BlockState(ancestor.ethBlock)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to retrieve block state due to: %w", err)
 		}
 
 		if bonusBlocks.Contains(b.id) {

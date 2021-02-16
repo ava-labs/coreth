@@ -46,13 +46,13 @@ func (c *Client) IssueTx(txBytes []byte) (ids.ID, error) {
 }
 
 // GetTxStatus returns the status of [txID]
-// func (c *Client) GetTxStatus(txID ids.ID) (choices.Status, error) {
-// 	res := &GetTxStatusReply{}
-// 	err := c.requester.SendRequest("getTxStatus", &api.JSONTxID{
-// 		TxID: txID,
-// 	}, res)
-// 	return res.Status, err
-// }
+func (c *Client) GetTxStatus(txID ids.ID) (Status, error) {
+	res := &GetTxStatusReply{}
+	err := c.requester.SendRequest("getTxStatus", &api.JSONTxID{
+		TxID: txID,
+	}, res)
+	return res.Status, err
+}
 
 // GetTx returns the byte representation of [txID]
 func (c *Client) GetTx(txID ids.ID) ([]byte, error) {

@@ -61,7 +61,6 @@ var (
 )
 
 var (
-	repairedKey    = []byte("chain_repaired_20210212")
 	ethDBPrefix    = []byte("ethdb")
 	atomicTxPrefix = []byte("atomicTxDB")
 )
@@ -200,14 +199,13 @@ type VM struct {
 	// built a block before notifying it again.
 	awaitingBuildBlock bool
 
-	genlock            sync.Mutex
-	txSubmitChan       <-chan struct{}
-	atomicTxSubmitChan chan struct{}
-	baseCodec          codec.Registry
-	codec              codec.Manager
-	clock              timer.Clock
-	txFee              uint64
-	pendingAtomicTxs   chan *Tx
+	genlock      sync.Mutex
+	txSubmitChan <-chan struct{}
+	baseCodec    codec.Registry
+	codec        codec.Manager
+	clock        timer.Clock
+	txFee        uint64
+	mempool      *Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -301,21 +299,29 @@ func (vm *VM) Initialize(
 		header.Extra = append(header.Extra, hid...)
 	})
 	chain.SetOnFinalizeAndAssemble(func(state *state.StateDB, txs []*types.Transaction) ([]byte, error) {
-		select {
-		case atx := <-vm.pendingAtomicTxs:
-			if err := atx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state); err != nil {
-				vm.newBlockChan <- nil
+		if tx, exists := vm.mempool.NextTx(); exists {
+			if err := tx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state); err != nil {
+				log.Error("Atomic transaction failed verification", "txID", tx.ID(), "error", err)
+				// Discard the transaction from the mempool on failed verification.
+				vm.mempool.DiscardCurrentTx()
 				return nil, err
 			}
-			raw, _ := vm.codec.Marshal(codecVersion, atx)
-			return raw, nil
-		default:
-			if len(txs) == 0 {
-				// this could happen due to the async logic of geth tx pool
-				vm.newBlockChan <- nil
-				return nil, errEmptyBlock
+			atomicTxBytes, err := vm.codec.Marshal(codecVersion, tx)
+			if err != nil {
+				log.Error("Failed to marshal atomic transaction", "txID", tx.ID(), "error", err)
+				// Discard the transaction from the mempool on failed verification.
+				vm.mempool.DiscardCurrentTx()
+				return nil, err
 			}
+			return atomicTxBytes, nil
 		}
+
+		if len(txs) == 0 {
+			// this could happen due to the async logic of geth tx pool
+			vm.newBlockChan <- nil
+			return nil, errEmptyBlock
+		}
+
 		return nil, nil
 	})
 	chain.SetOnSealFinish(func(block *types.Block) error {
@@ -336,9 +342,10 @@ func (vm *VM) Initialize(
 		// that produce a large number of blocks.
 		if err := blk.Verify(); err != nil {
 			vm.newBlockChan <- nil
-			return fmt.Errorf("block failed verify: %w", err)
+			return fmt.Errorf("block failed verification due to: %w", err)
 		}
 		vm.newBlockChan <- blk
+		// TODO clean up tx pool stabilization logic
 		vm.txPoolStabilizedLock.Lock()
 		vm.txPoolStabilizedHead = block.Hash()
 		vm.txPoolStabilizedLock.Unlock()
@@ -381,9 +388,8 @@ func (vm *VM) Initialize(
 	vm.mayBuildBlock = mayBuild
 	vm.tryToBuildBlock = true
 	vm.txPoolStabilizedOk = make(chan struct{}, 1)
-	// TODO: read size from options
-	vm.pendingAtomicTxs = make(chan *Tx, 1024)
-	vm.atomicTxSubmitChan = make(chan struct{}, 1)
+	// TODO: read size from settings
+	vm.mempool = NewMempool(1024)
 	vm.newMinedBlockSub = vm.chain.SubscribeNewMinedBlockEvent()
 	vm.shutdownWg.Add(1)
 	go ctx.Log.RecoverAndPanic(vm.awaitTxPoolStabilized)
@@ -406,12 +412,6 @@ func (vm *VM) Initialize(
 	vm.shutdownWg.Add(1)
 	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
 	vm.codec = Codec
-	if err := vm.repairCanonicalChain(); err != nil {
-		log.Error("failed to repair the canonical chain", "error", err)
-	}
-
-	log.Debug("unlocking indexing")
-	chain.BlockChain().UnlockIndexing()
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
@@ -420,38 +420,6 @@ func (vm *VM) Initialize(
 	vm.baseCodec = linearcodec.NewDefault()
 
 	return vm.fx.Initialize(vm)
-}
-
-// repairCanonicalChain writes the canonical chain index from the last accepted
-// block back to the genesis block to overwrite any corruption that might have
-// occurred.
-// assumes that the genesisHash and [lastAccepted] block have already been set.
-func (vm *VM) repairCanonicalChain() error {
-	// Check if the canonical chain has already been repaired
-	if has, err := vm.db.Has(repairedKey); err != nil {
-		return err
-	} else if has {
-		return nil
-	}
-
-	start := time.Now()
-	log.Info("starting to repair canonical chain", "startTime", start)
-
-	if err := vm.chain.SetTail(vm.lastAcceptedEthBlock().Hash()); err != nil {
-		return fmt.Errorf("failed to set tail to the last accepted block: %w", err)
-	}
-	if err := vm.chain.WriteCanonicalFromCurrentBlock(); err != nil {
-		return fmt.Errorf("failed to repair canonical chain after %v due to: %w", time.Since(start), err)
-	}
-	log.Info("finished repairing canonical chain", "timeElapsed", time.Since(start))
-	if err := vm.db.Put(repairedKey, []byte("finished")); err != nil {
-		return fmt.Errorf("failed to mark flag for canonical chain repaired due to: %w", err)
-	}
-	if err := vm.chain.ValidateCanonicalChain(); err != nil {
-		return fmt.Errorf("failed to validate canonical chain due to: %w", err)
-	}
-
-	return nil
 }
 
 func (vm *VM) lastAcceptedEthBlock() *types.Block {
@@ -496,9 +464,17 @@ func (vm *VM) internalBuildBlock() (chainState.Block, error) {
 	vm.buildBlockLock.Unlock()
 
 	if block == nil {
+		// Signal the mempool that if it was attempting to issue an atomic
+		// transaction into the next block, block building failed and the
+		// transaction should be re-issued unless it was discarded during
+		// atomic tx verification.
+		vm.mempool.CancelCurrentTx()
 		return nil, errCreateBlock
 	}
 
+	// Marks the current tx from the mempool as being successfully issued
+	// into a block.
+	vm.mempool.IssueCurrentTx()
 	log.Debug(fmt.Sprintf("Built block %s", block.ID()))
 	// make sure Tx Pool is updated
 	<-vm.txPoolStabilizedOk
@@ -634,7 +610,7 @@ func (vm *VM) tryBlockGen() error {
 	if err != nil {
 		return err
 	}
-	if size == 0 && len(vm.pendingAtomicTxs) == 0 {
+	if size == 0 && vm.mempool.Len() == 0 {
 		return nil
 	}
 
@@ -671,8 +647,8 @@ func (vm *VM) extractAtomicTx(block *types.Block) *Tx {
 	return atx
 }
 
-// getAtomicTx attempts to get [txID] from the database.
-func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, uint64, error) {
+// getAcceptedAtomicTx attempts to get [txID] from the database.
+func (vm *VM) getAcceptedAtomicTx(txID ids.ID) (*Tx, uint64, error) {
 	indexedTxBytes, err := vm.acceptedAtomicTxDB.Get(txID[:])
 	if err != nil {
 		return nil, 0, err
@@ -691,6 +667,24 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, uint64, error) {
 	}
 
 	return tx, height, nil
+}
+
+// getAtomicTx returns the requested transaction, status, height if accepted,
+// and whether or not it was found.
+func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, bool) {
+	if tx, height, err := vm.getAcceptedAtomicTx(txID); err == nil {
+		return tx, Accepted, height, true
+	}
+
+	tx, dropped, found := vm.mempool.GetTx(txID)
+	switch {
+	case found && dropped:
+		return tx, Dropped, 0, true
+	case found:
+		return tx, Processing, 0, true
+	default:
+		return nil, Unknown, 0, false
+	}
 }
 
 // writeAtomicTx writes indexes [tx] in [blk]
@@ -749,7 +743,7 @@ func (vm *VM) awaitSubmittedTxs() {
 		case <-vm.txSubmitChan:
 			log.Trace("New tx detected, trying to generate a block")
 			vm.tryBlockGen()
-		case <-vm.atomicTxSubmitChan:
+		case <-vm.mempool.Pending:
 			log.Trace("New atomic Tx detected, trying to generate a block")
 			vm.tryBlockGen()
 		case <-time.After(5 * time.Second):
@@ -786,17 +780,11 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	return chainID, addr, nil
 }
 
+// issueTx adds [tx] to the mempool and signals the goroutine waiting on
+// atomic transactions that there is an atomic transaction ready to be
+// put into a block.
 func (vm *VM) issueTx(tx *Tx) error {
-	select {
-	case vm.pendingAtomicTxs <- tx:
-		select {
-		case vm.atomicTxSubmitChan <- struct{}{}:
-		default:
-		}
-	default:
-		return errTooManyAtomicTx
-	}
-	return nil
+	return vm.mempool.AddTx(tx)
 }
 
 // GetAtomicUTXOs returns the utxos that at least one of the provided addresses is
