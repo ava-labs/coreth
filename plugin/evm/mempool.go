@@ -23,8 +23,8 @@ type Mempool struct {
 	issuedTxs map[ids.ID]*Tx
 	// discardedTxs is an LRU Cache of recently discarded transactions
 	discardedTxs *cache.LRU
-	// Pending is a channel that signals when the mempool is ready to put an atomic transaction
-	// into a new block
+	// Pending is a channel of length one, which the mempool ensures has an item on
+	// it as long as there is an unissued transaction remaining in [txs]
 	Pending chan struct{}
 }
 
@@ -59,15 +59,14 @@ func (m *Mempool) AddTx(tx *Tx) error {
 	defer m.lock.Unlock()
 
 	txID := tx.ID()
-	// If [txID] has already been issued, there is no need to
-	// build a new block.
+	// If [txID] has already been issued or is the currentTx
+	// there's no need to add it.
 	if _, exists := m.issuedTxs[txID]; exists {
 		return nil
 	}
-
-	// Each of the following cases results in there being a
-	// pending transaction, so we add to the channel here.
-	m.addPending()
+	if m.currentTx != nil && m.currentTx.ID() == tx.ID() {
+		return nil
+	}
 
 	if m.length() >= m.maxSize {
 		return errTooManyAtomicTx
@@ -78,6 +77,7 @@ func (m *Mempool) AddTx(tx *Tx) error {
 	}
 
 	m.txs[txID] = tx
+	m.addPending()
 	return nil
 }
 
@@ -151,9 +151,9 @@ func (m *Mempool) CancelCurrentTx() {
 		m.currentTx = nil
 	}
 
-	// If the VM failed to build a block for any reason
-	// make sure there is an item on the Pending channel if
-	// there are any more transactions to issue.
+	// If the VM cancelled building the block for any reason, ensure
+	// the Pending channel still has an item on it if there are txs
+	// remaining to be issued.
 	if len(m.txs) > 0 {
 		m.addPending()
 	}
@@ -197,11 +197,12 @@ func (m *Mempool) RejectTx(txID ids.ID) {
 	}
 	// If the transaction was issued by the mempool, add it back
 	// to transactions pending issuance.
+	delete(m.issuedTxs, txID)
 	m.txs[txID] = tx
 	m.addPending()
 }
 
-// addPending makes sure that an item is added to the pending channel
+// addPending makes sure that an item is in the Pending channel.
 func (m *Mempool) addPending() {
 	select {
 	case m.Pending <- struct{}{}:

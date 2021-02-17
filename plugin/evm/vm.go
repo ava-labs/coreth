@@ -304,6 +304,7 @@ func (vm *VM) Initialize(
 				log.Error("Atomic transaction failed verification", "txID", tx.ID(), "error", err)
 				// Discard the transaction from the mempool on failed verification.
 				vm.mempool.DiscardCurrentTx()
+				vm.newBlockChan <- nil
 				return nil, err
 			}
 			atomicTxBytes, err := vm.codec.Marshal(codecVersion, tx)
@@ -311,6 +312,7 @@ func (vm *VM) Initialize(
 				log.Error("Failed to marshal atomic transaction", "txID", tx.ID(), "error", err)
 				// Discard the transaction from the mempool on failed verification.
 				vm.mempool.DiscardCurrentTx()
+				vm.newBlockChan <- nil
 				return nil, err
 			}
 			return atomicTxBytes, nil
@@ -669,21 +671,23 @@ func (vm *VM) getAcceptedAtomicTx(txID ids.ID) (*Tx, uint64, error) {
 	return tx, height, nil
 }
 
-// getAtomicTx returns the requested transaction, status, height if accepted,
-// and whether or not it was found.
-func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, bool) {
+// getAtomicTx returns the requested transaction, status, and height.
+// If the status is Unknown, then the returned transaction will be nil.
+func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	if tx, height, err := vm.getAcceptedAtomicTx(txID); err == nil {
-		return tx, Accepted, height, true
+		return tx, Accepted, height, nil
+	} else if err != database.ErrNotFound {
+		return nil, Unknown, 0, err
 	}
 
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
 	case found && dropped:
-		return tx, Dropped, 0, true
+		return tx, Dropped, 0, nil
 	case found:
-		return tx, Processing, 0, true
+		return tx, Processing, 0, nil
 	default:
-		return nil, Unknown, 0, false
+		return nil, Unknown, 0, nil
 	}
 }
 

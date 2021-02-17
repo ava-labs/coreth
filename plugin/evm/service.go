@@ -445,10 +445,10 @@ func (service *AvaxAPI) GetTxStatus(r *http.Request, args *api.JSONTxID, reply *
 
 	_, status, height, _ := service.vm.getAtomicTx(args.TxID)
 
+	reply.Status = status
 	if status == Accepted {
 		reply.BlockHeight = &height
 	}
-	reply.Status = status
 	return nil
 }
 
@@ -465,9 +465,13 @@ func (service *AvaxAPI) GetTx(r *http.Request, args *api.GetTxArgs, reply *Forma
 		return errNilTxID
 	}
 
-	tx, status, height, found := service.vm.getAtomicTx(args.TxID)
-	if !found {
-		return fmt.Errorf("could not find atomic tx %s", args.TxID)
+	tx, status, height, err := service.vm.getAtomicTx(args.TxID)
+	if err != nil {
+		return err
+	}
+
+	if status == Unknown {
+		return fmt.Errorf("could not find tx %s", args.TxID)
 	}
 
 	txBytes, err := formatting.Encode(args.Encoding, tx.Bytes())

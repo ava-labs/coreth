@@ -5,6 +5,7 @@ package evm
 
 import (
 	"errors"
+	"fmt"
 )
 
 var (
@@ -31,7 +32,7 @@ func (s Status) MarshalJSON() ([]byte, error) {
 	if err := s.Valid(); err != nil {
 		return nil, err
 	}
-	return []byte("\"" + s.String() + "\""), nil
+	return []byte(fmt.Sprintf("%q", s)), nil
 }
 
 // UnmarshalJSON ...
