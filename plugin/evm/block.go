@@ -107,7 +107,7 @@ func (b *Block) ID() ids.ID { return b.id }
 func (b *Block) Accept() error {
 	vm := b.vm
 	b.status = choices.Accepted
-	if err := vm.chain.SetTail(common.Hash(b.id)); err != nil {
+	if err := vm.chain.SetHead(common.Hash(b.id)); err != nil {
 		return err
 	}
 

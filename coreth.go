@@ -197,9 +197,15 @@ func (self *ETHChain) WriteCanonicalFromCurrentBlock() error {
 	return self.backend.BlockChain().WriteCanonicalFromCurrentBlock()
 }
 
-// SetTail sets the current head block to the one defined by the hash
+// LastAcceptedBlock returns the last accepted block in the canonical
+// chain.
+func (self *ETHChain) LastAcceptedBlock() *types.Block {
+	return self.backend.BlockChain().CurrentBlock()
+}
+
+// SetHead sets the current head block to the one defined by the hash
 // irrelevant what the chain contents were prior.
-func (self *ETHChain) SetTail(hash common.Hash) error {
+func (self *ETHChain) SetHead(hash common.Hash) error {
 	return self.backend.BlockChain().ManualHead(hash)
 }
 

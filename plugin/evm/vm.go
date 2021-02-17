@@ -390,18 +390,18 @@ func (vm *VM) Initialize(
 	chain.Start()
 
 	ethGenesisBlock := chain.GetGenesisBlock()
-	genesisBlock := &Block{
-		ethBlock: ethGenesisBlock,
-		id:       ids.ID(ethGenesisBlock.Hash()),
+	ethLastAcceptedBlock := chain.LastAcceptedBlock()
+	lastAcceptedBlock := &Block{
+		ethBlock: ethLastAcceptedBlock,
+		id:       ids.ID(ethLastAcceptedBlock.Hash()),
 		vm:       vm,
 		status:   choices.Accepted,
 	}
-	vm.ChainState.Initialize(genesisBlock, vm.internalGetBlock, vm.internalParseBlock, vm.internalBuildBlock)
+	vm.ChainState.Initialize(lastAcceptedBlock, vm.internalGetBlockIDAtHeight, vm.internalGetBlock, vm.internalParseBlock, vm.internalBuildBlock)
 
-	lastAcceptedBlk := vm.ChainState.LastAcceptedBlock().Block.(*Block)
-	vm.chain.SetPreference(lastAcceptedBlk.ethBlock)
+	vm.chain.SetPreference(ethLastAcceptedBlock)
 	vm.genesisHash = ethGenesisBlock.Hash()
-	log.Info("Initializing Coreth VM", "Last Accepted", lastAcceptedBlk.ethBlock.Hash().Hex())
+	log.Info("Initializing Coreth VM", "Last Accepted", ethLastAcceptedBlock.Hash().Hex())
 
 	vm.shutdownWg.Add(1)
 	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
@@ -437,7 +437,7 @@ func (vm *VM) repairCanonicalChain() error {
 	start := time.Now()
 	log.Info("starting to repair canonical chain", "startTime", start)
 
-	if err := vm.chain.SetTail(vm.lastAcceptedEthBlock().Hash()); err != nil {
+	if err := vm.chain.SetHead(vm.lastAcceptedEthBlock().Hash()); err != nil {
 		return fmt.Errorf("failed to set tail to the last accepted block: %w", err)
 	}
 	if err := vm.chain.WriteCanonicalFromCurrentBlock(); err != nil {
@@ -540,6 +540,18 @@ func (vm *VM) internalGetBlock(id ids.ID) (chainState.Block, error) {
 		status:   choices.Processing,
 	}
 	return blk, nil
+}
+
+// internalGetBlockIDAtHeight retrieves the blkID of the canonical block at [blkHeight]
+// if [blkHeight] is less than the height of the last accepted block, this will return
+// a canonical block. Otherwise, it may return a block that has not yet been accepted.
+func (vm *VM) internalGetBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
+	ethBlock := vm.chain.GetBlockByNumber(blkHeight)
+	if ethBlock == nil {
+		return ids.ID{}, fmt.Errorf("could not find block at height: %d", blkHeight)
+	}
+
+	return ids.ID(ethBlock.Hash()), nil
 }
 
 // SetPreference sets what the current tail of the chain is

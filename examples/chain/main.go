@@ -126,7 +126,7 @@ func (tc *TestChain) GenRandomTree(n int, max int) {
 		pb, _ := rand.Int(rand.Reader, big.NewInt((int64)(m)))
 		pn := pb.Int64()
 		tc.parentBlock = tc.blocks[nblocks-1-(int)(pn)]
-		tc.chain.SetTail(tc.parentBlock)
+		tc.chain.SetHead(tc.parentBlock)
 		tc.blockWait.Add(1)
 		tc.chain.GenBlock()
 		tc.blockWait.Wait()

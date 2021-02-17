@@ -15,62 +15,31 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type testBlock struct {
-	id        ids.ID
-	bytes     []byte
-	height    uint64
-	status    choices.Status
-	parent    *testBlock
-	onAccept  func() error
-	onReject  func() error
-	verifyErr error
+type TestBlock struct {
+	snowman.TestBlock
 }
 
-func (b *testBlock) ID() ids.ID { return b.id }
+func (b *TestBlock) SetStatus(status choices.Status) { b.TestDecidable.StatusV = status }
 
-func (b *testBlock) Height() uint64 { return b.height }
-
-func (b *testBlock) Accept() error {
-	b.status = choices.Accepted
-	if b.onAccept == nil {
-		return nil
-	}
-	return b.onAccept()
-}
-
-func (b *testBlock) Reject() error {
-	b.status = choices.Rejected
-	if b.onReject == nil {
-		return nil
-	}
-	return b.onReject()
-}
-
-func (b *testBlock) Parent() snowman.Block { return b.parent }
-
-func (b *testBlock) Verify() error { return b.verifyErr }
-
-func (b *testBlock) Status() choices.Status { return b.status }
-
-func (b *testBlock) Bytes() []byte { return b.bytes }
-
-func (b *testBlock) SetStatus(status choices.Status) { b.status = status }
-
-func newTestBlock(i int, parent *testBlock) *testBlock {
+func newTestBlock(i int, parent *TestBlock) *TestBlock {
 	b := []byte{byte(i)}
 	id := hashing.ComputeHash256Array(b)
-	return &testBlock{
-		id:     id,
-		bytes:  b,
-		status: choices.Processing,
-		height: uint64(i),
-		parent: parent,
+	return &TestBlock{
+		TestBlock: snowman.TestBlock{
+			TestDecidable: choices.TestDecidable{
+				IDV:     id,
+				StatusV: choices.Processing,
+			},
+			HeightV: uint64(i),
+			ParentV: parent,
+			BytesV:  b,
+		},
 	}
 }
 
-func newTestBlocks(numBlocks int) []*testBlock {
-	blks := make([]*testBlock, 0, numBlocks)
-	var lastBlock *testBlock
+func newTestBlocks(numBlocks int) []*TestBlock {
+	blks := make([]*TestBlock, 0, numBlocks)
+	var lastBlock *TestBlock
 	for i := 0; i < numBlocks; i++ {
 		blks = append(blks, newTestBlock(i, lastBlock))
 		lastBlock = blks[len(blks)-1]
@@ -79,18 +48,29 @@ func newTestBlocks(numBlocks int) []*testBlock {
 	return blks
 }
 
+func getAcceptedBlockAtHeight(blks map[ids.ID]*TestBlock) GetBlockIDAtHeightType {
+	return func(blkHeight uint64) (ids.ID, error) {
+		for _, blk := range blks {
+			if blk.Height() != blkHeight {
+				continue
+			}
+
+			if blk.Status() == choices.Accepted {
+				return blk.ID(), nil
+			}
+		}
+		return ids.ID{}, fmt.Errorf("could not find accepted block at height %d", blkHeight)
+	}
+}
+
 func cantBuildBlock() (Block, error) {
 	return nil, errors.New("can't build new block")
 }
 
-// what do we want to test?
-
-// test that something being removed from each cache works correctly
-
 func TestChainState(t *testing.T) {
 	db := memdb.New()
 
-	blks := make(map[ids.ID]*testBlock)
+	blks := make(map[ids.ID]*TestBlock)
 	testBlks := newTestBlocks(3)
 	genesisBlock := testBlks[0]
 	blks[genesisBlock.ID()] = genesisBlock
@@ -100,20 +80,22 @@ func TestChainState(t *testing.T) {
 	// to generate a conflict with blk2
 	blk3Bytes := []byte{byte(3)}
 	blk3ID := hashing.ComputeHash256Array(blk3Bytes)
-	blk3 := &testBlock{
-		id:     blk3ID,
-		bytes:  blk3Bytes,
-		status: choices.Processing,
-		height: uint64(2),
-		parent: blk1,
+	blk3 := &TestBlock{
+		TestBlock: snowman.TestBlock{
+			TestDecidable: choices.TestDecidable{
+				IDV:     blk3ID,
+				StatusV: choices.Processing,
+			},
+			HeightV: uint64(2),
+			BytesV:  blk3Bytes,
+			ParentV: blk1,
+		},
 	}
 
 	chainState := NewChainState(prefixdb.New([]byte{1}, db), 2)
+	getCanonicalBlockID := getAcceptedBlockAtHeight(blks)
 	// getBlock returns a block if it's already known
 	getBlock := func(id ids.ID) (Block, error) {
-		chainState.lock.Lock()
-		defer chainState.lock.Unlock()
-
 		if blk, ok := blks[id]; ok {
 			return blk, nil
 		}
@@ -122,13 +104,10 @@ func TestChainState(t *testing.T) {
 	}
 	// parseBlock adds the block to known blocks and returns the block
 	parseBlock := func(b []byte) (Block, error) {
-		chainState.lock.Lock()
-		defer chainState.lock.Unlock()
-
 		if len(b) != 1 {
 			return nil, fmt.Errorf("unknown block with bytes length %d", len(b))
 		}
-		var blk *testBlock
+		var blk *TestBlock
 		switch b[0] {
 		case 0:
 			blk = genesisBlock
@@ -146,13 +125,18 @@ func TestChainState(t *testing.T) {
 		blks[blk.ID()] = blk
 		return blk, nil
 	}
-	err := chainState.Initialize(genesisBlock, getBlock, parseBlock, cantBuildBlock)
+	err := chainState.Initialize(genesisBlock, getCanonicalBlockID, getBlock, parseBlock, cantBuildBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if lastAccepted := chainState.LastAccepted(); lastAccepted != genesisBlock.ID() {
 		t.Fatal("Expected last accepted block to be the genesis block")
+	}
+
+	wrappedGenesisBlk, err := chainState.GetBlock(genesisBlock.ID())
+	if err != nil {
+		t.Fatalf("Failed to get genesis block due to: %s", err)
 	}
 
 	// Check that a cache miss on a block is handled correctly
@@ -231,54 +215,17 @@ func TestChainState(t *testing.T) {
 		t.Fatal("Expected last accepted block to be blk2")
 	}
 
-	// Check that ChainState from the same database accurately reflects the accepted chain.
-	chainStateRestarted := NewChainState(prefixdb.New([]byte{1}, db), 2)
-	err = chainStateRestarted.Initialize(genesisBlock, getBlock, parseBlock, cantBuildBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if lastAccepted := chainStateRestarted.LastAccepted(); lastAccepted != blk2.ID() {
-		t.Fatal("Expected last accepted block to be blk2 after restart")
-	}
-	lastAcceptedBlk := chainStateRestarted.LastAcceptedBlock()
-	if lastAcceptedBlk.ID() != blk2.ID() {
-		t.Fatalf("Expected last accepted block to be blk2 after restart")
-	}
-
-	acceptedBlk2, err := chainStateRestarted.GetBlock(blk2.ID())
-	assert.NoError(t, err, "ChainState should not have errored retrieving accepted block")
-
-	acceptedBlk1 := acceptedBlk2.Parent()
-	if status := acceptedBlk1.Status(); status != choices.Accepted {
-		t.Fatalf("blk1 should have been accepted, but had status %s", status)
-	}
-	if acceptedBlk1.ID() != blk1.ID() {
-		t.Fatalf("Found unexpected blkID for the parent of the last accepted block")
-	}
-	acceptedBlk0 := acceptedBlk1.Parent()
-	if status := acceptedBlk0.Status(); status != choices.Accepted {
-		t.Fatalf("blk0 should have been accepted, but had status %s", status)
-	}
-	if acceptedBlk0.ID() != genesisBlock.ID() {
-		t.Fatalf("Found unexpected blkID for ancestor of last accepted block")
-	}
-	rejectedBlk3, err := chainStateRestarted.GetBlock(blk3.ID())
-	if err != nil {
-		t.Fatalf("Unexpected error retrieving blk3 from restarted ChainState %s", err)
-	}
-
 	// Check each block
-	checkAcceptedBlock(t, chainState, acceptedBlk2, false)
-	checkAcceptedBlock(t, chainState, acceptedBlk1, false)
-	checkAcceptedBlock(t, chainState, acceptedBlk0, false)
-	checkRejectedBlock(t, chainState, rejectedBlk3, false)
+	checkAcceptedBlock(t, chainState, wrappedGenesisBlk, false)
+	checkAcceptedBlock(t, chainState, parsedBlk1, false)
+	checkAcceptedBlock(t, chainState, parsedBlk2, false)
+	checkRejectedBlock(t, chainState, parsedBlk3, false)
 }
 
 func TestBuildBlock(t *testing.T) {
 	db := memdb.New()
 
-	blks := make(map[ids.ID]*testBlock)
+	blks := make(map[ids.ID]*TestBlock)
 	testBlks := newTestBlocks(2)
 	genesisBlock := testBlks[0]
 	blks[genesisBlock.ID()] = genesisBlock
@@ -286,11 +233,9 @@ func TestBuildBlock(t *testing.T) {
 	blk1 := testBlks[1]
 
 	chainState := NewChainState(prefixdb.New([]byte{1}, db), 2)
+	getCanonicalBlockID := getAcceptedBlockAtHeight(blks)
 	// getBlock returns a block if it's already known
 	getBlock := func(id ids.ID) (Block, error) {
-		chainState.lock.Lock()
-		defer chainState.lock.Unlock()
-
 		if blk, ok := blks[id]; ok {
 			return blk, nil
 		}
@@ -299,13 +244,10 @@ func TestBuildBlock(t *testing.T) {
 	}
 	// parseBlock adds the block to known blocks and returns the block
 	parseBlock := func(b []byte) (Block, error) {
-		chainState.lock.Lock()
-		defer chainState.lock.Unlock()
-
 		if len(b) != 1 {
 			return nil, fmt.Errorf("unknown block with bytes length %d", len(b))
 		}
-		var blk *testBlock
+		var blk *TestBlock
 		switch b[0] {
 		case 0:
 			blk = genesisBlock
@@ -320,13 +262,10 @@ func TestBuildBlock(t *testing.T) {
 		return blk, nil
 	}
 	buildBlock := func() (Block, error) {
-		chainState.lock.Lock()
-		defer chainState.lock.Unlock()
-
 		return blk1, nil
 	}
 
-	err := chainState.Initialize(genesisBlock, getBlock, parseBlock, buildBlock)
+	err := chainState.Initialize(genesisBlock, getCanonicalBlockID, getBlock, parseBlock, buildBlock)
 	if err != nil {
 		t.Fatal(err)
 	}

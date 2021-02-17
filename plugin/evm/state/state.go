@@ -4,26 +4,15 @@
 package evm
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-)
-
-// Define db prefixes and keys
-var (
-	BlockByHeightPrefix      = []byte("blockByHeight")
-	LastAcceptedKey          = []byte("lastAccepted")
-	chainStateInternalPrefix = []byte("internal")
-	chainStateExternalPrefix = []byte("external")
 )
 
 var (
@@ -39,6 +28,9 @@ type BuildBlockType func() (Block, error)
 // GetBlockType ...
 type GetBlockType func(ids.ID) (Block, error)
 
+// GetBlockIDAtHeightType ...
+type GetBlockIDAtHeightType func(uint64) (ids.ID, error)
+
 // ChainState defines the canonical state of the chain
 // it tracks the accepted blocks and wraps a VM's implementation
 // of snowman.Block in order to take care of writing blocks to
@@ -49,25 +41,14 @@ type ChainState struct {
 	// atomic commits on block acceptance.
 	baseDB *versiondb.Database
 
-	// internalDB is used for all storage internal to ChainState
-	// which includes only the VM's canonical index of height -> blkID
-	// for accepted blocks.
-	internalDB database.Database
-	// externalDB is the database provided by ChainState for the VM to
-	// store data external to ChainState including the blocks themselves.
-	externalDB database.Database
-	// acceptedBlocksByHeight is prefixed from [internalDB] and provides
-	// a lookup from height to the accepted blkID at that height.
-	acceptedBlocksByHeight database.Database
-
 	// ChainState keeps these function types to request operations
 	// from the VM implementation.
-	getBlock       GetBlockType
-	unmarshalBlock UnmarshalType
-	buildBlock     BuildBlockType
-	genesisBlock   snowman.Block
+	getBlockIDAtHeight GetBlockIDAtHeightType
+	getBlock           GetBlockType
+	unmarshalBlock     UnmarshalType
+	buildBlock         BuildBlockType
+	genesisBlock       snowman.Block
 
-	lock sync.Mutex
 	// processingBlocks are the verified blocks that have entered
 	// consensus
 	processingBlocks map[ids.ID]*BlockWrapper
@@ -84,64 +65,31 @@ type ChainState struct {
 // NewChainState ...
 func NewChainState(db database.Database, cacheSize int) *ChainState {
 	baseDB := versiondb.New(db)
-	internalDB := prefixdb.New(chainStateInternalPrefix, baseDB)
-	externalDB := prefixdb.New(chainStateExternalPrefix, baseDB)
-	acceptedBlocksByHeightDB := prefixdb.New(BlockByHeightPrefix, internalDB)
 
 	state := &ChainState{
-		baseDB:                 baseDB,
-		internalDB:             internalDB,
-		externalDB:             externalDB,
-		acceptedBlocksByHeight: acceptedBlocksByHeightDB,
-		processingBlocks:       make(map[ids.ID]*BlockWrapper, cacheSize),
-		decidedBlocks:          &cache.LRU{Size: cacheSize},
-		missingBlocks:          &cache.LRU{Size: cacheSize},
-		unverifiedBlocks:       &cache.LRU{Size: cacheSize},
+		baseDB:           baseDB,
+		processingBlocks: make(map[ids.ID]*BlockWrapper, cacheSize),
+		decidedBlocks:    &cache.LRU{Size: cacheSize},
+		missingBlocks:    &cache.LRU{Size: cacheSize},
+		unverifiedBlocks: &cache.LRU{Size: cacheSize},
 	}
 	return state
 }
 
 // Initialize sets the genesis block, last accepted block, and the functions for retrieving blocks from the VM layer.
-func (c *ChainState) Initialize(genesisBlock Block, getBlock GetBlockType, unmarshalBlock UnmarshalType, buildBlock BuildBlockType) error {
+func (c *ChainState) Initialize(lastAcceptedBlock Block, getBlockIDAtHeight GetBlockIDAtHeightType, getBlock GetBlockType, unmarshalBlock UnmarshalType, buildBlock BuildBlockType) error {
 	// Set the functions for retrieving blocks from the VM
+	c.getBlockIDAtHeight = getBlockIDAtHeight
 	c.getBlock = getBlock
 	c.unmarshalBlock = unmarshalBlock
 	c.buildBlock = buildBlock
 
-	// Initialize the last accepted block
-	lastAcceptedIDBytes, err := c.internalDB.Get(LastAcceptedKey)
-	var lastAcceptedBlock *BlockWrapper
-	if err == nil {
-		lastAcceptedID, err := ids.ToID(lastAcceptedIDBytes)
-		if err != nil {
-			return err
-		}
-		internalBlock, err := getBlock(lastAcceptedID)
-		if err != nil {
-			return err
-		}
-		lastAcceptedBlock = &BlockWrapper{
-			Block:  internalBlock,
-			status: choices.Accepted,
-		}
-	} else {
-		genesisID := genesisBlock.ID()
-		if err := c.internalDB.Put(LastAcceptedKey, genesisID[:]); err != nil {
-			return err
-		}
-		if err := c.acceptedBlocksByHeight.Put(heightKey(genesisBlock.Height()), genesisID[:]); err != nil {
-			return err
-		}
-		lastAcceptedBlock = &BlockWrapper{
-			Block:  genesisBlock,
-			status: choices.Accepted,
-		}
+	lastAcceptedBlock.SetStatus(choices.Accepted)
+	c.lastAcceptedBlock = &BlockWrapper{
+		Block: lastAcceptedBlock,
+		state: c,
 	}
-	lastAcceptedBlock.state = c
-	c.lastAcceptedBlock = lastAcceptedBlock
-	// Put the last accepted block in the decided block cache to start.
-	c.decidedBlocks.Put(lastAcceptedBlock.ID(), lastAcceptedBlock)
-
+	c.decidedBlocks.Put(lastAcceptedBlock.ID(), c.lastAcceptedBlock)
 	return nil
 }
 
@@ -153,16 +101,12 @@ func (c *ChainState) FlushCaches() {
 }
 
 // ExternalDB returns a database to be used external to ChainState
-// The returned database must handle batching and atomicity by itself except for
-// any operations that take place during block decisions. Any database operations
-// that occur during block decisions (Accept/Reject) will be automatically batched.
-func (c *ChainState) ExternalDB() database.Database { return c.externalDB }
+// Any operations that occur on the returned database during Accept/Reject
+// of blocks will be automatically batched by ChainState.
+func (c *ChainState) ExternalDB() database.Database { return c.baseDB }
 
 // GetBlock returns the BlockWrapper as snowman.Block corresponding to [blkID]
 func (c *ChainState) GetBlock(blkID ids.ID) (snowman.Block, error) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	if blk, ok := c.getCachedBlock(blkID); ok {
 		return blk, nil
 	}
@@ -171,9 +115,7 @@ func (c *ChainState) GetBlock(blkID ids.ID) (snowman.Block, error) {
 		return nil, errUnknownBlock
 	}
 
-	c.lock.Unlock()
 	blk, err := c.getBlock(blkID)
-	c.lock.Lock()
 	if err != nil {
 		c.missingBlocks.Put(blkID, struct{}{})
 		return nil, err
@@ -212,26 +154,6 @@ func (c *ChainState) GetBlockInternal(blkID ids.ID) (Block, error) {
 	return wrappedBlk.(*BlockWrapper).Block, nil
 }
 
-// getBlockIDAtHeight returns the blkID accepted at [height] if there is
-// one.
-// assumes the lock is held.
-func (c *ChainState) getBlockIDAtHeight(height uint64) (ids.ID, error) {
-	if height > c.lastAcceptedBlock.Height() {
-		return ids.ID{}, fmt.Errorf("no block has been accepted at height: %d", height)
-	}
-
-	blkIDBytes, err := c.acceptedBlocksByHeight.Get(heightKey(height))
-	if err != nil {
-		return ids.ID{}, err
-	}
-
-	blkID, err := ids.ToID(blkIDBytes)
-	if err != nil {
-		return ids.ID{}, fmt.Errorf("failed to convert accepted blockID bytes to an ID type: %w", err)
-	}
-	return blkID, nil
-}
-
 // ParseBlock attempts to parse [b] into an internal Block and adds it to the appropriate
 // caching layer if successful.
 func (c *ChainState) ParseBlock(b []byte) (snowman.Block, error) {
@@ -240,15 +162,10 @@ func (c *ChainState) ParseBlock(b []byte) (snowman.Block, error) {
 		return nil, err
 	}
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	blkID := blk.ID()
 	// Check for an existing block, so we can return a unique block
 	// if processing or simply allow this block to be immediately
 	// garbage collected if it is already cached.
-	// If the block is already cached, there's no need to evict from
-	// missing blocks, since we already have it.
 	if blk, ok := c.getCachedBlock(blkID); ok {
 		return blk, nil
 	}
@@ -268,20 +185,15 @@ func (c *ChainState) BuildBlock() (snowman.Block, error) {
 		return nil, err
 	}
 
-	// Lock after building the block, so that the VM can call into ChainState
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	// Evict the produced block from missing blocks.
 	c.missingBlocks.Evict(blk.ID())
 
 	// Blocks built by BuildBlock are built on top of the
-	// preferred block, such that they are guaranteed to
-	// have status Processing.
+	// preferred block, so it is guaranteed to be in Processing.
 	blk.SetStatus(choices.Processing)
 	wrappedBlk := &BlockWrapper{
-		Block:  blk,
-		status: choices.Processing,
-		state:  c,
+		Block: blk,
+		state: c,
 	}
 	// Since the consensus engine has not called Verify on this
 	// block yet, we can add it directly as a non-processing block.
@@ -305,7 +217,6 @@ func (c *ChainState) addNonProcessingBlock(blk Block) (snowman.Block, error) {
 		return nil, err
 	}
 
-	wrappedBlk.status = status
 	blk.SetStatus(status)
 	blkID := blk.ID()
 	switch status {
@@ -322,17 +233,11 @@ func (c *ChainState) addNonProcessingBlock(blk Block) (snowman.Block, error) {
 
 // LastAccepted ...
 func (c *ChainState) LastAccepted() ids.ID {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	return c.lastAcceptedBlock.ID()
 }
 
 // LastAcceptedBlock returns the last accepted wrapped block
 func (c *ChainState) LastAcceptedBlock() *BlockWrapper {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	return c.lastAcceptedBlock
 }
 
@@ -350,6 +255,7 @@ func (c *ChainState) getStatus(blk snowman.Block) (choices.Status, error) {
 		return choices.Processing, nil
 	}
 
+	// Get the blockID at [blkHeight] so it can be compared to [blk]
 	acceptedBlkID, err := c.getBlockIDAtHeight(blk.Height())
 	if err != nil {
 		return choices.Unknown, fmt.Errorf("failed to get acceptedID at height %d, below last accepted height: %w", blk.Height(), err)
@@ -360,11 +266,4 @@ func (c *ChainState) getStatus(blk snowman.Block) (choices.Status, error) {
 	}
 
 	return choices.Rejected, nil
-}
-
-// heightKey ...
-func heightKey(height uint64) []byte {
-	heightKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightKey, height)
-	return heightKey
 }
