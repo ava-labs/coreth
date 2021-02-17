@@ -41,7 +41,6 @@ type ETHChain struct {
 	backend *eth.Ethereum
 	cb      *dummy.ConsensusCallbacks
 	mcb     *miner.MinerCallbacks
-	bcb     *eth.BackendCallbacks
 }
 
 // NewETHChain creates an Ethereum blockchain with the given configs.
@@ -62,9 +61,8 @@ func NewETHChain(config *eth.Config, nodecfg *node.Config, etherBase *common.Add
 	//}
 	cb := new(dummy.ConsensusCallbacks)
 	mcb := new(miner.MinerCallbacks)
-	bcb := new(eth.BackendCallbacks)
-	backend, _ := eth.New(node, config, cb, mcb, bcb, chainDB, settings)
-	chain := &ETHChain{backend: backend, cb: cb, mcb: mcb, bcb: bcb}
+	backend, _ := eth.New(node, config, cb, mcb, chainDB, settings)
+	chain := &ETHChain{backend: backend, cb: cb, mcb: mcb}
 	if etherBase == nil {
 		etherBase = &BlackholeAddr
 	}
@@ -158,10 +156,6 @@ func (self *ETHChain) SetOnFinalizeAndAssemble(cb dummy.OnFinalizeAndAssembleCal
 
 func (self *ETHChain) SetOnExtraStateChange(cb dummy.OnExtraStateChangeType) {
 	self.cb.OnExtraStateChange = cb
-}
-
-func (self *ETHChain) SetOnQueryAcceptedBlock(cb func() *types.Block) {
-	self.bcb.OnQueryAcceptedBlock = cb
 }
 
 // Returns a new mutable state based on the current HEAD block.

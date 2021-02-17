@@ -147,7 +147,7 @@ func TestChainState(t *testing.T) {
 		t.Fatal("expected GetBlock to return an error for blk1 before it's been parsed")
 	}
 
-	// Parse and verify blk1 and 2
+	// Parse and verify blk1 and blk2
 	parsedBlk1, err := chainState.ParseBlock(blk1.Bytes())
 	if err != nil {
 		t.Fatal("Failed to parse blk1 due to: %w", err)

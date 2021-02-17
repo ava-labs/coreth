@@ -344,9 +344,6 @@ func (vm *VM) Initialize(
 		vm.txPoolStabilizedLock.Unlock()
 		return nil
 	})
-	chain.SetOnQueryAcceptedBlock(func() *types.Block {
-		return vm.lastAcceptedEthBlock()
-	})
 	chain.SetOnExtraStateChange(func(block *types.Block, state *state.StateDB) error {
 		tx := vm.extractAtomicTx(block)
 		if tx == nil {
@@ -454,6 +451,7 @@ func (vm *VM) repairCanonicalChain() error {
 	return nil
 }
 
+// TODO remove once unused by repairCanonicalChain
 func (vm *VM) lastAcceptedEthBlock() *types.Block {
 	return vm.LastAcceptedBlock().Block.(*Block).ethBlock
 }
@@ -866,7 +864,7 @@ func (vm *VM) GetAtomicUTXOs(
 // since there are no multisig inputs in Ethereum
 func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids.ID, amount uint64) ([]EVMInput, [][]*crypto.PrivateKeySECP256K1R, error) {
 	// NOTE: should we use HEAD block or lastAccepted?
-	state, err := vm.chain.BlockState(vm.lastAcceptedEthBlock())
+	state, err := vm.chain.CurrentState()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -914,7 +912,7 @@ func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids
 
 // GetAcceptedNonce returns the nonce associated with the address at the last accepted block
 func (vm *VM) GetAcceptedNonce(address common.Address) (uint64, error) {
-	state, err := vm.chain.BlockState(vm.lastAcceptedEthBlock())
+	state, err := vm.chain.CurrentState()
 	if err != nil {
 		return 0, err
 	}
