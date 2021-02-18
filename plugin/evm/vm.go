@@ -81,7 +81,6 @@ const (
 var (
 	errEmptyBlock                 = errors.New("empty block")
 	errCreateBlock                = errors.New("couldn't create block")
-	errBlockFrequency             = errors.New("too frequent block issuance")
 	errUnsupportedFXs             = errors.New("unsupported feature extensions")
 	errInvalidBlock               = errors.New("invalid block")
 	errInvalidAddr                = errors.New("invalid hex address")
@@ -103,23 +102,15 @@ var (
 	errFailedChainVerify          = errors.New("block failed chain verify")
 )
 
-// mayBuildBlockStatus denotes whether the engine should be notified
-// that a block should be built, or whether more time has to pass
-// before doing so. See VM's [mayBuildBlock].
-type mayBuildBlockStatus uint8
+// buildingBlkStatus denotes the current status of the VM in block production.
+type buildingBlkStatus uint8
 
 const (
-	waitToBuild mayBuildBlockStatus = iota
-	conditionalWaitToBuild
+	dontBuild buildingBlkStatus = iota
+	conditionalBuild
 	mayBuild
+	building
 )
-
-func maxDuration(x, y time.Duration) time.Duration {
-	if x > y {
-		return x
-	}
-	return y
-}
 
 // Codec does serialization and deserialization
 var Codec codec.Manager
@@ -177,35 +168,24 @@ type VM struct {
 	txPoolStabilizedHead common.Hash
 	txPoolStabilizedOk   chan struct{}
 
-	// [buildBlockLock] must be held when accessing [mayBuildBlock],
-	// [tryToBuildBlock] or [awaitingBuildBlock].
+	// [buildBlockLock] must be held when accessing [buildStatus]
 	buildBlockLock sync.Mutex
-	// [buildBlockTimer] periodically fires in order to update [mayBuildBlock]
-	// and to try to build a block, if applicable.
+	// [buildBlockTimer] is a two stage timer handling block production.
+	// Stage1 build a block if the batch size has been reached.
+	// Stage2 build a block regardless of the size.
 	buildBlockTimer *timer.Timer
-	// [mayBuildBlock] == [wait] means that the next block may be built
-	// only after more time has elapsed.
-	// [mayBuildBlock] == [conditionalWait] means that the next block may be built
-	// only if it has more than [batchSize] txs in it. Otherwise, wait until more
-	// time has elapsed.
-	// [mayBuildBlock] == [build] means that the next block may be built
-	// at any time.
-	mayBuildBlock mayBuildBlockStatus
-	// If true, try to notify the engine that a block should be built.
-	// Engine may not be notified because [mayBuildBlock] says to wait.
-	tryToBuildBlock bool
-	// If true, the engine has been notified that it should build a block
-	// but has not done so yet. If this is the case, wait until it has
-	// built a block before notifying it again.
-	awaitingBuildBlock bool
+	// buildStatus signals the phase of block building the VM is currently in.
+	// [dontBuild] indicates there's no need to build a block.
+	// [conditionalBuild] indicates build a block if the batch size has been reached.
+	// [mayBuild] indicates the VM should proceed to build a block.
+	// [building] indicates the VM has sent a request to the engine to build a block.
+	buildStatus buildingBlkStatus
 
-	genlock      sync.Mutex
-	txSubmitChan <-chan struct{}
-	baseCodec    codec.Registry
-	codec        codec.Manager
-	clock        timer.Clock
-	txFee        uint64
-	mempool      *Mempool
+	baseCodec codec.Registry
+	codec     codec.Manager
+	clock     timer.Clock
+	txFee     uint64
+	mempool   *Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -366,29 +346,11 @@ func (vm *VM) Initialize(
 	vm.newBlockChan = make(chan *Block)
 	vm.notifyBuildBlockChan = toEngine
 
-	// Periodically updates [vm.mayBuildBlock] and tries to notify the engine to build
-	// a new block, if applicable.
-	vm.buildBlockTimer = timer.NewTimer(func() {
-		vm.buildBlockLock.Lock()
-		switch vm.mayBuildBlock {
-		case waitToBuild:
-			// Some time has passed. Allow block to be built if it has enough txs in it.
-			vm.mayBuildBlock = conditionalWaitToBuild
-			vm.buildBlockTimer.SetTimeoutIn(maxDuration(maxBlockTime-minBlockTime, 0))
-		case conditionalWaitToBuild:
-			// More time has passed. Allow block to be built regardless of tx count.
-			vm.mayBuildBlock = mayBuild
-		}
-		tryBuildBlock := vm.tryToBuildBlock
-		vm.buildBlockLock.Unlock()
-		if tryBuildBlock {
-			vm.tryBlockGen()
-		}
-	})
+	// buildBlockTimer handles passing PendingTxs messages to the consensus engine.
+	vm.buildBlockTimer = timer.NewStagedTimer(vm.buildBlockHandlerFunc)
+	vm.buildStatus = dontBuild
 	go ctx.Log.RecoverAndPanic(vm.buildBlockTimer.Dispatch)
 
-	vm.mayBuildBlock = mayBuild
-	vm.tryToBuildBlock = true
 	vm.txPoolStabilizedOk = make(chan struct{}, 1)
 	// TODO: read size from settings
 	vm.mempool = NewMempool(1024)
@@ -458,11 +420,12 @@ func (vm *VM) internalBuildBlock() (chainState.Block, error) {
 	block := <-vm.newBlockChan
 
 	vm.buildBlockLock.Lock()
-	// Specify that we should wait before trying to build another block.
-	vm.mayBuildBlock = waitToBuild
-	vm.tryToBuildBlock = false
-	vm.awaitingBuildBlock = false
-	vm.buildBlockTimer.SetTimeoutIn(minBlockTime)
+	if vm.needToBuild() {
+		vm.buildStatus = conditionalBuild
+		vm.buildBlockTimer.SetTimeoutIn(minBlockTime)
+	} else {
+		vm.buildStatus = dontBuild
+	}
 	vm.buildBlockLock.Unlock()
 
 	if block == nil {
@@ -595,48 +558,6 @@ func (vm *VM) CreateStaticHandlers() map[string]*commonEng.HTTPHandler {
  *********************************** Helpers **********************************
  ******************************************************************************
  */
-func (vm *VM) tryBlockGen() error {
-	vm.buildBlockLock.Lock()
-	defer vm.buildBlockLock.Unlock()
-	if vm.awaitingBuildBlock {
-		// We notified the engine that a block should be built but it hasn't
-		// done so yet. Wait until it has done so before notifying again.
-		return nil
-	}
-	vm.tryToBuildBlock = true
-
-	vm.genlock.Lock()
-	defer vm.genlock.Unlock()
-	// get pending size
-	size, err := vm.chain.PendingSize()
-	if err != nil {
-		return err
-	}
-	if size == 0 && vm.mempool.Len() == 0 {
-		return nil
-	}
-
-	switch vm.mayBuildBlock {
-	case waitToBuild: // Wait more time before notifying engine to building a block
-		return nil
-	case conditionalWaitToBuild: // Notify engine only if there are enough pending txs
-		if size < batchSize {
-			return nil
-		}
-	case mayBuild: // Notify engine
-	default:
-		panic(fmt.Sprintf("mayBuildBlock has unexpected value %d", vm.mayBuildBlock))
-	}
-	select {
-	case vm.notifyBuildBlockChan <- commonEng.PendingTxs:
-		// Notify engine to build a block
-		vm.awaitingBuildBlock = true
-	default:
-		return errBlockFrequency
-	}
-	return nil
-}
-
 // extractAtomicTx returns the atomic transaction in [block] if
 // one exists.
 func (vm *VM) extractAtomicTx(block *types.Block) *Tx {
@@ -736,22 +657,84 @@ func (vm *VM) awaitTxPoolStabilized() {
 	}
 }
 
+// needToBuild returns true if there are outstanding transactions to be issued
+// into a block.
+func (vm *VM) needToBuild() bool {
+	size, err := vm.chain.PendingSize()
+	if err != nil {
+		log.Error("Failed to get chain pending size", "error", err)
+		return false
+	}
+	return size > 0 || vm.mempool.Len() > 0
+}
+
+// buildEarly returns true if there are sufficient outstanding transactions to
+// be issued into a block to build a block early.
+func (vm *VM) buildEarly() bool {
+	size, err := vm.chain.PendingSize()
+	if err != nil {
+		log.Error("Failed to get chain pending size", "error", err)
+		return false
+	}
+	return size > batchSize || vm.mempool.Len() > 1
+}
+
+func (vm *VM) buildBlockHandlerFunc() (time.Duration, bool) {
+	vm.buildBlockLock.Lock()
+	defer vm.buildBlockLock.Unlock()
+
+	switch vm.buildStatus {
+	case dontBuild:
+		return 0, false
+	case conditionalBuild:
+		if !vm.buildEarly() {
+			vm.buildStatus = mayBuild
+			return (maxBlockTime - minBlockTime), true
+		}
+	case mayBuild:
+	case building:
+		// If the status has already been set to building, there is no need
+		// to send an additional request to the consensus engine until the call
+		// to BuildBlock resets the block status.
+		return 0, false
+	}
+
+	select {
+	case vm.notifyBuildBlockChan <- commonEng.PendingTxs:
+	default:
+		log.Error("Failed to push PendingTxs notification to the consensus engine.")
+	}
+	vm.buildStatus = building
+
+	// No need for the timeout to fire again until BuildBlock is called.
+	return 0, false
+}
+
+func (vm *VM) signalTxsReady() {
+	vm.buildBlockLock.Lock()
+	defer vm.buildBlockLock.Unlock()
+
+	// Set the build block timer in motion if it has not been started.
+	if vm.buildStatus == dontBuild {
+		vm.buildStatus = conditionalBuild
+		vm.buildBlockTimer.SetTimeoutIn(minBlockTime)
+	}
+}
+
 // awaitSubmittedTxs waits for new transactions to be submitted
 // and notifies the VM when the tx pool has transactions to be
 // put into a new block.
 func (vm *VM) awaitSubmittedTxs() {
 	defer vm.shutdownWg.Done()
-	vm.txSubmitChan = vm.chain.GetTxSubmitCh()
+	txSubmitChan := vm.chain.GetTxSubmitCh()
 	for {
 		select {
-		case <-vm.txSubmitChan:
+		case <-txSubmitChan:
 			log.Trace("New tx detected, trying to generate a block")
-			vm.tryBlockGen()
+			vm.signalTxsReady()
 		case <-vm.mempool.Pending:
 			log.Trace("New atomic Tx detected, trying to generate a block")
-			vm.tryBlockGen()
-		case <-time.After(5 * time.Second):
-			vm.tryBlockGen()
+			vm.signalTxsReady()
 		case <-vm.shutdownChan:
 			return
 		}

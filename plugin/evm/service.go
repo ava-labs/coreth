@@ -89,7 +89,8 @@ func (api *SnowmanAPI) GetAcceptedFront(ctx context.Context) (*GetAcceptedFrontR
 func (api *SnowmanAPI) IssueBlock(ctx context.Context) error {
 	log.Info("Issuing a new block")
 
-	return api.vm.tryBlockGen()
+	api.vm.signalTxsReady()
+	return nil
 }
 
 // parseAssetID parses an assetID string into an ID
