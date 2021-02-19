@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Mempool is a simple mempool for atomic transactions
@@ -76,7 +77,21 @@ func (m *Mempool) AddTx(tx *Tx) error {
 		return nil
 	}
 
+	// If the transaction was recently discarded, log the event and evict from
+	// discarded transactions so it's not in two places within the mempool.
+	// We allow the transaction to be re-issued since it may have been invalid due
+	// to an atomic UTXO not being present yet.
+	if _, has := m.discardedTxs.Get(txID); has {
+		log.Debug("Adding recently discarded transaction %s back to the mempool", txID)
+		m.discardedTxs.Evict(txID)
+	}
+
 	m.txs[txID] = tx
+	// When adding [tx] to the mempool make sure that there is an item in Pending
+	// to signal the VM to produce a block. Note: if the VM's buildStatus has already
+	// been set to something other than [dontBuild], this will be ignored and won't be
+	// reset until the engine calls BuildBlock. This case is handled in IssueCurrentTx
+	// and CancelCurrentTx.
 	m.addPending()
 	return nil
 }
@@ -89,11 +104,6 @@ func (m *Mempool) NextTx() (*Tx, bool) {
 	for txID, tx := range m.txs {
 		delete(m.txs, txID)
 		m.currentTx = tx
-		// If there are still atomic transactions remaining
-		// ensure there is an item on the pending channel.
-		if len(m.txs) > 0 {
-			m.addPending()
-		}
 		return tx, true
 	}
 
@@ -133,6 +143,8 @@ func (m *Mempool) IssueCurrentTx() {
 		m.currentTx = nil
 	}
 
+	// If there are more transactions to be issued, add an item
+	// to Pending.
 	if len(m.txs) > 0 {
 		m.addPending()
 	}
@@ -146,14 +158,15 @@ func (m *Mempool) CancelCurrentTx() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	// If building a block failed, put the currentTx back in [txs]
+	// if it exists.
 	if m.currentTx != nil {
 		m.txs[m.currentTx.ID()] = m.currentTx
 		m.currentTx = nil
 	}
 
-	// If the VM cancelled building the block for any reason, ensure
-	// the Pending channel still has an item on it if there are txs
-	// remaining to be issued.
+	// If there are more transactions to be issued, add an item
+	// to Pending.
 	if len(m.txs) > 0 {
 		m.addPending()
 	}
@@ -161,6 +174,7 @@ func (m *Mempool) CancelCurrentTx() {
 
 // DiscardCurrentTx marks [currentTx] as invalid and aborts the attempt
 // to issue it since it failed verification.
+// Adding to Pending should be handled by CancelCurrentTx in this case.
 func (m *Mempool) DiscardCurrentTx() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -199,6 +213,8 @@ func (m *Mempool) RejectTx(txID ids.ID) {
 	// to transactions pending issuance.
 	delete(m.issuedTxs, txID)
 	m.txs[txID] = tx
+	// Add an item to Pending to ensure the VM attempts to reissue
+	// [tx].
 	m.addPending()
 }
 

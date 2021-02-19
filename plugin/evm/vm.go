@@ -347,7 +347,7 @@ func (vm *VM) Initialize(
 	vm.notifyBuildBlockChan = toEngine
 
 	// buildBlockTimer handles passing PendingTxs messages to the consensus engine.
-	vm.buildBlockTimer = timer.NewStagedTimer(vm.buildBlockHandlerFunc)
+	vm.buildBlockTimer = timer.NewStagedTimer(vm.buildBlockTwoStageTimer)
 	vm.buildStatus = dontBuild
 	go ctx.Log.RecoverAndPanic(vm.buildBlockTimer.Dispatch)
 
@@ -419,6 +419,9 @@ func (vm *VM) internalBuildBlock() (chainState.Block, error) {
 	vm.chain.GenBlock()
 	block := <-vm.newBlockChan
 
+	// Set the buildStatus before calling Cancel or Issue on
+	// the mempool, so that when the mempool adds a new item to Pending
+	// it will be handled appropriately by [signalTxsReady]
 	vm.buildBlockLock.Lock()
 	if vm.needToBuild() {
 		vm.buildStatus = conditionalBuild
@@ -679,7 +682,11 @@ func (vm *VM) buildEarly() bool {
 	return size > batchSize || vm.mempool.Len() > 1
 }
 
-func (vm *VM) buildBlockHandlerFunc() (time.Duration, bool) {
+// buildBlockTwoStageTimer is a two stage timer that sends a notification
+// to the engine when the VM is ready to build a block.
+// If it should be called back again, it returns the timeout duration at
+// which it should be called again.
+func (vm *VM) buildBlockTwoStageTimer() (time.Duration, bool) {
 	vm.buildBlockLock.Lock()
 	defer vm.buildBlockLock.Unlock()
 
@@ -710,6 +717,10 @@ func (vm *VM) buildBlockHandlerFunc() (time.Duration, bool) {
 	return 0, false
 }
 
+// signalTxsReady sets the initial timeout on the two stage timer if the process
+// has not already begun from an earlier notification. If [buildStatus] is anything
+// other than [dontBuild], then the attempt has already begun and this notification
+// can be safely skipped.
 func (vm *VM) signalTxsReady() {
 	vm.buildBlockLock.Lock()
 	defer vm.buildBlockLock.Unlock()
