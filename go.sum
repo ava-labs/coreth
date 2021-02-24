@@ -30,6 +30,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/Determinant/cedrusdb-go v0.0.0-20210119194844-f739676411da h1:OnxmtWEkzln1WcVFbNtK4pQtLRyJQ5rCYC6a/uN+Ld4=
 github.com/Determinant/cedrusdb-go v0.0.0-20210119194844-f739676411da/go.mod h1:DzLJJa01bHUjbv1qs43HiBiGpp8YA59HKc4mcZQg7LY=
+github.com/Determinant/cedrusdb-go v0.1.1 h1:Qypbr6pwWnqTrhh6+aMX/oJBny9VKGk/i+3+BKNwxV4=
+github.com/Determinant/cedrusdb-go v0.1.1/go.mod h1:DzLJJa01bHUjbv1qs43HiBiGpp8YA59HKc4mcZQg7LY=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 h1:fLjPD/aNc3UIOA6tDi6QXUemppXK3P9BI7mr2hd6gx8=
