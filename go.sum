@@ -32,6 +32,8 @@ github.com/Determinant/cedrusdb-go v0.0.0-20210119194844-f739676411da h1:OnxmtWE
 github.com/Determinant/cedrusdb-go v0.0.0-20210119194844-f739676411da/go.mod h1:DzLJJa01bHUjbv1qs43HiBiGpp8YA59HKc4mcZQg7LY=
 github.com/Determinant/cedrusdb-go v0.1.1 h1:Qypbr6pwWnqTrhh6+aMX/oJBny9VKGk/i+3+BKNwxV4=
 github.com/Determinant/cedrusdb-go v0.1.1/go.mod h1:DzLJJa01bHUjbv1qs43HiBiGpp8YA59HKc4mcZQg7LY=
+github.com/Determinant/cedrusdb-go v0.1.2 h1:woO/qUrzWfLsgVIPkTcjBwFKE2v7rYhv00peRLKx2W4=
+github.com/Determinant/cedrusdb-go v0.1.2/go.mod h1:DzLJJa01bHUjbv1qs43HiBiGpp8YA59HKc4mcZQg7LY=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 h1:fLjPD/aNc3UIOA6tDi6QXUemppXK3P9BI7mr2hd6gx8=

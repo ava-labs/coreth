@@ -53,6 +53,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
+	"github.com/Determinant/cedrusdb-go"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	avalancheJSON "github.com/ava-labs/avalanchego/utils/json"
 )
@@ -172,7 +173,7 @@ type VM struct {
 	genesisHash  common.Hash
 	chain        *coreth.ETHChain
 	db           database.Database
-	chaindb      Database
+	chaindb      CedrusEthDatabase
 	newBlockChan chan *Block
 	// A message is sent on this channel when a new block
 	// is ready to be build. This notifies the consensus engine.
@@ -258,7 +259,7 @@ func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 // Initialize implements the snowman.ChainVM interface
 func (vm *VM) Initialize(
 	ctx *snow.Context,
-	db database.Database,
+	_db database.Database,
 	b []byte,
 	toEngine chan<- commonEng.Message,
 	fxs []*commonEng.Fx,
@@ -274,8 +275,11 @@ func (vm *VM) Initialize(
 
 	vm.shutdownChan = make(chan struct{}, 1)
 	vm.ctx = ctx
+
+	dbcfg := cedrusdb.DefaultConfig()
+	db := NewCedrusDatabase(cedrusdb.NewCedrus("./cedrusdb_test", &dbcfg, false))
 	vm.db = db
-	vm.chaindb = Database{db}
+	vm.chaindb = CedrusEthDatabase{db}
 	g := new(core.Genesis)
 	if err := json.Unmarshal(b, g); err != nil {
 		return err

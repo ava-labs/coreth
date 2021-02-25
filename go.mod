@@ -3,7 +3,7 @@ module github.com/ava-labs/coreth
 go 1.14
 
 require (
-	github.com/Determinant/cedrusdb-go v0.1.1
+	github.com/Determinant/cedrusdb-go v0.1.2
 	github.com/VictoriaMetrics/fastcache v1.5.7
 	github.com/ava-labs/avalanchego v1.1.2-0.20210107163848-9e1d2963d429
 	github.com/davecgh/go-spew v1.1.1

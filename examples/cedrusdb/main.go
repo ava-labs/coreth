@@ -75,7 +75,7 @@ func main() {
 	checkError(err)
 
 	dbcfg := cedrusdb.DefaultConfig()
-	db := NewDatabase(cedrusdb.NewCedrus("./cedrusdb_test", &dbcfg, true))
+	db := CedrusEthDatabase{NewCedrusDatabase(cedrusdb.NewCedrus("./cedrusdb_test", &dbcfg, true))}
 	chain := coreth.NewETHChain(&config, nil, nil, db, eth.DefaultSettings)
 	showBalance := func() {
 		state, err := chain.CurrentState()
