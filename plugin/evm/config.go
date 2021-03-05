@@ -28,7 +28,7 @@ type CommandLineConfig struct {
 	APIMaxDuration      int64 `json:"api-max-duration"`
 	MaxBlocksPerRequest int64 `json:"api-max-blocks-per-request"`
 
-	ParsingError error
+	FlagError error
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled
