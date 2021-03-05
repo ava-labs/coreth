@@ -5,6 +5,7 @@ package coreth
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -51,17 +52,16 @@ func NewETHChain(config *eth.Config, nodecfg *node.Config, etherBase *common.Add
 	if nodecfg == nil {
 		nodecfg = &node.Config{}
 	}
-	//mux := new(event.TypeMux)
 	node, err := node.New(nodecfg)
 	if err != nil {
 		panic(err)
 	}
-	//if ep != "" {
-	//	log.Info(fmt.Sprintf("temporary keystore = %s", ep))
-	//}
 	cb := new(dummy.ConsensusCallbacks)
 	mcb := new(miner.MinerCallbacks)
-	backend, _ := eth.New(node, config, cb, mcb, chainDB, settings)
+	backend, err := eth.New(node, config, cb, mcb, chainDB, settings)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create new eth backend due to %s", err))
+	}
 	chain := &ETHChain{backend: backend, cb: cb, mcb: mcb}
 	if etherBase == nil {
 		etherBase = &BlackholeAddr
