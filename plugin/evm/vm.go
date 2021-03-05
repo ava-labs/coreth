@@ -71,6 +71,7 @@ const (
 	batchSize           = 250
 	maxUTXOsToFetch     = 1024
 	chainStateCacheSize = 1024
+	defaultMempoolSize  = 1024
 	codecVersion        = uint16(0)
 )
 
@@ -353,7 +354,7 @@ func (vm *VM) Initialize(
 
 	vm.txPoolStabilizedOk = make(chan struct{}, 1)
 	// TODO: read size from settings
-	vm.mempool = NewMempool(1024)
+	vm.mempool = NewMempool(defaultMempoolSize)
 	vm.newMinedBlockSub = vm.chain.SubscribeNewMinedBlockEvent()
 	vm.shutdownWg.Add(1)
 	go ctx.Log.RecoverAndPanic(vm.awaitTxPoolStabilized)
@@ -704,14 +705,17 @@ func (vm *VM) buildBlockTwoStageTimer() (time.Duration, bool) {
 		// to send an additional request to the consensus engine until the call
 		// to BuildBlock resets the block status.
 		return 0, false
+	default:
+		// Log an error if an invalid status is found.
+		log.Error("Found invalid build status in build block timer", "buildStatus", vm.buildStatus)
 	}
 
 	select {
 	case vm.notifyBuildBlockChan <- commonEng.PendingTxs:
+		vm.buildStatus = building
 	default:
 		log.Error("Failed to push PendingTxs notification to the consensus engine.")
 	}
-	vm.buildStatus = building
 
 	// No need for the timeout to fire again until BuildBlock is called.
 	return 0, false

@@ -197,6 +197,7 @@ func (m *Mempool) RemoveTx(txID ids.ID) {
 	}
 	delete(m.txs, txID)
 	delete(m.issuedTxs, txID)
+	m.discardedTxs.Evict(txID)
 }
 
 // RejectTx marks [txID] as being rejected and attempts to re-issue
