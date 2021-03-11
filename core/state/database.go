@@ -124,8 +124,13 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithCache(db ethdb.Database, cache int, journal string) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
+	config := &trie.Config{
+		Cache:     cache,
+		Journal:   journal,
+		Preimages: true,
+	}
 	return &cachingDB{
-		db:            trie.NewDatabaseWithCache(db, cache, journal),
+		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
 	}

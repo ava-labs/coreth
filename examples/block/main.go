@@ -72,7 +72,7 @@ func main() {
 	var blk2 *types.Block
 	blk2 = new(types.Block)
 	fmt.Println(buff.Len())
-	fmt.Println(common.ToHex(buff.Bytes()))
+	fmt.Println(common.Bytes2Hex(buff.Bytes()))
 
 	err = rlp.Decode(buff, blk2)
 	fmt.Println(buff.Len())
@@ -81,7 +81,7 @@ func main() {
 	err = blk2.EncodeRLPEth(buff)
 	checkError(err)
 	fmt.Println(buff.Len())
-	fmt.Println(common.ToHex(buff.Bytes()))
+	fmt.Println(common.Bytes2Hex(buff.Bytes()))
 
 	err = rlp.Decode(buff, blk2)
 	fmt.Println(buff.Len())
@@ -91,7 +91,7 @@ func main() {
 	checkError(err)
 	buff.WriteString("somesuffix")
 	fmt.Println(buff.Len())
-	fmt.Println(common.ToHex(buff.Bytes()))
+	fmt.Println(common.Bytes2Hex(buff.Bytes()))
 
 	err = rlp.Decode(buff, blk2)
 	fmt.Println(buff.Len())
@@ -100,7 +100,7 @@ func main() {
 	err = blk2.EncodeRLP(buff)
 	checkError(err)
 	fmt.Println(buff.Len())
-	fmt.Println(common.ToHex(buff.Bytes()))
+	fmt.Println(common.Bytes2Hex(buff.Bytes()))
 
 	err = rlp.Decode(buff, blk2)
 	fmt.Println(buff.Len())
@@ -121,7 +121,7 @@ func main() {
 	err = rlp.DecodeBytes(blk2.ExtraData(), decoded1)
 	checkError(err)
 	fmt.Println(buff.Len(), decoded1)
-	fmt.Println(common.ToHex(buff.Bytes()))
+	fmt.Println(common.Bytes2Hex(buff.Bytes()))
 
 	buff.Reset()
 	type NestedData struct {
