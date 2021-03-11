@@ -33,9 +33,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/rpc"
+	"github.com/tenderly/coreth/accounts"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/rpc"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"

@@ -12,11 +12,11 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
-	"github.com/ava-labs/coreth/ethclient"
-	"github.com/ava-labs/coreth/plugin/evm"
+	"github.com/tenderly/coreth/ethclient"
+	"github.com/tenderly/coreth/plugin/evm"
 
-	"github.com/ava-labs/coreth"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/tenderly/coreth"
+	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 

@@ -31,7 +31,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/tenderly/coreth/core/types"
 	ethereum "github.com/ethereum/go-ethereum"
 	gethaccounts "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"

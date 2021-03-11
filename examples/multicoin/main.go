@@ -27,12 +27,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ava-labs/coreth"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/params"
+	"github.com/tenderly/coreth"
+	"github.com/tenderly/coreth/core"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/core/vm"
+	"github.com/tenderly/coreth/eth"
+	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -105,7 +105,7 @@ func main() {
 	if gopath == "" {
 		gopath = build.Default.GOPATH
 	}
-	counterSrc, err := filepath.Abs(gopath + "/src/github.com/ava-labs/coreth/examples/multicoin/mc_test.sol")
+	counterSrc, err := filepath.Abs(gopath + "/src/github.com/tenderly/coreth/examples/multicoin/mc_test.sol")
 	checkError(err)
 	contracts, err := compiler.CompileSolidity("", counterSrc)
 	checkError(err)

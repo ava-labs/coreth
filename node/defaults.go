@@ -32,7 +32,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ava-labs/coreth/rpc"
+	"github.com/tenderly/coreth/rpc"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )

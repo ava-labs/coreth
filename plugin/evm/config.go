@@ -3,7 +3,7 @@
 
 package evm
 
-import "github.com/ava-labs/coreth/eth"
+import "github.com/tenderly/coreth/eth"
 
 // CommandLineConfig ...
 type CommandLineConfig struct {

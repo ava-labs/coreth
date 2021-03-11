@@ -31,7 +31,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/tenderly/coreth/core/types"
 )
 
 // Tests that batched bloom bits are correctly rotated from the input bloom

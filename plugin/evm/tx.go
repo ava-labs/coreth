@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/tenderly/coreth/core/state"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"

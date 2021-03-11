@@ -32,7 +32,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"

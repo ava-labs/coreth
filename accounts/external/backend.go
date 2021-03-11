@@ -31,9 +31,9 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/rpc"
+	"github.com/tenderly/coreth/accounts"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/rpc"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
