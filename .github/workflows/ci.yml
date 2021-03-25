@@ -34,3 +34,20 @@ jobs:
       shell: bash
     - run: ./scripts/build_test.sh
       shell: bash
+  test:
+    name: Golang v${{ matrix.go }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        go: ['1.15']
+        os: [ubuntu-20.04]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v1
+      with:
+        go-version: ${{ matrix.go }}
+    - run: ./.ci/run_e2e_tests.sh
+      shell: bash
+    - env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
