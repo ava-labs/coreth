@@ -35,7 +35,7 @@ jobs:
     - run: ./scripts/build_test.sh
       shell: bash
   e2e:
-    name: Golang v${{ matrix.go }} (${{ matrix.os }})
+    name: Golang E2E Tests v${{ matrix.go }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
