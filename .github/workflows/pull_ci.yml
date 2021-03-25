@@ -1,4 +1,4 @@
-name: CI on PR
+name: PR CI
 on: [pull_request]
 
 jobs:
