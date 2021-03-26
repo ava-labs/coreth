@@ -2,6 +2,12 @@ module github.com/ava-labs/coreth
 
 go 1.14
 
+replace (
+	github.com/VictoriaMetrics/fastcache => github.com/dokterbob/fastcache v1.5.9-0.20210326130045-bf4e44451e4b
+	github.com/ethereum/go-ethereum => github.com/dokterbob/ethereum-miner-docker v0.9.40-0.20210326133706-c9ee74d76fef
+	gopkg.in/olebedev/go-duktape.v3 => github.com/dokterbob/go-duktape v0.0.0-20210326140511-ca7aa14cbf2f
+)
+
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
 	github.com/ava-labs/avalanchego v1.2.2-0.20210302204446-3f8e4094c10d
@@ -11,7 +17,7 @@ require (
 	github.com/ethereum/go-ethereum v1.9.21
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
-	github.com/golang/snappy v0.0.2-0.20200707131729-196ae77b8a26
+	github.com/golang/snappy v0.0.3
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/go-plugin v1.3.0
