@@ -46,7 +46,7 @@ docker run \
     --env "SUITE_EXECUTION_VOLUME=${SUITE_EXECUTION_VOLUME}" \
     --env "KURTOSIS_API_IMAGE=${API_IMAGE}" \
     --env "PARALLELISM=${PARALLELISM}" \
-    --env "TEST_NAMES=virtuousCorethTest,rpcWorkflowTest" \
+    --env "TEST_NAMES=virtuousCorethTest,rpcWorkflowTest,contentiousCorethTest,atomicCorethTest" \
     `# In Bash, this is how you feed arguments exactly as-is to a child script (since ${*} loses quoting and ${@} trips set -e if no arguments are passed)` \
     `# It basically says, "if and only if ${1} exists, evaluate ${@}"` \
     ${1+"${@}"} \
