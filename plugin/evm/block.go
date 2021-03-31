@@ -6,13 +6,10 @@ package evm
 import (
 	"fmt"
 
-	"github.com/tenderly/coreth"
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/tenderly/coreth/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
@@ -115,7 +112,10 @@ func (b *Block) Accept() error {
 		return err
 	}
 
-	tx := vm.getAtomicTx(b.ethBlock)
+	tx, err := vm.getAtomicTx(b.ethBlock)
+	if err != nil {
+		return err
+	}
 	if tx == nil {
 		return nil
 	}
@@ -167,35 +167,7 @@ func (b *Block) syntacticVerify() error {
 		return errInvalidBlock
 	}
 
-	// Skip verification of the genesis block since it
-	// should already be marked as accepted
-	if b.ethBlock.Hash() == b.vm.genesisHash {
-		return nil
-	}
-	txsHash := types.DeriveSha(b.ethBlock.Transactions(), new(trie.Trie))
-	uncleHash := types.CalcUncleHash(b.ethBlock.Uncles())
-	ethHeader := b.ethBlock.Header()
-	// Check that the tx hash in the header matches the body
-	if txsHash != ethHeader.TxHash {
-		return errTxHashMismatch
-	}
-	// Check that the uncle hash in the header matches the body
-	if uncleHash != ethHeader.UncleHash {
-		return errUncleHashMismatch
-	}
-	// Coinbase must be zero on C-Chain
-	if b.ethBlock.Coinbase() != coreth.BlackholeAddr {
-		return errInvalidBlock
-	}
-	// Block must not have any uncles
-	if len(b.ethBlock.Uncles()) > 0 {
-		return errUnclesUnsupported
-	}
-	// Block must not be empty
-	if len(b.ethBlock.Transactions()) == 0 && b.vm.getAtomicTx(b.ethBlock) == nil {
-		return errEmptyBlock
-	}
-	return nil
+	return b.vm.getBlockValidator(b.ethBlock.Header().Time).SyntacticVerify(b)
 }
 
 // Verify implements the snowman.Block interface
@@ -205,20 +177,6 @@ func (b *Block) Verify() error {
 	}
 
 	vm := b.vm
-
-	if maxBlockTime := uint64(b.vm.clock.Time().Add(maxFutureBlockTime).Unix()); b.ethBlock.Time() > maxBlockTime {
-		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", b.ethBlock.Time(), maxBlockTime)
-	}
-
-	// Only enforce a minimum fee when bootstrapping has finished
-	if vm.ctx.IsBootstrapped() {
-		// Ensure the minimum gas price is paid for every transaction
-		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(params.MinGasPrice) < 0 {
-				return errInvalidGas
-			}
-		}
-	}
 
 	ancestorIntf := b.Parent()
 	// Ensure that the parent was verified and inserted correctly.
@@ -230,7 +188,10 @@ func (b *Block) Verify() error {
 
 	// If the tx is an atomic tx, ensure that it doesn't conflict with any of
 	// its processing ancestry.
-	atomicTx := vm.getAtomicTx(b.ethBlock)
+	atomicTx, err := vm.getAtomicTx(b.ethBlock)
+	if err != nil {
+		return err
+	}
 	if atomicTx != nil {
 		// If the ancestor is unknown, then the parent failed verification when
 		// it was called.
@@ -258,7 +219,10 @@ func (b *Block) Verify() error {
 				// processing ancestors consume the same UTXO.
 				inputs := atx.InputUTXOs()
 				for ancestor.Status() != choices.Accepted {
-					atx := vm.getAtomicTx(ancestor.ethBlock)
+					atx, err := vm.getAtomicTx(ancestor.ethBlock)
+					if err != nil {
+						return fmt.Errorf("block %s failed verification while parsing atomic tx from ancestor %s", b.ethBlock.Hash().Hex(), ancestor.ethBlock.Hash().Hex())
+					}
 					// If the ancestor isn't an atomic block, it can't conflict with
 					// the import tx.
 					if atx != nil {
@@ -295,7 +259,7 @@ func (b *Block) Verify() error {
 			// the atomic transaction, so now we must ensure that the transaction is
 			// valid and doesn't have any accepted conflicts.
 			utx := atomicTx.UnsignedTx.(UnsignedAtomicTx)
-			if err := utx.SemanticVerify(vm, atomicTx); err != nil {
+			if err := utx.SemanticVerify(vm, atomicTx, b.vm.IsApricotPhase1(b.ethBlock.Time())); err != nil {
 				return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, b.Height())
 			}
 		}
@@ -308,7 +272,7 @@ func (b *Block) Verify() error {
 		}
 	}
 
-	_, err := vm.chain.InsertChain([]*types.Block{b.ethBlock})
+	_, err = vm.chain.InsertChain([]*types.Block{b.ethBlock})
 	return err
 }
 

@@ -6,6 +6,7 @@ package coreth
 import (
 	"crypto/ecdsa"
 	"io"
+	"math/big"
 	"os"
 	"time"
 
@@ -125,10 +126,6 @@ func (self *ETHChain) SetOnSealFinish(cb func(*types.Block) error) {
 	self.mcb.OnSealFinish = cb
 }
 
-func (self *ETHChain) SetOnHeaderNew(cb func(*types.Header)) {
-	self.mcb.OnHeaderNew = cb
-}
-
 func (self *ETHChain) SetOnSealDrop(cb func(*types.Block)) {
 	self.mcb.OnSealDrop = cb
 }
@@ -234,6 +231,11 @@ func (self *ETHChain) GetTxSubmitCh() <-chan struct{} {
 
 func (self *ETHChain) GetTxPool() *core.TxPool {
 	return self.backend.TxPool()
+}
+
+// SetGasPrice sets the gas price on the backend
+func (self *ETHChain) SetGasPrice(newGasPrice *big.Int) {
+	self.backend.SetGasPrice(newGasPrice)
 }
 
 type Key struct {

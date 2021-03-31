@@ -31,14 +31,18 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"runtime"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/tenderly/coreth/accounts"
 	"github.com/tenderly/coreth/consensus"
-	"github.com/tenderly/coreth/consensus/clique"
 	"github.com/tenderly/coreth/consensus/dummy"
-	"github.com/tenderly/coreth/consensus/ethash"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/bloombits"
 	"github.com/tenderly/coreth/core/rawdb"
@@ -51,15 +55,6 @@ import (
 	"github.com/tenderly/coreth/node"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
@@ -164,7 +159,7 @@ func New(stack *node.Node, config *Config,
 		}
 	}
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
-	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+	if genesisErr != nil {
 		return nil, genesisErr
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
@@ -174,7 +169,7 @@ func New(stack *node.Node, config *Config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
-		engine:            CreateConsensusEngine(stack, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb, cb),
+		engine:            CreateConsensusEngine(cb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
@@ -246,7 +241,7 @@ func New(stack *node.Node, config *Config,
 	//	return nil, err
 	//}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock, mcb)
-	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+	// eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
 	gpoParams := config.GPO
@@ -270,25 +265,26 @@ func New(stack *node.Node, config *Config,
 	return eth, nil
 }
 
-func makeExtraData(extra []byte) []byte {
-	if len(extra) == 0 {
-		// create default extradata
-		extra, _ = rlp.EncodeToBytes([]interface{}{
-			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
-			"geth",
-			runtime.Version(),
-			runtime.GOOS,
-		})
-	}
-	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
-		extra = nil
-	}
-	return extra
-}
+// Original code:
+// func makeExtraData(extra []byte) []byte {
+// 	if len(extra) == 0 {
+// 		// create default extradata
+// 		extra, _ = rlp.EncodeToBytes([]interface{}{
+// 			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
+// 			"geth",
+// 			runtime.Version(),
+// 			runtime.GOOS,
+// 		})
+// 	}
+// 	if uint64(len(extra)) > params.MaximumExtraDataSize {
+// 		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
+// 		extra = nil
+// 	}
+// 	return extra
+// }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, cb *dummy.ConsensusCallbacks) consensus.Engine {
+func CreateConsensusEngine(cb *dummy.ConsensusCallbacks) consensus.Engine {
 	return dummy.NewDummyEngine(cb)
 }
 
@@ -350,7 +346,7 @@ func (s *Ethereum) APIs() []rpc.API {
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+	s.blockchain.ResetWithGenesisBlock(gb, false)
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
@@ -424,9 +420,10 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 	// is A, F and G sign the block of round5 and reject the block of opponents
 	// and in the round6, the last available signer B is offline, the whole
 	// network is stuck.
-	if _, ok := s.engine.(*clique.Clique); ok {
-		return false
-	}
+	// Original Code:
+	// if _, ok := s.engine.(*clique.Clique); ok {
+	// 	return false
+	// }
 	return s.isLocalBlock(block)
 }
 
@@ -582,4 +579,14 @@ func (s *Ethereum) AcceptedBlock() *types.Block {
 		return cb()
 	}
 	return s.blockchain.CurrentBlock()
+}
+
+// SetGasPrice sets the minimum gas price to [newGasPrice]
+// sets the price on [s], [txPool], and the gas price oracle
+func (s *Ethereum) SetGasPrice(newGasPrice *big.Int) {
+	s.lock.Lock()
+	s.gasPrice = newGasPrice
+	s.lock.Unlock()
+	s.txPool.SetGasPrice(newGasPrice)
+	s.APIBackend.gpo.SetGasPrice(newGasPrice)
 }

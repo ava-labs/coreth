@@ -30,13 +30,11 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math/big"
 	"reflect"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -46,8 +44,9 @@ import (
 )
 
 var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = rlpHash([]*Header(nil))
+	EmptyRootHash    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyUncleHash   = rlpHash([]*Header(nil))
+	EmptyExtDataHash = rlpHash([]byte(nil))
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -96,7 +95,7 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
-	ExtDataHash common.Hash    `json:"extDataHash"        gencodec:"required"`
+	ExtDataHash common.Hash    `json:"extDataHash"      gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -124,24 +123,26 @@ func (h *Header) Size() common.StorageSize {
 	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen())/8)
 }
 
-// SanityCheck checks a few basic things -- these checks are way beyond what
-// any 'sane' production values should hold, and can mainly be used to prevent
-// that the unbounded fields are stuffed with junk data to add processing
-// overhead
-func (h *Header) SanityCheck() error {
-	if h.Number != nil && !h.Number.IsUint64() {
-		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
-	}
-	if h.Difficulty != nil {
-		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
-			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
-		}
-	}
-	if eLen := len(h.Extra); eLen > 100*1024 {
-		return fmt.Errorf("too large block extradata: size %d", eLen)
-	}
-	return nil
-}
+// Orignal code: (has been moved to syntacticVerify in plugin/evm/block.go)
+// // SanityCheck checks a few basic things -- these checks are way beyond what
+// // any 'sane' production values should hold, and can mainly be used to prevent
+// // that the unbounded fields are stuffed with junk data to add processing
+// // overhead
+// func (h *Header) SanityCheck() error {
+// 	if h.Number != nil && !h.Number.IsUint64() {
+// 		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
+// 	}
+// 	if h.Difficulty != nil {
+// 		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
+// 			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
+// 		}
+// 	}
+// 	// TODO: should assert Difficulty != nil
+// 	if eLen := len(h.Extra); eLen > 100*1024 {
+// 		return fmt.Errorf("too large block extradata: size %d", eLen)
+// 	}
+// 	return nil
+// }
 
 // hasherPool holds LegacyKeccak hashers.
 var hasherPool = sync.Pool{
@@ -195,10 +196,11 @@ type Block struct {
 	// of the chain up to and including the block.
 	td *big.Int
 
-	// These fields are used by package eth to track
-	// inter-peer block relay.
-	ReceivedAt   time.Time
-	ReceivedFrom interface{}
+	// Original Code:
+	// // These fields are used by package eth to track
+	// // inter-peer block relay.
+	// ReceivedAt   time.Time
+	// ReceivedFrom interface{}
 }
 
 // DeprecatedTd is an old relic for extracting the TD of a block. It is in the
@@ -245,7 +247,10 @@ type storageblock struct {
 // The values of TxHash, UncleHash, ReceiptHash and Bloom in header
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
-func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher Hasher, extdata []byte) *Block {
+func NewBlock(
+	header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt,
+	hasher Hasher, extdata []byte, recalc bool,
+) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
@@ -274,12 +279,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		}
 	}
 
-	if extdata != nil {
-		_data := make([]byte, len(extdata))
-		b.extdata = &_data
-		copy(*b.extdata, extdata)
-	}
-
+	b.SetExtData(extdata, recalc)
 	return b
 }
 
@@ -328,24 +328,28 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs
 		b.extdata = nil
 	}
-	b.hash = atomic.Value{}
 	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
 }
 
-func (b *Block) SetExtraData(data []byte) {
-	if data != nil {
-		_data := make([]byte, len(data))
-		b.extdata = &_data
-		copy(*b.extdata, data)
-	} else {
-		b.extdata = nil
+func (b *Block) SetExtDataHelper(data *[]byte, recalc bool) {
+	if data == nil {
+		b.SetExtData(nil, recalc)
+		return
 	}
-	b.header.ExtDataHash = rlpHash(data)
-	b.hash = atomic.Value{}
+	b.SetExtData(*data, recalc)
 }
 
-func (b *Block) ExtraData() []byte {
+func (b *Block) SetExtData(data []byte, recalc bool) {
+	_data := make([]byte, len(data))
+	b.extdata = &_data
+	copy(*b.extdata, data)
+	if recalc {
+		b.header.ExtDataHash = CalcExtDataHash(*b.extdata)
+	}
+}
+
+func (b *Block) ExtData() []byte {
 	if b.extdata == nil {
 		return nil
 	}
@@ -449,17 +453,25 @@ func (b *Block) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
-// SanityCheck can be used to prevent that unbounded fields are
-// stuffed with junk data to add processing overhead
-func (b *Block) SanityCheck() error {
-	return b.header.SanityCheck()
-}
+// Original code: (has been moved to syntacticVerify in plugin/evm/block.go)
+// // SanityCheck can be used to prevent that unbounded fields are
+// // stuffed with junk data to add processing overhead
+// func (b *Block) SanityCheck() error {
+// 	return b.header.SanityCheck()
+// }
 
 type writeCounter common.StorageSize
 
 func (c *writeCounter) Write(b []byte) (int, error) {
 	*c += writeCounter(len(b))
 	return len(b), nil
+}
+
+func CalcExtDataHash(extdata []byte) common.Hash {
+	if len(extdata) == 0 {
+		return EmptyExtDataHash
+	}
+	return rlpHash(extdata)
 }
 
 func CalcUncleHash(uncles []*Header) common.Hash {
@@ -483,23 +495,17 @@ func (b *Block) WithSeal(header *Header) *Block {
 
 // WithBody returns a new block with the given transaction and uncle contents.
 func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, version uint32, extdata *[]byte) *Block {
-	var extdataCopied *[]byte
-	if extdata != nil {
-		_data := make([]byte, len(*extdata))
-		extdataCopied = &_data
-		copy(*extdataCopied, *extdata)
-	}
 	block := &Block{
 		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
-		extdata:      extdataCopied,
 		version:      version,
 	}
 	copy(block.transactions, transactions)
 	for i := range uncles {
 		block.uncles[i] = CopyHeader(uncles[i])
 	}
+	block.SetExtDataHelper(extdata, false)
 	return block
 }
 
