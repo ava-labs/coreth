@@ -6,11 +6,11 @@ package evm
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/tenderly/coreth"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/params"
 )
 
 var (
