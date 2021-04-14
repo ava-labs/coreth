@@ -2,6 +2,12 @@ module github.com/ava-labs/coreth
 
 go 1.14
 
+replace (
+	github.com/VictoriaMetrics/fastcache => github.com/dokterbob/fastcache v1.5.9-0.20210326130045-bf4e44451e4b
+	github.com/ethereum/go-ethereum => github.com/dokterbob/ethereum-miner-docker v0.9.40-0.20210326133706-c9ee74d76fef
+	gopkg.in/olebedev/go-duktape.v3 => github.com/dokterbob/go-duktape v0.0.0-20210326140511-ca7aa14cbf2f
+)
+
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
 	github.com/ava-labs/avalanchego v1.3.2
