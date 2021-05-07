@@ -31,12 +31,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/eth/gasprice"
-	"github.com/ava-labs/coreth/miner"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/tenderly/coreth/core"
+	"github.com/tenderly/coreth/eth/gasprice"
+	"github.com/tenderly/coreth/miner"
+	"github.com/tenderly/coreth/params"
 )
 
 // DefaultFullGPOConfig contains default gasprice oracle settings for full node.

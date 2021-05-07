@@ -26,15 +26,15 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	accountKeystore "github.com/tenderly/coreth/accounts/keystore"
+	"github.com/tenderly/coreth/core"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/eth"
+	"github.com/tenderly/coreth/params"
+	"github.com/tenderly/coreth/rpc"
 )
 
 var (

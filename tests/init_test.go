@@ -41,7 +41,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/tenderly/coreth/params"
 )
 
 // Original code:

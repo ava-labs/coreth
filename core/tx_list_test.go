@@ -31,8 +31,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/tenderly/coreth/core/types"
 )
 
 // Tests that transactions can be added to strict lists and list contents and

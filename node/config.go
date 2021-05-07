@@ -32,12 +32,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/accounts/external"
-	"github.com/ava-labs/coreth/accounts/keystore"
+	"github.com/tenderly/coreth/accounts"
+	"github.com/tenderly/coreth/accounts/external"
+	"github.com/tenderly/coreth/accounts/keystore"
 
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/coreth/rpc"
 )
 
 // Original code:

@@ -35,12 +35,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/coreth/core"
+	"github.com/tenderly/coreth/core/vm"
 	"gopkg.in/olebedev/go-duktape.v3"
 )
 

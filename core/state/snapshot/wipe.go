@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/tenderly/coreth/core/rawdb"
 )
 
 // wipeSnapshot starts a goroutine to iterate over the entire key-value database

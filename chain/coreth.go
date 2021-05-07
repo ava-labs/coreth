@@ -8,18 +8,18 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/eth/ethconfig"
-	"github.com/ava-labs/coreth/miner"
-	"github.com/ava-labs/coreth/node"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/tenderly/coreth/consensus/dummy"
+	"github.com/tenderly/coreth/core"
+	"github.com/tenderly/coreth/core/state"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/eth"
+	"github.com/tenderly/coreth/eth/ethconfig"
+	"github.com/tenderly/coreth/miner"
+	"github.com/tenderly/coreth/node"
+	"github.com/tenderly/coreth/rpc"
 )
 
 var (

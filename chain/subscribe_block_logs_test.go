@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/eth/filters"
+	"github.com/tenderly/coreth/eth/filters"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/coreth/core/types"
 )
 
 func TestBlockLogsAllowUnfinalized(t *testing.T) {

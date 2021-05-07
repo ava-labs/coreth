@@ -13,7 +13,7 @@ ARG CORETH_COMMIT
 WORKDIR $GOPATH/src/github.com/ava-labs
 
 COPY . coreth
-WORKDIR $GOPATH/src/github.com/ava-labs/coreth
+WORKDIR $GOPATH/src/github.com/tenderly/coreth
 
 # Export CORETH_COMMIT so the build script can set the GitCommit on the binary correctly
 RUN export CORETH_COMMIT=$CORETH_COMMIT

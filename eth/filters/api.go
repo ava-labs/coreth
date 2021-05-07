@@ -35,13 +35,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/interfaces"
+	"github.com/tenderly/coreth/rpc"
 )
 
 // filter is a helper struct that holds meta information over the filter type

@@ -37,10 +37,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/accounts"
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/coreth/accounts"
 )
 
 var (

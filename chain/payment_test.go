@@ -7,8 +7,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/coreth/core/types"
 )
 
 // TestPayment tests basic payment (balance, not multi-coin)
