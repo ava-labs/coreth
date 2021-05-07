@@ -5,11 +5,13 @@ package evm
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/tenderly/coreth/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
@@ -104,7 +106,7 @@ func (b *Block) ID() ids.ID { return b.id }
 func (b *Block) Accept() error {
 	vm := b.vm
 
-	log.Trace(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
+	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	if err := vm.updateStatus(b.id, choices.Accepted); err != nil {
 		return err
 	}
@@ -119,22 +121,18 @@ func (b *Block) Accept() error {
 	if tx == nil {
 		return nil
 	}
-	utx, ok := tx.UnsignedTx.(UnsignedAtomicTx)
-	if !ok {
-		return errUnknownAtomicTx
-	}
 
 	if bonusBlocks.Contains(b.id) {
 		log.Info("skipping atomic tx verification on bonus block", "block", b.id)
 		return nil
 	}
 
-	return utx.Accept(vm.ctx, nil)
+	return tx.UnsignedAtomicTx.Accept(vm.ctx, nil)
 }
 
 // Reject implements the snowman.Block interface
 func (b *Block) Reject() error {
-	log.Trace(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
+	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	return b.vm.updateStatus(b.ID(), choices.Rejected)
 }
 
@@ -162,17 +160,20 @@ func (b *Block) Height() uint64 {
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() error {
+func (b *Block) syntacticVerify() (params.Rules, error) {
 	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
+		return params.Rules{}, errInvalidBlock
 	}
 
-	return b.vm.getBlockValidator(b.ethBlock.Header().Time).SyntacticVerify(b)
+	header := b.ethBlock.Header()
+	rules := b.vm.chainConfig.AvalancheRules(header.Number, new(big.Int).SetUint64(header.Time))
+	return rules, b.vm.getBlockValidator(rules).SyntacticVerify(b)
 }
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify() error {
-	if err := b.syntacticVerify(); err != nil {
+	rules, err := b.syntacticVerify()
+	if err != nil {
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 
@@ -213,7 +214,7 @@ func (b *Block) Verify() error {
 		if bonusBlocks.Contains(b.id) {
 			log.Info("skipping atomic tx verification on bonus block", "block", b.id)
 		} else {
-			switch atx := atomicTx.UnsignedTx.(type) {
+			switch atx := atomicTx.UnsignedAtomicTx.(type) {
 			case *UnsignedImportTx:
 				// If an import tx is seen, we must ensure that none of the
 				// processing ancestors consume the same UTXO.
@@ -226,7 +227,7 @@ func (b *Block) Verify() error {
 					// If the ancestor isn't an atomic block, it can't conflict with
 					// the import tx.
 					if atx != nil {
-						ancestorInputs := atx.UnsignedTx.(UnsignedAtomicTx).InputUTXOs()
+						ancestorInputs := atx.UnsignedAtomicTx.InputUTXOs()
 						if inputs.Overlaps(ancestorInputs) {
 							return errConflictingAtomicInputs
 						}
@@ -258,8 +259,8 @@ func (b *Block) Verify() error {
 			// We have verified that none of the processing ancestors conflict with
 			// the atomic transaction, so now we must ensure that the transaction is
 			// valid and doesn't have any accepted conflicts.
-			utx := atomicTx.UnsignedTx.(UnsignedAtomicTx)
-			if err := utx.SemanticVerify(vm, atomicTx, b.vm.IsApricotPhase1(b.ethBlock.Time())); err != nil {
+			utx := atomicTx.UnsignedAtomicTx
+			if err := utx.SemanticVerify(vm, atomicTx, rules); err != nil {
 				return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, b.Height())
 			}
 		}

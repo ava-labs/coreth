@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/tenderly/coreth/core/state"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
@@ -45,7 +46,7 @@ func (tx *UnsignedExportTx) Verify(
 	ctx *snow.Context,
 	feeAmount uint64,
 	feeAssetID ids.ID,
-	ap1 bool,
+	rules params.Rules,
 ) error {
 	switch {
 	case tx == nil:
@@ -74,7 +75,7 @@ func (tx *UnsignedExportTx) Verify(
 	if !avax.IsSortedTransferableOutputs(tx.ExportedOutputs, Codec) {
 		return errOutputsNotSorted
 	}
-	if ap1 && !IsSortedAndUniqueEVMInputs(tx.Ins) {
+	if rules.IsApricotPhase1 && !IsSortedAndUniqueEVMInputs(tx.Ins) {
 		return errInputsNotSortedUnique
 	}
 
@@ -85,9 +86,9 @@ func (tx *UnsignedExportTx) Verify(
 func (tx *UnsignedExportTx) SemanticVerify(
 	vm *VM,
 	stx *Tx,
-	ap1 bool,
+	rules params.Rules,
 ) TxError {
-	if err := tx.Verify(vm.ctx.XChainID, vm.ctx, vm.txFee, vm.ctx.AVAXAssetID, ap1); err != nil {
+	if err := tx.Verify(vm.ctx.XChainID, vm.ctx, vm.txFee, vm.ctx.AVAXAssetID, rules); err != nil {
 		return permError{err}
 	}
 
@@ -95,9 +96,11 @@ func (tx *UnsignedExportTx) SemanticVerify(
 		return permError{errSignatureInputsMismatch}
 	}
 
-	f := crypto.FactorySECP256K1R{}
 	for i, input := range tx.Ins {
-		cred := stx.Creds[i].(*secp256k1fx.Credential)
+		cred, ok := stx.Creds[i].(*secp256k1fx.Credential)
+		if !ok {
+			return permError{fmt.Errorf("expected *secp256k1fx.Credential but got %T", cred)}
+		}
 		if err := cred.Verify(); err != nil {
 			return permError{err}
 		}
@@ -105,9 +108,14 @@ func (tx *UnsignedExportTx) SemanticVerify(
 		if len(cred.Sigs) != 1 {
 			return permError{fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))}
 		}
-		pubKey, err := f.RecoverPublicKey(tx.UnsignedBytes(), cred.Sigs[0][:])
+		pubKeyIntf, err := vm.secpFactory.RecoverPublicKey(tx.UnsignedBytes(), cred.Sigs[0][:])
 		if err != nil {
 			return permError{err}
+		}
+		pubKey, ok := pubKeyIntf.(*crypto.PublicKeySECP256K1R)
+		if !ok {
+			// This should never happen
+			return permError{fmt.Errorf("expected *crypto.PublicKeySECP256K1R but got %T", pubKeyIntf)}
 		}
 		if input.Address != PublicKeyToEthAddress(pubKey) {
 			return permError{errPublicKeySignatureMismatch}
@@ -129,8 +137,6 @@ func (tx *UnsignedExportTx) SemanticVerify(
 	if err := fc.Verify(); err != nil {
 		return permError{err}
 	}
-
-	// TODO: verify UTXO outputs via gRPC
 	return nil
 }
 
@@ -229,19 +235,21 @@ func (vm *VM) newExportTx(
 		Ins:              ins,
 		ExportedOutputs:  exportOuts,
 	}
-	tx := &Tx{UnsignedTx: utx}
+	tx := &Tx{UnsignedAtomicTx: utx}
 	if err := tx.Sign(vm.codec, signers); err != nil {
 		return nil, err
 	}
-	return tx, utx.Verify(vm.ctx.XChainID, vm.ctx, vm.txFee, vm.ctx.AVAXAssetID, vm.useApricotPhase1())
+	return tx, utx.Verify(vm.ctx.XChainID, vm.ctx, vm.txFee, vm.ctx.AVAXAssetID, vm.currentRules())
 }
 
 // EVMStateTransfer executes the state update from the atomic export transaction
 func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error {
 	addrs := map[[20]byte]uint64{}
 	for _, from := range tx.Ins {
-		log.Info("crosschain C->X", "addr", from.Address, "amount", from.Amount)
 		if from.AssetID == vm.ctx.AVAXAssetID {
+			log.Debug("crosschain C->X", "addr", from.Address, "amount", from.Amount, "assetID", "AVAX")
+			// We multiply the input amount by x2cRate to convert AVAX back to the appropriate
+			// denomination before export.
 			amount := new(big.Int).Mul(
 				new(big.Int).SetUint64(from.Amount), x2cRate)
 			if state.GetBalance(from.Address).Cmp(amount) < 0 {
@@ -249,6 +257,7 @@ func (tx *UnsignedExportTx) EVMStateTransfer(vm *VM, state *state.StateDB) error
 			}
 			state.SubBalance(from.Address, amount)
 		} else {
+			log.Debug("crosschain C->X", "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
 			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds

@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tenderly/coreth"
-	"github.com/tenderly/coreth/core"
-	"github.com/tenderly/coreth/core/state"
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/eth"
-	"github.com/tenderly/coreth/node"
-	"github.com/tenderly/coreth/params"
+	coreth "github.com/ava-labs/coreth/chain"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/node"
+	"github.com/ava-labs/coreth/params"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -55,32 +55,35 @@ import (
 )
 
 var (
+	// x2cRate is the conversion rate between the smallest denomination on the X-Chain
+	// 1 nAVAX and the smallest denomination on the C-Chain 1 wei. Where 1 nAVAX = 1 gWei.
+	// This is only required for AVAX because the denomination of 1 AVAX is 9 decimal
+	// places on the X and P chains, but is 18 decimal places within the EVM.
 	x2cRate = big.NewInt(1000000000)
 	// GitCommit is set by the build script
 	GitCommit string
 	// Version is the version of Coreth
-	Version = "coreth-v0.4.0"
+	Version = "coreth-v0.5.0"
 
 	_ block.ChainVM = &VM{}
 )
 
 var (
-	lastAcceptedKey              = []byte("snowman_lastAccepted")
-	acceptedPrefix               = []byte("snowman_accepted")
-	historicalCanonicalRepairKey = []byte("chain_repaired_20210212")
-	tipCanonicalRepairKey        = []byte("chain_repaired_20210305")
+	lastAcceptedKey = []byte("snowman_lastAccepted")
+	acceptedPrefix  = []byte("snowman_accepted")
 )
 
 const (
 	minBlockTime = 2 * time.Second
 	maxBlockTime = 3 * time.Second
-	// maxFutureBlockTime should be smaller than the max allowed future time (15s) used
-	// in dummy consensus engine's verifyHeader
-	maxFutureBlockTime = 10 * time.Second
-	batchSize          = 250
-	maxUTXOsToFetch    = 1024
-	blockCacheSize     = 1024
-	codecVersion       = uint16(0)
+	// Max time from current time allowed for blocks, before they're considered future blocks
+	// and fail verification
+	maxFutureBlockTime   = 10 * time.Second
+	batchSize            = 250
+	maxUTXOsToFetch      = 1024
+	blockCacheSize       = 1024
+	codecVersion         = uint16(0)
+	secpFactoryCacheSize = 1024
 )
 
 const (
@@ -105,6 +108,7 @@ var (
 	errInsufficientFunds          = errors.New("insufficient funds")
 	errNoExportOutputs            = errors.New("tx has no export outputs")
 	errOutputsNotSorted           = errors.New("tx outputs not sorted")
+	errOutputsNotSortedUnique     = errors.New("outputs not sorted and unique")
 	errOverflowExport             = errors.New("overflow when computing export amount + txFee")
 	errInvalidNonce               = errors.New("invalid nonce")
 	errConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
@@ -118,6 +122,8 @@ var (
 	errInvalidMixDigest           = errors.New("invalid mix digest")
 	errInvalidExtDataHash         = errors.New("invalid extra data hash")
 	errHeaderExtraDataTooBig      = errors.New("header extra data too big")
+	errInsufficientFundsForFee    = errors.New("insufficient AVAX funds to pay transaction fee")
+	errNoEVMOutputs               = errors.New("tx has no EVM outputs")
 )
 
 // mayBuildBlockStatus denotes whether the engine should be notified
@@ -223,7 +229,6 @@ type VM struct {
 	awaitingBuildBlock bool
 
 	genlock            sync.Mutex
-	txSubmitChan       <-chan struct{}
 	atomicTxSubmitChan chan struct{}
 	baseCodec          codec.Registry
 	codec              codec.Manager
@@ -234,7 +239,8 @@ type VM struct {
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
 
-	fx secp256k1fx.Fx
+	fx          secp256k1fx.Fx
+	secpFactory crypto.FactorySECP256K1R
 }
 
 func (vm *VM) getAtomicTx(block *types.Block) (*Tx, error) {
@@ -302,21 +308,23 @@ func (vm *VM) Initialize(
 	// Set the ApricotPhase1BlockTimestamp for mainnet/fuji
 	switch {
 	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
-		g.Config.ApricotPhase1BlockTimestamp = params.AvalancheApricotMainnetChainConfig.ApricotPhase1BlockTimestamp
+		g.Config = params.AvalancheMainnetChainConfig
+		phase0BlockValidator.extDataHashes = mainnetExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
-		g.Config.ApricotPhase1BlockTimestamp = params.AvalancheApricotFujiChainConfig.ApricotPhase1BlockTimestamp
+		g.Config = params.AvalancheFujiChainConfig
+		phase0BlockValidator.extDataHashes = fujiExtDataHashes
 	}
+
+	// Allow ExtDataHashes to be garbage collected as soon as freed from block
+	// validator
+	fujiExtDataHashes = nil
+	mainnetExtDataHashes = nil
 
 	vm.chainID = g.Config.ChainID
 	vm.txFee = txFee
 
-	config := eth.NewDefaultConfig()
+	config := ethconfig.NewDefaultConfig()
 	config.Genesis = g
-	// disable the experimental snapshot feature from geth
-	config.TrieCleanCache += config.SnapshotCache
-	config.SnapshotCache = 0
-
-	config.Miner.ManualMining = true
 
 	// Set minimum gas price and launch goroutine to sleep until
 	// network upgrade when the gas price must be changed
@@ -350,13 +358,25 @@ func (vm *VM) Initialize(
 	config.RPCGasCap = vm.CLIConfig.RPCGasCap
 	config.RPCTxFeeCap = vm.CLIConfig.RPCTxFeeCap
 	config.TxPool.NoLocals = !vm.CLIConfig.LocalTxsEnabled
+	config.AllowUnfinalizedQueries = vm.CLIConfig.AllowUnfinalizedQueries
 	vm.chainConfig = g.Config
+	vm.secpFactory = crypto.FactorySECP256K1R{Cache: cache.LRU{Size: secpFactoryCacheSize}}
 
 	if err := config.SetGCMode("archive"); err != nil {
 		panic(err)
 	}
-	nodecfg := node.Config{NoUSB: true}
-	chain := coreth.NewETHChain(&config, &nodecfg, nil, vm.chaindb, vm.CLIConfig.EthBackendSettings())
+	nodecfg := node.Config{
+		CorethVersion:         Version,
+		KeyStoreDir:           vm.CLIConfig.KeystoreDirectory,
+		ExternalSigner:        vm.CLIConfig.KeystoreExternalSigner,
+		InsecureUnlockAllowed: vm.CLIConfig.KeystoreInsecureUnlockAllowed,
+	}
+
+	// Attempt to load last accepted block to determine if it is necessary to
+	// initialize state with the genesis block.
+	lastAcceptedBytes, lastAcceptedErr := vm.chaindb.Get(lastAcceptedKey)
+	initGenesis := lastAcceptedErr == database.ErrNotFound
+	chain := coreth.NewETHChain(&config, &nodecfg, vm.chaindb, vm.CLIConfig.EthBackendSettings(), initGenesis)
 	vm.chain = chain
 	vm.networkID = config.NetworkId
 
@@ -369,11 +389,15 @@ func (vm *VM) Initialize(
 	chain.SetOnFinalizeAndAssemble(func(state *state.StateDB, txs []*types.Transaction) ([]byte, error) {
 		select {
 		case atx := <-vm.pendingAtomicTxs:
-			if err := atx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state); err != nil {
+			if err := atx.UnsignedAtomicTx.EVMStateTransfer(vm, state); err != nil {
 				vm.newBlockChan <- nil
 				return nil, err
 			}
-			raw, _ := vm.codec.Marshal(codecVersion, atx)
+			raw, err := vm.codec.Marshal(codecVersion, atx)
+			if err != nil {
+				vm.newBlockChan <- nil
+				return nil, fmt.Errorf("couldn't marshal atomic tx: %s", err)
+			}
 			return raw, nil
 		default:
 			if len(txs) == 0 {
@@ -405,9 +429,6 @@ func (vm *VM) Initialize(
 		vm.txPoolStabilizedLock.Unlock()
 		return nil
 	})
-	chain.SetOnQueryAcceptedBlock(func() *types.Block {
-		return vm.getLastAccepted().ethBlock
-	})
 	chain.SetOnExtraStateChange(func(block *types.Block, state *state.StateDB) error {
 		tx, err := vm.getAtomicTx(block)
 		if err != nil {
@@ -416,7 +437,7 @@ func (vm *VM) Initialize(
 		if tx == nil {
 			return nil
 		}
-		return tx.UnsignedTx.(UnsignedAtomicTx).EVMStateTransfer(vm, state)
+		return tx.UnsignedAtomicTx.EVMStateTransfer(vm, state)
 	})
 	vm.blockCache = cache.LRU{Size: blockCacheSize}
 	vm.blockStatusCache = cache.LRU{Size: blockCacheSize}
@@ -453,12 +474,14 @@ func (vm *VM) Initialize(
 	vm.newMinedBlockSub = vm.chain.SubscribeNewMinedBlockEvent()
 	vm.shutdownWg.Add(1)
 	go ctx.Log.RecoverAndPanic(vm.awaitTxPoolStabilized)
-	chain.Start()
+	if err := chain.Start(); err != nil {
+		return fmt.Errorf("failed to start ETH Chain due to %w", err)
+	}
 
 	var lastAccepted *types.Block
-	if b, err := vm.chaindb.Get(lastAcceptedKey); err == nil {
+	if lastAcceptedErr == nil {
 		var hash common.Hash
-		if err = rlp.DecodeBytes(b, &hash); err == nil {
+		if err := rlp.DecodeBytes(lastAcceptedBytes, &hash); err == nil {
 			if block := chain.GetBlockByHash(hash); block == nil {
 				log.Debug("lastAccepted block not found in chaindb")
 			} else {
@@ -466,7 +489,14 @@ func (vm *VM) Initialize(
 			}
 		}
 	}
-	if lastAccepted == nil {
+
+	// Determine if db corruption has occurred.
+	switch {
+	case lastAccepted != nil && initGenesis:
+		return errors.New("database corruption detected, should be initializing genesis")
+	case lastAccepted == nil && !initGenesis:
+		return errors.New("database corruption detected, should not be initializing genesis")
+	case lastAccepted == nil && initGenesis:
 		log.Debug("lastAccepted is unavailable, setting to the genesis block")
 		lastAccepted = chain.GetGenesisBlock()
 	}
@@ -484,12 +514,6 @@ func (vm *VM) Initialize(
 	vm.shutdownWg.Add(1)
 	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
 	vm.codec = Codec
-	if err := vm.repairCanonicalChain(); err != nil {
-		return fmt.Errorf("failed to repair the canonical chain: %w", err)
-	}
-
-	log.Debug("unlocking indexing")
-	chain.BlockChain().UnlockIndexing()
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
@@ -498,81 +522,6 @@ func (vm *VM) Initialize(
 	vm.baseCodec = linearcodec.NewDefault()
 
 	return vm.fx.Initialize(vm)
-}
-
-// repairCanonicalChain writes the canonical chain index from the last accepted
-// block back to the genesis block to overwrite any corruption that might have
-// occurred.
-// assumes that the genesisHash and [lastAccepted] block have already been set.
-func (vm *VM) repairCanonicalChain() error {
-	if ran, err := vm.repairHistorical(); err != nil {
-		return err
-	} else if ran {
-		return nil
-	}
-
-	_, err := vm.repairTip()
-	return err
-}
-
-// repairHistorical writes the canonical chain index from the last accepted block back to the
-// genesis block to overwrite any corruption that might have occurred.
-// assumes that the genesis hash and [lastAccepted] block have already been set.
-// returns true if the repair occurs during this call. If the repair occurred on a
-// prior run, then false is returned.
-func (vm *VM) repairHistorical() (bool, error) {
-	// Check if the historical canonical chain repair has already occurred.
-	if has, err := vm.db.Has(historicalCanonicalRepairKey); err != nil {
-		return false, err
-	} else if has {
-		return false, nil
-	}
-
-	start := time.Now()
-	log.Info("starting historical canonical chain repair", "startTime", start)
-	genesisBlock := vm.chain.GetGenesisBlock()
-	if genesisBlock == nil {
-		return false, fmt.Errorf("failed to fetch genesis block from chain during historical chain repair")
-	}
-	if err := vm.chain.WriteCanonicalFromCurrentBlock(genesisBlock); err != nil {
-		return false, fmt.Errorf("historical canonical chain repair failed after %v due to: %w", time.Since(start), err)
-	}
-	log.Info("finished historical canonical chain repair", "timeElapsed", time.Since(start))
-	if err := vm.db.Put(historicalCanonicalRepairKey, []byte("finished")); err != nil {
-		return false, fmt.Errorf("failed to mark flag for historical canonical chain repair: %w", err)
-	}
-	if err := vm.chain.ValidateCanonicalChain(); err != nil {
-		return false, fmt.Errorf("failed to validate historical canonical chain repair due to: %w", err)
-	}
-
-	return true, nil
-}
-
-// repairTip writes the canonical chain index from the current block in the canonical chain
-// back to the last accepted block to overwrite any corruption of non-finalized blocks that
-// might have occurred.
-// assumes that the genesis hash and [lastAccepted] block have already been set.
-// returns true if the repair occurs during this call. If the repair occurred on a
-// prior run, then false is returned.
-func (vm *VM) repairTip() (bool, error) {
-	// Check if the canonical chain tip repair has already occurred.
-	if has, err := vm.db.Has(tipCanonicalRepairKey); err != nil {
-		return false, err
-	} else if has {
-		return false, nil
-	}
-
-	start := time.Now()
-	log.Info("starting canonical chain tip repair", "startTime", start)
-	if err := vm.chain.WriteCanonicalFromCurrentBlock(vm.lastAccepted.ethBlock); err != nil {
-		return false, fmt.Errorf("canonical chain tip repair failed after %v due to: %w", time.Since(start), err)
-	}
-	log.Info("finished canonical chain tip repair", "timeElapsed", time.Since(start))
-	if err := vm.db.Put(tipCanonicalRepairKey, []byte("finished")); err != nil {
-		return false, fmt.Errorf("failed to mark flag for canonical chain tip repair due to: %w", err)
-	}
-
-	return true, nil
 }
 
 // Bootstrapping notifies this VM that the consensus engine is performing
@@ -638,7 +587,7 @@ func (vm *VM) ParseBlock(b []byte) (snowman.Block, error) {
 	}
 	// Performing syntactic verification in ParseBlock allows for
 	// short-circuiting bad blocks before they are processed by the VM.
-	if err := block.syntacticVerify(); err != nil {
+	if _, err := block.syntacticVerify(); err != nil {
 		return nil, fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 	vm.blockCache.Put(block.ID(), block)
@@ -681,24 +630,26 @@ func (vm *VM) LastAccepted() (ids.ID, error) {
 //   * The LockOption is the first element of [lockOption]
 //     By default the LockOption is WriteLock
 //     [lockOption] should have either 0 or 1 elements. Elements beside the first are ignored.
-func newHandler(name string, service interface{}, lockOption ...commonEng.LockOption) *commonEng.HTTPHandler {
+func newHandler(name string, service interface{}, lockOption ...commonEng.LockOption) (*commonEng.HTTPHandler, error) {
 	server := avalancheRPC.NewServer()
 	server.RegisterCodec(avalancheJSON.NewCodec(), "application/json")
 	server.RegisterCodec(avalancheJSON.NewCodec(), "application/json;charset=UTF-8")
-	server.RegisterService(service, name)
+	if err := server.RegisterService(service, name); err != nil {
+		return nil, err
+	}
 
 	var lock commonEng.LockOption = commonEng.WriteLock
 	if len(lockOption) != 0 {
 		lock = lockOption[0]
 	}
-	return &commonEng.HTTPHandler{LockOptions: lock, Handler: server}
+	return &commonEng.HTTPHandler{LockOptions: lock, Handler: server}, nil
 }
 
 // CreateHandlers makes new http handlers that can handle API calls
 func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 	handler := vm.chain.NewRPCHandler(time.Duration(vm.CLIConfig.APIMaxDuration))
 	enabledAPIs := vm.CLIConfig.EthAPIs()
-	vm.chain.AttachEthService(handler, vm.CLIConfig.EthAPIs())
+	vm.chain.AttachEthService(handler, enabledAPIs)
 
 	errs := wrappers.Errs{}
 	if vm.CLIConfig.SnowmanAPIEnabled {
@@ -725,11 +676,16 @@ func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 		return nil, errs.Err
 	}
 
+	avaxAPI, err := newHandler("avax", &AvaxAPI{vm})
+	if err != nil {
+		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
+	}
+
 	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
 
 	return map[string]*commonEng.HTTPHandler{
 		"/rpc":  {LockOptions: commonEng.NoLock, Handler: handler},
-		"/avax": newHandler("avax", &AvaxAPI{vm}),
+		"/avax": avaxAPI,
 		"/ws":   {LockOptions: commonEng.NoLock, Handler: handler.WebsocketHandler([]string{"*"})},
 	}, nil
 }
@@ -762,7 +718,8 @@ func (vm *VM) updateStatus(blkID ids.ID, status choices.Status) error {
 		if blk == nil {
 			return errUnknownBlock
 		}
-		if err := vm.chain.Accept(blk.ethBlock); err != nil {
+		ethBlock := blk.ethBlock
+		if err := vm.chain.Accept(ethBlock); err != nil {
 			return fmt.Errorf("could not accept %s: %w", blkID, err)
 		}
 		if err := vm.setLastAccepted(blk); err != nil {
@@ -968,10 +925,10 @@ func (vm *VM) awaitTxPoolStabilized() {
 
 func (vm *VM) awaitSubmittedTxs() {
 	defer vm.shutdownWg.Done()
-	vm.txSubmitChan = vm.chain.GetTxSubmitCh()
+	txSubmitChan := vm.chain.GetTxSubmitCh()
 	for {
 		select {
-		case <-vm.txSubmitChan:
+		case <-txSubmitChan:
 			log.Trace("New tx detected, trying to generate a block")
 			vm.tryBlockGen()
 		case <-vm.atomicTxSubmitChan:
@@ -1082,18 +1039,19 @@ func (vm *VM) GetAtomicUTXOs(
 
 // GetSpendableFunds returns a list of EVMInputs and keys (in corresponding order)
 // to total [amount] of [assetID] owned by [keys]
-// TODO switch to returning a list of private keys
-// since there are no multisig inputs in Ethereum
+// Note: we return [][]*crypto.PrivateKeySECP256K1R even though each input corresponds
+// to a single key, so that the signers can be passed in to [tx.Sign] which supports
+// multiple keys on a single input.
 func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids.ID, amount uint64) ([]EVMInput, [][]*crypto.PrivateKeySECP256K1R, error) {
-	// NOTE: should we use HEAD block or lastAccepted?
-	state, err := vm.chain.BlockState(vm.lastAccepted.ethBlock)
+	// Note: current state uses the state of the preferred block.
+	state, err := vm.chain.CurrentState()
 	if err != nil {
 		return nil, nil, err
 	}
 	inputs := []EVMInput{}
 	signers := [][]*crypto.PrivateKeySECP256K1R{}
-	// NOTE: we assume all keys correspond to distinct accounts here (so the
-	// nonce handling in export_tx.go is correct)
+	// Note: we assume that each key in [keys] is unique, so that iterating over
+	// the keys will not produce duplicated nonces in the returned EVMInput slice.
 	for _, key := range keys {
 		if amount == 0 {
 			break
@@ -1101,6 +1059,8 @@ func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids
 		addr := GetEthAddress(key)
 		var balance uint64
 		if assetID == vm.ctx.AVAXAssetID {
+			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
+			// denomination of AVAX that can be exported.
 			balance = new(big.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
 		} else {
 			balance = state.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
@@ -1111,7 +1071,7 @@ func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids
 		if amount < balance {
 			balance = amount
 		}
-		nonce, err := vm.GetAcceptedNonce(addr)
+		nonce, err := vm.GetCurrentNonce(addr)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1132,27 +1092,33 @@ func (vm *VM) GetSpendableFunds(keys []*crypto.PrivateKeySECP256K1R, assetID ids
 	return inputs, signers, nil
 }
 
-// GetAcceptedNonce returns the nonce associated with the address at the last accepted block
-func (vm *VM) GetAcceptedNonce(address common.Address) (uint64, error) {
-	state, err := vm.chain.BlockState(vm.lastAccepted.ethBlock)
+// GetCurrentNonce returns the nonce associated with the address at the
+// preferred block
+func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
+	// Note: current state uses the state of the preferred block.
+	state, err := vm.chain.CurrentState()
 	if err != nil {
 		return 0, err
 	}
 	return state.GetNonce(address), nil
 }
 
-func (vm *VM) IsApricotPhase1(timestamp uint64) bool {
-	return vm.chainConfig.IsApricotPhase1(new(big.Int).SetUint64(timestamp))
+// currentRules returns the chain rules for the current block.
+func (vm *VM) currentRules() params.Rules {
+	header := vm.chain.APIBackend().CurrentHeader()
+	return vm.chainConfig.AvalancheRules(header.Number, big.NewInt(int64(header.Time)))
 }
 
-func (vm *VM) useApricotPhase1() bool {
-	return vm.IsApricotPhase1(vm.chain.BlockChain().CurrentHeader().Time)
-}
-
-func (vm *VM) getBlockValidator(timestamp uint64) BlockValidator {
-	if vm.IsApricotPhase1(timestamp) {
+// getBlockValidator returns the block validator that should be used for a block that
+// follows the ruleset defined by [rules]
+func (vm *VM) getBlockValidator(rules params.Rules) BlockValidator {
+	switch {
+	case rules.IsApricotPhase2:
+		// Note: the phase1BlockValidator is used in both apricot phase1 and phase2
 		return phase1BlockValidator
-	} else {
+	case rules.IsApricotPhase1:
+		return phase1BlockValidator
+	default:
 		return phase0BlockValidator
 	}
 }
@@ -1201,11 +1167,10 @@ func FormatEthAddress(addr common.Address) string {
 
 // GetEthAddress returns the ethereum address derived from [privKey]
 func GetEthAddress(privKey *crypto.PrivateKeySECP256K1R) common.Address {
-	return PublicKeyToEthAddress(privKey.PublicKey())
+	return PublicKeyToEthAddress(privKey.PublicKey().(*crypto.PublicKeySECP256K1R))
 }
 
 // PublicKeyToEthAddress returns the ethereum address derived from [pubKey]
-func PublicKeyToEthAddress(pubKey crypto.PublicKey) common.Address {
-	return ethcrypto.PubkeyToAddress(
-		(*pubKey.(*crypto.PublicKeySECP256K1R).ToECDSA()))
+func PublicKeyToEthAddress(pubKey *crypto.PublicKeySECP256K1R) common.Address {
+	return ethcrypto.PubkeyToAddress(*(pubKey.ToECDSA()))
 }

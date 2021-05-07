@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/tenderly/coreth/core/state"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
@@ -27,16 +28,21 @@ var (
 	errWrongBlockchainID = errors.New("wrong blockchain ID provided")
 	errWrongNetworkID    = errors.New("tx was issued with a different network ID")
 	errNilTx             = errors.New("tx is nil")
+	errNoValueOutput     = errors.New("output has no value")
+	errNoValueInput      = errors.New("input has no value")
+	errNilOutput         = errors.New("nil output")
+	errNilInput          = errors.New("nil input")
+	errEmptyAssetID      = errors.New("empty asset ID is not valid")
 )
 
-// EVMOutput defines an output from EVM State created from export transactions
+// EVMOutput defines an output that is added to the EVM state created by import transactions
 type EVMOutput struct {
 	Address common.Address `serialize:"true" json:"address"`
 	Amount  uint64         `serialize:"true" json:"amount"`
 	AssetID ids.ID         `serialize:"true" json:"assetID"`
 }
 
-// EVMInput defines an input for the EVM State to be used in import transactions
+// EVMInput defines an input created from the EVM state to fund export transactions
 type EVMInput struct {
 	Address common.Address `serialize:"true" json:"address"`
 	Amount  uint64         `serialize:"true" json:"amount"`
@@ -46,11 +52,27 @@ type EVMInput struct {
 
 // Verify ...
 func (out *EVMOutput) Verify() error {
+	switch {
+	case out == nil:
+		return errNilOutput
+	case out.Amount == 0:
+		return errNoValueOutput
+	case out.AssetID == ids.Empty:
+		return errEmptyAssetID
+	}
 	return nil
 }
 
 // Verify ...
 func (in *EVMInput) Verify() error {
+	switch {
+	case in == nil:
+		return errNilInput
+	case in.Amount == 0:
+		return errNoValueInput
+	case in.AssetID == ids.Empty:
+		return errEmptyAssetID
+	}
 	return nil
 }
 
@@ -69,7 +91,7 @@ type UnsignedAtomicTx interface {
 	// UTXOs this tx consumes
 	InputUTXOs() ids.Set
 	// Attempts to verify this transaction with the provided state.
-	SemanticVerify(vm *VM, stx *Tx, ap1 bool) TxError
+	SemanticVerify(vm *VM, stx *Tx, rules params.Rules) TxError
 
 	// Accept this transaction with the additionally provided state transitions.
 	Accept(ctx *snow.Context, batch database.Batch) error
@@ -80,7 +102,7 @@ type UnsignedAtomicTx interface {
 // Tx is a signed transaction
 type Tx struct {
 	// The body of this transaction
-	UnsignedTx `serialize:"true" json:"unsignedTx"`
+	UnsignedAtomicTx `serialize:"true" json:"unsignedTx"`
 
 	// The credentials of this transaction
 	Creds []verify.Verifiable `serialize:"true" json:"credentials"`
@@ -90,9 +112,9 @@ type Tx struct {
 
 // Sign this transaction with the provided signers
 func (tx *Tx) Sign(c codec.Manager, signers [][]*crypto.PrivateKeySECP256K1R) error {
-	unsignedBytes, err := c.Marshal(codecVersion, &tx.UnsignedTx)
+	unsignedBytes, err := c.Marshal(codecVersion, &tx.UnsignedAtomicTx)
 	if err != nil {
-		return fmt.Errorf("couldn't marshal UnsignedTx: %w", err)
+		return fmt.Errorf("couldn't marshal UnsignedAtomicTx: %w", err)
 	}
 
 	// Attach credentials
@@ -180,4 +202,10 @@ func SortEVMOutputs(outputs []EVMOutput) {
 // based on the account addresses and assetIDs
 func IsSortedEVMOutputs(outputs []EVMOutput) bool {
 	return sort.IsSorted(&innerSortEVMOutputs{outputs: outputs})
+}
+
+// IsSortedAndUniqueEVMOutputs returns true if the EVMOutputs are sorted
+// and unique based on the account addresses and assetIDs
+func IsSortedAndUniqueEVMOutputs(outputs []EVMOutput) bool {
+	return utils.IsSortedAndUnique(&innerSortEVMOutputs{outputs: outputs})
 }
