@@ -134,7 +134,7 @@ func New(stack *node.Node, config *Config,
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.DefaultConfig.Miner.GasPrice)
 	}
 	if config.NoPruning && config.TrieDirtyCache > 0 {
-		// Original code:
+		// TODO: uncomment when re-enabling snapshots
 		// if config.SnapshotCache > 0 {
 		// 	config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
 		// 	config.SnapshotCache += config.TrieDirtyCache * 2 / 5
