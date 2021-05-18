@@ -82,28 +82,6 @@ func NewDefaultConfig() Config {
 	}
 }
 
-// Original Code:
-// func init() {
-// 	home := os.Getenv("HOME")
-// 	if home == "" {
-// 		if user, err := user.Current(); err == nil {
-// 			home = user.HomeDir
-// 		}
-// 	}
-// 	if runtime.GOOS == "darwin" {
-// 		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
-// 	} else if runtime.GOOS == "windows" {
-// 		localappdata := os.Getenv("LOCALAPPDATA")
-// 		if localappdata != "" {
-// 			DefaultConfig.Ethash.DatasetDir = filepath.Join(localappdata, "Ethash")
-// 		} else {
-// 			DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Local", "Ethash")
-// 		}
-// 	} else {
-// 		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
-// 	}
-// }
-
 //go:generate gencodec -type Config -formats toml -out gen_config.go
 
 type Config struct {
@@ -156,10 +134,6 @@ type Config struct {
 	// Mining options
 	Miner miner.Config
 
-	// Original Code:
-	// // Ethash options
-	// Ethash ethash.Config
-
 	// Transaction pool options
 	TxPool core.TxPoolConfig
 
@@ -184,13 +158,6 @@ type Config struct {
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64 `toml:",omitempty"`
-
-	// Original Code:
-	// // Checkpoint is a hardcoded checkpoint which can be nil.
-	// Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
-
-	// // CheckpointOracle is the configuration for checkpoint oracle.
-	// CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
 	// AllowUnfinalizedQueries allow unfinalized queries
 	AllowUnfinalizedQueries bool

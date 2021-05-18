@@ -177,12 +177,6 @@ type Block struct {
 	// Td is used by package core to store the total difficulty
 	// of the chain up to and including the block.
 	td *big.Int
-
-	// Original Code:
-	// // These fields are used by package eth to track
-	// // inter-peer block relay.
-	// ReceivedAt   time.Time
-	// ReceivedFrom interface{}
 }
 
 // DeprecatedTd is an old relic for extracting the TD of a block. It is in the
@@ -192,13 +186,6 @@ func (b *Block) DeprecatedTd() *big.Int {
 	return b.td
 }
 
-// Original Code:
-// // [deprecated by eth/63]
-// // StorageBlock defines the RLP encoding of a Block stored in the
-// // state database. The StorageBlock encoding contains fields that
-// // would otherwise need to be recomputed.
-// type StorageBlock Block
-
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
 	Header  *Header
@@ -207,16 +194,6 @@ type extblock struct {
 	Version uint32
 	ExtData *[]byte `rlp:"nil"`
 }
-
-// Original Code:
-// // [deprecated by eth/63]
-// // "storage" block encoding. used for database.
-// type storageblock struct {
-// 	Header *Header
-// 	Txs    []*Transaction
-// 	Uncles []*Header
-// 	TD     *big.Int
-// }
 
 // NewBlock creates a new block. The input data is copied,
 // changes to header and to the field values will not affect the
@@ -339,17 +316,6 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		ExtData: b.extdata,
 	})
 }
-
-// Original Code:
-// // [deprecated by eth/63]
-// func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
-// 	var sb storageblock
-// 	if err := s.Decode(&sb); err != nil {
-// 		return err
-// 	}
-// 	b.header, b.uncles, b.transactions, b.td = sb.Header, sb.Uncles, sb.Txs, sb.TD
-// 	return nil
-// }
 
 // TODO: copies
 
