@@ -86,8 +86,6 @@ var (
 
 	blockPrefetchExecuteTimer   = metrics.NewRegisteredTimer("chain/prefetch/executes", nil)
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
-
-	// errInsertionInterrupted = errors.New("insertion is interrupted")
 )
 
 var (
