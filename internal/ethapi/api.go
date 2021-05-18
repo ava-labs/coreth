@@ -2000,16 +2000,6 @@ func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (strin
 	return spew.Sdump(block), nil
 }
 
-// Original code:
-// // SeedHash retrieves the seed hash of a block.
-// func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string, error) {
-// 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
-// 	if block == nil {
-// 		return "", fmt.Errorf("block #%d not found", number)
-// 	}
-// 	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
-// }
-
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
@@ -2063,8 +2053,6 @@ func (s *PublicNetAPI) Listening() bool {
 
 // PeerCount returns the number of connected peers
 func (s *PublicNetAPI) PeerCount() hexutil.Uint {
-	// Original code:
-	// return hexutil.Uint(s.net.PeerCount())
 	return hexutil.Uint(0)
 }
 

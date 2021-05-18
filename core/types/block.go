@@ -400,13 +400,6 @@ func (b *Block) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
-// Original code: (has been moved to syntacticVerify in plugin/evm/block.go)
-// // SanityCheck can be used to prevent that unbounded fields are
-// // stuffed with junk data to add processing overhead
-// func (b *Block) SanityCheck() error {
-// 	return b.header.SanityCheck()
-// }
-
 type writeCounter common.StorageSize
 
 func (c *writeCounter) Write(b []byte) (int, error) {
