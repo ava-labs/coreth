@@ -52,7 +52,7 @@ var (
 )
 
 // modified from consensus.go
-func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, seal bool) error {
+func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool) error {
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
@@ -101,15 +101,10 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header,
 		return consensus.ErrInvalidNumber
 	}
 	// Verify the engine specific seal securing the block
-	if seal {
-		if err := self.VerifySeal(chain, header); err != nil {
-			return err
-		}
-	}
-	return nil
+	return self.VerifySeal(chain, header)
 }
 
-func (self *DummyEngine) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool, index int) error {
+func (self *DummyEngine) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int) error {
 	var parent *types.Header
 	if index == 0 {
 		parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
@@ -122,14 +117,14 @@ func (self *DummyEngine) verifyHeaderWorker(chain consensus.ChainHeaderReader, h
 	if chain.GetHeader(headers[index].Hash(), headers[index].Number.Uint64()) != nil {
 		return nil // known block
 	}
-	return self.verifyHeader(chain, headers[index], parent, false, seals[index])
+	return self.verifyHeader(chain, headers[index], parent, false)
 }
 
 func (self *DummyEngine) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase, nil
 }
 
-func (self *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+func (self *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
 	// Short circuit if the header is known, or it's parent not
 	number := header.Number.Uint64()
 	if chain.GetHeader(header.Hash(), number) != nil {
@@ -140,10 +135,10 @@ func (self *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header 
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return self.verifyHeader(chain, header, parent, false, seal)
+	return self.verifyHeader(chain, header, parent, false)
 }
 
-func (self *DummyEngine) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (self *DummyEngine) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	// Spawn as many workers as allowed threads
 	workers := runtime.GOMAXPROCS(0)
 	if len(headers) < workers {
@@ -160,7 +155,7 @@ func (self *DummyEngine) VerifyHeaders(chain consensus.ChainHeaderReader, header
 	for i := 0; i < workers; i++ {
 		go func() {
 			for index := range inputs {
-				errors[index] = self.verifyHeaderWorker(chain, headers, seals, index)
+				errors[index] = self.verifyHeaderWorker(chain, headers, index)
 				done <- index
 			}
 		}()
