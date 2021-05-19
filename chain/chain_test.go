@@ -73,7 +73,7 @@ func newTestChain(name string, config *eth.Config,
 				panic(err)
 			}
 			if block.Hash() != tc.chain.GetGenesisBlock().Hash() {
-				if _, err = tc.chain.InsertChain([]*types.Block{block}); err != nil {
+				if err = tc.chain.InsertBlock(block); err != nil {
 					panic(err)
 				}
 			}
@@ -111,7 +111,7 @@ func (tc *testChain) GenRandomTree(n int, max int) {
 		if err != nil {
 			tc.t.Fatal(err)
 		}
-		if _, err := tc.chain.InsertChain([]*types.Block{block}); err != nil {
+		if err := tc.chain.InsertBlock(block); err != nil {
 			tc.t.Fatal(err)
 		}
 

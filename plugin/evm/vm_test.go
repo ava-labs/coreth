@@ -2909,10 +2909,10 @@ func TestApricotPhase1Transition(t *testing.T) {
 
 	// Confirm all txs are present
 	ethBlkTxs := vm1.chain.GetBlockByNumber(2).Transactions()
+	if len(ethBlkTxs) != 5 {
+		t.Fatalf("Expected 5 transactions in block, but found %d", len(ethBlkTxs))
+	}
 	for i, tx := range txs[:5] {
-		if len(ethBlkTxs) <= i {
-			t.Fatalf("missing transactions expected: %d but found: %d", len(txs), len(ethBlkTxs))
-		}
 		if ethBlkTxs[i].Hash() != tx.Hash() {
 			t.Fatalf("expected tx at index %d to have hash: %x but has: %x", i, txs[i].Hash(), tx.Hash())
 		}

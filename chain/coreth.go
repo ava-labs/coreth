@@ -190,8 +190,8 @@ func (self *ETHChain) GetGenesisBlock() *types.Block {
 	return self.backend.BlockChain().Genesis()
 }
 
-func (self *ETHChain) InsertChain(chain []*types.Block) (int, error) {
-	return self.backend.BlockChain().InsertChain(chain)
+func (self *ETHChain) InsertBlock(block *types.Block) error {
+	return self.backend.BlockChain().InsertBlock(block)
 }
 
 func (self *ETHChain) NewRPCHandler(maximumDuration time.Duration) *rpc.Server {

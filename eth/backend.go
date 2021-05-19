@@ -160,8 +160,7 @@ func New(stack *node.Node, config *Config,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
-		// p2pServer:         stack.Server(),
-		settings: settings,
+		settings:          settings,
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -190,11 +189,10 @@ func New(stack *node.Node, config *Config,
 			TrieCleanLimit: config.TrieCleanCache,
 			// Original code (requires disk):
 			// TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
-			TrieCleanRejournal:  config.TrieCleanCacheRejournal,
-			TrieCleanNoPrefetch: config.NoPrefetch,
-			TrieDirtyLimit:      config.TrieDirtyCache,
-			TrieDirtyDisabled:   config.NoPruning,
-			TrieTimeLimit:       config.TrieTimeout,
+			TrieCleanRejournal: config.TrieCleanCacheRejournal,
+			TrieDirtyLimit:     config.TrieDirtyCache,
+			TrieDirtyDisabled:  config.NoPruning,
+			TrieTimeLimit:      config.TrieTimeout,
 			// TODO: Enable snapshots once stable (when 0 they are disabled)
 			// SnapshotLimit: config.SnapshotCache,
 			Preimages: config.Preimages,

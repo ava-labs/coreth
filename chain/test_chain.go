@@ -82,7 +82,7 @@ func NewDefaultChain(t *testing.T) (*ETHChain, chan core.NewTxPoolHeadEvent, <-c
 	}
 
 	chain.SetOnSealFinish(func(block *types.Block) {
-		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+		if err := chain.InsertBlock(block); err != nil {
 			t.Fatal(err)
 		}
 		if err := chain.SetPreference(block); err != nil {

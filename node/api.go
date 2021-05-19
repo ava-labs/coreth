@@ -27,16 +27,10 @@
 package node
 
 import (
-	"errors"
-
 	"github.com/ava-labs/coreth/internal/debug"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-)
-
-var (
-	errNotSupported = errors.New("not supported")
 )
 
 // apis returns the collection of built-in RPC APIs.

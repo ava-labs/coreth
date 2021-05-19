@@ -81,9 +81,6 @@ var (
 	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
 	blockReorgDropMeter     = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
 	blockReorgInvalidatedTx = metrics.NewRegisteredMeter("chain/reorg/invalidTx", nil)
-
-	blockPrefetchExecuteTimer   = metrics.NewRegisteredTimer("chain/prefetch/executes", nil)
-	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 )
 
 var (
@@ -128,15 +125,14 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieCleanJournal    string        // Disk journal for saving clean cache entries.
-	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
-	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
-	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
-	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
-	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages           bool          // Whether to store preimage of trie key to the disk
+	TrieCleanLimit     int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanJournal   string        // Disk journal for saving clean cache entries.
+	TrieCleanRejournal time.Duration // Time interval to dump clean cache to disk periodically
+	TrieDirtyLimit     int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled  bool          // Whether to disable trie write caching and GC altogether (archive node)
+	TrieTimeLimit      time.Duration // Time limit after which to flush the current in-memory trie to disk
+	SnapshotLimit      int           // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages          bool          // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -1218,69 +1214,49 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	// Pre-checks passed, start the full block imports
 	bc.wg.Add(1)
-	bc.chainmu.Lock()
-	n, err := bc.insertChain(chain)
-	bc.chainmu.Unlock()
-	bc.wg.Done()
+	defer bc.wg.Done()
 
-	return n, err
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+	for n, block := range chain {
+		if err := bc.insertBlock(block); err != nil {
+			return n, err
+		}
+	}
+
+	return len(chain), nil
 }
 
-// insertChain is the internal implementation of InsertChain, which assumes that
-// 1) chains are contiguous, and 2) The chain mutex is held.
-//
-// This method is split out so that import batches that require re-injecting
-// historical blocks can do so without releasing the lock, which could lead to
-// racey behaviour. If a sidechain import is in progress, and the historic state
-// is imported, but then new canon-head is added before the actual sidechain
-// completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number(), new(big.Int).SetUint64(chain[0].Time())), chain)
+func (bc *BlockChain) InsertBlock(block *types.Block) error {
+	bc.blockProcFeed.Send(true)
+	defer bc.blockProcFeed.Send(false)
+
+	bc.wg.Add(1)
+	bc.chainmu.Lock()
+	err := bc.insertBlock(block)
+	bc.chainmu.Unlock()
+	bc.wg.Done()
+	return err
+}
+
+func (bc *BlockChain) insertBlock(block *types.Block) error {
+	senderCacher.recover(types.MakeSigner(bc.chainConfig, block.Number(), new(big.Int).SetUint64(block.Time())), block.Transactions())
 
 	var (
-		stats     = insertStats{startTime: mclock.Now()}
-		lastCanon *types.Block
+		stats = insertStats{startTime: mclock.Now()}
 	)
-	// Fire a single chain head event if we've progressed the chain
-	defer func() {
-		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
-		}
-	}()
-	// Start the parallel header verifier
-	headers := make([]*types.Header, len(chain))
 
-	for i, block := range chain {
-		headers[i] = block.Header()
+	err := bc.engine.VerifyHeader(bc, block.Header())
+	if err == nil {
+		err = bc.validator.ValidateBody(block)
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headers)
-	defer close(abort)
 
-	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
-
-	block, err := it.next()
-
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
-		// First block (and state) is known
-		//   1. We did a roll-back, and should now do a re-import
-		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-		// 	    from the canonical chain, which has not been verified.
-		// Skip all known blocks that are behind us
-		// Re-inserting previously known blocks should not update the head block or
-		// trigger a reorg. Rather, a reorg should only be triggered on previously
-		// known blocks using [SetPreference] or [Accept].
-		for block != nil && err == ErrKnownBlock {
-			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
-			stats.ignored++
-
-			block, err = it.next()
-		}
-		// Falls through to the block import
-	}
 	switch {
+	// If the block is already known, no need to re-insert
+	case errors.Is(err, ErrKnownBlock):
+		log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
+		stats.ignored++
+		return nil
 	// Pruning of the EVM is disabled, so we should never encounter this case.
 	// Because side chain insertion can have complex side effects, we error when
 	// we encounter it to prevent the accidental execution of these side effects.
@@ -1288,17 +1264,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	// When supporting EVM pruning, we must re-enable this and ensure it is
 	// compatible with external consensus invariants.
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		return 0, errors.New("side chain insertion is not supported")
+		return errors.New("side chain insertion is not supported")
 
-	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
+	// Future blocks are not supported, but should not be reported, so we return an error
+	// early here
 	case errors.Is(err, consensus.ErrFutureBlock):
-		return 0, errFutureBlockUnsupported
+		return errFutureBlockUnsupported
 
 	// Some other error occurred, abort
 	case err != nil:
-		stats.ignored += len(it.chain)
+		stats.ignored += 1
 		bc.reportBlock(block, nil, err)
-		return it.index, err
+		return err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
 	var activeState *state.StateDB
@@ -1312,168 +1289,110 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
-		// If the block is known (in the middle of the chain), it's a special case for
-		// Clique blocks where they can share state among each other, so importing an
-		// older block might complete the state of the subsequent one. In this case,
-		// just skip the block (we already validated it once fully (and crashed), since
-		// its header and body was already in the database).
-		if err == ErrKnownBlock {
-			log.Warn("Inserted known block", "number", block.Number(), "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.Root())
+	// Retrieve the parent block and it's state to execute on top
+	start := time.Now()
 
-			// Special case. Commit the empty receipt slice if we meet the known
-			// block in the middle. It can only happen in the clique chain. Whenever
-			// we insert blocks via `insertSideChain`, we only commit `td`, `header`
-			// and `body` if it's non-existent. Since we don't have receipts without
-			// reexecution, so nothing to commit. But if the sidechain will be adpoted
-			// as the canonical chain eventually, it needs to be reexecuted for missing
-			// state, but if it's this special case here(skip reexecution) we will lose
-			// the empty receipt entry.
-			if len(block.Transactions()) == 0 {
-				rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
-			} else {
-				log.Error("Please file an issue, skip known block execution without receipt",
-					"hash", block.Hash(), "number", block.NumberU64())
-			}
-			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
-			}
-			stats.processed++
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 
-			// We can assume that logs are empty here, since the only way for consecutive
-			// Clique blocks to have the same state is if there are no transactions.
-			lastCanon = block
-			continue
-		}
-		// Retrieve the parent block and it's state to execute on top
-		start := time.Now()
-
-		parent := it.previous()
-		if parent == nil {
-			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
-		}
-		bc.snapsLock.Lock()
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-		if err != nil {
-			bc.snapsLock.Unlock()
-			return it.index, err
-		}
+	bc.snapsLock.Lock()
+	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+	if err != nil {
 		bc.snapsLock.Unlock()
+		return err
+	}
+	bc.snapsLock.Unlock()
 
-		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
-		activeState = statedb
+	// Enable prefetching to pull in trie node paths while processing transactions
+	statedb.StartPrefetcher("chain")
+	activeState = statedb
 
-		// If we have a followup block, run that against the current state to pre-cache
-		// transactions and probabilistically some of the account/storage trie nodes.
-		var followupInterrupt uint32
-		if !bc.cacheConfig.TrieCleanNoPrefetch {
-			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
-				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
-
-					blockPrefetchExecuteTimer.Update(time.Since(start))
-					if atomic.LoadUint32(interrupt) == 1 {
-						blockPrefetchInterruptMeter.Mark(1)
-					}
-				}(time.Now(), followup, throwaway, &followupInterrupt)
-			}
-		}
-		// Process block using the parent state as reference point
-		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
-		}
-		// Update the metrics touched during block processing
-		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-		accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-
-		triehash := statedb.AccountHashes + statedb.StorageHashes // Save to not double count in validation
-		trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-		trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-		// Validate the state using the default validator
-		substart = time.Now()
-		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
-		}
-		proctime := time.Since(start)
-
-		// Update the metrics touched during block validation
-		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
-		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
-
-		// Write the block to the chain and get the status.
-		substart = time.Now()
-		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
+	// If we have a followup block, run that against the current state to pre-cache
+	// transactions and probabilistically some of the account/storage trie nodes.
+	var followupInterrupt uint32
+	// Process block using the parent state as reference point
+	substart := time.Now()
+	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	if err != nil {
+		bc.reportBlock(block, receipts, err)
 		atomic.StoreUint32(&followupInterrupt, 1)
-		if err != nil {
-			return it.index, err
-		}
-
-		// Update the metrics touched during block commit
-		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-		snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-
-		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
-		blockInsertTimer.UpdateSince(start)
-
-		switch status {
-		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"elapsed", common.PrettyDuration(time.Since(start)),
-				"root", block.Root())
-
-			lastCanon = block
-
-			// Only count canonical blocks for GC processing time
-			bc.gcproc += proctime
-
-		case SideStatTy:
-			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
-				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
-				"root", block.Root())
-
-		default:
-			// This in theory is impossible, but lets be nice to our future selves and leave
-			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "number", block.Number(), "hash", block.Hash(),
-				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
-				"root", block.Root())
-		}
-		stats.processed++
-		stats.usedGas += usedGas
-
-		dirty, _ := bc.stateCache.TrieDB().Size()
-		stats.report(chain, it.index, dirty)
+		return err
 	}
-	// Any blocks remaining here? The only ones we care about are the future ones
-	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
-		return 0, errFutureBlockUnsupported
-	}
-	stats.ignored += it.remaining()
+	// Update the metrics touched during block processing
+	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
+	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
+	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
+	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
+	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
+	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
 
-	return it.index, err
+	triehash := statedb.AccountHashes + statedb.StorageHashes // Save to not double count in validation
+	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
+	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
+
+	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
+
+	// Validate the state using the default validator
+	substart = time.Now()
+	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+		bc.reportBlock(block, receipts, err)
+		atomic.StoreUint32(&followupInterrupt, 1)
+		return err
+	}
+	proctime := time.Since(start)
+
+	// Update the metrics touched during block validation
+	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
+	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
+
+	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
+
+	// Write the block to the chain and get the status.
+	substart = time.Now()
+	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, true)
+	atomic.StoreUint32(&followupInterrupt, 1)
+	if err != nil {
+		return err
+	}
+
+	// Update the metrics touched during block commit
+	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
+	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
+	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+
+	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
+	blockInsertTimer.UpdateSince(start)
+
+	switch status {
+	case CanonStatTy:
+		log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
+			"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"root", block.Root())
+
+		// Only count canonical blocks for GC processing time
+		bc.gcproc += proctime
+
+	case SideStatTy:
+		log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
+			"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
+			"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
+			"root", block.Root())
+
+	default:
+		// This in theory is impossible, but lets be nice to our future selves and leave
+		// a log, instead of trying to track down blocks imports that don't emit logs.
+		log.Warn("Inserted block with unknown status", "number", block.Number(), "hash", block.Hash(),
+			"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
+			"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
+			"root", block.Root())
+	}
+	stats.processed++
+	stats.usedGas += usedGas
+
+	dirty, _ := bc.stateCache.TrieDB().Size()
+	stats.reportBlock(block, dirty)
+
+	return err
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the

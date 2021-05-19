@@ -208,8 +208,7 @@ func (b *Block) Verify() error {
 		return err
 	}
 
-	_, err := b.vm.chain.InsertChain([]*types.Block{b.ethBlock})
-	return err
+	return b.vm.chain.InsertBlock(b.ethBlock)
 }
 
 func (b *Block) VerifyWithoutWrites() error {
