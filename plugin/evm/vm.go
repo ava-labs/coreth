@@ -225,6 +225,14 @@ type VM struct {
 	secpFactory crypto.FactorySECP256K1R
 }
 
+func (vm *VM) Connected(id ids.ShortID) error {
+	panic("implement me")
+}
+
+func (vm *VM) Disconnected(id ids.ShortID) error {
+	panic("implement me")
+}
+
 // Codec implements the secp256k1fx interface
 func (vm *VM) Codec() codec.Manager { return vm.codec }
 
