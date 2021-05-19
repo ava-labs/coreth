@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 )
 
 var (
@@ -72,10 +71,6 @@ func (self *ETHChain) Stop() {
 
 func (self *ETHChain) GenerateBlock() (*types.Block, error) {
 	return self.backend.Miner().GenerateBlock()
-}
-
-func (self *ETHChain) SubscribeNewMinedBlockEvent() *event.TypeMuxSubscription {
-	return self.backend.Miner().SubscribeNewMinedBlockEvent()
 }
 
 func (self *ETHChain) BlockChain() *core.BlockChain {

@@ -76,7 +76,3 @@ func (miner *Miner) GenerateBlock() (*types.Block, error) {
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
-
-func (miner *Miner) SubscribeNewMinedBlockEvent() *event.TypeMuxSubscription {
-	return miner.worker.mux.Subscribe(core.NewMinedBlockEvent{})
-}

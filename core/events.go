@@ -38,9 +38,6 @@ type NewTxsEvent struct{ Txs []*types.Transaction }
 // TODO: remove unnecessary event
 type NewTxPoolHeadEvent struct{ Block *types.Block }
 
-// NewMinedBlockEvent is posted when a block has been imported.
-type NewMinedBlockEvent struct{ Block *types.Block }
-
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
 
