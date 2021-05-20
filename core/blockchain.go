@@ -1005,6 +1005,21 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	return nil
 }
 
+func (bc *BlockChain) Reject(block *types.Block) error {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	// Remove the block since its data is no longer needed
+	rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
+	// Dereference the statedb since it is no longer needed
+	// We should reject all of the children that have been inserted before doing anything
+	// else so this should work fine
+	triedb := bc.stateCache.TrieDB()
+	triedb.Dereference(block.Root())
+
+	return nil
+}
+
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
@@ -1021,16 +1036,10 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
-// WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
-
-	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
-}
-
 // writeBlockWithState writes the block and all associated state to the database,
-// but is expects the chain mutex to be held.
+// but it expects the chain mutex to be held.
+// writeBlockWithState expects to be the last verification step during InsertBlock
+// since it creates a reference that will only be cleaned up by Accept/Reject.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
@@ -1070,51 +1079,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			return NonStatTy, err
 		}
 	} else {
-		// Full but not archive node, do proper garbage collection
+		// Reference the node here, need to make sure that if we reference this node it doesn't
+		// create a memory leak if the block fails at a later step
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-		bc.triegc.Push(root, -int64(block.NumberU64()))
-
-		if current := block.NumberU64(); current > TriesInMemory {
-			// If we exceeded our memory allowance, flush matured singleton nodes to disk
-			var (
-				nodes, imgs = triedb.Size()
-				limit       = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
-			)
-			if nodes > limit || imgs > 4*1024*1024 {
-				triedb.Cap(limit - ethdb.IdealBatchSize)
-			}
-			// Find the next state trie we need to commit
-			chosen := current - TriesInMemory
-
-			// If we exceeded out time allowance, flush an entire trie to disk
-			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
-				// If the header is missing (canonical chain behind), we're reorging a low
-				// diff sidechain. Suspend committing until this operation is completed.
-				header := bc.GetHeaderByNumber(chosen)
-				if header == nil {
-					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
-				} else {
-					// If we're exceeding limits but haven't reached a large enough memory gap,
-					// warn the user that the system is becoming unstable.
-					if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
-					}
-					// Flush an entire trie and restart the counters
-					triedb.Commit(header.Root, true, nil)
-					lastWrite = chosen
-					bc.gcproc = 0
-				}
-			}
-			// Garbage collect anything below our required write retention
-			for !bc.triegc.Empty() {
-				root, number := bc.triegc.Pop()
-				if uint64(-number) > chosen {
-					bc.triegc.Push(root, number)
-					break
-				}
-				triedb.Dereference(root.(common.Hash))
-			}
-		}
 	}
 
 	// If a new block references the current block, we consider it canonical.
@@ -1280,7 +1247,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 	}
 
 	// Validate the state using the default validator
-	substart = time.Now()
 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 		bc.reportBlock(block, receipts, err)
 		return err
@@ -1288,7 +1254,9 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 	proctime := time.Since(start)
 
 	// Write the block to the chain and get the status.
-	substart = time.Now()
+	// writeBlockWithState creates a reference that will be cleaned up in Accept/Reject
+	// so we need to ensure an error cannot occur later in verification, since that would
+	// cause the referenced root to never be dereferenced.
 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, true)
 	if err != nil {
 		return err

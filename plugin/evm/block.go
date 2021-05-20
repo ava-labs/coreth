@@ -208,6 +208,8 @@ func (b *Block) Verify() error {
 		return err
 	}
 
+	// InsertBlock must be the last step in verification to prevent a memory leak in the management
+	// of tries that the chain maintains an active reference to.
 	return b.vm.chain.InsertBlock(b.ethBlock)
 }
 
