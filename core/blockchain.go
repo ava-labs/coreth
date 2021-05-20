@@ -44,43 +44,12 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
-)
-
-var (
-	headBlockGauge  = metrics.NewRegisteredGauge("chain/head/block", nil)
-	headHeaderGauge = metrics.NewRegisteredGauge("chain/head/header", nil)
-
-	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
-	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
-	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
-	accountCommitTimer = metrics.NewRegisteredTimer("chain/account/commits", nil)
-
-	storageReadTimer   = metrics.NewRegisteredTimer("chain/storage/reads", nil)
-	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
-	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
-	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
-
-	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
-
-	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
-
-	blockReorgMeter         = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
-	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
-	blockReorgDropMeter     = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
-	blockReorgInvalidatedTx = metrics.NewRegisteredMeter("chain/reorg/invalidTx", nil)
 )
 
 var (
@@ -120,6 +89,10 @@ const (
 	//  The following incompatible database changes were added:
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
+
+	// statsReportLimit is the time limit during import and export after which we
+	// always print out progress. This avoids the user wondering what's going on.
+	statsReportLimit = 8 * time.Second
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -370,7 +343,6 @@ func (bc *BlockChain) loadLastState(initGenesis bool) error {
 	}
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(currentBlock)
-	headBlockGauge.Update(int64(currentBlock.NumberU64()))
 
 	// Restore the last known head header
 	currentHeader := currentBlock.Header()
@@ -449,7 +421,6 @@ func (bc *BlockChain) loadGenesisState() error {
 	// Last update all in-memory chain markers
 	bc.genesisBlock = genesis
 	bc.currentBlock.Store(bc.genesisBlock)
-	headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	return nil
@@ -517,7 +488,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 		bc.hc.SetCurrentHeader(block.Header())
 	}
 	bc.currentBlock.Store(block)
-	headBlockGauge.Update(int64(block.NumberU64()))
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -1242,10 +1212,6 @@ func (bc *BlockChain) InsertBlock(block *types.Block) error {
 func (bc *BlockChain) insertBlock(block *types.Block) error {
 	senderCacher.recover(types.MakeSigner(bc.chainConfig, block.Number(), new(big.Int).SetUint64(block.Time())), block.Transactions())
 
-	var (
-		stats = insertStats{startTime: mclock.Now()}
-	)
-
 	err := bc.engine.VerifyHeader(bc, block.Header())
 	if err == nil {
 		err = bc.validator.ValidateBody(block)
@@ -1255,7 +1221,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 	// If the block is already known, no need to re-insert
 	case errors.Is(err, ErrKnownBlock):
 		log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
-		stats.ignored++
 		return nil
 	// Pruning of the EVM is disabled, so we should never encounter this case.
 	// Because side chain insertion can have complex side effects, we error when
@@ -1273,7 +1238,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 
 	// Some other error occurred, abort
 	case err != nil:
-		stats.ignored += 1
 		bc.reportBlock(block, nil, err)
 		return err
 	}
@@ -1308,59 +1272,27 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 
 	// If we have a followup block, run that against the current state to pre-cache
 	// transactions and probabilistically some of the account/storage trie nodes.
-	var followupInterrupt uint32
 	// Process block using the parent state as reference point
-	substart := time.Now()
 	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 	if err != nil {
 		bc.reportBlock(block, receipts, err)
-		atomic.StoreUint32(&followupInterrupt, 1)
 		return err
 	}
-	// Update the metrics touched during block processing
-	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-
-	triehash := statedb.AccountHashes + statedb.StorageHashes // Save to not double count in validation
-	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
 
 	// Validate the state using the default validator
 	substart = time.Now()
 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 		bc.reportBlock(block, receipts, err)
-		atomic.StoreUint32(&followupInterrupt, 1)
 		return err
 	}
 	proctime := time.Since(start)
 
-	// Update the metrics touched during block validation
-	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
-	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
-
 	// Write the block to the chain and get the status.
 	substart = time.Now()
 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, true)
-	atomic.StoreUint32(&followupInterrupt, 1)
 	if err != nil {
 		return err
 	}
-
-	// Update the metrics touched during block commit
-	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-
-	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
-	blockInsertTimer.UpdateSince(start)
 
 	switch status {
 	case CanonStatTy:
@@ -1368,16 +1300,13 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 			"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 			"elapsed", common.PrettyDuration(time.Since(start)),
 			"root", block.Root())
-
 		// Only count canonical blocks for GC processing time
 		bc.gcproc += proctime
-
 	case SideStatTy:
 		log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
 			"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 			"root", block.Root())
-
 	default:
 		// This in theory is impossible, but lets be nice to our future selves and leave
 		// a log, instead of trying to track down blocks imports that don't emit logs.
@@ -1386,11 +1315,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 			"root", block.Root())
 	}
-	stats.processed++
-	stats.usedGas += usedGas
-
-	dirty, _ := bc.stateCache.TrieDB().Size()
-	stats.reportBlock(block, dirty)
 
 	return err
 }
@@ -1522,9 +1446,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
-		blockReorgAddMeter.Mark(int64(len(newChain)))
-		blockReorgDropMeter.Mark(int64(len(oldChain)))
-		blockReorgMeter.Mark(1)
 	} else {
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
