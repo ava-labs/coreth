@@ -53,7 +53,8 @@ import (
 )
 
 var (
-	errFutureBlockUnsupported = errors.New("future block insertion not supported")
+	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
+	errCacheConfigNotSpecified = errors.New("must specify cache config")
 )
 
 const (
@@ -103,21 +104,12 @@ type CacheConfig struct {
 	TrieCleanRejournal time.Duration // Time interval to dump clean cache to disk periodically
 	TrieDirtyLimit     int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
 	TrieDirtyDisabled  bool          // Whether to disable trie write caching and GC altogether (archive node)
+	PeriodicTrieCommit uint32        // Commit trie every [PeriodicTrieCommit] accepted blocks when Dirty Trie is enabled.
 	TrieTimeLimit      time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit      int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages          bool          // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
-}
-
-// defaultCacheConfig are the default caching values if none are specified by the
-// user (also used during testing).
-var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
-	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
-	SnapshotWait:   true,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -188,7 +180,8 @@ type BlockChain struct {
 	badBlocks      *lru.Cache              // Bad block cache
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 
-	lastAccepted *types.Block // Prevents reorgs past this height
+	lastAccepted                 *types.Block // Prevents reorgs past this height
+	periodicAcceptedBlockCounter uint32
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -199,7 +192,7 @@ func NewBlockChain(
 	vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64, initGenesis bool,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
-		cacheConfig = defaultCacheConfig
+		return nil, errCacheConfigNotSpecified
 	}
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -837,45 +830,9 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
-	// Ensure the state of a recent block is also stored to disk before exiting.
-	// We're writing three different states to catch different restart scenarios:
-	//  - HEAD:     So we don't need to reprocess any blocks in the general case
-	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
-	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !bc.cacheConfig.TrieDirtyDisabled {
-		triedb := bc.stateCache.TrieDB()
-
-		// TODO when we commit accepted block states every so often instead of on every block
-		// we may want to commit the most recently accepted block, if not already done here.
-		// Commit blocks as necessary on shutdown
-		// recents := []*types.Block{bc.CurrentBlock()}
-		// if recents[0].Hash() != bc.lastAccepted.Hash() {
-		// 	recents = append(recents, bc.lastAccepted)
-		// }
-
-		// for _, block := range recents {
-		// 	log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-		// 	if err := triedb.Commit(recent.Root(), true, nil); err != nil {
-		// 		log.Error("Failed to commit recent state trie", "err", err)
-		// 	}
-		// }
-		// if snapBase != (common.Hash{}) {
-		// 	log.Info("Writing snapshot state to disk", "root", snapBase)
-		// 	if err := triedb.Commit(snapBase, true, nil); err != nil {
-		// 		log.Error("Failed to commit recent state trie", "err", err)
-		// 	}
-		// }
-
-		// TODO it seems that there's no reason to call Dereference here since this will
-		// simply clean up memory before shutting down and the memory is re-claimed by
-		// the OS.
-		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
-		}
-		if size, _ := triedb.Size(); size != 0 {
-			log.Error("Dangling trie nodes after full cleanup")
-		}
-	}
+	// TODO if we are writing the last accepted block periodically
+	// then we should write the last accepted block (if not already written)
+	// here to minimize re-processing on restart.
 	// Ensure all live cached entries be saved into disk, so that we can skip
 	// cache warmup when node restarts.
 	if bc.cacheConfig.TrieCleanJournal != "" {
