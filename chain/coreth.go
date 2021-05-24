@@ -172,6 +172,11 @@ func (self *ETHChain) Accept(block *types.Block) error {
 	return self.BlockChain().Accept(block)
 }
 
+// Reject tells the chain that [block] has been rejected.
+func (self *ETHChain) Reject(block *types.Block) error {
+	return self.BlockChain().Reject(block)
+}
+
 // LastAcceptedBlock returns the last block to be marked as accepted.
 func (self *ETHChain) LastAcceptedBlock() *types.Block {
 	return self.BlockChain().LastAcceptedBlock()

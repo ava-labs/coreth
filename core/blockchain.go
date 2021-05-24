@@ -830,10 +830,10 @@ func (bc *BlockChain) Stop() {
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
-	var snapBase common.Hash
+	// var snapBase common.Hash
 	if bc.snaps != nil {
 		var err error
-		if snapBase, err = bc.snaps.Journal(bc.CurrentBlock().Root()); err != nil {
+		if _, err = bc.snaps.Journal(bc.CurrentBlock().Root()); err != nil {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
@@ -845,22 +845,30 @@ func (bc *BlockChain) Stop() {
 	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
 
-		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
-			if number := bc.CurrentBlock().NumberU64(); number > offset {
-				recent := bc.GetBlockByNumber(number - offset)
+		// TODO when we commit accepted block states every so often instead of on every block
+		// we may want to commit the most recently accepted block, if not already done here.
+		// Commit blocks as necessary on shutdown
+		// recents := []*types.Block{bc.CurrentBlock()}
+		// if recents[0].Hash() != bc.lastAccepted.Hash() {
+		// 	recents = append(recents, bc.lastAccepted)
+		// }
 
-				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
-					log.Error("Failed to commit recent state trie", "err", err)
-				}
-			}
-		}
-		if snapBase != (common.Hash{}) {
-			log.Info("Writing snapshot state to disk", "root", snapBase)
-			if err := triedb.Commit(snapBase, true, nil); err != nil {
-				log.Error("Failed to commit recent state trie", "err", err)
-			}
-		}
+		// for _, block := range recents {
+		// 	log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+		// 	if err := triedb.Commit(recent.Root(), true, nil); err != nil {
+		// 		log.Error("Failed to commit recent state trie", "err", err)
+		// 	}
+		// }
+		// if snapBase != (common.Hash{}) {
+		// 	log.Info("Writing snapshot state to disk", "root", snapBase)
+		// 	if err := triedb.Commit(snapBase, true, nil); err != nil {
+		// 		log.Error("Failed to commit recent state trie", "err", err)
+		// 	}
+		// }
+
+		// TODO it seems that there's no reason to call Dereference here since this will
+		// simply clean up memory before shutting down and the memory is re-claimed by
+		// the OS.
 		for !bc.triegc.Empty() {
 			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
 		}
@@ -897,8 +905,6 @@ func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
 func (bc *BlockChain) TxLookupLimit() uint64 {
 	return bc.txLookupLimit
 }
-
-var lastWrite uint64
 
 // SetPreference attempts to update the head block to be the provided block and
 // emits a ChainHeadEvent if successful. This function will handle all reorg
@@ -1002,6 +1008,13 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		bc.txAcceptedFeed.Send(NewTxsEvent{block.Transactions()})
 	}
 
+	if !bc.cacheConfig.TrieDirtyDisabled {
+		triedb := bc.stateCache.TrieDB()
+		if err := triedb.Commit(block.Root(), false, nil); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1011,11 +1024,11 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 
 	// Remove the block since its data is no longer needed
 	rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
-	// Dereference the statedb since it is no longer needed
-	// We should reject all of the children that have been inserted before doing anything
-	// else so this should work fine
-	triedb := bc.stateCache.TrieDB()
-	triedb.Dereference(block.Root())
+	if !bc.cacheConfig.TrieDirtyDisabled {
+		// Dereference the statedb of the rejected block
+		triedb := bc.stateCache.TrieDB()
+		triedb.Dereference(block.Root())
+	}
 
 	return nil
 }
@@ -1693,4 +1706,30 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 // SubscribeAcceptedTransactionEvent registers a subscription of accepted transactions
 func (bc *BlockChain) SubscribeAcceptedTransactionEvent(ch chan<- NewTxsEvent) event.Subscription {
 	return bc.scope.Track(bc.txAcceptedFeed.Subscribe(ch))
+}
+
+func (bc *BlockChain) RemoveRejectedBlocks(start, end uint64) error {
+	batch := bc.db.NewBatch()
+
+	for i := start; i < end; i++ {
+		hashes := rawdb.ReadAllHashes(bc.db, i)
+		canonicalBlock := bc.GetBlockByNumber((i))
+		if canonicalBlock == nil {
+			return fmt.Errorf("failed to retrieve block by number at height %d", i)
+		}
+		canonicalHash := canonicalBlock.Hash()
+		for _, hash := range hashes {
+			if hash == canonicalHash {
+				continue
+			}
+			rawdb.DeleteBlock(batch, hash, i)
+		}
+
+		if err := batch.Write(); err != nil {
+			return fmt.Errorf("failed to write delete rejected block batch at height %d", i)
+		}
+		batch.Reset()
+	}
+
+	return nil
 }

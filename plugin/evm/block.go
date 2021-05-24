@@ -163,7 +163,7 @@ func (b *Block) Reject() error {
 		b.vm.mempool.RejectTx(tx.ID())
 	}
 
-	return nil
+	return b.vm.chain.Reject(b.ethBlock)
 }
 
 // SetStatus implements the InternalBlock interface allowing ChainState
