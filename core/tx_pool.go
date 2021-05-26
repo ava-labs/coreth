@@ -235,6 +235,7 @@ type TxPool struct {
 	gasPrice    *big.Int
 	txFeed      event.Feed
 	headFeed    event.Feed
+	reorgFeed   event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -428,6 +429,12 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscripti
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewHeadEvent(ch chan<- NewTxPoolHeadEvent) event.Subscription {
 	return pool.scope.Track(pool.headFeed.Subscribe(ch))
+}
+
+// SubscribeNewReorgEvent registers a subscription of NewReorgEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeNewReorgEvent(ch chan<- NewTxPoolReorgEvent) event.Subscription {
+	return pool.scope.Track(pool.reorgFeed.Subscribe(ch))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
@@ -1117,6 +1124,10 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
 	}
 	pool.mu.Unlock()
+
+	if reset != nil && reset.newHead != nil {
+		pool.reorgFeed.Send(NewTxPoolReorgEvent{reset.newHead})
+	}
 
 	// Notify subsystems for newly added transactions
 	for _, tx := range promoted {
