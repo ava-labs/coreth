@@ -99,17 +99,20 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit     int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieCleanJournal   string        // Disk journal for saving clean cache entries.
-	TrieCleanRejournal time.Duration // Time interval to dump clean cache to disk periodically
-	TrieDirtyLimit     int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled  bool          // Whether to disable trie write caching and GC altogether (archive node)
-	PeriodicTrieCommit uint32        // Commit trie every [PeriodicTrieCommit] accepted blocks when Dirty Trie is enabled.
-	TrieTimeLimit      time.Duration // Time limit after which to flush the current in-memory trie to disk
-	SnapshotLimit      int           // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages          bool          // Whether to store preimage of trie key to the disk
+	TrieCleanLimit    int  // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieDirtyLimit    int  // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled bool // Whether to disable trie write caching and GC altogether (archive node)
+	SnapshotLimit     int  // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages         bool // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+}
+
+var defaultCacheConfig = &CacheConfig{
+	TrieCleanLimit: 256,
+	TrieDirtyLimit: 256,
+	SnapshotLimit:  256,
+	SnapshotWait:   true,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -162,10 +165,11 @@ type BlockChain struct {
 	currentBlock atomic.Value // Current head of the block chain
 
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
+	stateManager  TrieWriter
+	bodyCache     *lru.Cache // Cache for the most recent block bodies
+	receiptsCache *lru.Cache // Cache for the most recent receipts per block
+	blockCache    *lru.Cache // Cache for the most recent entire blocks
+	txLookupCache *lru.Cache // Cache for the most recent transaction lookup data.
 
 	quit    chan struct{}  // blockchain quit channel
 	wg      sync.WaitGroup // chain processing wait group for shutting down
@@ -208,7 +212,6 @@ func NewBlockChain(
 		triegc:      prque.New(nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
-			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
 		quit:           make(chan struct{}),
@@ -241,15 +244,14 @@ func NewBlockChain(
 	if err := bc.loadLastState(initGenesis); err != nil {
 		return nil, err
 	}
+	// Create the state manager
+	bc.stateManager = NewTrieWriter(bc.stateCache, cacheConfig)
+
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
 	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
 		return nil, fmt.Errorf("head state missing %d:%s", head.Number(), head.Hash())
 	}
-	// The first thing the node will do is reconstruct the verification data for
-	// the head block (ethash cache or clique voting snapshot). Might as well do
-	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
 	// Load any existing snapshot, regenerating it if loading failed
 	if bc.cacheConfig.SnapshotLimit > 0 {
@@ -279,19 +281,6 @@ func NewBlockChain(
 
 		bc.wg.Add(1)
 		go bc.maintainTxIndex()
-	}
-	// If periodic cache journal is required, spin it up.
-	if bc.cacheConfig.TrieCleanRejournal > 0 {
-		if bc.cacheConfig.TrieCleanRejournal < time.Minute {
-			log.Warn("Sanitizing invalid trie cache journal time", "provided", bc.cacheConfig.TrieCleanRejournal, "updated", time.Minute)
-			bc.cacheConfig.TrieCleanRejournal = time.Minute
-		}
-		triedb := bc.stateCache.TrieDB()
-		bc.wg.Add(1)
-		go func() {
-			defer bc.wg.Done()
-			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
-		}()
 	}
 
 	return bc, nil
@@ -799,18 +788,6 @@ func (bc *BlockChain) ContractCode(hash common.Hash) ([]byte, error) {
 	return bc.stateCache.ContractCode(common.Hash{}, hash)
 }
 
-// ContractCodeWithPrefix retrieves a blob of data associated with a contract
-// hash either from ephemeral in-memory cache, or from persistent storage.
-//
-// If the code doesn't exist in the in-memory cache, check the storage with
-// new code scheme.
-func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
-	type codeReader interface {
-		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
-	}
-	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
-}
-
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
@@ -830,15 +807,10 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
-	// TODO if we are writing the last accepted block periodically
-	// then we should write the last accepted block (if not already written)
-	// here to minimize re-processing on restart.
-	// Ensure all live cached entries be saved into disk, so that we can skip
-	// cache warmup when node restarts.
-	if bc.cacheConfig.TrieCleanJournal != "" {
-		triedb := bc.stateCache.TrieDB()
-		triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
+	if err := bc.stateManager.Shutdown(); err != nil {
+		log.Error("Failed to Shutdown state manager", "err", err)
 	}
+
 	log.Info("Blockchain stopped")
 }
 
@@ -965,14 +937,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		bc.txAcceptedFeed.Send(NewTxsEvent{block.Transactions()})
 	}
 
-	if !bc.cacheConfig.TrieDirtyDisabled {
-		triedb := bc.stateCache.TrieDB()
-		if err := triedb.Commit(block.Root(), false, nil); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return bc.stateManager.AcceptTrie(block.Root())
 }
 
 func (bc *BlockChain) Reject(block *types.Block) error {
@@ -981,13 +946,7 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 
 	// Remove the block since its data is no longer needed
 	rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
-	if !bc.cacheConfig.TrieDirtyDisabled {
-		// Dereference the statedb of the rejected block
-		triedb := bc.stateCache.TrieDB()
-		triedb.Dereference(block.Root())
-	}
-
-	return nil
+	return bc.stateManager.RejectTrie(block.Root())
 }
 
 // writeKnownBlock updates the head block flag with a known block
@@ -1041,17 +1000,14 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return NonStatTy, err
 	}
-	triedb := bc.stateCache.TrieDB()
 
-	// If we're running an archive node, always flush
-	if bc.cacheConfig.TrieDirtyDisabled {
-		if err := triedb.Commit(root, false, nil); err != nil {
-			return NonStatTy, err
-		}
-	} else {
-		// Reference the node here, need to make sure that if we reference this node it doesn't
-		// create a memory leak if the block fails at a later step
-		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+	// Note: if InsertTrie must be the last step in verification that can return an error.
+	// This allows [stateManager] to assume that if it inserts a trie without returning an
+	// error then the block has passed verification and either AcceptTrie/RejectTrie will
+	// eventually be called on [root] unless a fatal error occurs. It does not assume that
+	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
+	if err := bc.stateManager.InsertTrie(root); err != nil {
+		return NonStatTy, err
 	}
 
 	// If a new block references the current block, we consider it canonical.

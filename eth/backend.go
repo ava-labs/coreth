@@ -186,13 +186,9 @@ func New(stack *node.Node, config *Config,
 			AllowUnfinalizedQueries: config.AllowUnfinalizedQueries,
 		}
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit: config.TrieCleanCache,
-			// Original code (requires disk):
-			// TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
-			TrieCleanRejournal: config.TrieCleanCacheRejournal,
-			TrieDirtyLimit:     config.TrieDirtyCache,
-			TrieDirtyDisabled:  config.NoPruning,
-			TrieTimeLimit:      config.TrieTimeout,
+			TrieCleanLimit:    config.TrieCleanCache,
+			TrieDirtyLimit:    config.TrieDirtyCache,
+			TrieDirtyDisabled: config.NoPruning,
 			// TODO: Enable snapshots once stable (when 0 they are disabled)
 			// SnapshotLimit: config.SnapshotCache,
 			Preimages: config.Preimages,

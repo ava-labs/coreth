@@ -36,7 +36,6 @@ import (
 	"reflect"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -86,7 +85,6 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	cacheConfig := &core.CacheConfig{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
-		TrieTimeLimit:  5 * time.Minute,
 		// FIXME
 		// SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
