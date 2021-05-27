@@ -76,7 +76,10 @@ func NewDefaultChain(t *testing.T) (*ETHChain, chan core.NewTxPoolHeadEvent, <-c
 		Alloc:      core.GenesisAlloc{fundedKey.Address: {Balance: initialBalance}},
 	}
 
-	chain := NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, true)
+	chain, err := NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := chain.Accept(chain.GetGenesisBlock()); err != nil {
 		t.Fatal(err)

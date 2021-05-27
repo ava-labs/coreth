@@ -38,20 +38,20 @@ type ETHChain struct {
 }
 
 // NewETHChain creates an Ethereum blockchain with the given configs.
-func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, initGenesis bool) *ETHChain {
+func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, lastAcceptedHash common.Hash) (*ETHChain, error) {
 	node, err := node.New(nodecfg)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	cb := new(dummy.ConsensusCallbacks)
 	mcb := new(miner.MinerCallbacks)
-	backend, err := eth.New(node, config, cb, mcb, chainDB, settings, initGenesis)
+	backend, err := eth.New(node, config, cb, mcb, chainDB, settings, lastAcceptedHash)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create new eth backend due to %s", err))
+		return nil, fmt.Errorf("failed to create backend: %w", err)
 	}
 	chain := &ETHChain{backend: backend, cb: cb, mcb: mcb}
 	backend.SetEtherbase(BlackholeAddr)
-	return chain
+	return chain, nil
 }
 
 func (self *ETHChain) Start() {

@@ -110,7 +110,7 @@ func New(stack *node.Node, config *Config,
 	mcb *miner.MinerCallbacks,
 	chainDb ethdb.Database,
 	settings Settings,
-	initGenesis bool,
+	lastAcceptedHash common.Hash,
 ) (*Ethereum, error) {
 	if chainDb == nil {
 		return nil, errors.New("chainDb cannot be nil")
@@ -195,7 +195,7 @@ func New(stack *node.Node, config *Config,
 		}
 	)
 	var err error
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, initGenesis)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, lastAcceptedHash)
 	if err != nil {
 		return nil, err
 	}

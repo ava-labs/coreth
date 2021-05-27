@@ -193,7 +193,7 @@ type BlockChain struct {
 // Processor.
 func NewBlockChain(
 	db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine,
-	vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64, initGenesis bool,
+	vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64, lastAcceptedHash common.Hash,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified
@@ -241,7 +241,7 @@ func NewBlockChain(
 	var nilBlock *types.Block
 	bc.currentBlock.Store(nilBlock)
 
-	if err := bc.loadLastState(initGenesis); err != nil {
+	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return nil, err
 	}
 	// Create the state manager
@@ -307,9 +307,9 @@ func (bc *BlockChain) empty() bool {
 
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
-func (bc *BlockChain) loadLastState(initGenesis bool) error {
+func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
-	if initGenesis {
+	if lastAcceptedHash == (common.Hash{}) {
 		return bc.loadGenesisState()
 	}
 
@@ -340,10 +340,22 @@ func (bc *BlockChain) loadLastState(initGenesis bool) error {
 
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(currentHeader.Time), 0)))
 	log.Info("Loaded most recent local full block", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "td", blockTd, "age", common.PrettyAge(time.Unix(int64(currentBlock.Time()), 0)))
-	if pivot := rawdb.ReadLastPivotNumber(bc.db); pivot != nil {
-		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
+
+	// If the current block is also the last accepted block, set [lastAccepted]
+	// and return early
+	if currentBlock.Hash() == lastAcceptedHash {
+		bc.lastAccepted = currentBlock
+		return nil
 	}
-	return nil
+
+	// Otherwise, set the last accepted block and perform a re-org.
+	bc.lastAccepted = bc.GetBlockByHash(lastAcceptedHash)
+	if bc.lastAccepted == nil {
+		return fmt.Errorf("could not load last accepted block")
+	}
+
+	// This ensures that the head block is updated to the last accepted block on startup
+	return bc.writeKnownBlock(bc.lastAccepted)
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -391,17 +403,16 @@ func (bc *BlockChain) StateCache() state.Database {
 
 func (bc *BlockChain) loadGenesisState() error {
 	// Prepare the genesis block and reinitialise the chain
-	genesis := bc.genesisBlock
 	batch := bc.db.NewBatch()
-	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
-	rawdb.WriteBlock(batch, genesis)
+	rawdb.WriteTd(batch, bc.genesisBlock.Hash(), bc.genesisBlock.NumberU64(), bc.genesisBlock.Difficulty())
+	rawdb.WriteBlock(batch, bc.genesisBlock)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
-	bc.writeHeadBlock(genesis)
+	bc.writeHeadBlock(bc.genesisBlock)
 
 	// Last update all in-memory chain markers
-	bc.genesisBlock = genesis
+	bc.lastAccepted = bc.genesisBlock
 	bc.currentBlock.Store(bc.genesisBlock)
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())

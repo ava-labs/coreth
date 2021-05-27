@@ -95,7 +95,10 @@ func TestMulticoin(t *testing.T) {
 	}
 	code := common.Hex2Bytes(contract)
 
-	chain := NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, true)
+	chain, err := NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := chain.Accept(chain.GetGenesisBlock()); err != nil {
 		t.Fatal(err)

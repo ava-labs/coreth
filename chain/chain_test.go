@@ -45,12 +45,16 @@ func newTestChain(name string, config *eth.Config,
 	inBlockCh <-chan []byte, outBlockCh chan<- []byte,
 	inAckCh <-chan struct{}, outAckCh chan<- struct{},
 	t *testing.T) *testChain {
+	chain, err := NewETHChain(config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	tc := &testChain{
 		t:          t,
 		hasBlock:   make(map[common.Hash]struct{}),
 		blocks:     make([]common.Hash, 0),
 		blkCount:   0,
-		chain:      NewETHChain(config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, true),
+		chain:      chain,
 		outBlockCh: outBlockCh,
 		inAckCh:    inAckCh,
 	}
