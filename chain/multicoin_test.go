@@ -100,10 +100,6 @@ func TestMulticoin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := chain.Accept(chain.GetGenesisBlock()); err != nil {
-		t.Fatal(err)
-	}
-
 	newTxPoolHeadChan := make(chan core.NewTxPoolHeadEvent, 1)
 	log.Info(chain.GetGenesisBlock().Hash().Hex())
 
