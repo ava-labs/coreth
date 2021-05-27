@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/rpc"
@@ -40,12 +39,6 @@ type ETHChain struct {
 
 // NewETHChain creates an Ethereum blockchain with the given configs.
 func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, initGenesis bool) *ETHChain {
-	if config == nil {
-		config = &ethconfig.DefaultConfig
-	}
-	if nodecfg == nil {
-		nodecfg = &node.Config{}
-	}
 	node, err := node.New(nodecfg)
 	if err != nil {
 		panic(err)
@@ -180,6 +173,12 @@ func (self *ETHChain) Reject(block *types.Block) error {
 // LastAcceptedBlock returns the last block to be marked as accepted.
 func (self *ETHChain) LastAcceptedBlock() *types.Block {
 	return self.BlockChain().LastAcceptedBlock()
+}
+
+// RemoveRejectedBlocks removes the rejected blocks between heights
+// [start] and [end].
+func (self *ETHChain) RemoveRejectedBlocks(start, end uint64) error {
+	return self.BlockChain().RemoveRejectedBlocks(start, end)
 }
 
 func (self *ETHChain) GetReceiptsByHash(hash common.Hash) types.Receipts {

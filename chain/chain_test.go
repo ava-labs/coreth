@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -49,7 +50,7 @@ func newTestChain(name string, config *eth.Config,
 		hasBlock:   make(map[common.Hash]struct{}),
 		blocks:     make([]common.Hash, 0),
 		blkCount:   0,
-		chain:      NewETHChain(config, nil, rawdb.NewMemoryDatabase(), eth.DefaultSettings, true),
+		chain:      NewETHChain(config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, true),
 		outBlockCh: outBlockCh,
 		inAckCh:    inAckCh,
 	}
