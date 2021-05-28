@@ -105,11 +105,17 @@ func TestBlockChainRestart(t *testing.T) {
 	}
 	defer blockchain.Stop()
 
+	// Insert three blocks into the chain and accept only the first.
 	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
 	blockchain.Stop()
 
+	// Re-create blockchain with the same database to ensure that it can recover
+	// from having a head block past the last accepted block.
 	blockchain, err = NewBlockChain(
 		chainDB,
 		&CacheConfig{

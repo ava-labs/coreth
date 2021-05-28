@@ -27,8 +27,11 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type TrieWriter interface {
@@ -67,8 +70,6 @@ func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
 type acceptedBlockTrieWriter struct {
 	state.Database
-	acceptedBlockCount          uint32
-	periodicAcceptedBlockCommit uint32
 }
 
 func (ap *acceptedBlockTrieWriter) InsertTrie(root common.Hash) error {
@@ -90,6 +91,65 @@ func (ap *acceptedBlockTrieWriter) RejectTrie(root common.Hash) error {
 
 func (ap *acceptedBlockTrieWriter) Shutdown() error { return nil }
 
-// TODO implement capability to undo a database commit by recursively deleting
-// nodes from a root node. This will make more nuanced pruning strategies more
-// performant.
+type cappedMemoryTrieWriter struct {
+	state.Database
+	memoryCap                         common.StorageSize
+	imageCap                          common.StorageSize
+	lastAcceptedRoot                  common.Hash
+	blocksAccepted, maxBlocksAccepted uint32
+}
+
+func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
+	triedb := cm.Database.TrieDB()
+	triedb.Reference(root, common.Hash{})
+	nodes, imgs := triedb.Size()
+
+	if nodes > cm.memoryCap || imgs > cm.imageCap {
+		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
+	}
+
+	return nil
+}
+
+func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
+	triedb := cm.Database.TrieDB()
+
+	cm.blocksAccepted++
+	cm.lastAcceptedRoot = root
+	// If we haven't committed an accepted block root within the desired
+	// interval make sure to commit this root.
+	if cm.blocksAccepted > cm.maxBlocksAccepted {
+		if err := triedb.Commit(root, false, nil); err != nil {
+			return fmt.Errorf("failed to commit trie root %s: %w", root.Hex(), err)
+		}
+		cm.blocksAccepted = 0
+	}
+
+	// Cap the memory consumption by the dirty cache if it is exceeding
+	// desired limit.
+	nodes, imgs := triedb.Size()
+	if nodes > cm.memoryCap || imgs > cm.imageCap {
+		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
+	}
+
+	return nil
+}
+
+func (cm *cappedMemoryTrieWriter) RejectTrie(root common.Hash) error {
+	triedb := cm.Database.TrieDB()
+	triedb.Dereference(root)
+	return nil
+}
+
+func (cm *cappedMemoryTrieWriter) Shutdown() error {
+	// If [lastAcceptedRoot] is empty, no need to do any cleanup on
+	// shutdown.
+	if cm.lastAcceptedRoot == (common.Hash{}) {
+		return nil
+	}
+
+	// Attempt to commit [lastAcceptedRoot] on shutdown to mitigate
+	// the amount of re-processing that may be required on restart.
+	triedb := cm.Database.TrieDB()
+	return triedb.Commit(cm.lastAcceptedRoot, false, nil)
+}
