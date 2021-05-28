@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"runtime"
 	"time"
 
 	"github.com/ava-labs/coreth/consensus"
@@ -136,59 +135,6 @@ func (self *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header 
 	}
 	// Sanity checks passed, do a proper verification
 	return self.verifyHeader(chain, header, parent, false)
-}
-
-func (self *DummyEngine) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
-	// Spawn as many workers as allowed threads
-	workers := runtime.GOMAXPROCS(0)
-	if len(headers) < workers {
-		workers = len(headers)
-	}
-
-	// Create a task channel and spawn the verifiers
-	var (
-		inputs = make(chan int)
-		done   = make(chan int, workers)
-		errors = make([]error, len(headers))
-		abort  = make(chan struct{})
-	)
-	for i := 0; i < workers; i++ {
-		go func() {
-			for index := range inputs {
-				errors[index] = self.verifyHeaderWorker(chain, headers, index)
-				done <- index
-			}
-		}()
-	}
-
-	errorsOut := make(chan error, len(headers))
-	go func() {
-		defer close(inputs)
-		var (
-			in, out = 0, 0
-			checked = make([]bool, len(headers))
-			inputs  = inputs
-		)
-		for {
-			select {
-			case inputs <- in:
-				if in++; in == len(headers) {
-					// Reached end of headers. Stop sending to workers.
-					inputs = nil
-				}
-			case index := <-done:
-				for checked[index] = true; checked[out]; out++ {
-					errorsOut <- errors[out]
-					if out == len(headers)-1 {
-						return
-					}
-				}
-			case <-abort:
-				return
-			}
-		}
-	}()
-	return abort, errorsOut
 }
 
 func (self *DummyEngine) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {

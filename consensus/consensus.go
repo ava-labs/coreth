@@ -77,12 +77,6 @@ type Engine interface {
 	// via the VerifySeal method.
 	VerifyHeader(chain ChainHeaderReader, header *types.Header) error
 
-	// VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
-	// concurrently. The method returns a quit channel to abort the operations and
-	// a results channel to retrieve the async verifications (the order is that of
-	// the input slice).
-	VerifyHeaders(chain ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error)
-
 	// VerifyUncles verifies that the given block's uncles conform to the consensus
 	// rules of a given engine.
 	VerifyUncles(chain ChainReader, block *types.Block) error
@@ -129,12 +123,4 @@ type Engine interface {
 	Close() error
 
 	ExtraStateChange(block *types.Block, statedb *state.StateDB) error
-}
-
-// PoW is a consensus engine based on proof-of-work.
-type PoW interface {
-	Engine
-
-	// Hashrate returns the current mining hashrate of a PoW consensus engine.
-	Hashrate() float64
 }
