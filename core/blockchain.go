@@ -184,8 +184,7 @@ type BlockChain struct {
 	badBlocks      *lru.Cache              // Bad block cache
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 
-	lastAccepted                 *types.Block // Prevents reorgs past this height
-	periodicAcceptedBlockCounter uint32
+	lastAccepted *types.Block // Prevents reorgs past this height
 }
 
 // NewBlockChain returns a fully initialised block chain using information
