@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
-	github.com/ava-labs/avalanchego v1.4.2-0.20210506001617-3ccf9ef37a01
+	github.com/ava-labs/avalanchego v1.4.7-0.20210528162441-bffd13a7a2bb
 	github.com/btcsuite/btcd v0.21.0-beta // indirect
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
