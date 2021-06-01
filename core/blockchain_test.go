@@ -91,3 +91,44 @@ func TestPruningBlockChain(t *testing.T) {
 		})
 	}
 }
+
+type wrappedStateManager struct {
+	TrieWriter
+}
+
+func (w *wrappedStateManager) Shutdown() error { return nil }
+
+func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
+	create := func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error) {
+		// Import the chain. This runs all block validation rules.
+		blockchain, err := NewBlockChain(
+			db,
+			&CacheConfig{
+				TrieCleanLimit:    256,
+				TrieDirtyLimit:    256,
+				TrieDirtyDisabled: false, // Enable pruning
+				SnapshotLimit:     256,
+				SnapshotWait:      true,
+			},
+			chainConfig,
+			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
+			vm.Config{},
+			nil,
+			nil,
+			lastAcceptedHash,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Overwrite state manager, so that Shutdown is not called.
+		// This tests to ensure that the state manager handles an ungraceful shutdown correctly.
+		blockchain.stateManager = &wrappedStateManager{TrieWriter: blockchain.stateManager}
+		return blockchain, err
+	}
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, create)
+		})
+	}
+}
