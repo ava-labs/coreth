@@ -339,13 +339,6 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(currentHeader.Time), 0)))
 	log.Info("Loaded most recent local full block", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "td", blockTd, "age", common.PrettyAge(time.Unix(int64(currentBlock.Time()), 0)))
 
-	// If the current block is also the last accepted block, set [lastAccepted]
-	// and return early
-	if currentBlock.Hash() == lastAcceptedHash {
-		bc.lastAccepted = currentBlock
-		return nil
-	}
-
 	// Otherwise, set the last accepted block and perform a re-org.
 	bc.lastAccepted = bc.GetBlockByHash(lastAcceptedHash)
 	if bc.lastAccepted == nil {

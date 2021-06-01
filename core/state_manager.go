@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	maxTrieInterval uint64 = 1024
+	maxTrieInterval uint64 = 128
 )
 
 type TrieWriter interface {
