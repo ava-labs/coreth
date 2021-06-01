@@ -27,113 +27,67 @@
 package core
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func TestBlockChainRestart(t *testing.T) {
-	var (
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		key3, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
-		chainDB = rawdb.NewMemoryDatabase()
-	)
-
-	// Ensure that key1 has some funds in the genesis block.
-	gspec := &Genesis{
-		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+func TestArchiveBlockChain(t *testing.T) {
+	create := func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error) {
+		// Import the chain. This runs all block validation rules.
+		blockchain, err := NewBlockChain(
+			db,
+			&CacheConfig{
+				TrieCleanLimit:    256,
+				TrieDirtyLimit:    256,
+				TrieDirtyDisabled: true, // Archive mode
+				SnapshotLimit:     256,
+				SnapshotWait:      true,
+			},
+			chainConfig,
+			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
+			vm.Config{},
+			nil,
+			nil,
+			lastAcceptedHash,
+		)
+		return blockchain, err
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
-
-	// This call generates a chain of 3 blocks. The function runs for
-	// each block and adds different features to gen based on the
-	// block index.
-	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of
-	chain, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, 30, func(i int, gen *BlockGen) {
-		switch i {
-		case 0:
-			// In block 1, addr1 sends addr2 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
-			gen.AddTx(tx)
-		case 1:
-			// In block 2, addr1 sends some more ether to addr2.
-			// addr2 passes it on to addr3.
-			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil), signer, key1)
-			gen.AddTx(tx1)
-		case 2:
-			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil), signer, key2)
-			gen.AddTx(tx2)
-		}
-	})
-
-	// Import the chain. This runs all block validation rules.
-	blockchain, err := NewBlockChain(
-		chainDB,
-		&CacheConfig{
-			TrieCleanLimit:    256,
-			TrieDirtyLimit:    256,
-			TrieDirtyDisabled: false, // Disable archival mode
-			SnapshotLimit:     256,
-			SnapshotWait:      true,
-		},
-		gspec.Config,
-		dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
-		vm.Config{},
-		nil,
-		nil,
-		common.Hash{},
-	)
-	if err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, create)
+		})
 	}
-	defer blockchain.Stop()
+}
 
-	// Insert three blocks into the chain and accept only the first.
-	if _, err := blockchain.InsertChain(chain); err != nil {
-		t.Fatal(err)
+func TestPruningBlockChain(t *testing.T) {
+	create := func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error) {
+		// Import the chain. This runs all block validation rules.
+		blockchain, err := NewBlockChain(
+			db,
+			&CacheConfig{
+				TrieCleanLimit:    256,
+				TrieDirtyLimit:    256,
+				TrieDirtyDisabled: false, // Enable pruning
+				SnapshotLimit:     256,
+				SnapshotWait:      true,
+			},
+			chainConfig,
+			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
+			vm.Config{},
+			nil,
+			nil,
+			lastAcceptedHash,
+		)
+		return blockchain, err
 	}
-	if err := blockchain.Accept(chain[0]); err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, create)
+		})
 	}
-	blockchain.Stop()
-
-	// Re-create blockchain with the same database to ensure that it can recover
-	// from having a head block past the last accepted block.
-	blockchain, err = NewBlockChain(
-		chainDB,
-		&CacheConfig{
-			TrieCleanLimit:    256,
-			TrieDirtyLimit:    256,
-			TrieDirtyDisabled: false, // Disable archival mode
-			SnapshotLimit:     256,
-			SnapshotWait:      true,
-		},
-		gspec.Config,
-		dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
-		vm.Config{},
-		nil,
-		nil,
-		genesis.Hash(),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer blockchain.Stop()
 }

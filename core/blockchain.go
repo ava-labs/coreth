@@ -201,7 +201,6 @@ func NewBlockChain(
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
-	// futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
 
 	bc := &BlockChain{
@@ -354,7 +353,13 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	}
 
 	// This ensures that the head block is updated to the last accepted block on startup
-	return bc.writeKnownBlock(bc.lastAccepted)
+	if err := bc.writeKnownBlock(bc.lastAccepted); err != nil {
+		return fmt.Errorf("failed to write known block while loading last state: %w", err)
+	}
+	// reprocessState as necessary to ensure that the last accepted state is
+	// available. The state may not be available if it was not committed due
+	// to an unclean shutdown.
+	return bc.reprocessState(bc.lastAccepted, maxTrieInterval, true)
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -1652,5 +1657,88 @@ func (bc *BlockChain) RemoveRejectedBlocks(start, end uint64) error {
 		batch.Reset()
 	}
 
+	return nil
+}
+
+func (bc *BlockChain) reprocessState(block *types.Block, reexec uint64, report bool) error {
+	var (
+		current = block
+		origin  = block.NumberU64()
+	)
+	// If the state is already available, skip re-processing
+	statedb, err := state.New(current.Root(), bc.stateCache, bc.snaps)
+	if err == nil {
+		return nil
+	}
+	// Check how far back we need to re-execute, capped at [reexec]
+	for i := 0; i < int(reexec); i++ {
+		if current.NumberU64() == 0 {
+			return errors.New("genesis state is missing")
+		}
+		parent := bc.GetBlock(current.ParentHash(), current.NumberU64()-1)
+		if parent == nil {
+			return fmt.Errorf("missing block %s:%d", current.ParentHash(), current.NumberU64()-1)
+		}
+		current = parent
+
+		statedb, err = state.New(current.Root(), bc.stateCache, bc.snaps)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		switch err.(type) {
+		case *trie.MissingNodeError:
+			return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
+		default:
+			return err
+		}
+	}
+
+	// State was available at historical point, regenerate
+	var (
+		start        = time.Now()
+		logged       time.Time
+		previousRoot common.Hash
+		triedb       = bc.stateCache.TrieDB()
+	)
+	for current.NumberU64() < origin {
+		// Print progress logs if long enough time elapsed
+		if time.Since(logged) > 8*time.Second && report {
+			log.Info("Regenerating historical state", "block", current.NumberU64()+1, "target", origin, "remaining", origin-current.NumberU64()-1, "elapsed", time.Since(start))
+			logged = time.Now()
+		}
+		// Retrieve the next block to regenerate and process it
+		next := current.NumberU64() + 1
+		if current = bc.GetBlockByNumber(next); current == nil {
+			return fmt.Errorf("failed to retrieve block %d while re-generating state", next)
+		}
+		_, _, _, err := bc.processor.Process(current, statedb, vm.Config{})
+		if err != nil {
+			return fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
+		}
+		// Finalize the state so any modifications are written to the trie
+		root, err := statedb.Commit(bc.chainConfig.IsEIP158(current.Number()))
+		if err != nil {
+			return err
+		}
+		statedb, err = state.New(root, bc.stateCache, bc.snaps)
+		if err != nil {
+			return fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
+		}
+
+		triedb.Reference(root, common.Hash{})
+		if previousRoot != (common.Hash{}) {
+			triedb.Dereference(previousRoot)
+		}
+		previousRoot = root
+	}
+	if report {
+		nodes, imgs := triedb.Size()
+		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
+	}
+	if previousRoot != (common.Hash{}) {
+		return triedb.Commit(previousRoot, report, nil)
+	}
 	return nil
 }

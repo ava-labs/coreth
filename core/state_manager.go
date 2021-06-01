@@ -34,6 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+const (
+	maxTrieInterval uint64 = 1024
+)
+
 type TrieWriter interface {
 	InsertTrie(root common.Hash) error // Insert reference to trie [root]
 	AcceptTrie(root common.Hash) error // Mark [root] as part of an accepted block
@@ -47,8 +51,11 @@ func NewTrieWriter(db state.Database, config *CacheConfig) TrieWriter {
 			Database: db,
 		}
 	} else {
-		return &acceptedBlockTrieWriter{
-			Database: db,
+		return &cappedMemoryTrieWriter{
+			Database:          db,
+			memoryCap:         common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
+			imageCap:          4 * 1024 * 1024,
+			maxBlocksAccepted: maxTrieInterval,
 		}
 	}
 }
@@ -68,35 +75,12 @@ func (np *noPruningTrieWriter) RejectTrie(root common.Hash) error { return nil }
 
 func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
-type acceptedBlockTrieWriter struct {
-	state.Database
-}
-
-func (ap *acceptedBlockTrieWriter) InsertTrie(root common.Hash) error {
-	triedb := ap.Database.TrieDB()
-	triedb.Reference(root, common.Hash{})
-	return nil
-}
-
-func (ap *acceptedBlockTrieWriter) AcceptTrie(root common.Hash) error {
-	triedb := ap.Database.TrieDB()
-	return triedb.Commit(root, false, nil)
-}
-
-func (ap *acceptedBlockTrieWriter) RejectTrie(root common.Hash) error {
-	triedb := ap.Database.TrieDB()
-	triedb.Dereference(root)
-	return nil
-}
-
-func (ap *acceptedBlockTrieWriter) Shutdown() error { return nil }
-
 type cappedMemoryTrieWriter struct {
 	state.Database
 	memoryCap                         common.StorageSize
 	imageCap                          common.StorageSize
 	lastAcceptedRoot                  common.Hash
-	blocksAccepted, maxBlocksAccepted uint32
+	blocksAccepted, maxBlocksAccepted uint64
 }
 
 func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
@@ -148,8 +132,8 @@ func (cm *cappedMemoryTrieWriter) Shutdown() error {
 		return nil
 	}
 
-	// Attempt to commit [lastAcceptedRoot] on shutdown to mitigate
-	// the amount of re-processing that may be required on restart.
+	// Attempt to commit [lastAcceptedRoot] on shutdown to avoid
+	// re-processing the state on the next startup.
 	triedb := cm.Database.TrieDB()
 	return triedb.Commit(cm.lastAcceptedRoot, false, nil)
 }
