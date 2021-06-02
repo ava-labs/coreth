@@ -904,9 +904,8 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
-	// If the lastAccepted block is non-nil (nil during initialization), the
-	// block we are accepting must have a parent hash equal to it.
-	if bc.lastAccepted != nil && bc.lastAccepted.Hash() != block.ParentHash() {
+	// The parent of [block] must be the last accepted block.
+	if bc.lastAccepted.Hash() != block.ParentHash() {
 		return fmt.Errorf(
 			"expected accepted parent block hash %s but got %s",
 			bc.lastAccepted.Hash().Hex(),
@@ -1225,12 +1224,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
 func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
-	// We must have populated lastAccepted before attempting a reorg
-	// to ensure we don't orphan accepted blocks.
-	if bc.lastAccepted == nil {
-		return errors.New("cannot perform reorg if lastAccepted is nil")
-	}
-
 	var (
 		newChain    types.Blocks
 		oldChain    types.Blocks
