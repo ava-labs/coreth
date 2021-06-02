@@ -30,7 +30,7 @@ type Config struct {
 
 	// Continuous Profiler
 	ContinuousProfilerDir       string        `json:"continuous-profiler-dir"`       // If set to non-empty string creates a continuous profiler
-	ContinuousProfilerFrequency time.Duration `json:"continuous-profiler-duration"`  // Frequency to run continuous profiler if enabled
+	ContinuousProfilerFrequency time.Duration `json:"continuous-profiler-frequency"` // Frequency to run continuous profiler if enabled
 	ContinuousProfilerMaxFiles  int           `json:"continuous-profiler-max-files"` // Maximum number of files to maintain
 
 	// Coreth API Gas/Price Caps
