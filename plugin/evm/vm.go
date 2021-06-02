@@ -496,7 +496,7 @@ func (vm *VM) Initialize(
 	vm.codec = Codec
 
 	vm.shutdownWg.Add(1)
-	go vm.ctx.Log.RecoverAndPanic(vm.initContinuousProfiler)
+	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
@@ -1102,7 +1102,7 @@ func (vm *VM) getBlockValidator(rules params.Rules) BlockValidator {
 	}
 }
 
-func (vm *VM) initContinuousProfiler() {
+func (vm *VM) startContinuousProfiler() {
 	defer vm.shutdownWg.Done()
 
 	// If the profiler directory is empty, return immediately
