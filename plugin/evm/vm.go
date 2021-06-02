@@ -673,7 +673,7 @@ func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get primary alias for chain due to %w", err)
 		}
-		errs.Add(handler.RegisterName("admin", NewPerformanceService(fmt.Sprintf("coreth_%s_", primaryAlias))))
+		errs.Add(handler.RegisterName("performance", NewPerformanceService(fmt.Sprintf("coreth_performance_%s", primaryAlias))))
 		enabledAPIs = append(enabledAPIs, "coreth-admin")
 	}
 	if vm.config.NetAPIEnabled {
