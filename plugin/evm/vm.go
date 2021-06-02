@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -223,6 +225,9 @@ type VM struct {
 
 	fx          secp256k1fx.Fx
 	secpFactory crypto.FactorySECP256K1R
+
+	// Continuous Profiler
+	profiler profiler.ContinuousProfiler
 }
 
 func (vm *VM) Connected(id ids.ShortID) error {
@@ -489,6 +494,9 @@ func (vm *VM) Initialize(
 	vm.shutdownWg.Add(1)
 	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
 	vm.codec = Codec
+
+	vm.shutdownWg.Add(1)
+	go vm.ctx.Log.RecoverAndPanic(vm.initContinuousProfiler)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
@@ -1092,6 +1100,31 @@ func (vm *VM) getBlockValidator(rules params.Rules) BlockValidator {
 	default:
 		return phase0BlockValidator
 	}
+}
+
+func (vm *VM) initContinuousProfiler() {
+	defer vm.shutdownWg.Done()
+
+	// If the profiler directory is empty, return immediately
+	// without creating or starting a continuous profiler.
+	if vm.config.ContinuousProfilerDir == "" {
+		return
+	}
+	vm.profiler = profiler.NewContinuous(
+		filepath.Join(vm.config.ContinuousProfilerDir),
+		vm.config.ContinuousProfilerFrequency,
+		vm.config.ContinuousProfilerMaxFiles,
+	)
+	defer vm.profiler.Shutdown()
+
+	go func() {
+		err := vm.profiler.Dispatch()
+		if err != nil {
+			log.Error("continuous profiler failed", "err", err)
+		}
+	}()
+	// Wait for shutdownChan to be closed
+	<-vm.shutdownChan
 }
 
 // ParseLocalAddress takes in an address for this chain and produces the ID
