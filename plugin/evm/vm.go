@@ -495,7 +495,6 @@ func (vm *VM) Initialize(
 	go vm.ctx.Log.RecoverAndPanic(vm.awaitSubmittedTxs)
 	vm.codec = Codec
 
-	vm.shutdownWg.Add(1)
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
@@ -1103,8 +1102,6 @@ func (vm *VM) getBlockValidator(rules params.Rules) BlockValidator {
 }
 
 func (vm *VM) startContinuousProfiler() {
-	defer vm.shutdownWg.Done()
-
 	// If the profiler directory is empty, return immediately
 	// without creating or starting a continuous profiler.
 	if vm.config.ContinuousProfilerDir == "" {
@@ -1117,7 +1114,10 @@ func (vm *VM) startContinuousProfiler() {
 	)
 	defer vm.profiler.Shutdown()
 
+	vm.shutdownWg.Add(1)
 	go func() {
+		defer vm.shutdownWg.Done()
+		log.Info("Dispatching continuous profiler", "dir", vm.config.ContinuousProfilerDir, "freq", vm.config.ContinuousProfilerFrequency, "maxFiles", vm.config.ContinuousProfilerMaxFiles)
 		err := vm.profiler.Dispatch()
 		if err != nil {
 			log.Error("continuous profiler failed", "err", err)
