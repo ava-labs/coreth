@@ -132,11 +132,10 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 	genesis := gspec.MustCommit(genDB)
 	_ = gspec.MustCommit(chainDB)
 
-	// This call generates a chain of 3 blocks. The function runs for
-	// each block and adds different features to gen based on the
-	// block index.
+	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of
+	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
+	// to the BlockChain's database while generating blocks.
 	chain, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, 3, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -148,7 +147,7 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 	}
 	defer blockchain.Stop()
 
-	// Insert three blocks into the chain and accept only the first.
+	// Insert three blocks into the chain and accept only the first block.
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatal(err)
 	}
@@ -181,16 +180,17 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 
 	numBlocks := 129
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of
+	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
+	// to the BlockChain's database while generating blocks.
 	chain1, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, numBlocks, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
-	// Generate the forked chain to be longer than the original to check for a regression
-	// where a longer chain might trigger a re-org.
+	// Generate the forked chain to be longer than the original chain to check for a regression where
+	// a longer chain can trigger a reorg.
 	chain2, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, numBlocks+1, func(i int, gen *BlockGen) {
-		// Generate a transaction with a different amount to create a chain of blocks different from [chain1]
+		// Generate a transaction with a different amount to ensure [chain2] is different than [chain1].
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(5000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -201,7 +201,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 	}
 	defer blockchain.Stop()
 
-	// Insert three blocks into the chain and accept only the first.
+	// Insert both chains.
 	if _, err := blockchain.InsertChain(chain1); err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,8 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 
 	numBlocks := 3
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of
+	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
+	// to the BlockChain's database while generating blocks.
 	chain1, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, numBlocks, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
@@ -350,7 +351,8 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 
 	numBlocks := 3
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of
+	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
+	// to the BlockChain's database while generating blocks.
 	chain, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, numBlocks, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
