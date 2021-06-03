@@ -179,13 +179,6 @@ type Block struct {
 	td *big.Int
 }
 
-// DeprecatedTd is an old relic for extracting the TD of a block. It is in the
-// code solely to facilitate upgrading the database from the old format to the
-// new, after which it should be deleted. Do not use!
-func (b *Block) DeprecatedTd() *big.Int {
-	return b.td
-}
-
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
 	Header  *Header
