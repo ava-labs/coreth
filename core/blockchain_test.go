@@ -42,11 +42,11 @@ func TestArchiveBlockChain(t *testing.T) {
 		blockchain, err := NewBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:    256,
-				TrieDirtyLimit:    256,
-				TrieDirtyDisabled: true, // Archive mode
-				SnapshotLimit:     256,
-				SnapshotWait:      true,
+				TrieCleanLimit: 256,
+				TrieDirtyLimit: 256,
+				Pruning:        false, // Archive mode
+				SnapshotLimit:  256,
+				SnapshotWait:   true,
 			},
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
@@ -70,11 +70,11 @@ func TestPruningBlockChain(t *testing.T) {
 		blockchain, err := NewBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:    256,
-				TrieDirtyLimit:    256,
-				TrieDirtyDisabled: false, // Enable pruning
-				SnapshotLimit:     256,
-				SnapshotWait:      true,
+				TrieCleanLimit: 256,
+				TrieDirtyLimit: 256,
+				Pruning:        true, // Enable pruning
+				SnapshotLimit:  256,
+				SnapshotWait:   true,
 			},
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
@@ -104,11 +104,11 @@ func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
 		blockchain, err := NewBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:    256,
-				TrieDirtyLimit:    256,
-				TrieDirtyDisabled: false, // Enable pruning
-				SnapshotLimit:     256,
-				SnapshotWait:      true,
+				TrieCleanLimit: 256,
+				TrieDirtyLimit: 256,
+				Pruning:        true, // Enable pruning
+				SnapshotLimit:  256,
+				SnapshotWait:   true,
 			},
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),

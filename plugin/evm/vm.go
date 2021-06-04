@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -92,10 +93,11 @@ const (
 
 var (
 	// Set last accepted key to be longer than the keys used to store accepted block IDs.
-	lastAcceptedKey = []byte("last_accepted_key")
-	acceptedPrefix  = []byte("snowman_accepted")
-	ethDBPrefix     = []byte("ethdb")
-	atomicTxPrefix  = []byte("atomicTxDB")
+	lastAcceptedKey        = []byte("last_accepted_key")
+	acceptedPrefix         = []byte("snowman_accepted")
+	ethDBPrefix            = []byte("ethdb")
+	atomicTxPrefix         = []byte("atomicTxDB")
+	pruneRejectedBlocksKey = []byte("pruned_rejected_blocks")
 )
 
 var (
@@ -343,13 +345,11 @@ func (vm *VM) Initialize(
 	ethConfig.RPCTxFeeCap = vm.config.RPCTxFeeCap
 	ethConfig.TxPool.NoLocals = !vm.config.LocalTxsEnabled
 	ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
+	ethConfig.Pruning = !vm.config.Pruning
 	vm.chainConfig = g.Config
 	vm.networkID = ethConfig.NetworkId
 	vm.secpFactory = crypto.FactorySECP256K1R{Cache: cache.LRU{Size: secpFactoryCacheSize}}
 
-	if err := ethConfig.SetGCMode("archive"); err != nil {
-		panic(err)
-	}
 	nodecfg := node.Config{
 		CorethVersion:         Version,
 		KeyStoreDir:           vm.config.KeystoreDirectory,
@@ -487,7 +487,36 @@ func (vm *VM) Initialize(
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
 
+	if err := vm.pruneChain(); err != nil {
+		return err
+	}
+
 	return vm.fx.Initialize(vm)
+}
+
+func (vm *VM) pruneChain() error {
+	if !vm.config.Pruning {
+		return nil
+	}
+	pruned, err := vm.db.Has(pruneRejectedBlocksKey)
+	if err != nil {
+		return fmt.Errorf("failed to check if the VM has pruned rejected blocks: %w", err)
+	}
+	if pruned {
+		return nil
+	}
+
+	lastAcceptedHeight := vm.LastAcceptedBlock().Height()
+	if err := vm.chain.RemoveRejectedBlocks(0, lastAcceptedHeight); err != nil {
+		return err
+	}
+	heightBytes := make([]byte, 8)
+	binary.PutUvarint(heightBytes, lastAcceptedHeight)
+	if err := vm.db.Put(pruneRejectedBlocksKey, heightBytes); err == nil {
+		return nil
+	} else {
+		return fmt.Errorf("failed to write pruned rejected blocks to db: %w", err)
+	}
 }
 
 // Bootstrapping notifies this VM that the consensus engine is performing

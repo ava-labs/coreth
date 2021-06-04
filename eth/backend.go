@@ -126,15 +126,17 @@ func New(stack *node.Node, config *Config,
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.DefaultConfig.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.DefaultConfig.Miner.GasPrice)
 	}
-	if config.NoPruning && config.TrieDirtyCache > 0 {
-		// TODO: uncomment when re-enabling snapshots
-		// if config.SnapshotCache > 0 {
-		// 	config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
-		// 	config.SnapshotCache += config.TrieDirtyCache * 2 / 5
-		// } else {
-		// 	config.TrieCleanCache += config.TrieDirtyCache
-		// }
-		config.TrieDirtyCache = 0
+	if !config.Pruning && config.TrieDirtyCache > 0 {
+		// If snapshots are enabled, allocate 2/5 of the TrieDirtyCache memory cap to the snapshot cache
+		if config.SnapshotCache > 0 {
+			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
+			config.SnapshotCache += config.TrieDirtyCache * 2 / 5
+		} else {
+			// If snapshots are disabled, the TrieDirtyCache will be written through to the clean cache
+			// so move the cache allocation from the dirty cache to the clean cache
+			config.TrieCleanCache += config.TrieDirtyCache
+			config.TrieDirtyCache = 0
+		}
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
@@ -186,11 +188,11 @@ func New(stack *node.Node, config *Config,
 			AllowUnfinalizedQueries: config.AllowUnfinalizedQueries,
 		}
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:    config.TrieCleanCache,
-			TrieDirtyLimit:    config.TrieDirtyCache,
-			TrieDirtyDisabled: config.NoPruning,
-			SnapshotLimit:     config.SnapshotCache,
-			Preimages:         config.Preimages,
+			TrieCleanLimit: config.TrieCleanCache,
+			TrieDirtyLimit: config.TrieDirtyCache,
+			Pruning:        config.Pruning,
+			SnapshotLimit:  config.SnapshotCache,
+			Preimages:      config.Preimages,
 		}
 	)
 	var err error
@@ -361,7 +363,7 @@ func (s *Ethereum) IsListening() bool                  { return true } // Always
 func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return nil }  // s.protocolManager.downloader }
 func (s *Ethereum) Synced() bool                       { return true } // atomic.LoadUint32(&s.protocolManager.acceptTxs) == 1 }
-func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *Ethereum) ArchiveMode() bool                  { return !s.config.Pruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the

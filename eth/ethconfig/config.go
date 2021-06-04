@@ -97,7 +97,7 @@ type Config struct {
 	// for nodes to connect to.
 	DiscoveryURLs []string
 
-	NoPruning bool // Whether to disable pruning and flush everything to disk
+	Pruning bool // Whether to disable pruning and flush everything to disk
 
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
@@ -165,9 +165,9 @@ type Config struct {
 func (cfg *Config) SetGCMode(gcmode string) error {
 	switch gcmode {
 	case "full":
-		cfg.NoPruning = false
+		cfg.Pruning = true
 	case "archive":
-		cfg.NoPruning = true
+		cfg.Pruning = false
 	default:
 		return errors.New("invalid gcmode value")
 	}

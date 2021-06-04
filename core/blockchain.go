@@ -99,11 +99,11 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit    int  // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieDirtyLimit    int  // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled bool // Whether to disable trie write caching and GC altogether (archive node)
-	SnapshotLimit     int  // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages         bool // Whether to store preimage of trie key to the disk
+	TrieCleanLimit int  // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieDirtyLimit int  // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	Pruning        bool // Whether to disable trie write caching and GC altogether (archive node)
+	SnapshotLimit  int  // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages      bool // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -808,11 +808,17 @@ func (bc *BlockChain) Stop() {
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
-	// var snapBase common.Hash
 	if bc.snaps != nil {
 		var err error
-		if _, err = bc.snaps.Journal(bc.CurrentBlock().Root()); err != nil {
+		snapBase, err := bc.snaps.Journal(bc.LastAcceptedBlock().Root())
+		if err != nil {
 			log.Error("Failed to journal state snapshot", "err", err)
+		}
+		if bc.cacheConfig.Pruning && snapBase != (common.Hash{}) {
+			triedb := bc.stateCache.TrieDB()
+			if err := triedb.Commit(snapBase, true, nil); err != nil {
+				log.Error("Failed to commit recent state trie", "err", err)
+			}
 		}
 	}
 	if err := bc.stateManager.Shutdown(); err != nil {
@@ -956,8 +962,11 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
-	// Remove the block since its data is no longer needed
-	rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
+	// If pruning is enabled, delete the rejected block.
+	if bc.cacheConfig.Pruning {
+		// Remove the block since its data is no longer needed
+		rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
+	}
 	return bc.stateManager.RejectTrie(block.Root())
 }
 
@@ -1346,6 +1355,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
+	} else {
+		log.Warn("Unlikely reorg (rewind to ancestor) occurred", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
 	// Insert the new chain(except the head block(reverse order)),
 	// taking care of the proper incremental order.

@@ -46,16 +46,16 @@ type TrieWriter interface {
 }
 
 func NewTrieWriter(db state.Database, config *CacheConfig) TrieWriter {
-	if config.TrieDirtyDisabled {
-		return &noPruningTrieWriter{
-			Database: db,
-		}
-	} else {
+	if config.Pruning {
 		return &cappedMemoryTrieWriter{
 			Database:          db,
 			memoryCap:         common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
 			imageCap:          4 * 1024 * 1024,
 			maxBlocksAccepted: maxTrieInterval,
+		}
+	} else {
+		return &noPruningTrieWriter{
+			Database: db,
 		}
 	}
 }
