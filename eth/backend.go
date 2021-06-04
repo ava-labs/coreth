@@ -189,9 +189,8 @@ func New(stack *node.Node, config *Config,
 			TrieCleanLimit:    config.TrieCleanCache,
 			TrieDirtyLimit:    config.TrieDirtyCache,
 			TrieDirtyDisabled: config.NoPruning,
-			// TODO: Enable snapshots once stable (when 0 they are disabled)
-			// SnapshotLimit: config.SnapshotCache,
-			Preimages: config.Preimages,
+			SnapshotLimit:     config.SnapshotCache,
+			Preimages:         config.Preimages,
 		}
 	)
 	var err error
