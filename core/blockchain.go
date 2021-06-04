@@ -1146,7 +1146,7 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 		bc.reportBlock(block, nil, err)
 		return err
 	}
-	// No validation errors for the first block (or chain prefix skipped)
+	// No validation errors for the block
 	var activeState *state.StateDB
 	defer func() {
 		// The chain importer is starting and stopping trie prefetchers. If a bad

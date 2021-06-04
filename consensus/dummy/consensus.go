@@ -103,22 +103,6 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header,
 	return self.VerifySeal(chain, header)
 }
 
-func (self *DummyEngine) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int) error {
-	var parent *types.Header
-	if index == 0 {
-		parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
-	} else if headers[index-1].Hash() == headers[index].ParentHash {
-		parent = headers[index-1]
-	}
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	if chain.GetHeader(headers[index].Hash(), headers[index].Number.Uint64()) != nil {
-		return nil // known block
-	}
-	return self.verifyHeader(chain, headers[index], parent, false)
-}
-
 func (self *DummyEngine) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase, nil
 }
