@@ -346,8 +346,8 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	}
 
 	// This ensures that the head block is updated to the last accepted block on startup
-	if err := bc.writeKnownBlock(bc.lastAccepted); err != nil {
-		return fmt.Errorf("failed to write known block while loading last state: %w", err)
+	if err := bc.setPreference(bc.lastAccepted); err != nil {
+		return fmt.Errorf("failed to set preference to last accepted block while loading last state: %w", err)
 	}
 	// reprocessState as necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
@@ -1704,6 +1704,8 @@ func (bc *BlockChain) reprocessState(block *types.Block, reexec uint64, report b
 		previousRoot common.Hash
 		triedb       = bc.stateCache.TrieDB()
 	)
+	// Note: we add 1 since in each iteration, we attempt to re-execute the next block.
+	log.Info("Re-executing blocks to generate state for last accepted block", "from", current.NumberU64()+1, "to", origin+1)
 	for current.NumberU64() < origin {
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second && report {
