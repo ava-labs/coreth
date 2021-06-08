@@ -27,11 +27,13 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,7 +43,10 @@ import (
 
 type ChainTest struct {
 	Name     string
-	testFunc func(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error))
+	testFunc func(
+		t *testing.T,
+		create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error),
+	)
 }
 
 var tests = []ChainTest{
@@ -68,12 +73,28 @@ var tests = []ChainTest{
 // root.
 // Additionally, create another BlockChain instance from [originalDB] to ensure that BlockChain is
 // persisted correctly through a restart.
-func checkBlockChainState(t *testing.T, bc *BlockChain, genesis *Genesis, originalDB ethdb.Database, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func checkBlockChainState(
+	t *testing.T,
+	bc *BlockChain,
+	genesis *Genesis,
+	originalDB ethdb.Database,
+	create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error),
+	checkState func(sdb *state.StateDB) error,
+) {
 	var (
 		chainConfig       = bc.Config()
 		lastAcceptedBlock = bc.LastAcceptedBlock()
 		newDB             = rawdb.NewMemoryDatabase()
 	)
+
+	acceptedState, err := bc.StateAt(lastAcceptedBlock.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkState(acceptedState); err != nil {
+		t.Fatalf("Check state failed for original blockchain due to: %s", err)
+	}
+
 	_ = genesis.MustCommit(newDB)
 
 	newBlockChain, err := create(newDB, chainConfig, common.Hash{})
@@ -99,6 +120,15 @@ func checkBlockChainState(t *testing.T, bc *BlockChain, genesis *Genesis, origin
 		t.Fatalf("Expected new blockchain to have last accepted block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), newLastAcceptedBlock.Hash().Hex(), newLastAcceptedBlock.NumberU64())
 	}
 
+	// Check that the state of [newBlockChain] passes the check
+	acceptedState, err = newBlockChain.StateAt(lastAcceptedBlock.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkState(acceptedState); err != nil {
+		t.Fatalf("Check state failed for newly generated blockchain due to: %s", err)
+	}
+
 	restartedChain, err := create(originalDB, chainConfig, lastAcceptedBlock.Hash())
 	if err != nil {
 		t.Fatal(err)
@@ -109,6 +139,15 @@ func checkBlockChainState(t *testing.T, bc *BlockChain, genesis *Genesis, origin
 	}
 	if restartedLastAcceptedBlock := restartedChain.LastAcceptedBlock(); restartedLastAcceptedBlock.Hash() != lastAcceptedBlock.Hash() {
 		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), restartedLastAcceptedBlock.Hash().Hex(), restartedLastAcceptedBlock.NumberU64())
+	}
+
+	// Check that the state of [restartedChain] passes the check
+	acceptedState, err = restartedChain.StateAt(lastAcceptedBlock.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkState(acceptedState); err != nil {
+		t.Fatalf("Check state failed for restarted blockchain due to: %s", err)
 	}
 }
 
@@ -125,9 +164,10 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000)
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 	genesis := gspec.MustCommit(genDB)
 	_ = gspec.MustCommit(chainDB)
@@ -155,7 +195,33 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 		t.Fatal(err)
 	}
 
-	checkBlockChainState(t, blockchain, gspec, chainDB, create)
+	// check the state of the last accepted block
+	checkState := func(sdb *state.StateDB) error {
+		nonce := sdb.GetNonce(addr1)
+		if nonce != 1 {
+			return fmt.Errorf("expected nonce addr1: 1, found nonce: %d", nonce)
+		}
+		transferredFunds := big.NewInt(10000)
+		balance1 := sdb.GetBalance(addr1)
+		expectedBalance1 := new(big.Int).Sub(genesisBalance, transferredFunds)
+		if balance1.Cmp(expectedBalance1) != 0 {
+			return fmt.Errorf("expected addr1 balance: %d, found balance: %d", expectedBalance1, balance1)
+		}
+
+		balance2 := sdb.GetBalance(addr2)
+		expectedBalance2 := transferredFunds
+		if balance2.Cmp(expectedBalance2) != 0 {
+			return fmt.Errorf("expected addr2 balance: %d, found balance: %d", expectedBalance2, balance2)
+		}
+
+		nonce = sdb.GetNonce(addr2)
+		if nonce != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce: %d", nonce)
+		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
 func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
@@ -171,9 +237,10 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000000)
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000000)}},
+		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 	genesis := gspec.MustCommit(genDB)
 	_ = gspec.MustCommit(chainDB)
@@ -244,7 +311,30 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 		t.Fatal(err)
 	}
 
-	checkBlockChainState(t, blockchain, gspec, chainDB, create)
+	// check the state of the last accepted block
+	checkState := func(sdb *state.StateDB) error {
+		nonce1 := sdb.GetNonce(addr1)
+		if nonce1 != 129 {
+			return fmt.Errorf("expected addr1 nonce: 129, found nonce %d", nonce1)
+		}
+		balance1 := sdb.GetBalance(addr1)
+		transferredFunds := new(big.Int).Mul(big.NewInt(129), big.NewInt(10000))
+		expectedBalance := new(big.Int).Sub(genesisBalance, transferredFunds)
+		if balance1.Cmp(expectedBalance) != 0 {
+			return fmt.Errorf("expected addr1 balance: %d, found balance: %d", expectedBalance, balance1)
+		}
+		nonce2 := sdb.GetNonce(addr2)
+		if nonce2 != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce: %d", nonce2)
+		}
+		balance2 := sdb.GetBalance(addr2)
+		if balance2.Cmp(transferredFunds) != 0 {
+			return fmt.Errorf("expected addr2 balance: %d, found balance: %d", transferredFunds, balance2)
+		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
 func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
@@ -260,9 +350,10 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000000)
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000000)}},
+		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 	genesis := gspec.MustCommit(genDB)
 	_ = gspec.MustCommit(chainDB)
@@ -326,7 +417,30 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 		t.Fatal(err)
 	}
 
-	checkBlockChainState(t, blockchain, gspec, chainDB, create)
+	// check the state of the last accepted block
+	checkState := func(sdb *state.StateDB) error {
+		nonce1 := sdb.GetNonce(addr1)
+		if nonce1 != 1 {
+			return fmt.Errorf("expected addr1 nonce: 1, found nonce: %d", nonce1)
+		}
+		balance1 := sdb.GetBalance(addr1)
+		transferredFunds := big.NewInt(5000)
+		expectedBalance := new(big.Int).Sub(genesisBalance, transferredFunds)
+		if balance1.Cmp(expectedBalance) != 0 {
+			return fmt.Errorf("expected balance1: %d, found balance: %d", expectedBalance, balance1)
+		}
+		nonce2 := sdb.GetNonce(addr2)
+		if nonce2 != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce %d", nonce2)
+		}
+		balance2 := sdb.GetBalance(addr2)
+		if balance2.Cmp(transferredFunds) != 0 {
+			return fmt.Errorf("expected balance2: %d, found %d", transferredFunds, balance2)
+		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
 func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
@@ -342,9 +456,10 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000000)
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000000)}},
+		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 	genesis := gspec.MustCommit(genDB)
 	_ = gspec.MustCommit(chainDB)
@@ -380,6 +495,8 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 		t.Fatal(err)
 	}
 
+	// SetPreference to an ancestor of the currently preferred block. Test that this unlikely, but possible behavior
+	// is handled correctly.
 	if err := blockchain.SetPreference(chain[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +515,27 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
 		t.Fatal(err)
 	}
-	checkBlockChainState(t, blockchain, gspec, chainDB, create)
+	// check the state of the last accepted block
+	checkGenesisState := func(sdb *state.StateDB) error {
+		nonce1 := sdb.GetNonce(addr1)
+		if nonce1 != 0 {
+			return fmt.Errorf("expected addr1 nonce: 0, found nonce: %d", nonce1)
+		}
+		balance1 := sdb.GetBalance(addr1)
+		if balance1.Cmp(genesisBalance) != 0 {
+			return fmt.Errorf("expected addr1 balance: %d, found balance: %d", genesisBalance, balance1)
+		}
+		nonce2 := sdb.GetNonce(addr2)
+		if nonce2 != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce: %d", nonce2)
+		}
+		balance2 := sdb.GetBalance(addr2)
+		if balance2.Cmp(big.NewInt(0)) != 0 {
+			return fmt.Errorf("expected addr2 balance: 0, found balance %d", balance2)
+		}
+		return nil
+	}
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkGenesisState)
 
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
@@ -411,5 +548,29 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
 		t.Fatal(err)
 	}
-	checkBlockChainState(t, blockchain, gspec, chainDB, create)
+	checkUpdatedState := func(sdb *state.StateDB) error {
+		nonce := sdb.GetNonce(addr1)
+		if nonce != 1 {
+			return fmt.Errorf("expected addr1 nonce: 1, found nonce: %d", nonce)
+		}
+		transferredFunds := big.NewInt(10000)
+		balance1 := sdb.GetBalance(addr1)
+		expectedBalance1 := new(big.Int).Sub(genesisBalance, transferredFunds)
+		if balance1.Cmp(expectedBalance1) != 0 {
+			return fmt.Errorf("expected addr1 balance: %d, found balance %d", expectedBalance1, balance1)
+		}
+
+		balance2 := sdb.GetBalance(addr2)
+		expectedBalance2 := transferredFunds
+		if balance2.Cmp(expectedBalance2) != 0 {
+			return fmt.Errorf("expected addr2 balance: %d, found balance: %d", expectedBalance2, balance2)
+		}
+
+		nonce = sdb.GetNonce(addr2)
+		if nonce != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce: %d", nonce)
+		}
+		return nil
+	}
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkUpdatedState)
 }
