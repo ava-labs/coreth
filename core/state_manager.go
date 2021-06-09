@@ -98,8 +98,10 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
 	triedb := cm.Database.TrieDB()
 
+	triedb.Dereference(root)
 	cm.blocksAccepted++
 	cm.lastAcceptedRoot = root
+
 	// If we haven't committed an accepted block root within the desired
 	// interval make sure to commit this root.
 	if cm.blocksAccepted > cm.maxBlocksAccepted {

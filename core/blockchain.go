@@ -1721,6 +1721,7 @@ func (bc *BlockChain) reprocessState(block *types.Block, reexec uint64, report b
 		if err != nil {
 			return fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
+		log.Debug("processed block", "block", current.Hash(), "number", current.NumberU64())
 		// Finalize the state so any modifications are written to the trie
 		root, err := statedb.Commit(bc.chainConfig.IsEIP158(current.Number()))
 		if err != nil {
