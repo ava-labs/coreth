@@ -98,7 +98,6 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
 	triedb := cm.Database.TrieDB()
 
-	triedb.Dereference(root)
 	cm.blocksAccepted++
 	cm.lastAcceptedRoot = root
 
