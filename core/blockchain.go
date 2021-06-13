@@ -931,6 +931,11 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	bc.lastAccepted = block
 
+	// Accept Trie
+	if err := bc.stateManager.AcceptTrie(block.Root()); err != nil {
+		return fmt.Errorf("unable to accept trie: %w", err)
+	}
+
 	// Flatten the entire snap Trie to disk
 	if err := bc.snaps.Cap(block.Root(), 0); err != nil {
 		log.Warn("Failed to cap snapshot tree", "root", block.Root(), "layers", 0, "err", err)
@@ -955,7 +960,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		bc.txAcceptedFeed.Send(NewTxsEvent{block.Transactions()})
 	}
 
-	return bc.stateManager.AcceptTrie(block.Root())
+	return nil
 }
 
 func (bc *BlockChain) Reject(block *types.Block) error {
