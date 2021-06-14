@@ -336,7 +336,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 
 // TestSnaphots tests the functionality for retrieveing the snapshot
 // with given head root and the desired depth.
-func TestSnaphots(t *testing.T) {
+func TestSnapshots(t *testing.T) {
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
 	setAccount := func(accKey string) map[common.Hash][]byte {
