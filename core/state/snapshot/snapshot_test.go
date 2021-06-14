@@ -433,3 +433,43 @@ func TestSnapshots(t *testing.T) {
 		}
 	}
 }
+
+func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
+	// For Tree `t` with layers [A, B, C, D, E]
+	//   t.Flatten(C) results in layers [A, C, D, E]
+
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexTo
+		Hash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+	}
+	accounts := map[common.Hash][]byte{
+		common.HexToHash("0xa1"): randomAccount(),
+	}
+	fmt.Println("l:", len(snaps.layers))
+
+	// Create N layers on top of base (N+1) total
+	n := 10
+	for i := 0; i < n; i++ {
+		if err := snaps.Update(common.Hash{byte(i)}, common.HexToHash("0x01"), nil, accounts, nil); err != nil {
+			t.Fatalf("failed to create a diff layer: %v", err)
+		}
+	}
+
+	fmt.Println("l:", len(snaps.layers))
+	// Flatten at an internal layer
+	if err := snaps.Flatten(common.Hash{byte(3)}); err != nil {
+		t.Fatalf("failed to flatten tree: %v", err)
+	}
+
+	// We should always have one fewer layer
+	if got := len(snaps.layers); got != n {
+		t.Fatalf("incorrect layer count: %d, wanted %d", got, n-1)
+	}
+}
