@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -48,10 +49,10 @@ type TrieWriter interface {
 func NewTrieWriter(db state.Database, config *CacheConfig) TrieWriter {
 	if config.Pruning {
 		return &cappedMemoryTrieWriter{
-			Database:          db,
-			memoryCap:         common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
-			imageCap:          4 * 1024 * 1024,
-			maxBlocksAccepted: maxTrieInterval,
+			Database:            db,
+			memoryCap:           common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
+			imageCap:            4 * 1024 * 1024,
+			maxUncommittedDepth: maxTrieInterval,
 		}
 	} else {
 		return &noPruningTrieWriter{
@@ -77,10 +78,10 @@ func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
 type cappedMemoryTrieWriter struct {
 	state.Database
-	memoryCap                         common.StorageSize
-	imageCap                          common.StorageSize
-	lastAcceptedRoot                  common.Hash
-	blocksAccepted, maxBlocksAccepted uint64
+	memoryCap                             common.StorageSize
+	imageCap                              common.StorageSize
+	lastAcceptedRoot                      common.Hash
+	uncommittedDepth, maxUncommittedDepth uint64
 }
 
 func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
@@ -88,7 +89,20 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 	triedb.Reference(root, common.Hash{})
 	nodes, imgs := triedb.Size()
 
+	cm.uncommittedDepth++
+
+	// Commit this root if we haven't committed an accepted block root within
+	// the desired interval
+	if cm.uncommittedDepth > cm.maxUncommittedDepth {
+		if err := triedb.Commit(root, true, nil); err != nil {
+			return fmt.Errorf("failed to commit trie root %s: %w", root.Hex(), err)
+		}
+		cm.uncommittedDepth = 0
+		return nil
+	}
+
 	if nodes > cm.memoryCap || imgs > cm.imageCap {
+		log.Info("Cap Tree", "nodes", nodes, "imgs", imgs)
 		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
 	}
 
@@ -96,27 +110,7 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 }
 
 func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
-	triedb := cm.Database.TrieDB()
-
-	cm.blocksAccepted++
 	cm.lastAcceptedRoot = root
-
-	// If we haven't committed an accepted block root within the desired
-	// interval make sure to commit this root.
-	if cm.blocksAccepted > cm.maxBlocksAccepted {
-		if err := triedb.Commit(root, false, nil); err != nil {
-			return fmt.Errorf("failed to commit trie root %s: %w", root.Hex(), err)
-		}
-		cm.blocksAccepted = 0
-	}
-
-	// Cap the memory consumption by the dirty cache if it is exceeding
-	// desired limit.
-	nodes, imgs := triedb.Size()
-	if nodes > cm.memoryCap || imgs > cm.imageCap {
-		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
-	}
-
 	return nil
 }
 
