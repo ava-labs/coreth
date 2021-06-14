@@ -1135,7 +1135,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		commonBlock *types.Block
 
 		deletedTxs types.Transactions
-		addedTxs   types.Transactions
 
 		deletedLogs [][]*types.Log
 		rebirthLogs [][]*types.Log
@@ -1257,15 +1256,13 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		// Collect reborn logs due to chain reorg
 		collectLogs(newChain[i].Hash(), false)
-
-		// Collect the new added transactions.
-		addedTxs = append(addedTxs, newChain[i].Transactions()...)
 	}
 	// Delete useless indexes right now which includes the non-canonical
 	// transaction indexes, canonical chain indexes which above the head.
 	indexesBatch := bc.db.NewBatch()
-	for _, tx := range types.TxDifference(deletedTxs, addedTxs) {
-		// TODO: we should delete all references not just the difference
+	for _, tx := range deletedTxs {
+		// TODO: convert to removing all these on startup (after v1.4.9 we will
+		// never add unconfirmed entries again)
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
 	}
 	// Delete any canonical number assignments above the new head

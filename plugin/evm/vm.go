@@ -371,6 +371,7 @@ func (vm *VM) Initialize(
 	default:
 		lastAcceptedHash = common.BytesToHash(lastAcceptedBytes)
 	}
+	// TODO: somehow extract processing tip here for use in cleanup?
 	ethChain, err := coreth.NewETHChain(&ethConfig, &nodecfg, vm.chaindb, vm.config.EthBackendSettings(), lastAcceptedHash)
 	if err != nil {
 		return err
