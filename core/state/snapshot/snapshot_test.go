@@ -122,7 +122,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 		t.Errorf("pre-cap layer count mismatch: have %d, want %d", n, 2)
 	}
 	// Commit the diff layer onto the disk and ensure it's persisted
-	if err := snaps.Flatten(common.HexToHash("0x02")); err != nil {
+	if err := snaps.FlattenAncestors(common.HexToHash("0x02")); err != nil {
 		t.Fatalf("failed to merge diff layer onto disk: %v", err)
 	}
 	// Since the base layer was modified, ensure that data retrieval on the external reference fail
@@ -301,11 +301,11 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 		t.Error(err)
 	}
 	// Cap to a bad root should fail
-	if err := snaps.Flatten(common.HexToHash("0x1337")); err == nil {
+	if err := snaps.FlattenAncestors(common.HexToHash("0x1337")); err == nil {
 		t.Errorf("expected error, got none")
 	}
 	// Now, merge the a-chain
-	snaps.Flatten(common.HexToHash("0xa3"))
+	snaps.FlattenAncestors(common.HexToHash("0xa3"))
 
 	// At this point, a2 got merged into a1. Thus, a1 is now modified, and as a1 is
 	// the parent of b2, b2 should no longer be able to iterate into parent.
@@ -329,7 +329,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	}
 	// Now, merge it again, just for fun. It should now error, since a3
 	// is a disk layer
-	if err := snaps.Flatten(common.HexToHash("0xa3")); err == nil {
+	if err := snaps.FlattenAncestors(common.HexToHash("0xa3")); err == nil {
 		t.Error("expected error capping the disk layer, got none")
 	}
 }
@@ -466,7 +466,7 @@ func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
 	}
 
 	// Flatten at an internal layer
-	if err := snaps.Flatten(common.Hash{byte(flattenAt)}); err != nil {
+	if err := snaps.FlattenAncestors(common.Hash{byte(flattenAt)}); err != nil {
 		t.Fatalf("failed to flatten tree: %v", err)
 	}
 

@@ -305,7 +305,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 }
 
 // TODO: test
-func (t *Tree) Flatten(root common.Hash) error {
+func (t *Tree) FlattenAncestors(root common.Hash) error {
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
 	if snap == nil {
