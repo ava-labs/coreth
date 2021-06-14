@@ -937,7 +937,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	}
 
 	// Flatten the entire snap Trie to disk
-	if err := bc.snaps.Cap(block.Root(), 0); err != nil {
+	if err := bc.snaps.Flatten(block.Root()); err != nil {
 		log.Warn("Failed to cap snapshot tree", "root", block.Root(), "layers", 0, "err", err)
 	}
 
@@ -967,12 +967,22 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	// Reject Trie
+	if err := bc.stateManager.RejectTrie(block.Root()); err != nil {
+		return fmt.Errorf("unable to reject trie: %w", err)
+	}
+
+	if err := bc.snaps.Discard(block.Root()); err != nil {
+		return fmt.Errorf("unable to clean rejected snapshot: %w", err)
+	}
+
 	// If pruning is enabled, delete the rejected block.
 	if bc.cacheConfig.Pruning {
 		// Remove the block since its data is no longer needed
 		rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
 	}
-	return bc.stateManager.RejectTrie(block.Root())
+
+	return nil
 }
 
 // writeKnownBlock updates the head block flag with a known block

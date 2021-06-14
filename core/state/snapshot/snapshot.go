@@ -304,6 +304,60 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	return nil
 }
 
+// TODO: test
+func (t *Tree) Flatten(root common.Hash) error {
+	// Retrieve the head snapshot to cap from
+	snap := t.Snapshot(root)
+	if snap == nil {
+		return fmt.Errorf("snapshot [%#x] missing", root)
+	}
+	diff, ok := snap.(*diffLayer)
+	if !ok {
+		return fmt.Errorf("snapshot [%#x] is disk layer", root)
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	diff.lock.RLock()
+	base := diffToDisk(diff.flatten().(*diffLayer))
+	diff.lock.RUnlock()
+
+	// TODO: need to clean up rejected block layers too
+	delete(t.layers, diff.parent.Root())
+	t.layers[base.root] = base
+
+	// TODO: set parent of anyone with root to be base to ensure
+	// we don't use a stale layer. There is probably a better way to do this.
+	for _, snap := range t.layers {
+		if diff, ok := snap.(*diffLayer); ok {
+			if base.root == diff.parent.Root() {
+				diff.parent = base
+			}
+		}
+	}
+
+	log.Debug("layer size", "size", len(t.layers))
+	return nil
+}
+
+// TODO: add tests to ensure we are deleting the right layer on
+// reject
+// This is needed because we no longer call Cap (as it clobbers all layers)
+func (t *Tree) Discard(root common.Hash) error {
+	snap := t.Snapshot(root)
+	if snap == nil {
+		return fmt.Errorf("snapshot [%#x] missing", root)
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	// TODO: may be easier to find all now invalid roots at the same height
+	delete(t.layers, root)
+	return nil
+}
+
 // Cap traverses downwards the snapshot tree from a head block hash until the
 // number of allowed layers are crossed. All layers beyond the permitted number
 // are flattened downwards.
