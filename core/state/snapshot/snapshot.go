@@ -323,8 +323,21 @@ func (t *Tree) Flatten(root common.Hash) error {
 	base := diffToDisk(diff.flatten().(*diffLayer))
 	diff.lock.RUnlock()
 
+	// Remove all ancestor layers
 	// TODO: need to clean up rejected block layers too
-	delete(t.layers, diff.parent.Root())
+	parentLayer := t.layers[diff.parent.Root()]
+	for parentLayer != nil {
+		if _, ok := t.layers[parentLayer.Root()]; !ok {
+			break
+		}
+
+		delete(t.layers, parentLayer.Root())
+
+		if parentLayer.Parent() != nil {
+			parentLayer = t.layers[parentLayer.Parent().Root()]
+		}
+	}
+
 	t.layers[base.root] = base
 
 	// TODO: set parent of anyone with root to be base to ensure

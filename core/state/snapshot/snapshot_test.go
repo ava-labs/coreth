@@ -440,8 +440,7 @@ func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
 
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
-		root:   common.HexTo
-		Hash("0x01"),
+		root:   common.HexToHash("0x01"),
 		cache:  fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
@@ -452,24 +451,25 @@ func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
 	accounts := map[common.Hash][]byte{
 		common.HexToHash("0xa1"): randomAccount(),
 	}
-	fmt.Println("l:", len(snaps.layers))
 
 	// Create N layers on top of base (N+1) total
-	n := 10
-	for i := 0; i < n; i++ {
-		if err := snaps.Update(common.Hash{byte(i)}, common.HexToHash("0x01"), nil, accounts, nil); err != nil {
+	parentHash := base.Root()
+	totalLayers := 10
+	flattenAt := 3
+	for i := 1; i < totalLayers; i++ {
+		if err := snaps.Update(common.Hash{byte(i)}, parentHash, nil, accounts, nil); err != nil {
 			t.Fatalf("failed to create a diff layer: %v", err)
 		}
+		parentHash = common.Hash{byte(i)}
 	}
 
-	fmt.Println("l:", len(snaps.layers))
 	// Flatten at an internal layer
-	if err := snaps.Flatten(common.Hash{byte(3)}); err != nil {
+	if err := snaps.Flatten(common.Hash{byte(flattenAt)}); err != nil {
 		t.Fatalf("failed to flatten tree: %v", err)
 	}
 
-	// We should always have one fewer layer
-	if got := len(snaps.layers); got != n {
-		t.Fatalf("incorrect layer count: %d, wanted %d", got, n-1)
+	// We should have no have the layer we flattened at and all following layers
+	if got := len(snaps.layers); got != (totalLayers - flattenAt) {
+		t.Fatalf("incorrect layer count: %d, wanted %d", got, totalLayers-flattenAt)
 	}
 }
