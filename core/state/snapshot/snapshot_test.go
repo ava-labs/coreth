@@ -434,10 +434,12 @@ func TestSnapshots(t *testing.T) {
 	}
 }
 
+// TestTreeFlattenDoesNotDropPendingLayers tests that Tree.Flatten correctly
+// retains layers built on top of the given root layer.
+//
+// i.e. For Tree `t` with layers [A, B, C, D, E], `t.Flatten(C)` results in:
+//   [C, D, E].
 func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
-	// For Tree `t` with layers [A, B, C, D, E]
-	//   t.Flatten(C) results in layers [C, D, E]
-
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
