@@ -140,13 +140,6 @@ type BlockChain struct {
 	triegc    *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc    time.Duration  // Accumulates canonical block processing for trie dumping
 
-	// txLookupLimit is the maximum number of blocks from head whose tx indices
-	// are reserved:
-	//  * 0:   means no limit and regenerate any missing indexes
-	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
-	//  * nil: disable tx reindexer/deleter, but still index new blocks
-	txLookupLimit uint64
-
 	hc                *HeaderChain
 	rmLogsFeed        event.Feed
 	chainFeed         event.Feed
@@ -270,15 +263,6 @@ func NewBlockChain(
 			log.Error("unable to initialize snapshots", "error", err)
 		}
 		bc.snapsLock.Unlock()
-	}
-
-	// Take ownership of this particular state
-	// go bc.update()
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
-
-		bc.wg.Add(1)
-		go bc.maintainTxIndex()
 	}
 
 	return bc, nil
@@ -566,6 +550,7 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 	return bc.GetBlock(hash, number)
 }
 
+// ValidateCanonicalChain confirms a canonical chain is well-formed.
 func (bc *BlockChain) ValidateCanonicalChain() error {
 	current := bc.CurrentBlock()
 	i := 0
@@ -650,91 +635,6 @@ func (bc *BlockChain) ValidateCanonicalChain() error {
 	}
 
 	return nil
-}
-
-// WriteCanonicalFromCurrentBlock writes the canonical chain from the
-// current block to the genesis.
-func (bc *BlockChain) WriteCanonicalFromCurrentBlock(toBlock *types.Block) error {
-	current := bc.CurrentBlock()
-	if current == nil {
-		return fmt.Errorf("failed to get current block")
-	}
-	lastBlk, err := bc.writeCanonicalFromBlock(current, toBlock, repairBlockBatchSize)
-	if err == nil {
-		return nil
-	}
-
-	log.Error("problem repairing canonical", "batchSize", repairBlockBatchSize, "error", err)
-	_, err = bc.writeCanonicalFromBlock(lastBlk, toBlock, 1)
-	return err
-}
-
-// writeCanonicalFromBlock writes the canonical chain from [startBlock] back to the genesis
-// using [batchSize] for each write. Returns the last block that was successfully written
-// if an error occurs, which is guaranteed to be non-nil.
-// assumes that [startBlock] and [toBlock] are non-nil
-func (bc *BlockChain) writeCanonicalFromBlock(startBlock, toBlock *types.Block, batchSize int) (*types.Block, error) {
-	current := startBlock
-	// assumes [startBlock] is non-nil
-	lastBlk := startBlock
-
-	currentSize := 0
-	totalUpdates := 0
-	batch := bc.db.NewBatch()
-
-	log.Debug("repairing canonical chain from block", "hash", current.Hash().String(), "number", current.NumberU64())
-
-	for current.Hash() != toBlock.Hash() {
-		blkNumber := current.NumberU64()
-		log.Debug("repairing block", "hash", current.Hash().String(), "height", blkNumber)
-
-		rawdb.WriteCanonicalHash(batch, current.Hash(), current.NumberU64())
-		rawdb.WriteTxLookupEntriesByBlock(batch, current)
-		currentSize += 1
-		if currentSize >= batchSize {
-			totalUpdates += currentSize
-			log.Debug("writing repair batch", "totalUpdates", totalUpdates, "size", currentSize)
-
-			bc.chainmu.Lock()
-			// Flush the whole batch into the disk
-			if err := batch.Write(); err != nil {
-				// If the batch write failed, unlock and return [lastBlk] and the error
-				bc.chainmu.Unlock()
-				return lastBlk, fmt.Errorf("failed to write batch with size %d at current block height %d: %s", currentSize, blkNumber, err)
-			}
-			bc.chainmu.Unlock()
-			currentSize = 0
-			// Update [lastBlk] to current since it was successfully updated
-			// [current] is guaranteed to be non-nil here because of the check
-			// at the start of the for loop.
-			lastBlk = current
-			batch = bc.db.NewBatch()
-		}
-
-		parent := bc.GetBlockByHash(current.ParentHash())
-		if parent == nil {
-			return lastBlk, fmt.Errorf("failed to get parent of block %s, with parent hash %s", current.Hash().String(), current.ParentHash().String())
-		} else {
-			current = parent
-		}
-	}
-
-	if currentSize > 0 {
-		totalUpdates += currentSize
-		log.Debug("writing repair batch", "totalUpdates", totalUpdates, "size", currentSize)
-
-		bc.chainmu.Lock()
-		// Flush the whole batch into the disk
-		if err := batch.Write(); err != nil {
-			// If the batch write failed, unlock and return [lastBlk] and the error
-			bc.chainmu.Unlock()
-			return lastBlk, fmt.Errorf("failed to write final batch due to: %w", err)
-		}
-		bc.chainmu.Unlock()
-	}
-	log.Debug("finished repairs", "totalUpdates", totalUpdates)
-
-	return toBlock, nil
 }
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
@@ -837,18 +737,6 @@ const (
 	SideStatTy
 )
 
-// SetTxLookupLimit is responsible for updating the txlookup limit to the
-// original one stored in db if the new mismatches with the old one.
-func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
-	bc.txLookupLimit = limit
-}
-
-// TxLookupLimit retrieves the txlookup limit used by blockchain to prune
-// stale transaction indices.
-func (bc *BlockChain) TxLookupLimit() uint64 {
-	return bc.txLookupLimit
-}
-
 // SetPreference attempts to update the head block to be the provided block and
 // emits a ChainHeadEvent if successful. This function will handle all reorg
 // side effects, if necessary.
@@ -930,6 +818,9 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	}
 
 	bc.lastAccepted = block
+
+	// Update transaction lookup index
+	rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 
 	// Flatten the entire snap Trie to disk
 	if err := bc.snaps.Cap(block.Root(), 0); err != nil {
@@ -1043,7 +934,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if status == CanonStatTy {
 		bc.writeHeadBlock(block)
 	}
-	// bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
@@ -1120,6 +1010,7 @@ func (bc *BlockChain) InsertBlock(block *types.Block) error {
 	err := bc.insertBlock(block)
 	bc.chainmu.Unlock()
 	bc.wg.Done()
+
 	return err
 }
 
@@ -1374,6 +1265,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// transaction indexes, canonical chain indexes which above the head.
 	indexesBatch := bc.db.NewBatch()
 	for _, tx := range types.TxDifference(deletedTxs, addedTxs) {
+		// TODO: we should delete all references not just the difference
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
 	}
 	// Delete any canonical number assignments above the new head
@@ -1404,81 +1296,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 	return nil
-}
-
-// maintainTxIndex is responsible for the construction and deletion of the
-// transaction index.
-//
-// User can use flag `txlookuplimit` to specify a "recentness" block, below
-// which ancient tx indices get deleted. If `txlookuplimit` is 0, it means
-// all tx indices will be reserved.
-//
-// The user can adjust the txlookuplimit value for each launch after fast
-// sync, Geth will automatically construct the missing indices and delete
-// the extra indices.
-func (bc *BlockChain) maintainTxIndex() {
-	defer bc.wg.Done()
-
-	// indexBlocks reindexes or unindexes transactions depending on user configuration
-	indexBlocks := func(tail *uint64, head uint64, done chan struct{}) {
-		defer func() { done <- struct{}{} }()
-
-		// If the user just upgraded Geth to a new version which supports transaction
-		// index pruning, write the new tail and remove anything older.
-		if tail == nil {
-			if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
-				// Nothing to delete, write the tail and return
-				rawdb.WriteTxIndexTail(bc.db, 0)
-			} else {
-				// Prune all stale tx indices and record the tx index tail
-				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1, bc.quit)
-			}
-			return
-		}
-		// If a previous indexing existed, make sure that we fill in any missing entries
-		if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
-			if *tail > 0 {
-				rawdb.IndexTransactions(bc.db, 0, *tail, bc.quit)
-			}
-			return
-		}
-		// Update the transaction index to the new chain state
-		if head-bc.txLookupLimit+1 < *tail {
-			// Reindex a part of missing indices and rewind index tail to HEAD-limit
-			rawdb.IndexTransactions(bc.db, head-bc.txLookupLimit+1, *tail, bc.quit)
-		} else {
-			// Unindex a part of stale indices and forward index tail to HEAD-limit
-			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1, bc.quit)
-		}
-	}
-	// Any reindexing done, start listening to chain events and moving the index window
-	var (
-		done   chan struct{}                  // Non-nil if background unindexing or reindexing routine is active.
-		headCh = make(chan ChainHeadEvent, 1) // Buffered to avoid locking up the event feed
-	)
-	sub := bc.SubscribeChainHeadEvent(headCh)
-	if sub == nil {
-		return
-	}
-	defer sub.Unsubscribe()
-
-	for {
-		select {
-		case head := <-headCh:
-			if done == nil {
-				done = make(chan struct{})
-				go indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), done)
-			}
-		case <-done:
-			done = nil
-		case <-bc.quit:
-			if done != nil {
-				log.Info("Waiting background transaction indexer to exit")
-				<-done
-			}
-			return
-		}
-	}
 }
 
 // BadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
