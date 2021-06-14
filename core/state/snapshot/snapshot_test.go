@@ -436,7 +436,7 @@ func TestSnapshots(t *testing.T) {
 
 func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
 	// For Tree `t` with layers [A, B, C, D, E]
-	//   t.Flatten(C) results in layers [A, C, D, E]
+	//   t.Flatten(C) results in layers [C, D, E]
 
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
