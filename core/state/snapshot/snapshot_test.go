@@ -457,7 +457,7 @@ func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {
 	// Create N layers on top of base (N+1) total
 	parentHash := base.Root()
 	totalLayers := 10
-	flattenAt := 3
+	flattenAt := 1
 	for i := 1; i < totalLayers; i++ {
 		if err := snaps.Update(common.Hash{byte(i)}, parentHash, nil, accounts, nil); err != nil {
 			t.Fatalf("failed to create a diff layer: %v", err)
