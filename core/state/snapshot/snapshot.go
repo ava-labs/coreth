@@ -325,34 +325,24 @@ func (t *Tree) Flatten(root common.Hash) error {
 	if _, ok := diff.parent.(*diskLayer); !ok {
 		return fmt.Errorf("snapshot [%#x] parent is diff layer", root)
 	}
+	parentRoot := diff.parent.Root()
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
+
+	parentLayer := t.layers[parentRoot]
+	if parentLayer == nil {
+		return fmt.Errorf("snapshot missing parent layer: %s", parentRoot)
+	}
 
 	diff.lock.RLock()
 	base := diffToDisk(diff)
 	diff.lock.RUnlock()
 
-	// Remove all ancestor layers
-	// The caller must ensure they call Discard to, which is responsible for
-	// cleaning up layers.
-	parentLayer := t.layers[diff.parent.Root()]
-	for parentLayer != nil {
-
-		// We're at the end of the available ancestor chain so we're done
-		if _, ok := t.layers[parentLayer.Root()]; !ok {
-			break
-		}
-
-		delete(t.layers, parentLayer.Root())
-
-		if parentLayer.Parent() != nil {
-			parentLayer = t.layers[parentLayer.Parent().Root()]
-		}
-	}
+	// Remove parent layer
+	delete(t.layers, parentRoot)
 
 	t.layers[base.root] = base
-
 	// Replace root with base in parent pointers
 	for _, snap := range t.layers {
 		if diff, ok := snap.(*diffLayer); ok {
@@ -362,7 +352,7 @@ func (t *Tree) Flatten(root common.Hash) error {
 		}
 	}
 
-	log.Debug("layer size", "size", len(t.layers))
+	log.Debug("Flattened snapshot tree", "root", root, "parent", parentRoot, "size", len(t.layers))
 	return nil
 }
 
@@ -372,15 +362,14 @@ func (t *Tree) Layers() map[common.Hash]snapshot {
 
 // Discard removes layers that we no longer need
 func (t *Tree) Discard(root common.Hash) error {
-	snap := t.Snapshot(root)
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	snap := t.layers[root]
 	if snap == nil {
 		return fmt.Errorf("snapshot [%#x] missing", root)
 	}
 
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	// TODO: may be easier to find all now invalid roots at the same height
 	delete(t.layers, root)
 	return nil
 }

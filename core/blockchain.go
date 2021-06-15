@@ -256,7 +256,7 @@ func NewBlockChain(
 			recover = true
 		}
 		bc.snapsLock.Lock()
-		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), true, true, recover)
+		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), false, true, recover)
 		if err != nil {
 			log.Error("unable to initialize snapshots", "error", err)
 		}
@@ -824,9 +824,11 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	// The parent of [block] must be the last accepted block.
 	if bc.lastAccepted.Hash() != block.ParentHash() {
 		return fmt.Errorf(
-			"expected accepted parent block hash %s but got %s",
+			"expected accepted parent block %s:%d but got %s:%d",
 			bc.lastAccepted.Hash().Hex(),
+			bc.lastAccepted.NumberU64(),
 			block.ParentHash().Hex(),
+			block.NumberU64()-1,
 		)
 	}
 

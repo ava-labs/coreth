@@ -66,6 +66,10 @@ var tests = []ChainTest{
 		"SetPreferenceRewind",
 		TestSetPreferenceRewind,
 	},
+	{
+		"TestBuildOnVariousStages",
+		TestBuildOnVariousStages,
+	},
 }
 
 // checkBlockChainState creates a new BlockChain instance and checks that exporting each block from
@@ -80,7 +84,7 @@ func checkBlockChainState(
 	originalDB ethdb.Database,
 	create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error),
 	checkState func(sdb *state.StateDB) error,
-) {
+) (*BlockChain, *BlockChain, *BlockChain) {
 	var (
 		chainConfig       = bc.Config()
 		lastAcceptedBlock = bc.LastAcceptedBlock()
@@ -149,6 +153,8 @@ func checkBlockChainState(
 	if err := checkState(acceptedState); err != nil {
 		t.Fatalf("Check state failed for restarted blockchain due to: %s", err)
 	}
+
+	return bc, newBlockChain, restartedChain
 }
 
 func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
@@ -609,4 +615,162 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 		return nil
 	}
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkUpdatedState)
+}
+
+func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		key3, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
+		// We use two separate databases since GenerateChain commits the state roots to its underlying
+		// database.
+		genDB   = rawdb.NewMemoryDatabase()
+		chainDB = rawdb.NewMemoryDatabase()
+	)
+
+	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000)
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc: GenesisAlloc{
+			addr1: {Balance: genesisBalance},
+			addr3: {Balance: genesisBalance},
+		},
+	}
+	genesis := gspec.MustCommit(genDB)
+	_ = gspec.MustCommit(chainDB)
+
+	// This call generates a chain of 3 blocks.
+	signer := types.HomesteadSigner{}
+	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
+	// to the BlockChain's database while generating blocks.
+	chain1, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, 20, func(i int, gen *BlockGen) {
+		// Send all funds back and forth between the two accounts
+		if i%2 == 0 {
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, genesisBalance, params.TxGas, nil, nil), signer, key1)
+			gen.AddTx(tx)
+		} else {
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr1, genesisBalance, params.TxGas, nil, nil), signer, key2)
+			gen.AddTx(tx)
+		}
+	})
+	// Build second chain forked off of the 10th block in [chain1]
+	chain2, _ := GenerateChain(gspec.Config, chain1[9], dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, 10, func(i int, gen *BlockGen) {
+		// Send all funds back and forth between the two accounts
+		if i%2 == 0 {
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr3), addr2, genesisBalance, params.TxGas, nil, nil), signer, key3)
+			gen.AddTx(tx)
+		} else {
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, genesisBalance, params.TxGas, nil, nil), signer, key2)
+			gen.AddTx(tx)
+		}
+	})
+	// Build third chain forked off of the 5th block in [chain1].
+	// The parent of this chain will be accepted before this fork
+	// is inserted.
+	chain3, _ := GenerateChain(gspec.Config, chain1[4], dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, 10, func(i int, gen *BlockGen) {
+		// Send all funds back and forth between accounts 2 and 3.
+		if i%2 == 0 {
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, genesisBalance, params.TxGas, nil, nil), signer, key2)
+			gen.AddTx(tx)
+		} else {
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr3), addr2, genesisBalance, params.TxGas, nil, nil), signer, key3)
+			gen.AddTx(tx)
+		}
+	})
+
+	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	// Insert first 10 blocks from [chain1]
+	if _, err := blockchain.InsertChain(chain1); err != nil {
+		t.Fatal(err)
+	}
+	// Accept the first 5 blocks
+	for _, block := range chain1[0:5] {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Insert the forked chain [chain2] which starts at the 10th
+	// block in [chain1] ie. a block that is still in processing.
+	if _, err := blockchain.InsertChain(chain2); err != nil {
+		t.Fatal(err)
+	}
+	// Insert another forked chain starting at the last accepted
+	// block from [chain1].
+	if _, err := blockchain.InsertChain(chain3); err != nil {
+		t.Fatal(err)
+	}
+	// Accept the next block in [chain1] and then reject all
+	// of the blocks in [chain3], which would then be rejected.
+	if err := blockchain.Accept(chain1[5]); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain3 {
+		if err := blockchain.Reject(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Accept the rest of the blocks in [chain1]
+	for _, block := range chain1[6:10] {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Accept the first block in [chain2] and reject the
+	// subsequent blocks in [chain1] which would then be rejected.
+	if err := blockchain.Accept(chain2[0]); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain1[10:] {
+		if err := blockchain.Reject(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// check the state of the last accepted block
+	checkState := func(sdb *state.StateDB) error {
+		nonce := sdb.GetNonce(addr1)
+		if nonce != 5 {
+			return fmt.Errorf("expected nonce addr1: 5, found nonce: %d", nonce)
+		}
+		balance1 := sdb.GetBalance(addr1)
+		expectedBalance1 := genesisBalance
+		if balance1.Cmp(expectedBalance1) != 0 {
+			return fmt.Errorf("expected addr1 balance: %d, found balance: %d", expectedBalance1, balance1)
+		}
+
+		balance2 := sdb.GetBalance(addr2)
+		expectedBalance2 := genesisBalance
+		if balance2.Cmp(expectedBalance2) != 0 {
+			return fmt.Errorf("expected addr2 balance: %d, found balance: %d", expectedBalance2, balance2)
+		}
+
+		nonce = sdb.GetNonce(addr2)
+		if nonce != 5 {
+			return fmt.Errorf("expected addr2 nonce: 5, found nonce: %d", nonce)
+		}
+
+		balance3 := sdb.GetBalance(addr3)
+		expectedBalance3 := common.Big0
+		if balance3.Cmp(expectedBalance3) != 0 {
+			return fmt.Errorf("expected addr3 balance: %d, found balance: %d", expectedBalance3, balance3)
+		}
+
+		nonce = sdb.GetNonce(addr3)
+		if nonce != 1 {
+			return fmt.Errorf("expected addr3 nonce: 1, found nonce: %d", nonce)
+		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
