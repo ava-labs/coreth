@@ -352,7 +352,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState as necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	return bc.reprocessState(bc.lastAccepted, maxTrieInterval, true)
+	return bc.reprocessState(bc.lastAccepted, 2*commitInterval, true)
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -932,12 +932,12 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.lastAccepted = block
 
 	// Accept Trie
-	if err := bc.stateManager.AcceptTrie(block.Root()); err != nil {
+	if err := bc.stateManager.AcceptTrie(block); err != nil {
 		return fmt.Errorf("unable to accept trie: %w", err)
 	}
 
 	// Flatten the entire snap Trie to disk
-	if err := bc.snaps.FlattenAncestors(block.Root()); err != nil {
+	if err := bc.snaps.Flatten(block.Root()); err != nil {
 		return fmt.Errorf("unable to flatten trie: %w", err)
 	}
 
@@ -968,7 +968,7 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 	defer bc.chainmu.Unlock()
 
 	// Reject Trie
-	if err := bc.stateManager.RejectTrie(block.Root()); err != nil {
+	if err := bc.stateManager.RejectTrie(block); err != nil {
 		return fmt.Errorf("unable to reject trie: %w", err)
 	}
 
@@ -1032,7 +1032,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
+	_, err = state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -1042,7 +1042,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// error then the block has passed verification and either AcceptTrie/RejectTrie will
 	// eventually be called on [root] unless a fatal error occurs. It does not assume that
 	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
-	if err := bc.stateManager.InsertTrie(root); err != nil {
+	if err := bc.stateManager.InsertTrie(block); err != nil {
 		return NonStatTy, err
 	}
 

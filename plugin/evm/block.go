@@ -136,7 +136,7 @@ func (b *Block) Accept() error {
 
 	if bonusBlocks.Contains(b.id) {
 		log.Info("skipping atomic tx acceptance on bonus block", "block", b.id)
-		return nil
+		return vm.db.Commit()
 	}
 
 	// Note: since CommitBatch holds the database lock, this precludes any other
