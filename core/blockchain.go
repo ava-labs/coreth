@@ -938,7 +938,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Flatten the entire snap Trie to disk
 	if err := bc.snaps.FlattenAncestors(block.Root()); err != nil {
-		log.Warn("Failed to cap snapshot tree", "root", block.Root(), "layers", 0, "err", err)
+		return fmt.Errorf("unable to flatten trie: %w", err)
 	}
 
 	// Fetch block logs
