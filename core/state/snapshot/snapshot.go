@@ -315,8 +315,9 @@ func (t *Tree) Flatten(root common.Hash) error {
 		return fmt.Errorf("snapshot [%#x] missing", root)
 	}
 	diff, ok := snap.(*diffLayer)
+	// If [root] already reflects a disk layer, Flatten is a no-op.
 	if !ok {
-		return fmt.Errorf("snapshot [%#x] is disk layer", root)
+		return nil
 	}
 	if diff.parent == nil {
 		return fmt.Errorf("snapshot [%#x] missing parent", root)

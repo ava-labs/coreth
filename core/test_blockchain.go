@@ -70,6 +70,10 @@ var tests = []ChainTest{
 		"TestBuildOnVariousStages",
 		TestBuildOnVariousStages,
 	},
+	{
+		"TestEmptyBlocks",
+		TestEmptyBlocks,
+	},
 }
 
 // checkBlockChainState creates a new BlockChain instance and checks that exporting each block from
@@ -769,6 +773,52 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 		if nonce != 1 {
 			return fmt.Errorf("expected addr3 nonce: 1, found nonce: %d", nonce)
 		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
+}
+
+func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+	var (
+		// We use two separate databases since GenerateChain commits the state roots to its underlying
+		// database.
+		genDB   = rawdb.NewMemoryDatabase()
+		chainDB = rawdb.NewMemoryDatabase()
+	)
+
+	// Ensure that key1 has some funds in the genesis block.
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  GenesisAlloc{},
+	}
+	genesis := gspec.MustCommit(genDB)
+	_ = gspec.MustCommit(chainDB)
+
+	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
+	// to the BlockChain's database while generating blocks.
+	chain, _ := GenerateChain(gspec.Config, genesis, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), genDB, 1, func(i int, gen *BlockGen) {
+		// gen.SetExtra([]byte{byte(i)})
+	})
+
+	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	// Insert three blocks into the chain and accept only the first block.
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Nothing to assert about the state
+	checkState := func(sdb *state.StateDB) error {
 		return nil
 	}
 
