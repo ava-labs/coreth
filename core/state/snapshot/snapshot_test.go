@@ -335,11 +335,6 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	if err := shouldErr(snap, "0xa3"); err != nil {
 		t.Error(err)
 	}
-	// Now, merge it again, just for fun. It should now error, since a3
-	// is a disk layer
-	if err := snaps.Flatten(common.HexToHash("0xa3")); err == nil {
-		t.Error("expected error capping the disk layer, got none")
-	}
 }
 
 // TestSnaphots tests the functionality for retrieveing the snapshot
