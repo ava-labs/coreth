@@ -359,7 +359,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState as necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	return bc.reprocessState(bc.lastAccepted, maxTrieInterval, true)
+	return bc.reprocessState(bc.lastAccepted, 2*commitInterval, true)
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -842,13 +842,20 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	bc.lastAccepted = block
 
-	// Update transaction lookup index
-	rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
+	// Accept Trie
+	if err := bc.stateManager.AcceptTrie(block); err != nil {
+		return fmt.Errorf("unable to accept trie: %w", err)
+	}
 
 	// Flatten the entire snap Trie to disk
-	if err := bc.snaps.Cap(block.Root(), 0); err != nil {
-		log.Warn("Failed to cap snapshot tree", "root", block.Root(), "layers", 0, "err", err)
+	if bc.snaps != nil {
+		if err := bc.snaps.Flatten(block.Root()); err != nil {
+			return fmt.Errorf("unable to flatten trie: %w", err)
+		}
 	}
+
+	// Update transaction lookup index
+	rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 
 	// Fetch block logs
 	receipts := rawdb.ReadReceipts(bc.db, block.Hash(), block.NumberU64(), bc.chainConfig)
@@ -869,19 +876,31 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		bc.txAcceptedFeed.Send(NewTxsEvent{block.Transactions()})
 	}
 
-	return bc.stateManager.AcceptTrie(block.Root())
+	return nil
 }
 
 func (bc *BlockChain) Reject(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	// Reject Trie
+	if err := bc.stateManager.RejectTrie(block); err != nil {
+		return fmt.Errorf("unable to reject trie: %w", err)
+	}
+
+	if bc.snaps != nil {
+		if err := bc.snaps.Discard(block.Root()); err != nil {
+			log.Error("unable to discard snap from rejected block", "block", block.Hash(), "number", block.NumberU64(), "root", block.Root())
+		}
+	}
+
 	// If pruning is enabled, delete the rejected block.
 	if bc.cacheConfig.Pruning {
 		// Remove the block since its data is no longer needed
 		rawdb.DeleteBlock(bc.db, block.Hash(), block.NumberU64())
 	}
-	return bc.stateManager.RejectTrie(block.Root())
+
+	return nil
 }
 
 // writeKnownBlock updates the head block flag with a known block
@@ -931,7 +950,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
+	_, err = state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -941,7 +960,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// error then the block has passed verification and either AcceptTrie/RejectTrie will
 	// eventually be called on [root] unless a fatal error occurs. It does not assume that
 	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
-	if err := bc.stateManager.InsertTrie(root); err != nil {
+	if err := bc.stateManager.InsertTrie(block); err != nil {
 		return NonStatTy, err
 	}
 

@@ -304,6 +304,87 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	return nil
 }
 
+// Flatten flattens the given root into its parent. If it's parent is not
+// a disk layer, Flatten will return an error. Layers built on top of the
+// root are not removed. It is the responsibility of the caller to call
+// Discard to clean up any additional layers built on the parent of [root].
+func (t *Tree) Flatten(root common.Hash) error {
+	// Retrieve the head snapshot to cap from
+	snap := t.Snapshot(root)
+	if snap == nil {
+		return fmt.Errorf("snapshot [%#x] missing", root)
+	}
+	diff, ok := snap.(*diffLayer)
+	if !ok {
+		return fmt.Errorf("snapshot [%#x] is disk layer", root)
+	}
+	if diff.parent == nil {
+		return fmt.Errorf("snapshot [%#x] missing parent", root)
+	}
+
+	if _, ok := diff.parent.(*diskLayer); !ok {
+		return fmt.Errorf("snapshot [%#x] parent is diff layer", root)
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	diff.lock.RLock()
+	base := diffToDisk(diff)
+	diff.lock.RUnlock()
+
+	// Remove all ancestor layers
+	// The caller must ensure they call Discard to, which is responsible for
+	// cleaning up layers.
+	parentLayer := t.layers[diff.parent.Root()]
+	for parentLayer != nil {
+
+		// We're at the end of the available ancestor chain so we're done
+		if _, ok := t.layers[parentLayer.Root()]; !ok {
+			break
+		}
+
+		delete(t.layers, parentLayer.Root())
+
+		if parentLayer.Parent() != nil {
+			parentLayer = t.layers[parentLayer.Parent().Root()]
+		}
+	}
+
+	t.layers[base.root] = base
+
+	// Replace root with base in parent pointers
+	for _, snap := range t.layers {
+		if diff, ok := snap.(*diffLayer); ok {
+			if base.root == diff.parent.Root() {
+				diff.parent = base
+			}
+		}
+	}
+
+	log.Debug("layer size", "size", len(t.layers))
+	return nil
+}
+
+func (t *Tree) Layers() map[common.Hash]snapshot {
+	return t.layers
+}
+
+// Discard removes layers that we no longer need
+func (t *Tree) Discard(root common.Hash) error {
+	snap := t.Snapshot(root)
+	if snap == nil {
+		return fmt.Errorf("snapshot [%#x] missing", root)
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	// TODO: may be easier to find all now invalid roots at the same height
+	delete(t.layers, root)
+	return nil
+}
+
 // Cap traverses downwards the snapshot tree from a head block hash until the
 // number of allowed layers are crossed. All layers beyond the permitted number
 // are flattened downwards.

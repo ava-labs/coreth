@@ -28,30 +28,33 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 const (
-	maxTrieInterval uint64 = 128
+	commitInterval = 4096
 )
 
 type TrieWriter interface {
-	InsertTrie(root common.Hash) error // Insert reference to trie [root]
-	AcceptTrie(root common.Hash) error // Mark [root] as part of an accepted block
-	RejectTrie(root common.Hash) error // Notify TrieWriter that the block containing [root] has been rejected
+	InsertTrie(block *types.Block) error // Insert reference to trie [root]
+	AcceptTrie(block *types.Block) error // Mark [root] as part of an accepted block
+	RejectTrie(block *types.Block) error // Notify TrieWriter that the block containing [root] has been rejected
 	Shutdown() error
 }
 
 func NewTrieWriter(db state.Database, config *CacheConfig) TrieWriter {
 	if config.Pruning {
 		return &cappedMemoryTrieWriter{
-			Database:          db,
-			memoryCap:         common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
-			imageCap:          4 * 1024 * 1024,
-			maxBlocksAccepted: maxTrieInterval,
+			Database:           db,
+			memoryCap:          common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
+			imageCap:           4 * 1024 * 1024,
+			commitInterval:     commitInterval,
+			randomizedInterval: uint64(rand.Int63n(commitInterval)) + commitInterval,
 		}
 	} else {
 		return &noPruningTrieWriter{
@@ -64,30 +67,30 @@ type noPruningTrieWriter struct {
 	state.Database
 }
 
-func (np *noPruningTrieWriter) InsertTrie(root common.Hash) error {
+func (np *noPruningTrieWriter) InsertTrie(block *types.Block) error {
 	triedb := np.Database.TrieDB()
-	return triedb.Commit(root, false, nil)
+	return triedb.Commit(block.Root(), false, nil)
 }
 
-func (np *noPruningTrieWriter) AcceptTrie(root common.Hash) error { return nil }
+func (np *noPruningTrieWriter) AcceptTrie(block *types.Block) error { return nil }
 
-func (np *noPruningTrieWriter) RejectTrie(root common.Hash) error { return nil }
+func (np *noPruningTrieWriter) RejectTrie(block *types.Block) error { return nil }
 
 func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
 type cappedMemoryTrieWriter struct {
 	state.Database
-	memoryCap                         common.StorageSize
-	imageCap                          common.StorageSize
-	lastAcceptedRoot                  common.Hash
-	blocksAccepted, maxBlocksAccepted uint64
+	memoryCap                          common.StorageSize
+	imageCap                           common.StorageSize
+	lastAcceptedRoot                   common.Hash
+	commitInterval, randomizedInterval uint64
 }
 
-func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
+func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
 	triedb := cm.Database.TrieDB()
-	triedb.Reference(root, common.Hash{})
-	nodes, imgs := triedb.Size()
+	triedb.Reference(block.Root(), common.Hash{})
 
+	nodes, imgs := triedb.Size()
 	if nodes > cm.memoryCap || imgs > cm.imageCap {
 		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
 	}
@@ -95,34 +98,25 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 	return nil
 }
 
-func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
+func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	triedb := cm.Database.TrieDB()
+	cm.lastAcceptedRoot = block.Root()
 
-	cm.blocksAccepted++
-	cm.lastAcceptedRoot = root
-
-	// If we haven't committed an accepted block root within the desired
-	// interval make sure to commit this root.
-	if cm.blocksAccepted > cm.maxBlocksAccepted {
-		if err := triedb.Commit(root, false, nil); err != nil {
-			return fmt.Errorf("failed to commit trie root %s: %w", root.Hex(), err)
+	// Commit this root if we haven't committed an accepted block root within
+	// the desired interval.
+	// Note: a randomized interval is added here to ensure that pruning nodes
+	// do not all only commit at the exact same heights.
+	if height := block.NumberU64(); height%cm.commitInterval == 0 || height%cm.randomizedInterval == 0 {
+		if err := triedb.Commit(block.Root(), true, nil); err != nil {
+			return fmt.Errorf("failed to commit trie for block %s: %w", block.Hash().Hex(), err)
 		}
-		cm.blocksAccepted = 0
 	}
-
-	// Cap the memory consumption by the dirty cache if it is exceeding
-	// desired limit.
-	nodes, imgs := triedb.Size()
-	if nodes > cm.memoryCap || imgs > cm.imageCap {
-		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
-	}
-
 	return nil
 }
 
-func (cm *cappedMemoryTrieWriter) RejectTrie(root common.Hash) error {
+func (cm *cappedMemoryTrieWriter) RejectTrie(block *types.Block) error {
 	triedb := cm.Database.TrieDB()
-	triedb.Dereference(root)
+	triedb.Dereference(block.Root())
 	return nil
 }
 
@@ -136,5 +130,5 @@ func (cm *cappedMemoryTrieWriter) Shutdown() error {
 	// Attempt to commit [lastAcceptedRoot] on shutdown to avoid
 	// re-processing the state on the next startup.
 	triedb := cm.Database.TrieDB()
-	return triedb.Commit(cm.lastAcceptedRoot, false, nil)
+	return triedb.Commit(cm.lastAcceptedRoot, true, nil)
 }

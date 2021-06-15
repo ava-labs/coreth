@@ -27,7 +27,6 @@
 package ethconfig
 
 import (
-	"errors"
 	"math/big"
 	"time"
 
@@ -160,16 +159,4 @@ type Config struct {
 
 	// AllowUnfinalizedQueries allow unfinalized queries
 	AllowUnfinalizedQueries bool
-}
-
-func (cfg *Config) SetGCMode(gcmode string) error {
-	switch gcmode {
-	case "full":
-		cfg.Pruning = true
-	case "archive":
-		cfg.Pruning = false
-	default:
-		return errors.New("invalid gcmode value")
-	}
-	return nil
 }
