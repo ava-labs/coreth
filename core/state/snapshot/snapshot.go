@@ -336,6 +336,8 @@ func (t *Tree) FlattenAncestors(root common.Hash) error {
 	// cleaning up layers.
 	parentLayer := t.layers[diff.parent.Root()]
 	for parentLayer != nil {
+
+		// We're at the end of the available ancestor chain so we're done
 		if _, ok := t.layers[parentLayer.Root()]; !ok {
 			break
 		}
@@ -362,9 +364,11 @@ func (t *Tree) FlattenAncestors(root common.Hash) error {
 	return nil
 }
 
-// TODO: add tests to ensure we are deleting the right layer on
-// reject
-// This is needed because we no longer call Cap (as it clobbers all layers)
+func (t *Tree) Layers() map[common.Hash]snapshot {
+	return t.layers
+}
+
+// Discard removes layers that we no longer need
 func (t *Tree) Discard(root common.Hash) error {
 	snap := t.Snapshot(root)
 	if snap == nil {
