@@ -824,7 +824,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	// The parent of [block] must be the last accepted block.
 	if bc.lastAccepted.Hash() != block.ParentHash() {
 		return fmt.Errorf(
-			"expected accepted parent block %s:%d but got %s:%d",
+			"expected accepted block to have parent %s:%d but got %s:%d",
 			bc.lastAccepted.Hash().Hex(),
 			bc.lastAccepted.NumberU64(),
 			block.ParentHash().Hex(),
