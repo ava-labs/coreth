@@ -93,8 +93,6 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 
 func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
 	triedb := cm.Database.TrieDB()
-	nodes, imgs := triedb.Size()
-
 	// Dereference last accepted root
 	triedb.Dereference(cm.lastAcceptedRoot)
 	cm.lastAcceptedRoot = root
@@ -109,9 +107,19 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
 		return nil
 	}
 
+	nodes, imgs := triedb.Size()
 	if nodes > cm.memoryCap || imgs > cm.imageCap {
 		log.Info("Cap Tree", "nodes", nodes, "imgs", imgs)
-		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
+
+		// Commit block and recheck to see if we still need to Cap
+		if err := triedb.Commit(root, true, nil); err != nil {
+			return fmt.Errorf("failed to commit trie root %s: %w", root.Hex(), err)
+		}
+		nodes, imgs = triedb.Size()
+
+		if nodes > cm.memoryCap || imgs > cm.imageCap {
+			return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
+		}
 	}
 
 	return nil
