@@ -53,6 +53,8 @@ import (
 )
 
 var (
+	txIndexCleanup = []byte("tx_index_cleanup")
+
 	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
 	errCacheConfigNotSpecified = errors.New("must specify cache config")
 )
@@ -329,10 +331,35 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 		return fmt.Errorf("could not load last accepted block")
 	}
 
+	// Remove all tx indexes above lastAccepted (done before set preference so
+	// can still fetch block).
+	indexesCleaned, err := bc.db.Has(txIndexCleanup)
+	if err != nil {
+		return fmt.Errorf("unable to determine if tx index clean: %w", err)
+	}
+	if !indexesCleaned {
+		transactionsCleaned := 0
+		for i := currentBlock.NumberU64(); i > bc.lastAccepted.NumberU64(); i-- {
+			b := bc.GetBlockByNumber(i)
+			if b == nil {
+				return fmt.Errorf("could not load canonical block: %d", i)
+			}
+			for _, tx := range b.Transactions() {
+				rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
+				transactionsCleaned++
+			}
+		}
+		if err := bc.db.Put(txIndexCleanup, bc.lastAccepted.Number().Bytes()); err != nil {
+			return fmt.Errorf("unable to mark tx indexes cleaned: %w", err)
+		}
+		log.Debug("Cleaned transaction indexes", "count", transactionsCleaned)
+	}
+
 	// This ensures that the head block is updated to the last accepted block on startup
 	if err := bc.setPreference(bc.lastAccepted); err != nil {
 		return fmt.Errorf("failed to set preference to last accepted block while loading last state: %w", err)
 	}
+
 	// reprocessState as necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
@@ -1134,8 +1161,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		oldChain    types.Blocks
 		commonBlock *types.Block
 
-		deletedTxs types.Transactions
-
 		deletedLogs [][]*types.Log
 		rebirthLogs [][]*types.Log
 
@@ -1187,7 +1212,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// Old chain is longer, gather all transactions and logs as deleted ones
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
-			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 			collectLogs(oldBlock.Hash(), true)
 		}
 	} else {
@@ -1212,7 +1236,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 		// Remove an old block as well as stash away a new block
 		oldChain = append(oldChain, oldBlock)
-		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 		collectLogs(oldBlock.Hash(), true)
 
 		newChain = append(newChain, newBlock)
@@ -1257,15 +1280,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// Collect reborn logs due to chain reorg
 		collectLogs(newChain[i].Hash(), false)
 	}
-	// Delete useless indexes right now which includes the non-canonical
-	// transaction indexes, canonical chain indexes which above the head.
-	indexesBatch := bc.db.NewBatch()
-	for _, tx := range deletedTxs {
-		// TODO: convert to removing all these on startup (after v1.4.9 we will
-		// never add unconfirmed entries again)
-		rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
-	}
 	// Delete any canonical number assignments above the new head
+	indexesBatch := bc.db.NewBatch()
 	number := bc.CurrentBlock().NumberU64()
 	for i := number + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
