@@ -1474,7 +1474,7 @@ func TestReorgProtection(t *testing.T) {
 		t.Fatalf("Unexpected error when setting preference that would trigger reorg: %s", err)
 	}
 
-	if err := vm1BlkC.Accept(); !strings.Contains(err.Error(), "expected accepted parent block hash") {
+	if err := vm1BlkC.Accept(); !strings.Contains(err.Error(), "expected accepted block to have parent") {
 		t.Fatalf("Unexpected error when setting block at finalized height: %s", err)
 	}
 }
@@ -1958,7 +1958,7 @@ func TestStickyPreference(t *testing.T) {
 	}
 
 	// Attempt to accept out of order
-	if err := vm1BlkD.Accept(); !strings.Contains(err.Error(), "expected accepted parent block hash") {
+	if err := vm1BlkD.Accept(); !strings.Contains(err.Error(), "expected accepted block to have parent") {
 		t.Fatalf("unexpected error when accepting out of order block: %s", err)
 	}
 
