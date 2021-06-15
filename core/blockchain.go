@@ -848,11 +848,13 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	}
 
 	// Flatten the entire snap Trie to disk
-	if err := bc.snaps.Flatten(block.Root()); err != nil {
-		return fmt.Errorf("unable to flatten trie: %w", err)
+	if bc.snaps != nil {
+		if err := bc.snaps.Flatten(block.Root()); err != nil {
+			return fmt.Errorf("unable to flatten trie: %w", err)
+		}
 	}
-  
- 	// Update transaction lookup index
+
+	// Update transaction lookup index
 	rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 
 	// Fetch block logs
@@ -886,8 +888,10 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 		return fmt.Errorf("unable to reject trie: %w", err)
 	}
 
-	if err := bc.snaps.Discard(block.Root()); err != nil {
-		return fmt.Errorf("unable to clean rejected snapshot: %w", err)
+	if bc.snaps != nil {
+		if err := bc.snaps.Discard(block.Root()); err != nil {
+			log.Error("unable to discard snap from rejected block", "block", block.Hash(), "number", block.NumberU64(), "root", block.Root())
+		}
 	}
 
 	// If pruning is enabled, delete the rejected block.
