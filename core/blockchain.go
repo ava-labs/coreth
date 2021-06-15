@@ -53,7 +53,7 @@ import (
 )
 
 var (
-	txIndexCleanup = []byte("tx_index_cleanup")
+	removeTxIndicesKey = []byte("removed_tx_indices")
 
 	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
 	errCacheConfigNotSpecified = errors.New("must specify cache config")
@@ -331,28 +331,28 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 		return fmt.Errorf("could not load last accepted block")
 	}
 
-	// Remove all tx indexes above lastAccepted (done before set preference so
-	// can still fetch block).
-	indexesCleaned, err := bc.db.Has(txIndexCleanup)
+	// Remove all processing transaction indices leftover from when we used to
+	// write transaction indices as soon as a block was verified.
+	indicesRemoved, err := bc.db.Has(removeTxIndicesKey)
 	if err != nil {
-		return fmt.Errorf("unable to determine if tx index clean: %w", err)
+		return fmt.Errorf("unable to determine if transaction indices removed: %w", err)
 	}
-	if !indexesCleaned {
-		transactionsCleaned := 0
+	if !indicesRemoved {
+		indicesRemoved := 0
 		for i := currentBlock.NumberU64(); i > bc.lastAccepted.NumberU64(); i-- {
 			b := bc.GetBlockByNumber(i)
 			if b == nil {
-				return fmt.Errorf("could not load canonical block: %d", i)
+				return fmt.Errorf("could not load canonical block at height %d", i)
 			}
 			for _, tx := range b.Transactions() {
 				rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
-				transactionsCleaned++
+				indicesRemoved++
 			}
 		}
-		if err := bc.db.Put(txIndexCleanup, bc.lastAccepted.Number().Bytes()); err != nil {
-			return fmt.Errorf("unable to mark tx indexes cleaned: %w", err)
+		if err := bc.db.Put(removeTxIndicesKey, bc.lastAccepted.Number().Bytes()); err != nil {
+			return fmt.Errorf("unable to mark indices removed: %w", err)
 		}
-		log.Debug("Cleaned transaction indexes", "count", transactionsCleaned)
+		log.Debug("removed processing transaction indices", "count", indicesRemoved)
 	}
 
 	// This ensures that the head block is updated to the last accepted block on startup
