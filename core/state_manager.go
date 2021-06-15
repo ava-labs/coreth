@@ -54,7 +54,7 @@ func NewTrieWriter(db state.Database, config *CacheConfig) TrieWriter {
 			memoryCap:          common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
 			imageCap:           4 * 1024 * 1024,
 			commitInterval:     commitInterval,
-			randomizedInterval: uint64(rand.Int63n(commitInterval)),
+			randomizedInterval: uint64(rand.Int63n(commitInterval)) + commitInterval,
 		}
 	} else {
 		return &noPruningTrieWriter{
