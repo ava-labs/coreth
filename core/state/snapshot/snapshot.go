@@ -304,9 +304,11 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	return nil
 }
 
-// FlattenAncestors flattens the given root into all of its ancestors. Layers
-// built on top of the root are not removed.
-func (t *Tree) FlattenAncestors(root common.Hash) error {
+// Flatten flattens the given root into its parent. If it's parent is not
+// a disk layer, Flatten will return an error. Layers built on top of the
+// root are not removed. It is the responsibility of the caller to call
+// Discard to clean up any additional layers built on the parent of [root].
+func (t *Tree) Flatten(root common.Hash) error {
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
 	if snap == nil {
@@ -328,7 +330,7 @@ func (t *Tree) FlattenAncestors(root common.Hash) error {
 	defer t.lock.Unlock()
 
 	diff.lock.RLock()
-	base := diffToDisk(diff.flatten().(*diffLayer))
+	base := diffToDisk(diff)
 	diff.lock.RUnlock()
 
 	// Remove all ancestor layers
