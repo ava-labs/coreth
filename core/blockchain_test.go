@@ -46,7 +46,6 @@ func TestArchiveBlockChain(t *testing.T) {
 				TrieDirtyLimit: 256,
 				Pruning:        false, // Archive mode
 				SnapshotLimit:  256,
-				SnapshotWait:   true,
 			},
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
@@ -74,7 +73,6 @@ func TestPruningBlockChain(t *testing.T) {
 				TrieDirtyLimit: 256,
 				Pruning:        true, // Enable pruning
 				SnapshotLimit:  256,
-				SnapshotWait:   true,
 			},
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
@@ -108,7 +106,6 @@ func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
 				TrieDirtyLimit: 256,
 				Pruning:        true, // Enable pruning
 				SnapshotLimit:  256,
-				SnapshotWait:   true,
 			},
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),

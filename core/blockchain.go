@@ -60,13 +60,12 @@ var (
 )
 
 const (
-	bodyCacheLimit       = 256
-	blockCacheLimit      = 256
-	receiptsCacheLimit   = 32
-	txLookupCacheLimit   = 1024
-	badBlockLimit        = 10
-	TriesInMemory        = 128
-	repairBlockBatchSize = 10
+	bodyCacheLimit     = 256
+	blockCacheLimit    = 256
+	receiptsCacheLimit = 32
+	txLookupCacheLimit = 1024
+	badBlockLimit      = 10
+	TriesInMemory      = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
