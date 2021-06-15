@@ -324,7 +324,8 @@ func (t *Tree) FlattenAncestors(root common.Hash) error {
 	diff.lock.RUnlock()
 
 	// Remove all ancestor layers
-	// TODO: need to clean up rejected block layers too
+	// The caller must ensure they call Discard to, which is responsible for
+	// cleaning up layers.
 	parentLayer := t.layers[diff.parent.Root()]
 	for parentLayer != nil {
 		if _, ok := t.layers[parentLayer.Root()]; !ok {
@@ -340,8 +341,7 @@ func (t *Tree) FlattenAncestors(root common.Hash) error {
 
 	t.layers[base.root] = base
 
-	// TODO: set parent of anyone with root to be base to ensure
-	// we don't use a stale layer. There is probably a better way to do this.
+	// Replace root with base in parent pointers
 	for _, snap := range t.layers {
 		if diff, ok := snap.(*diffLayer); ok {
 			if base.root == diff.parent.Root() {
