@@ -146,12 +146,6 @@ func (self *ETHChain) ValidateCanonicalChain() error {
 	return self.backend.BlockChain().ValidateCanonicalChain()
 }
 
-// WriteCanonicalFromCurrentBlock writes the canonical chain from the
-// current block to the genesis.
-func (self *ETHChain) WriteCanonicalFromCurrentBlock(toBlock *types.Block) error {
-	return self.backend.BlockChain().WriteCanonicalFromCurrentBlock(toBlock)
-}
-
 // SetPreference sets the current head block to the one provided as an argument
 // regardless of what the chain contents were prior.
 func (self *ETHChain) SetPreference(block *types.Block) error {
