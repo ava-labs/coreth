@@ -106,15 +106,12 @@ type CacheConfig struct {
 	Pruning        bool // Whether to disable trie write caching and GC altogether (archive node)
 	SnapshotLimit  int  // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages      bool // Whether to store preimage of trie key to the disk
-
-	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
 var defaultCacheConfig = &CacheConfig{
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
 	SnapshotLimit:  256,
-	SnapshotWait:   true,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -260,7 +257,7 @@ func NewBlockChain(
 			recover = true
 		}
 		bc.snapsLock.Lock()
-		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), true, true, recover)
 		if err != nil {
 			log.Error("unable to initialize snapshots", "error", err)
 		}
