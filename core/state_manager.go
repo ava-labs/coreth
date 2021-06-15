@@ -28,6 +28,7 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
@@ -49,10 +50,11 @@ type TrieWriter interface {
 func NewTrieWriter(db state.Database, config *CacheConfig) TrieWriter {
 	if config.Pruning {
 		return &cappedMemoryTrieWriter{
-			Database:       db,
-			memoryCap:      common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
-			imageCap:       4 * 1024 * 1024,
-			commitInterval: commitInterval,
+			Database:           db,
+			memoryCap:          common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
+			imageCap:           4 * 1024 * 1024,
+			commitInterval:     commitInterval,
+			randomizedInterval: uint64(rand.Int63n(commitInterval)),
 		}
 	} else {
 		return &noPruningTrieWriter{
@@ -78,10 +80,10 @@ func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
 type cappedMemoryTrieWriter struct {
 	state.Database
-	memoryCap        common.StorageSize
-	imageCap         common.StorageSize
-	lastAcceptedRoot common.Hash
-	commitInterval   uint64
+	memoryCap                          common.StorageSize
+	imageCap                           common.StorageSize
+	lastAcceptedRoot                   common.Hash
+	commitInterval, randomizedInterval uint64
 }
 
 func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
@@ -101,8 +103,10 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	cm.lastAcceptedRoot = block.Root()
 
 	// Commit this root if we haven't committed an accepted block root within
-	// the desired interval
-	if block.NumberU64()%cm.commitInterval == 0 {
+	// the desired interval.
+	// Note: a randomized interval is added here to ensure that pruning nodes
+	// do not all only commit at the exact same heights.
+	if height := block.NumberU64(); height%cm.commitInterval == 0 || height%cm.randomizedInterval == 0 {
 		if err := triedb.Commit(block.Root(), true, nil); err != nil {
 			return fmt.Errorf("failed to commit trie for block %s: %w", block.Hash().Hex(), err)
 		}
