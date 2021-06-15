@@ -87,9 +87,17 @@ type cappedMemoryTrieWriter struct {
 func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 	triedb := cm.Database.TrieDB()
 	triedb.Reference(root, common.Hash{})
+	cm.uncommittedDepth++
+	return nil
+}
+
+func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
+	triedb := cm.Database.TrieDB()
 	nodes, imgs := triedb.Size()
 
-	cm.uncommittedDepth++
+	// Dereference last accepted root
+	triedb.Dereference(cm.lastAcceptedRoot)
+	cm.lastAcceptedRoot = root
 
 	// Commit this root if we haven't committed an accepted block root within
 	// the desired interval
@@ -106,15 +114,6 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(root common.Hash) error {
 		return triedb.Cap(cm.memoryCap - ethdb.IdealBatchSize)
 	}
 
-	return nil
-}
-
-func (cm *cappedMemoryTrieWriter) AcceptTrie(root common.Hash) error {
-	triedb := cm.Database.TrieDB()
-
-	// Dereference last accepted root
-	triedb.Dereference(cm.lastAcceptedRoot)
-	cm.lastAcceptedRoot = root
 	return nil
 }
 
