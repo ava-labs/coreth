@@ -196,7 +196,7 @@ func New(stack *node.Node, config *Config,
 		}
 	)
 	var err error
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, lastAcceptedHash)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, lastAcceptedHash)
 	if err != nil {
 		return nil, err
 	}

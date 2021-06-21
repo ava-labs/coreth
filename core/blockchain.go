@@ -181,7 +181,7 @@ type BlockChain struct {
 // Processor.
 func NewBlockChain(
 	db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine,
-	vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64, lastAcceptedHash common.Hash,
+	vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, lastAcceptedHash common.Hash,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified

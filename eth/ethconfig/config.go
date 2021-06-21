@@ -98,8 +98,6 @@ type Config struct {
 
 	Pruning bool // Whether to disable pruning and flush everything to disk
 
-	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
-
 	// Whitelist of required block number -> hash values to accept
 	Whitelist map[uint64]common.Hash `toml:"-"`
 
