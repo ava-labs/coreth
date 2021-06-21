@@ -997,7 +997,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			log.Crit("Failed to commit dirty codes", "error", err)
 		}
 	}
-	// Write the account trie changes, measuing the amount of wasted time
+	// Write the account trie changes, measuring the amount of wasted time
 	var start time.Time
 	if metrics.EnabledExpensive {
 		start = time.Now()
