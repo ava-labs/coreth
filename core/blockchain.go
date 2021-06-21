@@ -331,21 +331,14 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 		return fmt.Errorf("unable to determine if transaction indices removed: %w", err)
 	}
 	if !indicesRemoved {
-		indicesRemoved := 0
-		for i := currentBlock.NumberU64(); i > bc.lastAccepted.NumberU64(); i-- {
-			b := bc.GetBlockByNumber(i)
-			if b == nil {
-				return fmt.Errorf("could not load canonical block at height %d", i)
-			}
-			for _, tx := range b.Transactions() {
-				rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
-				indicesRemoved++
-			}
+		indicesRemoved, err := bc.removeIndices(currentBlock.NumberU64(), bc.lastAccepted.NumberU64())
+		if err != nil {
+			return err
 		}
 		if err := bc.db.Put(removeTxIndicesKey, bc.lastAccepted.Number().Bytes()); err != nil {
 			return fmt.Errorf("unable to mark indices removed: %w", err)
 		}
-		log.Debug("removed processing transaction indices", "count", indicesRemoved)
+		log.Debug("removed processing transaction indices", "count", indicesRemoved, "currentBlock", currentBlock.NumberU64(), "lastAccepted", bc.lastAccepted.NumberU64())
 	}
 
 	// This ensures that the head block is updated to the last accepted block on startup
@@ -357,6 +350,23 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
 	return bc.reprocessState(bc.lastAccepted, 2*commitInterval, true)
+}
+
+// removeIndices removes all transaction lookup entries for the transactions contained in the canonical chain
+// from block at height [to] to block at height [from]. Blocks are traversed in reverse order.
+func (bc *BlockChain) removeIndices(from, to uint64) (int, error) {
+	indicesRemoved := 0
+	for i := from; i > to; i-- {
+		b := bc.GetBlockByNumber(i)
+		if b == nil {
+			return indicesRemoved, fmt.Errorf("could not load canonical block at height %d", i)
+		}
+		for _, tx := range b.Transactions() {
+			rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
+			indicesRemoved++
+		}
+	}
+	return indicesRemoved, nil
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
