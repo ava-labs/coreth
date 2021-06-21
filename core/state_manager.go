@@ -100,14 +100,16 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
 
 func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	triedb := cm.Database.TrieDB()
-	cm.lastAcceptedRoot = block.Root()
+	root := block.Root()
+	triedb.Dereference(cm.lastAcceptedRoot)
+	cm.lastAcceptedRoot = root
 
 	// Commit this root if we haven't committed an accepted block root within
 	// the desired interval.
 	// Note: a randomized interval is added here to ensure that pruning nodes
 	// do not all only commit at the exact same heights.
 	if height := block.NumberU64(); height%cm.commitInterval == 0 || height%cm.randomizedInterval == 0 {
-		if err := triedb.Commit(block.Root(), true, nil); err != nil {
+		if err := triedb.Commit(root, true, nil); err != nil {
 			return fmt.Errorf("failed to commit trie for block %s: %w", block.Hash().Hex(), err)
 		}
 	}
