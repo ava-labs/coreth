@@ -35,7 +35,6 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 )
 
 // DefaultFullGPOConfig contains default gasprice oracle settings for full node.
@@ -57,7 +56,6 @@ var DefaultConfig = NewDefaultConfig()
 
 func NewDefaultConfig() Config {
 	return Config{
-		SyncMode:                downloader.FastSync,
 		NetworkId:               1,
 		LightPeers:              100,
 		UltraLightFraction:      75,
@@ -90,7 +88,6 @@ type Config struct {
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
-	SyncMode  downloader.SyncMode
 
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// for nodes to connect to.
