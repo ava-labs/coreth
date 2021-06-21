@@ -739,16 +739,8 @@ func (bc *BlockChain) Stop() {
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
 	if bc.snaps != nil {
-		var err error
-		snapBase, err := bc.snaps.Journal(bc.LastAcceptedBlock().Root())
-		if err != nil {
+		if _, err := bc.snaps.Journal(bc.LastAcceptedBlock().Root()); err != nil {
 			log.Error("Failed to journal state snapshot", "err", err)
-		}
-		if bc.cacheConfig.Pruning && snapBase != (common.Hash{}) {
-			triedb := bc.stateCache.TrieDB()
-			if err := triedb.Commit(snapBase, true, nil); err != nil {
-				log.Error("Failed to commit recent state trie", "err", err)
-			}
 		}
 	}
 	if err := bc.stateManager.Shutdown(); err != nil {
@@ -1522,7 +1514,7 @@ func (bc *BlockChain) reprocessState(block *types.Block, reexec uint64, report b
 		origin  = block.NumberU64()
 	)
 	// If the state is already available, skip re-processing
-	statedb, err := state.New(current.Root(), bc.stateCache, bc.snaps)
+	statedb, err := state.New(current.Root(), bc.stateCache, nil)
 	if err == nil {
 		return nil
 	}
@@ -1537,7 +1529,7 @@ func (bc *BlockChain) reprocessState(block *types.Block, reexec uint64, report b
 		}
 		current = parent
 
-		statedb, err = state.New(current.Root(), bc.stateCache, bc.snaps)
+		statedb, err = state.New(current.Root(), bc.stateCache, nil)
 		if err == nil {
 			break
 		}
@@ -1581,7 +1573,7 @@ func (bc *BlockChain) reprocessState(block *types.Block, reexec uint64, report b
 		if err != nil {
 			return err
 		}
-		statedb, err = state.New(root, bc.stateCache, bc.snaps)
+		statedb, err = state.New(root, bc.stateCache, nil)
 		if err != nil {
 			return fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
