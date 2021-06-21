@@ -79,7 +79,7 @@ func ExampleGenerateChain() {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, defaultCacheConfig, gspec.Config, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), vm.Config{}, nil, common.Hash{})
+	blockchain, _ := NewBlockChain(db, defaultCacheConfig, gspec.Config, dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)), vm.Config{}, common.Hash{})
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(chain); err != nil {

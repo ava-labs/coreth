@@ -50,7 +50,6 @@ func TestArchiveBlockChain(t *testing.T) {
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
 			vm.Config{},
-			nil,
 			lastAcceptedHash,
 		)
 		return blockchain, err
@@ -76,7 +75,6 @@ func TestPruningBlockChain(t *testing.T) {
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
 			vm.Config{},
-			nil,
 			lastAcceptedHash,
 		)
 		return blockchain, err
@@ -108,7 +106,6 @@ func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
 			chainConfig,
 			dummy.NewDummyEngine(new(dummy.ConsensusCallbacks)),
 			vm.Config{},
-			nil,
 			lastAcceptedHash,
 		)
 		if err != nil {
