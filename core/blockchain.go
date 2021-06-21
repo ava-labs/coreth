@@ -44,7 +44,6 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -135,7 +134,6 @@ type BlockChain struct {
 
 	snaps     *snapshot.Tree // Snapshot tree for fast trie leaf access
 	snapsLock sync.Mutex     // Lock protecting modification of snaps pointer
-	triegc    *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc    time.Duration  // Accumulates canonical block processing for trie dumping
 
 	hc                *HeaderChain
@@ -198,7 +196,6 @@ func NewBlockChain(
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
 		db:          db,
-		triegc:      prque.New(nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Preimages: cacheConfig.Preimages,
