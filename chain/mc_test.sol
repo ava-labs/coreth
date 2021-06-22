@@ -18,7 +18,7 @@ contract MCTest {
     function withdraw(uint256 amount, uint256 coinid, uint256 amount2) public {
         (bool success,) = MultiCoin.call(
             abi.encodeWithSignature("transfer(address,uint256,uint256,uint256)",
-                                    msg.sender, amount, coinid, amount2));
+            msg.sender, amount, coinid, amount2));
 
         require(success);
     }

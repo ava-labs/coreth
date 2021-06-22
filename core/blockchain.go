@@ -36,13 +36,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tenderly/coreth/consensus"
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/core/state"
-	"github.com/tenderly/coreth/core/state/snapshot"
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/core/vm"
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -53,6 +46,13 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/tenderly/coreth/consensus"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/core/state"
+	"github.com/tenderly/coreth/core/state/snapshot"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/core/vm"
+	"github.com/tenderly/coreth/params"
 )
 
 var (

@@ -29,10 +29,10 @@ package core
 import (
 	"time"
 
-	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/coreth/core/types"
 )
 
 // insertStats tracks and reports on block insertion.

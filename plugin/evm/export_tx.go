@@ -176,10 +176,10 @@ func (tx *UnsignedExportTx) Accept(ctx *snow.Context, _ database.Batch) error {
 
 // newExportTx returns a new ExportTx
 func (vm *VM) newExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
+	assetID ids.ID,                      // AssetID of the tokens to export
+	amount uint64,                       // Amount of tokens to export
+	chainID ids.ID,                      // Chain to send the UTXOs to
+	to ids.ShortID,                      // Address of chain recipient
 	keys []*crypto.PrivateKeySECP256K1R, // Pay the fee and provide the tokens
 ) (*Tx, error) {
 	if vm.ctx.XChainID != chainID {

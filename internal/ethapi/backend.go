@@ -31,6 +31,10 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/tenderly/coreth/accounts"
 	"github.com/tenderly/coreth/consensus"
 	"github.com/tenderly/coreth/core"
@@ -40,10 +44,6 @@ import (
 	"github.com/tenderly/coreth/core/vm"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 )
 
 // Backend interface provides the common API services (that are provided by

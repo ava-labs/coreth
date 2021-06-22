@@ -33,14 +33,14 @@ import (
 	mrand "math/rand"
 	"sync/atomic"
 
-	"github.com/tenderly/coreth/consensus"
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/tenderly/coreth/consensus"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/params"
 )
 
 const (

@@ -34,15 +34,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/core/state/snapshot"
-	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/core/state/snapshot"
+	"github.com/tenderly/coreth/core/types"
 )
 
 type revision struct {
@@ -1005,7 +1005,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
-	root, err := s.trie.Commit(func(path []byte, leaf []byte, parent common.Hash) error {
+	root, err := s.trie.Commit(func(path [][]byte, hexpath []byte, leaf []byte, parent common.Hash) error {
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}

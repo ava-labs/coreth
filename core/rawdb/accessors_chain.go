@@ -31,13 +31,13 @@ import (
 	"encoding/binary"
 	"math/big"
 
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/params"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.

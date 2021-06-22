@@ -29,11 +29,11 @@ package core
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tenderly/coreth/consensus"
 	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

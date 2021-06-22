@@ -34,16 +34,16 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/core/state"
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/core/state"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/params"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go

@@ -37,15 +37,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/consensus"
 	"github.com/tenderly/coreth/consensus/misc"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
