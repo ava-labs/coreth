@@ -20,6 +20,7 @@ import (
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/eth"
 	"github.com/tenderly/coreth/eth/ethconfig"
+	"github.com/tenderly/coreth/node"
 	"github.com/tenderly/coreth/params"
 )
 

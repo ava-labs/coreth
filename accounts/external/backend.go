@@ -35,11 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/tenderly/coreth/accounts"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/interfaces"
 	"github.com/tenderly/coreth/rpc"
+	"github.com/tenderly/coreth/signer/core"
 )
 
 type ExternalBackend struct {
