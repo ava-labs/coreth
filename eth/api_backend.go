@@ -79,12 +79,6 @@ func (b *EthAPIBackend) LastAcceptedBlock() *types.Block {
 	return b.eth.LastAcceptedBlock()
 }
 
-// Original code:
-// func (b *EthAPIBackend) SetHead(number uint64) {
-// 	//b.eth.protocolManager.downloader.Cancel()
-// 	b.eth.blockchain.SetHead(number)
-// }
-
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
 		return nil, errExpired
@@ -137,7 +131,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	// identically.
 	acceptedBlock := b.eth.LastAcceptedBlock()
 	if number.IsAccepted() {
-		return b.eth.LastAcceptedBlock(), nil
+		return acceptedBlock, nil
 	}
 
 	if !b.GetVMConfig().AllowUnfinalizedQueries && acceptedBlock != nil {
@@ -294,10 +288,6 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 		return errExpired
 	}
 	err := b.eth.txPool.AddLocal(signedTx)
-	select {
-	case b.eth.txSubmitChan <- struct{}{}:
-	default:
-	}
 	return err
 }
 

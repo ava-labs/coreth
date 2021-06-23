@@ -10,13 +10,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/tenderly/coreth/consensus/dummy"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/eth"
-	"github.com/tenderly/coreth/eth/ethconfig"
 	"github.com/tenderly/coreth/miner"
 	"github.com/tenderly/coreth/node"
 	"github.com/tenderly/coreth/rpc"
@@ -40,47 +38,32 @@ type ETHChain struct {
 }
 
 // NewETHChain creates an Ethereum blockchain with the given configs.
-func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, initGenesis bool) *ETHChain {
-	if config == nil {
-		config = &ethconfig.DefaultConfig
-	}
-	if nodecfg == nil {
-		nodecfg = &node.Config{}
-	}
-	//mux := new(event.TypeMux)
+func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, lastAcceptedHash common.Hash) (*ETHChain, error) {
 	node, err := node.New(nodecfg)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	//if ep != "" {
-	//	log.Info(fmt.Sprintf("temporary keystore = %s", ep))
-	//}
 	cb := new(dummy.ConsensusCallbacks)
 	mcb := new(miner.MinerCallbacks)
-	backend, err := eth.New(node, config, cb, mcb, chainDB, settings, initGenesis)
+	backend, err := eth.New(node, config, cb, mcb, chainDB, settings, lastAcceptedHash)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create new eth backend due to %s", err))
+		return nil, fmt.Errorf("failed to create backend: %w", err)
 	}
 	chain := &ETHChain{backend: backend, cb: cb, mcb: mcb}
 	backend.SetEtherbase(BlackholeAddr)
-	return chain
+	return chain, nil
 }
 
-func (self *ETHChain) Start() error {
+func (self *ETHChain) Start() {
 	self.backend.Start()
-	return self.backend.StartMining()
 }
 
 func (self *ETHChain) Stop() {
 	self.backend.Stop()
 }
 
-func (self *ETHChain) GenBlock() {
-	self.backend.Miner().GenBlock()
-}
-
-func (self *ETHChain) SubscribeNewMinedBlockEvent() *event.TypeMuxSubscription {
-	return self.backend.Miner().GetWorkerMux().Subscribe(core.NewMinedBlockEvent{})
+func (self *ETHChain) GenerateBlock() (*types.Block, error) {
+	return self.backend.Miner().GenerateBlock()
 }
 
 func (self *ETHChain) BlockChain() *core.BlockChain {
@@ -112,11 +95,7 @@ func (self *ETHChain) SetOnSeal(cb func(*types.Block) error) {
 	self.cb.OnSeal = cb
 }
 
-func (self *ETHChain) SetOnSealHash(cb func(*types.Header)) {
-	self.cb.OnSealHash = cb
-}
-
-func (self *ETHChain) SetOnSealFinish(cb func(*types.Block) error) {
+func (self *ETHChain) SetOnSealFinish(cb func(*types.Block)) {
 	self.mcb.OnSealFinish = cb
 }
 
@@ -167,12 +146,6 @@ func (self *ETHChain) ValidateCanonicalChain() error {
 	return self.backend.BlockChain().ValidateCanonicalChain()
 }
 
-// WriteCanonicalFromCurrentBlock writes the canonical chain from the
-// current block to the genesis.
-func (self *ETHChain) WriteCanonicalFromCurrentBlock(toBlock *types.Block) error {
-	return self.backend.BlockChain().WriteCanonicalFromCurrentBlock(toBlock)
-}
-
 // SetPreference sets the current head block to the one provided as an argument
 // regardless of what the chain contents were prior.
 func (self *ETHChain) SetPreference(block *types.Block) error {
@@ -186,9 +159,20 @@ func (self *ETHChain) Accept(block *types.Block) error {
 	return self.BlockChain().Accept(block)
 }
 
+// Reject tells the chain that [block] has been rejected.
+func (self *ETHChain) Reject(block *types.Block) error {
+	return self.BlockChain().Reject(block)
+}
+
 // LastAcceptedBlock returns the last block to be marked as accepted.
 func (self *ETHChain) LastAcceptedBlock() *types.Block {
 	return self.BlockChain().LastAcceptedBlock()
+}
+
+// RemoveRejectedBlocks removes the rejected blocks between heights
+// [start] and [end].
+func (self *ETHChain) RemoveRejectedBlocks(start, end uint64) error {
+	return self.BlockChain().RemoveRejectedBlocks(start, end)
 }
 
 func (self *ETHChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
@@ -199,8 +183,8 @@ func (self *ETHChain) GetGenesisBlock() *types.Block {
 	return self.backend.BlockChain().Genesis()
 }
 
-func (self *ETHChain) InsertChain(chain []*types.Block) (int, error) {
-	return self.backend.BlockChain().InsertChain(chain)
+func (self *ETHChain) InsertBlock(block *types.Block) error {
+	return self.backend.BlockChain().InsertBlock(block)
 }
 
 func (self *ETHChain) NewRPCHandler(maximumDuration time.Duration) *rpc.Server {

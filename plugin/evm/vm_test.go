@@ -8,14 +8,17 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ava-labs/avalanchego/api/keystore"
 	"github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database/manager"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -24,11 +27,14 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
+	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/stretchr/testify/assert"
 	accountKeystore "github.com/tenderly/coreth/accounts/keystore"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/types"
@@ -111,22 +117,24 @@ func NewContext() *snow.Context {
 	return ctx
 }
 
-// GenesisVM creates a VM instance with the genesis test bytes and returns
-// the channel use to send messages to the engine, the vm, and atomic memory
-func GenesisVM(t *testing.T, finishBootstrapping bool, genesisJSON string) (chan engCommon.Message, *VM, []byte, *atomic.Memory) {
+func setupGenesis(t *testing.T, genesisJSON string) (*VM, *snow.Context, manager.Manager, []byte, chan engCommon.Message, *atomic.Memory) {
 	genesisBytes := BuildGenesisTest(t, genesisJSON)
 	ctx := NewContext()
-	baseDB := memdb.New()
+
+	baseDBManager := manager.NewDefaultMemDBManager()
 
 	m := &atomic.Memory{}
-	m.Initialize(logging.NoLog{}, prefixdb.New([]byte{0}, baseDB))
+	m.Initialize(logging.NoLog{}, prefixdb.New([]byte{0}, baseDBManager.Current().Database))
 	ctx.SharedMemory = m.NewSharedMemory(ctx.ChainID)
 
 	// NB: this lock is intentionally left locked when this function returns.
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
 
-	userKeystore := keystore.New(logging.NoLog{}, memdb.New())
+	userKeystore, err := keystore.New(logging.NoLog{}, manager.NewDefaultMemDBManager())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := userKeystore.CreateUser(username, password); err != nil {
 		t.Fatal(err)
 	}
@@ -136,10 +144,20 @@ func GenesisVM(t *testing.T, finishBootstrapping bool, genesisJSON string) (chan
 	vm := &VM{
 		txFee: testTxFee,
 	}
+	prefixedDBManager := baseDBManager.NewPrefixDBManager([]byte{1})
+	return vm, ctx, prefixedDBManager, genesisBytes, issuer, m
+}
+
+// GenesisVM creates a VM instance with the genesis test bytes and returns
+// the channel use to send messages to the engine, the vm, and atomic memory
+func GenesisVM(t *testing.T, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string) (chan engCommon.Message, *VM, []byte, *atomic.Memory) {
+	vm, ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
 	if err := vm.Initialize(
 		ctx,
-		prefixdb.New([]byte{1}, baseDB),
+		dbManager,
 		genesisBytes,
+		[]byte(upgradeJSON),
+		[]byte(configJSON),
 		issuer,
 		[]*engCommon.Fx{},
 	); err != nil {
@@ -147,16 +165,64 @@ func GenesisVM(t *testing.T, finishBootstrapping bool, genesisJSON string) (chan
 	}
 
 	if finishBootstrapping {
-		if err := vm.Bootstrapping(); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := vm.Bootstrapped(); err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, vm.Bootstrapping())
+		assert.NoError(t, vm.Bootstrapped())
 	}
 
 	return issuer, vm, genesisBytes, m
+}
+
+func TestVMConfig(t *testing.T) {
+	txFeeCap := float64(11)
+	netApiEnabled := true
+	configJSON := fmt.Sprintf("{\"rpc-tx-fee-cap\": %g,\"net-api-enabled\": %t}", txFeeCap, netApiEnabled)
+	_, vm, _, _ := GenesisVM(t, false, genesisJSONApricotPhase0, configJSON, "")
+	assert.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
+	assert.Equal(t, vm.config.NetAPIEnabled, netApiEnabled, "Net API Enabled should be set")
+	assert.NoError(t, vm.Shutdown())
+}
+
+func TestVMConfigDefaults(t *testing.T) {
+	txFeeCap := float64(11)
+	netApiEnabled := true
+	configJSON := fmt.Sprintf("{\"rpc-tx-fee-cap\": %g,\"net-api-enabled\": %t}", txFeeCap, netApiEnabled)
+	_, vm, _, _ := GenesisVM(t, false, genesisJSONApricotPhase0, configJSON, "")
+
+	var vmConfig Config
+	vmConfig.SetDefaults()
+	vmConfig.RPCTxFeeCap = txFeeCap
+	vmConfig.NetAPIEnabled = netApiEnabled
+	assert.Equal(t, vmConfig, vm.config, "VM Config should match default with overrides")
+	assert.NoError(t, vm.Shutdown())
+}
+
+func TestVMNilConfig(t *testing.T) {
+	_, vm, _, _ := GenesisVM(t, false, genesisJSONApricotPhase0, "", "")
+
+	// VM Config should match defaults if no config is passed in
+	var vmConfig Config
+	vmConfig.SetDefaults()
+	assert.Equal(t, vmConfig, vm.config, "VM Config should match default config")
+	assert.NoError(t, vm.Shutdown())
+}
+
+func TestVMContinuosProfiler(t *testing.T) {
+	profilerDir := t.TempDir()
+	profilerFrequency := 500 * time.Millisecond
+	configJSON := fmt.Sprintf("{\"continuous-profiler-dir\": %q,\"continuous-profiler-frequency\": \"500ms\"}", profilerDir)
+	_, vm, _, _ := GenesisVM(t, false, genesisJSONApricotPhase0, configJSON, "")
+	assert.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
+	assert.Equal(t, vm.config.ContinuousProfilerFrequency.Duration, profilerFrequency, "profiler frequency should be set")
+
+	// Sleep for twice the frequency of the profiler to give it time
+	// to generate the first profile.
+	time.Sleep(2 * time.Second)
+	assert.NoError(t, vm.Shutdown())
+
+	// Check that the first profile was generated
+	expectedFileName := filepath.Join(profilerDir, "cpu.profile.1")
+	_, err := os.Stat(expectedFileName)
+	assert.NoError(t, err, "Expected continuous profiler to generate the first CPU profile at %s", expectedFileName)
 }
 
 func TestVMGenesis(t *testing.T) {
@@ -179,7 +245,7 @@ func TestVMGenesis(t *testing.T) {
 	}
 	for _, test := range genesisTests {
 		t.Run(test.name, func(t *testing.T) {
-			_, vm, _, _ := GenesisVM(t, true, test.genesis)
+			_, vm, _, _ := GenesisVM(t, true, test.genesis, "", "")
 
 			defer func() {
 				shutdownChan := make(chan error, 1)
@@ -228,7 +294,7 @@ func TestVMGenesis(t *testing.T) {
 }
 
 func TestIssueAtomicTxs(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase2)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase2, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -310,11 +376,9 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
 	}
 
-	lastAcceptedID, err := vm.LastAccepted()
-	if err != nil {
+	if lastAcceptedID, err := vm.LastAccepted(); err != nil {
 		t.Fatal(err)
-	}
-	if lastAcceptedID != blk.ID() {
+	} else if lastAcceptedID != blk.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
 
@@ -350,23 +414,37 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
 	}
 
-	lastAcceptedID, err = vm.LastAccepted()
-	if err != nil {
+	if lastAcceptedID, err := vm.LastAccepted(); err != nil {
 		t.Fatal(err)
-	}
-	if lastAcceptedID != blk2.ID() {
+	} else if lastAcceptedID != blk2.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
 	}
+
+	// Check that both atomic transactions were indexed as expected.
+	indexedImportTx, status, height, err := vm.getAtomicTx(importTx.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Accepted, status)
+	assert.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
+	assert.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
+
+	indexedExportTx, status, height, err := vm.getAtomicTx(exportTx.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Accepted, status)
+	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
+	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase2)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase2, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
 			t.Fatal(err)
 		}
 	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.chain.GetTxPool().SubscribeNewReorgEvent(newTxPoolHeadChan)
 
 	key, err := accountKeystore.NewKey(rand.Reader)
 	if err != nil {
@@ -422,25 +500,30 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 	<-issuer
 
-	blk, err := vm.BuildBlock()
+	blk1, err := vm.BuildBlock()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := blk.Verify(); err != nil {
+	if err := blk1.Verify(); err != nil {
 		t.Fatal(err)
 	}
 
-	if status := blk.Status(); status != choices.Processing {
+	if status := blk1.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	if err := vm.SetPreference(blk.ID()); err != nil {
+	if err := vm.SetPreference(blk1.ID()); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := blk.Accept(); err != nil {
+	if err := blk1.Accept(); err != nil {
 		t.Fatal(err)
+	}
+
+	newHead := <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk1.ID()) {
+		t.Fatalf("Expected new block to match")
 	}
 
 	txs := make([]*types.Transaction, 10)
@@ -461,24 +544,29 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 	<-issuer
 
-	blk, err = vm.BuildBlock()
+	blk2, err := vm.BuildBlock()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := blk.Verify(); err != nil {
+	if err := blk2.Verify(); err != nil {
 		t.Fatal(err)
 	}
 
-	if status := blk.Status(); status != choices.Processing {
+	if status := blk2.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	if err := blk.Accept(); err != nil {
+	if err := blk2.Accept(); err != nil {
 		t.Fatal(err)
 	}
 
-	if status := blk.Status(); status != choices.Accepted {
+	newHead = <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk2.ID()) {
+		t.Fatalf("Expected new block to match")
+	}
+
+	if status := blk2.Status(); status != choices.Accepted {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
 	}
 
@@ -486,13 +574,32 @@ func TestBuildEthTxBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	if lastAcceptedID != blk2.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+	}
+
+	// Clear the cache and ensure that GetBlock returns internal blocks with the correct status
+	vm.State.Flush()
+	blk2Refreshed, err := vm.GetBlockInternal(blk2.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status := blk2Refreshed.Status(); status != choices.Accepted {
+		t.Fatalf("Expected refreshed blk2 to be Accepted, but found status: %s", status)
+	}
+
+	blk1Refreshed := blk2Refreshed.Parent()
+	if status := blk1Refreshed.Status(); status != choices.Accepted {
+		t.Fatalf("Expected refreshed blk1 to be Accepted, but found status: %s", status)
+	}
+
+	if blk1Refreshed.ID() != blk1.ID() {
+		t.Fatalf("Found unexpected blkID for parent of blk2")
 	}
 }
 
 func TestConflictingImportTxs(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -617,8 +724,8 @@ func TestConflictingImportTxs(t *testing.T) {
 func TestSetPreferenceRace(t *testing.T) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0)
-	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
@@ -745,9 +852,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		txs[i] = signedTx
 	}
 
-	var (
-		errs []error
-	)
+	var errs []error
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
 	errs = vm1.chain.AddRemoteTxs(txs)
@@ -888,7 +993,7 @@ func TestSetPreferenceRace(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	issuer, vm, _, atomicMemory := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer, vm, _, atomicMemory := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -966,13 +1071,18 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importTx0, err := vm.newImportTx(vm.ctx.XChainID, key.Address, []*crypto.PrivateKeySECP256K1R{key0})
+	importTx0A, err := vm.newImportTx(vm.ctx.XChainID, key.Address, []*crypto.PrivateKeySECP256K1R{key0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Create a conflicting transaction
+	importTx0B, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[2], []*crypto.PrivateKeySECP256K1R{key0})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := vm.issueTx(importTx0); err != nil {
-		t.Fatal(err)
+	if err := vm.issueTx(importTx0A); err != nil {
+		t.Fatalf("Failed to issue importTx0A: %s", err)
 	}
 
 	<-issuer
@@ -1008,11 +1118,11 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 
 	blk1, err := vm.BuildBlock()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to build blk1: %s", err)
 	}
 
 	if err := blk1.Verify(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("blk1 failed verification due to %s", err)
 	}
 
 	if err := vm.SetPreference(blk1.ID()); err != nil {
@@ -1021,7 +1131,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 
 	importTx1, err := vm.newImportTx(vm.ctx.XChainID, key.Address, []*crypto.PrivateKeySECP256K1R{key1})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to issue importTx1 due to: %s", err)
 	}
 
 	if err := vm.issueTx(importTx1); err != nil {
@@ -1043,8 +1153,8 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := vm.issueTx(importTx0); err != nil {
-		t.Fatal(err)
+	if err := vm.issueTx(importTx0B); err != nil {
+		t.Fatalf("Failed to issue importTx0B due to: %s", err)
 	}
 
 	<-issuer
@@ -1056,7 +1166,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -1118,10 +1228,9 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	evmBlock := blk.(*Block)
-	evmBlock.id = bonusBlocks.CappedList(1)[0]
-	vm.blockCache.Put(evmBlock.id, evmBlock)
+	bonusBlocks.Add(blk.ID())
 
+	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
 	if err := vm.ctx.SharedMemory.Remove(vm.ctx.XChainID, [][]byte{inputID[:]}); err != nil {
 		t.Fatal(err)
 	}
@@ -1134,7 +1243,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	if err := vm.SetPreference(evmBlock.id); err != nil {
+	if err := vm.SetPreference(blk.ID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1150,7 +1259,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lastAcceptedID != evmBlock.id {
+	if lastAcceptedID != blk.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
 }
@@ -1165,8 +1274,8 @@ func TestBonusBlocksTxs(t *testing.T) {
 //     |
 //     D
 func TestReorgProtection(t *testing.T) {
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0)
-	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
@@ -1293,9 +1402,7 @@ func TestReorgProtection(t *testing.T) {
 		txs[i] = signedTx
 	}
 
-	var (
-		errs []error
-	)
+	var errs []error
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
 	errs = vm1.chain.AddRemoteTxs(txs)
@@ -1367,7 +1474,7 @@ func TestReorgProtection(t *testing.T) {
 		t.Fatalf("Unexpected error when setting preference that would trigger reorg: %s", err)
 	}
 
-	if err := vm1BlkC.Accept(); !strings.Contains(err.Error(), "expected accepted parent block hash") {
+	if err := vm1BlkC.Accept(); !strings.Contains(err.Error(), "expected accepted block to have parent") {
 		t.Fatalf("Unexpected error when setting block at finalized height: %s", err)
 	}
 }
@@ -1378,8 +1485,8 @@ func TestReorgProtection(t *testing.T) {
 //  / \
 // B   C
 func TestNonCanonicalAccept(t *testing.T) {
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0)
-	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
@@ -1506,9 +1613,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		txs[i] = signedTx
 	}
 
-	var (
-		errs []error
-	)
+	var errs []error
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
 	errs = vm1.chain.AddRemoteTxs(txs)
@@ -1540,7 +1645,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	vm1.chain.BlockChain().GetVMConfig().AllowUnfinalizedQueries = true
 
 	blkBHeight := vm1BlkB.Height()
-	blkBHash := vm1BlkB.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 	if b := vm1.chain.GetBlockByNumber(blkBHeight); b.Hash() != blkBHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -1571,7 +1676,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatalf("VM1 failed to accept block: %s", err)
 	}
 
-	blkCHash := vm1BlkC.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 	if b := vm1.chain.GetBlockByNumber(blkBHeight); b.Hash() != blkCHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkCHash.Hex(), b.Hash().Hex())
 	}
@@ -1586,8 +1691,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 //     |
 //     D
 func TestStickyPreference(t *testing.T) {
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0)
-	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
@@ -1714,9 +1819,7 @@ func TestStickyPreference(t *testing.T) {
 		txs[i] = signedTx
 	}
 
-	var (
-		errs []error
-	)
+	var errs []error
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
 	errs = vm1.chain.AddRemoteTxs(txs)
@@ -1748,7 +1851,7 @@ func TestStickyPreference(t *testing.T) {
 	vm1.chain.BlockChain().GetVMConfig().AllowUnfinalizedQueries = true
 
 	blkBHeight := vm1BlkB.Height()
-	blkBHash := vm1BlkB.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 	if b := vm1.chain.GetBlockByNumber(blkBHeight); b.Hash() != blkBHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -1796,14 +1899,14 @@ func TestStickyPreference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error parsing block from vm2: %s", err)
 	}
-	blkCHash := vm1BlkC.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 
 	vm1BlkD, err := vm1.ParseBlock(vm2BlkD.Bytes())
 	if err != nil {
 		t.Fatalf("Unexpected error parsing block from vm2: %s", err)
 	}
 	blkDHeight := vm1BlkD.Height()
-	blkDHash := vm1BlkD.(*Block).ethBlock.Hash()
+	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 
 	// Should be no-ops
 	if err := vm1BlkC.Verify(); err != nil {
@@ -1855,7 +1958,7 @@ func TestStickyPreference(t *testing.T) {
 	}
 
 	// Attempt to accept out of order
-	if err := vm1BlkD.Accept(); !strings.Contains(err.Error(), "expected accepted parent block hash") {
+	if err := vm1BlkD.Accept(); !strings.Contains(err.Error(), "expected accepted block to have parent") {
 		t.Fatalf("unexpected error when accepting out of order block: %s", err)
 	}
 
@@ -1888,8 +1991,8 @@ func TestStickyPreference(t *testing.T) {
 //     |
 //     D
 func TestUncleBlock(t *testing.T) {
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0)
-	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
@@ -1978,7 +2081,9 @@ func TestUncleBlock(t *testing.T) {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	vm1.SetPreference(vm1BlkA.ID())
+	if err := vm1.SetPreference(vm1BlkA.ID()); err != nil {
+		t.Fatal(err)
+	}
 
 	vm2BlkA, err := vm2.ParseBlock(vm1BlkA.Bytes())
 	if err != nil {
@@ -1990,7 +2095,9 @@ func TestUncleBlock(t *testing.T) {
 	if status := vm2BlkA.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of block on VM2 to be %s, but found %s", choices.Processing, status)
 	}
-	vm2.SetPreference(vm2BlkA.ID())
+	if err := vm2.SetPreference(vm2BlkA.ID()); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := vm1BlkA.Accept(); err != nil {
 		t.Fatalf("VM1 failed to accept block: %s", err)
@@ -2009,9 +2116,7 @@ func TestUncleBlock(t *testing.T) {
 		txs[i] = signedTx
 	}
 
-	var (
-		errs []error
-	)
+	var errs []error
 
 	errs = vm1.chain.AddRemoteTxs(txs)
 	for i, err := range errs {
@@ -2035,7 +2140,9 @@ func TestUncleBlock(t *testing.T) {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	vm1.SetPreference(vm1BlkB.ID())
+	if err := vm1.SetPreference(vm1BlkB.ID()); err != nil {
+		t.Fatal(err)
+	}
 
 	errs = vm2.chain.AddRemoteTxs(txs[0:5])
 	for i, err := range errs {
@@ -2058,7 +2165,9 @@ func TestUncleBlock(t *testing.T) {
 		t.Fatalf("Expected status of built block C to be %s, but found %s", choices.Processing, status)
 	}
 
-	vm2.SetPreference(vm2BlkC.ID())
+	if err := vm2.SetPreference(vm2BlkC.ID()); err != nil {
+		t.Fatal(err)
+	}
 
 	errs = vm2.chain.AddRemoteTxs(txs[5:10])
 	for i, err := range errs {
@@ -2074,8 +2183,8 @@ func TestUncleBlock(t *testing.T) {
 	}
 
 	// Create uncle block from blkD
-	blkDEthBlock := vm2BlkD.(*Block).ethBlock
-	uncles := []*types.Header{vm1BlkB.(*Block).ethBlock.Header()}
+	blkDEthBlock := vm2BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	uncles := []*types.Header{vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Header()}
 	uncleBlockHeader := types.CopyHeader(blkDEthBlock.Header())
 	uncleBlockHeader.UncleHash = types.CalcUncleHash(uncles)
 
@@ -2107,7 +2216,7 @@ func TestUncleBlock(t *testing.T) {
 // Regression test to ensure that a VM that is not able to parse a block that
 // contains no transactions.
 func TestEmptyBlock(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -2176,7 +2285,7 @@ func TestEmptyBlock(t *testing.T) {
 	}
 
 	// Create empty block from blkA
-	ethBlock := blk.(*Block).ethBlock
+	ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
 
 	emptyEthBlock := types.NewBlock(
 		types.CopyHeader(ethBlock.Header()),
@@ -2214,8 +2323,8 @@ func TestEmptyBlock(t *testing.T) {
 //     |
 //     D
 func TestAcceptReorg(t *testing.T) {
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0)
-	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	issuer2, vm2, _, sharedMemory2 := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
@@ -2424,7 +2533,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatalf("Block failed verification on VM1: %s", err)
 	}
 
-	blkBHash := vm1BlkB.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 	if b := vm1.chain.BlockChain().CurrentBlock(); b.Hash() != blkBHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -2433,7 +2542,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blkCHash := vm1BlkC.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 	if b := vm1.chain.BlockChain().CurrentBlock(); b.Hash() != blkCHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkCHash.Hex(), b.Hash().Hex())
 	}
@@ -2442,14 +2551,14 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blkDHash := vm1BlkD.(*Block).ethBlock.Hash()
+	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 	if b := vm1.chain.BlockChain().CurrentBlock(); b.Hash() != blkDHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkDHash.Hex(), b.Hash().Hex())
 	}
 }
 
 func TestFutureBlock(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -2518,7 +2627,7 @@ func TestFutureBlock(t *testing.T) {
 	}
 
 	// Create empty block from blkA
-	blkAEthBlock := blkA.(*Block).ethBlock
+	blkAEthBlock := blkA.(*chain.BlockWrapper).Block.(*Block).ethBlock
 
 	modifiedHeader := types.CopyHeader(blkAEthBlock.Header())
 	// Set the VM's clock to the time of the produced block
@@ -2552,7 +2661,7 @@ func TestFutureBlock(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase1)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -2711,14 +2820,15 @@ func TestApricotPhase1Transition(t *testing.T) {
 	if err := json.Unmarshal([]byte(genesisJSONApricotPhase1), genesis); err != nil {
 		t.Fatalf("Problem unmarshaling genesis JSON: %s", err)
 	}
-	genesis.Config.ApricotPhase1BlockTimestamp = big.NewInt(time.Now().Add(5 * time.Second).Unix())
+	apricotPhase1Time := time.Now().Add(5 * time.Second)
+	genesis.Config.ApricotPhase1BlockTimestamp = big.NewInt(apricotPhase1Time.Unix())
 	customGenesisJSON, err := json.Marshal(genesis)
 	if err != nil {
 		t.Fatalf("Problem marshaling custom genesis JSON: %s", err)
 	}
 
 	// Initialize VMs
-	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, string(customGenesisJSON))
+	issuer1, vm1, _, sharedMemory1 := GenesisVM(t, true, string(customGenesisJSON), "", "")
 	defer func() {
 		if err := vm1.Shutdown(); err != nil {
 			t.Fatal(err)
@@ -2836,7 +2946,7 @@ func TestApricotPhase1Transition(t *testing.T) {
 	}
 
 	// Wait for transition
-	time.Sleep(5 * time.Second)
+	time.Sleep(time.Until(apricotPhase1Time) + time.Second)
 
 	if status := blkB.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
@@ -2860,10 +2970,10 @@ func TestApricotPhase1Transition(t *testing.T) {
 
 	// Confirm all txs are present
 	ethBlkTxs := vm1.chain.GetBlockByNumber(2).Transactions()
+	if len(ethBlkTxs) != 5 {
+		t.Fatalf("Expected 5 transactions in block, but found %d", len(ethBlkTxs))
+	}
 	for i, tx := range txs[:5] {
-		if len(ethBlkTxs) <= i {
-			t.Fatalf("missing transactions expected: %d but found: %d", len(txs), len(ethBlkTxs))
-		}
 		if ethBlkTxs[i].Hash() != tx.Hash() {
 			t.Fatalf("expected tx at index %d to have hash: %x but has: %x", i, txs[i].Hash(), tx.Hash())
 		}
@@ -2919,7 +3029,7 @@ func TestApricotPhase1Transition(t *testing.T) {
 	}
 
 	// Sync up other genesis VM (after transition)
-	_, vm2, _, sharedMemory2 := GenesisVM(t, true, string(customGenesisJSON))
+	_, vm2, _, sharedMemory2 := GenesisVM(t, true, string(customGenesisJSON), "", "")
 	defer func() {
 		if err := vm2.Shutdown(); err != nil {
 			t.Fatal(err)
@@ -2989,7 +3099,7 @@ func TestApricotPhase1Transition(t *testing.T) {
 }
 
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
-	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0)
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(); err != nil {
@@ -3070,7 +3180,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	}
 
 	blkHeight := blk.Height()
-	blkHash := blk.(*Block).ethBlock.Hash()
+	blkHash := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
 
 	vm.chain.BlockChain().GetVMConfig().AllowUnfinalizedQueries = true
 
@@ -3096,5 +3206,313 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 
 	if b := vm.chain.GetBlockByNumber(blkHeight); b.Hash() != blkHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkHeight, blkHash.Hex(), b.Hash().Hex())
+	}
+}
+
+func TestReissueAtomicTx(t *testing.T) {
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
+
+	defer func() {
+		if err := vm.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	genesisBlkID, err := vm.LastAccepted()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	importAmount := uint64(10000000)
+	utxoID := avax.UTXOID{
+		TxID: ids.ID{
+			0x0f, 0x2f, 0x4f, 0x6f, 0x8e, 0xae, 0xce, 0xee,
+			0x0d, 0x2d, 0x4d, 0x6d, 0x8c, 0xac, 0xcc, 0xec,
+			0x0b, 0x2b, 0x4b, 0x6b, 0x8a, 0xaa, 0xca, 0xea,
+			0x09, 0x29, 0x49, 0x69, 0x88, 0xa8, 0xc8, 0xe8,
+		},
+	}
+
+	utxo := &avax.UTXO{
+		UTXOID: utxoID,
+		Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		Out: &secp256k1fx.TransferOutput{
+			Amt: importAmount,
+			OutputOwners: secp256k1fx.OutputOwners{
+				Threshold: 1,
+				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+			},
+		},
+	}
+	utxoBytes, err := vm.codec.Marshal(codecVersion, utxo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+	inputID := utxo.InputID()
+	if err := xChainSharedMemory.Put(vm.ctx.ChainID, []*atomic.Element{{
+		Key:   inputID[:],
+		Value: utxoBytes,
+		Traits: [][]byte{
+			testKeys[0].PublicKey().Address().Bytes(),
+		},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(importTx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk, err := vm.BuildBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Reject(); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Rejected {
+		t.Fatalf("Expected status of rejected block to be %s, but found %s", choices.Rejected, status)
+	}
+
+	if err := vm.SetPreference(genesisBlkID); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+	blk, err = vm.BuildBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+}
+
+func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
+	issuer, vm, _, sharedMemory := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
+
+	defer func() {
+		if err := vm.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	importAmount := uint64(10000000)
+	utxoID := avax.UTXOID{
+		TxID: ids.ID{
+			0x0f, 0x2f, 0x4f, 0x6f, 0x8e, 0xae, 0xce, 0xee,
+			0x0d, 0x2d, 0x4d, 0x6d, 0x8c, 0xac, 0xcc, 0xec,
+			0x0b, 0x2b, 0x4b, 0x6b, 0x8a, 0xaa, 0xca, 0xea,
+			0x09, 0x29, 0x49, 0x69, 0x88, 0xa8, 0xc8, 0xe8,
+		},
+	}
+
+	utxo := &avax.UTXO{
+		UTXOID: utxoID,
+		Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		Out: &secp256k1fx.TransferOutput{
+			Amt: importAmount,
+			OutputOwners: secp256k1fx.OutputOwners{
+				Threshold: 1,
+				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+			},
+		},
+	}
+	utxoBytes, err := vm.codec.Marshal(codecVersion, utxo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+	inputID := utxo.InputID()
+	if err := xChainSharedMemory.Put(vm.ctx.ChainID, []*atomic.Element{{
+		Key:   inputID[:],
+		Value: utxoBytes,
+		Traits: [][]byte{
+			testKeys[0].PublicKey().Address().Bytes(),
+		},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(importTx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk, err := vm.BuildBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+
+	exportTx1, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-2*vm.txFee, vm.ctx.XChainID, testShortIDAddrs[0], []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-2*vm.txFee, vm.ctx.XChainID, testShortIDAddrs[1], []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(exportTx1); err != nil {
+		t.Fatal(err)
+	}
+	<-issuer
+	exportBlk1, err := vm.BuildBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := exportBlk1.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.SetPreference(exportBlk1.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(exportTx2); err != nil {
+		t.Fatal(err)
+	}
+	<-issuer
+
+	_, err = vm.BuildBlock()
+	if err == nil {
+		t.Fatal("BuildBlock should have returned an error due to invalid export transaction")
+	}
+}
+
+func TestBuildInvalidBlockHead(t *testing.T) {
+	issuer, vm, _, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+
+	defer func() {
+		if err := vm.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	key0 := testKeys[0]
+	addr0 := key0.PublicKey().Address()
+
+	// Create the transaction
+	utx := &UnsignedImportTx{
+		NetworkID:    vm.ctx.NetworkID,
+		BlockchainID: vm.ctx.ChainID,
+		Outs: []EVMOutput{{
+			Address: common.Address(addr0),
+			Amount:  1 * units.Avax,
+			AssetID: vm.ctx.AVAXAssetID,
+		}},
+		ImportedInputs: []*avax.TransferableInput{
+			{
+				Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
+				In: &secp256k1fx.TransferInput{
+					Amt: 1 * units.Avax,
+					Input: secp256k1fx.Input{
+						SigIndices: []uint32{0},
+					},
+				},
+			},
+		},
+		SourceChain: vm.ctx.XChainID,
+	}
+	tx := &Tx{UnsignedAtomicTx: utx}
+	if err := tx.Sign(vm.codec, [][]*crypto.PrivateKeySECP256K1R{{key0}}); err != nil {
+		t.Fatal(err)
+	}
+
+	currentBlock := vm.chain.BlockChain().CurrentBlock()
+
+	if err := vm.issueTx(tx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	if _, err := vm.BuildBlock(); err == nil {
+		t.Fatalf("Unexpectedly created a block")
+	}
+
+	newCurrentBlock := vm.chain.BlockChain().CurrentBlock()
+
+	if currentBlock.Hash() != newCurrentBlock.Hash() {
+		t.Fatal("current block changed")
 	}
 }
