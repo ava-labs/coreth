@@ -44,8 +44,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/tenderly/coreth/core"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/core"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

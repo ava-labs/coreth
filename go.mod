@@ -5,7 +5,6 @@ go 1.15
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
 	github.com/ava-labs/avalanchego v1.4.8-0.20210601235005-97c9b3532896
-	github.com/btcsuite/btcd v0.21.0-beta // indirect
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.7.1
@@ -22,7 +21,6 @@ require (
 	github.com/mattn/go-colorable v0.1.7
 	github.com/mattn/go-isatty v0.0.12
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/prometheus/tsdb v0.10.0 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/spf13/cast v1.3.1
 	github.com/spf13/pflag v1.0.5

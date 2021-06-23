@@ -30,8 +30,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/tenderly/coreth/params"
 	"github.com/holiman/uint256"
+	"github.com/tenderly/coreth/params"
 )
 
 var activators = map[int]func(*JumpTable){

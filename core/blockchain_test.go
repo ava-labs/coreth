@@ -29,11 +29,11 @@ package core
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/tenderly/coreth/consensus/dummy"
+	"github.com/tenderly/coreth/core/vm"
+	"github.com/tenderly/coreth/params"
 )
 
 func TestArchiveBlockChain(t *testing.T) {

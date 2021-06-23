@@ -30,11 +30,11 @@ package consensus
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // ChainHeaderReader defines a small collection of methods needed to access the local

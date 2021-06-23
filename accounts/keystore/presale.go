@@ -35,9 +35,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tenderly/coreth/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
+	"github.com/tenderly/coreth/accounts"
 	"golang.org/x/crypto/pbkdf2"
 )
 

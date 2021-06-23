@@ -42,11 +42,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tenderly/coreth/accounts"
-	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/tenderly/coreth/accounts"
+	"github.com/tenderly/coreth/core/types"
 )
 
 var (

@@ -35,16 +35,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/internal/ethapi"
 	"github.com/tenderly/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related

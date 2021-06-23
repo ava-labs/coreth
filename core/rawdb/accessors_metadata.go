@@ -29,11 +29,11 @@ package rawdb
 import (
 	"encoding/json"
 
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/params"
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.

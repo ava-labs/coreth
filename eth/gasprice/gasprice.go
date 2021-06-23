@@ -31,11 +31,11 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var DefaultMaxPrice = big.NewInt(500 * params.GWei)

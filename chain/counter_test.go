@@ -12,7 +12,6 @@ package chain
 import (
 	"fmt"
 	"math/big"
-
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
