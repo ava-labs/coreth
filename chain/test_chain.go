@@ -16,6 +16,7 @@ import (
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/eth"
 	"github.com/tenderly/coreth/eth/ethconfig"
+	"github.com/tenderly/coreth/node"
 	"github.com/tenderly/coreth/params"
 )
 
@@ -47,7 +48,7 @@ func init() {
 	alice = genKey
 }
 
-func NewDefaultChain(t *testing.T) (*ETHChain, chan *types.Block, chan core.NewTxPoolHeadEvent, <-chan core.NewTxsEvent) {
+func NewDefaultChain(t *testing.T) (*ETHChain, chan core.NewTxPoolHeadEvent, <-chan core.NewTxsEvent) {
 	// configure the chain
 	config := ethconfig.NewDefaultConfig()
 	chainConfig := &params.ChainConfig{
@@ -75,27 +76,26 @@ func NewDefaultChain(t *testing.T) (*ETHChain, chan *types.Block, chan core.NewT
 		Alloc:      core.GenesisAlloc{fundedKey.Address: {Balance: initialBalance}},
 	}
 
-	chain := NewETHChain(&config, nil, rawdb.NewMemoryDatabase(), eth.DefaultSettings, true)
-
-	if err := chain.Accept(chain.GetGenesisBlock()); err != nil {
+	chain, err := NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, common.Hash{})
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	newBlockChan := make(chan *types.Block)
-	chain.SetOnSealFinish(func(block *types.Block) error {
+	chain.SetOnSealFinish(func(block *types.Block) {
+		if err := chain.InsertBlock(block); err != nil {
+			t.Fatal(err)
+		}
 		if err := chain.SetPreference(block); err != nil {
 			t.Fatal(err)
 		}
 		if err := chain.Accept(block); err != nil {
 			t.Fatal(err)
 		}
-		newBlockChan <- block
-		return nil
 	})
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolHeadEvent, 1)
 	chain.GetTxPool().SubscribeNewHeadEvent(newTxPoolHeadChan)
 
 	txSubmitCh := chain.GetTxSubmitCh()
-	return chain, newBlockChan, newTxPoolHeadChan, txSubmitCh
+	return chain, newTxPoolHeadChan, txSubmitCh
 }
