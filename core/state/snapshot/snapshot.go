@@ -245,7 +245,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash
 
 	// Verify any previously generated snapshot from disk
 	if generated {
-		if err := snap.verifyIntegrity(snap.disklayer(), true); err != nil {
+		if err := snap.verifyIntegrity(snap.disklayer()); err != nil {
 			return nil, err
 		}
 		return snap, nil
@@ -292,7 +292,7 @@ func (t *Tree) waitBuild() error {
 
 	// Wait until the snapshot is generated
 	<-done
-	return t.verifyIntegrity(diskLayer, true)
+	return t.verifyIntegrity(diskLayer)
 }
 
 // Snapshot retrieves a snapshot belonging to the given state root, or nil if no
@@ -374,10 +374,13 @@ func (t *Tree) Update(blockHash, blockRoot, parentBlockHash common.Hash, destruc
 	return nil
 }
 
-// verifyIntegrity performs an integrity check on the current snapshot. It is
-// assumed that the caller holds the [snapTree] lock.
-func (t *Tree) verifyIntegrity(base *diskLayer, snapshotGenerated bool) error {
-	if t.verified || !snapshotGenerated {
+// verifyIntegrity performs an integrity check on the current snapshot using
+// verify. Most importantly, verifyIntegrity ensures verify is called at
+// most once during the entire lifetime of [Tree], returning immediately if
+// already invoked. It is assumed that the caller holds the [snapTree] lock
+// when calling this function.
+func (t *Tree) verifyIntegrity(base *diskLayer) error {
+	if t.verified {
 		return nil
 	}
 
@@ -492,7 +495,11 @@ func (t *Tree) Flatten(blockHash common.Hash) error {
 	}
 	rebloom(base.blockHash)
 	log.Debug("Flattened snapshot tree", "blockHash", blockHash, "root", base.root, "size", len(t.blockLayers), "elapsed", common.PrettyDuration(time.Since(start)))
-	return t.verifyIntegrity(base, snapshotGenerated)
+
+	if !snapshotGenerated {
+		return nil
+	}
+	return t.verifyIntegrity(base)
 }
 
 // Length returns the number of snapshot layers that is currently being maintained.
