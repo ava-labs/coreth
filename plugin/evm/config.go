@@ -17,6 +17,7 @@ const (
 	defaultWeb3ApiEnabled              = true
 	defaultPruningEnabled              = true
 	defaultSnapshotAsync               = true
+	defaultSnapshotVerification        = true
 	defaultRpcGasCap                   = 2500000000 // 25000000 X 100
 	defaultRpcTxFeeCap                 = 100        // 100 AVAX
 	defaultApiMaxDuration              = 0          // Default to no maximum API Call duration
@@ -53,8 +54,9 @@ type Config struct {
 	Web3APIEnabled     bool `json:"web3-api-enabled"`
 
 	// Eth Settings
-	Pruning       bool `json:"pruning-enabled"`
-	SnapshotAsync bool `json:"snapshot-async"`
+	Pruning                     bool `json:"pruning-enabled"`
+	SnapshotAsync               bool `json:"snapshot-async"`
+	SnapshotVerificationEnabled bool `json:"snapshot-verification-enabled"`
 
 	LocalTxsEnabled         bool     `json:"local-txs-enabled"`
 	APIMaxDuration          Duration `json:"api-max-duration"`
@@ -103,6 +105,7 @@ func (c *Config) SetDefaults() {
 	c.ContinuousProfilerMaxFiles = defaultContinuousProfilerMaxFiles
 	c.Pruning = defaultPruningEnabled
 	c.SnapshotAsync = defaultSnapshotAsync
+	c.SnapshotVerificationEnabled = defaultSnapshotVerification
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
