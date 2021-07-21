@@ -245,8 +245,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash
 
 	// Verify any previously generated snapshot from disk
 	if generated {
-		dl := snap.disklayer()
-		if err := snap.verify(dl.Root(), true); err != nil {
+		if err := snap.verifyIntegrity(snap.disklayer(), true); err != nil {
 			return nil, err
 		}
 		return snap, nil
