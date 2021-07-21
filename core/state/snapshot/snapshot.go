@@ -206,7 +206,7 @@ type Tree struct {
 // store, on a background thread. If the memory layers from the journal is not
 // continuous with disk layer or the journal is missing, all diffs will be discarded
 // iff it's in "recovery" mode, otherwise rebuild is mandatory.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash, root common.Hash, async bool, rebuild bool, recovery bool, verify bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb:      diskdb,
@@ -214,6 +214,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash
 		cache:       cache,
 		blockLayers: make(map[common.Hash]snapshot),
 		stateLayers: make(map[common.Hash]map[common.Hash]snapshot),
+		verified:    verify, // if verify is true, all verification will be bypassed
 	}
 
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
@@ -242,10 +243,12 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash
 		head = head.Parent()
 	}
 
-	// We assume a snapshot read from disk on startup was previously verified. This prevents
-	// us from a doing a costly re-verification procedure when it is not needed.
+	// Verify any previously generated snapshot from disk
 	if generated {
-		snap.verified = true
+		dl := snap.disklayer()
+		if err := snap.verify(dl.Root(), true); err != nil {
+			return nil, err
+		}
 		return snap, nil
 	}
 
@@ -867,12 +870,14 @@ func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek commo
 
 // Verify iterates the whole state(all the accounts as well as the corresponding storages)
 // with the specific root and compares the re-computed hash with the original one.
-// When [force] is true, it is assumed that the caller has confirmed that the
-// snapshot is generated and that they hold the snapTree lock.
 func (t *Tree) Verify(root common.Hash) error {
 	return t.verify(root, false)
 }
 
+// verify iterates the whole state(all the accounts as well as the corresponding storages)
+// with the specific root and compares the re-computed hash with the original one.
+// When [force] is true, it is assumed that the caller has confirmed that the
+// snapshot is generated and that they hold the snapTree lock.
 func (t *Tree) verify(root common.Hash, force bool) error {
 	acctIt, err := t.AccountIterator(root, common.Hash{}, force)
 	if err != nil {
