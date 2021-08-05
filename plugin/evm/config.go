@@ -51,6 +51,7 @@ type Config struct {
 	TxPoolAPIEnabled   bool `json:"tx-pool-api-enabled"`
 	DebugAPIEnabled    bool `json:"debug-api-enabled"`
 	Web3APIEnabled     bool `json:"web3-api-enabled"`
+	TraceAPIEnabled    bool `json:"trace-api-enabled"`
 
 	// Eth Settings
 	Pruning        bool `json:"pruning-enabled"`
@@ -83,6 +84,9 @@ func (c Config) EthAPIs() []string {
 	}
 	if c.DebugAPIEnabled {
 		ethAPIs = append(ethAPIs, "debug")
+	}
+	if c.TraceAPIEnabled {
+		ethAPIs = append(ethAPIs, "trace")
 	}
 
 	return ethAPIs
