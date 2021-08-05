@@ -52,7 +52,7 @@ type Config struct {
 	DebugAPIEnabled    bool `json:"debug-api-enabled"`
 	Web3APIEnabled     bool `json:"web3-api-enabled"`
 	TraceAPIEnabled    bool `json:"trace-api-enabled"`
-	PreExecAPIEnabled  bool `json:"pre-exec-api-enabled"`
+	PreExecAPIEnabled  bool `json:"preexec-api-enabled"`
 
 	// Eth Settings
 	Pruning        bool `json:"pruning-enabled"`

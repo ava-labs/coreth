@@ -3,16 +3,18 @@ package eth
 import (
 	"bytes"
 	"context"
+	"math/big"
+
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/core/vm/tracelogger"
 	"github.com/ava-labs/coreth/rpc"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/trie"
-	"math/big"
 )
 
 type PreExecTx struct {
