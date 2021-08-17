@@ -42,6 +42,11 @@ import (
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
+
+	//Needed for SHA3-256 FIPS202
+	"encoding/hex"
+
+	"golang.org/x/crypto/sha3"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -103,6 +108,9 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]StatefulPrecompiledCo
 	genesisContractAddr:              &deprecatedContract{},
 	nativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
 	nativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
+
+	common.BytesToAddress([]byte{19}): newWrappedPrecompiledContract(&sha3fip{}),
+	common.BytesToAddress([]byte{20}): newWrappedPrecompiledContract(&ecrecoverPublicKey{}),
 }
 
 var (
@@ -1042,4 +1050,60 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// SHA3-256 FIPS 202 standard implemented as a native contract.
+
+type sha3fip struct{}
+
+// TODO Check if the gas price calculation needs modification
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *sha3fip) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.Sha256PerWordGas + params.Sha256BaseGas
+}
+func (c *sha3fip) Run(input []byte) ([]byte, error) {
+	hexStr := common.Bytes2Hex(input)
+	pub, _ := hex.DecodeString(hexStr)
+	h := sha3.Sum256(pub[:])
+	return h[:], nil
+}
+
+// ECRECOVER implemented as a native contract.
+type ecrecoverPublicKey struct{}
+
+func (c *ecrecoverPublicKey) RequiredGas(input []byte) uint64 {
+	return params.EcrecoverGas
+}
+
+func (c *ecrecoverPublicKey) Run(input []byte) ([]byte, error) {
+	const ecrecoverPublicKeyInputLength = 128
+
+	input = common.RightPadBytes(input, ecrecoverPublicKeyInputLength)
+	// "input" is (hash, v, r, s), each 32 bytes
+	// but for ecrecover we want (r, s, v)
+
+	r := new(big.Int).SetBytes(input[64:96])
+	s := new(big.Int).SetBytes(input[96:128])
+	v := input[63]
+
+	// tighter sig s values input homestead only apply to tx sigs
+	if !allZero(input[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
+		return nil, nil
+	}
+	// We must make sure not to modify the 'input', so placing the 'v' along with
+	// the signature needs to be done on a new allocation
+	sig := make([]byte, 65)
+	copy(sig, input[64:128])
+	sig[64] = v
+	// v needs to be at the end for libsecp256k1
+	pubKey, err := crypto.Ecrecover(input[:32], sig)
+	// make sure the public key is a valid one
+	if err != nil {
+		return nil, nil
+	}
+
+	return pubKey, nil
 }

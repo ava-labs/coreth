@@ -75,6 +75,8 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}):   &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}):   &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}):   &bls12381MapG2{},
+	common.BytesToAddress([]byte{19}):   &sha3fip{},
+	common.BytesToAddress([]byte{20}):   &ecrecoverPublicKey{},
 }
 
 // EIP-152 test vectors
@@ -401,3 +403,7 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 	}
 	benchmarkPrecompiled("0f", testcase, b)
 }
+
+func TestPrecompiledSHA3fips(t *testing.T) { testJson("sha3fips", "13", t) }
+
+func TestPrecompiledEcrecoverPublicKey(t *testing.T) { testJson("ecRecoverPublicKey", "14", t) }
