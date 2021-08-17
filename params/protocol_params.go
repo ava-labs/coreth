@@ -158,6 +158,11 @@ const (
 	// asset transfer itself, which is a write to state storage. The cost of creating a new account and
 	// normal value transfer is assessed separately from this cost.
 	AssetCallApricot uint64 = 20000
+
+	//SHA3-FIPS Precompiled contracts gas price esstimation as per ethereum yellow paper appendix G
+	Sha3FipsGas     uint64 = 30 // Once per SHA3-256 operation.
+	Sha3FipsWordGas uint64 = 6  // Once per word of the SHA3-256 operation's data.
+
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
