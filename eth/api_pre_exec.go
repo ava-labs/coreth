@@ -65,6 +65,8 @@ func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*type
 		hexutil.MustDecodeBig(origin.Value),
 		hexutil.MustDecodeUint64(origin.Gas),
 		hexutil.MustDecodeBig(origin.GasPrice),
+		tx.GasFeeCap(),
+		tx.GasTipCap(),
 		hexutil.MustDecode(origin.Data),
 		nil, false,
 	)
@@ -104,7 +106,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	gas := d.tx.Gas()
 	gp := new(core.GasPool).AddGas(gas)
 
-	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), 0)
+	d.stateDb.Prepare(d.tx.Hash(), 0)
 	receipt, err := core.ApplyTransactionForPreExec(
 		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, d.msg, &gas, *bc.GetVMConfig())
 	if err != nil {
@@ -143,7 +145,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 
 	txIndex := 0
 	// Call Prepare to clear out the statedb access list
-	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), txIndex)
+	d.stateDb.Prepare(d.tx.Hash(), txIndex)
 
 	result, err := core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.Gas()))
 	if err != nil {

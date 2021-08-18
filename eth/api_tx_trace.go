@@ -105,7 +105,7 @@ func (api *PublicTxTraceAPI) traceTx(ctx context.Context, message core.Message, 
 	// Construct trace logger to record result as parity's one
 	tracer = tracelogger.NewTraceStructLogger(nil)
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.e.APIBackend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer})
-	statedb.Prepare(txctx.tx.Hash(), txctx.block, txctx.index)
+	statedb.Prepare(txctx.tx.Hash(), txctx.index)
 
 	// Fill essential info into logger
 	tracer.SetFrom(message.From())
