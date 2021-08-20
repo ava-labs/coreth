@@ -231,7 +231,7 @@ func (tx *UnsignedExportTx) SemanticVerify(
 }
 
 // Accept this transaction.
-func (tx *UnsignedExportTx) Accept() (ids.ID, *atomic.Requests, error) {
+func (tx *UnsignedExportTx) Accept() (vm *VM, ids.ID, *atomic.Requests, error) {
 	txID := tx.ID()
 
 	elems := make([]*atomic.Element, len(tx.ExportedOutputs))
@@ -260,6 +260,8 @@ func (tx *UnsignedExportTx) Accept() (ids.ID, *atomic.Requests, error) {
 
 		elems[i] = elem
 	}
+
+	vm.pubsub.Publish(tx.ID(), NewPubSubExportFilterer(tx))
 
 	return tx.DestinationChain, &atomic.Requests{PutRequests: elems}, nil
 }

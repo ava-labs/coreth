@@ -120,8 +120,6 @@ type Tx struct {
 	// The body of this transaction
 	UnsignedAtomicTx `serialize:"true" json:"unsignedTx"`
 
-	vm *VM
-
 	// The credentials of this transaction
 	Creds []verify.Verifiable `serialize:"true" json:"credentials"`
 }
