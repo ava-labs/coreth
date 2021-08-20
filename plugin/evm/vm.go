@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ava-labs/avalanchego/pubsub"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -174,6 +175,8 @@ type VM struct {
 
 	config Config
 
+	pubsub *pubsub.Server
+
 	chainID     *big.Int
 	networkID   uint64
 	genesisHash common.Hash
@@ -291,6 +294,8 @@ func (vm *VM) Initialize(
 	if err := json.Unmarshal(genesisBytes, g); err != nil {
 		return err
 	}
+
+	vm.pubsub = pubsub.New(ctx.NetworkID, ctx.Log)
 
 	// Set the chain config for mainnet/fuji chain IDs
 	switch {
@@ -892,6 +897,8 @@ func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 			vm.config.WSCPUMaxStored.Duration,
 		),
 	}
+
+	apis["/events"] = vm.pubsub
 
 	return apis, nil
 }

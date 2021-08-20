@@ -35,6 +35,16 @@ type UnsignedImportTx struct {
 	ImportedInputs []*avax.TransferableInput `serialize:"true" json:"importedInputs"`
 	// Outputs
 	Outs []EVMOutput `serialize:"true" json:"outputs"`
+
+	vm *VM
+}
+
+func (tx *UnsignedImportTx) Addresses() [][]byte {
+	addrs := make([][]byte, len(tx.Outs))
+	for i, out := range tx.Outs {
+		addrs[i] = out.Address.Bytes()
+	}
+	return addrs
 }
 
 // InputUTXOs returns the UTXOIDs of the imported funds
@@ -253,6 +263,8 @@ func (tx *UnsignedImportTx) Accept() (ids.ID, *atomic.Requests, error) {
 		inputID := in.InputID()
 		utxoIDs[i] = inputID[:]
 	}
+	tx.vm.pubsub.Publish(tx.ID(), NewPubSubFilterer(tx))
+
 	return tx.SourceChain, &atomic.Requests{RemoveRequests: utxoIDs}, nil
 }
 
