@@ -72,9 +72,11 @@ type stJSON struct {
 }
 
 type stPostState struct {
-	Root    common.UnprefixedHash `json:"hash"`
-	Logs    common.UnprefixedHash `json:"logs"`
-	Indexes struct {
+	Root            common.UnprefixedHash `json:"hash"`
+	Logs            common.UnprefixedHash `json:"logs"`
+	TxBytes         hexutil.Bytes         `json:"txbytes"`
+	ExpectException string                `json:"expectException"`
+	Indexes         struct {
 		Data  int `json:"data"`
 		Gas   int `json:"gas"`
 		Value int `json:"value"`
@@ -251,6 +253,6 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 	}
 
 	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
-		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, true)
+		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, false)
 	return msg, nil
 }
