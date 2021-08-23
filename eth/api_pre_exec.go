@@ -128,7 +128,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 	}
 	txContext := core.NewEVMTxContext(d.msg)
 
-	vmctx := vm.BlockContext{}
+	vmctx := core.NewEVMBlockContext(d.header, bc, nil)
 	tracer = tracelogger.NewTraceStructLogger(nil)
 
 	// Fill essential info into logger
@@ -141,7 +141,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 	tracer.SetTx(d.tx.Hash())
 	tracer.SetTxIndex(uint(0))
 	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
+	vmenv := vm.NewEVM(vmctx, txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
 
 	txIndex := 0
 	// Call Prepare to clear out the statedb access list
