@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -136,6 +137,7 @@ var (
 	errInsufficientFundsForFee    = errors.New("insufficient AVAX funds to pay transaction fee")
 	errNoEVMOutputs               = errors.New("tx has no EVM outputs")
 	errNilBaseFeeApricotPhase3    = errors.New("nil base fee is invalid in apricotPhase3")
+	defaultLogLevel               = log.LvlDebug
 )
 
 // buildingBlkStatus denotes the current status of the VM in block production.
@@ -149,7 +151,10 @@ const (
 )
 
 // Codec does serialization and deserialization
-var Codec codec.Manager
+var (
+	Codec          codec.Manager
+	originalStderr *os.File
+)
 
 func init() {
 	Codec = codec.NewDefaultManager()
@@ -179,6 +184,12 @@ func init() {
 	if errs.Errored() {
 		panic(errs.Err)
 	}
+
+	// Preserve [os.Stderr] prior to the call in plugin/main.go to plugin.Serve(...).
+	// Preserving the log level allows us to update the root handler while writing to the original
+	// [os.Stderr] that is being piped through to the logger via the rpcchainvm.
+	originalStderr = os.Stderr
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
 }
 
 // VM implements the snowman.ChainVM interface
@@ -272,6 +283,7 @@ func (vm *VM) Initialize(
 	configBytes []byte,
 	toEngine chan<- commonEng.Message,
 	fxs []*commonEng.Fx,
+	_ commonEng.AppSender,
 ) error {
 	vm.config.SetDefaults()
 	if len(configBytes) > 0 {
@@ -325,6 +337,18 @@ func (vm *VM) Initialize(
 
 	ethConfig := ethconfig.NewDefaultConfig()
 	ethConfig.Genesis = g
+
+	// Set log level
+	logLevel := defaultLogLevel
+	if vm.config.LogLevel != "" {
+		configLogLevel, err := log.LvlFromString(vm.config.LogLevel)
+		if err != nil {
+			return fmt.Errorf("failed to initialize logger due to: %w ", err)
+		}
+		logLevel = configLogLevel
+	}
+
+	log.Root().SetHandler(log.LvlFilterHandler(logLevel, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -643,6 +667,22 @@ func (vm *VM) getBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
 
 func (vm *VM) Version() (string, error) {
 	return Version, nil
+}
+
+func (vm *VM) AppRequest(nodeID ids.ShortID, requestID uint32, request []byte) error {
+	return nil
+}
+
+func (vm *VM) AppResponse(nodeID ids.ShortID, requestID uint32, response []byte) error {
+	return nil
+}
+
+func (vm *VM) AppRequestFailed(nodeID ids.ShortID, requestID uint32) error {
+	return nil
+}
+
+func (vm *VM) AppGossip(nodeID ids.ShortID, msg []byte) error {
+	return nil
 }
 
 // NewHandler returns a new Handler for a service where:
