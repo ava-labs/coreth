@@ -46,4 +46,4 @@ Blocks are produced asynchronously in Snowman Consensus, so the timing assumptio
 
 A block with a timestamp more than 10 seconds in the future will not be considered valid. However, a block with a timestamp more than 10 seconds in the past will still be considered valid as long as its timestamp is greater than or equal to the timestamp of its parent block.
 
-baker
+baker from branch baker
