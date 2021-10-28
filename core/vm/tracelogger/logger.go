@@ -289,6 +289,11 @@ func (tr *StructLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, 
 	return
 }
 
+func (tr *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+}
+
+func (tr *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (tr *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	log.Debug("StructLogger CaptureEND", "txHash", tr.tx.String(), "duration", common.PrettyDuration(t), "gasUsed", gasUsed)
