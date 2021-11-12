@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/prometheus/client_golang/prometheus"
 
 	// Force-load tracer engine to trigger registration
 	//
@@ -203,6 +204,8 @@ type VM struct {
 
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
+
+	bootstrapped bool
 }
 
 func (vm *VM) Connected(nodeID ids.ShortID) error {
@@ -421,6 +424,25 @@ func (vm *VM) Initialize(
 	// 	return err
 	// }
 
+	registerer := prometheus.NewRegistry()
+	if err := ctx.Metrics.Register(registerer); err != nil {
+		return err
+	}
+
+	counter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "woooooo",
+	})
+	if err := registerer.Register(counter); err != nil {
+		return err
+	}
+
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		for range ticker.C {
+			counter.Inc()
+		}
+	}()
+
 	return vm.fx.Initialize(vm)
 }
 
@@ -526,12 +548,15 @@ func (vm *VM) pruneChain() error {
 
 // Bootstrapping notifies this VM that the consensus engine is performing
 // bootstrapping
-func (vm *VM) Bootstrapping() error { return vm.fx.Bootstrapping() }
+func (vm *VM) Bootstrapping() error {
+	vm.bootstrapped = false
+	return vm.fx.Bootstrapping()
+}
 
 // Bootstrapped notifies this VM that the consensus engine has finished
 // bootstrapping
 func (vm *VM) Bootstrapped() error {
-	vm.ctx.Bootstrapped()
+	vm.bootstrapped = true
 	return vm.fx.Bootstrapped()
 }
 
