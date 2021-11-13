@@ -22,10 +22,10 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/prometheus/client_golang/prometheus"
 
 	// Force-load tracer engine to trigger registration
 	//
@@ -36,6 +36,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
@@ -424,24 +425,10 @@ func (vm *VM) Initialize(
 	// 	return err
 	// }
 
-	registerer := prometheus.NewRegistry()
-	if err := ctx.Metrics.Register(registerer); err != nil {
+	gatherer := prometheus.Gatherer(metrics.DefaultRegistry)
+	if err := ctx.Metrics.Register(gatherer); err != nil {
 		return err
 	}
-
-	counter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "woooooo",
-	})
-	if err := registerer.Register(counter); err != nil {
-		return err
-	}
-
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		for range ticker.C {
-			counter.Inc()
-		}
-	}()
 
 	return vm.fx.Initialize(vm)
 }
