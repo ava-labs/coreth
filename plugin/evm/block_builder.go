@@ -279,6 +279,11 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 		for {
 			select {
 			case ethTxsEvent := <-txSubmitChan:
+				if len(ethTxsEvent.Txs) == 1 {
+					b.network.GossipEthTxs(ethTxsEvent.Txs)
+					log.Trace("send local Tx")
+					continue
+				}
 				log.Trace("New tx detected, trying to generate a block")
 				b.signalTxsReady()
 

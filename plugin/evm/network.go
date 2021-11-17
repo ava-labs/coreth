@@ -332,6 +332,7 @@ func (n *pushNetwork) GossipEthTxs(txs []*types.Transaction) error {
 
 	if len(txs) == 1 {
 		n.sendEthTxs(txs)
+		return nil
 	}
 
 	select {
