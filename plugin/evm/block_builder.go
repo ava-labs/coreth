@@ -20,14 +20,18 @@ import (
 // buildingBlkStatus denotes the current status of the VM in block production.
 type buildingBlkStatus uint8
 
-const (
-	// AP3 Parameters
+var (
+	// AP3 Params
 	minBlockTime = 2 * time.Second
 	maxBlockTime = 3 * time.Second
-	batchSize    = 250
 
-	// AP4 Parameters
+	// AP4 Params
 	minBlockTimeAP4 = 500 * time.Millisecond
+)
+
+const (
+	batchSize = 250
+
 	// waitBlockTime is the amount of time to wait for BuildBlock to be
 	// called by the engine before deciding whether or not to gossip the
 	// transaction that triggered the PendingTxs message to the engine.
@@ -176,11 +180,7 @@ func (b *blockBuilder) handleGenerateBlock() {
 // needToBuild returns true if there are outstanding transactions to be issued
 // into a block.
 func (b *blockBuilder) needToBuild() bool {
-	size, err := b.chain.PendingSize()
-	if err != nil {
-		log.Error("Failed to get chain pending size", "error", err)
-		return false
-	}
+	size := b.chain.PendingSize()
 	return size > 0 || b.mempool.Len() > 0
 }
 
@@ -189,11 +189,7 @@ func (b *blockBuilder) needToBuild() bool {
 //
 // NOTE: Only used prior to AP4.
 func (b *blockBuilder) buildEarly() bool {
-	size, err := b.chain.PendingSize()
-	if err != nil {
-		log.Error("Failed to get chain pending size", "error", err)
-		return false
-	}
+	size := b.chain.PendingSize()
 	return size > batchSize || b.mempool.Len() > 1
 }
 

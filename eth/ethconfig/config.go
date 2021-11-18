@@ -37,11 +37,13 @@ import (
 
 // DefaultFullGPOConfig contains default gasprice oracle settings for full node.
 var DefaultFullGPOConfig = gasprice.Config{
-	Blocks:     20,
-	Percentile: 60,
-	MinPrice:   gasprice.DefaultMinPrice,
-	MaxPrice:   gasprice.DefaultMaxPrice,
-	MinGasUsed: gasprice.DefaultMinGasUsed,
+	Blocks:           20,
+	Percentile:       60,
+	MaxHeaderHistory: 1024,
+	MaxBlockHistory:  1024,
+	MinPrice:         gasprice.DefaultMinPrice,
+	MaxPrice:         gasprice.DefaultMaxPrice,
+	MinGasUsed:       gasprice.DefaultMinGasUsed,
 }
 
 // DefaultConfig contains default settings for use on the Avalanche main net.
@@ -62,6 +64,7 @@ func NewDefaultConfig() Config {
 		Miner:                   miner.Config{},
 		TxPool:                  core.DefaultTxPoolConfig,
 		RPCGasCap:               25000000,
+		RPCEVMTimeout:           5 * time.Second,
 		GPO:                     DefaultFullGPOConfig,
 		RPCTxFeeCap:             1, // 1 AVAX
 	}
@@ -69,6 +72,7 @@ func NewDefaultConfig() Config {
 
 //go:generate gencodec -type Config -formats toml -out gen_config.go
 
+// Config contains configuration options for of the ETH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
@@ -132,10 +136,18 @@ type Config struct {
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64 `toml:",omitempty"`
 
+	// RPCEVMTimeout is the global timeout for eth-call.
+	RPCEVMTimeout time.Duration
+
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64 `toml:",omitempty"`
 
 	// AllowUnfinalizedQueries allow unfinalized queries
 	AllowUnfinalizedQueries bool
+
+	// AllowUnprotectedTxs allow unprotected transactions to be locally issued.
+	// Unprotected transactions are transactions that are signed without EIP-155
+	// replay protection.
+	AllowUnprotectedTxs bool
 }
