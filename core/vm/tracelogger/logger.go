@@ -41,7 +41,7 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 )
 
-var _ vm.Tracer = (*StructLogger)(nil)
+var _ vm.EVMLogger = (*StructLogger)(nil)
 
 // StructLogger is a transaction trace creator
 type StructLogger struct {
