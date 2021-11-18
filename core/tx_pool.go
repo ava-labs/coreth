@@ -787,10 +787,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 
 	if isLocal {
-		var txs []*types.Transaction
-		txs = append(txs, tx)
-		log.Trace("local transaction:", hash)
-		pool.txFeed.Send(NewTxsEvent{txs})
+		//var txs []*types.Transaction
+		//txs = append(txs, tx)
+		//log.Trace("local transaction:", hash)
+		//pool.txFeed.Send(NewTxsEvent{txs})
 		localGauge.Inc(1)
 	}
 	pool.journalTx(from, tx)
@@ -893,6 +893,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
 func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
+	pool.txFeed.Send(txs)
 	return pool.addTxs(txs, !pool.config.NoLocals, true)
 }
 
