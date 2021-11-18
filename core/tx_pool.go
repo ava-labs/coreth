@@ -785,10 +785,11 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		pool.locals.add(from)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
-	if isLocal {
 
+	if isLocal {
 		var txs []*types.Transaction
 		txs = append(txs, tx)
+		log.Trace("local transaction:", hash)
 		pool.txFeed.Send(NewTxsEvent{txs})
 		localGauge.Inc(1)
 	}
