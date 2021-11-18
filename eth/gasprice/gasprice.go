@@ -32,7 +32,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ava-labs/avalanchego/utils/timer"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -90,7 +90,7 @@ type Oracle struct {
 	fetchLock  sync.Mutex
 
 	// clock to decide what set of rules to use when recommending a gas price
-	clock timer.Clock
+	clock mockable.Clock
 
 	checkBlocks, percentile           int
 	maxHeaderHistory, maxBlockHistory int
@@ -171,10 +171,17 @@ func (oracle *Oracle) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
 		return nil, nil
 	}
 
+	// If the current time is prior to the parent timestamp, then we use the parent
+	// timestamp instead.
+	header := block.Header()
+	timestamp := oracle.clock.Unix()
+	if timestamp < header.Time {
+		timestamp = header.Time
+	}
 	// If the block does have a baseFee, calculate the next base fee
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
-	_, nextBaseFee, err := dummy.CalcBaseFee(oracle.backend.ChainConfig(), block.Header(), oracle.clock.Unix())
+	_, nextBaseFee, err := dummy.CalcBaseFee(oracle.backend.ChainConfig(), header, timestamp)
 	return nextBaseFee, err
 }
 
