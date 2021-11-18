@@ -68,7 +68,7 @@ func testCtx() *vmContext {
 	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
-func runTrace(tracer *Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
+func runTrace(tracer Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
 	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
 	var (
 		startGas uint64 = 10000
@@ -178,7 +178,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 // TestNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
 func TestNoStepExec(t *testing.T) {
-	runEmptyTrace := func(tracer *Tracer, vmctx *vmContext) (json.RawMessage, error) {
+	runEmptyTrace := func(tracer Tracer, vmctx *vmContext) (json.RawMessage, error) {
 		env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 		startGas := uint64(10000)
 		contract := vm.NewContract(account{}, account{}, big.NewInt(0), startGas)
@@ -244,5 +244,37 @@ func TestIsPrecompile(t *testing.T) {
 	}
 	if string(res) != "true" {
 		t.Errorf("Tracer should consider blake2f as precompile in istanbul")
+	}
+}
+
+func TestEnterExit(t *testing.T) {
+	// test that either both or none of enter() and exit() are defined
+	if _, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(Context)); err == nil {
+		t.Fatal("tracer creation should've failed without exit() definition")
+	}
+	if _, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(Context)); err != nil {
+		t.Fatal(err)
+	}
+
+	// test that the enter and exit method are correctly invoked and the values passed
+	tracer, err := New("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(Context))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scope := &vm.ScopeContext{
+		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
+	}
+
+	tracer.CaptureEnter(vm.CALL, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
+	tracer.CaptureExit([]byte{}, 400, nil)
+
+	have, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"enters":1,"exits":1,"enterGas":1000,"gasUsed":400}`
+	if string(have) != want {
+		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)
 	}
 }

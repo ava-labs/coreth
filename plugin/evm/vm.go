@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/database/versiondb"
 	coreth "github.com/ava-labs/coreth/chain"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -25,8 +24,15 @@ import (
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
-
 	"github.com/ava-labs/coreth/rpc"
+
+	// Force-load tracer engine to trigger registration
+	//
+	// We must import this package (not referenced elsewhere) so that the native "callTracer"
+	// is added to a map of client-accessible tracers. In geth, this is done
+	// inside of cmd/geth.
+	_ "github.com/ava-labs/coreth/eth/tracers/native"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -39,6 +45,7 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/manager"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
@@ -50,7 +57,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/profiler"
-	"github.com/ava-labs/avalanchego/utils/timer"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
@@ -82,13 +89,21 @@ const (
 	// and fail verification
 	maxFutureBlockTime   = 10 * time.Second
 	maxUTXOsToFetch      = 1024
-	defaultMempoolSize   = 1024
+	defaultMempoolSize   = 4096
 	codecVersion         = uint16(0)
 	secpFactoryCacheSize = 1024
 
 	decidedCacheSize    = 100
 	missingCacheSize    = 50
 	unverifiedCacheSize = 50
+)
+
+// Define the API endpoints for the VM
+const (
+	avaxEndpoint   = "/avax"
+	adminEndpoint  = "/admin"
+	ethRPCEndpoint = "/rpc"
+	ethWSEndpoint  = "/ws"
 )
 
 var (
@@ -177,7 +192,7 @@ type VM struct {
 
 	baseCodec codec.Registry
 	codec     codec.Manager
-	clock     timer.Clock
+	clock     mockable.Clock
 	mempool   *Mempool
 
 	shutdownChan chan struct{}
@@ -190,11 +205,11 @@ type VM struct {
 	profiler profiler.ContinuousProfiler
 }
 
-func (vm *VM) Connected(id ids.ShortID) error {
+func (vm *VM) Connected(nodeID ids.ShortID) error {
 	return nil // noop
 }
 
-func (vm *VM) Disconnected(id ids.ShortID) error {
+func (vm *VM) Disconnected(nodeID ids.ShortID) error {
 	return nil // noop
 }
 
@@ -205,10 +220,15 @@ func (vm *VM) Codec() codec.Manager { return vm.codec }
 func (vm *VM) CodecRegistry() codec.Registry { return vm.baseCodec }
 
 // Clock implements the secp256k1fx interface
-func (vm *VM) Clock() *timer.Clock { return &vm.clock }
+func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
+
+// SetLogLevel sets the log level with the original [os.StdErr] interface
+func (vm *VM) setLogLevel(logLevel log.Lvl) {
+	log.Root().SetHandler(log.LvlFilterHandler(logLevel, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
+}
 
 /*
  ******************************************************************************
@@ -296,14 +316,17 @@ func (vm *VM) Initialize(
 		logLevel = configLogLevel
 	}
 
-	log.Root().SetHandler(log.LvlFilterHandler(logLevel, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
+	vm.setLogLevel(logLevel)
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
 	ethConfig.RPCGasCap = vm.config.RPCGasCap
+	ethConfig.RPCEVMTimeout = vm.config.APIMaxDuration.Duration
 	ethConfig.RPCTxFeeCap = vm.config.RPCTxFeeCap
 	ethConfig.TxPool.NoLocals = !vm.config.LocalTxsEnabled
 	ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
+	ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
+	ethConfig.Preimages = vm.config.Preimages
 	ethConfig.Pruning = vm.config.Pruning
 	ethConfig.SnapshotAsync = vm.config.SnapshotAsync
 	ethConfig.SnapshotVerify = vm.config.SnapshotVerify
@@ -659,18 +682,31 @@ func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 	enabledAPIs := vm.config.EthAPIs()
 	vm.chain.AttachEthService(handler, enabledAPIs)
 
+	primaryAlias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get primary alias for chain due to %w", err)
+	}
+	apis := make(map[string]*commonEng.HTTPHandler)
+	avaxAPI, err := newHandler("avax", &AvaxAPI{vm})
+	if err != nil {
+		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
+	}
+	enabledAPIs = append(enabledAPIs, "avax")
+	apis[avaxEndpoint] = avaxAPI
+
+	if vm.config.CorethAdminAPIEnabled {
+		adminAPI, err := newHandler("admin", NewAdminService(vm, fmt.Sprintf("coreth_performance_%s", primaryAlias)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to register service for admin API due to %w", err)
+		}
+		apis[adminEndpoint] = adminAPI
+		enabledAPIs = append(enabledAPIs, "coreth-admin")
+	}
+
 	errs := wrappers.Errs{}
 	if vm.config.SnowmanAPIEnabled {
 		errs.Add(handler.RegisterName("snowman", &SnowmanAPI{vm}))
 		enabledAPIs = append(enabledAPIs, "snowman")
-	}
-	if vm.config.CorethAdminAPIEnabled {
-		primaryAlias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get primary alias for chain due to %w", err)
-		}
-		errs.Add(handler.RegisterName("performance", NewPerformanceService(fmt.Sprintf("coreth_performance_%s", primaryAlias))))
-		enabledAPIs = append(enabledAPIs, "coreth-admin")
 	}
 	if vm.config.NetAPIEnabled {
 		errs.Add(handler.RegisterName("net", &NetAPI{vm}))
@@ -684,18 +720,22 @@ func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 		return nil, errs.Err
 	}
 
-	avaxAPI, err := newHandler("avax", &AvaxAPI{vm})
-	if err != nil {
-		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
+	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
+	apis[ethRPCEndpoint] = &commonEng.HTTPHandler{
+		LockOptions: commonEng.NoLock,
+		Handler:     handler,
+	}
+	apis[ethWSEndpoint] = &commonEng.HTTPHandler{
+		LockOptions: commonEng.NoLock,
+		Handler: handler.WebsocketHandlerWithDuration(
+			[]string{"*"},
+			vm.config.APIMaxDuration.Duration,
+			vm.config.WSCPURefillRate.Duration,
+			vm.config.WSCPUMaxStored.Duration,
+		),
 	}
 
-	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
-
-	return map[string]*commonEng.HTTPHandler{
-		"/rpc":  {LockOptions: commonEng.NoLock, Handler: handler},
-		"/avax": avaxAPI,
-		"/ws":   {LockOptions: commonEng.NoLock, Handler: handler.WebsocketHandlerWithDuration([]string{"*"}, vm.config.APIMaxDuration.Duration)},
-	}, nil
+	return apis, nil
 }
 
 // CreateStaticHandlers makes new http handlers that can handle API calls
