@@ -280,8 +280,9 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 					log.Trace("send local Tx")
 					continue
 				}
-				else
+				else{
 					continue
+				}
 				log.Trace("New tx detected, trying to generate a block")
 				b.signalTxsReady()
 
