@@ -292,8 +292,8 @@ func (b *EthAPIBackend) SubscribeAcceptedLogsEvent(ch chan<- []*types.Log) event
 }
 
 func (b *EthAPIBackend) SubscribeAcceptedTransactionEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	//return b.eth.BlockChain().SubscribeAcceptedTransactionEvent(ch)
-	return b.eth.TxPool().SubscribeNewTxsEvent(ch)
+	return b.eth.BlockChain().SubscribeAcceptedTransactionEvent(ch)
+	//return b.eth.TxPool().SubscribeNewTxsEvent(ch)
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
