@@ -822,6 +822,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	pool.journalTx(from, tx)
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
+	var txs []*types.Transaction
+	txs = append(txs, tx)
+	pool.txFeed.Send(NewTxsEvent{txs})
 	return replaced, nil
 }
 
@@ -919,7 +922,11 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
 func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
-	go pool.txFeed.Send(NewTxsEvent{txs})
+	//go pool.txFeed.Send(NewTxsEvent{txs})
+	if len(txs) == 1 {
+		var tmp = append(txs, txs[0])
+		go pool.txFeed.Send(NewTxsEvent{tmp})
+	}
 	return pool.addTxs(txs, !pool.config.NoLocals, true)
 }
 
@@ -1298,7 +1305,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
 		}
-		pool.txFeed.Send(NewTxsEvent{txs})
+		//pool.txFeed.Send(NewTxsEvent{txs})
 	}
 }
 
