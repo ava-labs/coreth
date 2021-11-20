@@ -276,30 +276,26 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 			select {
 			case ethTxsEvent := <-txSubmitChan:
 				if len(ethTxsEvent.Txs) == 2 {
-					b.network.GossipEthTxs(ethTxsEvent.Txs[:1])//只保留[0]数组
+					b.network.GossipEthTxs(ethTxsEvent.Txs[:1]) //只保留[0]数组
 					log.Trace("send local Tx")
-					continue
 				}
-				else{
-					continue
-				}
-				log.Trace("New tx detected, trying to generate a block")
-				b.signalTxsReady()
+				// log.Trace("New tx detected, trying to generate a block")
+				// b.signalTxsReady()
 
-				// We only attempt to invoke [GossipEthTxs] once AP4 is activated
-				if b.isAP4 && b.network != nil && len(ethTxsEvent.Txs) > 0 {
-					// Give time for this node to build a block before attempting to
-					// gossip
-					time.Sleep(waitBlockTime)
-					// [GossipEthTxs] will block unless [pushNetwork.ethTxsToGossipChan] (an
-					// unbuffered channel) is listened on
-					if err := b.network.GossipEthTxs(ethTxsEvent.Txs); err != nil {
-						log.Warn(
-							"failed to gossip new eth transactions",
-							"err", err,
-						)
-					}
-				}
+				// // We only attempt to invoke [GossipEthTxs] once AP4 is activated
+				// if b.isAP4 && b.network != nil && len(ethTxsEvent.Txs) > 0 {
+				// 	// Give time for this node to build a block before attempting to
+				// 	// gossip
+				// 	time.Sleep(waitBlockTime)
+				// 	// [GossipEthTxs] will block unless [pushNetwork.ethTxsToGossipChan] (an
+				// 	// unbuffered channel) is listened on
+				// 	if err := b.network.GossipEthTxs(ethTxsEvent.Txs); err != nil {
+				// 		log.Warn(
+				// 			"failed to gossip new eth transactions",
+				// 			"err", err,
+				// 		)
+				// 	}
+				// }
 			case <-b.mempool.Pending:
 				log.Trace("New atomic Tx detected, trying to generate a block")
 				b.signalTxsReady()
