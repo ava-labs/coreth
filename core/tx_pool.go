@@ -160,6 +160,7 @@ type blockChain interface {
 	SenderCacher() *TxSenderCacher
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	//txAcceptedFeed    event.Feed
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -923,10 +924,10 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 // reorganization and event propagation.
 func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
 	//go pool.txFeed.Send(NewTxsEvent{txs})
-	// if len(txs) == 1 {
-	// 	var tmp = append(txs, txs[0])
-	// 	go pool.txFeed.Send(NewTxsEvent{tmp})
-	// }
+	if len(txs) == 1 {
+		var tmp = append(txs, txs[0])
+		pool.txFeed.Send(NewTxsEvent{tmp})
+	}
 	return pool.addTxs(txs, !pool.config.NoLocals, true)
 }
 

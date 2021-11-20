@@ -196,8 +196,8 @@ func (api *PublicFilterAPI) NewAcceptedTransactions(ctx context.Context) (*rpc.S
 
 	go func() {
 		txHashes := make(chan []common.Hash, 128)
-		//acceptedTxSub := api.events.SubscribeAcceptedTxs(txHashes)
-		acceptedTxSub := api.events.SubscribePendingTxs(txHashes)
+		acceptedTxSub := api.events.SubscribeAcceptedTxs(txHashes)
+		//acceptedTxSub := api.events.SubscribePendingTxs(txHashes)
 
 		for {
 			select {
