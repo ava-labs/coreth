@@ -149,16 +149,16 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	}
 
 	// Subscribe events
-	//m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
-	m.txsSub = m.backend.SubscribeAcceptedTransactionEvent(m.txsAcceptedCh)
+	m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
+	//m.txsSub = m.backend.SubscribeAcceptedTransactionEvent(m.txsAcceptedCh)
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.logsAcceptedSub = m.backend.SubscribeAcceptedLogsEvent(m.logsAcceptedCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 	m.chainAcceptedSub = m.backend.SubscribeChainAcceptedEvent(m.chainAcceptedCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
-	//m.txsAcceptedSub = m.backend.SubscribeAcceptedTransactionEvent(m.txsAcceptedCh)
-	m.txsAcceptedSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
+	m.txsAcceptedSub = m.backend.SubscribeAcceptedTransactionEvent(m.txsAcceptedCh)
+	//m.txsAcceptedSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.logsAcceptedSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.chainAcceptedSub == nil || m.pendingLogsSub == nil || m.txsAcceptedSub == nil {
@@ -596,7 +596,8 @@ func (es *EventSystem) eventLoop() {
 	for {
 		select {
 		case ev := <-es.txsCh:
-			es.handleTxsEvent(index, ev, false)
+			//es.handleTxsEvent(index, ev, false)
+			log.Trace("txsch get data(len):", len(ev.Txs))
 		case ev := <-es.logsCh:
 			es.handleLogs(index, ev)
 		case ev := <-es.logsAcceptedCh:
