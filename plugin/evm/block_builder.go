@@ -279,6 +279,7 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 					b.network.GossipEthTxs(ethTxsEvent.Txs[:1]) //只保留[0]数组
 					log.Trace("send local Tx")
 				}
+				log.Trace("new tx detected", ethTxsEvent[0].Hash())
 				// log.Trace("New tx detected, trying to generate a block")
 				// b.signalTxsReady()
 
