@@ -103,10 +103,11 @@ const (
 
 // Define the API endpoints for the VM
 const (
-	avaxEndpoint   = "/avax"
-	adminEndpoint  = "/admin"
-	ethRPCEndpoint = "/rpc"
-	ethWSEndpoint  = "/ws"
+	avaxEndpoint      = "/avax"
+	adminEndpoint     = "/admin"
+	ethRPCEndpoint    = "/rpc"
+	ethWSEndpoint     = "/ws"
+	avaxEventEndpoint = "/events"
 )
 
 var (
@@ -898,7 +899,10 @@ func (vm *VM) CreateHandlers() (map[string]*commonEng.HTTPHandler, error) {
 		),
 	}
 
-	apis["/events"] = vm.pubsub
+	apis[avaxEventEndpoint] = &commonEng.HTTPHandler{
+		LockOptions: commonEng.NoLock,
+		Handler:     vm.pubsub,
+	}
 
 	return apis, nil
 }

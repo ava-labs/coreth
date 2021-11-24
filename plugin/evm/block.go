@@ -133,7 +133,7 @@ func (b *Block) Accept() error {
 		if err := vm.writeAtomicTx(b, tx); err != nil {
 			return err
 		}
-		chainID, txRequest, err := tx.UnsignedAtomicTx.Accept()
+		chainID, txRequest, err := tx.UnsignedAtomicTx.Accept(vm)
 		if err != nil {
 			return err
 		}

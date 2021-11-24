@@ -110,7 +110,7 @@ type UnsignedAtomicTx interface {
 	SemanticVerify(vm *VM, stx *Tx, parent *Block, baseFee *big.Int, rules params.Rules) error
 
 	// Accept this transaction with the additionally provided state transitions.
-	Accept() (ids.ID, *atomic.Requests, error)
+	Accept(vm *VM) (ids.ID, *atomic.Requests, error)
 
 	EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error
 }
