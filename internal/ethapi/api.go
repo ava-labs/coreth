@@ -27,12 +27,15 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
+
+	"encoding/json"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/accounts"
@@ -885,6 +888,52 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 	return nil
 }
 
+// [EVM++]
+var (
+	EVMPP = common.HexToAddress("0x5555555555555555555555555555555555555555")
+
+	// SolidityErrorSignature is Keccak("Error(string)")
+	SolidityErrorSignature = []byte{0x08, 0xc3, 0x79, 0xa0}
+
+	// SolidityPanicSignature is Keccak("Panic(uint256)")
+	SolidityPanicSignature = []byte{0x4e, 0x48, 0x7b, 0x71}
+)
+
+func isCallLogs(args *TransactionArgs) bool {
+	return args.AccessList != nil && len(*args.AccessList) == 1 && (*args.AccessList)[0].Address == EVMPP
+}
+
+func isSolidityRevertOrPanicMessage(res []byte) bool {
+	return bytes.Equal(res[:4], SolidityErrorSignature) || bytes.Equal(res[:4], SolidityPanicSignature)
+}
+
+// fromSolidityRevertMessage construct the call result from an revert message
+func fromSolidityRevertMessage(msg []byte) []byte {
+	len := len(msg)
+	cap := (len + 31) / 32 * 32
+	res := make([]byte, 4+32+32+cap)
+
+	copy(res, SolidityErrorSignature)
+
+	offset := common.BigToHash(common.Big32)
+	copy(res[4:], offset.Bytes())
+
+	size := common.BigToHash(big.NewInt(int64(len)))
+	copy(res[4+32:], size.Bytes())
+
+	copy(res[4+32+32:], msg)
+	return res
+}
+
+type resultAndLogs struct {
+	UsedGas    uint64        `json:"usedGas" gencodec:"required"`
+	Err        error         `json:"err" gencodec:"required"`
+	ReturnData hexutil.Bytes `json:"returnData" gencodec:"required"`
+	Logs       []*types.Log  `json:"logs" gencodec:"required"`
+}
+
+// [EVM--]
+
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
@@ -951,6 +1000,23 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
+
+	// [EVM++]
+	if isCallLogs(&args) && !isSolidityRevertOrPanicMessage(result.ReturnData) {
+		logs := evm.StateDB.Logs()
+		msg, err := json.Marshal(resultAndLogs{
+			UsedGas:    result.UsedGas,
+			Err:        result.Err,
+			ReturnData: result.ReturnData,
+			Logs:       logs,
+		})
+		if err != nil {
+			return nil, err
+		}
+		result.ReturnData = fromSolidityRevertMessage(msg)
+	}
+	// [EVM--]
+
 	return result, nil
 }
 
