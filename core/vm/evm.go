@@ -224,7 +224,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	evm.StateDB.AddLog(&types.Log{
 		Address:     common.HexToAddress("0x0000000000000000000000000000000000000000"),
 		Topics:      topics,
-		Data:        value.Bytes(),
+		Data:        common.BigToHash(value).Bytes(),
 		BlockNumber: evm.Context.BlockNumber.Uint64(),
 	})
 	// [EVM--]
