@@ -31,7 +31,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -214,20 +213,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
-
-	// [EVM++]
-	topics := make([]common.Hash, 3)
-	topics[0] = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-	topics[1] = caller.Address().Hash()
-	topics[2] = addr.Hash()
-
-	evm.StateDB.AddLog(&types.Log{
-		Address:     common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		Topics:      topics,
-		Data:        common.BigToHash(value).Bytes(),
-		BlockNumber: evm.Context.BlockNumber.Uint64(),
-	})
-	// [EVM--]
 
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Debug {
