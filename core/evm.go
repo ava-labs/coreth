@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	//"github.com/ethereum/go-ethereum/log"
 )
@@ -140,6 +141,18 @@ func CanTransferMC(db vm.StateDB, addr common.Address, to common.Address, coinID
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
+
+	// [EVM++]
+	db.AddLog(&types.Log{
+		Address: common.Address{},
+		Topics: []common.Hash{
+			params.TopicTransfer,
+			sender.Hash(),
+			recipient.Hash(),
+		},
+		Data: common.BigToHash(amount).Bytes(),
+	})
+	// [EVM--]
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
