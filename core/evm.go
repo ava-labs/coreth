@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	//"github.com/ethereum/go-ethereum/log"
 )
@@ -136,27 +137,22 @@ func CanTransferMC(db vm.StateDB, addr common.Address, to common.Address, coinID
 	return false
 }
 
-// ERC20 Transfer event signature
-var ETES = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 
 	// [EVM++]
-	topics := make([]common.Hash, 3)
-	topics[0] = ETES
-	topics[1] = sender.Hash()
-	topics[2] = recipient.Hash()
-
 	db.AddLog(&types.Log{
 		Address: common.Address{},
-		Topics:  topics,
-		Data:    common.BigToHash(amount).Bytes(),
+		Topics: []common.Hash{
+			params.TopicTransfer,
+			sender.Hash(),
+			recipient.Hash(),
+		},
+		Data: common.BigToHash(amount).Bytes(),
 	})
 	// [EVM--]
-
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
