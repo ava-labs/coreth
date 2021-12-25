@@ -904,6 +904,9 @@ func isCallLogs(args *TransactionArgs) bool {
 }
 
 func isSolidityRevertOrPanicMessage(res []byte) bool {
+	if res == nil || len(res) < 4 {
+		return false
+	}
 	return bytes.Equal(res[:4], SolidityErrorSignature) || bytes.Equal(res[:4], SolidityPanicSignature)
 }
 
