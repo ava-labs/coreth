@@ -27,10 +27,14 @@
 package vm
 
 import (
+	"bytes"
+	"encoding/json"
 	"math/big"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -177,11 +181,62 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
+type Tx struct {
+	To    common.Address `json:"to"`
+	Data  []byte         `json:"data"`
+	Value *big.Int       `json:"value"`
+}
+
+var (
+	// CallBatchSignature is Keccak("callBatch([]Tx")
+	CallBatchSignature = []byte{0x7d, 0x15, 0x53, 0x2f}
+	BADDR              = common.HexToAddress("0x5555555555555555555555555555555555555555")
+)
+
+func isBatchTx(addr common.Address, input []byte) bool {
+	if len(input) < 4 {
+		return false
+	}
+	return bytes.Equal(input[:4], CallBatchSignature) && addr == BADDR
+}
+
+func decodeBatchTxInput(encodedData []byte) (txs []*Tx, err error) {
+	abiJsonString := `[{"inputs": [{"components": [{"internalType": "address","name": "to","type": "address"},{"internalType": "bytes","name": "data","type": "bytes"},{"internalType": "uint256","name": "value","type": "uint256"}],"internalType": "struct Test.Tx[]","name": "txs","type": "tuple[]"}],"name": "callBatch","outputs": [{"internalType": "bytes[]","name": "results","type": "bytes[]"}],"stateMutability": "nonpayable","type": "function"}]`
+	myAbi, err := abi.JSON(strings.NewReader(abiJsonString))
+	if err != nil {
+		return txs, err
+	}
+
+	var params []interface{}
+	if method, ok := myAbi.Methods["callBatch"]; ok {
+		params, err = method.Inputs.Unpack(encodedData[4:])
+		if err != nil {
+			return txs, err
+		}
+	}
+	bodyBytes, err := json.Marshal(params[0])
+	if err != nil {
+		return txs, err
+	}
+	if err := json.Unmarshal(bodyBytes, &txs); err != nil {
+		return txs, err
+	}
+	return txs, nil
+}
+
 // Call executes the contract associated with the addr with the given input as
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	var txs []*Tx
+	if isBatchTx(addr, input) {
+		txs, _ = decodeBatchTxInput(input)
+	} else {
+		tx := Tx{addr, input, value}
+		txs = []*Tx{&tx}
+	}
+
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -189,77 +244,87 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	// Fail if we're trying to transfer more than the available balance
-	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, gas, ErrInsufficientBalance
-	}
+
 	snapshot := evm.StateDB.Snapshot()
-	p, isPrecompile := evm.precompile(addr)
+	for _, tx := range txs {
+		addr = tx.To
+		value = tx.Value
+		input = tx.Data
 
-	if !evm.StateDB.Exist(addr) {
-		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
-			// Calling a non existing account, don't do anything, but ping the tracer
-			if evm.Config.Debug {
-				if evm.depth == 0 {
-					evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
-					evm.Config.Tracer.CaptureEnd(ret, 0, 0, nil)
-				} else {
-					evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
-					evm.Config.Tracer.CaptureExit(ret, 0, nil)
+		// Fail if we're trying to transfer more than the available balance
+		if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
+			return nil, gas, ErrInsufficientBalance
+		}
+
+		p, isPrecompile := evm.precompile(addr)
+
+		if !evm.StateDB.Exist(addr) {
+			if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
+				// Calling a non existing account, don't do anything, but ping the tracer
+				if evm.Config.Debug {
+					if evm.depth == 0 {
+						evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
+						evm.Config.Tracer.CaptureEnd(ret, 0, 0, nil)
+					} else {
+						evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
+						evm.Config.Tracer.CaptureExit(ret, 0, nil)
+					}
 				}
+				return nil, gas, nil
 			}
-			return nil, gas, nil
+			evm.StateDB.CreateAccount(addr)
 		}
-		evm.StateDB.CreateAccount(addr)
-	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
+		evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 
-	// Capture the tracer start/end events in debug mode
-	if evm.Config.Debug {
-		if evm.depth == 0 {
-			evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
-			defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
-				evm.Config.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
-			}(gas, time.Now())
-		} else {
-			// Handle tracer events for entering and exiting a call frame
-			evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
-			defer func(startGas uint64) {
-				evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
-			}(gas)
+		// Capture the tracer start/end events in debug mode
+		if evm.Config.Debug {
+			if evm.depth == 0 {
+				evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
+				defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
+					evm.Config.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
+				}(gas, time.Now())
+			} else {
+				// Handle tracer events for entering and exiting a call frame
+				evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
+				defer func(startGas uint64) {
+					evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
+				}(gas)
+			}
 		}
+
+		if isPrecompile {
+			ret, gas, err = p.Run(evm, caller, addr, input, gas, evm.interpreter.readOnly)
+		} else {
+			// Initialise a new contract and set the code that is to be used by the EVM.
+			// The contract is a scoped environment for this execution context only.
+			code := evm.StateDB.GetCode(addr)
+			if len(code) == 0 {
+				ret, err = nil, nil // gas is unchanged
+			} else {
+				addrCopy := addr
+				// If the account has no code, we can abort here
+				// The depth-check is already done, and precompiles handled above
+				contract := NewContract(caller, AccountRef(addrCopy), value, gas)
+				contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
+				ret, err = evm.interpreter.Run(contract, input, false)
+				gas = contract.Gas
+			}
+		}
+		// When an error was returned by the EVM or when setting the creation code
+		// above we revert to the snapshot and consume any gas remaining. Additionally
+		// when we're in homestead this also counts for code storage gas errors.
+		if err != nil {
+			evm.StateDB.RevertToSnapshot(snapshot)
+			if err != ErrExecutionReverted {
+				gas = 0
+			}
+			// TODO: consider clearing up unused snapshots:
+			//} else {
+			//	evm.StateDB.DiscardSnapshot(snapshot)
+		}
+
 	}
 
-	if isPrecompile {
-		ret, gas, err = p.Run(evm, caller, addr, input, gas, evm.interpreter.readOnly)
-	} else {
-		// Initialise a new contract and set the code that is to be used by the EVM.
-		// The contract is a scoped environment for this execution context only.
-		code := evm.StateDB.GetCode(addr)
-		if len(code) == 0 {
-			ret, err = nil, nil // gas is unchanged
-		} else {
-			addrCopy := addr
-			// If the account has no code, we can abort here
-			// The depth-check is already done, and precompiles handled above
-			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
-			ret, err = evm.interpreter.Run(contract, input, false)
-			gas = contract.Gas
-		}
-	}
-	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally
-	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
-			gas = 0
-		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
-	}
 	return ret, gas, err
 }
 
