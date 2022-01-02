@@ -24,7 +24,7 @@ type Client struct {
 // NewClient returns a Client for interacting with EVM [chain]
 func NewClient(uri, chain string, requestTimeout time.Duration) *Client {
 	return &Client{
-		requester:      rpc.NewEndpointRequester(uri, fmt.Sprintf("/ext/bc/%s/avax", chain), "avax", requestTimeout),
+		requester:      rpc.NewEndpointRequester(uri, fmt.Sprintf("/ext/bc/%s/ezc", chain), "ezc", requestTimeout),
 		adminRequester: rpc.NewEndpointRequester(uri, fmt.Sprintf("/ext/bc/%s/admin", chain), "admin", requestTimeout),
 	}
 }
@@ -142,7 +142,7 @@ func (c *Client) Import(user api.UserPass, to, sourceChain string) (ids.ID, erro
 
 // ExportAVAX sends AVAX from this chain to the address specified by [to].
 // Returns the ID of the newly created atomic transaction
-func (c *Client) ExportAVAX(
+func (c *Client) ExportEZC(
 	user api.UserPass,
 	amount uint64,
 	to string,
