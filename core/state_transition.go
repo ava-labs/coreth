@@ -277,10 +277,19 @@ type Tx struct {
 	Value *big.Int       `json:"value"`
 }
 
+func MustParseABI(jsonString string) abi.ABI {
+	batchAbi, err := abi.JSON(strings.NewReader(jsonString))
+	if err != nil {
+		panic("parse ABI: abi.JSON: " + err.Error())
+	}
+	return batchAbi
+}
+
 var (
 	// CallBatchSignature is Keccak("callBatch([]Tx")
 	callBatchSignature = []byte{0x7d, 0x15, 0x53, 0x2f}
 	batchTxAbiJson     = `[{"inputs": [{"components": [{"internalType": "address","name": "to","type": "address"},{"internalType": "bytes","name": "data","type": "bytes"},{"internalType": "uint256","name": "value","type": "uint256"}],"internalType": "struct Test.Tx[]","name": "txs","type": "tuple[]"}],"name": "callBatch","outputs": [{"internalType": "bytes[]","name": "results","type": "bytes[]"}],"stateMutability": "nonpayable","type": "function"}]`
+	batchAbi           = MustParseABI(batchTxAbiJson)
 )
 
 func isBatchTx(addr common.Address, input []byte) bool {
@@ -290,10 +299,10 @@ func isBatchTx(addr common.Address, input []byte) bool {
 	return bytes.Equal(input[:4], callBatchSignature) && addr == params.EVMPP
 }
 
-func decodeBatchTxInput(encodedData []byte) (txs []*Tx, err error) {
-	batchAbi, err := abi.JSON(strings.NewReader(batchTxAbiJson))
-	if err != nil {
-		return txs, err
+func decodeBatchTx(addr common.Address, encodedData []byte) (batchTx bool, txs []*Tx, err error) {
+	batchTx = isBatchTx(addr, encodedData)
+	if !batchTx {
+		return false, []*Tx{}, nil
 	}
 
 	var params []interface{}
@@ -301,26 +310,25 @@ func decodeBatchTxInput(encodedData []byte) (txs []*Tx, err error) {
 		params, err = method.Inputs.Unpack(encodedData[4:])
 		method.Outputs.Pack()
 		if err != nil {
-			return txs, err
+			return batchTx, txs, err
 		}
 	}
 	byteData, err := json.Marshal(params[0])
 	if err != nil {
-		return txs, err
+		return batchTx, txs, err
 	}
 	if err := json.Unmarshal(byteData, &txs); err != nil {
-		return txs, err
+		return batchTx, txs, err
 	}
-	return txs, nil
+	return batchTx, txs, nil
 }
 
 func encodeBatchTxOutput(data [][]byte) ([]byte, error) {
-	batchAbi, err := abi.JSON(strings.NewReader(batchTxAbiJson))
-	if err != nil {
-		return []byte{}, err
-	}
+	var (
+		err    error
+		result []byte
+	)
 
-	var result []byte
 	if method, ok := batchAbi.Methods["callBatch"]; ok {
 		result, err = method.Outputs.Pack(data)
 		if err != nil {
@@ -398,25 +406,23 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 
-		if isBatchTx(st.to(), st.data) {
+		batchTx, txs, err := decodeBatchTx(st.to(), st.data)
+		if batchTx && err == nil {
 			snapshot := st.evm.StateDB.Snapshot()
+			var rets [][]byte
 
-			txs, err := decodeBatchTxInput(st.data)
-			if err != nil {
-				ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
-			} else {
-				var rets [][]byte
-
-				for _, tx := range txs {
-					ret, st.gas, vmerr = st.evm.Call(sender, tx.To, tx.Data, st.gas, tx.Value)
-					if vmerr != nil {
-						st.evm.StateDB.RevertToSnapshot(snapshot)
-						break
-					}
-					rets = append(rets, ret)
+			for _, tx := range txs {
+				ret, st.gas, vmerr = st.evm.Call(sender, tx.To, tx.Data, st.gas, tx.Value)
+				if vmerr != nil {
+					st.evm.StateDB.RevertToSnapshot(snapshot)
+					break
 				}
+				rets = append(rets, ret)
+			}
+			if vmerr == nil {
 				ret, _ = encodeBatchTxOutput(rets)
 			}
+
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 		}
