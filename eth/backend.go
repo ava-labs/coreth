@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/accounts"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -97,16 +98,21 @@ type Ethereum struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
+	stackRPCs []rpc.API
+
 	settings Settings // Settings for Ethereum API
 }
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(stack *node.Node, config *Config,
+func New(
+	stack *node.Node,
+	config *Config,
 	cb *dummy.ConsensusCallbacks,
 	chainDb ethdb.Database,
 	settings Settings,
 	lastAcceptedHash common.Hash,
+	clock *mockable.Clock,
 ) (*Ethereum, error) {
 	if chainDb == nil {
 		return nil, errors.New("chainDb cannot be nil")
@@ -138,7 +144,7 @@ func New(stack *node.Node, config *Config,
 	eth := &Ethereum{
 		config:            config,
 		chainDb:           chainDb,
-		eventMux:          stack.EventMux(),
+		eventMux:          new(event.TypeMux),
 		accountManager:    stack.AccountManager(),
 		engine:            dummy.NewDummyEngine(cb),
 		closeBloomHandler: make(chan struct{}),
@@ -193,7 +199,7 @@ func New(stack *node.Node, config *Config,
 	config.TxPool.Journal = ""
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine)
+	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, clock)
 
 	eth.APIBackend = &EthAPIBackend{
 		extRPCEnabled:       stack.Config().ExtRPCEnabled(),
@@ -213,8 +219,7 @@ func New(stack *node.Node, config *Config,
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewPublicNetAPI(eth.NetVersion())
 
-	// Register the backend on the node
-	stack.RegisterAPIs(eth.APIs())
+	eth.stackRPCs = stack.APIs()
 
 	return eth, nil
 }
@@ -227,8 +232,8 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append tracing APIs
 	apis = append(apis, tracers.APIs(s.APIBackend)...)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+	// Add the APIs from the node
+	apis = append(apis, s.stackRPCs...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
@@ -237,29 +242,35 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   NewPublicEthereumAPI(s),
 			Public:    true,
+			Name:      "public-eth",
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
 			Public:    true,
+			Name:      "public-eth-filter",
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
 			Service:   NewPrivateAdminAPI(s),
+			Name:      "private-admin",
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPublicDebugAPI(s),
 			Public:    true,
+			Name:      "public-debug",
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(s),
+			Name:      "private-debug",
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
 			Service:   s.netRPCService,
 			Public:    true,
+			Name:      "net",
 		},
 	}...)
 }
