@@ -32,7 +32,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 
@@ -277,26 +276,35 @@ type Tx struct {
 	Value *big.Int       `json:"value"`
 }
 
-func MustParseABI(jsonString string) abi.ABI {
-	batchAbi, err := abi.JSON(strings.NewReader(jsonString))
+func mustCreateNewType(td string) abi.Type {
+	t, err := abi.NewType(td, "", nil)
 	if err != nil {
-		panic("parse ABI: abi.JSON: " + err.Error())
+		panic(err)
 	}
-	return batchAbi
+	return t
 }
 
 var (
-	// CallBatchSignature is Keccak("callBatch([]Tx")
-	callBatchSignature = []byte{0x7d, 0x15, 0x53, 0x2f}
-	batchTxAbiJson     = `[{"inputs": [{"components": [{"internalType": "address","name": "to","type": "address"},{"internalType": "bytes","name": "data","type": "bytes"},{"internalType": "uint256","name": "value","type": "uint256"}],"internalType": "struct Test.Tx[]","name": "txs","type": "tuple[]"}],"name": "callBatch","outputs": [{"internalType": "bytes[]","name": "results","type": "bytes[]"}],"stateMutability": "nonpayable","type": "function"}]`
-	batchAbi           = MustParseABI(batchTxAbiJson)
+	callBatchFuncName = "callBatch"
+
+	batchAbi = abi.ABI{
+		Methods: map[string]abi.Method{
+			callBatchFuncName: {
+				Inputs: abi.Arguments{
+					abi.Argument{
+						Type: mustCreateNewType("(address,bytes,uint256)[]"),
+					},
+				},
+			},
+		},
+	}
 )
 
 func isBatchTx(addr common.Address, input []byte) bool {
 	if input == nil || len(input) < 4 {
 		return false
 	}
-	return bytes.Equal(input[:4], callBatchSignature) && addr == params.EVMPP
+	return bytes.Equal(input[:4], batchAbi.Methods[callBatchFuncName].ID) && addr == params.EVMPP
 }
 
 func decodeBatchTx(addr common.Address, encodedData []byte) (batchTx bool, txs []*Tx, err error) {
@@ -306,7 +314,7 @@ func decodeBatchTx(addr common.Address, encodedData []byte) (batchTx bool, txs [
 	}
 
 	var params []interface{}
-	if method, ok := batchAbi.Methods["callBatch"]; ok {
+	if method, ok := batchAbi.Methods[callBatchFuncName]; ok {
 		params, err = method.Inputs.Unpack(encodedData[4:])
 		method.Outputs.Pack()
 		if err != nil {
@@ -329,7 +337,7 @@ func encodeBatchTxOutput(data [][]byte) ([]byte, error) {
 		result []byte
 	)
 
-	if method, ok := batchAbi.Methods["callBatch"]; ok {
+	if method, ok := batchAbi.Methods[callBatchFuncName]; ok {
 		result, err = method.Outputs.Pack(data)
 		if err != nil {
 			return []byte{}, err
