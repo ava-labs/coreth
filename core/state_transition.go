@@ -29,6 +29,7 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -276,8 +277,13 @@ type Tx struct {
 	Value *big.Int       `json:"value"`
 }
 
-func mustCreateNewType(td string) abi.Type {
-	t, err := abi.NewType(td, "", nil)
+func mustCreateNewType() abi.Type {
+	t, err := abi.NewType("tuple[]", "", []abi.ArgumentMarshaling{
+		{Name: "to", Type: "address"},
+		{Name: "data", Type: "bytes"},
+		{Name: "value", Type: "uint256"},
+	})
+
 	if err != nil {
 		panic(err)
 	}
@@ -286,16 +292,16 @@ func mustCreateNewType(td string) abi.Type {
 
 var (
 	callBatchFuncName = "callBatch"
-
-	batchAbi = abi.ABI{
+	batchAbi          = abi.ABI{
 		Methods: map[string]abi.Method{
-			callBatchFuncName: {
-				Inputs: abi.Arguments{
-					abi.Argument{
-						Type: mustCreateNewType("(address,bytes,uint256)[]"),
-					},
-				},
-			},
+			callBatchFuncName: abi.NewMethod(callBatchFuncName,
+				callBatchFuncName,
+				abi.Function,
+				"",
+				false,
+				false,
+				abi.Arguments{abi.Argument{Type: mustCreateNewType()}},
+				nil),
 		},
 	}
 )
@@ -307,42 +313,74 @@ func isBatchTx(addr common.Address, input []byte) bool {
 	return bytes.Equal(input[:4], batchAbi.Methods[callBatchFuncName].ID) && addr == params.EVMPP
 }
 
-func decodeBatchTx(addr common.Address, encodedData []byte) (batchTx bool, txs []*Tx, err error) {
-	batchTx = isBatchTx(addr, encodedData)
+func decodeBatchTx(addr common.Address, encodedData []byte) ([]*Tx, error) {
+
+	batchTx := isBatchTx(addr, encodedData)
 	if !batchTx {
-		return false, []*Tx{}, nil
+		return nil, errors.New("Not batch Tx")
 	}
 
-	var params []interface{}
+	var (
+		err    error
+		params []interface{}
+	)
+
 	if method, ok := batchAbi.Methods[callBatchFuncName]; ok {
 		params, err = method.Inputs.Unpack(encodedData[4:])
 		method.Outputs.Pack()
 		if err != nil {
-			return batchTx, txs, err
+			return nil, err
 		}
 	}
 	byteData, err := json.Marshal(params[0])
 	if err != nil {
-		return batchTx, txs, err
+		return nil, err
 	}
+
+	var txs []*Tx
 	if err := json.Unmarshal(byteData, &txs); err != nil {
-		return batchTx, txs, err
+		return nil, err
 	}
-	return batchTx, txs, nil
+	return txs, nil
 }
 
-func encodeBatchTxOutput(data [][]byte) ([]byte, error) {
-	var (
-		err    error
-		result []byte
-	)
+func encodeBatchTxOutput(rets [][]byte) ([]byte, error) {
+	// Calculate result size and number of return values
+	size := 0
+	returnNum := 0
+	for _, ret := range rets {
+		if len(ret) == 0 {
+			continue
+		}
+		returnNum++
+		size += len(ret)
 
-	if method, ok := batchAbi.Methods[callBatchFuncName]; ok {
-		result, err = method.Outputs.Pack(data)
-		if err != nil {
-			return []byte{}, err
+		if len(ret) > 32 {
+			size += 32
 		}
 	}
+
+	result := make([]byte, size)
+
+	offset := returnNum * 32
+	index := 0
+	for _, ret := range rets {
+		if len(ret) == 0 {
+			continue
+		}
+
+		if len(ret) == 32 {
+			copy(result[index*32:], ret)
+
+		} else {
+			offsetBytes := common.BigToHash(big.NewInt(int64(offset))).Bytes()
+			copy(result[index*32:], offsetBytes)
+			copy(result[offset:], ret)
+			offset += len(ret)
+		}
+		index++
+	}
+
 	return result, nil
 }
 
@@ -414,8 +452,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 
-		batchTx, txs, err := decodeBatchTx(st.to(), st.data)
-		if batchTx && err == nil {
+		txs, err := decodeBatchTx(st.to(), st.data)
+		if err == nil {
 			snapshot := st.evm.StateDB.Snapshot()
 			var rets [][]byte
 
