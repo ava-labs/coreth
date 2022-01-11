@@ -87,14 +87,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		var blockGasCost, parentExtraStateGasUsed uint64
 		switch {
 		case isApricotPhase5:
-			blockGasCost = calcBlockGasCost(
-				ApricotPhase4TargetBlockRate,
-				ApricotPhase4MinBlockGasCost,
-				ApricotPhase4MaxBlockGasCost,
-				ApricotPhase5BlockGasCostStep,
-				parent.BlockGasCost,
-				parent.Time, timestamp,
-			).Uint64()
+			// [blockGasCost] has been removed in AP5, so it is left as 0.
 
 			// At the start of a new network, the parent
 			// may not have a populated [ExtDataGasUsed].
@@ -158,7 +151,6 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 			common.Big1,
 		)
 
-		// Gas price is increasing, so ensure it does not increase past the maximum
 		baseFee.Add(baseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
@@ -181,6 +173,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		baseFee.Sub(baseFee, baseFeeDelta)
 	}
 
+	// Ensure that the base fee does not increase/decrease outside of the bounds
 	switch {
 	case isApricotPhase5:
 		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, nil)
