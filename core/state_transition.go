@@ -317,7 +317,7 @@ func decodeBatchTx(addr common.Address, encodedData []byte) ([]*Tx, error) {
 
 	batchTx := isBatchTx(addr, encodedData)
 	if !batchTx {
-		return nil, errors.New("Not batch Tx")
+		return nil, errors.New("not batch Tx")
 	}
 
 	var (
@@ -342,46 +342,6 @@ func decodeBatchTx(addr common.Address, encodedData []byte) ([]*Tx, error) {
 		return nil, err
 	}
 	return txs, nil
-}
-
-func encodeBatchTxOutput(rets [][]byte) ([]byte, error) {
-	// Calculate result size and number of return values
-	size := 0
-	returnNum := 0
-	for _, ret := range rets {
-		if len(ret) == 0 {
-			continue
-		}
-		returnNum++
-		size += len(ret)
-
-		if len(ret) > 32 {
-			size += 32
-		}
-	}
-
-	result := make([]byte, size)
-
-	offset := returnNum * 32
-	index := 0
-	for _, ret := range rets {
-		if len(ret) == 0 {
-			continue
-		}
-
-		if len(ret) == 32 {
-			copy(result[index*32:], ret)
-
-		} else {
-			offsetBytes := common.BigToHash(big.NewInt(int64(offset))).Bytes()
-			copy(result[index*32:], offsetBytes)
-			copy(result[offset:], ret)
-			offset += len(ret)
-		}
-		index++
-	}
-
-	return result, nil
 }
 
 // [EVM--]
@@ -455,7 +415,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		txs, err := decodeBatchTx(st.to(), st.data)
 		if err == nil {
 			snapshot := st.evm.StateDB.Snapshot()
-			var rets [][]byte
 
 			for _, tx := range txs {
 				ret, st.gas, vmerr = st.evm.Call(sender, tx.To, tx.Data, st.gas, tx.Value)
@@ -463,10 +422,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					st.evm.StateDB.RevertToSnapshot(snapshot)
 					break
 				}
-				rets = append(rets, ret)
-			}
-			if vmerr == nil {
-				ret, _ = encodeBatchTxOutput(rets)
 			}
 
 		} else {
