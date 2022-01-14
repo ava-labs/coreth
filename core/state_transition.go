@@ -313,31 +313,24 @@ func isBatchTx(addr common.Address, input []byte) bool {
 	return bytes.Equal(input[:4], batchAbi.Methods[callBatchFuncName].ID) && addr == params.EVMPP
 }
 
-func decodeBatchTx(addr common.Address, encodedData []byte) ([]*Tx, error) {
-
-	batchTx := isBatchTx(addr, encodedData)
-	if !batchTx {
-		return nil, errors.New("not batch Tx")
+func decodeBatchTx(addr common.Address, encodedData []byte) (txs []*Tx, err error) {
+	if !isBatchTx(addr, encodedData) {
+		return nil, nil
 	}
 
-	var (
-		err    error
-		params []interface{}
-	)
+	params, err := batchAbi.Methods[callBatchFuncName].Inputs.Unpack(encodedData[4:])
+	if err != nil {
+		return nil, err
+	}
 
-	if method, ok := batchAbi.Methods[callBatchFuncName]; ok {
-		params, err = method.Inputs.Unpack(encodedData[4:])
-		method.Outputs.Pack()
-		if err != nil {
-			return nil, err
-		}
+	if len(params) != 1 {
+		return nil, errors.New("batch: invalid number of arguments")
 	}
 	byteData, err := json.Marshal(params[0])
 	if err != nil {
 		return nil, err
 	}
 
-	var txs []*Tx
 	if err := json.Unmarshal(byteData, &txs); err != nil {
 		return nil, err
 	}
@@ -405,7 +398,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
-
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
@@ -413,9 +405,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 
 		txs, err := decodeBatchTx(st.to(), st.data)
-		if err == nil {
+		if err != nil {
+			return nil, err
+		}
+		if txs != nil {
 			snapshot := st.evm.StateDB.Snapshot()
-
 			for _, tx := range txs {
 				ret, st.gas, vmerr = st.evm.Call(sender, tx.To, tx.Data, st.gas, tx.Value)
 				if vmerr != nil {
@@ -423,7 +417,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					break
 				}
 			}
-
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 		}
