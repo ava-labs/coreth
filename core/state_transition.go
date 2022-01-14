@@ -291,11 +291,12 @@ func mustCreateNewType() abi.Type {
 }
 
 var (
-	callBatchFuncName = "callBatch"
+	batchCallFuncName = "call"
 	batchAbi          = abi.ABI{
 		Methods: map[string]abi.Method{
-			callBatchFuncName: abi.NewMethod(callBatchFuncName,
-				callBatchFuncName,
+			batchCallFuncName: abi.NewMethod(
+				batchCallFuncName,
+				batchCallFuncName,
 				abi.Function,
 				"",
 				false,
@@ -310,7 +311,7 @@ func isBatchTx(addr common.Address, input []byte) bool {
 	if input == nil || len(input) < 4 {
 		return false
 	}
-	return bytes.Equal(input[:4], batchAbi.Methods[callBatchFuncName].ID) && addr == params.EVMPP
+	return bytes.Equal(input[:4], batchAbi.Methods[batchCallFuncName].ID) && addr == params.EVMPP
 }
 
 func decodeBatchTx(addr common.Address, encodedData []byte) (txs []*Tx, err error) {
@@ -318,7 +319,7 @@ func decodeBatchTx(addr common.Address, encodedData []byte) (txs []*Tx, err erro
 		return nil, nil
 	}
 
-	params, err := batchAbi.Methods[callBatchFuncName].Inputs.Unpack(encodedData[4:])
+	params, err := batchAbi.Methods[batchCallFuncName].Inputs.Unpack(encodedData[4:])
 	if err != nil {
 		return nil, err
 	}
