@@ -96,8 +96,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLogs failed due to %s", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("Expected GetLogs to return 1 log, but found %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("Expected GetLogs to return 2 logs, but found %d", len(logs))
 	}
 	if logs[0].BlockNumber != 1 {
 		t.Fatalf("Expected GetLogs to return 1 log with block number 1, but found block number %d", logs[0].BlockNumber)
@@ -107,8 +107,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFilter failed due to %s", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("Expected GetFilterLogs to return 1 log, but found %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("Expected GetFilterLogs to return 2 logs, but found %d", len(logs))
 	}
 	if logs[0].BlockNumber != 1 {
 		t.Fatalf("Expected GetFilterLogs to return 1 log with BlockNumber 1, but found BlockNumber %d", logs[0].BlockNumber)
@@ -236,8 +236,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLogs failed due to %s", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("Expected GetLogs to return 1 log, but found %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("Expected GetLogs to return 2 logs, but found %d", len(logs))
 	}
 	if logs[0].BlockNumber != 1 {
 		t.Fatalf("Expected single log to have block number 1, but found %d", logs[0].BlockNumber)
@@ -247,8 +247,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFilterLogs failed due to %s", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("Expected GetFilterLogs to return 1 log, but found %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("Expected GetFilterLogs to return 2 logs, but found %d", len(logs))
 	}
 	if logs[0].BlockNumber != 1 {
 		t.Fatalf("Expected GetFilterLogs to return 1 log with BlocKNumber 1, but found BlockNumber %d", logs[0].BlockNumber)
@@ -258,8 +258,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to GetLogs for FilterCriteria with empty from and to block due to %s", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("Expected GetLogs to return 1 log, but found %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("Expected GetLogs to return 2 logs, but found %d", len(logs))
 	}
 	if logs[0].BlockNumber != 1 {
 		t.Fatalf("Expected single log to have block number 1, but found %d", logs[0].BlockNumber)
@@ -272,8 +272,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFilterLogs failed due to %s", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("Expected GetFilterLogs to return 1 log, but found %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("Expected GetFilterLogs to return 2 logs, but found %d", len(logs))
 	}
 	if logs[0].BlockNumber != 1 {
 		t.Fatalf("Expected GetFilterLogs to return 1 log with BlockNumber 1, but found BlockNumber %d", logs[0].BlockNumber)
@@ -281,8 +281,8 @@ func TestBlockLogsAllowUnfinalized(t *testing.T) {
 
 	select {
 	case acceptedLogs := <-acceptedLogsCh:
-		if len(acceptedLogs) != 1 {
-			t.Fatalf("Expected accepted logs channel to return 1 log, but found %d", len(acceptedLogs))
+		if len(acceptedLogs) != 2 {
+			t.Fatalf("Expected accepted logs channel to return 2 logs, but found %d", len(acceptedLogs))
 		}
 		if acceptedLogs[0].BlockNumber != 1 {
 			t.Fatalf("Expected accepted logs channel to return 1 log with BlockNumber 1, but found BlockNumber %d", acceptedLogs[0].BlockNumber)
