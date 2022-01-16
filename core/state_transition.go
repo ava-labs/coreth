@@ -27,12 +27,16 @@
 package core
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
@@ -266,6 +270,76 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+// [EVM++]
+type Tx struct {
+	To    common.Address `json:"to"`
+	Data  []byte         `json:"data"`
+	Value *big.Int       `json:"value"`
+}
+
+func mustCreateNewType() abi.Type {
+	t, err := abi.NewType("tuple[]", "", []abi.ArgumentMarshaling{
+		{Name: "to", Type: "address"},
+		{Name: "data", Type: "bytes"},
+		{Name: "value", Type: "uint256"},
+	})
+
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+var (
+	batchCallFuncName = "call"
+	batchAbi          = abi.ABI{
+		Methods: map[string]abi.Method{
+			batchCallFuncName: abi.NewMethod(
+				batchCallFuncName,
+				batchCallFuncName,
+				abi.Function,
+				"",
+				false,
+				false,
+				abi.Arguments{abi.Argument{Type: mustCreateNewType()}},
+				nil),
+		},
+	}
+)
+
+func isBatchTx(addr common.Address, input []byte) bool {
+	if input == nil || len(input) < 4 {
+		return false
+	}
+	return bytes.Equal(input[:4], batchAbi.Methods[batchCallFuncName].ID) && addr == params.EVMPP
+}
+
+func decodeBatchTx(addr common.Address, encodedData []byte) (txs []*Tx, err error) {
+	if !isBatchTx(addr, encodedData) {
+		return nil, nil
+	}
+
+	params, err := batchAbi.Methods[batchCallFuncName].Inputs.Unpack(encodedData[4:])
+	if err != nil {
+		return nil, err
+	}
+
+	if len(params) != 1 {
+		return nil, errors.New("batch: invalid number of arguments")
+	}
+	byteData, err := json.Marshal(params[0])
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(byteData, &txs); err != nil {
+		return nil, err
+	}
+	return txs, nil
+}
+
+// [EVM--]
+
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -330,7 +404,23 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+
+		txs, err := decodeBatchTx(st.to(), st.data)
+		if err != nil {
+			return nil, err
+		}
+		if txs != nil {
+			snapshot := st.evm.StateDB.Snapshot()
+			for _, tx := range txs {
+				ret, st.gas, vmerr = st.evm.Call(sender, tx.To, tx.Data, st.gas, tx.Value)
+				if vmerr != nil {
+					st.evm.StateDB.RevertToSnapshot(snapshot)
+					break
+				}
+			}
+		} else {
+			ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		}
 	}
 	st.refundGas(apricotPhase1)
 	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))

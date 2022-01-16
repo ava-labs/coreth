@@ -890,8 +890,6 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 
 // [EVM++]
 var (
-	EVMPP = common.HexToAddress("0x5555555555555555555555555555555555555555")
-
 	// SolidityErrorSignature is Keccak("Error(string)")
 	SolidityErrorSignature = []byte{0x08, 0xc3, 0x79, 0xa0}
 
@@ -900,7 +898,7 @@ var (
 )
 
 func isCallLogs(args *TransactionArgs) bool {
-	return args.AccessList != nil && len(*args.AccessList) == 1 && (*args.AccessList)[0].Address == EVMPP
+	return args.AccessList != nil && len(*args.AccessList) == 1 && (*args.AccessList)[0].Address == params.EVMPP
 }
 
 func isSolidityRevertOrPanicMessage(res []byte) bool {
