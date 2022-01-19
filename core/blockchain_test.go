@@ -41,6 +41,7 @@ func TestArchiveBlockChain(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		return blockchain, err
 	}
@@ -75,6 +76,7 @@ func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		return blockchain, err
 	}
@@ -109,6 +111,7 @@ func TestPruningBlockChain(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		return blockchain, err
 	}
@@ -143,6 +146,7 @@ func TestPruningBlockChainSnapsDisabled(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		return blockchain, err
 	}
@@ -183,6 +187,7 @@ func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		if err != nil {
 			return nil, err
@@ -224,6 +229,7 @@ func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		if err != nil {
 			return nil, err
@@ -267,6 +273,7 @@ func TestEnableSnapshots(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		if err != nil {
 			return nil, err
@@ -310,6 +317,7 @@ func TestCorruptSnapshots(t *testing.T) {
 			}),
 			vm.Config{},
 			lastAcceptedHash,
+			new(vm.NoOpAtomicTransactor),
 		)
 		if err != nil {
 			return nil, err

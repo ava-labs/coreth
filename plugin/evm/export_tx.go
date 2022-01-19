@@ -356,6 +356,119 @@ func (vm *VM) newExportTx(
 	return tx, utx.Verify(vm.ctx, vm.currentRules())
 }
 
+// newUnsignedExportTX returns a new ExportTx without signing it.
+// This is used to do purely in-memory operations, without add the
+// transaction to the mempool or gossiping it.
+func (vm *VM) newUnsignedExportTX(
+	assetID ids.ID, // AssetID of the tokens to export
+	amount uint64, // Amount of tokens to export
+	chainID ids.ID, // Chain to send the UTXOs to
+	recipient ids.ShortID, // Address of chain recipient
+	sender common.Address, // the address providing the token and paying the fee
+	baseFee *big.Int, // fee to use post-AP3
+) (*Tx, error) {
+	outs := []*avax.TransferableOutput{{ // Exported to X-Chain
+		Asset: avax.Asset{ID: assetID},
+		Out: &secp256k1fx.TransferOutput{
+			Amt: amount,
+			OutputOwners: secp256k1fx.OutputOwners{
+				Locktime:  0,
+				Threshold: 1,
+				Addrs:     []ids.ShortID{recipient},
+			},
+		},
+	}}
+
+	var (
+		avaxNeeded   uint64 = 0
+		ins, avaxIns []EVMInput
+		err          error
+	)
+
+	// Note: current state uses the state of the preferred block.
+	chainState, err := vm.chain.CurrentState()
+	if err != nil {
+		return nil, err
+	}
+
+	// consume non-AVAX
+	if assetID != vm.ctx.AVAXAssetID {
+		evmInput, err := vm.getSpendableFundsEVMInputForAddress(chainState, sender, assetID, amount)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't generate tx input: %w", err)
+		}
+		if evmInput == nil {
+			return nil, fmt.Errorf("couldn't generate tx input: zero balance")
+		}
+		ins = append(ins, *evmInput)
+	} else {
+		avaxNeeded = amount
+	}
+
+	rules := vm.currentRules()
+	switch {
+	case rules.IsApricotPhase3:
+		utx := &UnsignedExportTx{
+			NetworkID:        vm.ctx.NetworkID,
+			BlockchainID:     vm.ctx.ChainID,
+			DestinationChain: chainID,
+			Ins:              ins,
+			ExportedOutputs:  outs,
+		}
+		tx := &Tx{UnsignedAtomicTx: utx}
+		if err := tx.Sign(vm.codec, nil); err != nil {
+			return nil, err
+		}
+
+		var cost uint64
+		cost, err = tx.GasUsed(rules.IsApricotPhase5)
+		if err != nil {
+			return nil, err
+		}
+
+		evmInput, _, err := vm.getSpendableAVAXWithFeeEVMInputForAddress(chainState, sender, avaxNeeded, cost, baseFee)
+		if err != nil {
+			return nil, err
+		}
+		avaxIns = append(avaxIns, *evmInput)
+
+	default:
+		var newAvaxNeeded uint64
+		newAvaxNeeded, err = math.Add64(avaxNeeded, params.AvalancheAtomicTxFee)
+		if err != nil {
+			return nil, errOverflowExport
+		}
+		evmInput, err := vm.getSpendableFundsEVMInputForAddress(chainState, sender, vm.ctx.AVAXAssetID, newAvaxNeeded)
+		if err != nil {
+			return nil, err
+		}
+		avaxIns = append(avaxIns, *evmInput)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
+	}
+	ins = append(ins, avaxIns...)
+
+	avax.SortTransferableOutputs(outs, vm.codec)
+	SortEVMInputs(ins)
+
+	// Create the transaction
+	utx := &UnsignedExportTx{
+		NetworkID:        vm.ctx.NetworkID,
+		BlockchainID:     vm.ctx.ChainID,
+		DestinationChain: chainID,
+		Ins:              ins,
+		ExportedOutputs:  outs,
+	}
+	tx := &Tx{UnsignedAtomicTx: utx}
+	// call Sign here with a nil signers slice, since we don't want to sign the tx,
+	// but we want to set the internal unsigned bytes.
+	if err := tx.Sign(vm.codec, nil); err != nil {
+		return nil, err
+	}
+	return tx, utx.Verify(vm.ctx, vm.currentRules())
+}
+
 // EVMStateTransfer executes the state update from the atomic export transaction
 func (tx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error {
 	addrs := map[[20]byte]uint64{}

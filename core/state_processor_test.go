@@ -98,7 +98,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				GasLimit: params.ApricotPhase1GasLimit,
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 		)
 		defer blockchain.Stop()
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
@@ -237,7 +237,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				GasLimit: params.ApricotPhase1GasLimit,
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -278,7 +278,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				GasLimit: params.ApricotPhase1GasLimit,
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {

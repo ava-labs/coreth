@@ -44,11 +44,12 @@ import (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i       int
-	parent  *types.Block
-	chain   []*types.Block
-	header  *types.Header
-	statedb *state.StateDB
+	i                int
+	parent           *types.Block
+	chain            []*types.Block
+	header           *types.Header
+	statedb          *state.StateDB
+	atomicTransactor vm.AtomicTransactor
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -80,6 +81,11 @@ func (b *BlockGen) SetExtra(data []byte) {
 // SetNonce sets the nonce field of the generated block.
 func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 	b.header.Nonce = nonce
+}
+
+// SetAtomicTransactor sets the atomic transactor of the generated block.
+func (b *BlockGen) SetAtomicTransactor(transactor vm.AtomicTransactor) {
+	b.atomicTransactor = transactor
 }
 
 // SetDifficulty sets the difficulty field of the generated block. This method is
@@ -114,7 +120,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, b.atomicTransactor)
 	if err != nil {
 		panic(err)
 	}

@@ -59,7 +59,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	proConf.DAOForkBlock = forkBlock
 	proConf.DAOForkSupport = true
 
-	proBc, _ := NewBlockChain(proDb, DefaultCacheConfig, &proConf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+	proBc, _ := NewBlockChain(proDb, DefaultCacheConfig, &proConf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 	defer proBc.Stop()
 
 	conDb := rawdb.NewMemoryDatabase()
@@ -69,7 +69,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	conConf.DAOForkBlock = forkBlock
 	conConf.DAOForkSupport = false
 
-	conBc, _ := NewBlockChain(conDb, DefaultCacheConfig, &conConf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+	conBc, _ := NewBlockChain(conDb, DefaultCacheConfig, &conConf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 	defer conBc.Stop()
 
 	if _, err := proBc.InsertChain(prefix); err != nil {
@@ -83,7 +83,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		// Create a pro-fork block, and try to feed into the no-fork chain
 		db = rawdb.NewMemoryDatabase()
 		gspec.MustCommit(db)
-		bc, _ := NewBlockChain(db, DefaultCacheConfig, &conConf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+		bc, _ := NewBlockChain(db, DefaultCacheConfig, &conConf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 		defer bc.Stop()
 
 		blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()))
@@ -108,7 +108,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		// Create a no-fork block, and try to feed into the pro-fork chain
 		db = rawdb.NewMemoryDatabase()
 		gspec.MustCommit(db)
-		bc, _ = NewBlockChain(db, DefaultCacheConfig, &proConf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+		bc, _ = NewBlockChain(db, DefaultCacheConfig, &proConf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 		defer bc.Stop()
 
 		blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()))
@@ -134,7 +134,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Verify that contra-forkers accept pro-fork extra-datas after forking finishes
 	db = rawdb.NewMemoryDatabase()
 	gspec.MustCommit(db)
-	bc, _ := NewBlockChain(db, DefaultCacheConfig, &conConf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+	bc, _ := NewBlockChain(db, DefaultCacheConfig, &conConf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 	defer bc.Stop()
 
 	blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()))
@@ -154,7 +154,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Verify that pro-forkers accept contra-fork extra-datas after forking finishes
 	db = rawdb.NewMemoryDatabase()
 	gspec.MustCommit(db)
-	bc, _ = NewBlockChain(db, DefaultCacheConfig, &proConf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+	bc, _ = NewBlockChain(db, DefaultCacheConfig, &proConf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 	defer bc.Stop()
 
 	blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()))
@@ -186,7 +186,7 @@ func TestDAOForkSupportPostApricotPhase3(t *testing.T) {
 		Config:  &conf,
 	}
 	genesis := gspec.MustCommit(db)
-	bc, _ := NewBlockChain(db, DefaultCacheConfig, &conf, dummy.NewFaker(), vm.Config{}, common.Hash{})
+	bc, _ := NewBlockChain(db, DefaultCacheConfig, &conf, dummy.NewFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 	defer bc.Stop()
 
 	blocks, _, _ := GenerateChain(&conf, genesis, dummy.NewFaker(), db, 32, 10, func(i int, gen *BlockGen) {})

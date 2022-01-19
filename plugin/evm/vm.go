@@ -170,6 +170,78 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
 }
 
+type unsignedExportTxFunc func(
+	assetID ids.ID, // AssetID of the tokens to export
+	amount uint64, // Amount of tokens to export
+	chainID ids.ID, // Chain to send the UTXOs to
+	recipient ids.ShortID, // Address of chain recipient
+	sender common.Address, // the address providing the token and paying the fee
+	baseFee *big.Int, // fee to use post-AP3
+) (*Tx, error)
+
+type parseAddressFunc func(addrStr string) (ids.ID, ids.ShortID, error)
+
+type AtomicTransactor struct {
+	sync.Mutex
+
+	avaxAssetID         ids.ID
+	parseAddress        parseAddressFunc
+	newUnsignedExportTx unsignedExportTxFunc
+
+	pendingAtomicTxs []*Tx // atomic transactions that have yet to be committed
+}
+
+func newAtomicTransactor(avaxAssetID ids.ID, parseAddress parseAddressFunc, newUnsignedExportTx unsignedExportTxFunc) *AtomicTransactor {
+	return &AtomicTransactor{
+		avaxAssetID:         avaxAssetID,
+		parseAddress:        parseAddress,
+		newUnsignedExportTx: newUnsignedExportTx,
+	}
+}
+
+func (a *AtomicTransactor) CreateExportTx(assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
+	parsedAssetID, err := a.parseAssetID(assetID)
+	if err != nil {
+		return err
+	}
+
+	if gWeiAmount.Sign() != 1 {
+		return errors.New("argument 'amount' must be > 0")
+	}
+
+	chainID, to, err := a.parseAddress(recipient)
+	if err != nil {
+		return err
+	}
+
+	// I think I need to convert gWei to nAVAX here, then in UnsignedExportTx.EVMStateTransfer, it will be multiplied back to gWei.
+	nAVAXAmount := big.NewInt(0).Div(gWeiAmount, x2cRate)
+
+	tx, err := a.newUnsignedExportTx(parsedAssetID, nAVAXAmount.Uint64(), chainID, to, sender, baseFee)
+	if err != nil {
+		return err
+	}
+
+	a.pendingAtomicTxs = append(a.pendingAtomicTxs, tx)
+
+	return nil
+}
+
+// parseAssetID parses an assetID string into an ID
+func (a *AtomicTransactor) parseAssetID(assetID string) (ids.ID, error) {
+	if assetID == "" {
+		return ids.ID{}, fmt.Errorf("assetID is required")
+	} else if assetID == "AVAX" {
+		return a.avaxAssetID, nil
+	} else {
+		return ids.FromString(assetID)
+	}
+}
+
+func (a *AtomicTransactor) reset() {
+	a.pendingAtomicTxs = nil
+}
+
 // VM implements the snowman.ChainVM interface
 type VM struct {
 	ctx *snow.Context
@@ -199,6 +271,8 @@ type VM struct {
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
 	//  Used to state sync clients.
 	atomicTrie AtomicTrie
+	// atomicTransactor allows EVM contracts to export and import assets cross-chain
+	atomicTransactor *AtomicTransactor
 
 	builder *blockBuilder
 
@@ -381,7 +455,10 @@ func (vm *VM) Initialize(
 	default:
 		lastAcceptedHash = common.BytesToHash(lastAcceptedBytes)
 	}
-	ethChain, err := coreth.NewETHChain(&ethConfig, &nodecfg, vm.chaindb, vm.config.EthBackendSettings(), vm.createConsensusCallbacks(), lastAcceptedHash, &vm.clock)
+
+	vm.atomicTransactor = newAtomicTransactor(vm.ctx.AVAXAssetID, vm.ParseAddress, vm.newUnsignedExportTX)
+
+	ethChain, err := coreth.NewETHChain(&ethConfig, &nodecfg, vm.chaindb, vm.config.EthBackendSettings(), vm.createConsensusCallbacks(), lastAcceptedHash, &vm.clock, vm.atomicTransactor)
 	if err != nil {
 		return err
 	}
@@ -634,6 +711,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 	if err != nil {
 		return nil, nil, err
 	}
+
+	txs = append(txs, vm.atomicTransactor.pendingAtomicTxs...)
 
 	// If there are no transactions, we can return early
 	if len(txs) == 0 {
@@ -1164,7 +1243,7 @@ func (vm *VM) GetSpendableFunds(
 	amount uint64,
 ) ([]EVMInput, [][]*crypto.PrivateKeySECP256K1R, error) {
 	// Note: current state uses the state of the preferred block.
-	state, err := vm.chain.CurrentState()
+	chainState, err := vm.chain.CurrentState()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1176,33 +1255,16 @@ func (vm *VM) GetSpendableFunds(
 		if amount == 0 {
 			break
 		}
-		addr := GetEthAddress(key)
-		var balance uint64
-		if assetID == vm.ctx.AVAXAssetID {
-			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
-			// denomination of AVAX that can be exported.
-			balance = new(big.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
-		} else {
-			balance = state.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
-		}
-		if balance == 0 {
-			continue
-		}
-		if amount < balance {
-			balance = amount
-		}
-		nonce, err := vm.GetCurrentNonce(addr)
+		evmInput, err := vm.getSpendableFundsEVMInputForAddress(chainState, GetEthAddress(key), assetID, amount)
 		if err != nil {
 			return nil, nil, err
 		}
-		inputs = append(inputs, EVMInput{
-			Address: addr,
-			Amount:  balance,
-			AssetID: assetID,
-			Nonce:   nonce,
-		})
+		if evmInput == nil {
+			continue
+		}
+		inputs = append(inputs, *evmInput)
 		signers = append(signers, []*crypto.PrivateKeySECP256K1R{key})
-		amount -= balance
+		amount -= evmInput.Amount
 	}
 
 	if amount > 0 {
@@ -1210,6 +1272,40 @@ func (vm *VM) GetSpendableFunds(
 	}
 
 	return inputs, signers, nil
+}
+
+// getSpendableFundsEVMInputForAddress returns an EVMInput to total [amount] of [assetID]
+// owned by [address]. If the balance of the address is zero, returns nil, nil.
+func (vm *VM) getSpendableFundsEVMInputForAddress(
+	chainState *state.StateDB,
+	address common.Address,
+	assetID ids.ID,
+	amount uint64) (*EVMInput, error) {
+	var balance uint64
+	if assetID == vm.ctx.AVAXAssetID {
+		// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
+		// denomination of AVAX that can be exported.
+		balance = new(big.Int).Div(chainState.GetBalance(address), x2cRate).Uint64()
+	} else {
+		balance = chainState.GetBalanceMultiCoin(address, common.Hash(assetID)).Uint64()
+	}
+	if balance == 0 {
+		return nil, nil
+	}
+	if amount < balance {
+		balance = amount
+	}
+	nonce, err := vm.GetCurrentNonce(address)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EVMInput{
+		Address: address,
+		Amount:  balance,
+		AssetID: assetID,
+		Nonce:   nonce,
+	}, nil
 }
 
 // GetSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
@@ -1227,7 +1323,7 @@ func (vm *VM) GetSpendableAVAXWithFee(
 	baseFee *big.Int,
 ) ([]EVMInput, [][]*crypto.PrivateKeySECP256K1R, error) {
 	// Note: current state uses the state of the preferred block.
-	state, err := vm.chain.CurrentState()
+	chainState, err := vm.chain.CurrentState()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1252,57 +1348,24 @@ func (vm *VM) GetSpendableAVAXWithFee(
 			break
 		}
 
-		prevFee, err := calculateDynamicFee(cost, baseFee)
+		var evmInput *EVMInput
+		evmInput, cost, err = vm.getSpendableAVAXWithFeeEVMInputForAddress(
+			chainState,
+			GetEthAddress(key),
+			amount,
+			cost,
+			baseFee,
+		)
 		if err != nil {
 			return nil, nil, err
 		}
-
-		newCost := cost + EVMInputGas
-		newFee, err := calculateDynamicFee(newCost, baseFee)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		additionalFee := newFee - prevFee
-
-		addr := GetEthAddress(key)
-		// Since the asset is AVAX, we divide by the x2cRate to convert back to
-		// the correct denomination of AVAX that can be exported.
-		balance := new(big.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
-		// If the balance for [addr] is insufficient to cover the additional cost
-		// of adding an input to the transaction, skip adding the input altogether
-		if balance <= additionalFee {
+		if evmInput == nil {
 			continue
 		}
 
-		// Update the cost for the next iteration
-		cost = newCost
-
-		newAmount, err := math.Add64(amount, additionalFee)
-		if err != nil {
-			return nil, nil, err
-		}
-		amount = newAmount
-
-		// Use the entire [balance] as an input, but if the required [amount]
-		// is less than the balance, update the [inputAmount] to spend the
-		// minimum amount to finish the transaction.
-		inputAmount := balance
-		if amount < balance {
-			inputAmount = amount
-		}
-		nonce, err := vm.GetCurrentNonce(addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		inputs = append(inputs, EVMInput{
-			Address: addr,
-			Amount:  inputAmount,
-			AssetID: vm.ctx.AVAXAssetID,
-			Nonce:   nonce,
-		})
+		inputs = append(inputs, *evmInput)
 		signers = append(signers, []*crypto.PrivateKeySECP256K1R{key})
-		amount -= inputAmount
+		amount -= evmInput.Amount
 	}
 
 	if amount > 0 {
@@ -1310,6 +1373,70 @@ func (vm *VM) GetSpendableAVAXWithFee(
 	}
 
 	return inputs, signers, nil
+}
+
+// getSpendableAVAXWithFeeEVMInputForAddress returns an EVMInput
+//  to total [amount] + [fee] of [AVAX] owned by [address]. Additionally,
+// it returns a new [cost] and [amount] for use by the caller if this method is
+// run in a loop. This function accounts for the added cost of the additional
+// inputs needed to create the transaction and makes sure to skip any keys with a
+// balance that is insufficient to cover the additional fee.
+func (vm *VM) getSpendableAVAXWithFeeEVMInputForAddress(
+	chainState *state.StateDB,
+	address common.Address,
+	amount uint64,
+	cost uint64,
+	baseFee *big.Int,
+) (*EVMInput, uint64, error) {
+	prevFee, err := calculateDynamicFee(cost, baseFee)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	newCost := cost + EVMInputGas
+	newFee, err := calculateDynamicFee(newCost, baseFee)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	additionalFee := newFee - prevFee
+
+	// Since the asset is AVAX, we divide by the x2cRate to convert back to
+	// the correct denomination of AVAX that can be exported.
+	balance := new(big.Int).Div(chainState.GetBalance(address), x2cRate).Uint64()
+	// If the balance for [address] is insufficient to cover the additional cost
+	// of adding an input to the transaction, no transaction can be created.
+	if balance <= additionalFee {
+		return nil, cost, nil
+	}
+
+	// Update the cost for the next iteration
+	cost = newCost
+
+	newAmount, err := math.Add64(amount, additionalFee)
+	if err != nil {
+		return nil, 0, err
+	}
+	amount = newAmount
+
+	// Use the entire [balance] as an input, but if the required [amount]
+	// is less than the balance, update the [inputAmount] to spend the
+	// minimum amount to finish the transaction.
+	inputAmount := balance
+	if amount < balance {
+		inputAmount = amount
+	}
+	nonce, err := vm.GetCurrentNonce(address)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return &EVMInput{
+		Address: address,
+		Amount:  inputAmount,
+		AssetID: vm.ctx.AVAXAssetID,
+		Nonce:   nonce,
+	}, cost, nil
 }
 
 // GetCurrentNonce returns the nonce associated with the address at the

@@ -100,15 +100,7 @@ func TestMulticoin(t *testing.T) {
 	var (
 		chain *ETHChain
 	)
-	chain, err = NewETHChain(
-		&config,
-		&node.Config{},
-		rawdb.NewMemoryDatabase(),
-		eth.DefaultSettings,
-		new(dummy.ConsensusCallbacks),
-		common.Hash{},
-		&mockable.Clock{},
-	)
+	chain, err = NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, new(dummy.ConsensusCallbacks), common.Hash{}, &mockable.Clock{}, new(vm.NoOpAtomicTransactor))
 	if err != nil {
 		t.Fatal(err)
 	}

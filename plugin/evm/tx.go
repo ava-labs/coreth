@@ -190,6 +190,30 @@ func (tx *Tx) BlockFeeContribution(fixedFee bool, avaxAssetID ids.ID, baseFee *b
 	return blockFeeContribution, new(big.Int).SetUint64(gasUsed), nil
 }
 
+// innerSortInputs implements sort.Interface for EVMInput
+type innerSortInputs struct {
+	inputs []EVMInput
+}
+
+func (ins *innerSortInputs) Less(i, j int) bool {
+	addrComp := bytes.Compare(ins.inputs[i].Address.Bytes(), ins.inputs[j].Address.Bytes())
+	if addrComp != 0 {
+		return addrComp < 0
+	}
+	return bytes.Compare(ins.inputs[i].AssetID[:], ins.inputs[j].AssetID[:]) < 0
+}
+
+func (ins *innerSortInputs) Len() int { return len(ins.inputs) }
+
+func (ins *innerSortInputs) Swap(i, j int) {
+	ins.inputs[j], ins.inputs[i] = ins.inputs[i], ins.inputs[j]
+}
+
+// SortEVMInputs sorts the list of EVMInputs based on the addresses and assetIDs
+func SortEVMInputs(inputs []EVMInput) {
+	sort.Sort(&innerSortInputs{inputs: inputs})
+}
+
 // innerSortInputsAndSigners implements sort.Interface for EVMInput
 type innerSortInputsAndSigners struct {
 	inputs  []EVMInput

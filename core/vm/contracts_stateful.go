@@ -22,6 +22,7 @@ var (
 	genesisContractAddr    = common.HexToAddress("0x0100000000000000000000000000000000000000")
 	nativeAssetBalanceAddr = common.HexToAddress("0x0100000000000000000000000000000000000001")
 	nativeAssetCallAddr    = common.HexToAddress("0x0100000000000000000000000000000000000002")
+	exportAssetAddr        = common.HexToAddress("0x0100000000000000000000000000000000000003")
 )
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
@@ -169,6 +170,68 @@ func (c *nativeAssetCall) Run(evm *EVM, caller ContractRef, addr common.Address,
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, remainingGas, err
+}
+
+// exportAsset atomically transfers a native asset to a recipient address as well as calling that
+// address
+type exportAsset struct {
+	gasCost uint64
+}
+
+func PackExportAssetInput(address string, assetID common.Hash, assetAmount *big.Int) []byte {
+	input := make([]byte, 109)
+	copy(input[0:45], []byte(address))
+	copy(input[45:77], assetID.Bytes())
+	assetAmount.FillBytes(input[77:109])
+	return input
+}
+
+func UnpackExportAssetInput(input []byte) (string, string, *big.Int, error) {
+	if len(input) < 109 {
+		return "", "", nil, fmt.Errorf("export asset call input had unexpcted length %d", len(input))
+	}
+	recipient := string(input[:45])                        // string encoded X-* address.
+	assetID := string(common.TrimLeftZeroes(input[45:77])) // string encoded assetID. could be 0 left padded literal "AVAX".
+	assetAmount := new(big.Int).SetBytes(input[77:109])
+	return recipient, assetID, assetAmount, nil
+}
+
+// Run implements StatefulPrecompiledContract
+func (c *exportAsset) Run(evm *EVM, caller ContractRef, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	// input: encodePacked(address 20 bytes, assetID 32 bytes, assetAmount 32 bytes, callData variable length bytes)
+	if suppliedGas < c.gasCost {
+		return nil, 0, ErrOutOfGas
+	}
+	remainingGas = suppliedGas - c.gasCost
+
+	if readOnly {
+		return nil, remainingGas, ErrExecutionReverted
+	}
+
+	recipient, assetID, assetAmount, err := UnpackExportAssetInput(input)
+	if err != nil {
+		return nil, remainingGas, ErrExecutionReverted
+	}
+
+	// [assetID] is a string encoded asset ID. It will be parsed as either the string literal "AVAX" or by using ids.FromString
+	// [assetAmount] is the EVM representation of the amount to be transferred. This will be translated to the native asset representation.
+	// [sender] is the C-Chain address of the sender of the asset.
+	// [recipient] is the string encoded X-Chain address of the recipient of the asset.
+	// [baseFee] is the base gas fee to be charged for the export asset call. (TODO: verify this is correct)
+
+	sender := caller.Address()
+
+	if evm.StateDB.GetBalance(sender).Cmp(assetAmount) < 0 {
+		return nil, suppliedGas, ErrInsufficientBalance
+	}
+
+	baseFee := evm.Context.BaseFee
+	err = evm.AtomicTransactor.CreateExportTx(assetID, assetAmount, sender, recipient, baseFee)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	return nil, remainingGas, nil
 }
 
 type deprecatedContract struct{}

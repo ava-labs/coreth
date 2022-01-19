@@ -55,8 +55,9 @@ type Config struct {
 	EVMConfig   vm.Config
 	BaseFee     *big.Int
 
-	State     *state.StateDB
-	GetHashFn func(n uint64) common.Hash
+	State            *state.StateDB
+	AtomicTransactor vm.AtomicTransactor
+	GetHashFn        func(n uint64) common.Hash
 }
 
 // sets defaults on the config
@@ -124,6 +125,9 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	}
+	if cfg.AtomicTransactor == nil {
+		cfg.AtomicTransactor = new(vm.NoOpAtomicTransactor)
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))

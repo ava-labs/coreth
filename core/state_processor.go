@@ -45,17 +45,19 @@ import (
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
-	engine consensus.Engine    // Consensus engine used for block rewards
+	config           *params.ChainConfig // Chain configuration options
+	bc               *BlockChain         // Canonical block chain
+	engine           consensus.Engine    // Consensus engine used for block rewards
+	atomicTransactor vm.AtomicTransactor // AtomicTransactor for handling atomic transactions
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine, atomicTransactor vm.AtomicTransactor) *StateProcessor {
 	return &StateProcessor{
-		config: config,
-		bc:     bc,
-		engine: engine,
+		config:           config,
+		bc:               bc,
+		engine:           engine,
+		atomicTransactor: atomicTransactor,
 	}
 }
 
@@ -81,7 +83,7 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 		misc.ApplyDAOHardFork(statedb)
 	}
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg, p.atomicTransactor)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number, new(big.Int).SetUint64(header.Time)), header.BaseFee)
@@ -153,13 +155,13 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, atomicTransactor vm.AtomicTransactor) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number, new(big.Int).SetUint64(header.Time)), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg, atomicTransactor)
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }

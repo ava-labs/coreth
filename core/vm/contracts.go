@@ -103,6 +103,7 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]StatefulPrecompiledCo
 	genesisContractAddr:              &deprecatedContract{},
 	nativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
 	nativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
+	exportAssetAddr:                  &exportAsset{gasCost: params.AssetCallApricot},
 }
 
 var (

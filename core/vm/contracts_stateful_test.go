@@ -15,6 +15,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type testCreateExportTxFunc func(t *testing.T, stateDB StateDB, assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error
+
+type TestAtomicTransactor struct {
+	t                  *testing.T
+	stateDB            StateDB
+	CreateExportTxMock testCreateExportTxFunc
+}
+
+func (t TestAtomicTransactor) CreateExportTx(assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
+	return t.CreateExportTxMock(t.t, t.stateDB, assetID, gWeiAmount, sender, recipient, baseFee)
+}
+
 func TestPrecompiledContractSpendsGas(t *testing.T) {
 	unwrapped := &sha256hash{}
 
@@ -80,17 +92,19 @@ func TestStatefulPrecompile(t *testing.T) {
 	}
 
 	type statefulContractTest struct {
-		setupStateDB         func() StateDB
-		from                 common.Address
-		precompileAddr       common.Address
-		input                []byte
-		value                *big.Int
-		gasInput             uint64
-		expectedGasRemaining uint64
-		expectedErr          error
-		expectedResult       []byte
-		name                 string
-		stateDBCheck         func(*testing.T, StateDB)
+		setupStateDB          func() StateDB
+		from                  common.Address
+		precompileAddr        common.Address
+		input                 []byte
+		value                 *big.Int
+		gasInput              uint64
+		expectedGasRemaining  uint64
+		expectedErr           error
+		expectedResult        []byte
+		name                  string
+		setupAtomicTransactor func(t *testing.T, stateDB StateDB) TestAtomicTransactor
+		evmContextBaseFee     *big.Int
+		stateDBCheck          func(*testing.T, StateDB)
 	}
 
 	userAddr1 := common.BytesToAddress([]byte("user1"))
@@ -104,6 +118,8 @@ func TestStatefulPrecompile(t *testing.T) {
 	fiftyBytes := make([]byte, 32)
 	bigFifty.FillBytes(fiftyBytes)
 	bigHundred.FillBytes(oneHundredBytes)
+	xChainAddr := "X-avax1kumuyxn5pp4mfu07ztrzy6tqpsul5jpryjmn2r"
+	paddedAVAXLiteral := common.BytesToHash(common.LeftPadBytes([]byte("AVAX"), 28))
 
 	tests := []statefulContractTest{
 		{
@@ -462,26 +478,221 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedResult:       nil,
 			name:                 "deprecated contract",
 		},
+		{
+			setupStateDB: func() StateDB {
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statedb.SetBalance(userAddr1, bigHundred)
+				statedb.SetBalanceMultiCoin(userAddr1, assetID, bigHundred)
+				statedb.Finalise(true)
+				return statedb
+			},
+			from:                 userAddr1,
+			precompileAddr:       nativeAssetCallAddr,
+			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
+			value:                big.NewInt(50),
+			gasInput:             params.AssetCallApricot + params.CallNewAccountGas - 1,
+			expectedGasRemaining: 0,
+			expectedErr:          ErrOutOfGas,
+			expectedResult:       nil,
+			name:                 "native asset call: insufficient gas to create new account",
+			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+				user1Balance := stateDB.GetBalance(userAddr1)
+				user2Balance := stateDB.GetBalance(userAddr2)
+				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
+
+				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
+				assert.Equal(t, big0, user2Balance, "user 2 balance")
+				assert.Equal(t, bigHundred, user1AssetBalance, "user 1 asset balance")
+				assert.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
+			},
+		},
+		{
+			setupStateDB: func() StateDB {
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statedb.SetBalance(userAddr1, bigHundred)
+				statedb.SetBalanceMultiCoin(userAddr1, assetID, bigHundred)
+				statedb.Finalise(true)
+				return statedb
+			},
+			from:                 userAddr1,
+			precompileAddr:       nativeAssetCallAddr,
+			input:                make([]byte, 24),
+			value:                big.NewInt(50),
+			gasInput:             params.AssetCallApricot + params.CallNewAccountGas,
+			expectedGasRemaining: params.CallNewAccountGas,
+			expectedErr:          ErrExecutionReverted,
+			expectedResult:       nil,
+			name:                 "native asset call: invalid input",
+		},
+		{
+			setupStateDB: func() StateDB {
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statedb.SetBalance(userAddr1, bigHundred)
+				statedb.SetBalanceMultiCoin(userAddr1, assetID, bigHundred)
+				statedb.Finalise(true)
+				return statedb
+			},
+			from:                 userAddr1,
+			precompileAddr:       genesisContractAddr,
+			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
+			value:                big0,
+			gasInput:             params.AssetCallApricot + params.CallNewAccountGas,
+			expectedGasRemaining: params.AssetCallApricot + params.CallNewAccountGas,
+			expectedErr:          ErrExecutionReverted,
+			expectedResult:       nil,
+			name:                 "deprecated contract",
+		},
+		{
+			setupStateDB: func() StateDB {
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statedb.SetBalance(userAddr1, bigHundred)
+				statedb.Finalise(true)
+				return statedb
+			},
+			from:                 userAddr1,
+			precompileAddr:       exportAssetAddr,
+			input:                PackExportAssetInput(xChainAddr, paddedAVAXLiteral, bigFifty),
+			value:                big0,
+			gasInput:             params.AssetCallApricot,
+			expectedGasRemaining: 0,
+			expectedErr:          nil,
+			expectedResult:       nil,
+			name:                 "export asset",
+			evmContextBaseFee:    bigHundred,
+			setupAtomicTransactor: func(t *testing.T, stateDB StateDB) TestAtomicTransactor {
+				return TestAtomicTransactor{
+					t:       t,
+					stateDB: stateDB,
+					CreateExportTxMock: func(t *testing.T, stateDB StateDB, assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
+						assert.Equal(t, assetID, "AVAX")
+						assert.Equal(t, bigFifty, gWeiAmount)
+						assert.Equal(t, userAddr1, sender)
+						assert.Equal(t, recipient, xChainAddr)
+						assert.Equal(t, bigHundred, baseFee)
+
+						// mock the behavior of EVMStateTransfer by reducing the EVM asset amount
+						stateDB.SubBalance(sender, gWeiAmount)
+
+						return nil
+					},
+				}
+			},
+			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+				user1Balance := stateDB.GetBalance(userAddr1)
+				assert.Equal(t, bigFifty, user1Balance, "user 1 balance")
+			},
+		},
+		{
+			setupStateDB: func() StateDB {
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statedb.SetBalance(userAddr1, bigFifty)
+				statedb.Finalise(true)
+				return statedb
+			},
+			from:                 userAddr1,
+			precompileAddr:       exportAssetAddr,
+			input:                PackExportAssetInput(xChainAddr, paddedAVAXLiteral, bigHundred),
+			value:                big0,
+			gasInput:             params.AssetCallApricot,
+			expectedGasRemaining: 0,
+			expectedErr:          ErrInsufficientBalance,
+			expectedResult:       nil,
+			name:                 "export asset: insufficient funds",
+			evmContextBaseFee:    bigHundred,
+			setupAtomicTransactor: func(t *testing.T, stateDB StateDB) TestAtomicTransactor {
+				return TestAtomicTransactor{
+					t:       t,
+					stateDB: stateDB,
+					CreateExportTxMock: func(t *testing.T, stateDB StateDB, assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
+						assert.Fail(t, "This method should not be hit.")
+						return nil
+					},
+				}
+			},
+			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+				user1Balance := stateDB.GetBalance(userAddr1)
+				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
+			},
+		},
+		{
+			setupStateDB: func() StateDB {
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statedb.SetBalance(userAddr1, bigFifty)
+				statedb.Finalise(true)
+				return statedb
+			},
+			from:                 userAddr1,
+			precompileAddr:       exportAssetAddr,
+			input:                PackExportAssetInput(xChainAddr, paddedAVAXLiteral, bigHundred),
+			value:                big0,
+			gasInput:             params.AssetCallApricot - 1,
+			expectedGasRemaining: 0,
+			expectedErr:          ErrOutOfGas,
+			expectedResult:       nil,
+			name:                 "export asset: insufficient gas",
+			evmContextBaseFee:    bigHundred,
+			setupAtomicTransactor: func(t *testing.T, stateDB StateDB) TestAtomicTransactor {
+				return TestAtomicTransactor{
+					t:       t,
+					stateDB: stateDB,
+					CreateExportTxMock: func(t *testing.T, stateDB StateDB, assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
+						assert.Fail(t, "This method should not be hit.")
+						return nil
+					},
+				}
+			},
+			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+				user1Balance := stateDB.GetBalance(userAddr1)
+				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
+			},
+		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			stateDB := test.setupStateDB()
-			// Create EVM with BlockNumber and Time initialized to 0 to enable Apricot Rules.
-			evm := NewEVM(vmCtx, TxContext{}, stateDB, params.TestChainConfig, Config{})
-			ret, gasRemaining, err := evm.Call(AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
-			// Place gas remaining check before error check, so that it is not skipped when there is an error
-			assert.Equal(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining")
-
-			if test.expectedErr != nil {
-				assert.Equal(t, test.expectedErr, err, "expected error to match")
-				return
-			}
-			if assert.NoError(t, err, "EVM Call produced unexpected error") {
-				assert.Equal(t, test.expectedResult, ret, "unexpected return value")
-				if test.stateDBCheck != nil {
-					test.stateDBCheck(t, stateDB)
+		t.Run(
+			test.name, func(t *testing.T) {
+				stateDB := test.setupStateDB()
+				// Create EVM with BlockNumber and Time initialized to 0 to enable Apricot Rules.
+				evm := NewEVM(vmCtx, TxContext{}, stateDB, params.TestChainConfig, Config{}, new(NoOpAtomicTransactor))
+				if test.setupAtomicTransactor != nil {
+					evm.AtomicTransactor = test.setupAtomicTransactor(t, stateDB)
 				}
-			}
-		})
+				if test.evmContextBaseFee != nil {
+					evm.Context.BaseFee = test.evmContextBaseFee
+				}
+				ret, gasRemaining, err := evm.Call(AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
+				// Place gas remaining check before error check, so that it is not skipped when there is an error
+				assert.Equal(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining")
+
+				if test.expectedErr != nil {
+					assert.Equal(t, test.expectedErr, err, "expected error to match")
+					return
+				}
+				if assert.NoError(t, err, "EVM Call produced unexpected error") {
+					assert.Equal(t, test.expectedResult, ret, "unexpected return value")
+					if test.stateDBCheck != nil {
+						test.stateDBCheck(t, stateDB)
+					}
+				}
+			},
+		)
 	}
 }

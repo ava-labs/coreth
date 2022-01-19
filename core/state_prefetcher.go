@@ -41,17 +41,19 @@ import (
 // of an arbitrary state with the goal of prefetching potentially useful state
 // data from disk before the main block processor start executing.
 type statePrefetcher struct {
-	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
-	engine consensus.Engine    // Consensus engine used for block rewards
+	config           *params.ChainConfig // Chain configuration options
+	bc               *BlockChain         // Canonical block chain
+	engine           consensus.Engine    // Consensus engine used for block rewards
+	atomicTransactor vm.AtomicTransactor // Atomic transactor for handling atomic transactions
 }
 
 // newStatePrefetcher initialises a new statePrefetcher.
-func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *statePrefetcher {
+func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine, atomicTransactor vm.AtomicTransactor) *statePrefetcher {
 	return &statePrefetcher{
-		config: config,
-		bc:     bc,
-		engine: engine,
+		config:           config,
+		bc:               bc,
+		engine:           engine,
+		atomicTransactor: atomicTransactor,
 	}
 }
 
@@ -63,7 +65,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		header       = block.Header()
 		gaspool      = new(GasPool).AddGas(block.GasLimit())
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
-		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg, p.atomicTransactor)
 		signer       = types.MakeSigner(p.config, header.Number, new(big.Int).SetUint64(header.Time))
 	)
 	// Iterate over and process the individual transactions

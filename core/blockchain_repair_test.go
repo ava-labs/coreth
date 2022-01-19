@@ -533,7 +533,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if snapshots {
 		config.SnapshotLimit = 256
 	}
-	chain, err := NewBlockChain(db, config, params.TestChainConfig, engine, vm.Config{}, common.Hash{})
+	chain, err := NewBlockChain(db, config, params.TestChainConfig, engine, vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -580,7 +580,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, DefaultCacheConfig, params.TestChainConfig, engine, vm.Config{}, lastAcceptedHash)
+	chain, err = NewBlockChain(db, DefaultCacheConfig, params.TestChainConfig, engine, vm.Config{}, lastAcceptedHash, new(vm.NoOpAtomicTransactor))
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

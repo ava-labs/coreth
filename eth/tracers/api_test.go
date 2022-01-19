@@ -60,17 +60,21 @@ var (
 )
 
 type testBackend struct {
-	chainConfig *params.ChainConfig
-	engine      consensus.Engine
-	chaindb     ethdb.Database
-	chain       *core.BlockChain
+	chainConfig      *params.ChainConfig
+	engine           consensus.Engine
+	chaindb          ethdb.Database
+	chain            *core.BlockChain
+	atomicTransactor vm.AtomicTransactor
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
+	// TODO: replace me?
+	atomicTransactor := new(vm.NoOpAtomicTransactor)
 	backend := &testBackend{
-		chainConfig: params.TestChainConfig,
-		engine:      dummy.NewETHFaker(),
-		chaindb:     rawdb.NewMemoryDatabase(),
+		chainConfig:      params.TestChainConfig,
+		engine:           dummy.NewETHFaker(),
+		chaindb:          rawdb.NewMemoryDatabase(),
+		atomicTransactor: atomicTransactor,
 	}
 	// Generate blocks for testing
 	gspec.Config = backend.chainConfig
@@ -91,7 +95,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:  128,
 		Pruning:        false, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, common.Hash{})
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, common.Hash{}, atomicTransactor)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -163,6 +167,10 @@ func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reex
 	return statedb, nil
 }
 
+func (b *testBackend) AtomicTransactor() vm.AtomicTransactor {
+	return b.atomicTransactor
+}
+
 func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	parent := b.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
@@ -184,7 +192,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		if idx == txIndex {
 			return msg, context, statedb, nil
 		}
-		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{})
+		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{}, b.atomicTransactor)
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}

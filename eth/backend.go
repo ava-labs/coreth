@@ -104,6 +104,8 @@ type Ethereum struct {
 	stackRPCs []rpc.API
 
 	settings Settings // Settings for Ethereum API
+
+	atomicTransactor vm.AtomicTransactor
 }
 
 // New creates a new Ethereum object (including the
@@ -116,6 +118,7 @@ func New(
 	settings Settings,
 	lastAcceptedHash common.Hash,
 	clock *mockable.Clock,
+	atomicTransactor vm.AtomicTransactor,
 ) (*Ethereum, error) {
 	if chainDb == nil {
 		return nil, errors.New("chainDb cannot be nil")
@@ -157,6 +160,7 @@ func New(
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		settings:          settings,
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
+		atomicTransactor:  atomicTransactor,
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -190,7 +194,7 @@ func New(
 		}
 	)
 	var err error
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, lastAcceptedHash)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, lastAcceptedHash, atomicTransactor)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +213,7 @@ func New(
 		extRPCEnabled:       stack.Config().ExtRPCEnabled(),
 		allowUnprotectedTxs: config.AllowUnprotectedTxs,
 		eth:                 eth,
+		atomicTransactor:    atomicTransactor,
 	}
 	if config.AllowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")

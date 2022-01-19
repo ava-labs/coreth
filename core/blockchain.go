@@ -185,7 +185,7 @@ type BlockChain struct {
 // Processor.
 func NewBlockChain(
 	db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine,
-	vmConfig vm.Config, lastAcceptedHash common.Hash,
+	vmConfig vm.Config, lastAcceptedHash common.Hash, atomicTransactor vm.AtomicTransactor,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified
@@ -215,8 +215,8 @@ func NewBlockChain(
 		senderCacher:  newTxSenderCacher(runtime.NumCPU()),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine, atomicTransactor)
+	bc.processor = NewStateProcessor(chainConfig, bc, engine, atomicTransactor)
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine)

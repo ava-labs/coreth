@@ -43,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -53,9 +54,10 @@ import (
 type environment struct {
 	signer types.Signer
 
-	state   *state.StateDB // apply state changes here
-	tcount  int            // tx count in cycle
-	gasPool *core.GasPool  // available gas used to pack transactions
+	state            *state.StateDB // apply state changes here
+	atomicTransactor vm.AtomicTransactor
+	tcount           int           // tx count in cycle
+	gasPool          *core.GasPool // available gas used to pack transactions
 
 	parent   *types.Header
 	header   *types.Header
@@ -205,7 +207,7 @@ func (w *worker) createCurrentEnvironment(parent *types.Block, header *types.Hea
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), env.atomicTransactor)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return nil, err

@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/node"
@@ -35,12 +36,12 @@ type ETHChain struct {
 }
 
 // NewETHChain creates an Ethereum blockchain with the given configs.
-func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, consensusCallbacks *dummy.ConsensusCallbacks, lastAcceptedHash common.Hash, clock *mockable.Clock) (*ETHChain, error) {
+func NewETHChain(config *eth.Config, nodecfg *node.Config, chainDB ethdb.Database, settings eth.Settings, consensusCallbacks *dummy.ConsensusCallbacks, lastAcceptedHash common.Hash, clock *mockable.Clock, atomicTransactor vm.AtomicTransactor) (*ETHChain, error) {
 	node, err := node.New(nodecfg)
 	if err != nil {
 		return nil, err
 	}
-	backend, err := eth.New(node, config, consensusCallbacks, chainDB, settings, lastAcceptedHash, clock)
+	backend, err := eth.New(node, config, consensusCallbacks, chainDB, settings, lastAcceptedHash, clock, atomicTransactor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create backend: %w", err)
 	}

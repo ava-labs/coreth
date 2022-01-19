@@ -120,7 +120,7 @@ func TestSetupGenesis(t *testing.T) {
 			name: "incompatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				genesis := oldcustomg.MustCommit(db)
-				bc, _ := NewBlockChain(db, DefaultCacheConfig, oldcustomg.Config, dummy.NewFullFaker(), vm.Config{}, common.Hash{})
+				bc, _ := NewBlockChain(db, DefaultCacheConfig, oldcustomg.Config, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, new(vm.NoOpAtomicTransactor))
 				defer bc.Stop()
 				blocks, _, _ := GenerateChain(oldcustomg.Config, genesis, dummy.NewFaker(), db, 4, 10, nil)
 				bc.InsertChain(blocks)

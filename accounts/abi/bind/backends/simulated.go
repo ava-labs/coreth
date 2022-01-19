@@ -99,6 +99,8 @@ type SimulatedBackend struct {
 	events *filters.EventSystem // Event system for filtering log events live
 
 	config *params.ChainConfig
+
+	atomicTransactor vm.AtomicTransactor
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
@@ -110,13 +112,18 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	genesis := core.Genesis{Config: cpcfg, GasLimit: gasLimit, Alloc: alloc}
 	genesis.MustCommit(database)
 	cacheConfig := &core.CacheConfig{}
-	blockchain, _ := core.NewBlockChain(database, cacheConfig, genesis.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+
+	// TODO: replace this?
+	atomicTransactor := new(vm.NoOpAtomicTransactor)
+
+	blockchain, _ := core.NewBlockChain(database, cacheConfig, genesis.Config, dummy.NewFaker(), vm.Config{}, common.Hash{}, atomicTransactor)
 
 	backend := &SimulatedBackend{
-		database:   database,
-		blockchain: blockchain,
-		config:     genesis.Config,
-		events:     filters.NewEventSystem(&filterBackend{database, blockchain}, false),
+		database:         database,
+		blockchain:       blockchain,
+		config:           genesis.Config,
+		events:           filters.NewEventSystem(&filterBackend{database, blockchain}, false),
+		atomicTransactor: atomicTransactor,
 	}
 	backend.rollback(blockchain.CurrentBlock())
 	return backend
@@ -669,7 +676,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call interfaces.Cal
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true}, b.atomicTransactor)
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()

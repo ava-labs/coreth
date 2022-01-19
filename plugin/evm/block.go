@@ -145,9 +145,39 @@ func (b *Block) Accept() error {
 	if err != nil {
 		return err
 	}
-	for _, tx := range b.atomicTxs {
+
+	acceptAtomic := func(tx *Tx) error {
+		// Accept atomic transaction
+		chainID, txRequest, err := tx.UnsignedAtomicTx.AtomicOps()
+		if err != nil {
+			return err
+		}
+		// Add/merge in the atomic requests represented by [tx]
+		if request, exists := batchChainsAndInputs[chainID]; exists {
+			request.PutRequests = append(request.PutRequests, txRequest.PutRequests...)
+			request.RemoveRequests = append(request.RemoveRequests, txRequest.RemoveRequests...)
+		} else {
+			batchChainsAndInputs[chainID] = txRequest
+		}
+		return nil
+	}
+
+	for i := range b.atomicTxs {
+		tx := b.atomicTxs[i]
 		// Remove the accepted transaction from the mempool
 		vm.mempool.RemoveTx(tx.ID())
+		// Accept atomic transaction
+		if err := acceptAtomic(tx); err != nil {
+			return err
+		}
+	}
+
+	for i := range b.vm.atomicTransactor.pendingAtomicTxs {
+		tx := b.vm.atomicTransactor.pendingAtomicTxs[i]
+		// Accept atomic transaction
+		if err := acceptAtomic(tx); err != nil {
+			return err
+		}
 	}
 
 	isBonus := bonusBlocks.Contains(b.id)
@@ -165,7 +195,14 @@ func (b *Block) Accept() error {
 	if err != nil {
 		return fmt.Errorf("failed to create commit batch due to: %w", err)
 	}
-	return vm.ctx.SharedMemory.Apply(batchChainsAndInputs, batch)
+	err = vm.ctx.SharedMemory.Apply(batchChainsAndInputs, batch)
+	if err != nil {
+		return err
+	}
+
+	b.vm.atomicTransactor.reset()
+
+	return nil
 }
 
 // indexAtomics writes given list of atomic transactions and atomic operations to atomic repository
@@ -261,7 +298,8 @@ func (b *Block) verifyAtomicTxs(rules params.Rules) error {
 	// If the tx is an atomic tx, ensure that it doesn't conflict with any of
 	// its processing ancestry.
 	inputs := &ids.Set{}
-	for _, atomicTx := range b.atomicTxs {
+
+	verifyAtomic := func(atomicTx *Tx) error {
 		// If the ancestor is unknown, then the parent failed verification when
 		// it was called.
 		// If the ancestor is rejected, then this block shouldn't be inserted
@@ -289,6 +327,21 @@ func (b *Block) verifyAtomicTxs(rules params.Rules) error {
 				return errConflictingAtomicInputs
 			}
 			inputs.Union(txInputs)
+		}
+		return nil
+	}
+
+	for i := range b.atomicTxs {
+		atomicTx := b.atomicTxs[i]
+		if err := verifyAtomic(atomicTx); err != nil {
+			return err
+		}
+	}
+
+	for i := range b.vm.atomicTransactor.pendingAtomicTxs {
+		atomicTx := b.vm.atomicTransactor.pendingAtomicTxs[i]
+		if err := verifyAtomic(atomicTx); err != nil {
+			return err
 		}
 	}
 

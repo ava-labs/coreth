@@ -57,7 +57,7 @@ func TestLoopInterrupt(t *testing.T) {
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := NewEVM(vmctx, TxContext{}, statedb, params.TestChainConfig, Config{})
+		evm := NewEVM(vmctx, TxContext{}, statedb, params.TestChainConfig, Config{}, new(NoOpAtomicTransactor))
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)

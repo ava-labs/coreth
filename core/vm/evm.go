@@ -102,6 +102,18 @@ type TxContext struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 }
 
+// AtomicTransactor enables smart contracts to create import and export transactions between the
+// C-Chain and the X-Chain via precompile contracts.
+type AtomicTransactor interface {
+	CreateExportTx(assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error
+}
+
+type NoOpAtomicTransactor struct{}
+
+func (n NoOpAtomicTransactor) CreateExportTx(assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
+	return nil
+}
+
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
 // the provided context. It should be noted that any error
@@ -137,18 +149,23 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	// AtomicTransactor is used to create atomic transactions in shared memory for the purpose of
+	// cross-chain transfers.
+	AtomicTransactor AtomicTransactor
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, atomicTransactor AtomicTransactor) *EVM {
 	evm := &EVM{
-		Context:     blockCtx,
-		TxContext:   txCtx,
-		StateDB:     statedb,
-		Config:      config,
-		chainConfig: chainConfig,
-		chainRules:  chainConfig.AvalancheRules(blockCtx.BlockNumber, blockCtx.Time),
+		Context:          blockCtx,
+		TxContext:        txCtx,
+		StateDB:          statedb,
+		Config:           config,
+		chainConfig:      chainConfig,
+		chainRules:       chainConfig.AvalancheRules(blockCtx.BlockNumber, blockCtx.Time),
+		AtomicTransactor: atomicTransactor,
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm

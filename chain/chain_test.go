@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/node"
@@ -62,9 +63,7 @@ func newTestChain(name string, config *eth.Config,
 				}
 				return randData, nil, nil, nil
 			},
-		},
-		common.Hash{},
-		&mockable.Clock{},
+		}, common.Hash{}, &mockable.Clock{}, new(vm.NoOpAtomicTransactor),
 	)
 	if err != nil {
 		t.Fatal(err)

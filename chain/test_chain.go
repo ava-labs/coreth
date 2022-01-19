@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/node"
@@ -78,19 +79,14 @@ func NewDefaultChain(t *testing.T) (*ETHChain, chan core.NewTxPoolHeadEvent, <-c
 		Alloc:      core.GenesisAlloc{fundedKey.Address: {Balance: initialBalance}},
 	}
 
+	// TODO: replace me?
+	atomicTransactor := new(vm.NoOpAtomicTransactor)
+
 	var (
 		chain *ETHChain
 		err   error
 	)
-	chain, err = NewETHChain(
-		&config,
-		&node.Config{},
-		rawdb.NewMemoryDatabase(),
-		eth.DefaultSettings,
-		new(dummy.ConsensusCallbacks),
-		common.Hash{},
-		&mockable.Clock{},
-	)
+	chain, err = NewETHChain(&config, &node.Config{}, rawdb.NewMemoryDatabase(), eth.DefaultSettings, new(dummy.ConsensusCallbacks), common.Hash{}, &mockable.Clock{}, atomicTransactor)
 	if err != nil {
 		t.Fatal(err)
 	}
