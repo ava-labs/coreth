@@ -119,7 +119,7 @@ func TestStatefulPrecompile(t *testing.T) {
 	bigFifty.FillBytes(fiftyBytes)
 	bigHundred.FillBytes(oneHundredBytes)
 	xChainAddr := "X-avax1kumuyxn5pp4mfu07ztrzy6tqpsul5jpryjmn2r"
-	paddedAVAXLiteral := common.BytesToHash(common.LeftPadBytes([]byte("AVAX"), 28))
+	paddedAVAXLiteral := common.BytesToHash(common.RightPadBytes([]byte("AVAX"), 32))
 
 	tests := []statefulContractTest{
 		{
@@ -577,11 +577,11 @@ func TestStatefulPrecompile(t *testing.T) {
 					t:       t,
 					stateDB: stateDB,
 					CreateExportTxMock: func(t *testing.T, stateDB StateDB, assetID string, gWeiAmount *big.Int, sender common.Address, recipient string, baseFee *big.Int) error {
-						assert.Equal(t, assetID, "AVAX")
-						assert.Equal(t, bigFifty, gWeiAmount)
-						assert.Equal(t, userAddr1, sender)
-						assert.Equal(t, recipient, xChainAddr)
-						assert.Equal(t, bigHundred, baseFee)
+						assert.Equal(t, "AVAX", assetID)
+						assert.Equal(t, gWeiAmount, bigFifty)
+						assert.Equal(t, sender, userAddr1)
+						assert.Equal(t, xChainAddr, recipient)
+						assert.Equal(t, baseFee, bigHundred)
 
 						// mock the behavior of EVMStateTransfer by reducing the EVM asset amount
 						stateDB.SubBalance(sender, gWeiAmount)
