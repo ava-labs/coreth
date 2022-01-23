@@ -207,7 +207,7 @@ func New(
 	config.TxPool.Journal = ""
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, clock)
+	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, clock, atomicTransactor)
 
 	eth.APIBackend = &EthAPIBackend{
 		extRPCEnabled:       stack.Config().ExtRPCEnabled(),

@@ -426,7 +426,7 @@ func (vm *VM) newUnsignedExportTX(
 			return nil, err
 		}
 
-		evmInput, _, err := vm.getSpendableAVAXWithFeeEVMInputForAddress(chainState, sender, avaxNeeded, cost, baseFee)
+		evmInput, _, _, err := vm.getSpendableAVAXWithFeeEVMInputForAddress(chainState, sender, avaxNeeded, cost, baseFee)
 		if err != nil {
 			return nil, err
 		}

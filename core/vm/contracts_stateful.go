@@ -6,6 +6,7 @@ package vm
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -178,23 +179,28 @@ type exportAsset struct {
 	gasCost uint64
 }
 
-//func PackNativeAssetCallInput(address common.Address, assetID common.Hash, assetAmount *big.Int, callData []byte) []byte {
-
 func PackExportAssetInput(address string, assetID common.Hash, assetAmount *big.Int) []byte {
-	input := make([]byte, 109)
-	copy(input[0:45], []byte(address))
-	copy(input[45:77], assetID.Bytes())
-	assetAmount.FillBytes(input[77:109])
+	input := make([]byte, 156)
+	copy(input[0:92], address) // pack bech32 (max 92 bytes with prefix)
+	copy(input[92:124], assetID.Bytes())
+	assetAmount.FillBytes(input[124:156])
+
+	var packed []byte
+	packed = append(packed, []byte(address)...)
+
 	return input
 }
 
 func UnpackExportAssetInput(input []byte) (string, string, *big.Int, error) {
-	if len(input) < 109 {
+	if len(input) < 156 {
 		return "", "", nil, fmt.Errorf("export asset call input had unexpcted length %d", len(input))
 	}
-	recipient := string(input[:45])                         // string encoded X-* address.
-	assetID := string(common.TrimRightZeroes(input[45:77])) // string encoded assetID. could be 0 right padded literal "AVAX".
-	assetAmount := new(big.Int).SetBytes(input[77:109])
+	recipient := string(input[:92]) // bech32 encoded C-Chain address, prefixed by `X-`
+	// strip null bytes from right side of recipient in case it is < 90 bytes
+	recipient = strings.TrimRight(recipient, "\x00")
+
+	assetID := string(common.TrimRightZeroes(input[92:124])) // string encoded assetID. could be 0 right padded literal "AVAX".
+	assetAmount := new(big.Int).SetBytes(input[124:156])
 	return recipient, assetID, assetAmount, nil
 }
 
@@ -222,6 +228,8 @@ func (c *exportAsset) Run(evm *EVM, caller ContractRef, addr common.Address, inp
 	// [baseFee] is the base gas fee to be charged for the export asset call. (TODO: verify this is correct)
 
 	sender := caller.Address()
+
+	fmt.Println("precompile - balance of address:", evm.StateDB.GetBalance(sender), sender)
 
 	if evm.StateDB.GetBalance(sender).Cmp(assetAmount) < 0 {
 		return nil, suppliedGas, ErrInsufficientBalance

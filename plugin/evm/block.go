@@ -134,7 +134,8 @@ func (b *Block) Accept() error {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
-	if len(b.atomicTxs) == 0 {
+	if len(b.atomicTxs) == 0 &&
+		len(vm.atomicTransactor.pendingAtomicTxs) == 0 {
 		if err := b.vm.atomicTrie.Index(b.Height(), nil); err != nil {
 			return err
 		}
@@ -172,8 +173,8 @@ func (b *Block) Accept() error {
 		}
 	}
 
-	for i := range b.vm.atomicTransactor.pendingAtomicTxs {
-		tx := b.vm.atomicTransactor.pendingAtomicTxs[i]
+	for i := range vm.atomicTransactor.pendingAtomicTxs {
+		tx := vm.atomicTransactor.pendingAtomicTxs[i]
 		// Accept atomic transaction
 		if err := acceptAtomic(tx); err != nil {
 			return err

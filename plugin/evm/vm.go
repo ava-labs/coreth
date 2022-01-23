@@ -216,6 +216,9 @@ func (a *AtomicTransactor) CreateExportTx(assetID string, gWeiAmount *big.Int, s
 
 	// I think I need to convert gWei to nAVAX here, then in UnsignedExportTx.EVMStateTransfer, it will be multiplied back to gWei.
 	nAVAXAmount := big.NewInt(0).Div(gWeiAmount, x2cRate)
+	fmt.Println(gWeiAmount.String())
+	fmt.Println(nAVAXAmount.String())
+	fmt.Println(nAVAXAmount.Uint64())
 
 	tx, err := a.newUnsignedExportTx(parsedAssetID, nAVAXAmount.Uint64(), chainID, to, sender, baseFee)
 	if err != nil {
@@ -1349,7 +1352,7 @@ func (vm *VM) GetSpendableAVAXWithFee(
 		}
 
 		var evmInput *EVMInput
-		evmInput, cost, err = vm.getSpendableAVAXWithFeeEVMInputForAddress(
+		evmInput, amount, cost, err = vm.getSpendableAVAXWithFeeEVMInputForAddress(
 			chainState,
 			GetEthAddress(key),
 			amount,
@@ -1387,27 +1390,29 @@ func (vm *VM) getSpendableAVAXWithFeeEVMInputForAddress(
 	amount uint64,
 	cost uint64,
 	baseFee *big.Int,
-) (*EVMInput, uint64, error) {
+) (*EVMInput, uint64, uint64, error) {
 	prevFee, err := calculateDynamicFee(cost, baseFee)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	newCost := cost + EVMInputGas
 	newFee, err := calculateDynamicFee(newCost, baseFee)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	additionalFee := newFee - prevFee
 
 	// Since the asset is AVAX, we divide by the x2cRate to convert back to
 	// the correct denomination of AVAX that can be exported.
+
+	fmt.Println("balance of address", chainState.GetBalance(address), address)
 	balance := new(big.Int).Div(chainState.GetBalance(address), x2cRate).Uint64()
 	// If the balance for [address] is insufficient to cover the additional cost
 	// of adding an input to the transaction, no transaction can be created.
 	if balance <= additionalFee {
-		return nil, cost, nil
+		return nil, cost, 0, nil
 	}
 
 	// Update the cost for the next iteration
@@ -1415,7 +1420,7 @@ func (vm *VM) getSpendableAVAXWithFeeEVMInputForAddress(
 
 	newAmount, err := math.Add64(amount, additionalFee)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	amount = newAmount
 
@@ -1428,7 +1433,7 @@ func (vm *VM) getSpendableAVAXWithFeeEVMInputForAddress(
 	}
 	nonce, err := vm.GetCurrentNonce(address)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	return &EVMInput{
@@ -1436,7 +1441,7 @@ func (vm *VM) getSpendableAVAXWithFeeEVMInputForAddress(
 		Amount:  inputAmount,
 		AssetID: vm.ctx.AVAXAssetID,
 		Nonce:   nonce,
-	}, cost, nil
+	}, amount, cost, nil
 }
 
 // GetCurrentNonce returns the nonce associated with the address at the

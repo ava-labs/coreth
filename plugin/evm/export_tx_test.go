@@ -5,6 +5,7 @@ package evm
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -1836,5 +1839,174 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatalf("address balance multicoin %s equal %s not %s", addr.String(), stdb.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
 			}
 		})
+	}
+}
+
+func TestAtomicTransactor(t *testing.T) {
+	genesis := genesisJSONApricotPhase5
+
+	// import funds into the C-Chain for us to then export
+	issuer, testVM, _, sharedMemory, _ := GenesisVM(t, true, genesis, "", "")
+
+	defer func() {
+		if err := testVM.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	importAmount := uint64(500000000000)
+	utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
+
+	utxo := &avax.UTXO{
+		UTXOID: utxoID,
+		Asset:  avax.Asset{ID: testVM.ctx.AVAXAssetID},
+		Out: &secp256k1fx.TransferOutput{
+			Amt: importAmount,
+			OutputOwners: secp256k1fx.OutputOwners{
+				Threshold: 1,
+				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+			},
+		},
+	}
+	utxoBytes, err := testVM.codec.Marshal(codecVersion, utxo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xChainSharedMemory := sharedMemory.NewSharedMemory(testVM.ctx.XChainID)
+	inputID := utxo.InputID()
+	if err := xChainSharedMemory.Apply(map[ids.ID]*atomic.Requests{testVM.ctx.ChainID: {PutRequests: []*atomic.Element{{
+		Key:   inputID[:],
+		Value: utxoBytes,
+		Traits: [][]byte{
+			testKeys[0].PublicKey().Address().Bytes(),
+		},
+	}}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := testVM.newImportTx(testVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testVM.issueTx(tx, true /*=local*/); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk, err := testVM.BuildBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testVM.SetPreference(blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(); err != nil {
+		t.Fatal(err)
+	}
+
+	// now do our precompile export
+	big0 := big.NewInt(0)
+	bigHundred := big.NewInt(0).Mul(big.NewInt(1000000), x2cRate)
+	fmt.Println(bigHundred.String())
+	xChainAddr := testKeys[0].PublicKey().Address()
+	ethAddr := GetEthAddress(testKeys[0])
+	paddedAVAXLiteral := common.BytesToHash(common.RightPadBytes([]byte("AVAX"), 32))
+	//expectedBurnedAVAX := uint64(2526750)
+
+	formattedAddress, err := testVM.FormatAddress(testVM.ctx.XChainID, xChainAddr)
+	if err != nil {
+		t.Fatal("Failed to format xChainAddress")
+	}
+
+	stateDB, err := testVM.chain.CurrentState()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("test - balance of address before:", stateDB.GetBalance(ethAddr), ethAddr)
+
+	exportAssetAddr := common.HexToAddress("0x0100000000000000000000000000000000000003")
+	input := vm.PackExportAssetInput(formattedAddress, paddedAVAXLiteral, bigHundred)
+
+	ethTX := types.NewTransaction(
+		uint64(0),
+		exportAssetAddr,
+		big0,
+		222960,
+		big.NewInt(470_000_000_000_000),
+		input,
+	)
+	signedTx, err := types.SignTx(ethTX, types.NewEIP155Signer(testVM.chainID), testKeys[0].ToECDSA())
+	if err != nil {
+		t.Fatal(err)
+	}
+	errs := testVM.chain.AddRemoteTxsSync([]*types.Transaction{signedTx})
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("Failed to add tx at index %d: %s", i, err)
+		}
+	}
+
+	<-issuer
+
+	blk, err = testVM.BuildBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testVM.SetPreference(blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(); err != nil {
+		t.Fatal(err)
+	}
+
+	//if len(testVM.atomicTransactor.pendingAtomicTxs) == 0 {
+	//	t.Fatal("Atomic Transactor should have one pending transaction")
+	//}
+	//
+	//exportTx := testVM.atomicTransactor.pendingAtomicTxs[0]
+
+	//burnedAVAX, err := exportTx.Burned(testVM.ctx.AVAXAssetID)
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//if burnedAVAX != expectedBurnedAVAX {
+	//	t.Fatalf("burned wrong amount of AVAX - expected %d burned %d", expectedBurnedAVAX, burnedAVAX)
+	//}
+
+	//if len(testVM.atomicTransactor.pendingAtomicTxs) != 0 {
+	//	t.Fatal("Atomic Transactor should have zero pending transactions")
+	//}
+
+	stateDB, err = testVM.chain.CurrentState()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("test - balance of address after:", stateDB.GetBalance(ethAddr), ethAddr)
+
+	finalBalanceUint64 := int64(489518353250)
+	finalBalance := new(big.Int).Mul(big.NewInt(finalBalanceUint64), x2cRate)
+
+	fmt.Println("state bal:", stateDB.GetBalance(ethAddr))
+	fmt.Println("comp bal:", new(big.Int).Mul(big.NewInt(finalBalanceUint64), x2cRate))
+
+	if stateDB.GetBalance(ethAddr).Cmp(finalBalance) != 0 {
+		t.Fatalf("address balance %s equal %s not %s", ethAddr.String(), stateDB.GetBalance(ethAddr), finalBalance)
 	}
 }

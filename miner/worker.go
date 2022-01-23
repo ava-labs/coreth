@@ -81,21 +81,23 @@ type worker struct {
 	pendingLogsFeed event.Feed
 
 	// Subscriptions
-	mux      *event.TypeMux // TODO replace
-	mu       sync.RWMutex   // The lock used to protect the coinbase and extra fields
-	coinbase common.Address
-	clock    *mockable.Clock // Allows us mock the clock for testing
+	mux              *event.TypeMux // TODO replace
+	mu               sync.RWMutex   // The lock used to protect the coinbase and extra fields
+	coinbase         common.Address
+	clock            *mockable.Clock     // Allows us mock the clock for testing
+	atomicTransactor vm.AtomicTransactor // process smart contract import/export
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, clock *mockable.Clock) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, clock *mockable.Clock, atomicTransactor vm.AtomicTransactor) *worker {
 	worker := &worker{
-		config:      config,
-		chainConfig: chainConfig,
-		engine:      engine,
-		eth:         eth,
-		mux:         mux,
-		chain:       eth.BlockChain(),
-		clock:       clock,
+		config:           config,
+		chainConfig:      chainConfig,
+		engine:           engine,
+		eth:              eth,
+		mux:              mux,
+		chain:            eth.BlockChain(),
+		clock:            clock,
+		atomicTransactor: atomicTransactor,
 	}
 
 	return worker
@@ -194,13 +196,14 @@ func (w *worker) createCurrentEnvironment(parent *types.Block, header *types.Hea
 		return nil, err
 	}
 	return &environment{
-		signer:  types.MakeSigner(w.chainConfig, header.Number, new(big.Int).SetUint64(header.Time)),
-		state:   state,
-		parent:  parent.Header(),
-		header:  header,
-		tcount:  0,
-		gasPool: new(core.GasPool).AddGas(header.GasLimit),
-		start:   tstart,
+		signer:           types.MakeSigner(w.chainConfig, header.Number, new(big.Int).SetUint64(header.Time)),
+		state:            state,
+		parent:           parent.Header(),
+		header:           header,
+		tcount:           0,
+		gasPool:          new(core.GasPool).AddGas(header.GasLimit),
+		start:            tstart,
+		atomicTransactor: w.atomicTransactor,
 	}, nil
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -52,9 +53,9 @@ type Miner struct {
 	worker *worker
 }
 
-func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, clock *mockable.Clock) *Miner {
+func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, clock *mockable.Clock, atomicTransactor vm.AtomicTransactor) *Miner {
 	return &Miner{
-		worker: newWorker(config, chainConfig, engine, eth, mux, clock),
+		worker: newWorker(config, chainConfig, engine, eth, mux, clock, atomicTransactor),
 	}
 }
 
