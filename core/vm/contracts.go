@@ -516,7 +516,13 @@ type vdfVerify struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *vdfVerify) RequiredGas(input []byte) uint64 {
-	return params.VDFVerifyBaseGas // TODO +++
+	bitSize := new(big.Int).SetBytes(getData(input, 0, 32))
+	gas := bitSize.Mul(bitSize, new(big.Int).SetUint64(params.VDFVerifyPerBitGas))
+	gas = gas.Add(gas, new(big.Int).SetUint64(params.VDFVerifyBaseGas))
+	if gas.BitLen() > 64 {
+		return math.MaxUint64
+	}
+	return gas.Uint64()
 }
 
 func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
