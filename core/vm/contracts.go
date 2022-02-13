@@ -509,9 +509,6 @@ var (
 var (
 	// errBadVDFInputLen is returned if the vdf verification input length is invalid.
 	errBadVDFInputLen = errors.New("bad VDF verification input length")
-
-	// errBadVDFBitSize is returned if the vdf verification input bit size is not supported.
-	errUnsupportedVDFBitSize = errors.New("unsupported VDF bit size")
 )
 
 // vdfVerify implements a VDF verification using either wesolowski or pietrzak construction
@@ -527,10 +524,6 @@ func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 
 	// Convert the input into a vdf params
 	bitSize := new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-	if !isPowerOfTwo(bitSize) {
-		log.Error("VDFVerify", "error", errUnsupportedVDFBitSize, "bitSize", bitSize)
-		return nil, errUnsupportedVDFBitSize
-	}
 	outputLen := (bitSize + 16) >> 2
 	// Handle some corner cases cheaply
 	if uint64(len(input)) != 32*3+outputLen {

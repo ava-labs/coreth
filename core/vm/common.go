@@ -90,7 +90,3 @@ func allZero(b []byte) bool {
 	}
 	return true
 }
-
-func isPowerOfTwo(x uint64) bool {
-	return (x != 0) && ((x & (x - 1)) == 0)
-}
