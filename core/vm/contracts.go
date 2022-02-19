@@ -108,7 +108,7 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]StatefulPrecompiledCo
 	nativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
 	nativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
 
-	common.BytesToAddress([]byte{0xFF}): newWrappedPrecompiledContract(&vdfVerify{}),
+	common.BytesToAddress([]byte{0xF1}): newWrappedPrecompiledContract(&vdfVerify{}),
 }
 
 var (
@@ -550,9 +550,9 @@ func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 		if x := recover(); x != nil {
 			log.Error("VDFVerify: verification process panic",
 				"error", x,
-		"bitSize", bitSize,
-		"iteration", iteration,
-		"seed", common.Bytes2Hex(seed),
+				"bitSize", bitSize,
+				"iteration", iteration,
+				"seed", common.Bytes2Hex(seed),
 				"output", common.Bytes2Hex(output),
 			)
 			valid = false32Byte
