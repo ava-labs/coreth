@@ -43,6 +43,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/harmony-one/vdf/src/vdf_go"
+	lru "github.com/hashicorp/golang-lru"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -514,6 +515,8 @@ var (
 // vdfVerify implements a VDF verification using either wesolowski or pietrzak construction
 type vdfVerify struct{}
 
+var vdfCache, _ = lru.New(32)
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *vdfVerify) RequiredGas(input []byte) uint64 {
 	gas := params.VDFVerifyBaseGas
@@ -540,6 +543,15 @@ func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 		return nil, errBadVDFInputLen
 	}
 
+	key := common.Bytes2Hex(input)
+	if value, ok := vdfCache.Get(key); ok {
+		if value.(bool) {
+			return true32Byte, nil
+		} else {
+			return false32Byte, nil
+		}
+	}
+
 	// make a clone
 	seed := make([]byte, 32)
 	copy(seed, getData(input, 0, 32))
@@ -562,6 +574,9 @@ func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 
 	ok := vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
 	log.Debug("VDFVerify", "valid", ok)
+
+	vdfCache.Add(key, ok)
+
 	if ok {
 		return true32Byte, nil
 	}
