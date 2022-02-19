@@ -516,49 +516,52 @@ type vdfVerify struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *vdfVerify) RequiredGas(input []byte) uint64 {
-	bitSize := new(big.Int).SetBytes(getData(input, 0, 32))
-	gas := bitSize.Mul(bitSize, new(big.Int).SetUint64(params.VDFVerifyPerBitGas))
-	gas = gas.Add(gas, new(big.Int).SetUint64(params.VDFVerifyBaseGas))
-	if gas.BitLen() > 64 {
-		return math.MaxUint64
+	gas := params.VDFVerifyBaseGas
+
+	outputLen := len(input) - 32 - 8 - 8
+	if outputLen > 0 {
+		gas += uint64(outputLen) * params.VDFVerifyPerByteGas
 	}
-	return gas.Uint64()
+
+	return gas
 }
 
 func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
-	log.Trace("VDFVerify", "input", common.Bytes2Hex(input))
+	log.Debug("VDFVerify", "input", common.Bytes2Hex(input))
 
-	// Convert the input into a vdf params
-	bitSize := new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-	outputLen := (bitSize + 16) >> 2
-	// Handle some corner cases cheaply
-	if uint64(len(input)) != 32*3+outputLen {
-		log.Error("VDFVerify", "error", errBadVDFInputLen, "input len", len(input), "expected", 32*3+outputLen)
+	bitSize := new(big.Int).SetBytes(getData(input, 32, 8)).Uint64()
+	outputLen := ((bitSize + 16) >> 4) << 2
+	if len(input)-32-8-8 != int(outputLen) {
+		log.Error("VDFVerify",
+			"error", errBadVDFInputLen,
+			"expected", outputLen,
+			"actual", len(input)-32-8-8,
+		)
 		return nil, errBadVDFInputLen
 	}
 
-	iteration := new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
 	// make a clone
 	seed := make([]byte, 32)
-	copy(seed, getData(input, 64, 32))
-	output := getData(input, 96, outputLen)
-
-	log.Trace("VDFVerify",
-		"bitSize", bitSize,
-		"iteration", iteration,
-		"seed", common.Bytes2Hex(seed),
-		"output", common.Bytes2Hex(output))
+	copy(seed, getData(input, 0, 32))
+	iteration := new(big.Int).SetBytes(getData(input, 32+8, 8)).Uint64()
+	output := getData(input, 32+8+8, uint64(outputLen))
 
 	defer func() {
 		if x := recover(); x != nil {
-			log.Error("VDFVerify: verification process panic", "reason", x)
+			log.Error("VDFVerify: verification process panic",
+				"error", x,
+		"bitSize", bitSize,
+		"iteration", iteration,
+		"seed", common.Bytes2Hex(seed),
+				"output", common.Bytes2Hex(output),
+			)
 			valid = false32Byte
 			err = fmt.Errorf("%v", x)
 		}
 	}()
 
 	ok := vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
-	log.Trace("VDFVerify", "valid", ok)
+	log.Debug("VDFVerify", "valid", ok)
 	if ok {
 		return true32Byte, nil
 	}
