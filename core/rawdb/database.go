@@ -104,6 +104,11 @@ func (s *stat) Count() string {
 	return s.count.String()
 }
 
+func (s *stat) Average() string {
+	avg := common.StorageSize(float64(s.size) / float64(s.count))
+	return avg.String()
+}
+
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
 func InspectDatabase(out *os.File, db ethdb.Database, keyPrefix, keyStart []byte) error {
@@ -128,11 +133,6 @@ func InspectDatabase(out *os.File, db ethdb.Database, keyPrefix, keyStart []byte
 		storageSnaps    stat
 		preimages       stat
 		bloomBits       stat
-		cliqueSnaps     stat
-
-		// Les statistic
-		chtTrieNodes   stat
-		bloomTrieNodes stat
 
 		// Meta- and unaccounted data
 		metadata    stat
@@ -177,16 +177,6 @@ func InspectDatabase(out *os.File, db ethdb.Database, keyPrefix, keyStart []byte
 			bloomBits.Add(size)
 		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
 			bloomBits.Add(size)
-		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
-			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, []byte("cht-")) ||
-			bytes.HasPrefix(key, []byte("chtIndexV2-")) ||
-			bytes.HasPrefix(key, []byte("chtRootV2-")): // Canonical hash trie
-			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, []byte("blt-")) ||
-			bytes.HasPrefix(key, []byte("bltIndex-")) ||
-			bytes.HasPrefix(key, []byte("bltRoot-")): // Bloomtrie sub
-			bloomTrieNodes.Add(size)
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
@@ -211,25 +201,22 @@ func InspectDatabase(out *os.File, db ethdb.Database, keyPrefix, keyStart []byte
 	}
 	// Display the database statistic.
 	stats := [][]string{
-		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
-		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},
-		{"Key-Value store", "Receipt lists", receipts.Size(), receipts.Count()},
-		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
-		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
-		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
-		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count()},
-		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
-		{"Key-Value store", "Trie nodes", tries.Size(), tries.Count()},
-		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
-		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
-		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
-		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
-		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
-		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
-		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
+		{"Key-Value store", "Headers", headers.Size(), headers.Count(), headers.Average()},
+		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count(), bodies.Average()},
+		{"Key-Value store", "Receipt lists", receipts.Size(), receipts.Count(), receipts.Average()},
+		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count(), numHashPairings.Average()},
+		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count(), hashNumPairings.Average()},
+		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count(), txLookups.Average()},
+		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count(), bloomBits.Average()},
+		{"Key-Value store", "Contract codes", codes.Size(), codes.Count(), codes.Average()},
+		{"Key-Value store", "Trie nodes", tries.Size(), tries.Count(), tries.Average()},
+		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count(), preimages.Average()},
+		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count(), accountSnaps.Average()},
+		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count(), storageSnaps.Average()},
+		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count(), metadata.Average()},
 	}
 	table := tablewriter.NewWriter(out)
-	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
+	table.SetHeader([]string{"Database", "Category", "Size", "Items", "Average Size"})
 	table.SetFooter([]string{"", "Total", total.String(), " "})
 	table.AppendBulk(stats)
 	table.Render()
