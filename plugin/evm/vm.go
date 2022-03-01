@@ -23,6 +23,7 @@ import (
 	coreth "github.com/ava-labs/coreth/chain"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/ethconfig"
@@ -474,6 +475,11 @@ func (vm *VM) Initialize(
 
 	vm.builder.awaitSubmittedTxs()
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
+
+	// Perform DB inspection
+	log.Info("inspecting database...")
+	rawdb.InspectDatabase(originalStderr, vm.chaindb, nil, nil)
+	log.Info("databse inspection finished", "err", err)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
