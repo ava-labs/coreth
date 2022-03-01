@@ -105,6 +105,9 @@ func (s *stat) Count() string {
 }
 
 func (s *stat) Average() string {
+	if s.count == 0 {
+		return s.size.String()
+	}
 	avg := common.StorageSize(float64(s.size) / float64(s.count))
 	return avg.String()
 }
