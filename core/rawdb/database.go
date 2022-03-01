@@ -220,7 +220,7 @@ func InspectDatabase(out *os.File, db ethdb.Database, keyPrefix, keyStart []byte
 	}
 	table := tablewriter.NewWriter(out)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items", "Average Size"})
-	table.SetFooter([]string{"", "Total", total.String(), " "})
+	table.SetFooter([]string{"", "Total", total.String(), "", ""})
 	table.AppendBulk(stats)
 	table.Render()
 
