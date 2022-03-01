@@ -512,7 +512,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 		if tx != nil {
 			signer := types.MakeSigner(st.evm.ChainConfig(), st.evm.Context.BlockNumber, st.evm.Context.Time)
-			payee, err = signer.Sender(tx)
+			payee, err = types.Sender(signer, tx)
 
 			if err != nil {
 				return &ExecutionResult{
