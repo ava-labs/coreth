@@ -20,7 +20,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -40,27 +39,6 @@ var (
 
 	initialBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
 )
-
-// NetAPI offers network related API methods
-type NetAPI struct{ vm *VM }
-
-// Listening returns an indication if the node is listening for network connections.
-func (s *NetAPI) Listening() bool { return true } // always listening
-
-// PeerCount returns the number of connected peers
-func (s *NetAPI) PeerCount() hexutil.Uint { return hexutil.Uint(0) }
-
-// Version returns the current ethereum protocol version.
-func (s *NetAPI) Version() string { return fmt.Sprintf("%d", s.vm.networkID) }
-
-// Web3API offers helper API methods
-type Web3API struct{}
-
-// ClientVersion returns the version of the vm running
-func (s *Web3API) ClientVersion() string { return Version }
-
-// Sha3 returns the bytes returned by hashing [input] with Keccak256
-func (s *Web3API) Sha3(input hexutil.Bytes) hexutil.Bytes { return ethcrypto.Keccak256(input) }
 
 // SnowmanAPI introduces snowman specific functionality to the evm
 type SnowmanAPI struct{ vm *VM }
@@ -221,7 +199,7 @@ type ImportArgs struct {
 }
 
 // ImportAVAX is a deprecated name for Import.
-func (service *AvaxAPI) ImportAVAX(_ *http.Request, args *ImportArgs, response *api.JSONTxID) error {
+func (service *AvaxAPI) ImportEZC(_ *http.Request, args *ImportArgs, response *api.JSONTxID) error {
 	return service.Import(nil, args, response)
 }
 
@@ -293,7 +271,7 @@ type ExportAVAXArgs struct {
 
 // ExportAVAX exports AVAX from the C-Chain to the X-Chain
 // It must be imported on the X-Chain to complete the transfer
-func (service *AvaxAPI) ExportAVAX(_ *http.Request, args *ExportAVAXArgs, response *api.JSONTxID) error {
+func (service *AvaxAPI) ExportEZC(_ *http.Request, args *ExportAVAXArgs, response *api.JSONTxID) error {
 	return service.Export(nil, &ExportArgs{
 		ExportAVAXArgs: *args,
 		AssetID:        service.vm.ctx.AVAXAssetID.String(),
