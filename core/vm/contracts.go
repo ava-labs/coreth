@@ -30,6 +30,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
@@ -39,6 +40,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/harmony-one/vdf/src/vdf_go"
+	lru "github.com/hashicorp/golang-lru"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -103,6 +108,8 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]StatefulPrecompiledCo
 	genesisContractAddr:              &deprecatedContract{},
 	nativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
 	nativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
+
+	common.BytesToAddress([]byte{0xF1}): newWrappedPrecompiledContract(&vdfVerify{}),
 }
 
 var (
@@ -499,6 +506,82 @@ var (
 	// errBadPairingInput is returned if the bn256 pairing input is invalid.
 	errBadPairingInput = errors.New("bad elliptic curve pairing size")
 )
+
+var (
+	// errBadVDFInputLen is returned if the vdf verification input length is invalid.
+	errBadVDFInputLen = errors.New("bad VDF verification input length")
+)
+
+// vdfVerify implements a VDF verification using either wesolowski or pietrzak construction
+type vdfVerify struct{}
+
+var vdfCache, _ = lru.New(32)
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *vdfVerify) RequiredGas(input []byte) uint64 {
+	gas := params.VDFVerifyBaseGas
+
+	outputLen := len(input) - 32 - 8 - 8
+	if outputLen > 0 {
+		gas += uint64(outputLen) * params.VDFVerifyPerByteGas
+	}
+
+	return gas
+}
+
+func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
+	log.Debug("VDFVerify", "input", common.Bytes2Hex(input))
+
+	bitSize := new(big.Int).SetBytes(getData(input, 32, 8)).Uint64()
+	outputLen := ((bitSize + 16) >> 4) << 2
+	if len(input)-32-8-8 != int(outputLen) {
+		log.Error("VDFVerify",
+			"error", errBadVDFInputLen,
+			"expected", outputLen,
+			"actual", len(input)-32-8-8,
+		)
+		return nil, errBadVDFInputLen
+	}
+
+	key := common.Bytes2Hex(input)
+	if value, ok := vdfCache.Get(key); ok {
+		if value.(bool) {
+			return true32Byte, nil
+		} else {
+			return false32Byte, nil
+		}
+	}
+
+	// make a clone
+	seed := make([]byte, 32)
+	copy(seed, getData(input, 0, 32))
+	iteration := new(big.Int).SetBytes(getData(input, 32+8, 8)).Uint64()
+	output := getData(input, 32+8+8, uint64(outputLen))
+
+	defer func() {
+		if x := recover(); x != nil {
+			log.Error("VDFVerify: verification process panic",
+				"error", x,
+				"bitSize", bitSize,
+				"iteration", iteration,
+				"seed", common.Bytes2Hex(seed),
+				"output", common.Bytes2Hex(output),
+			)
+			valid = false32Byte
+			err = fmt.Errorf("%v", x)
+		}
+	}()
+
+	ok := vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
+	log.Debug("VDFVerify", "valid", ok)
+
+	vdfCache.Add(key, ok)
+
+	if ok {
+		return true32Byte, nil
+	}
+	return false32Byte, nil
+}
 
 // runBn256Pairing implements the Bn256Pairing precompile, referenced by both
 // Byzantium and Istanbul operations.

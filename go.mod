@@ -15,6 +15,7 @@ require (
 	github.com/google/uuid v1.1.5
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.2
+	github.com/harmony-one/vdf v1.0.0 // indirect
 	github.com/hashicorp/go-bexpr v0.1.10
 	github.com/hashicorp/go-plugin v1.4.3
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d

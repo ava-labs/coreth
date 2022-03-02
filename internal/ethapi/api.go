@@ -890,8 +890,6 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 
 // [EVM++]
 var (
-	EVMPP = common.HexToAddress("0x5555555555555555555555555555555555555555")
-
 	// SolidityErrorSignature is Keccak("Error(string)")
 	SolidityErrorSignature = []byte{0x08, 0xc3, 0x79, 0xa0}
 
@@ -899,8 +897,24 @@ var (
 	SolidityPanicSignature = []byte{0x4e, 0x48, 0x7b, 0x71}
 )
 
-func isCallLogs(args *TransactionArgs) bool {
-	return args.AccessList != nil && len(*args.AccessList) == 1 && (*args.AccessList)[0].Address == EVMPP
+func filterCallLogsArgs(args *TransactionArgs) bool {
+	if args.AccessList == nil || len(*args.AccessList) < 1 {
+		return false
+	}
+	length := len(*args.AccessList)
+	if length < 1 {
+		return false
+	}
+	lastAccessList := (*args.AccessList)[length-1]
+	if lastAccessList.Address != params.EVMPP {
+		return false
+	}
+	should := lastAccessList.StorageKeys != nil && len(lastAccessList.StorageKeys) == 1 && lastAccessList.StorageKeys[0] == params.EVMPP_HASH
+	if should {
+		accessList := (*args.AccessList)[:length-1]
+		args.AccessList = &accessList
+	}
+	return should
 }
 
 func isSolidityRevertOrPanicMessage(res []byte) bool {
@@ -977,6 +991,10 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
+	// [EVM++]
+	shouldReturnCallLogs := filterCallLogsArgs(&args)
+	// [EVM--]
+
 	// Get a new instance of the EVM.
 	msg, err := args.ToMessage(globalGasCap, header.BaseFee)
 	if err != nil {
@@ -1009,7 +1027,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}
 
 	// [EVM++]
-	if isCallLogs(&args) && !isSolidityRevertOrPanicMessage(result.ReturnData) {
+	if shouldReturnCallLogs && !isSolidityRevertOrPanicMessage(result.ReturnData) {
 		logs := evm.StateDB.Logs()
 		msg, err := json.Marshal(resultAndLogs{
 			UsedGas:    result.UsedGas,

@@ -168,6 +168,9 @@ const (
 	// asset transfer itself, which is a write to state storage. The cost of creating a new account and
 	// normal value transfer is assessed separately from this cost.
 	AssetCallApricot uint64 = 20000
+
+	VDFVerifyBaseGas    uint64 = 100000 // Base price for a VDF verification
+	VDFVerifyPerByteGas uint64 = 10000  // Per-byte input size for a VDF verification
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
