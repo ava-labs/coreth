@@ -19,6 +19,9 @@ import (
 var (
 	getDB stat
 	putDB stat
+
+	agoGetDB stat
+	agoPutDB stat
 )
 
 type counter uint64
@@ -73,6 +76,8 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 			stats := [][]string{
 				{"GET", getDB.Size(), getDB.Count()},
 				{"PUT", putDB.Size(), putDB.Count()},
+				{"ROOT GET", agoGetDB.Size(), agoGetDB.Count()},
+				{"ROOT PUT", agoPutDB.Size(), agoPutDB.Count()},
 			}
 			table := tablewriter.NewWriter(f)
 			table.SetHeader([]string{"Op", "Size", "Items"})
@@ -150,3 +155,18 @@ func (batch Batch) ValueSize() int { return batch.Batch.Size() }
 
 // Replay implements ethdb.Batch
 func (batch Batch) Replay(w ethdb.KeyValueWriter) error { return batch.Batch.Replay(w) }
+
+type ADatabase struct {
+	database.Database
+}
+
+func (a ADatabase) Put(k []byte, v []byte) error {
+	agoPutDB.AddBytes(v)
+	return a.Database.Put(k, v)
+}
+
+func (a ADatabase) Get(k []byte) ([]byte, error) {
+	dat, err := a.Database.Get(k)
+	agoGetDB.AddBytes(dat)
+	return dat, err
+}
