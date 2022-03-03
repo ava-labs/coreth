@@ -11,7 +11,6 @@ import (
 
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/olekukonko/tablewriter"
@@ -84,23 +83,43 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 }
 
 // Database implements ethdb.Database
-type Database struct{ database.Database }
+type Database struct {
+	d database.Database
+}
 
 func (db Database) Get(key []byte) ([]byte, error) {
-	log.Info("get")
-	dat, err := db.Database.Get(key)
+	dat, err := db.d.Get(key)
 	getDB.AddBytes(dat)
 	return dat, err
 }
 
 func (db Database) Put(key []byte, value []byte) error {
-	log.Info("put")
 	putDB.AddBytes(value)
-	return db.Database.Put(key, value)
+	return db.d.Put(key, value)
+}
+
+func (db Database) Has(key []byte) (bool, error) {
+	return db.d.Has(key)
+}
+
+func (db Database) Delete(key []byte) error {
+	return db.d.Delete(key)
+}
+
+func (db Database) Close() error {
+	return db.d.Close()
+}
+
+func (db Database) Compact(start []byte, limit []byte) error {
+	return db.d.Compact(start, limit)
+}
+
+func (db Database) Stat(property string) (string, error) {
+	return db.d.Stat(property)
 }
 
 // NewBatch implements ethdb.Database
-func (db Database) NewBatch() ethdb.Batch { return Batch{db.Database.NewBatch()} }
+func (db Database) NewBatch() ethdb.Batch { return Batch{db.d.NewBatch()} }
 
 // NewIterator implements ethdb.Database
 //
@@ -115,12 +134,12 @@ func (db Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		copy(newStart[len(prefix):], start)
 		start = newStart
 	}
-	return db.Database.NewIteratorWithStartAndPrefix(start, prefix)
+	return db.d.NewIteratorWithStartAndPrefix(start, prefix)
 }
 
 // NewIteratorWithStart implements ethdb.Database
 func (db Database) NewIteratorWithStart(start []byte) ethdb.Iterator {
-	return db.Database.NewIteratorWithStart(start)
+	return db.d.NewIteratorWithStart(start)
 }
 
 // Batch implements ethdb.Batch
