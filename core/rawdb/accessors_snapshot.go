@@ -33,11 +33,13 @@ import (
 )
 
 var (
-	readSnapshotRootDB stat
+	readSnapshotRootDB     stat
+	writeSnapshotRootDB    stat
+	readAccountSnapshotDB  stat
+	writeAccountSnapshotDB stat
+	readStorageSnapshotDB  stat
+	writeStorageSnapshotDB stat
 )
-
-func init() {
-}
 
 // ReadSnapshotRoot retrieves the root of the block whose state is contained in
 // the persisted snapshot.
@@ -56,6 +58,7 @@ func WriteSnapshotRoot(db ethdb.KeyValueWriter, root common.Hash) {
 	if err := db.Put(snapshotRootKey, root[:]); err != nil {
 		log.Crit("Failed to store snapshot root", "err", err)
 	}
+	writeSnapshotRootDB.AddBytes(root[:])
 }
 
 // DeleteSnapshotRoot deletes the root of the block whose state is contained in
@@ -99,6 +102,7 @@ func DeleteSnapshotBlockHash(db ethdb.KeyValueWriter) {
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(accountSnapshotKey(hash))
+	readAccountSnapshotDB.AddBytes(data)
 	return data
 }
 
@@ -107,6 +111,7 @@ func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byt
 	if err := db.Put(accountSnapshotKey(hash), entry); err != nil {
 		log.Crit("Failed to store account snapshot", "err", err)
 	}
+	writeAccountSnapshotDB.AddBytes(entry)
 }
 
 // DeleteAccountSnapshot removes the snapshot entry of an account trie leaf.
@@ -119,6 +124,7 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 // ReadStorageSnapshot retrieves the snapshot entry of an storage trie leaf.
 func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
 	data, _ := db.Get(storageSnapshotKey(accountHash, storageHash))
+	readStorageSnapshotDB.AddBytes(data)
 	return data
 }
 
@@ -127,6 +133,7 @@ func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash comm
 	if err := db.Put(storageSnapshotKey(accountHash, storageHash), entry); err != nil {
 		log.Crit("Failed to store storage snapshot", "err", err)
 	}
+	writeStorageSnapshotDB.AddBytes(entry)
 }
 
 // DeleteStorageSnapshot removes the snapshot entry of an storage trie leaf.

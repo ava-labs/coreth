@@ -126,6 +126,11 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 			// Display the database statistic.
 			stats := [][]string{
 				{"READ", "SnapshotRoot", readSnapshotRootDB.Size(), readSnapshotRootDB.Count()},
+				{"WRITE", "SnapshotRoot", writeSnapshotRootDB.Size(), writeSnapshotRootDB.Count()},
+				{"READ", "AccountSnapshot", readAccountSnapshotDB.Size(), readAccountSnapshotDB.Count()},
+				{"WRITE", "AccountSnapshot", writeAccountSnapshotDB.Size(), writeAccountSnapshotDB.Count()},
+				{"READ", "StorageSnapshot", readStorageSnapshotDB.Size(), readStorageSnapshotDB.Count()},
+				{"WRITE", "StorageSnapshot", writeStorageSnapshotDB.Size(), writeStorageSnapshotDB.Count()},
 			}
 			table := tablewriter.NewWriter(f)
 			table.SetHeader([]string{"Op", "Type", "Size", "Items"})
