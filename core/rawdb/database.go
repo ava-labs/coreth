@@ -131,6 +131,13 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 				{"WRITE", "AccountSnapshot", writeAccountSnapshotDB.Size(), writeAccountSnapshotDB.Count()},
 				{"READ", "StorageSnapshot", readStorageSnapshotDB.Size(), readStorageSnapshotDB.Count()},
 				{"WRITE", "StorageSnapshot", writeStorageSnapshotDB.Size(), writeStorageSnapshotDB.Count()},
+				{"READ", "ReadHeaderRLP", readHeaderRLPDB.Size(), readHeaderRLPDB.Count()},
+				{"WRITE", "WriteHeaderRLP", writeHeaderRLPDB.Size(), writeHeaderRLPDB.Count()},
+				{"READ", "ReadBodyRLP", readBodyRLPDB.Size(), readBodyRLPDB.Count()},
+				{"READ", "ReadCanonicalBodyRLP", readCanonicalBodyRLPDB.Size(), readCanonicalBodyRLPDB.Count()},
+				{"WRITE", "WriteBodyRLP", writeBodyRLPDB.Size(), writeBodyRLPDB.Count()},
+				{"READ", "ReadReceiptsRLP", readReceiptsRLPDB.Size(), readReceiptsRLPDB.Count()},
+				{"WRITE", "WriteReceiptsRLP", writeReceiptsRLPDB.Size(), writeReceiptsRLPDB.Count()},
 			}
 			table := tablewriter.NewWriter(f)
 			table.SetHeader([]string{"Op", "Type", "Size", "Items"})

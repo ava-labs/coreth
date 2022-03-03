@@ -39,6 +39,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var (
+	readHeaderRLPDB        stat
+	writeHeaderRLPDB       stat
+	readBodyRLPDB          stat
+	readCanonicalBodyRLPDB stat
+	writeBodyRLPDB         stat
+	readReceiptsRLPDB      stat
+	writeReceiptsRLPDB     stat
+)
+
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	data, _ := db.Get(headerHashKey(number))
@@ -208,6 +218,7 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	if len(data) > 0 {
 		return data
 	}
+	readHeaderRLPDB.AddBytes(data)
 	return nil // Can't find the data anywhere.
 }
 
@@ -252,6 +263,7 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}
+	writeHeaderRLPDB.AddBytes(data)
 }
 
 // DeleteHeader removes all block header data associated with a hash.
@@ -277,6 +289,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	if len(data) > 0 {
 		return data
 	}
+	readBodyRLPDB.AddBytes(data)
 	return nil // Can't find the data anywhere.
 }
 
@@ -288,6 +301,7 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	if len(data) > 0 {
 		return data
 	}
+	readCanonicalBodyRLPDB.AddBytes(data)
 	return nil
 }
 
@@ -296,6 +310,7 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 	if err := db.Put(blockBodyKey(number, hash), rlp); err != nil {
 		log.Crit("Failed to store block body", "err", err)
 	}
+	writeBodyRLPDB.AddBytes(rlp)
 }
 
 // HasBody verifies the existence of a block body corresponding to the hash.
@@ -352,6 +367,7 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 	if len(data) > 0 {
 		return data
 	}
+	readReceiptsRLPDB.AddBytes(data)
 	return nil // Can't find the data anywhere.
 }
 
@@ -421,6 +437,7 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
 		log.Crit("Failed to store block receipts", "err", err)
 	}
+	writeReceiptsRLPDB.AddBytes(bytes)
 }
 
 // DeleteReceipts removes all receipt data associated with a block hash.
