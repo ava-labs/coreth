@@ -106,13 +106,13 @@ func (s *stat) AddBytes(b []byte) {
 
 func (s *stat) Size() string {
 	s.l.RLock()
-	defer s.l.Unlock()
+	defer s.l.RUnlock()
 	return s.size.String()
 }
 
 func (s *stat) Count() string {
 	s.l.RLock()
-	defer s.l.Unlock()
+	defer s.l.RUnlock()
 	return s.count.String()
 }
 
