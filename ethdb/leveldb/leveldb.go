@@ -32,6 +32,7 @@ package leveldb
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,12 +42,79 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/olekukonko/tablewriter"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
+
+var (
+	getDB stat
+	putDB stat
+)
+
+type counter uint64
+
+func (c counter) String() string {
+	return fmt.Sprintf("%d", c)
+}
+
+func (c counter) Percentage(current uint64) string {
+	return fmt.Sprintf("%d", current*100/uint64(c))
+}
+
+// stat stores sizes and count for a parameter
+type stat struct {
+	size  common.StorageSize
+	count counter
+	l     sync.RWMutex
+}
+
+// Add size to the stat and increase the counter by 1
+func (s *stat) Add(size common.StorageSize) {
+	s.l.Lock()
+	defer s.l.Unlock()
+	s.size += size
+	s.count++
+}
+
+func (s *stat) AddBytes(b []byte) {
+	s.Add(common.StorageSize(len(b)))
+}
+
+func (s *stat) Size() string {
+	s.l.RLock()
+	defer s.l.RUnlock()
+	return s.size.String()
+}
+
+func (s *stat) Count() string {
+	s.l.RLock()
+	defer s.l.RUnlock()
+	return s.count.String()
+}
+
+func DBUsageLogger(s chan struct{}, f *os.File) {
+	t := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-s:
+			return
+		case <-t.C:
+			// Display the database statistic.
+			stats := [][]string{
+				{"GET", getDB.Size(), getDB.Count()},
+				{"PUT", putDB.Size(), putDB.Count()},
+			}
+			table := tablewriter.NewWriter(f)
+			table.SetHeader([]string{"Op", "Size", "Items"})
+			table.AppendBulk(stats)
+			table.Render()
+		}
+	}
+}
 
 const (
 	// degradationWarnInterval specifies how often warning should be printed if the
@@ -201,11 +269,13 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	getDB.AddBytes(dat)
 	return dat, nil
 }
 
 // Put inserts the given value into the key-value store.
 func (db *Database) Put(key []byte, value []byte) error {
+	putDB.AddBytes(value)
 	return db.db.Put(key, value, nil)
 }
 

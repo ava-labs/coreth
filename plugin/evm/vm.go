@@ -27,6 +27,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/ethdb/leveldb"
 	corethPrometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
@@ -477,6 +478,7 @@ func (vm *VM) Initialize(
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	go rawdb.DBUsageLogger(vm.shutdownChan, originalStderr)
+	go leveldb.DBUsageLogger(vm.shutdownChan, originalStderr)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
