@@ -41,6 +41,8 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
+var TrieDBNodeDB stat
+
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore
@@ -141,6 +143,7 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 				{"READ", "Code", readCodeDB.Size(), readCodeDB.Count()},
 				{"WRITE", "Code", writeCodeDB.Size(), writeCodeDB.Count()},
 				{"READ", "TrieNode", readTrieNodeDB.Size(), readTrieNodeDB.Count()},
+				{"READ", "TrieDBNode", TrieDBNodeDB.Size(), TrieDBNodeDB.Count()},
 				{"WRITE", "TrieNode", writeTrieNodeDB.Size(), writeTrieNodeDB.Count()},
 				{"READ", "Preimage", readPreimageDB.Size(), readPreimageDB.Count()},
 				{"WRITE", "Preimage", writePreimageDB.Size(), writePreimageDB.Count()},

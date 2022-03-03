@@ -400,6 +400,7 @@ func (db *Database) node(hash common.Hash) node {
 	if err != nil || enc == nil {
 		return nil
 	}
+	rawdb.TrieDBNodeDB.AddBytes(enc)
 	if db.cleans != nil {
 		db.cleans.Set(hash[:], enc)
 		memcacheCleanMissMeter.Mark(1)
