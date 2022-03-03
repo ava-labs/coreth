@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/olekukonko/tablewriter"
@@ -86,12 +87,14 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 type Database struct{ database.Database }
 
 func (db Database) Get(key []byte) ([]byte, error) {
+	log.Info("get")
 	dat, err := db.Database.Get(key)
 	getDB.AddBytes(dat)
 	return dat, err
 }
 
 func (db Database) Put(key []byte, value []byte) error {
+	log.Info("put")
 	putDB.AddBytes(value)
 	return db.Database.Put(key, value)
 }
