@@ -37,11 +37,14 @@ var (
 	readCodeDB      stat
 	readTrieNodeDB  stat
 	writeTrieNodeDB stat
+	readPreimageDB  stat
+	writePreimageDB stat
 )
 
 // ReadPreimage retrieves a single preimage of the provided hash.
 func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
+	readPreimageDB.AddBytes(data)
 	return data
 }
 
@@ -51,6 +54,7 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 		if err := db.Put(preimageKey(hash), preimage); err != nil {
 			log.Crit("Failed to store trie preimage", "err", err)
 		}
+		writePreimageDB.AddBytes(preimage)
 	}
 	preimageCounter.Inc(int64(len(preimages)))
 	preimageHitCounter.Inc(int64(len(preimages)))

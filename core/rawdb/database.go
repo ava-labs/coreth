@@ -142,6 +142,10 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 				{"WRITE", "Code", writeCodeDB.Size(), writeCodeDB.Count()},
 				{"READ", "TrieNode", readTrieNodeDB.Size(), readTrieNodeDB.Count()},
 				{"WRITE", "TrieNode", writeTrieNodeDB.Size(), writeTrieNodeDB.Count()},
+				{"READ", "Preimage", readPreimageDB.Size(), readPreimageDB.Count()},
+				{"WRITE", "Preimage", writePreimageDB.Size(), writePreimageDB.Count()},
+				{"READ", "BloomBits", readBloomBitsDB.Size(), readBloomBitsDB.Count()},
+				{"WRITE", "BloomBits", writeBloomBitsDB.Size(), writeBloomBitsDB.Count()},
 			}
 			table := tablewriter.NewWriter(f)
 			table.SetHeader([]string{"Op", "Type", "Size", "Items"})

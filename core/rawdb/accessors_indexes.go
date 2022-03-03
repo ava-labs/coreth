@@ -38,6 +38,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var (
+	readBloomBitsDB  stat
+	writeBloomBitsDB stat
+)
+
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
 // hash to allow retrieving the transaction or receipt by hash.
 func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
@@ -154,7 +159,9 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 // ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
 // section and bit index from the.
 func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
-	return db.Get(bloomBitsKey(bit, section, head))
+	b, err := db.Get(bloomBitsKey(bit, section, head))
+	readBloomBitsDB.AddBytes(b)
+	return b, err
 }
 
 // WriteBloomBits stores the compressed bloom bits vector belonging to the given
@@ -163,6 +170,7 @@ func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head comm
 	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
 		log.Crit("Failed to store bloom bits", "err", err)
 	}
+	writeBloomBitsDB.AddBytes(bits)
 }
 
 // DeleteBloombits removes all compressed bloom bits vector belonging to the
