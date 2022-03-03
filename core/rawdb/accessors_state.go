@@ -32,6 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var (
+	writeCodeDB     stat
+	readCodeDB      stat
+	readTrieNodeDB  stat
+	writeTrieNodeDB stat
+)
+
 // ReadPreimage retrieves a single preimage of the provided hash.
 func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
@@ -60,6 +67,7 @@ func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	// TODO: we have never used the legacy scheme, so we should be able to
 	// remove the latter attempt.
 	data, _ = db.Get(hash[:])
+	readCodeDB.AddBytes(data)
 	return data
 }
 
@@ -84,6 +92,7 @@ func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 	if err := db.Put(codeKey(hash), code); err != nil {
 		log.Crit("Failed to store contract code", "err", err)
 	}
+	writeCodeDB.AddBytes(code)
 }
 
 // DeleteCode deletes the specified contract code from the database.
@@ -96,6 +105,7 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 // ReadTrieNode retrieves the trie node of the provided hash.
 func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(hash.Bytes())
+	readTrieNodeDB.AddBytes(data)
 	return data
 }
 
@@ -110,6 +120,7 @@ func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
 	if err := db.Put(hash.Bytes(), node); err != nil {
 		log.Crit("Failed to store trie node", "err", err)
 	}
+	writeTrieNodeDB.AddBytes(node)
 }
 
 // DeleteTrieNode deletes the specified trie node from the database.
