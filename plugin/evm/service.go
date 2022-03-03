@@ -221,7 +221,7 @@ type ImportArgs struct {
 }
 
 // ImportAVAX is a deprecated name for Import.
-func (service *AvaxAPI) ImportAVAX(_ *http.Request, args *ImportArgs, response *api.JSONTxID) error {
+func (service *AvaxAPI) ImportEZC(_ *http.Request, args *ImportArgs, response *api.JSONTxID) error {
 	return service.Import(nil, args, response)
 }
 
@@ -293,7 +293,7 @@ type ExportAVAXArgs struct {
 
 // ExportAVAX exports AVAX from the C-Chain to the X-Chain
 // It must be imported on the X-Chain to complete the transfer
-func (service *AvaxAPI) ExportAVAX(_ *http.Request, args *ExportAVAXArgs, response *api.JSONTxID) error {
+func (service *AvaxAPI) ExportEZC(_ *http.Request, args *ExportAVAXArgs, response *api.JSONTxID) error {
 	return service.Export(nil, &ExportArgs{
 		ExportAVAXArgs: *args,
 		AssetID:        service.vm.ctx.AVAXAssetID.String(),
