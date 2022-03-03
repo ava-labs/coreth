@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/ava-labs/coreth/ethdb"
@@ -88,20 +89,50 @@ func (c counter) Percentage(current uint64) string {
 type stat struct {
 	size  common.StorageSize
 	count counter
+	l     sync.RWMutex
 }
 
 // Add size to the stat and increase the counter by 1
 func (s *stat) Add(size common.StorageSize) {
+	s.l.Lock()
+	defer s.l.Unlock()
 	s.size += size
 	s.count++
 }
 
+func (s *stat) AddBytes(b []byte) {
+	s.Add(common.StorageSize(len(b)))
+}
+
 func (s *stat) Size() string {
+	s.l.RLock()
+	defer s.l.Unlock()
 	return s.size.String()
 }
 
 func (s *stat) Count() string {
+	s.l.RLock()
+	defer s.l.Unlock()
 	return s.count.String()
+}
+
+func DBUsageLogger(s chan struct{}, f *os.File) {
+	t := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-s:
+			return
+		case <-t.C:
+			// Display the database statistic.
+			stats := [][]string{
+				{"READ", "SnapshotRoot", readSnapshotRootDB.Size(), readSnapshotRootDB.Count()},
+			}
+			table := tablewriter.NewWriter(f)
+			table.SetHeader([]string{"Op", "Type", "Size", "Items"})
+			table.AppendBulk(stats)
+			table.Render()
+		}
+	}
 }
 
 // InspectDatabase traverses the entire database and checks the size

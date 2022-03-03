@@ -32,6 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var (
+	readSnapshotRootDB stat
+)
+
+func init() {
+}
+
 // ReadSnapshotRoot retrieves the root of the block whose state is contained in
 // the persisted snapshot.
 func ReadSnapshotRoot(db ethdb.KeyValueReader) common.Hash {
@@ -39,6 +46,7 @@ func ReadSnapshotRoot(db ethdb.KeyValueReader) common.Hash {
 	if len(data) != common.HashLength {
 		return common.Hash{}
 	}
+	readSnapshotRootDB.AddBytes(data)
 	return common.BytesToHash(data)
 }
 
