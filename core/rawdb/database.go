@@ -118,7 +118,7 @@ func (s *stat) Count() string {
 	return s.count.String()
 }
 
-func DBUsageLogger(s chan struct{}, f *os.File) {
+func DBUsageLogger(db ethdb.Database, s chan struct{}, f *os.File) {
 	t := time.NewTicker(10 * time.Second)
 	for {
 		select {
@@ -153,6 +153,33 @@ func DBUsageLogger(s chan struct{}, f *os.File) {
 			table := tablewriter.NewWriter(f)
 			table.SetHeader([]string{"Op", "Type", "Size", "Items"})
 			table.AppendBulk(stats)
+			table.Render()
+
+			dbStats := []string{
+				"leveldb.num-files-at-level{0}",
+				"leveldb.num-files-at-level{1}",
+				"leveldb.num-files-at-level{2}",
+				"leveldb.num-files-at-level{3}",
+				"leveldb.num-files-at-level{4}",
+				"leveldb.num-files-at-level{5}",
+				"leveldb.stats",
+				"leveldb.iostats",
+				"leveldb.writedelay",
+				"leveldb.sstables",
+				"leveldb.blockpool",
+				"leveldb.openedtables",
+			}
+			t := make([][]string, len(dbStats))
+			for i, stat := range dbStats {
+				info, err := db.Stat(stat)
+				if err != nil {
+					panic(err)
+				}
+				t[i] = []string{stat, info}
+			}
+			table = tablewriter.NewWriter(f)
+			table.SetHeader([]string{"Stat", "Value"})
+			table.AppendBulk(t)
 			table.Render()
 		}
 	}

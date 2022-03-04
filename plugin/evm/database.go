@@ -4,128 +4,15 @@
 package evm
 
 import (
-	"fmt"
-	"os"
-	"sync"
-	"time"
-
 	"github.com/ava-labs/coreth/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/olekukonko/tablewriter"
 )
 
-var (
-	getDB stat
-	putDB stat
-
-	agoGetDB stat
-	agoPutDB stat
-)
-
-type counter uint64
-
-func (c counter) String() string {
-	return fmt.Sprintf("%d", c)
-}
-
-func (c counter) Percentage(current uint64) string {
-	return fmt.Sprintf("%d", current*100/uint64(c))
-}
-
-// stat stores sizes and count for a parameter
-type stat struct {
-	size  common.StorageSize
-	count counter
-	l     sync.RWMutex
-}
-
-// Add size to the stat and increase the counter by 1
-func (s *stat) Add(size common.StorageSize) {
-	s.l.Lock()
-	defer s.l.Unlock()
-	s.size += size
-	s.count++
-}
-
-func (s *stat) AddBytes(b []byte) {
-	s.Add(common.StorageSize(len(b)))
-}
-
-func (s *stat) Size() string {
-	s.l.RLock()
-	defer s.l.RUnlock()
-	return s.size.String()
-}
-
-func (s *stat) Count() string {
-	s.l.RLock()
-	defer s.l.RUnlock()
-	return s.count.String()
-}
-
-func DBUsageLogger(s chan struct{}, f *os.File) {
-	t := time.NewTicker(10 * time.Second)
-	time.Sleep(5 * time.Second)
-	for {
-		select {
-		case <-s:
-			return
-		case <-t.C:
-			// Display the database statistic.
-			stats := [][]string{
-				{"GET", getDB.Size(), getDB.Count()},
-				{"PUT", putDB.Size(), putDB.Count()},
-				{"ROOT GET", agoGetDB.Size(), agoGetDB.Count()},
-				{"ROOT PUT", agoPutDB.Size(), agoPutDB.Count()},
-			}
-			table := tablewriter.NewWriter(f)
-			table.SetHeader([]string{"Op", "Size", "Items"})
-			table.AppendBulk(stats)
-			table.Render()
-		}
-	}
-}
-
-// Database implements ethdb.Database
-type Database struct {
-	d database.Database
-}
-
-func (db Database) Get(key []byte) ([]byte, error) {
-	dat, err := db.d.Get(key)
-	getDB.AddBytes(dat)
-	return dat, err
-}
-
-func (db Database) Put(key []byte, value []byte) error {
-	putDB.AddBytes(value)
-	return db.d.Put(key, value)
-}
-
-func (db Database) Has(key []byte) (bool, error) {
-	return db.d.Has(key)
-}
-
-func (db Database) Delete(key []byte) error {
-	return db.d.Delete(key)
-}
-
-func (db Database) Close() error {
-	return db.d.Close()
-}
-
-func (db Database) Compact(start []byte, limit []byte) error {
-	return db.d.Compact(start, limit)
-}
-
-func (db Database) Stat(property string) (string, error) {
-	return db.d.Stat(property)
-}
+type Database struct{ database.Database }
 
 // NewBatch implements ethdb.Database
-func (db Database) NewBatch() ethdb.Batch { return Batch{db.d.NewBatch()} }
+func (db Database) NewBatch() ethdb.Batch { return Batch{db.Database.NewBatch()} }
 
 // NewIterator implements ethdb.Database
 //
@@ -140,12 +27,12 @@ func (db Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		copy(newStart[len(prefix):], start)
 		start = newStart
 	}
-	return db.d.NewIteratorWithStartAndPrefix(start, prefix)
+	return db.Database.NewIteratorWithStartAndPrefix(start, prefix)
 }
 
 // NewIteratorWithStart implements ethdb.Database
 func (db Database) NewIteratorWithStart(start []byte) ethdb.Iterator {
-	return db.d.NewIteratorWithStart(start)
+	return db.Database.NewIteratorWithStart(start)
 }
 
 // Batch implements ethdb.Batch
@@ -156,18 +43,3 @@ func (batch Batch) ValueSize() int { return batch.Batch.Size() }
 
 // Replay implements ethdb.Batch
 func (batch Batch) Replay(w ethdb.KeyValueWriter) error { return batch.Batch.Replay(w) }
-
-type ADatabase struct {
-	database.Database
-}
-
-func (a ADatabase) Put(k []byte, v []byte) error {
-	agoPutDB.AddBytes(v)
-	return a.Database.Put(k, v)
-}
-
-func (a ADatabase) Get(k []byte) ([]byte, error) {
-	dat, err := a.Database.Get(k)
-	agoGetDB.AddBytes(dat)
-	return dat, err
-}

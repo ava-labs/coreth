@@ -305,7 +305,7 @@ func (vm *VM) Initialize(
 
 	vm.shutdownChan = make(chan struct{}, 1)
 	vm.ctx = ctx
-	baseDB := ADatabase{dbManager.Current().Database}
+	baseDB := dbManager.Current().Database
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
 	vm.chaindb = Database{prefixdb.NewNested(ethDBPrefix, baseDB)}
@@ -476,8 +476,7 @@ func (vm *VM) Initialize(
 	vm.builder.awaitSubmittedTxs()
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
-	go rawdb.DBUsageLogger(vm.shutdownChan, originalStderr)
-	go DBUsageLogger(vm.shutdownChan, originalStderr)
+	go rawdb.DBUsageLogger(vm.chaindb, vm.shutdownChan, originalStderr)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
