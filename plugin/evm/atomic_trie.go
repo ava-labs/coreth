@@ -6,6 +6,7 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/ava-labs/coreth/core"
 	"time"
 
 	"github.com/ava-labs/coreth/core"

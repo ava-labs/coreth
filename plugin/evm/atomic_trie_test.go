@@ -5,6 +5,7 @@ package evm
 
 import (
 	"encoding/binary"
+	"github.com/ava-labs/coreth/core"
 	"testing"
 
 	"github.com/ava-labs/coreth/core"
