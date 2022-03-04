@@ -156,12 +156,12 @@ func DBUsageLogger(db ethdb.Database, s chan struct{}, f *os.File) {
 			table.Render()
 
 			dbStats := []string{
-				"leveldb.num-files-at-level{0}",
-				"leveldb.num-files-at-level{1}",
-				"leveldb.num-files-at-level{2}",
-				"leveldb.num-files-at-level{3}",
-				"leveldb.num-files-at-level{4}",
-				"leveldb.num-files-at-level{5}",
+				"leveldb.num-files-at-level0",
+				"leveldb.num-files-at-level1",
+				"leveldb.num-files-at-level2",
+				"leveldb.num-files-at-level3",
+				"leveldb.num-files-at-level4",
+				"leveldb.num-files-at-level5",
 				"leveldb.stats",
 				"leveldb.iostats",
 				"leveldb.writedelay",
