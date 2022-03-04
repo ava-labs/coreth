@@ -306,6 +306,11 @@ func (vm *VM) Initialize(
 	vm.shutdownChan = make(chan struct{}, 1)
 	vm.ctx = ctx
 	baseDB := dbManager.Current().Database
+	log.Info("triggering full compaction")
+	if err := baseDB.Compact(nil, nil); err != nil {
+		panic(err)
+	}
+	log.Info("triggered full compaction")
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
 	vm.chaindb = Database{prefixdb.NewNested(ethDBPrefix, baseDB)}
