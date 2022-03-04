@@ -45,6 +45,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/davecgh/go-spew/spew"
@@ -271,7 +272,7 @@ func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
 	}
 }
 
-// listAccounts will return a list of addresses for accounts this node manages.
+// ListAccounts will return a list of addresses for accounts this node manages.
 func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 	return s.am.Accounts()
 }
@@ -764,8 +765,7 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Ha
 	return nil, err
 }
 
-// GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
-// all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
+// GetUncleByBlockNumberAndIndex returns the uncle block for the given block number and index.
 func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, blockNr)
 	if block != nil {
@@ -780,8 +780,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 	return nil, err
 }
 
-// GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index. When fullTx is true
-// all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
+// GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
 func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) (map[string]interface{}, error) {
 	block, err := s.b.BlockByHash(ctx, blockHash)
 	if block != nil {
@@ -1248,7 +1247,7 @@ type StructLogRes struct {
 }
 
 // FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []vm.StructLog) []StructLogRes {
+func FormatLogs(logs []logger.StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
 		formatted[index] = StructLogRes{
@@ -1554,9 +1553,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().AvalancheRules(header.Number, new(big.Int).SetUint64(header.Time)))
 
 	// Create an initial tracer
-	prevTracer := vm.NewAccessListTracer(nil, args.from(), to, precompiles)
+	prevTracer := logger.NewAccessListTracer(nil, args.from(), to, precompiles)
 	if args.AccessList != nil {
-		prevTracer = vm.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
+		prevTracer = logger.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
 	}
 	for {
 		// Retrieve the current access list to expand
@@ -1583,7 +1582,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 
 		// Apply the transaction with the access list tracer
-		tracer := vm.NewAccessListTracer(accessList, args.from(), to, precompiles)
+		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
 		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
 		if err != nil {
@@ -1782,7 +1781,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["status"] = hexutil.Uint(receipt.Status)
 	}
 	if receipt.Logs == nil {
-		fields["logs"] = [][]*types.Log{}
+		fields["logs"] = []*types.Log{}
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {

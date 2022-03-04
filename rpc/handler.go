@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"golang.org/x/time/rate"
 )
 
@@ -327,7 +328,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "t", time.Since(execStart))
+		h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(execStart))
 		return true
 	default:
 		return false
@@ -443,7 +444,9 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 			successfulRequestGauge.Inc(1)
 		}
 		rpcServingTimer.UpdateSince(start)
-		newRPCServingTimer(msg.Method, answer.Error == nil).UpdateSince(start)
+		if metrics.EnabledExpensive {
+			newRPCServingTimer(msg.Method, answer.Error == nil).UpdateSince(start)
+		}
 	}
 	return answer
 }

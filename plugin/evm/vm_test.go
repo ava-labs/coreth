@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -128,6 +129,7 @@ func NewContext() *snow.Context {
 	ctx.ChainID = testCChainID
 	ctx.AVAXAssetID = testAvaxAssetID
 	ctx.XChainID = testXChainID
+	ctx.SharedMemory = testSharedMemory()
 	aliaser := ctx.BCLookup.(ids.Aliaser)
 	_ = aliaser.Alias(testCChainID, "C")
 	_ = aliaser.Alias(testCChainID, testCChainID.String())
@@ -216,8 +218,8 @@ func GenesisVM(t *testing.T,
 	}
 
 	if finishBootstrapping {
-		assert.NoError(t, vm.Bootstrapping())
-		assert.NoError(t, vm.Bootstrapped())
+		assert.NoError(t, vm.SetState(snow.Bootstrapping))
+		assert.NoError(t, vm.SetState(snow.NormalOp))
 	}
 
 	return issuer, vm, dbManager, m, appSender
@@ -3675,4 +3677,13 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	if _, _, err := vm2.onExtraStateChange(ethBlk2, state); err == nil || !strings.Contains(err.Error(), "exceeds atomic gas limit") {
 		t.Fatalf("Expected block to fail verification due to exceeded atomic gas limit, but found error: %v", err)
 	}
+}
+
+func TestGetAtomicRepositoryRepairHeights(t *testing.T) {
+	mainnetHeights := getAtomicRepositoryRepairHeights(params.AvalancheMainnetChainID)
+	assert.Len(t, mainnetHeights, 76)
+	sorted := sort.SliceIsSorted(mainnetHeights, func(i, j int) bool { return mainnetHeights[i] < mainnetHeights[j] })
+	assert.True(t, sorted)
+	testnetHeights := getAtomicRepositoryRepairHeights(params.AvalancheFujiChainID)
+	assert.Empty(t, testnetHeights)
 }

@@ -151,7 +151,6 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 			common.Big1,
 		)
 
-		// Gas price is increasing, so ensure it does not increase past the maximum
 		baseFee.Add(baseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
@@ -174,6 +173,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		baseFee.Sub(baseFee, baseFeeDelta)
 	}
 
+	// Ensure that the base fee does not increase/decrease outside of the bounds
 	switch {
 	case isApricotPhase5:
 		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, nil)
@@ -184,6 +184,18 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	}
 
 	return newRollupWindow, baseFee, nil
+}
+
+// EstiamteNextBaseFee attempts to estimate the next base fee based on a block with [parent] being built at
+// [timestamp].
+// If [timestamp] is less than the timestamp of [parent], then it uses the same timestamp as parent.
+// Warning: This function should only be used in estimation and should not be used when calculating the canonical
+// base fee for a subsequent block.
+func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
+	if timestamp < parent.Time {
+		timestamp = parent.Time
+	}
+	return CalcBaseFee(config, parent, timestamp)
 }
 
 // selectBigWithinBounds returns [value] if it is within the bounds:

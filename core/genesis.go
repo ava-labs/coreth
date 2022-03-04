@@ -209,12 +209,14 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
-	if height == nil {
-		return newcfg, fmt.Errorf("missing block number for head header hash")
+	headBlock := rawdb.ReadHeadBlock(db)
+	if headBlock == nil {
+		return newcfg, fmt.Errorf("missing head block")
 	}
-	compatErr := storedcfg.CheckCompatible(newcfg, *height)
-	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
+	height := headBlock.NumberU64()
+	timestamp := headBlock.Time()
+	compatErr := storedcfg.CheckCompatible(newcfg, height, timestamp)
+	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
 		return newcfg, compatErr
 	}
 	rawdb.WriteChainConfig(db, stored, newcfg)
@@ -296,7 +298,6 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())
-	rawdb.WriteHeadFastBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
 	return block, nil
@@ -315,6 +316,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := Genesis{
+		Config:  params.TestChainConfig,
 		Alloc:   GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 	}

@@ -12,26 +12,33 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/message"
+
+	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
 	coreth "github.com/ava-labs/coreth/chain"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/ethconfig"
-	"github.com/ava-labs/coreth/metrics/prometheus"
+	corethPrometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/rpc"
 
+	"github.com/prometheus/client_golang/prometheus"
 	// Force-load tracer engine to trigger registration
 	//
 	// We must import this package (not referenced elsewhere) so that the native "callTracer"
 	// is added to a map of client-accessible tracers. In geth, this is done
 	// inside of cmd/geth.
+	_ "github.com/ava-labs/coreth/eth/tracers/js"
 	_ "github.com/ava-labs/coreth/eth/tracers/native"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,9 +65,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
-	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -73,6 +80,10 @@ import (
 const (
 	x2cRateInt64       int64 = 1_000_000_000
 	x2cRateMinus1Int64 int64 = x2cRateInt64 - 1
+
+	// Prefixes for metrics gatherers
+	ethMetricsPrefix        = "eth"
+	chainStateMetricsPrefix = "chain_state"
 )
 
 var (
@@ -83,7 +94,8 @@ var (
 	x2cRate       = big.NewInt(x2cRateInt64)
 	x2cRateMinus1 = big.NewInt(x2cRateMinus1Int64)
 
-	_ block.ChainVM = &VM{}
+	_ block.ChainVM              = &VM{}
+	_ block.HeightIndexedChainVM = &VM{}
 )
 
 const (
@@ -110,9 +122,14 @@ const (
 
 var (
 	// Set last accepted key to be longer than the keys used to store accepted block IDs.
-	lastAcceptedKey        = []byte("last_accepted_key")
-	acceptedPrefix         = []byte("snowman_accepted")
-	ethDBPrefix            = []byte("ethdb")
+	lastAcceptedKey = []byte("last_accepted_key")
+	acceptedPrefix  = []byte("snowman_accepted")
+	ethDBPrefix     = []byte("ethdb")
+
+	// Prefixes for atomic trie
+	atomicTrieDBPrefix     = []byte("atomicTrieDB")
+	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
+
 	pruneRejectedBlocksKey = []byte("pruned_rejected_blocks")
 )
 
@@ -151,7 +168,6 @@ var (
 	errConflictingAtomicTx            = errors.New("conflicting atomic tx present")
 	errTooManyAtomicTx                = errors.New("too many atomic tx")
 	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
-	defaultLogLevel                   = log.LvlDebug
 )
 
 var originalStderr *os.File
@@ -190,10 +206,13 @@ type VM struct {
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
 	atomicTxRepository AtomicTxRepository
+	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
+	//  Used to state sync clients.
+	atomicTrie AtomicTrie
 
 	builder *blockBuilder
 
-	network Network
+	gossiper Gossiper
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -209,15 +228,14 @@ type VM struct {
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
 
+	peer.Network
+	client       peer.Client
+	networkCodec codec.Manager
+
+	// Metrics
+	multiGatherer avalanchegoMetrics.MultiGatherer
+
 	bootstrapped bool
-}
-
-func (vm *VM) Connected(id ids.ShortID, nodeVersion version.Application) error {
-	return nil // noop
-}
-
-func (vm *VM) Disconnected(nodeID ids.ShortID) error {
-	return nil // noop
 }
 
 // Codec implements the secp256k1fx interface
@@ -232,9 +250,14 @@ func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
-// SetLogLevel sets the log level with the original [os.StdErr] interface
+// setLogLevel sets the log level with the original [os.StdErr] interface along
+// with the context logger.
 func (vm *VM) setLogLevel(logLevel log.Lvl) {
-	log.Root().SetHandler(log.LvlFilterHandler(logLevel, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
+	format := log.TerminalFormat(false)
+	log.Root().SetHandler(log.LvlFilterHandler(logLevel, log.MultiHandler(
+		log.StreamHandler(originalStderr, format),
+		log.StreamHandler(vm.ctx.Log, format),
+	)))
 }
 
 /*
@@ -249,7 +272,6 @@ func (vm *VM) GetActivationTime() time.Time {
 }
 
 // Initialize implements the snowman.ChainVM interface
-
 func (vm *VM) Initialize(
 	ctx *snow.Context,
 	dbManager manager.Manager,
@@ -314,15 +336,12 @@ func (vm *VM) Initialize(
 
 	ethConfig := ethconfig.NewDefaultConfig()
 	ethConfig.Genesis = g
+	ethConfig.NetworkId = vm.chainID.Uint64()
 
 	// Set log level
-	logLevel := defaultLogLevel
-	if vm.config.LogLevel != "" {
-		configLogLevel, err := log.LvlFromString(vm.config.LogLevel)
-		if err != nil {
-			return fmt.Errorf("failed to initialize logger due to: %w ", err)
-		}
-		logLevel = configLogLevel
+	logLevel, err := log.LvlFromString(vm.config.LogLevel)
+	if err != nil {
+		return fmt.Errorf("failed to initialize logger due to: %w ", err)
 	}
 
 	vm.setLogLevel(logLevel)
@@ -339,6 +358,16 @@ func (vm *VM) Initialize(
 	ethConfig.Pruning = vm.config.Pruning
 	ethConfig.SnapshotAsync = vm.config.SnapshotAsync
 	ethConfig.SnapshotVerify = vm.config.SnapshotVerify
+	ethConfig.OfflinePruning = vm.config.OfflinePruning
+	ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
+	ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
+
+	if len(ethConfig.OfflinePruningDataDirectory) != 0 {
+		if err := os.MkdirAll(ethConfig.OfflinePruningDataDirectory, perms.ReadWriteExecute); err != nil {
+			log.Error("failed to create offline pruning data directory", "error", err)
+			return err
+		}
+	}
 
 	vm.chainConfig = g.Config
 	vm.networkID = ethConfig.NetworkId
@@ -362,7 +391,7 @@ func (vm *VM) Initialize(
 	var lastAcceptedHash common.Hash
 	switch {
 	case lastAcceptedErr == database.ErrNotFound:
-		// // Set [lastAcceptedHash] to the genesis block hash.
+		// Set [lastAcceptedHash] to the genesis block hash.
 		lastAcceptedHash = ethConfig.Genesis.ToBlock(nil).Hash()
 	case lastAcceptedErr != nil:
 		return fmt.Errorf("failed to get last accepted block ID due to: %w", lastAcceptedErr)
@@ -383,13 +412,35 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
 
+	bonusBlockHeights := make(map[uint64]ids.ID)
+	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
+		bonusBlockHeights = bonusBlockMainnetHeights
+	}
+	if err := repairAtomicRepositoryForBonusBlockTxs(
+		vm.atomicTxRepository,
+		vm.db,
+		getAtomicRepositoryRepairHeights(vm.chainID),
+		vm.getAtomicTxFromPreApricot5BlockByHeight,
+	); err != nil {
+		return fmt.Errorf("failed to repair atomic repository: %w", err)
+	}
+	vm.atomicTrie, err = NewAtomicTrie(vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, vm.codec, lastAccepted.NumberU64())
+	if err != nil {
+		return fmt.Errorf("failed to create atomic trie: %w", err)
+	}
+
 	// start goroutines to update the tx pool gas minimum gas price when upgrades go into effect
 	vm.handleGasPriceUpdates()
 
-	// initialize new gossip network
-	//
-	// NOTE: This network must be initialized after the atomic mempool.
-	vm.network = vm.NewNetwork(appSender)
+	vm.networkCodec, err = message.BuildCodec()
+	if err != nil {
+		return err
+	}
+
+	// initialize peer network
+	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.client = peer.NewClient(vm.Network)
+	vm.initGossipHandling()
 
 	// start goroutines to manage block building
 	//
@@ -407,22 +458,19 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
-	vm.State = chain.NewState(&chain.Config{
-		DecidedCacheSize:    decidedCacheSize,
-		MissingCacheSize:    missingCacheSize,
-		UnverifiedCacheSize: unverifiedCacheSize,
-		LastAcceptedBlock: &Block{
-			id:        ids.ID(lastAccepted.Hash()),
-			ethBlock:  lastAccepted,
-			vm:        vm,
-			status:    choices.Accepted,
-			atomicTxs: atomicTxs,
-		},
-		GetBlockIDAtHeight: vm.getBlockIDAtHeight,
-		GetBlock:           vm.getBlock,
-		UnmarshalBlock:     vm.parseBlock,
-		BuildBlock:         vm.buildBlock,
-	})
+
+	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
+
+	// Initialize [vm.State]
+	if err := vm.initChainState(&Block{
+		id:        ids.ID(lastAccepted.Hash()),
+		ethBlock:  lastAccepted,
+		vm:        vm,
+		status:    choices.Accepted,
+		atomicTxs: atomicTxs,
+	}, metrics.Enabled); err != nil {
+		return err
+	}
 
 	vm.builder.awaitSubmittedTxs()
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
@@ -441,15 +489,56 @@ func (vm *VM) Initialize(
 	// 	return err
 	// }
 
-	// Only provide metrics if they are being populated.
+	// If metrics are enabled, register the default metrics regitry
 	if metrics.Enabled {
-		gatherer := prometheus.Gatherer(metrics.DefaultRegistry)
-		if err := ctx.Metrics.Register(gatherer); err != nil {
+		gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
+		if err := vm.multiGatherer.Register(ethMetricsPrefix, gatherer); err != nil {
 			return err
 		}
 	}
+	// Register [multiGatherer] after registerers have been registered to it
+	if err := ctx.Metrics.Register(vm.multiGatherer); err != nil {
+		return err
+	}
 
 	return vm.fx.Initialize(vm)
+}
+
+func (vm *VM) initChainState(lastAcceptedBlock *Block, metricsEnabled bool) error {
+	config := &chain.Config{
+		DecidedCacheSize:    decidedCacheSize,
+		MissingCacheSize:    missingCacheSize,
+		UnverifiedCacheSize: unverifiedCacheSize,
+		LastAcceptedBlock:   lastAcceptedBlock,
+		GetBlockIDAtHeight:  vm.GetBlockIDAtHeight,
+		GetBlock:            vm.getBlock,
+		UnmarshalBlock:      vm.parseBlock,
+		BuildBlock:          vm.buildBlock,
+	}
+	if !metricsEnabled {
+		vm.State = chain.NewState(config)
+		return nil
+	}
+
+	// Register chain state metrics
+	chainStateRegisterer := prometheus.NewRegistry()
+	state, err := chain.NewMeteredState(chainStateRegisterer, config)
+	if err != nil {
+		return err
+	}
+	vm.State = state
+
+	return vm.multiGatherer.Register(chainStateMetricsPrefix, chainStateRegisterer)
+}
+
+func (vm *VM) initGossipHandling() {
+	if vm.chainConfig.ApricotPhase4BlockTimestamp != nil {
+		vm.gossiper = vm.newPushGossiper()
+		vm.Network.SetGossipHandler(NewGossipHandler(vm))
+	} else {
+		vm.gossiper = &noopGossiper{}
+		vm.Network.SetGossipHandler(message.NoopMempoolGossipHandler{})
+	}
 }
 
 func (vm *VM) createConsensusCallbacks() *dummy.ConsensusCallbacks {
@@ -669,18 +758,17 @@ func (vm *VM) pruneChain() error {
 	return vm.db.Commit()
 }
 
-// Bootstrapping notifies this VM that the consensus engine is performing
-// bootstrapping
-func (vm *VM) Bootstrapping() error {
-	vm.bootstrapped = false
-	return vm.fx.Bootstrapping()
-}
-
-// Bootstrapped notifies this VM that the consensus engine has finished
-// bootstrapping
-func (vm *VM) Bootstrapped() error {
-	vm.bootstrapped = true
-	return vm.fx.Bootstrapped()
+func (vm *VM) SetState(state snow.State) error {
+	switch state {
+	case snow.Bootstrapping:
+		vm.bootstrapped = false
+		return vm.fx.Bootstrapping()
+	case snow.NormalOp:
+		vm.bootstrapped = true
+		return vm.fx.Bootstrapped()
+	default:
+		return snow.ErrUnknownState
+	}
 }
 
 // Shutdown implements the snowman.ChainVM interface
@@ -806,10 +894,15 @@ func (vm *VM) SetPreference(blkID ids.ID) error {
 	return vm.chain.SetPreference(block.(*Block).ethBlock)
 }
 
-// getBlockIDAtHeight retrieves the blkID of the canonical block at [blkHeight]
+func (vm *VM) VerifyHeightIndex() error {
+	// our index is vm.chain.GetBlockByNumber
+	return nil
+}
+
+// GetBlockIDAtHeight retrieves the blkID of the canonical block at [blkHeight]
 // if [blkHeight] is less than the height of the last accepted block, this will return
 // a canonical block. Otherwise, it may return a blkID that has not yet been accepted.
-func (vm *VM) getBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
+func (vm *VM) GetBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
 	ethBlock := vm.chain.GetBlockByNumber(blkHeight)
 	if ethBlock == nil {
 		return ids.ID{}, fmt.Errorf("could not find block at height: %d", blkHeight)
@@ -1053,7 +1146,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 	timestamp := vm.clock.Time().Unix()
 	bigTimestamp := big.NewInt(timestamp)
 	if vm.chainConfig.IsApricotPhase3(bigTimestamp) {
-		_, nextBaseFee, err = dummy.CalcBaseFee(vm.chainConfig, parentHeader, uint64(timestamp))
+		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, uint64(timestamp))
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
@@ -1367,4 +1460,86 @@ func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
 	}
 
 	return baseFee, nil
+}
+
+func getAtomicRepositoryRepairHeights(chainID *big.Int) []uint64 {
+	if chainID.Cmp(params.AvalancheMainnetChainID) != 0 {
+		return nil
+	}
+	repairHeights := make([]uint64, 0, len(bonusBlockMainnetHeights)+len(canonicalBonusBlocks))
+	for height := range bonusBlockMainnetHeights {
+		repairHeights = append(repairHeights, height)
+	}
+	for _, height := range canonicalBonusBlocks {
+		if _, exists := bonusBlockMainnetHeights[height]; !exists {
+			repairHeights = append(repairHeights, height)
+		}
+	}
+	sort.Slice(repairHeights, func(i, j int) bool { return repairHeights[i] < repairHeights[j] })
+	return repairHeights
+}
+
+func (vm *VM) getAtomicTxFromPreApricot5BlockByHeight(height uint64) (*Tx, error) {
+	blk := vm.chain.GetBlockByNumber(height)
+	if blk == nil {
+		return nil, nil
+	}
+	return ExtractAtomicTx(blk.ExtData(), vm.codec)
+}
+
+// repairAtomicRepositoryForBonusBlockTxs ensures that atomic txs that were processed
+// on more than one block (canonical block + a number of bonus blocks) are indexed to
+// the first height they were processed on (canonical block).
+// [sortedHeights] should include all canonical block + bonus block heights in ascending
+// order, and will only be passed as non-empty on mainnet.
+func repairAtomicRepositoryForBonusBlockTxs(
+	atomicTxRepository AtomicTxRepository, db *versiondb.Database,
+	sortedHeights []uint64, getAtomicTxFromBlockByHeight func(height uint64) (*Tx, error),
+) error {
+	done, err := atomicTxRepository.IsBonusBlocksRepaired()
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+	repairedEntries := uint64(0)
+	seenTxs := make(map[ids.ID][]uint64)
+	for _, height := range sortedHeights {
+		// get atomic tx from block
+		tx, err := getAtomicTxFromBlockByHeight(height)
+		if err != nil {
+			return err
+		}
+		if tx == nil {
+			continue
+		}
+
+		// get the tx by txID and update it, the first time we encounter
+		// a given [txID], overwrite the previous [txID] => [height]
+		// mapping. This provides a canonical mapping across nodes.
+		heights, seen := seenTxs[tx.ID()]
+		_, foundHeight, err := atomicTxRepository.GetByTxID(tx.ID())
+		if err != nil && !errors.Is(err, database.ErrNotFound) {
+			return err
+		}
+		if !seen {
+			if err := atomicTxRepository.Write(height, []*Tx{tx}); err != nil {
+				return err
+			}
+		} else {
+			if err := atomicTxRepository.WriteBonus(height, []*Tx{tx}); err != nil {
+				return err
+			}
+		}
+		if foundHeight != height && !seen {
+			repairedEntries++
+		}
+		seenTxs[tx.ID()] = append(heights, height)
+	}
+	if err := atomicTxRepository.MarkBonusBlocksRepaired(repairedEntries); err != nil {
+		return err
+	}
+	log.Info("repairAtomicRepositoryForBonusBlockTxs complete", "repairedEntries", repairedEntries)
+	return db.Commit()
 }
