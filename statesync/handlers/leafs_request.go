@@ -63,7 +63,6 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		bytes.Equal(leafsRequest.Start, leafsRequest.End) ||
 		leafsRequest.Root == (common.Hash{}) ||
 		leafsRequest.Root == types.EmptyRootHash ||
-		leafsRequest.Root == types.EmptyCodeHash ||
 		leafsRequest.Limit == 0 {
 		log.Debug("invalid leafs request, dropping request", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest)
 		lrh.stats.IncInvalidLeafsRequest()

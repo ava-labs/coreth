@@ -86,22 +86,6 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.EqualValues(t, 1, mockHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
-		"empty code hash dropped": {
-			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
-					Root:     types.EmptyCodeHash,
-					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-					Limit:    maxLeavesLimit,
-					NodeType: message.StateTrieNode,
-				}
-			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, mockHandlerStats.InvalidLeafsRequestCount)
-			},
-		},
 		"missing root dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				return context.Background(), message.LeafsRequest{
