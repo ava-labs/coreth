@@ -175,7 +175,7 @@ func DBUsageLogger(db ethdb.Database, s chan struct{}, f *os.File) {
 				if err != nil {
 					log.Debug("not found", "stat", stat, "error", err)
 				}
-				f.WriteString(fmt.Sprintf("***%s***:\n%s\n", stat, info))
+				fmt.Printf("***%s***:\n%s\n", stat, info)
 			}
 		}
 	}
