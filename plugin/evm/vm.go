@@ -1083,7 +1083,7 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	}
 
 	//expectedHRP := constants.GetHRP(vm.ctx.NetworkID)
-	expectedHRP := "ezc"
+	expectedHRP := "fuji"
 	if hrp != expectedHRP {
 		return ids.ID{}, ids.ShortID{}, fmt.Errorf("expected hrp %q but got %q",
 			expectedHRP, hrp)
