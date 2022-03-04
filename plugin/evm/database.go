@@ -67,6 +67,7 @@ func (s *stat) Count() string {
 
 func DBUsageLogger(s chan struct{}, f *os.File) {
 	t := time.NewTicker(10 * time.Second)
+	time.Sleep(5 * time.Second)
 	for {
 		select {
 		case <-s:
