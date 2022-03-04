@@ -8,11 +8,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/ava-labs/coreth/core/types"
-
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/wrappers"
 
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers/stats"
@@ -190,7 +190,7 @@ func (lrh *LeafsRequestHandler) addProofKeys(t *trie.Trie, leafsRequest *message
 func getKeyLength(nodeType message.NodeType) int {
 	switch nodeType {
 	case message.AtomicTrieNode:
-		return 40
+		return common.HashLength + wrappers.LongLen
 	case message.StateTrieNode:
 		return common.HashLength
 	}

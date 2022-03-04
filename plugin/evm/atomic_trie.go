@@ -6,21 +6,19 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/avalanchego/chains/atomic"
 	"time"
 
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core"
 
-	"github.com/ava-labs/avalanchego/utils/units"
-
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
-
-	"github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"

@@ -5,8 +5,9 @@ package evm
 
 import (
 	"encoding/binary"
-	"github.com/ava-labs/coreth/core"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/ava-labs/coreth/core"
 
@@ -16,8 +17,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 )
 
 const testCommitInterval = 100
