@@ -169,13 +169,13 @@ func DBUsageLogger(db ethdb.Database, s chan struct{}, f *os.File) {
 				"leveldb.blockpool",
 				"leveldb.openedtables",
 			}
-			t := make([][]string, len(dbStats))
-			for i, stat := range dbStats {
+			t := [][]string{}
+			for _, stat := range dbStats {
 				info, err := db.Stat(stat)
 				if err != nil {
-					panic(err)
+					log.Debug("not found", "stat", stat, "error", err)
 				}
-				t[i] = []string{stat, info}
+				t = append(t, []string{stat, info})
 			}
 			table = tablewriter.NewWriter(f)
 			table.SetHeader([]string{"Stat", "Value"})
