@@ -162,12 +162,12 @@ func DBUsageLogger(db ethdb.Database, s chan struct{}, f *os.File) {
 				"leveldb.num-files-at-level3",
 				"leveldb.num-files-at-level4",
 				"leveldb.num-files-at-level5",
+				"leveldb.num-files-at-level6",
+				"leveldb.num-files-at-level7",
+				"leveldb.num-files-at-level8",
 				"leveldb.stats",
 				"leveldb.iostats",
 				"leveldb.writedelay",
-				"leveldb.sstables",
-				"leveldb.blockpool",
-				"leveldb.openedtables",
 				"leveldb.compcount",
 			}
 			for _, stat := range dbStats {
