@@ -4,9 +4,13 @@
 package message
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"math/rand"
 	"testing"
+
+	"github.com/ava-labs/avalanchego/ids"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -115,4 +119,98 @@ func TestMarshalLeafsResponse(t *testing.T) {
 	assert.False(t, l.More) // make sure it is not serialized
 	assert.Equal(t, leafsResponse.ProofKeys, l.ProofKeys)
 	assert.Equal(t, leafsResponse.ProofVals, l.ProofVals)
+}
+
+func TestLeafsRequestValidatesNodeType(t *testing.T) {
+	var (
+		handleStateTrieCalled,
+		handleAtomicTrieCalled,
+		handleBlocksRequestCalled,
+		handleCodeRequestCalled bool
+	)
+	mockRequestHandler := &mockHandler{
+		stateTrieLeafsRequestFn: func(ctx context.Context, id ids.ShortID, u uint32, request LeafsRequest) ([]byte, error) {
+			handleStateTrieCalled = true
+			return nil, nil
+		},
+		atomicTrieLeafsRequestFn: func(ctx context.Context, id ids.ShortID, u uint32, request LeafsRequest) ([]byte, error) {
+			handleAtomicTrieCalled = true
+			return nil, nil
+		},
+		blockRequestFn: func(ctx context.Context, id ids.ShortID, u uint32, request BlockRequest) ([]byte, error) {
+			handleBlocksRequestCalled = true
+			return nil, nil
+		},
+		codeRequestFn: func(ctx context.Context, id ids.ShortID, u uint32, request CodeRequest) ([]byte, error) {
+			handleCodeRequestCalled = true
+			return nil, nil
+		},
+	}
+
+	// test node type StateTrieNode
+	request := LeafsRequest{
+		Root:     common.BytesToHash([]byte("some hash goes here")),
+		Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
+		End:      bytes.Repeat([]byte{0xff}, common.HashLength),
+		Limit:    10,
+		NodeType: StateTrieNode,
+	}
+	response, err := request.Handle(context.Background(), ids.GenerateTestShortID(), 1, mockRequestHandler)
+	assert.NoError(t, err)
+	assert.Nil(t, response)
+	assert.True(t, handleStateTrieCalled)
+	assert.False(t, handleAtomicTrieCalled)
+	assert.False(t, handleBlocksRequestCalled)
+	assert.False(t, handleCodeRequestCalled)
+
+	// reset switch
+	handleStateTrieCalled = false
+
+	// test node type AtomicTrieNode
+	request.NodeType = AtomicTrieNode
+	response, err = request.Handle(context.Background(), ids.GenerateTestShortID(), 2, mockRequestHandler)
+	assert.NoError(t, err)
+	assert.Nil(t, response)
+	assert.True(t, handleAtomicTrieCalled)
+	assert.False(t, handleStateTrieCalled)
+	assert.False(t, handleBlocksRequestCalled)
+	assert.False(t, handleCodeRequestCalled)
+
+	// reset switch
+	handleAtomicTrieCalled = false
+
+	// test unknown node type
+	request.NodeType = NodeType(11)
+	response, err = request.Handle(context.Background(), ids.GenerateTestShortID(), 3, mockRequestHandler)
+	assert.NoError(t, err)
+	assert.Nil(t, response)
+	// assert nothing is called
+	assert.False(t, handleStateTrieCalled)
+	assert.False(t, handleAtomicTrieCalled)
+	assert.False(t, handleBlocksRequestCalled)
+	assert.False(t, handleCodeRequestCalled)
+}
+
+var _ RequestHandler = &mockHandler{}
+
+type mockHandler struct {
+	stateTrieLeafsRequestFn, atomicTrieLeafsRequestFn func(context.Context, ids.ShortID, uint32, LeafsRequest) ([]byte, error)
+	blockRequestFn                                    func(context.Context, ids.ShortID, uint32, BlockRequest) ([]byte, error)
+	codeRequestFn                                     func(context.Context, ids.ShortID, uint32, CodeRequest) ([]byte, error)
+}
+
+func (m *mockHandler) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
+	return m.stateTrieLeafsRequestFn(ctx, nodeID, requestID, leafsRequest)
+}
+
+func (m *mockHandler) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
+	return m.atomicTrieLeafsRequestFn(ctx, nodeID, requestID, leafsRequest)
+}
+
+func (m *mockHandler) HandleBlockRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, blockRequest BlockRequest) ([]byte, error) {
+	return m.blockRequestFn(ctx, nodeID, requestID, blockRequest)
+}
+
+func (m *mockHandler) HandleCodeRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, codeRequest CodeRequest) ([]byte, error) {
+	return m.codeRequestFn(ctx, nodeID, requestID, codeRequest)
 }
