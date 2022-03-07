@@ -347,6 +347,39 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.False(t, more)
 			},
 		},
+		"final end range": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				return context.Background(), message.LeafsRequest{
+					Root:     largeTrieRoot,
+					Start:    bytes.Repeat([]byte{0xff}, common.HashLength),
+					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, len(leafsResponse.Keys), 0)
+				assert.EqualValues(t, len(leafsResponse.Vals), 0)
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+
+				proofDB := memorydb.New()
+				defer proofDB.Close()
+				for i, proofKey := range leafsResponse.ProofKeys {
+					if err = proofDB.Put(proofKey, leafsResponse.ProofVals[i]); err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				more, err := trie.VerifyRangeProof(request.Root, request.Start, request.End, leafsResponse.Keys, leafsResponse.Vals, proofDB)
+				assert.NoError(t, err)
+				assert.False(t, more)
+			},
+		},
 		"small trie root": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				return context.Background(), message.LeafsRequest{

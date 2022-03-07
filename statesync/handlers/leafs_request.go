@@ -43,6 +43,7 @@ func NewLeafsRequestHandler(trieDB *trie.Database, syncerStats stats.HandlerStat
 }
 
 // OnLeafsRequest returns encoded message.LeafsResponse for a given message.LeafsRequest
+// Returns leaves with proofs for specified (Start-End) (both inclusive) ranges
 // Returned message.LeafsResponse may contain partial leaves within requested Start and End range if:
 // - ctx expired while fetching leafs
 // - number of leaves read is greater than Limit (message.LeafsRequest)
@@ -60,7 +61,6 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 
 	if (leafsRequest.Start != nil && bytes.Compare(leafsRequest.Start, leafsRequest.End) > 0) ||
 		len(leafsRequest.End) == 0 ||
-		bytes.Equal(leafsRequest.Start, leafsRequest.End) ||
 		leafsRequest.Root == (common.Hash{}) ||
 		leafsRequest.Root == types.EmptyRootHash ||
 		leafsRequest.Limit == 0 {
