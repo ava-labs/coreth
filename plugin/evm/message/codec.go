@@ -6,6 +6,7 @@ package message
 import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 )
@@ -24,6 +25,7 @@ func BuildCodec() (codec.Manager, error) {
 
 		// Types for state sync frontier consensus
 		c.RegisterType(SyncableBlock{}),
+		c.RegisterType(block.CoreSummaryContent{}),
 
 		// state sync types
 		c.RegisterType(BlockRequest{}),

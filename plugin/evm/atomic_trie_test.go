@@ -7,6 +7,8 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/ava-labs/coreth/core"
+
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -35,12 +37,12 @@ func TestNearestCommitHeight(t *testing.T) {
 	for _, test := range []test{
 		{
 			height:               4500,
-			commitInterval:       4096,
+			commitInterval:       core.CommitInterval,
 			expectedCommitHeight: 4096,
 		},
 		{
 			height:               8500,
-			commitInterval:       4096,
+			commitInterval:       core.CommitInterval,
 			expectedCommitHeight: 8192,
 		},
 		{
@@ -533,6 +535,11 @@ func TestApplyToSharedMemory(t *testing.T) {
 					sharedMemories.assertOpsNotApplied(t, ops)
 				}
 			}
+
+			// marker should be removed after ApplyToSharedMemory is complete
+			hasMarker, err = atomicTrie.metadataDB.Has(appliedSharedMemoryCursorKey)
+			assert.NoError(t, err)
+			assert.False(t, hasMarker)
 		})
 	}
 

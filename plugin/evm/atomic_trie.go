@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/coreth/core"
+
 	"github.com/ava-labs/avalanchego/utils/units"
 
 	"github.com/ava-labs/avalanchego/database"
@@ -25,7 +27,7 @@ import (
 
 const (
 	trieCommitSizeCap    = 10 * units.MiB
-	commitHeightInterval = uint64(4096)
+	commitHeightInterval = core.CommitInterval
 	progressLogUpdate    = 30 * time.Second
 )
 

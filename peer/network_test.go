@@ -99,7 +99,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 			defer wg.Done()
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			assert.NoError(t, err)
-			responseBytes, err := client.RequestAny(defaultPeerVersion, requestBytes)
+			responseBytes, _, err := client.RequestAny(defaultPeerVersion, requestBytes)
 			assert.NoError(t, err)
 			assert.NotNil(t, responseBytes)
 
@@ -245,12 +245,12 @@ func TestRequestMinVersion(t *testing.T) {
 	assert.NoError(t, net.Connected(nodeID, version.NewDefaultApplication("corethtest", 1, 7, 1)))
 
 	// ensure version does not match
-	responseBytes, err := client.RequestAny(version.NewDefaultApplication("corethtest", 2, 0, 0), requestBytes)
+	responseBytes, _, err := client.RequestAny(version.NewDefaultApplication("corethtest", 2, 0, 0), requestBytes)
 	assert.Equal(t, err.Error(), "no peers found matching version corethtest/2.0.0 out of 1 peers")
 	assert.Nil(t, responseBytes)
 
 	// ensure version matches and the request goes through
-	responseBytes, err = client.RequestAny(version.NewDefaultApplication("corethtest", 1, 0, 0), requestBytes)
+	responseBytes, _, err = client.RequestAny(version.NewDefaultApplication("corethtest", 1, 0, 0), requestBytes)
 	assert.NoError(t, err)
 
 	var response TestMessage

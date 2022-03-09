@@ -17,7 +17,12 @@ import (
 	"sync"
 	"time"
 
+	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
+
 	"github.com/ava-labs/coreth/plugin/evm/message"
+
+	"github.com/ava-labs/coreth/statesync/handlers"
+	"github.com/ava-labs/coreth/trie"
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
 	coreth "github.com/ava-labs/coreth/chain"
@@ -31,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/rpc"
+	syncerstats "github.com/ava-labs/coreth/statesync/stats"
 
 	"github.com/prometheus/client_golang/prometheus"
 	// Force-load tracer engine to trigger registration
@@ -95,6 +101,7 @@ var (
 	x2cRateMinus1 = big.NewInt(x2cRateMinus1Int64)
 
 	_ block.ChainVM              = &VM{}
+	_ block.StateSyncableVM      = &VM{}
 	_ block.HeightIndexedChainVM = &VM{}
 )
 
@@ -181,20 +188,11 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
 }
 
-// VM implements the snowman.ChainVM interface
-type VM struct {
-	ctx *snow.Context
+type vmState struct {
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
 	*chain.State
-
-	config Config
-
-	chainID     *big.Int
-	networkID   uint64
-	genesisHash common.Hash
-	chain       *coreth.ETHChain
-	chainConfig *params.ChainConfig
+	chain *coreth.ETHChain
 	// [db] is the VM's current database managed by ChainState
 	db *versiondb.Database
 	// [chaindb] is the database supplied to the Ethereum backend
@@ -202,14 +200,26 @@ type VM struct {
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
 	acceptedBlockDB database.Database
+	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
+	atomicTrie AtomicTrie
+}
+
+// VM implements the snowman.ChainVM interface
+type VM struct {
+	ctx *snow.Context
+	vmState
+
+	config Config
+
+	chainID     *big.Int
+	networkID   uint64
+	genesisHash common.Hash
+	chainConfig *params.ChainConfig
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
 	atomicTxRepository AtomicTxRepository
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	//  Used to state sync clients.
-	atomicTrie AtomicTrie
 
 	builder *blockBuilder
 
@@ -237,6 +247,9 @@ type VM struct {
 	multiGatherer avalanchegoMetrics.MultiGatherer
 
 	bootstrapped bool
+
+	// State sync
+	*stateSyncer
 }
 
 // Codec implements the secp256k1fx interface
@@ -449,33 +462,27 @@ func (vm *VM) Initialize(
 	vm.client = peer.NewClient(vm.Network)
 	vm.initGossipHandling()
 
+	if err = vm.initializeStateSync(toEngine); err != nil {
+		return err
+	}
+
 	// start goroutines to manage block building
 	//
 	// NOTE: gossip network must be initialized first otherwie ETH tx gossip will
 	// not work.
 	vm.builder = vm.NewBlockBuilder(toEngine)
-
 	vm.chain.Start()
 
 	vm.genesisHash = vm.chain.GetGenesisBlock().Hash()
 	log.Info(fmt.Sprintf("lastAccepted = %s", lastAccepted.Hash().Hex()))
 
-	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(new(big.Int).SetUint64(lastAccepted.Time()))
-	atomicTxs, err := ExtractAtomicTxs(lastAccepted.ExtData(), isApricotPhase5, vm.codec)
-	if err != nil {
-		return err
-	}
-
 	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
 
-	// Initialize [vm.State]
-	if err := vm.initChainState(&Block{
-		id:        ids.ID(lastAccepted.Hash()),
-		ethBlock:  lastAccepted,
-		vm:        vm,
-		status:    choices.Accepted,
-		atomicTxs: atomicTxs,
-	}, metrics.Enabled); err != nil {
+	// if performing state syncs, metrics will be initialized
+	// with the final state, so in that case we pass false to
+	// registerMetrics here.
+	registerMetrics := !vm.config.StateSyncEnabled
+	if err := vm.initChainState(lastAccepted, registerMetrics); err != nil {
 		return err
 	}
 
@@ -511,16 +518,89 @@ func (vm *VM) Initialize(
 	return vm.fx.Initialize(vm)
 }
 
-func (vm *VM) initChainState(lastAcceptedBlock *Block, metricsEnabled bool) error {
+// initializeStateSync is called from Initialize and registers
+// state sync handlers and [vm.stateSyncer].
+// [vm.stateSyncer] implements the StateSyncableVM interface
+// expected by engine for VMs that support state sync.
+func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
+	var syncStats syncerstats.Stats
+	if metrics.Enabled && vm.config.StateSyncMetricsEnabled {
+		log.Info("state sync stats are enabled")
+		syncStats = syncerstats.NewStats()
+	} else {
+		syncStats = syncerstats.NewNoOpStats()
+	}
+
+	// parse nodeIDs from state sync IDs in vm config
+	stateSyncIDs := make([]ids.ShortID, len(vm.config.StateSyncIDs))
+	for i, nodeIDString := range vm.config.StateSyncIDs {
+		nodeID, err := ids.ShortFromPrefixedString(nodeIDString, constants.NodeIDPrefix)
+		if err != nil {
+			return fmt.Errorf("failed to parse %s as ShortID: %w", nodeIDString, err)
+		}
+		stateSyncIDs[i] = nodeID
+	}
+
+	vm.stateSyncer = NewStateSyncer(&vm.vmState, &stateSyncConfig{
+		enabled:      vm.config.StateSyncEnabled,
+		codec:        vm.codec,
+		netCodec:     vm.networkCodec,
+		toEngine:     toEngine,
+		syncStats:    syncStats,
+		network:      vm.Network,
+		client:       vm.client,
+		stateSyncIDs: stateSyncIDs,
+	})
+
+	var handlerStats handlerstats.HandlerStats
+	if metrics.Enabled {
+		// TODO: add separate metrics for atomic trie & state trie
+		handlerStats = handlerstats.NewHandlerStats()
+	} else {
+		handlerStats = handlerstats.NewNoopHandlerStats()
+	}
+
+	blockRequestHandler := handlers.NewBlockRequestHandler(vm.chain.BlockChain().GetBlock, vm.networkCodec, handlerStats)
+	codeRequestHandler := handlers.NewCodeRequestHandler(vm.chaindb, handlerStats, vm.networkCodec)
+	stateTrieLeafsRequestHandler := handlers.NewLeafsRequestHandler(
+		trie.NewDatabaseWithConfig(vm.chaindb, &trie.Config{Cache: vm.config.StateSyncServerTrieCache}),
+		handlerStats,
+		vm.networkCodec,
+	)
+	atomicTrieLeafsRequestHandler := handlers.NewLeafsRequestHandler(
+		vm.atomicTrie.TrieDB(),
+		handlerStats,
+		vm.networkCodec,
+	)
+	requestHandler := handlers.NewSyncHandler(stateTrieLeafsRequestHandler, atomicTrieLeafsRequestHandler, blockRequestHandler, codeRequestHandler)
+	vm.Network.SetRequestHandler(requestHandler)
+	return nil
+}
+
+func (vm *VM) initChainState(lastAcceptedBlock *types.Block, metricsEnabled bool) error {
+	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(new(big.Int).SetUint64(lastAcceptedBlock.Time()))
+	atomicTxs, err := ExtractAtomicTxs(lastAcceptedBlock.ExtData(), isApricotPhase5, vm.codec)
+	if err != nil {
+		return fmt.Errorf(
+			"error extracting atomic txs when setting chain state, height=%d, hash=%s, err=%w",
+			lastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash(), err,
+		)
+	}
 	config := &chain.Config{
 		DecidedCacheSize:    decidedCacheSize,
 		MissingCacheSize:    missingCacheSize,
 		UnverifiedCacheSize: unverifiedCacheSize,
-		LastAcceptedBlock:   lastAcceptedBlock,
 		GetBlockIDAtHeight:  vm.GetBlockIDAtHeight,
 		GetBlock:            vm.getBlock,
 		UnmarshalBlock:      vm.parseBlock,
 		BuildBlock:          vm.buildBlock,
+		LastAcceptedBlock: &Block{
+			id:        ids.ID(lastAcceptedBlock.Hash()),
+			ethBlock:  lastAcceptedBlock,
+			vm:        vm,
+			status:    choices.Accepted,
+			atomicTxs: atomicTxs,
+		},
 	}
 	if !metricsEnabled {
 		vm.State = chain.NewState(config)
@@ -531,7 +611,7 @@ func (vm *VM) initChainState(lastAcceptedBlock *Block, metricsEnabled bool) erro
 	chainStateRegisterer := prometheus.NewRegistry()
 	state, err := chain.NewMeteredState(chainStateRegisterer, config)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create metered state: %w", err)
 	}
 	vm.State = state
 
@@ -773,6 +853,9 @@ func (vm *VM) SetState(state snow.State) error {
 	case snow.NormalOp:
 		vm.bootstrapped = true
 		return vm.fx.Bootstrapped()
+	case snow.StateSyncing:
+		vm.bootstrapped = false
+		return nil
 	default:
 		return snow.ErrUnknownState
 	}
@@ -783,7 +866,10 @@ func (vm *VM) Shutdown() error {
 	if vm.ctx == nil {
 		return nil
 	}
-
+	vm.Network.Shutdown()
+	if err := vm.stateSyncer.Shutdown(); err != nil {
+		log.Error("error stopping state syncer", "err", err)
+	}
 	close(vm.shutdownChan)
 	vm.chain.Stop()
 	vm.shutdownWg.Wait()

@@ -343,7 +343,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState is necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	return bc.reprocessState(bc.lastAccepted, 2*commitInterval)
+	return bc.reprocessState(bc.lastAccepted, 2*CommitInterval)
 }
 
 // removeIndices removes all transaction lookup entries for the transactions contained in the canonical chain

@@ -40,7 +40,7 @@ type Network interface {
 	// random order.
 	// A peer is considered a match if its version is greater than or equal to the specified minVersion
 	// Returns an error if the request could not be sent to a peer with the desired [minVersion].
-	RequestAny(minVersion version.Application, message []byte, handler message.ResponseHandler) error
+	RequestAny(minVersion version.Application, message []byte, handler message.ResponseHandler) (ids.ShortID, error)
 
 	// Request sends message to given nodeID, notifying handler when there's a response or timeout
 	Request(nodeID ids.ShortID, message []byte, handler message.ResponseHandler) error
@@ -94,10 +94,10 @@ func NewNetwork(appSender common.AppSender, codec codec.Manager, self ids.ShortI
 // If minVersion is nil, then the request will be sent to any peer regardless of their version
 // Returns a non-nil error if we were not able to send a request to a peer with >= [minVersion]
 // or we fail to send a request to the selected peer.
-func (n *network) RequestAny(minVersion version.Application, request []byte, handler message.ResponseHandler) error {
+func (n *network) RequestAny(minVersion version.Application, request []byte, handler message.ResponseHandler) (ids.ShortID, error) {
 	// Take a slot from total [activeRequests] and block until a slot becomes available.
 	if err := n.activeRequests.Acquire(context.Background(), 1); err != nil {
-		return errAcquiringSemaphore
+		return ids.ShortEmpty, errAcquiringSemaphore
 	}
 
 	n.lock.Lock()
@@ -108,12 +108,12 @@ func (n *network) RequestAny(minVersion version.Application, request []byte, han
 		// we get a random peerID key that we compare minimum version that
 		// we have
 		if minVersion == nil || nodeVersion.Compare(minVersion) >= 0 {
-			return n.request(nodeID, request, handler)
+			return nodeID, n.request(nodeID, request, handler)
 		}
 	}
 
 	n.activeRequests.Release(1)
-	return fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, len(n.peers))
+	return ids.ShortEmpty, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, len(n.peers))
 }
 
 // Request sends request message bytes to specified nodeID, notifying the responseHandler on response or failure

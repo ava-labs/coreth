@@ -43,6 +43,19 @@ func TestUnmarshalConfig(t *testing.T) {
 			Config{},
 			true,
 		},
+
+		{
+			"state sync enabled",
+			[]byte(`{"state-sync-enabled":true}`),
+			Config{StateSyncEnabled: true},
+			false,
+		},
+		{
+			"state sync sources",
+			[]byte(`{"state-sync-ids": ["CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"]}`),
+			Config{StateSyncIDs: []string{"CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"}},
+			false,
+		},
 	}
 
 	for _, tt := range tests {

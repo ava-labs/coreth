@@ -45,13 +45,14 @@ func TestBlockRequestHandler(t *testing.T) {
 		t.Fatal("error building codec", err)
 	}
 
+	mockHandlerStats := &stats.MockHandlerStats{}
 	blockRequestHandler := NewBlockRequestHandler(func(hash common.Hash, height uint64) *types.Block {
 		blk, ok := blocksDB[hash]
 		if !ok || blk.NumberU64() != height {
 			return nil
 		}
 		return blk
-	}, codec, stats.NewNoopHandlerStats())
+	}, codec, mockHandlerStats)
 
 	tests := []struct {
 		name string
@@ -64,6 +65,7 @@ func TestBlockRequestHandler(t *testing.T) {
 		requestedParents  uint16
 		expectedBlocks    int
 		expectNilResponse bool
+		assertResponse    func(t *testing.T, response []byte)
 	}{
 		{
 			name:             "handler_returns_blocks_as_requested",
@@ -89,6 +91,9 @@ func TestBlockRequestHandler(t *testing.T) {
 			startBlockHeight:  1_000_000,
 			requestedParents:  64,
 			expectNilResponse: true,
+			assertResponse: func(t *testing.T, _ []byte) {
+				assert.Equal(t, 1, mockHandlerStats.MissingBlockHashCount)
+			},
 		},
 	}
 	for _, test := range tests {
@@ -131,6 +136,7 @@ func TestBlockRequestHandler(t *testing.T) {
 				assert.Equal(t, blocks[test.startBlockIndex].Hash(), block.Hash())
 				test.startBlockIndex--
 			}
+			mockHandlerStats.Reset()
 		})
 	}
 }

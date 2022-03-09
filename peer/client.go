@@ -24,7 +24,7 @@ type Client interface {
 	// A peer is considered a match if its version is greater than or equal to the specified minVersion
 	// Returns errNoPeersMatchingVersion if no peer could be found matching specified version
 	// and errRequestFailed if the request should be retried.
-	RequestAny(minVersion version.Application, request []byte) ([]byte, error)
+	RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error)
 
 	// Request synchronously sends request to the selected nodeID
 	// Returns response bytes
@@ -44,16 +44,17 @@ type client struct {
 // RequestAny synchronously sends request to the first connected peer that matches the specified minVersion in
 // random order and blocks until it receives a response or the request could not be sent or times out.
 // Returns the response bytes from the peer.
-func (c *client) RequestAny(minVersion version.Application, request []byte) ([]byte, error) {
+func (c *client) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error) {
 	waitingHandler := newWaitingResponseHandler()
-	if err := c.network.RequestAny(minVersion, request, waitingHandler); err != nil {
-		return nil, err
+	nodeID, err := c.network.RequestAny(minVersion, request, waitingHandler)
+	if err != nil {
+		return nil, ids.ShortEmpty, err
 	}
 	response := <-waitingHandler.responseChan
 	if waitingHandler.failed {
-		return nil, errRequestFailed
+		return nil, ids.ShortEmpty, errRequestFailed
 	}
-	return response, nil
+	return response, nodeID, nil
 }
 
 // Request synchronously sends [request] message to specified [nodeID]

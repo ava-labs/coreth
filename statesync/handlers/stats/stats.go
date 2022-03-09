@@ -25,6 +25,7 @@ type HandlerStats interface {
 
 	// LeafsRequestHandler stats
 	IncLeafsRequest()
+	IncInvalidLeafsRequest()
 	UpdateLeafsReturned(numLeafs uint16)
 	UpdateLeafsRequestProcessingTime(duration time.Duration)
 	IncMissingRoot()
@@ -45,6 +46,7 @@ type handlerStats struct {
 
 	// LeafsRequestHandler stats
 	leafsRequest               metrics.Counter
+	invalidLeafsRequest        metrics.Counter
 	leafsReturned              metrics.Histogram
 	leafsRequestProcessingTime metrics.Timer
 	missingRoot                metrics.Counter
@@ -86,6 +88,10 @@ func (h *handlerStats) IncLeafsRequest() {
 	h.leafsRequest.Inc(1)
 }
 
+func (h *handlerStats) IncInvalidLeafsRequest() {
+	h.invalidLeafsRequest.Inc(1)
+}
+
 func (h *handlerStats) UpdateLeafsRequestProcessingTime(duration time.Duration) {
 	h.leafsRequestProcessingTime.Update(duration)
 }
@@ -114,6 +120,7 @@ func NewHandlerStats() HandlerStats {
 
 		// initialise leafs request stats
 		leafsRequest:               metrics.GetOrRegisterCounter("leafs_request", nil),
+		invalidLeafsRequest:        metrics.GetOrRegisterCounter("invalid_leafs_request", nil),
 		leafsRequestProcessingTime: metrics.GetOrRegisterTimer("leafs_request_processing_time", nil),
 		leafsReturned:              metrics.GetOrRegisterHistogram("leafs_returned", nil, metrics.NewExpDecaySample(1028, 0.015)),
 		missingRoot:                metrics.GetOrRegisterCounter("missing_root", nil),
@@ -137,6 +144,7 @@ func (n *noopHandlerStats) IncMissingCodeHash()                            {}
 func (n *noopHandlerStats) UpdateCodeReadTime(time.Duration)               {}
 func (n *noopHandlerStats) UpdateCodeBytesReturned(uint32)                 {}
 func (n *noopHandlerStats) IncLeafsRequest()                               {}
+func (n *noopHandlerStats) IncInvalidLeafsRequest()                        {}
 func (n *noopHandlerStats) UpdateLeafsRequestProcessingTime(time.Duration) {}
 func (n *noopHandlerStats) UpdateLeafsReturned(uint16)                     {}
 func (n *noopHandlerStats) IncMissingRoot()                                {}

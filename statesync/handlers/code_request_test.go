@@ -33,7 +33,8 @@ func TestCodeRequestHandler(t *testing.T) {
 	codeHash := crypto.Keccak256Hash(codeBytes)
 	rawdb.WriteCode(database, codeHash, codeBytes)
 
-	codeRequestHandler := NewCodeRequestHandler(database, stats.NewNoopHandlerStats(), codec)
+	mockHandlerStats := &stats.MockHandlerStats{}
+	codeRequestHandler := NewCodeRequestHandler(database, mockHandlerStats, codec)
 
 	// query for known code entry
 	responseBytes, err := codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestShortID(), 1, message.CodeRequest{Hash: codeHash})
@@ -44,11 +45,16 @@ func TestCodeRequestHandler(t *testing.T) {
 		t.Fatal("error unmarshalling CodeResponse", err)
 	}
 	assert.True(t, bytes.Equal(codeBytes, response.Data))
+	assert.EqualValues(t, 1, mockHandlerStats.CodeRequestCount)
+	assert.EqualValues(t, len(response.Data), mockHandlerStats.CodeBytesReturnedSum)
+	mockHandlerStats.Reset()
 
 	// query for missing code entry
 	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestShortID(), 2, message.CodeRequest{Hash: common.BytesToHash([]byte("some unknown hash"))})
 	assert.NoError(t, err)
 	assert.Nil(t, responseBytes)
+	assert.EqualValues(t, 1, mockHandlerStats.MissingCodeHashCount)
+	mockHandlerStats.Reset()
 
 	// assert max size code bytes are handled
 	codeBytes = make([]byte, params.MaxCodeSize)
@@ -67,4 +73,6 @@ func TestCodeRequestHandler(t *testing.T) {
 		t.Fatal("error unmarshalling CodeResponse", err)
 	}
 	assert.True(t, bytes.Equal(codeBytes, response.Data))
+	assert.EqualValues(t, 1, mockHandlerStats.CodeRequestCount)
+	assert.EqualValues(t, len(response.Data), mockHandlerStats.CodeBytesReturnedSum)
 }

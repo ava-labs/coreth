@@ -30,6 +30,8 @@ const (
 	defaultOfflinePruningBloomFilterSize uint64 = 512 // Default size (MB) for the offline pruner to use
 	defaultLogLevel                             = "info"
 	defaultMaxOutboundActiveRequests            = 8
+	defaultStateSyncServerTrieCache             = 64 // MB
+	defaultStateSyncMetricsEnabled              = true
 )
 
 var defaultEnabledAPIs = []string{
@@ -109,6 +111,12 @@ type Config struct {
 
 	// VM2VM network
 	MaxOutboundActiveRequests int64 `json:"max-outbound-active-requests"`
+
+	// Sync settings
+	StateSyncEnabled         bool     `json:"state-sync-enabled"`
+	StateSyncMetricsEnabled  bool     `json:"state-sync-metrics-enabled"`
+	StateSyncServerTrieCache int      `json:"state-sync-server-trie-cache"`
+	StateSyncIDs             []string `json:"state-sync-ids"`
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled
@@ -139,6 +147,8 @@ func (c *Config) SetDefaults() {
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
 	c.LogLevel = defaultLogLevel
 	c.MaxOutboundActiveRequests = defaultMaxOutboundActiveRequests
+	c.StateSyncServerTrieCache = defaultStateSyncServerTrieCache
+	c.StateSyncMetricsEnabled = defaultStateSyncMetricsEnabled
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
