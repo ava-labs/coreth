@@ -6,8 +6,9 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/ava-labs/avalanchego/chains/atomic"
 	"time"
+
+	"github.com/ava-labs/avalanchego/chains/atomic"
 
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core"

@@ -10,8 +10,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils/wrappers"
-
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -93,9 +91,14 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		limit = maxLeavesLimit
 	}
 
-	var leafsResponse message.LeafsResponse
-	// more indicates whether there are more leaves in the trie
-	more := false
+	var (
+		leafsResponse message.LeafsResponse
+		// more indicates whether there are more leaves in the trie
+		more = false
+
+		// end is the last key included in the response
+		end = leafsRequest.End
+	)
 	for it.Next() {
 		// if we're at the end, break this loop
 		if bytes.Compare(it.Key, leafsRequest.End) > 0 {
@@ -126,11 +129,23 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 	}
 
 	// only generate proof if we're not returning the full trie
-	// we determine this based on the starting point of the trie iteration and if there are more keys in the trie
-	// than what we are returning.
+	// we determine this based on if the starting point is nil and if the iterator
+	// indicates that are more leaves in the trie.
 	if leafsRequest.Start != nil || more {
+		start := leafsRequest.Start
+		// If [start] in the request is empty, populate it with the appropriate length
+		// key starting at 0.
+		if len(start) == 0 {
+			start = bytes.Repeat([]byte{0x00}, getKeyLength(leafsRequest.NodeType))
+		}
+		// If there is a non-zero number of keys, set [end] for the range proof to the
+		// last key included in the response.
+		if len(leafsResponse.Keys) > 0 {
+			end = leafsResponse.Keys[len(leafsResponse.Keys)-1]
+		}
+		leafsResponse.ProofKeys, leafsResponse.ProofVals, err = GenerateRangeProof(t, start, end)
 		// Generate the proof and add it to the response.
-		if err = lrh.addProofKeys(t, &leafsRequest, &leafsResponse); err != nil {
+		if err != nil {
 			log.Debug("failed to create valid proof serving leafs request", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest, "err", err)
 			return nil, nil
 		}
@@ -146,42 +161,32 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 	return responseBytes, nil
 }
 
-func (lrh *LeafsRequestHandler) addProofKeys(t *trie.Trie, leafsRequest *message.LeafsRequest, leafsResponse *message.LeafsResponse) error {
+// GenerateRangeProof returns the required proof key-values pairs for the range proof of
+// [t] from [start, end].
+func GenerateRangeProof(t *trie.Trie, start, end []byte) ([][]byte, [][]byte, error) {
 	proof := memorydb.New()
 	defer proof.Close() // Closing the memorydb should never error
 
-	// Set the end of the range proof to the right edge of the leaf request.
-	firstKey := leafsRequest.Start
-	end := leafsRequest.End
-	// If there is a non-zero number of keys, set the end of the range proof to be the last
-	// key-value pair in the response instead.
-	if len(leafsResponse.Keys) > 0 {
-		if len(firstKey) == 0 {
-			keyLen := getKeyLength(leafsRequest.NodeType)
-			firstKey = bytes.Repeat([]byte{0x00}, keyLen)
-		}
-
-		end = leafsResponse.Keys[len(leafsResponse.Keys)-1]
-	}
-
-	if err := t.Prove(firstKey, 0, proof); err != nil {
-		return err
+	if err := t.Prove(start, 0, proof); err != nil {
+		return nil, nil, err
 	}
 
 	if err := t.Prove(end, 0, proof); err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// dump proof into response
 	proofIt := proof.NewIterator(nil, nil)
 	defer proofIt.Release()
 
+	keys := make([][]byte, 0, proof.Len())
+	values := make([][]byte, 0, proof.Len())
 	for proofIt.Next() {
-		leafsResponse.ProofKeys = append(leafsResponse.ProofKeys, proofIt.Key())
-		leafsResponse.ProofVals = append(leafsResponse.ProofVals, proofIt.Value())
+		keys = append(keys, proofIt.Key())
+		values = append(values, proofIt.Value())
 	}
 
-	return proofIt.Error()
+	return keys, values, proofIt.Error()
 }
 
 // getKeyLength returns trie key length for given nodeType
@@ -189,7 +194,7 @@ func (lrh *LeafsRequestHandler) addProofKeys(t *trie.Trie, leafsRequest *message
 func getKeyLength(nodeType message.NodeType) int {
 	switch nodeType {
 	case message.AtomicTrieNode:
-		return common.HashLength + wrappers.LongLen
+		return 40
 	case message.StateTrieNode:
 		return common.HashLength
 	}

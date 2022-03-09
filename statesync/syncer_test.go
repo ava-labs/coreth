@@ -507,7 +507,6 @@ func TestResumeSync(t *testing.T) {
 	}
 	err = s.Error()
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
 
 	progress, err = NewProgressMarker(clientDB, codec, uint(numThreads))
 	if err != nil {
