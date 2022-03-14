@@ -135,7 +135,11 @@ func TestCancel(t *testing.T) {
 	// that gives us time to cancel the context and assert the correct error
 	waitCh := make(chan struct{}, 1)
 	waitCh <- struct{}{}
-	leafResponse := message.LeafsResponse{More: true} // set more to true so client will attempt more requests
+	leafResponse := message.LeafsResponse{
+		Keys: [][]byte{[]byte("key")},
+		Vals: [][]byte{[]byte("val")},
+		More: true, // set more to true so client will attempt more requests
+	}
 	s, err := NewStateSyncer(common.Hash{}, &testingClient{leafs: leafResponse}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)

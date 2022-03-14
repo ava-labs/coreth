@@ -147,12 +147,13 @@ func parseLeafsResponse(codec codec.Manager, reqIntf message.Request, data []byt
 		firstKey = leafsRequest.Start
 		lastKey  = leafsRequest.End
 	)
-	if firstKey == nil {
-		firstKey = bytes.Repeat([]byte{0x00}, len(leafsRequest.End))
-	}
 	// Last key is the last returned key in response
 	if len(leafsResponse.Keys) > 0 {
 		lastKey = leafsResponse.Keys[len(leafsResponse.Keys)-1]
+
+		if firstKey == nil {
+			firstKey = bytes.Repeat([]byte{0x00}, len(lastKey))
+		}
 	}
 
 	// VerifyRangeProof verifies that the key-value pairs included in [leafResponse] are all of the keys within the range from start

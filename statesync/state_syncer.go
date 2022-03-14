@@ -84,10 +84,6 @@ func NewStateSyncer(root common.Hash, client Client, numThreads int, stats stats
 	if err := RestoreMainTrieProgressFromSnapshot(db, progressMarker.MainTrie); err != nil {
 		return nil, err
 	}
-	// TODO: remove (when handlers are updated to support nil start.)
-	if progressMarker.MainTrie.startFrom == nil {
-		progressMarker.MainTrie.startFrom = bytes.Repeat([]byte{0x00}, common.HashLength)
-	}
 
 	for _, storageProgress := range progressMarker.StorageTries {
 		storageProgress.TrieProgress = NewTrieProgress(db, commitCap)
@@ -97,10 +93,6 @@ func NewStateSyncer(root common.Hash, client Client, numThreads int, stats stats
 		// from the first account's storage snapshot
 		if err := RestoreStorageTrieProgressFromSnapshot(db, storageProgress.TrieProgress, storageProgress.Account); err != nil {
 			return nil, err
-		}
-		// TODO: remove (when handlers are updated to support nil start.)
-		if storageProgress.startFrom == nil {
-			storageProgress.startFrom = bytes.Repeat([]byte{0x00}, common.HashLength)
 		}
 	}
 

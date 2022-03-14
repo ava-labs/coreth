@@ -10,6 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -55,10 +56,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 	startTime := time.Now()
 	lrh.stats.IncLeafsRequest()
 
-	leafCount := uint16(0)
-
-	if (leafsRequest.Start != nil && bytes.Compare(leafsRequest.Start, leafsRequest.End) > 0) ||
-		len(leafsRequest.End) == 0 ||
+	if (len(leafsRequest.End) > 0 && bytes.Compare(leafsRequest.Start, leafsRequest.End) > 0) ||
 		leafsRequest.Root == (common.Hash{}) ||
 		leafsRequest.Root == types.EmptyRootHash ||
 		leafsRequest.Limit == 0 {
@@ -75,6 +73,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 	}
 
 	// ensure metrics are captured properly on all return paths
+	leafCount := uint16(0)
 	defer func() {
 		lrh.stats.UpdateLeafsRequestProcessingTime(time.Since(startTime))
 		lrh.stats.UpdateLeafsReturned(leafCount)
@@ -91,18 +90,14 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		limit = maxLeavesLimit
 	}
 
-	var (
-		leafsResponse message.LeafsResponse
-		// more indicates whether there are more leaves in the trie
-		more = false
+	var leafsResponse message.LeafsResponse
 
-		// end is the last key included in the response
-		end = leafsRequest.End
-	)
+	// more indicates whether there are more leaves in the trie
+	more := false
 	for it.Next() {
 		// if we're at the end, break this loop
-		if bytes.Compare(it.Key, leafsRequest.End) > 0 {
-			more = it.Next()
+		if len(leafsRequest.End) > 0 && bytes.Compare(it.Key, leafsRequest.End) > 0 {
+			more = true
 			break
 		}
 
@@ -113,7 +108,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 				log.Debug("context err set before any leafs were iterated", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest, "ctxErr", ctx.Err())
 				return nil, nil
 			}
-			more = it.Next()
+			more = true
 			break
 		}
 
@@ -131,7 +126,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 	// only generate proof if we're not returning the full trie
 	// we determine this based on if the starting point is nil and if the iterator
 	// indicates that are more leaves in the trie.
-	if leafsRequest.Start != nil || more {
+	if len(leafsRequest.Start) > 0 || more {
 		start := leafsRequest.Start
 		// If [start] in the request is empty, populate it with the appropriate length
 		// key starting at 0.
@@ -140,6 +135,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		}
 		// If there is a non-zero number of keys, set [end] for the range proof to the
 		// last key included in the response.
+		end := leafsRequest.End
 		if len(leafsResponse.Keys) > 0 {
 			end = leafsResponse.Keys[len(leafsResponse.Keys)-1]
 		}
@@ -194,7 +190,7 @@ func GenerateRangeProof(t *trie.Trie, start, end []byte) ([][]byte, [][]byte, er
 func getKeyLength(nodeType message.NodeType) int {
 	switch nodeType {
 	case message.AtomicTrieNode:
-		return 40
+		return wrappers.LongLen + common.HashLength
 	case message.StateTrieNode:
 		return common.HashLength
 	}

@@ -8,9 +8,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/types"
-
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers/stats"
@@ -119,12 +118,10 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.Nil(t, err)
 			},
 		},
-		"nil start and end range dropped": {
+		"nil start and end range returns entire trie": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				return ctx, message.LeafsRequest{
-					Root:     largeTrieRoot,
+				return context.Background(), message.LeafsRequest{
+					Root:     smallTrieRoot,
 					Start:    nil,
 					End:      nil,
 					Limit:    maxLeavesLimit,
@@ -132,17 +129,20 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				}
 			},
 			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, mockHandlerStats.InvalidLeafsRequestCount)
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.Len(t, leafsResponse.Keys, 500)
+				assert.Len(t, leafsResponse.Vals, 500)
+				assert.Len(t, leafsResponse.ProofKeys, 0)
+				assert.Len(t, leafsResponse.ProofVals, 0)
 			},
 		},
-		"nil end range dropped": {
+		"nil end range treated like greatest possible value": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				return ctx, message.LeafsRequest{
-					Root:     largeTrieRoot,
+				return context.Background(), message.LeafsRequest{
+					Root:     smallTrieRoot,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      nil,
 					Limit:    maxLeavesLimit,
@@ -150,9 +150,12 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				}
 			},
 			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, mockHandlerStats.InvalidLeafsRequestCount)
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.Len(t, leafsResponse.Keys, 500)
+				assert.Len(t, leafsResponse.Vals, 500)
 			},
 		},
 		"end greater than start dropped": {
