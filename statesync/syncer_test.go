@@ -86,8 +86,6 @@ func TestSimpleTrieSync(t *testing.T) {
 
 type testingClient struct {
 	leafs  message.LeafsResponse
-	blocks []*types.Block
-	code   []byte
 	err    error
 	waitCh <-chan struct{}
 }
@@ -105,17 +103,11 @@ func (tc *testingClient) GetLeafs(req message.LeafsRequest) (message.LeafsRespon
 }
 
 func (tc *testingClient) GetBlocks(common.Hash, uint64, uint16) ([]*types.Block, error) {
-	if tc.waitCh != nil {
-		<-tc.waitCh
-	}
-	return tc.blocks, tc.err
+	panic("not implemented")
 }
 
 func (tc *testingClient) GetCode(common.Hash) ([]byte, error) {
-	if tc.waitCh != nil {
-		<-tc.waitCh
-	}
-	return tc.code, tc.err
+	panic("not implemented")
 }
 
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
@@ -143,7 +135,8 @@ func TestCancel(t *testing.T) {
 	// that gives us time to cancel the context and assert the correct error
 	waitCh := make(chan struct{}, 1)
 	waitCh <- struct{}{}
-	s, err := NewStateSyncer(common.Hash{}, &testingClient{leafs: message.LeafsResponse{}}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	leafResponse := message.LeafsResponse{More: true} // set more to true so client will attempt more requests
+	s, err := NewStateSyncer(common.Hash{}, &testingClient{leafs: leafResponse}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
