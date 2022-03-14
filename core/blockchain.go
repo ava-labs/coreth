@@ -28,6 +28,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -102,15 +103,16 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit       int     // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieDirtyLimit       int     // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	Pruning              bool    // Whether to disable trie write caching and GC altogether (archive node)
-	PopulateMissingTries *uint64 // If non-nil, sets the starting height for re-generating historical tries.
-	AllowMissingTries    bool    // Whether to allow an archive node to run with pruning enabled
-	SnapshotLimit        int     // Memory allowance (MB) to use for caching snapshot entries in memory
-	SnapshotAsync        bool    // Generate snapshot tree async
-	SnapshotVerify       bool    // Verify generated snapshots
-	Preimages            bool    // Whether to store preimage of trie key to the disk
+	TrieCleanLimit                  int     // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieDirtyLimit                  int     // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	Pruning                         bool    // Whether to disable trie write caching and GC altogether (archive node)
+	PopulateMissingTries            *uint64 // If non-nil, sets the starting height for re-generating historical tries.
+	PopulateMissingTriesParallelism int     // Is the number of readers to use when trying to populate missing tries.
+	AllowMissingTries               bool    // Whether to allow an archive node to run with pruning enabled
+	SnapshotLimit                   int     // Memory allowance (MB) to use for caching snapshot entries in memory
+	SnapshotAsync                   bool    // Generate snapshot tree async
+	SnapshotVerify                  bool    // Verify generated snapshots
+	Preimages                       bool    // Whether to store preimage of trie key to the disk
 }
 
 var DefaultCacheConfig = &CacheConfig{
@@ -167,9 +169,7 @@ type BlockChain struct {
 	blockCache    *lru.Cache // Cache for the most recent entire blocks
 	txLookupCache *lru.Cache // Cache for the most recent transaction lookup data.
 
-	quit    chan struct{}  // blockchain quit channel
-	wg      sync.WaitGroup // chain processing wait group for shutting down
-	running int32          // 0 if chain is running, 1 when stopped
+	running int32 // 0 if chain is running, 1 when stopped
 
 	engine     consensus.Engine
 	validator  Validator  // Block and state validator interface
@@ -208,7 +208,6 @@ func NewBlockChain(
 			Cache:     cacheConfig.TrieCleanLimit,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:          make(chan struct{}),
 		bodyCache:     bodyCache,
 		receiptsCache: receiptsCache,
 		blockCache:    blockCache,
@@ -539,12 +538,11 @@ func (bc *BlockChain) Stop() {
 		return
 	}
 
+	// Stop senderCacher's goroutines
+	bc.senderCacher.Shutdown()
+
 	// Unsubscribe all subscriptions registered from blockchain.
 	bc.scope.Close()
-
-	// Signal shutdown to all goroutines.
-	close(bc.quit)
-	bc.wg.Wait()
 
 	if err := bc.stateManager.Shutdown(); err != nil {
 		log.Error("Failed to Shutdown state manager", "err", err)
@@ -705,9 +703,6 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
 		if err := bc.reorg(current, block); err != nil {
@@ -759,9 +754,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 // writeBlockWithState writes the block and all associated state to the database,
 // but it expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(hash->number map, header, body, receipts)
@@ -835,9 +827,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 	}
 	// Pre-checks passed, start the full block imports
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 	for n, block := range chain {
@@ -857,11 +846,9 @@ func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
-	bc.wg.Add(1)
 	bc.chainmu.Lock()
 	err := bc.insertBlock(block, writes)
 	bc.chainmu.Unlock()
-	bc.wg.Done()
 
 	return err
 }
@@ -1373,28 +1360,32 @@ func (bc *BlockChain) populateMissingTries() error {
 		return fmt.Errorf("failed to fetch initial parent block for re-populate missing tries at height %d", startHeight-1)
 	}
 
-	for i := startHeight; i < lastAccepted; i++ {
-		// TODO: handle canceled context
+	it := newBlockChainIterator(bc, startHeight, bc.cacheConfig.PopulateMissingTriesParallelism)
+	defer it.Stop()
 
+	for i := startHeight; i < lastAccepted; i++ {
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second {
 			log.Info("Populating missing tries", "missing", missing, "block", i, "remaining", lastAccepted-i, "elapsed", time.Since(startTime))
 			logged = time.Now()
 		}
-		// Retrieve the next block to regenerate and process it (if its root
-		// doesn't exist)
-		current := bc.GetBlockByNumber(i)
-		if current == nil {
-			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
+
+		// TODO: handle canceled context
+		current, hasState, err := it.Next(context.TODO())
+		if err != nil {
+			return fmt.Errorf("error while populating missing tries: %w", err)
 		}
-		if bc.HasState(current.Root()) {
+
+		if hasState {
 			parent = current
 			continue
 		}
+
 		root, err := bc.reprocessBlock(parent, current)
 		if err != nil {
 			return err
 		}
+
 		// Commit root to disk so that it can be accessed directly
 		if err := triedb.Commit(root, false, nil); err != nil {
 			return err
