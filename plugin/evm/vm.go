@@ -17,14 +17,8 @@ import (
 	"sync"
 	"time"
 
-	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-
-	"github.com/ava-labs/coreth/plugin/evm/message"
-
-	"github.com/ava-labs/coreth/statesync/handlers"
-	"github.com/ava-labs/coreth/trie"
-
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
+
 	coreth "github.com/ava-labs/coreth/chain"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -35,8 +29,12 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/statesync/handlers"
+	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
 	syncerstats "github.com/ava-labs/coreth/statesync/stats"
+	"github.com/ava-labs/coreth/trie"
 
 	"github.com/prometheus/client_golang/prometheus"
 	// Force-load tracer engine to trigger registration
@@ -129,16 +127,14 @@ const (
 
 var (
 	// Set last accepted key to be longer than the keys used to store accepted block IDs.
-	lastAcceptedKey = []byte("last_accepted_key")
-	acceptedPrefix  = []byte("snowman_accepted")
-	ethDBPrefix     = []byte("ethdb")
+	lastAcceptedKey        = []byte("last_accepted_key")
+	acceptedPrefix         = []byte("snowman_accepted")
+	ethDBPrefix            = []byte("ethdb")
+	pruneRejectedBlocksKey = []byte("pruned_rejected_blocks")
 
 	// Prefixes for atomic trie
 	atomicTrieDBPrefix     = []byte("atomicTrieDB")
 	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
-
-	// Prefixes for pruning
-	pruneRejectedBlocksKey = []byte("pruned_rejected_blocks")
 )
 
 var (
@@ -201,7 +197,7 @@ type vmState struct {
 	// block.
 	acceptedBlockDB database.Database
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
+	atomicTrie *atomicTrie
 }
 
 // VM implements the snowman.ChainVM interface

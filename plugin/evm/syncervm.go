@@ -63,8 +63,18 @@ type stateSyncConfig struct {
 	stateSyncIDs []ids.ShortID
 }
 
+// Syncer represents a step in state sync,
+// along with Start/Done methods to control
+// and monitor progress.
+// Error returns an error if any was encountered.
+type Syncer interface {
+	Start(ctx context.Context)
+	Error() error
+	Done() <-chan struct{}
+}
+
 type stateSyncer struct {
-	syncer           statesync.Syncer
+	syncer           Syncer
 	stateSyncError   error
 	stateSyncSummary commonEng.Summary
 	stateSyncBlock   message.SyncableBlock
@@ -298,24 +308,24 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 	vm.cancel = cancel
 	defer cancel()
 
-	atomicSync := func() error { return vm.syncAtomicTrie(ctx, commitCap) }
-	if err := vm.doWithMarker(atomicSyncDoneKey, "atomic sync", atomicSync); err != nil {
+	atomicSync := func() error { return vm.syncAtomicTrie(ctx) }
+	if err := vm.stateSyncStepWithMarker(atomicSyncDoneKey, "atomic sync", atomicSync); err != nil {
 		vm.stateSyncError = err
 		return
 	}
 
 	stateSync := func() error { return vm.syncStateTrie(ctx, commitCap) }
-	if err := vm.doWithMarker(stateSyncDoneKey, "state sync", stateSync); err != nil {
+	if err := vm.stateSyncStepWithMarker(stateSyncDoneKey, "state sync", stateSync); err != nil {
 		vm.stateSyncError = err
 		return
 	}
 }
 
-// doWithMarker executes work function if marker specified in doneKey is not set
+// stateSyncStepWithMarker executes work function if marker specified in doneKey is not set
 // Sets marker in doneKey if work function returns no errors
 // Does nothing if marker in doneKey is already set
 // name is for logging purposes only
-func (vm *stateSyncer) doWithMarker(doneKey []byte, name string, work func() error) error {
+func (vm *stateSyncer) stateSyncStepWithMarker(doneKey []byte, name string, work func() error) error {
 	if done, err := vm.db.Has(doneKey); err != nil {
 		return err
 	} else if done {
@@ -333,11 +343,16 @@ func (vm *stateSyncer) doWithMarker(doneKey []byte, name string, work func() err
 	return vm.db.Commit()
 }
 
-func (vm *stateSyncer) syncAtomicTrie(ctx context.Context, commitCap int) error {
+func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", vm.stateSyncBlock.AtomicRoot)
-	vm.syncer = statesync.NewLeafSyncer(
-		message.AtomicTrieNode, 40, vm.atomicTrie.TrieDB().DiskDB(), vm.db.Commit, commitCap, nil, vm.client, 1, stats.NewStats())
-	vm.syncer.Start(ctx, vm.stateSyncBlock.AtomicRoot)
+	vm.syncer = newAtomicSyncer(
+		vm.atomicTrie,
+		vm.stateSyncBlock.AtomicRoot,
+		vm.stateSyncBlock.BlockNumber,
+		vm.client,
+		stats.NewStats(),
+	)
+	vm.syncer.Start(ctx)
 	<-vm.syncer.Done()
 	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", vm.syncer.Error())
 	return vm.syncer.Error()
@@ -345,16 +360,14 @@ func (vm *stateSyncer) syncAtomicTrie(ctx context.Context, commitCap int) error 
 
 func (vm *stateSyncer) syncStateTrie(ctx context.Context, commitCap int) error {
 	log.Info("state sync: sync starting", "root", vm.stateSyncBlock.BlockRoot)
-	progressMarker, err := statesync.NewProgressMarker(vm.chaindb, vm.netCodec, 4)
+	syncer, err := statesync.NewStateSyncer(
+		vm.stateSyncBlock.BlockRoot, vm.client, 4, stats.NewStats(), vm.chaindb, commitCap)
 	if err != nil {
 		return err
 	}
-
-	vm.syncer = statesync.NewLeafSyncer(
-		message.StateTrieNode, 32, vm.chaindb, nil, commitCap, progressMarker, vm.client, 4, stats.NewStats())
-	vm.syncer.Start(ctx, vm.stateSyncBlock.BlockRoot)
+	vm.syncer = syncer
+	vm.syncer.Start(ctx)
 	<-vm.syncer.Done()
-
 	log.Info("state sync: sync finished", "root", vm.stateSyncBlock.BlockRoot, "err", vm.syncer.Error())
 	return vm.syncer.Error()
 }
@@ -490,9 +503,6 @@ func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
 // - updates lastAcceptedKey
 // - removes state sync progress markers
 func (vm *stateSyncer) updateVMMarkers() error {
-	if err := vm.atomicTrie.UpdateLastCommitted(vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber); err != nil {
-		return err
-	}
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.stateSyncBlock] when ApplyToSharedMemory
 	// is called.

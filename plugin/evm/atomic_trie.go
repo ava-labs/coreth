@@ -9,17 +9,15 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
-
-	"github.com/ava-labs/avalanchego/utils/units"
-	"github.com/ava-labs/coreth/core"
-
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -29,6 +27,7 @@ const (
 	trieCommitSizeCap    = 10 * units.MiB
 	commitHeightInterval = core.CommitInterval
 	progressLogUpdate    = 30 * time.Second
+	atomicKeyLength      = wrappers.LongLen + common.HashLength
 )
 
 var (
@@ -52,11 +51,6 @@ type AtomicTrie interface {
 
 	// LastCommitted returns the last committed hash and corresponding block height
 	LastCommitted() (common.Hash, uint64)
-
-	// UpdateLastCommitted sets the state to last committed hash and height
-	// This function is used by statesync.Syncer to set the atomic trie metadata
-	// as it is not synced as part of the atomic trie.
-	UpdateLastCommitted(hash common.Hash, height uint64) error
 
 	// TrieDB returns the underlying trie database
 	TrieDB() *trie.Database
@@ -132,7 +126,7 @@ var _ AtomicTrie = &atomicTrie{}
 func NewAtomicTrie(
 	db *versiondb.Database, sharedMemory atomic.SharedMemory,
 	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository, codec codec.Manager, lastAcceptedHeight uint64,
-) (AtomicTrie, error) {
+) (*atomicTrie, error) {
 	return newAtomicTrie(db, sharedMemory, bonusBlocks, repo, codec, lastAcceptedHeight, commitHeightInterval)
 }
 
@@ -400,7 +394,7 @@ func (a *atomicTrie) commit(height uint64) error {
 		return err
 	}
 
-	if err := a.UpdateLastCommitted(hash, height); err != nil {
+	if err := a.updateLastCommitted(hash, height); err != nil {
 		return err
 	}
 	return nil
@@ -416,7 +410,7 @@ func (a *atomicTrie) updateTrie(height uint64, atomicOps map[ids.ID]*atomic.Requ
 		}
 
 		// key is [height]+[blockchainID]
-		keyPacker := wrappers.Packer{Bytes: make([]byte, wrappers.LongLen+common.HashLength)}
+		keyPacker := wrappers.Packer{Bytes: make([]byte, atomicKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
 		if err := a.trie.TryUpdate(keyPacker.Bytes, valueBytes); err != nil {
@@ -432,9 +426,9 @@ func (a *atomicTrie) LastCommitted() (common.Hash, uint64) {
 	return a.lastCommittedHash, a.lastCommittedHeight
 }
 
-// UpdateLastCommitted adds [height] -> [root] to the index and marks it as the last committed
+// updateLastCommitted adds [height] -> [root] to the index and marks it as the last committed
 // root/height pair.
-func (a *atomicTrie) UpdateLastCommitted(root common.Hash, height uint64) error {
+func (a *atomicTrie) updateLastCommitted(root common.Hash, height uint64) error {
 	heightBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(heightBytes, height)
 

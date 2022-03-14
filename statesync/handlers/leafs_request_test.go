@@ -29,8 +29,8 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	memdb := memorydb.New()
 	trieDB := trie.NewDatabase(memdb)
 
-	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000)
-	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500)
+	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
 
 	leafsHandler := NewLeafsRequestHandler(trieDB, mockHandlerStats, codec)
 
@@ -280,9 +280,8 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 		"partial mid range": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				startKey := largeTrieKeys[1_000]
-				startKey[31] = startKey[31] + 1
-				endKey := largeTrieKeys[1_040]
-				endKey[31] = endKey[31] - 1
+				startKey[31] = startKey[31] + 1 // exclude start key from response
+				endKey := largeTrieKeys[1_040]  // include end key in response
 				return context.Background(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    startKey,

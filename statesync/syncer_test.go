@@ -14,14 +14,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ava-labs/avalanchego/codec"
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/units"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
-	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers"
 	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
@@ -32,7 +29,6 @@ import (
 )
 
 const commitCap = 1 * units.MiB
-const testMaxRetryDelay = 10 * time.Millisecond
 
 func TestSimpleTrieSync(t *testing.T) {
 	var (
@@ -44,279 +40,18 @@ func TestSimpleTrieSync(t *testing.T) {
 	root, serverTrie := setupTestTrie(t, serverTrieDB)
 
 	// setup client
-	peerID := ids.GenerateTestShortID()
 	clientDB := memorydb.New()
-	var net peer.Network
-	sender := newTestSender(t, 10*time.Millisecond, func(nodeIDs ids.ShortSet, requestID uint32, requestBytes []byte) error {
-		assert.Len(t, nodeIDs, 1)
-		nodeID, exists := nodeIDs.Pop()
-		assert.True(t, exists)
-		assert.Equal(t, nodeID, peerID)
-		go func() {
-			err := net.AppRequest(nodeID, requestID, defaultDeadline(), requestBytes)
-			assert.NoError(t, err)
-		}()
-		return nil
-	}, func(nodeID ids.ShortID, requestID uint32, bytes []byte) error {
-		assert.Equal(t, nodeID, peerID)
-		go func() {
-			err := net.AppResponse(nodeID, requestID, bytes)
-			assert.NoError(t, err)
-		}()
-		return nil
-	})
 	codec := getSyncCodec(t)
-	net = peer.NewNetwork(sender, codec, ids.ShortEmpty, 4)
-	sender.network = net
-	netClient := peer.NewClient(net)
-
-	assert.NoError(t, net.Connected(peerID, StateSyncVersion))
-	client := NewClient(netClient, 16, testMaxRetryDelay, codec, nil)
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
 	codeRequestHandler := handlers.NewCodeRequestHandler(nil, handlerstats.NewNoopHandlerStats(), codec)
-	syncHandler := handlers.NewSyncHandler(leafsRequestHandler, nil, nil, codeRequestHandler)
-	net.SetRequestHandler(syncHandler)
-	s := NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, nil, client, 4, syncerstats.NewNoOpStats())
+	client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
+	s, err := NewStateSyncer(root, client, 4, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	if err != nil {
+		t.Fatal("could not create StateSyncer", err)
+	}
 	// begin sync
-	s.Start(context.Background(), root)
-	select {
-	case <-s.Done():
-		// expect sync to be done in a reasonable time.
-	case <-time.After(1 * time.Minute):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.NoError(t, s.Error())
-
-	// get the two tries and ensure they have equal nodes
-	clientTrieDB := trie.NewDatabase(clientDB)
-	clientTrie, err := trie.New(root, clientTrieDB)
-	assert.NoError(t, err, "client trie must initialise with synced root")
-
-	// ensure trie hashes are the same
-	assert.Equal(t, serverTrie.Hash(), clientTrie.Hash(), "server trie hash and client trie hash must match")
-
-	clientIt := trie.NewIterator(clientTrie.NodeIterator(nil))
-	clientNodes := 0
-	for clientIt.Next() {
-		clientNodes++
-	}
-
-	serverIt := trie.NewIterator(serverTrie.NodeIterator(nil))
-	serverNodes := 0
-	for serverIt.Next() {
-		serverNodes++
-	}
-	assert.Equal(t, 3, clientNodes)
-	assert.Equal(t, serverNodes, clientNodes)
-}
-
-func TestAllEvenNumberedRequestIDsDroppedByNetwork(t *testing.T) {
-	var (
-		// server stuff
-		serverDB     = memorydb.New()
-		serverTrieDB = trie.NewDatabase(serverDB)
-	)
-
-	root, serverTrie := setupTestTrie(t, serverTrieDB)
-
-	// setup client
-	peerID := ids.GenerateTestShortID()
-	clientDB := memorydb.New()
-	var net peer.Network
-	sender := newTestSender(t, 10*time.Millisecond, func(set ids.ShortSet, requestID uint32, bytes []byte) error {
-		assert.Len(t, set, 1)
-		id, exists := set.Pop()
-		assert.True(t, exists)
-		assert.Equal(t, id, peerID)
-
-		if requestID%2 == 0 {
-			// drop it
-			return nil
-		}
-
-		go func() {
-			err := net.AppRequest(id, requestID, defaultDeadline(), bytes)
-			assert.NoError(t, err)
-		}()
-		return nil
-	}, func(id ids.ShortID, requestID uint32, bytes []byte) error {
-		assert.Equal(t, id, peerID)
-		go func() {
-			err := net.AppResponse(id, requestID, bytes)
-			assert.NoError(t, err)
-		}()
-		return nil
-	})
-	codec := getSyncCodec(t)
-	net = peer.NewNetwork(sender, codec, ids.ShortEmpty, 4)
-	sender.network = net
-
-	netClient := peer.NewClient(net)
-	assert.NoError(t, net.Connected(peerID, StateSyncVersion))
-	client := NewClient(netClient, 16, testMaxRetryDelay, codec, nil)
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec)
-	syncHandler := handlers.NewSyncHandler(leafsRequestHandler, nil, nil, codeRequestHandler)
-	net.SetRequestHandler(syncHandler)
-	s := NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, nil, client, 4, syncerstats.NewNoOpStats())
-
-	// begin sync
-	s.Start(context.Background(), root)
-	select {
-	case <-s.Done():
-		// expect sync to be done in a reasonable time.
-	case <-time.After(1 * time.Minute):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.NoError(t, s.Error())
-
-	// get the two tries and ensure they have equal nodes
-	clientTrieDB := trie.NewDatabase(clientDB)
-	clientTrie, err := trie.New(root, clientTrieDB)
-	assert.NoError(t, err, "client trie must initialise with synced root")
-
-	// ensure trie hashes are the same
-	assert.Equal(t, serverTrie.Hash(), clientTrie.Hash(), "server trie hash and client trie hash must match")
-
-	clientIt := trie.NewIterator(clientTrie.NodeIterator(nil))
-	clientNodes := 0
-	for clientIt.Next() {
-		clientNodes++
-	}
-
-	serverIt := trie.NewIterator(serverTrie.NodeIterator(nil))
-	serverNodes := 0
-	for serverIt.Next() {
-		serverNodes++
-	}
-	assert.Equal(t, 3, clientNodes)
-	assert.Equal(t, serverNodes, clientNodes)
-}
-
-var _ message.RequestHandler = &testRequestHandlerWrapper{}
-
-// testRequestHandlerWrapper calls the respective method on underlying syncRequestHandler
-// if the corresponding function (onLeafsRequestFn, etc) returns (nil, nil)
-type testRequestHandlerWrapper struct {
-	syncRequestHandler message.RequestHandler
-	onLeafsRequestFn   func(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error)
-	onBlockRequestFn   func(ctx context.Context, nodeID ids.ShortID, requestID uint32, blockRequest message.BlockRequest) ([]byte, error)
-	onCodeRequestFn    func(ctx context.Context, nodeID ids.ShortID, requestID uint32, codeRequest message.CodeRequest) ([]byte, error)
-}
-
-func (t *testRequestHandlerWrapper) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
-	if t.onLeafsRequestFn != nil {
-		responseBytes, err := t.onLeafsRequestFn(ctx, nodeID, requestID, leafsRequest)
-		if responseBytes != nil || err != nil {
-			return responseBytes, err
-		}
-	}
-
-	return t.syncRequestHandler.HandleStateTrieLeafsRequest(ctx, nodeID, requestID, leafsRequest)
-}
-
-func (t *testRequestHandlerWrapper) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
-	if t.onLeafsRequestFn != nil {
-		responseBytes, err := t.onLeafsRequestFn(ctx, nodeID, requestID, leafsRequest)
-		if responseBytes != nil || err != nil {
-			return responseBytes, err
-		}
-	}
-
-	return t.syncRequestHandler.HandleAtomicTrieLeafsRequest(ctx, nodeID, requestID, leafsRequest)
-}
-
-func (t *testRequestHandlerWrapper) HandleBlockRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, blockRequest message.BlockRequest) ([]byte, error) {
-	if t.onBlockRequestFn != nil {
-		responseBytes, err := t.onBlockRequestFn(ctx, nodeID, requestID, blockRequest)
-		if responseBytes != nil || err != nil {
-			return responseBytes, err
-		}
-	}
-
-	return t.syncRequestHandler.HandleBlockRequest(ctx, nodeID, requestID, blockRequest)
-}
-
-func (t *testRequestHandlerWrapper) HandleCodeRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, codeRequest message.CodeRequest) ([]byte, error) {
-	if t.onCodeRequestFn != nil {
-		responseBytes, err := t.onCodeRequestFn(ctx, nodeID, requestID, codeRequest)
-		if responseBytes != nil || err != nil {
-			return responseBytes, err
-		}
-	}
-
-	return t.syncRequestHandler.HandleCodeRequest(ctx, nodeID, requestID, codeRequest)
-}
-
-func TestAllEvenNumberedRequestIDsMishandledByPeer(t *testing.T) {
-	var (
-		// server stuff
-		serverDB     = memorydb.New()
-		serverTrieDB = trie.NewDatabase(serverDB)
-	)
-
-	root, serverTrie := setupTestTrie(t, serverTrieDB)
-
-	// setup client
-	peerID := ids.GenerateTestShortID()
-	clientDB := memorydb.New()
-	var net peer.Network
-	sender := newTestSender(t, 10*time.Millisecond, func(set ids.ShortSet, requestID uint32, bytes []byte) error {
-		assert.Len(t, set, 1)
-		id, exists := set.Pop()
-		assert.True(t, exists)
-		assert.Equal(t, id, peerID)
-		go func() {
-			err := net.AppRequest(id, requestID, defaultDeadline(), bytes)
-			assert.NoError(t, err)
-		}()
-		return nil
-	}, func(id ids.ShortID, requestID uint32, bytes []byte) error {
-		assert.Equal(t, id, peerID)
-		go func() {
-			err := net.AppResponse(id, requestID, bytes)
-			assert.NoError(t, err)
-		}()
-		return nil
-	})
-	codec := getSyncCodec(t)
-	net = peer.NewNetwork(sender, codec, ids.ShortEmpty, 4)
-	sender.network = net
-
-	netClient := peer.NewClient(net)
-	assert.NoError(t, net.Connected(peerID, StateSyncVersion))
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec)
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-	syncHandler := handlers.NewSyncHandler(leafsRequestHandler, nil, nil, codeRequestHandler)
-	testHandlerWrapper := &testRequestHandlerWrapper{
-		syncRequestHandler: syncHandler,
-		onLeafsRequestFn: func(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
-			if requestID%2 != 0 {
-				// if its not even, process as normal
-				return nil, nil
-			}
-
-			return codec.Marshal(message.Version, &message.LeafsResponse{Keys: [][]byte{[]byte("somekey")}, Vals: [][]byte{[]byte("someval")}})
-		},
-		onCodeRequestFn: func(ctx context.Context, nodeID ids.ShortID, requestID uint32, codeRequest message.CodeRequest) ([]byte, error) {
-			if requestID%2 != 0 {
-				// if its not even, process as normal
-				return nil, nil
-			}
-
-			return codec.Marshal(message.Version, &message.CodeResponse{Data: []byte("some code that is totally invalid")})
-		},
-	}
-	net.SetRequestHandler(testHandlerWrapper)
-
-	client := NewClient(netClient, 16, testMaxRetryDelay, codec, nil)
-	s := NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, nil, client, 8, syncerstats.NewNoOpStats())
-
-	// begin sync
-	s.Start(context.Background(), root)
+	s.Start(context.Background())
 	select {
 	case <-s.Done():
 		// expect sync to be done in a reasonable time.
@@ -350,7 +85,7 @@ func TestAllEvenNumberedRequestIDsMishandledByPeer(t *testing.T) {
 }
 
 type testingClient struct {
-	leafs  *message.LeafsResponse
+	leafs  message.LeafsResponse
 	blocks []*types.Block
 	code   []byte
 	err    error
@@ -362,7 +97,7 @@ var (
 	errErrClient        = errors.New("always returns this error")
 )
 
-func (tc *testingClient) GetLeafs(req message.LeafsRequest) (*message.LeafsResponse, error) {
+func (tc *testingClient) GetLeafs(req message.LeafsRequest) (message.LeafsResponse, error) {
 	if tc.waitCh != nil {
 		<-tc.waitCh
 	}
@@ -386,8 +121,12 @@ func (tc *testingClient) GetCode(common.Hash) ([]byte, error) {
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
 	clientDB := memorydb.New()
 	defer clientDB.Close()
-	s := NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, nil, &testingClient{err: errErrClient}, 2, syncerstats.NewNoOpStats())
-	s.Start(context.Background(), common.Hash{})
+	s, err := NewStateSyncer(common.Hash{}, &testingClient{err: errErrClient}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	if err != nil {
+		t.Fatal("could not create StateSyncer", err)
+	}
+	// begin sync
+	s.Start(context.Background())
 	select {
 	case <-s.Done():
 	case <-time.After(10 * time.Second):
@@ -404,9 +143,13 @@ func TestCancel(t *testing.T) {
 	// that gives us time to cancel the context and assert the correct error
 	waitCh := make(chan struct{}, 1)
 	waitCh <- struct{}{}
-	s := NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, nil, &testingClient{leafs: &message.LeafsResponse{}}, 2, syncerstats.NewNoOpStats())
+	s, err := NewStateSyncer(common.Hash{}, &testingClient{leafs: message.LeafsResponse{}}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	if err != nil {
+		t.Fatal("could not create StateSyncer", err)
+	}
+	// begin sync
 	ctx, cancel := context.WithCancel(context.Background())
-	s.Start(ctx, common.Hash{})
+	s.Start(ctx)
 	cancel()
 	select {
 	case <-s.Done():
@@ -417,48 +160,6 @@ func TestCancel(t *testing.T) {
 	assert.ErrorIs(t, s.Error(), context.Canceled)
 }
 
-type leafTestingClient struct {
-	leafs        *message.LeafsResponse
-	leafsHandler *handlers.LeafsRequestHandler
-	codec        codec.Manager
-	limit        uint16
-	waitCh       chan struct{}
-	ctx          context.Context
-	count        uint32
-}
-
-var _ Client = &leafTestingClient{}
-
-func (tc *leafTestingClient) GetLeafs(req message.LeafsRequest) (*message.LeafsResponse, error) {
-	req.Limit = tc.limit
-	nodeID := ids.GenerateTestShortID()
-	bytes, err := tc.leafsHandler.OnLeafsRequest(context.Background(), nodeID, 1, req)
-	if err != nil {
-		return nil, err
-	}
-	c := NewClient(nil, 0, 0, tc.codec, nil) // only used to parse results
-	resp, err := c.parseLeafsResponse(req, bytes)
-	if err != nil {
-		return nil, err
-	}
-	leafsResponse := resp.(message.LeafsResponse)
-	select {
-	case <-tc.waitCh:
-		atomic.AddUint32(&tc.count, 1)
-		return &leafsResponse, nil
-	case <-tc.ctx.Done():
-		return nil, errors.New("generic error")
-	}
-}
-
-func (tc *leafTestingClient) GetBlocks(common.Hash, uint64, uint16) ([]*types.Block, error) {
-	panic("unimplemented")
-}
-
-func (tc *leafTestingClient) GetCode(common.Hash) ([]byte, error) {
-	panic("unimplemented")
-}
-
 func TestResumeSync(t *testing.T) {
 	codec := getSyncCodec(t)
 	serverDB := memorydb.New()
@@ -466,7 +167,7 @@ func TestResumeSync(t *testing.T) {
 
 	trieDB := trie.NewDatabase(serverDB)
 	root, serverTrie := setupTestTrie(t, trieDB)
-	handler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
+	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
 
 	clientDB := memorydb.New()
 	defer clientDB.Close()
@@ -474,21 +175,33 @@ func TestResumeSync(t *testing.T) {
 	// that gives us time to cancel the context and perform a resume
 	waitCh := make(chan struct{})
 	numThreads := 2
-	progress, err := NewProgressMarker(clientDB, codec, uint(numThreads))
-	if err != nil {
-		t.Fatal("could not initialize progress marker", err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
-	client := &leafTestingClient{
-		leafsHandler: handler,
-		limit:        1,
-		codec:        codec,
-		waitCh:       waitCh,
-		ctx:          ctx,
+	clientCtx, clientCancel := context.WithCancel(context.Background())
+	defer clientCancel()
+
+	count := uint32(0)
+	client := NewMockLeafClient(codec, leafsHandler, nil, nil)
+	client.GetLeafsIntercept = func(response message.LeafsResponse) (message.LeafsResponse, error) {
+		limit := 1
+		if len(response.Keys) > limit {
+			response.Keys = response.Keys[:limit]
+			response.Vals = response.Vals[:limit]
+			response.More = true
+		}
+		select {
+		case <-waitCh:
+			atomic.AddUint32(&count, 1)
+			return response, nil
+		case <-clientCtx.Done():
+			return message.LeafsResponse{}, errors.New("generic error")
+		}
 	}
-	s := NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, progress, client, numThreads, syncerstats.NewNoOpStats())
-	defer cancel()
-	s.Start(ctx, root)
+	s, err := NewStateSyncer(root, client, numThreads, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	if err != nil {
+		t.Fatal("could not create StateSyncer", err)
+	}
+	// begin sync
+	s.Start(ctx)
 	waitCh <- struct{}{} // one leaf (main trie)
 
 	// Wait for one more leaf to be requested. This guarantees the
@@ -498,6 +211,7 @@ func TestResumeSync(t *testing.T) {
 	// account trie, and in both cases resume logic should work.
 	waitCh <- struct{}{}
 	cancel()
+	close(waitCh) // allow work to progress
 
 	select {
 	case <-s.Done():
@@ -505,22 +219,17 @@ func TestResumeSync(t *testing.T) {
 		assert.Fail(t, "sync not complete in a reasonable time")
 		return
 	}
-	err = s.Error()
-	assert.Error(t, err)
-
-	progress, err = NewProgressMarker(clientDB, codec, uint(numThreads))
-	if err != nil {
-		t.Fatal("could not initialize progress marker", err)
-	}
-	accounts, roots := progress.Get()
-	assert.Equal(t, 2, len(accounts))
-	assert.Equal(t, 2, len(roots))
+	assert.ErrorIs(t, s.Error(), context.Canceled)
 
 	// resume
-	client.ctx = context.Background()
-	s = NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, progress, client, numThreads, syncerstats.NewNoOpStats())
-	close(waitCh) // allow work to progress
-	s.Start(context.Background(), root)
+	s, err = NewStateSyncer(root, client, numThreads, syncerstats.NewNoOpStats(), clientDB, s.commitCap)
+	if err != nil {
+		t.Fatal("could not create StateSyncer", err)
+	}
+	// assert number of in progress storage tries
+	assert.Len(t, s.progressMarker.StorageTries, 1)
+
+	s.Start(context.Background())
 	select {
 	case <-s.Done():
 	case <-time.After(10 * time.Second):
@@ -554,10 +263,14 @@ func TestResumeSync(t *testing.T) {
 	assert.NoError(t, trieDB.Commit(newRoot, false, nil))
 
 	// reset count and do another sync
-	client.count = 0
+	count = 0
 	<-snapshot.WipeSnapshot(clientDB, true)
-	s = NewLeafSyncer(message.StateTrieNode, 32, clientDB, nil, commitCap, progress, client, numThreads, syncerstats.NewNoOpStats())
-	s.Start(context.Background(), newRoot)
+	s, err = NewStateSyncer(newRoot, client, numThreads, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	if err != nil {
+		t.Fatal("could not create StateSyncer", err)
+	}
+	// begin sync
+	s.Start(context.Background())
 	select {
 	case <-s.Done():
 	case <-time.After(10 * time.Second):
@@ -570,7 +283,7 @@ func TestResumeSync(t *testing.T) {
 
 	// should only request leaves in main trie
 	// storage trie will be on disk already
-	assert.Equal(t, uint32(3), client.count)
+	assert.Equal(t, uint32(3), count)
 }
 
 // setupTestTrie creates a trie in [triedb]

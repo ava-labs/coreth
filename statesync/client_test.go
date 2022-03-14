@@ -332,8 +332,8 @@ func TestGetLeafs(t *testing.T) {
 
 	trieDB := trie.NewDatabase(memorydb.New())
 
-	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100_000)
-	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, leafsLimit)
+	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
+	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, leafsLimit, common.HashLength)
 
 	handler := handlers.NewLeafsRequestHandler(trieDB, stats.NewNoopHandlerStats(), codec)
 	client := NewClient(&testClient{}, 1, 1, codec, nil)
@@ -669,7 +669,7 @@ func TestGetLeafs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			responseBytes := test.getResponse(t, test.request)
 
-			response, err := client.parseLeafsResponse(test.request, responseBytes)
+			response, err := parseLeafsResponse(client.codec, test.request, responseBytes)
 			if test.expectedErr != nil {
 				if err == nil {
 					t.Fatalf("Expected error: %s, but found no error", test.expectedErr)
@@ -698,7 +698,7 @@ func TestGetLeafsRetries(t *testing.T) {
 	}
 
 	trieDB := trie.NewDatabase(memorydb.New())
-	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000)
+	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 
 	handler := handlers.NewLeafsRequestHandler(trieDB, stats.NewNoopHandlerStats(), codec)
 	netClient := &testClient{}

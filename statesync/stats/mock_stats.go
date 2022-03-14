@@ -29,7 +29,7 @@ func (m *MockSyncerStats) IncLeavesRequested() {
 	m.LeavesRequested++
 }
 
-func (m *MockSyncerStats) IncLeavesReceived(size int64) {
+func (m *MockSyncerStats) UpdateLeavesReceived(size int64) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.LeavesReceived += size

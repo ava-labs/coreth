@@ -11,6 +11,8 @@ import (
 // Database implements ethdb.Database
 type Database struct{ database.Database }
 
+var _ ethdb.Database = &Database{}
+
 // NewBatch implements ethdb.Database
 func (db Database) NewBatch() ethdb.Batch { return Batch{db.Database.NewBatch()} }
 

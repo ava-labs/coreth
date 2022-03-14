@@ -46,7 +46,7 @@ var _ Client = &client{}
 // Client is a state sync client that synchronously fetches data from the network
 type Client interface {
 	// GetLeafs synchronously sends given request, returning parsed *LeafsResponse or error
-	GetLeafs(request message.LeafsRequest) (*message.LeafsResponse, error)
+	GetLeafs(request message.LeafsRequest) (message.LeafsResponse, error)
 
 	// GetBlocks synchronously retrieves blocks starting with specified common.Hash and height up to specified parents
 	// specified range from height to height-parents is inclusive
@@ -59,7 +59,7 @@ type Client interface {
 // parseResponseFn parses given response bytes in context of specified request
 // Validates response in context of the request
 // Ensures that the returned interface matches the expected response type of the request
-type parseResponseFn func(request message.Request, response []byte) (interface{}, error)
+type parseResponseFn func(codec codec.Manager, request message.Request, response []byte) (interface{}, error)
 
 type client struct {
 	networkClient  peer.Client
@@ -86,18 +86,18 @@ func NewClient(networkClient peer.Client, maxAttempts uint8, maxRetryDelay time.
 // - response keys do not correspond to the requested range.
 // - response does not contain a valid merkle proof.
 // Returns error if retries have been exceeded
-func (c *client) GetLeafs(req message.LeafsRequest) (*message.LeafsResponse, error) {
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, c.parseLeafsResponse)
+func (c *client) GetLeafs(req message.LeafsRequest) (message.LeafsResponse, error) {
+	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseLeafsResponse)
 	if err != nil {
-		return nil, err
+		return message.LeafsResponse{}, err
 	}
 
 	response, ok := data.(message.LeafsResponse)
 	if !ok {
-		return nil, fmt.Errorf("received unexpected type in response, expected: %T", response)
+		return message.LeafsResponse{}, fmt.Errorf("received unexpected type in response, expected: %T", response)
 	}
 
-	return &response, err
+	return response, err
 }
 
 // parseLeafsResponse validates given object as message.LeafsResponse
@@ -109,9 +109,9 @@ func (c *client) GetLeafs(req message.LeafsRequest) (*message.LeafsResponse, err
 // - first and last key in the response is not within the requested start and end range
 // - response keys are not in increasing order
 // - proof validation failed
-func (c *client) parseLeafsResponse(reqIntf message.Request, data []byte) (interface{}, error) {
+func parseLeafsResponse(codec codec.Manager, reqIntf message.Request, data []byte) (interface{}, error) {
 	var leafsResponse message.LeafsResponse
-	if _, err := c.codec.Unmarshal(data, &leafsResponse); err != nil {
+	if _, err := codec.Unmarshal(data, &leafsResponse); err != nil {
 		return nil, err
 	}
 
@@ -177,7 +177,7 @@ func (c *client) GetBlocks(hash common.Hash, height uint64, parents uint16) ([]*
 		Parents: parents,
 	}
 
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, c.parseBlocks)
+	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseBlocks)
 	if err != nil {
 		return nil, fmt.Errorf("could not get blocks (%s) due to %w", hash, err)
 	}
@@ -189,9 +189,9 @@ func (c *client) GetBlocks(hash common.Hash, height uint64, parents uint16) ([]*
 // assumes req is of type message.BlockRequest
 // returns types.Blocks as interface{}
 // returns a non-nil error if the request should be retried
-func (c *client) parseBlocks(req message.Request, data []byte) (interface{}, error) {
+func parseBlocks(codec codec.Manager, req message.Request, data []byte) (interface{}, error) {
 	var response message.BlockResponse
-	if _, err := c.codec.Unmarshal(data, &response); err != nil {
+	if _, err := codec.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("%s: %w", errUnmarshalResponse, err)
 	}
 	if len(response.Blocks) == 0 {
@@ -228,7 +228,7 @@ func (c *client) parseBlocks(req message.Request, data []byte) (interface{}, err
 func (c *client) GetCode(hash common.Hash) ([]byte, error) {
 	req := message.NewCodeRequest(hash)
 
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, c.parseCode)
+	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseCode)
 	if err != nil {
 		return nil, fmt.Errorf("could not get code (%s): %w", hash, err)
 	}
@@ -240,9 +240,9 @@ func (c *client) GetCode(hash common.Hash) ([]byte, error) {
 // parseCode validates given object as a code object
 // assumes req is of type message.CodeRequest
 // returns a non-nil error if the request should be retried
-func (c *client) parseCode(req message.Request, data []byte) (interface{}, error) {
+func parseCode(codec codec.Manager, req message.Request, data []byte) (interface{}, error) {
 	var response message.CodeResponse
-	if _, err := c.codec.Unmarshal(data, &response); err != nil {
+	if _, err := codec.Unmarshal(data, &response); err != nil {
 		return nil, err
 	}
 	if len(response.Data) == 0 {
@@ -300,7 +300,7 @@ func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time
 			log.Info("request failed, retrying", "nodeID", nodeID, "attempt", attempt, "request", request, "err", err)
 			continue
 		} else {
-			responseIntf, err = parseFn(request, response)
+			responseIntf, err = parseFn(c.codec, request, response)
 			if err != nil {
 				log.Info("could not validate response, retrying", "nodeID", nodeID, "attempt", attempt, "request", request, "err", err)
 				continue

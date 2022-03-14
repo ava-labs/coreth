@@ -11,7 +11,7 @@ import (
 
 type Stats interface {
 	IncLeavesRequested()
-	IncLeavesReceived(size int64)
+	UpdateLeavesReceived(size int64)
 
 	UpdateTrieCommitted(size int64)
 	UpdateStorageCommitted(size int64)
@@ -51,7 +51,7 @@ func (s *stateSyncerStats) IncLeavesRequested() {
 	s.leavesRequested.Inc(1)
 }
 
-func (s *stateSyncerStats) IncLeavesReceived(size int64) {
+func (s *stateSyncerStats) UpdateLeavesReceived(size int64) {
 	s.leavesReceived.Update(size)
 }
 
@@ -79,7 +79,7 @@ func NewNoOpStats() Stats {
 
 // all operations are no-ops
 func (n *noopStats) IncLeavesRequested()                    {}
-func (n *noopStats) IncLeavesReceived(int64)                {}
+func (n *noopStats) UpdateLeavesReceived(int64)             {}
 func (n *noopStats) UpdateTrieCommitted(int64)              {}
 func (n *noopStats) UpdateStorageCommitted(int64)           {}
 func (n *noopStats) UpdateCodeCommitted(int64)              {}
