@@ -4,7 +4,6 @@
 package statesync
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -89,7 +88,6 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 	var (
 		root  = task.Root
 		start = task.Start
-		end   = bytes.Repeat([]byte{0xff}, len(task.Start))
 	)
 	for {
 		// If [ctx] has finished, return early.
@@ -104,7 +102,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 		leafsResponse, err := c.client.GetLeafs(message.LeafsRequest{
 			Root:     root,
 			Start:    start,
-			End:      end,
+			End:      nil, // will request until the end of the trie
 			Limit:    1024,
 			NodeType: task.NodeType,
 		})
