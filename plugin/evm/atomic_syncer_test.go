@@ -77,7 +77,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 			t.Fatalf("Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 		}
 
-		assert.Equal(t, checkpoint.expectedNumLeavesSynced, leafClient.LeavesReceived, "unexpected number of leaves received at checkpoint %d", i)
+		assert.Equal(t, checkpoint.expectedNumLeavesSynced, int64(leafClient.LeavesReceived), "unexpected number of leaves received at checkpoint %d", i)
 		// Replace the trie and target height for the next checkpoint
 		syncTrie = checkpoint.trie
 		targetHeight = checkpoint.targetHeight
@@ -98,7 +98,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 		t.Fatalf("Expected syncer to finish successfully but failed due to %s", err)
 	}
 
-	assert.Equal(t, finalExpectedNumLeaves, leafClient.LeavesReceived, "unexpected number of leaves received to match")
+	assert.Equal(t, finalExpectedNumLeaves, int64(leafClient.LeavesReceived), "unexpected number of leaves received to match")
 
 	// we re-initialise trie DB for asserting the trie to make sure any issues with unflushed writes
 	// are caught here as this will only pass if all trie nodes have been written to the underlying DB
