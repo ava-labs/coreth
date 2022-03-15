@@ -287,12 +287,12 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 	// interfere with the sync.
 	// We also clear the marker, since state sync will update the
 	// snapshot correctly.
-	generator := rawdb.ReadSnapshotGenerator(vm.chaindb)
-	if len(generator) > 0 {
-		log.Info("unclean shutdown prior to state sync detected, wiping snapshot")
+	inProgress, err := snapshot.IsSnapshotGenerationInProgress(vm.chaindb)
+	if inProgress || err != nil {
+		log.Info("unclean shutdown prior to state sync detected, wiping snapshot", "err", err)
 		vm.chain.BlockChain().Snapshots().AbortGeneration()
+		snapshot.ResetSnapshotGeneration(vm.chaindb)
 		<-snapshot.WipeSnapshot(vm.chaindb, false)
-		rawdb.DeleteSnapshotGenerator(vm.chaindb)
 	}
 
 	if !resuming {
