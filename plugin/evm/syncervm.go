@@ -281,6 +281,20 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 		return
 	}
 
+	// in the rare case that we have a previous unclean shutdown
+	// initializing the blockchain will try to rebuild the snapshot.
+	// we need to stop the async snapshot generation, because it will
+	// interfere with the sync.
+	// We also clear the marker, since state sync will update the
+	// snapshot correctly.
+	generator := rawdb.ReadSnapshotGenerator(vm.chaindb)
+	if len(generator) > 0 {
+		log.Info("unclean shutdown prior to state sync detected, wiping snapshot")
+		vm.chain.BlockChain().Snapshots().AbortGeneration()
+		<-snapshot.WipeSnapshot(vm.chaindb, false)
+		rawdb.DeleteSnapshotGenerator(vm.chaindb)
+	}
+
 	if !resuming {
 		log.Info("not resuming a previous sync, wipe snapshot & resume markers")
 		<-snapshot.WipeSnapshot(vm.chaindb, false)
