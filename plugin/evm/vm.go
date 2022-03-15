@@ -33,7 +33,6 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/statesync/handlers"
 	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	syncerstats "github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -520,14 +519,6 @@ func (vm *VM) Initialize(
 // [vm.stateSyncer] implements the StateSyncableVM interface
 // expected by engine for VMs that support state sync.
 func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
-	var syncStats syncerstats.Stats
-	if metrics.Enabled && vm.config.StateSyncMetricsEnabled {
-		log.Info("state sync stats are enabled")
-		syncStats = syncerstats.NewStats()
-	} else {
-		syncStats = syncerstats.NewNoOpStats()
-	}
-
 	// parse nodeIDs from state sync IDs in vm config
 	stateSyncIDs := make([]ids.ShortID, len(vm.config.StateSyncIDs))
 	for i, nodeIDString := range vm.config.StateSyncIDs {
@@ -538,12 +529,13 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 		stateSyncIDs[i] = nodeID
 	}
 
-	vm.stateSyncer = NewStateSyncer(&vm.vmState, &stateSyncConfig{
+	vm.stateSyncer = NewStateSyncer(&stateSyncConfig{
+		vmState:      &vm.vmState,
+		statsEnabled: vm.config.StateSyncMetricsEnabled,
 		enabled:      vm.config.StateSyncEnabled,
 		codec:        vm.codec,
 		netCodec:     vm.networkCodec,
 		toEngine:     toEngine,
-		syncStats:    syncStats,
 		network:      vm.Network,
 		client:       vm.client,
 		stateSyncIDs: stateSyncIDs,

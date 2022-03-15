@@ -21,7 +21,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers"
 	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	syncerstats "github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -83,7 +82,6 @@ type stateSyncResult struct {
 	syncer                     *stateSyncer
 	accounts                   map[common.Hash]types.StateAccount
 	serverTrieDB, clientTrieDB *trie.Database
-	syncerStats                *syncerstats.MockSyncerStats
 	expectedSnapshot           *expectedSnapshot
 }
 
@@ -394,9 +392,8 @@ func TestStateSyncerSync(t *testing.T) {
 			)
 
 			clientDB := memorydb.New()
-			syncerStats := &syncerstats.MockSyncerStats{}
 
-			syncer, err := NewStateSyncer(root, leafClient, 4, syncerStats, clientDB, 10*units.MiB)
+			syncer, err := NewEVMStateSyncer(root, leafClient, 4, clientDB, 10*units.MiB)
 			if err != nil {
 				t.Fatalf("error creating new state syncer: %v", err)
 			}
@@ -422,7 +419,6 @@ func TestStateSyncerSync(t *testing.T) {
 					serverTrieDB:     serverTrieDB,
 					clientTrieDB:     clientTrieDB,
 					syncer:           syncer,
-					syncerStats:      syncerStats,
 					expectedSnapshot: expectedSnapshot,
 				})
 			}

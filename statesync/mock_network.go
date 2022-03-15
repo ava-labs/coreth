@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 )
 
-type testClient struct {
+type mockNetwork struct {
 	// captured request data
 	numCalls         uint
 	requestedVersion version.Application
@@ -23,9 +23,9 @@ type testClient struct {
 	nodesRequested []ids.ShortID
 }
 
-func (t *testClient) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error) {
+func (t *mockNetwork) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error) {
 	if len(t.response) == 0 {
-		return nil, ids.ShortEmpty, errors.New("no mocked response to return in testClient")
+		return nil, ids.ShortEmpty, errors.New("no mocked response to return in mockNetwork")
 	}
 
 	t.requestedVersion = minVersion
@@ -34,9 +34,9 @@ func (t *testClient) RequestAny(minVersion version.Application, request []byte) 
 	return response, ids.ShortEmpty, err
 }
 
-func (t *testClient) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
+func (t *mockNetwork) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
 	if len(t.response) == 0 {
-		return nil, errors.New("no mocked response to return in testClient")
+		return nil, errors.New("no mocked response to return in mockNetwork")
 	}
 
 	t.nodesRequested = append(t.nodesRequested, nodeID)
@@ -44,7 +44,7 @@ func (t *testClient) Request(nodeID ids.ShortID, request []byte) ([]byte, error)
 	return t.processMock(request)
 }
 
-func (t *testClient) processMock(request []byte) ([]byte, error) {
+func (t *mockNetwork) processMock(request []byte) ([]byte, error) {
 	t.request = request
 	t.numCalls++
 
@@ -64,11 +64,11 @@ func (t *testClient) processMock(request []byte) ([]byte, error) {
 	return response, err
 }
 
-func (t *testClient) Gossip([]byte) error {
+func (t *mockNetwork) Gossip([]byte) error {
 	panic("not implemented") // we don't care about this function for this test
 }
 
-func (t *testClient) mockResponse(times uint8, response []byte) {
+func (t *mockNetwork) mockResponse(times uint8, response []byte) {
 	t.response = make([][]byte, times)
 	for i := uint8(0); i < times; i++ {
 		t.response[i] = response
@@ -76,7 +76,7 @@ func (t *testClient) mockResponse(times uint8, response []byte) {
 	t.numCalls = 0
 }
 
-func (t *testClient) mockResponses(responses ...[]byte) {
+func (t *mockNetwork) mockResponses(responses ...[]byte) {
 	t.response = responses
 	t.numCalls = 0
 }

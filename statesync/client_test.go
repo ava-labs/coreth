@@ -22,7 +22,8 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers"
-	"github.com/ava-labs/coreth/statesync/handlers/stats"
+	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
+	clientstats "github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -36,7 +37,7 @@ func TestGetCode(t *testing.T) {
 		t.Fatal("error building codec", err)
 	}
 
-	testNetClient := &testClient{}
+	testNetClient := &mockNetwork{}
 
 	// test happy path - code response is valid
 	codeResponse := message.CodeResponse{
@@ -49,7 +50,7 @@ func TestGetCode(t *testing.T) {
 	testNetClient.mockResponse(1, response)
 	codeHash := crypto.Keccak256Hash(codeResponse.Data)
 
-	stateSyncClient := NewClient(testNetClient, maxAttempts, 1, codec, nil)
+	stateSyncClient := NewClient(testNetClient, clientstats.NewNoOpStats(), maxAttempts, 1, codec, nil)
 	codeBytes, err := stateSyncClient.GetCode(codeHash)
 	if err != nil {
 		t.Fatal("unexpected error in test", err)
@@ -90,10 +91,10 @@ func TestGetBlocks(t *testing.T) {
 	assert.Equal(t, numBlocks, len(blocks))
 
 	// Construct client
-	testNetClient := &testClient{}
-	stateSyncClient := NewClient(testNetClient, 1, 1, codec, nil)
+	testNetClient := &mockNetwork{}
+	stateSyncClient := NewClient(testNetClient, clientstats.NewNoOpStats(), 1, 1, codec, nil)
 
-	blocksRequestHandler := handlers.NewBlockRequestHandler(buildGetter(blocks), codec, stats.NewNoopHandlerStats())
+	blocksRequestHandler := handlers.NewBlockRequestHandler(buildGetter(blocks), codec, handlerstats.NewNoopHandlerStats())
 
 	// encodeBlockSlice takes a slice of blocks that are ordered in increasing height order
 	// and returns a slice of byte slices with those blocks encoded in reverse order
@@ -335,8 +336,8 @@ func TestGetLeafs(t *testing.T) {
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, leafsLimit, common.HashLength)
 
-	handler := handlers.NewLeafsRequestHandler(trieDB, stats.NewNoopHandlerStats(), codec)
-	client := NewClient(&testClient{}, 1, 1, codec, nil)
+	handler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
+	client := NewClient(&mockNetwork{}, clientstats.NewNoOpStats(), 1, 1, codec, nil)
 
 	tests := map[string]struct {
 		request        message.LeafsRequest
@@ -700,11 +701,11 @@ func TestGetLeafsRetries(t *testing.T) {
 	trieDB := trie.NewDatabase(memorydb.New())
 	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 
-	handler := handlers.NewLeafsRequestHandler(trieDB, stats.NewNoopHandlerStats(), codec)
-	netClient := &testClient{}
+	handler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
+	netClient := &mockNetwork{}
 
 	const maxAttempts = 8
-	client := NewClient(netClient, maxAttempts, 1, codec, nil)
+	client := NewClient(netClient, clientstats.NewNoOpStats(), maxAttempts, 1, codec, nil)
 
 	request := message.LeafsRequest{
 		Root:     root,
@@ -748,7 +749,7 @@ func TestStateSyncNodes(t *testing.T) {
 		t.Fatal("error building codec", err)
 	}
 
-	netClient := &testClient{}
+	netClient := &mockNetwork{}
 
 	stateSyncNodes := []ids.ShortID{
 		ids.GenerateTestShortID(),
@@ -756,7 +757,7 @@ func TestStateSyncNodes(t *testing.T) {
 		ids.GenerateTestShortID(),
 		ids.GenerateTestShortID(),
 	}
-	client := NewClient(netClient, 4, 1, codec, stateSyncNodes)
+	client := NewClient(netClient, clientstats.NewNoOpStats(), 4, 1, codec, stateSyncNodes)
 	netClient.response = [][]byte{{1}, {2}, {3}, {4}}
 
 	// send some request, doesn't matter what it is because we're testing the interaction with state sync nodes here

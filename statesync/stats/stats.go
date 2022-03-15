@@ -4,83 +4,108 @@
 package stats
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-type Stats interface {
-	IncLeavesRequested()
-	UpdateLeavesReceived(size int64)
+var _ ClientSyncerStats = &clientSyncerStats{}
 
-	UpdateTrieCommitted(size int64)
-	UpdateStorageCommitted(size int64)
-	UpdateCodeCommitted(size int64)
-
-	UpdateLeafRequestLatency(duration time.Duration)
+type ClientSyncerStats interface {
+	GetMetric(message.Request) (MessageMetric, error)
 }
 
-type stateSyncerStats struct {
-	// network metrics
-	leavesRequested metrics.Counter
-	leavesReceived  metrics.Histogram
-
-	// writes
-	leavesCommitted  metrics.Histogram
-	storageCommitted metrics.Histogram
-	codeCommitted    metrics.Histogram
-
-	// latency
-	leafRequestLatency metrics.Timer
+type MessageMetric interface {
+	IncRequested()
+	IncSucceeded()
+	IncFailed()
+	IncInvalidResponse()
+	UpdateReceived(int64)
+	UpdateRequestLatency(time.Duration)
 }
 
-func NewStats() Stats {
-	return &stateSyncerStats{
-		leavesRequested: metrics.GetOrRegisterCounter("sync_leaves_requested", nil),
-		leavesReceived:  metrics.GetOrRegisterHistogram("sync_leaves_received", nil, metrics.NewExpDecaySample(1028, 0.015)),
+type messageMetric struct {
+	requested       metrics.Counter // Number of times a request has been sent
+	succeeded       metrics.Counter // Number of times a request has succeeded
+	failed          metrics.Counter // Number of times a request failed (includes invalid responses)
+	invalidResponse metrics.Counter // Number of times a request failed due to an invalid response
 
-		leavesCommitted:  metrics.GetOrRegisterHistogram("sync_leaves_committed", nil, metrics.NewExpDecaySample(1028, 0.015)),
-		storageCommitted: metrics.GetOrRegisterHistogram("sync_storage_committed", nil, metrics.NewExpDecaySample(1028, 0.015)),
-		codeCommitted:    metrics.GetOrRegisterHistogram("sync_code_committed", nil, metrics.NewExpDecaySample(1028, 0.015)),
+	received       metrics.Histogram // Histogram of the amount of this metric that has been received
+	requestLatency metrics.Timer     // Latency for this request
+}
 
-		leafRequestLatency: metrics.GetOrRegisterTimer("sync_leaf_request_latency", nil),
+func NewMessageMetric(name string) MessageMetric {
+	return &messageMetric{
+		requested:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_requested", name), nil),
+		succeeded:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_succeeded", name), nil),
+		failed:          metrics.GetOrRegisterCounter(fmt.Sprintf("%s_failed", name), nil),
+		invalidResponse: metrics.GetOrRegisterCounter(fmt.Sprintf("%s_invalid_response", name), nil),
+		received:        metrics.GetOrRegisterHistogram(fmt.Sprintf("%s_received", name), nil, metrics.NewExpDecaySample(1028, 0.015)),
+		requestLatency:  metrics.GetOrRegisterTimer(fmt.Sprintf("%s_request_latency", name), nil),
 	}
 }
 
-func (s *stateSyncerStats) IncLeavesRequested() {
-	s.leavesRequested.Inc(1)
+func (m *messageMetric) IncRequested() {
+	m.requested.Inc(1)
 }
 
-func (s *stateSyncerStats) UpdateLeavesReceived(size int64) {
-	s.leavesReceived.Update(size)
+func (m *messageMetric) IncSucceeded() {
+	m.succeeded.Inc(1)
 }
 
-func (s *stateSyncerStats) UpdateTrieCommitted(bytes int64) {
-	s.leavesCommitted.Update(bytes)
+func (m *messageMetric) IncFailed() {
+	m.failed.Inc(1)
 }
 
-func (s *stateSyncerStats) UpdateStorageCommitted(bytes int64) {
-	s.storageCommitted.Update(bytes)
+func (m *messageMetric) IncInvalidResponse() {
+	m.failed.Inc(1)
 }
 
-func (s *stateSyncerStats) UpdateCodeCommitted(bytes int64) {
-	s.codeCommitted.Update(bytes)
+func (m *messageMetric) UpdateReceived(size int64) {
+	m.received.Update(size)
 }
 
-func (s *stateSyncerStats) UpdateLeafRequestLatency(duration time.Duration) {
-	s.leafRequestLatency.Update(duration)
+func (m *messageMetric) UpdateRequestLatency(duration time.Duration) {
+	m.requestLatency.Update(duration)
 }
 
-type noopStats struct{}
-
-func NewNoOpStats() Stats {
-	return &noopStats{}
+type clientSyncerStats struct {
+	atomicTrieLeavesMetric,
+	stateTrieLeavesMetric,
+	codeRequestMetric,
+	blockRequestMetric MessageMetric
 }
 
-// all operations are no-ops
-func (n *noopStats) IncLeavesRequested()                    {}
-func (n *noopStats) UpdateLeavesReceived(int64)             {}
-func (n *noopStats) UpdateTrieCommitted(int64)              {}
-func (n *noopStats) UpdateStorageCommitted(int64)           {}
-func (n *noopStats) UpdateCodeCommitted(int64)              {}
-func (n *noopStats) UpdateLeafRequestLatency(time.Duration) {}
+// NewClientSyncerStats returns stats for the client syncer
+func NewClientSyncerStats() ClientSyncerStats {
+	return &clientSyncerStats{
+		atomicTrieLeavesMetric: NewMessageMetric("sync_atomic_trie_leaves"),
+		stateTrieLeavesMetric:  NewMessageMetric("sync_state_trie_leaves"),
+		codeRequestMetric:      NewMessageMetric("sync_code"),
+		blockRequestMetric:     NewMessageMetric("sync_blocks"),
+	}
+}
+
+// GetMetric returns the appropriate messaage metric for the given request
+// Note: this function will panic if an unexpected request type is passed in.
+func (c *clientSyncerStats) GetMetric(msgIntf message.Request) (MessageMetric, error) {
+	switch msg := msgIntf.(type) {
+	case message.BlockRequest:
+		return c.blockRequestMetric, nil
+	case message.CodeRequest:
+		return c.codeRequestMetric, nil
+	case message.LeafsRequest:
+		switch msg.NodeType {
+		case message.StateTrieNode:
+			return c.stateTrieLeavesMetric, nil
+		case message.AtomicTrieNode:
+			return c.atomicTrieLeavesMetric, nil
+		default:
+			return nil, fmt.Errorf("invalid leafs request for node type: %T", msg.NodeType)
+		}
+	default:
+		return nil, fmt.Errorf("attempted to get metric for invalid request with type %T", msg)
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 
 	"github.com/ava-labs/coreth/ethdb/memorydb"
+	"github.com/ava-labs/coreth/statesync/stats"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -68,15 +69,17 @@ type client struct {
 	maxRetryDelay  time.Duration
 	stateSyncNodes []ids.ShortID
 	nodeIdx        int
+	stats          stats.ClientSyncerStats
 }
 
-func NewClient(networkClient peer.Client, maxAttempts uint8, maxRetryDelay time.Duration, codec codec.Manager, stateSyncNodes []ids.ShortID) *client {
+func NewClient(networkClient peer.Client, stats stats.ClientSyncerStats, maxAttempts uint8, maxRetryDelay time.Duration, codec codec.Manager, stateSyncNodes []ids.ShortID) *client {
 	return &client{
 		networkClient:  networkClient,
 		maxAttempts:    maxAttempts,
 		maxRetryDelay:  maxRetryDelay,
 		codec:          codec,
 		stateSyncNodes: stateSyncNodes,
+		stats:          stats,
 	}
 }
 
@@ -87,7 +90,7 @@ func NewClient(networkClient peer.Client, maxAttempts uint8, maxRetryDelay time.
 // - response does not contain a valid merkle proof.
 // Returns error if retries have been exceeded
 func (c *client) GetLeafs(req message.LeafsRequest) (message.LeafsResponse, error) {
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseLeafsResponse)
+	data, metric, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseLeafsResponse)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}
@@ -96,6 +99,7 @@ func (c *client) GetLeafs(req message.LeafsRequest) (message.LeafsResponse, erro
 	if !ok {
 		return message.LeafsResponse{}, fmt.Errorf("received unexpected type in response, expected: %T", response)
 	}
+	metric.UpdateReceived(int64(len(response.Keys)))
 
 	return response, err
 }
@@ -178,12 +182,15 @@ func (c *client) GetBlocks(hash common.Hash, height uint64, parents uint16) ([]*
 		Parents: parents,
 	}
 
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseBlocks)
+	data, metric, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseBlocks)
 	if err != nil {
 		return nil, fmt.Errorf("could not get blocks (%s) due to %w", hash, err)
 	}
 
-	return data.(types.Blocks), err
+	blocks := data.(types.Blocks)
+	metric.UpdateReceived(int64(len(blocks)))
+
+	return blocks, err
 }
 
 // parseBlocks validates given object as message.BlockResponse
@@ -229,12 +236,13 @@ func parseBlocks(codec codec.Manager, req message.Request, data []byte) (interfa
 func (c *client) GetCode(hash common.Hash) ([]byte, error) {
 	req := message.NewCodeRequest(hash)
 
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseCode)
+	data, metric, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseCode)
 	if err != nil {
 		return nil, fmt.Errorf("could not get code (%s): %w", hash, err)
 	}
 
 	response := data.(message.CodeResponse)
+	metric.UpdateReceived(int64(len(response.Data)))
 	return response.Data, err
 }
 
@@ -264,13 +272,17 @@ func parseCode(codec codec.Manager, req message.Request, data []byte) (interface
 // returns parsed struct as interface{} returned by parseResponseFn
 // retries given request for maximum of [attempts] times with maximum delay of [maxRetryDelay] between attempts
 // Thread safe
-func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time.Duration, parseFn parseResponseFn) (interface{}, error) {
+func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time.Duration, parseFn parseResponseFn) (interface{}, stats.MessageMetric, error) {
 	// marshal the request into requestBytes
 	requestBytes, err := message.RequestToBytes(c.codec, request)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	metric, err := c.stats.GetMetric(request)
+	if err != nil {
+		return nil, nil, err
+	}
 	var responseIntf interface{}
 	// Loop until we run out of attempts or receive a valid response.
 	for attempt := uint8(0); attempt < attempts; attempt++ {
@@ -281,10 +293,12 @@ func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time
 			randTime := rand.Int63n(maxRetryDelay.Nanoseconds())
 			time.Sleep(time.Duration(randTime))
 		}
+		metric.IncRequested()
 
 		var (
 			response []byte
 			nodeID   ids.ShortID
+			start    time.Time = time.Now()
 		)
 		if len(c.stateSyncNodes) == 0 {
 			response, nodeID, err = c.networkClient.RequestAny(StateSyncVersion, requestBytes)
@@ -296,20 +310,25 @@ func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time
 
 			response, err = c.networkClient.Request(nodeID, requestBytes)
 		}
+		metric.UpdateRequestLatency(time.Since(start))
 
 		if err != nil {
 			log.Info("request failed, retrying", "nodeID", nodeID, "attempt", attempt, "request", request, "err", err)
+			metric.IncFailed()
 			continue
 		} else {
 			responseIntf, err = parseFn(c.codec, request, response)
 			if err != nil {
 				log.Info("could not validate response, retrying", "nodeID", nodeID, "attempt", attempt, "request", request, "err", err)
+				metric.IncFailed()
+				metric.IncInvalidResponse()
 				continue
 			}
-			return responseIntf, nil
+			metric.IncSucceeded()
+			return responseIntf, metric, nil
 		}
 	}
 
 	// we only get this far if we've run out of attempts
-	return nil, fmt.Errorf("%s (%d): %w", errExceededRetryLimit, attempts, err)
+	return nil, nil, fmt.Errorf("%s (%d): %w", errExceededRetryLimit, attempts, err)
 }

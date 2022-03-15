@@ -7,10 +7,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
@@ -40,7 +38,6 @@ type LeafSyncTask struct {
 
 type CallbackLeafSyncer struct {
 	client LeafClient
-	stats  stats.Stats
 	tasks  chan *LeafSyncTask
 	done   chan error
 
@@ -52,10 +49,9 @@ type LeafClient interface {
 }
 
 // NewCallbackLeafSyncer creates a new syncer object to perform leaf sync of tries.
-func NewCallbackLeafSyncer(client LeafClient, stats stats.Stats) *CallbackLeafSyncer {
+func NewCallbackLeafSyncer(client LeafClient) *CallbackLeafSyncer {
 	return &CallbackLeafSyncer{
 		client: client,
-		stats:  stats,
 		tasks:  make(chan *LeafSyncTask),
 		done:   make(chan error),
 	}
@@ -96,8 +92,6 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 		default:
 		}
 
-		c.stats.IncLeavesRequested()
-		startTime := time.Now()
 		leafsResponse, err := c.client.GetLeafs(message.LeafsRequest{
 			Root:     root,
 			Start:    start,
@@ -105,8 +99,6 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 			Limit:    1024,
 			NodeType: task.NodeType,
 		})
-		c.stats.UpdateLeafRequestLatency(time.Since(startTime))
-		c.stats.UpdateLeavesReceived(int64(len(leafsResponse.Keys)))
 
 		if err != nil {
 			return fmt.Errorf("failed to fetch leafs: %w", err)

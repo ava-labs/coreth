@@ -4,57 +4,36 @@
 package stats
 
 import (
-	"sync"
 	"time"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
-var _ Stats = &MockSyncerStats{}
+var _ ClientSyncerStats = &noopStats{}
 
-// MockSyncerStats is stats collector for metrics
-// Fields are exported here because it is expected that they are accessed
-// when the syncer has finished running in test so there will be no race condition
-type MockSyncerStats struct {
-	lock                  sync.Mutex
-	LeavesRequested       uint32
-	LeavesReceived        int64
-	TrieCommitted         int64
-	StorageCommitted      int64
-	CodeCommitted         int64
-	LeafRequestLatencySum time.Duration
+// no-op implementation of ClientSyncerStats
+type noopStats struct {
+	noop noopMsgMetric
 }
 
-func (m *MockSyncerStats) IncLeavesRequested() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.LeavesRequested++
+type noopMsgMetric struct{}
+
+func (noopMsgMetric) IncRequested()                      {}
+func (noopMsgMetric) IncSucceeded()                      {}
+func (noopMsgMetric) IncFailed()                         {}
+func (noopMsgMetric) IncInvalidResponse()                {}
+func (noopMsgMetric) UpdateReceived(int64)               {}
+func (noopMsgMetric) UpdateRequestLatency(time.Duration) {}
+
+func NewNoOpStats() ClientSyncerStats {
+	return &noopStats{}
 }
 
-func (m *MockSyncerStats) UpdateLeavesReceived(size int64) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.LeavesReceived += size
+func (n noopStats) GetMetric(_ message.Request) (MessageMetric, error) {
+	return n.noop, nil
 }
 
-func (m *MockSyncerStats) UpdateTrieCommitted(size int64) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.TrieCommitted += size
-}
-
-func (m *MockSyncerStats) UpdateStorageCommitted(size int64) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.StorageCommitted += size
-}
-
-func (m *MockSyncerStats) UpdateCodeCommitted(size int64) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.CodeCommitted += size
-}
-
-func (m *MockSyncerStats) UpdateLeafRequestLatency(duration time.Duration) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.LeafRequestLatencySum += duration
-}
+// all operations are no-ops
+func (n *noopStats) IncLeavesRequested()                    {}
+func (n *noopStats) UpdateLeavesReceived(int64)             {}
+func (n *noopStats) UpdateLeafRequestLatency(time.Duration) {}

@@ -27,7 +27,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers"
 	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	syncerstats "github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -134,7 +133,6 @@ type testSyncResult struct {
 	syncer                     *stateSyncer
 	accounts                   map[common.Hash]types.StateAccount
 	serverTrieDB, clientTrieDB *trie.Database
-	syncerStats                *syncerstats.MockSyncerStats
 }
 
 func TestSyncer(t *testing.T) {
@@ -487,8 +485,7 @@ func TestSyncer(t *testing.T) {
 			client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
 			clientDB = memorydb.New()
-			syncerStats := &syncerstats.MockSyncerStats{}
-			s, err := NewStateSyncer(root, client, 4, syncerStats, clientDB, commitCap)
+			s, err := NewEVMStateSyncer(root, client, 4, clientDB, commitCap)
 			if err != nil {
 				t.Fatal("could not create StateSyncer", err)
 			}
@@ -504,7 +501,6 @@ func TestSyncer(t *testing.T) {
 					serverTrieDB: serverTrieDB,
 					clientTrieDB: clientTrieDB,
 					syncer:       s,
-					syncerStats:  syncerStats,
 				})
 			}
 		})
@@ -690,8 +686,7 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	clientDB = memorydb.New()
 	clientTrieDB = trie.NewDatabase(clientDB)
 
-	syncerStats := &syncerstats.MockSyncerStats{}
-	s, err := NewStateSyncer(root1, client, 4, syncerStats, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(root1, client, 4, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -707,13 +702,8 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 		syncer:       s,
 	})
 
-	assert.True(t, syncerStats.LeavesReceived > 0)
-	assert.True(t, syncerStats.LeavesRequested > 0)
-
-	// TODO: fix stats
-	// assert.True(t, syncerStats.CodeCommitted > 0)
-	// assert.True(t, syncerStats.StorageCommitted > 0)
-	// assert.True(t, syncerStats.TrieCommitted > 0)
+	assert.True(t, client.LeavesReceived > 0)
+	assert.True(t, client.CodeReceived > 0)
 
 	db := clientTrieDB.DiskDB()
 
@@ -744,10 +734,8 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	}
 	iter.Release()
 
-	// reset syncer stats
-	syncerStats = &syncerstats.MockSyncerStats{}
 	// now sync to new root
-	s, err = NewStateSyncer(root2, client, 4, syncerStats, clientDB, commitCap)
+	s, err = NewEVMStateSyncer(root2, client, 4, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -767,13 +755,8 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 		syncer:       s,
 	})
 
-	assert.True(t, syncerStats.LeavesReceived > 0)
-	assert.True(t, syncerStats.LeavesRequested > 0)
-
-	// TODO: fix stats
-	// assert.True(t, syncerStats.CodeCommitted > 0)
-	// assert.True(t, syncerStats.StorageCommitted > 0)
-	// assert.True(t, syncerStats.TrieCommitted > 0)
+	assert.True(t, client.LeavesReceived > 0)
+	assert.True(t, client.CodeReceived > 0)
 }
 
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
@@ -790,7 +773,7 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec)
 	client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
-	s, err := NewStateSyncer(root, client, 4, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	s, err := NewEVMStateSyncer(root, client, 4, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}

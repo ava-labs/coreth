@@ -13,7 +13,6 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync"
-	"github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -45,7 +44,7 @@ func addZeroes(height uint64) []byte {
 	return packer.Bytes
 }
 
-func newAtomicSyncer(atomicTrie *atomicTrie, targetRoot common.Hash, targetHeight uint64, client statesync.LeafClient, stats stats.Stats) *atomicSyncer {
+func newAtomicSyncer(atomicTrie *atomicTrie, targetRoot common.Hash, targetHeight uint64, client statesync.LeafClient) *atomicSyncer {
 	_, lastCommit := atomicTrie.LastCommitted()
 
 	return &atomicSyncer{
@@ -54,7 +53,7 @@ func newAtomicSyncer(atomicTrie *atomicTrie, targetRoot common.Hash, targetHeigh
 		targetHeight: targetHeight,
 		nextCommit:   lastCommit + atomicTrie.commitHeightInterval,
 		nextHeight:   lastCommit + 1,
-		syncer:       statesync.NewCallbackLeafSyncer(client, stats),
+		syncer:       statesync.NewCallbackLeafSyncer(client),
 	}
 }
 

@@ -51,13 +51,14 @@ var (
 )
 
 type stateSyncConfig struct {
+	*vmState
+	statsEnabled bool
 	enabled      bool
 	codec        codec.Manager
 	netCodec     codec.Manager
 	network      peer.Network
 	client       peer.Client
 	toEngine     chan<- commonEng.Message
-	syncStats    stats.Stats
 	stateSyncIDs []ids.ShortID
 }
 
@@ -78,17 +79,21 @@ type stateSyncer struct {
 
 	client statesync.Client
 	*stateSyncConfig
-	*vmState
 
 	// used to stop syncer
 	cancel func()
 }
 
-func NewStateSyncer(vmState *vmState, config *stateSyncConfig) *stateSyncer {
+func NewStateSyncer(config *stateSyncConfig) *stateSyncer {
+	var syncerStats stats.ClientSyncerStats
+	if config.statsEnabled {
+		syncerStats = stats.NewClientSyncerStats()
+	} else {
+		syncerStats = stats.NewNoOpStats()
+	}
 	return &stateSyncer{
-		vmState:         vmState,
 		stateSyncConfig: config,
-		client:          statesync.NewClient(config.client, maxRetryAttempts, statesync.DefaultMaxRetryDelay, config.netCodec, config.stateSyncIDs),
+		client:          statesync.NewClient(config.client, syncerStats, maxRetryAttempts, statesync.DefaultMaxRetryDelay, config.netCodec, config.stateSyncIDs),
 	}
 }
 
@@ -350,13 +355,7 @@ func (vm *stateSyncer) stateSyncStepWithMarker(doneKey []byte, name string, work
 
 func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", vm.stateSyncBlock.AtomicRoot)
-	vm.syncer = newAtomicSyncer(
-		vm.atomicTrie,
-		vm.stateSyncBlock.AtomicRoot,
-		vm.stateSyncBlock.BlockNumber,
-		vm.client,
-		stats.NewStats(),
-	)
+	vm.syncer = newAtomicSyncer(vm.atomicTrie, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber, vm.client)
 	vm.syncer.Start(ctx)
 	err := <-vm.syncer.Done()
 	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", err)
@@ -365,8 +364,7 @@ func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 
 func (vm *stateSyncer) syncStateTrie(ctx context.Context, commitCap int) error {
 	log.Info("state sync: sync starting", "root", vm.stateSyncBlock.BlockRoot)
-	syncer, err := statesync.NewStateSyncer(
-		vm.stateSyncBlock.BlockRoot, vm.client, 4, stats.NewStats(), vm.chaindb, commitCap)
+	syncer, err := statesync.NewEVMStateSyncer(vm.stateSyncBlock.BlockRoot, vm.client, 4, vm.chaindb, commitCap)
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/ava-labs/coreth/statesync"
 	"github.com/ava-labs/coreth/statesync/handlers"
 	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	syncerstats "github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 )
 
@@ -47,7 +46,6 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 		codec, handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec), nil, nil)
 
 	clientDB := versiondb.New(memdb.New())
-	syncerStats := &syncerstats.MockSyncerStats{}
 
 	repo, err := NewAtomicTxRepository(clientDB, codec, 0)
 	if err != nil {
@@ -62,7 +60,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 	// next trie.
 	for i, checkpoint := range checkpoints {
 		// Create syncer targeting the current [syncTrie].
-		syncer := newAtomicSyncer(atomicTrie, syncTrie.Hash(), targetHeight, leafClient, syncerStats)
+		syncer := newAtomicSyncer(atomicTrie, syncTrie.Hash(), targetHeight, leafClient)
 		leafClient.GetLeafsIntercept = func(leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
 			if numLeaves+len(leafsResponse.Keys) > checkpoint.leafCutoff {
@@ -79,14 +77,14 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 			t.Fatalf("Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 		}
 
-		assert.Equal(t, checkpoint.expectedNumLeavesSynced, syncerStats.LeavesReceived, "unexpected number of leaves received at checkpoint %d", i)
+		assert.Equal(t, checkpoint.expectedNumLeavesSynced, leafClient.LeavesReceived, "unexpected number of leaves received at checkpoint %d", i)
 		// Replace the trie and target height for the next checkpoint
 		syncTrie = checkpoint.trie
 		targetHeight = checkpoint.targetHeight
 	}
 
 	// Create syncer targeting the current [syncTrie].
-	syncer := newAtomicSyncer(atomicTrie, syncTrie.Hash(), targetHeight, leafClient, syncerStats)
+	syncer := newAtomicSyncer(atomicTrie, syncTrie.Hash(), targetHeight, leafClient)
 
 	// Update intercept to only count the leaves
 	leafClient.GetLeafsIntercept = func(leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
@@ -100,7 +98,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 		t.Fatalf("Expected syncer to finish successfully but failed due to %s", err)
 	}
 
-	assert.Equal(t, finalExpectedNumLeaves, syncerStats.LeavesReceived, "unexpected number of leaves received to match")
+	assert.Equal(t, finalExpectedNumLeaves, leafClient.LeavesReceived, "unexpected number of leaves received to match")
 
 	// we re-initialise trie DB for asserting the trie to make sure any issues with unflushed writes
 	// are caught here as this will only pass if all trie nodes have been written to the underlying DB

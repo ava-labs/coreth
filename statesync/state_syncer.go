@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -73,7 +72,7 @@ type stateSyncer struct {
 	client    Client
 }
 
-func NewStateSyncer(root common.Hash, client Client, numThreads int, stats stats.Stats, db ethdb.Database, commitCap int) (*stateSyncer, error) {
+func NewEVMStateSyncer(root common.Hash, client Client, numThreads int, db ethdb.Database, commitCap int) (*stateSyncer, error) {
 	progressMarker, err := loadProgress(db, root)
 	if err != nil {
 		return nil, err
@@ -103,7 +102,7 @@ func NewStateSyncer(root common.Hash, client Client, numThreads int, stats stats
 		trieDB:         trie.NewDatabase(db),
 		db:             db,
 		numThreads:     numThreads,
-		syncer:         NewCallbackLeafSyncer(client, stats),
+		syncer:         NewCallbackLeafSyncer(client),
 	}, nil
 }
 

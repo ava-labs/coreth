@@ -22,7 +22,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/statesync/handlers"
 	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	syncerstats "github.com/ava-labs/coreth/statesync/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -45,7 +44,7 @@ func TestSimpleTrieSync(t *testing.T) {
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
 	client := NewMockLeafClient(codec, leafsRequestHandler, nil, nil)
 
-	s, err := NewStateSyncer(root, client, 4, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	s, err := NewEVMStateSyncer(root, client, 4, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -72,7 +71,7 @@ func TestErrorsPropagateFromGoroutines(t *testing.T) {
 	client.GetLeafsIntercept = func(message.LeafsResponse) (message.LeafsResponse, error) {
 		return message.LeafsResponse{}, testErr
 	}
-	s, err := NewStateSyncer(root, client, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	s, err := NewEVMStateSyncer(root, client, 2, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -100,7 +99,7 @@ func TestCancel(t *testing.T) {
 		return response, nil
 	}
 
-	s, err := NewStateSyncer(root, client, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	s, err := NewEVMStateSyncer(root, client, 2, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -147,7 +146,7 @@ func TestResumeSync(t *testing.T) {
 			return message.LeafsResponse{}, errors.New("generic error")
 		}
 	}
-	s, err := NewStateSyncer(root, client, numThreads, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	s, err := NewEVMStateSyncer(root, client, numThreads, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -168,7 +167,7 @@ func TestResumeSync(t *testing.T) {
 	waitFor(t, s.Done(), context.Canceled, testSyncTimeout)
 
 	// resume
-	s, err = NewStateSyncer(root, client, numThreads, syncerstats.NewNoOpStats(), clientDB, s.commitCap)
+	s, err = NewEVMStateSyncer(root, client, numThreads, clientDB, s.commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -203,7 +202,7 @@ func TestResumeSync(t *testing.T) {
 	// reset count and do another sync
 	count = 0
 	<-snapshot.WipeSnapshot(clientDB, true)
-	s, err = NewStateSyncer(newRoot, client, numThreads, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	s, err = NewEVMStateSyncer(newRoot, client, numThreads, clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
