@@ -84,6 +84,9 @@ func (s *atomicSyncer) onLeafs(_ common.Hash, keys [][]byte, values [][]byte) ([
 			if err := s.atomicTrie.commit(s.nextCommit); err != nil {
 				return nil, err
 			}
+			if err := s.atomicTrie.db.Commit(); err != nil {
+				return nil, err
+			}
 			s.nextCommit += s.atomicTrie.commitHeightInterval
 		}
 
@@ -100,6 +103,9 @@ func (s *atomicSyncer) onLeafs(_ common.Hash, keys [][]byte, values [][]byte) ([
 func (s *atomicSyncer) onFinish(_ common.Hash) error {
 	// commit the trie on finish
 	if err := s.atomicTrie.commit(s.targetHeight); err != nil {
+		return err
+	}
+	if err := s.atomicTrie.db.Commit(); err != nil {
 		return err
 	}
 
