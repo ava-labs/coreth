@@ -84,36 +84,19 @@ func TestSimpleTrieSync(t *testing.T) {
 	assert.Equal(t, serverNodes, clientNodes)
 }
 
-type testingClient struct {
-	leafs  message.LeafsResponse
-	err    error
-	waitCh <-chan struct{}
-}
-
-var (
-	_            Client = &testingClient{}
-	errErrClient        = errors.New("always returns this error")
-)
-
-func (tc *testingClient) GetLeafs(req message.LeafsRequest) (message.LeafsResponse, error) {
-	if tc.waitCh != nil {
-		<-tc.waitCh
-	}
-	return tc.leafs, tc.err
-}
-
-func (tc *testingClient) GetBlocks(common.Hash, uint64, uint16) ([]*types.Block, error) {
-	panic("not implemented")
-}
-
-func (tc *testingClient) GetCode(common.Hash) ([]byte, error) {
-	panic("not implemented")
-}
-
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
+	codec := getSyncCodec(t)
 	clientDB := memorydb.New()
 	defer clientDB.Close()
-	s, err := NewStateSyncer(common.Hash{}, &testingClient{err: errErrClient}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+	trieDB := trie.NewDatabase(clientDB)
+	root, _, _ := trie.GenerateTrie(t, trieDB, 1, common.HashLength)
+	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewHandlerStats(), codec)
+	client := NewMockLeafClient(codec, leafsHandler, nil, nil)
+	testErr := errors.New("always returns this error")
+	client.GetLeafsIntercept = func(message.LeafsResponse) (message.LeafsResponse, error) {
+		return message.LeafsResponse{}, testErr
+	}
+	s, err := NewStateSyncer(root, client, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -125,22 +108,29 @@ func TestErrorsPropagateFromGoroutines(t *testing.T) {
 		assert.Fail(t, "sync not complete in a reasonable time")
 		return
 	}
-	assert.ErrorIs(t, s.Error(), errErrClient)
+	assert.ErrorIs(t, s.Error(), testErr)
 }
 
 func TestCancel(t *testing.T) {
+	codec := getSyncCodec(t)
 	clientDB := memorydb.New()
 	defer clientDB.Close()
-	// setup the testingClient with waitCh so it blocks after serving 1 request
+	trieDB := trie.NewDatabase(clientDB)
+	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewHandlerStats(), codec)
+	root, _, _ := trie.GenerateTrie(t, trieDB, 1, common.HashLength)
+	client := NewMockLeafClient(codec, leafsHandler, nil, nil)
+
+	// setup GetLeafsIntercept with waitCh so it blocks after serving 1 request
 	// that gives us time to cancel the context and assert the correct error
 	waitCh := make(chan struct{}, 1)
 	waitCh <- struct{}{}
-	leafResponse := message.LeafsResponse{
-		Keys: [][]byte{[]byte("key")},
-		Vals: [][]byte{[]byte("val")},
-		More: true, // set more to true so client will attempt more requests
+	client.GetLeafsIntercept = func(response message.LeafsResponse) (message.LeafsResponse, error) {
+		<-waitCh
+		response.More = true // set more to true so client will attempt more requests
+		return response, nil
 	}
-	s, err := NewStateSyncer(common.Hash{}, &testingClient{leafs: leafResponse}, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
+
+	s, err := NewStateSyncer(root, client, 2, syncerstats.NewNoOpStats(), clientDB, commitCap)
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
