@@ -5,6 +5,7 @@ package evm
 
 import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
@@ -18,7 +19,7 @@ import (
 func syncableBlockToSummary(codec codec.Manager, syncableBlock message.SyncableBlock) (common.Summary, error) {
 	contentBytes, err := codec.Marshal(message.Version, syncableBlock)
 	if err != nil {
-		return common.Summary{}, err
+		return nil, err
 	}
 
 	// engine needs to access block ID and height,
@@ -32,16 +33,21 @@ func syncableBlockToSummary(codec codec.Manager, syncableBlock message.SyncableB
 	// as the engine does in the codec here
 	summary, err := codec.Marshal(block.StateSyncDefaultKeysVersion, engineSummary)
 	if err != nil {
-		return common.Summary{}, err
+		return nil, err
 	}
 
-	return summary, nil
+	summaryID, err := ids.ToID(crypto.Keccak256(summary))
+	return &block.Summary{
+		SummaryKey:   common.SummaryKey(engineSummary.Height),
+		SummaryID:    common.SummaryID(summaryID),
+		ContentBytes: summary,
+	}, err
 }
 
 // summaryToSyncableBlock parses common.Summary into a message.SyncableBlock
-func summaryToSyncableBlock(codec codec.Manager, summary common.Summary) (message.SyncableBlock, error) {
+func summaryToSyncableBlock(codec codec.Manager, summaryBytes []byte) (message.SyncableBlock, error) {
 	var engineSummary block.CoreSummaryContent
-	if _, err := codec.Unmarshal(summary, &engineSummary); err != nil {
+	if _, err := codec.Unmarshal(summaryBytes, &engineSummary); err != nil {
 		return message.SyncableBlock{}, err
 	}
 

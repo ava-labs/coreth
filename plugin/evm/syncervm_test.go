@@ -147,11 +147,11 @@ func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	lastKey, _, err := syncedVM.StateSyncGetKeyHash(summary)
+	parsedSummary, err := syncedVM.ParseSummary(summary.Bytes())
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	retrievedSummary, err := syncedVM.StateSyncGetSummary(lastKey)
+	retrievedSummary, err := syncedVM.StateSyncGetSummary(parsedSummary.Key())
 	if err != nil {
 		t.Fatal("error when checking if summary is accepted", "err", err)
 	}
