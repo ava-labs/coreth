@@ -75,9 +75,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 		}
 
 		syncer.Start(ctx)
-		<-syncer.Done()
-
-		if err := syncer.Error(); err == nil {
+		if err := <-syncer.Done(); err == nil {
 			t.Fatalf("Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 		}
 
@@ -98,9 +96,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 	}
 
 	syncer.Start(ctx)
-	<-syncer.Done()
-
-	if err := syncer.Error(); err != nil {
+	if err := <-syncer.Done(); err != nil {
 		t.Fatalf("Expected syncer to finish successfully but failed due to %s", err)
 	}
 

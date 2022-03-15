@@ -280,7 +280,7 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 		return err
 	}
 	if storageRoot != root {
-		return fmt.Errorf("unexpected storage root, expected=%s, actual=%s", root, storageRoot)
+		return fmt.Errorf("unexpected storage root, expected=%s, actual=%s account=%s", root, storageRoot, storageTrieProgress.Account)
 	}
 	// Note: we hold the lock when copying storage snapshots as well as when adding new accounts to ensure there is
 	// no race condition between adding accounts and copying them.
@@ -344,12 +344,8 @@ func (s *stateSyncer) checkAllDone() error {
 	return mainTrie.batch.Write()
 }
 
-// Error return an error from syncing. This should only be called after the channel returned by Done
-// has been closed.
-func (s *stateSyncer) Error() error { return s.syncer.Error() }
-
-// Done returns a channel that will be closed when the syncer has terminated.
-func (s *stateSyncer) Done() <-chan struct{} { return s.syncer.Done() }
+// Done returns a channel which produces any error that occurred during syncing or nil on success.
+func (s *stateSyncer) Done() <-chan error { return s.syncer.Done() }
 
 // onSyncFailure writes all in-progress batches to disk to preserve maximum progress
 func (s *stateSyncer) onSyncFailure(error) error {

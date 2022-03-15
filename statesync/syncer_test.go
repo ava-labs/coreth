@@ -28,23 +28,22 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const commitCap = 1 * units.MiB
+const (
+	commitCap       = 1 * units.MiB
+	testSyncTimeout = 20 * time.Second
+)
 
 func TestSimpleTrieSync(t *testing.T) {
-	var (
-		// server stuff
-		serverDB     = memorydb.New()
-		serverTrieDB = trie.NewDatabase(serverDB)
-	)
-
-	root, serverTrie := setupTestTrie(t, serverTrieDB)
+	// setup server
+	serverDB := memorydb.New()
+	serverTrieDB := trie.NewDatabase(serverDB)
+	root, _ := setupTestTrie(t, serverTrieDB)
 
 	// setup client
 	clientDB := memorydb.New()
 	codec := getSyncCodec(t)
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-	codeRequestHandler := handlers.NewCodeRequestHandler(nil, handlerstats.NewNoopHandlerStats(), codec)
-	client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
+	client := NewMockLeafClient(codec, leafsRequestHandler, nil, nil)
 
 	s, err := NewStateSyncer(root, client, 4, syncerstats.NewNoOpStats(), clientDB, commitCap)
 	if err != nil {
@@ -52,36 +51,13 @@ func TestSimpleTrieSync(t *testing.T) {
 	}
 	// begin sync
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-		// expect sync to be done in a reasonable time.
-	case <-time.After(1 * time.Minute):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.NoError(t, s.Error())
+	waitFor(t, s.Done(), nil, testSyncTimeout)
 
-	// get the two tries and ensure they have equal nodes
+	// ensure client trie has same nodes as server trie
 	clientTrieDB := trie.NewDatabase(clientDB)
-	clientTrie, err := trie.New(root, clientTrieDB)
 	assert.NoError(t, err, "client trie must initialise with synced root")
 
-	// ensure trie hashes are the same
-	assert.Equal(t, serverTrie.Hash(), clientTrie.Hash(), "server trie hash and client trie hash must match")
-
-	clientIt := trie.NewIterator(clientTrie.NodeIterator(nil))
-	clientNodes := 0
-	for clientIt.Next() {
-		clientNodes++
-	}
-
-	serverIt := trie.NewIterator(serverTrie.NodeIterator(nil))
-	serverNodes := 0
-	for serverIt.Next() {
-		serverNodes++
-	}
-	assert.Equal(t, 3, clientNodes)
-	assert.Equal(t, serverNodes, clientNodes)
+	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB)
 }
 
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
@@ -102,13 +78,7 @@ func TestErrorsPropagateFromGoroutines(t *testing.T) {
 	}
 	// begin sync
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-	case <-time.After(10 * time.Second):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.ErrorIs(t, s.Error(), testErr)
+	waitFor(t, s.Done(), testErr, testSyncTimeout)
 }
 
 func TestCancel(t *testing.T) {
@@ -138,13 +108,7 @@ func TestCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.Start(ctx)
 	cancel()
-	select {
-	case <-s.Done():
-	case <-time.After(10 * time.Second):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.ErrorIs(t, s.Error(), context.Canceled)
+	waitFor(t, s.Done(), context.Canceled, testSyncTimeout)
 }
 
 func TestResumeSync(t *testing.T) {
@@ -200,13 +164,8 @@ func TestResumeSync(t *testing.T) {
 	cancel()
 	close(waitCh) // allow work to progress
 
-	select {
-	case <-s.Done():
-	case <-time.After(10 * time.Second):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.ErrorIs(t, s.Error(), context.Canceled)
+	// expect result to be context.Canceled
+	waitFor(t, s.Done(), context.Canceled, testSyncTimeout)
 
 	// resume
 	s, err = NewStateSyncer(root, client, numThreads, syncerstats.NewNoOpStats(), clientDB, s.commitCap)
@@ -217,15 +176,7 @@ func TestResumeSync(t *testing.T) {
 	assert.Len(t, s.progressMarker.StorageTries, 1)
 
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-	case <-time.After(10 * time.Second):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	if err := s.Error(); err != nil {
-		t.Fatal("error in completing resumed sync", err)
-	}
+	waitFor(t, s.Done(), nil, testSyncTimeout)
 
 	// ensure all data is copied
 	it := serverDB.NewIterator(nil, nil)
@@ -258,15 +209,7 @@ func TestResumeSync(t *testing.T) {
 	}
 	// begin sync
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-	case <-time.After(10 * time.Second):
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	if err := s.Error(); err != nil {
-		t.Fatal("error in completing updated trie sync", err)
-	}
+	waitFor(t, s.Done(), nil, testSyncTimeout)
 
 	// should only request leaves in main trie
 	// storage trie will be on disk already
@@ -307,4 +250,20 @@ func setupTestTrie(t *testing.T, triedb *trie.Database) (common.Hash, *trie.Secu
 	assert.NoError(t, err)
 
 	return root, accTrie
+}
+
+// waitFor waits for a result on the [result] channel to match [expected], or a timeout.
+func waitFor(t *testing.T, result <-chan error, expected error, timeout time.Duration) {
+	t.Helper()
+	select {
+	case err := <-result:
+		if expected != nil {
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), expected.Error())
+		} else if err != nil {
+			t.Fatal("unexpected error waiting for sync result", err)
+		}
+	case <-time.After(timeout):
+		t.Fatal("unexpected timeout waiting for sync result")
+	}
 }

@@ -123,10 +123,5 @@ func (s *atomicSyncer) onSyncFailure(error) error {
 	return nil
 }
 
-// Error returns an error if set by the leaf syncer. This should only be called
-// after the channel returned by Done() has been closed.
-func (s *atomicSyncer) Error() error { return s.syncer.Error() }
-
-// Done returns a channel that will be closed when the syncer finishes or exits
-// with an error.
-func (s *atomicSyncer) Done() <-chan struct{} { return s.syncer.Done() }
+// Done returns a channel which produces any error that occurred during syncing or nil on success.
+func (s *atomicSyncer) Done() <-chan error { return s.syncer.Done() }

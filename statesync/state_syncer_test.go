@@ -402,9 +402,8 @@ func TestStateSyncerSync(t *testing.T) {
 			}
 
 			syncer.Start(context.Background())
-			<-syncer.Done()
+			err = <-syncer.Done()
 
-			err = syncer.Error()
 			isError := err != nil
 			if isError != test.expectError {
 				t.Fatalf("unexpected error in test, err=%v", err)

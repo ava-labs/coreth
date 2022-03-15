@@ -42,10 +42,9 @@ type CallbackLeafSyncer struct {
 	client LeafClient
 	stats  stats.Stats
 	tasks  chan *LeafSyncTask
-	done   chan struct{}
+	done   chan error
 
-	err error
-	wg  sync.WaitGroup
+	wg sync.WaitGroup
 }
 
 type LeafClient interface {
@@ -58,7 +57,7 @@ func NewCallbackLeafSyncer(client LeafClient, stats stats.Stats) *CallbackLeafSy
 		client: client,
 		stats:  stats,
 		tasks:  make(chan *LeafSyncTask),
-		done:   make(chan struct{}),
+		done:   make(chan error),
 	}
 }
 
@@ -175,22 +174,19 @@ func (c *CallbackLeafSyncer) Start(ctx context.Context, numThreads int, task *Le
 	})
 
 	go func() {
-		if err := eg.Wait(); err != nil {
-			// Note: [c.err] is only set here, no need for additional locking.
-			c.err = err
+		err := eg.Wait()
+		if err != nil {
 			if err := task.OnSyncFailure(err); err != nil {
 				log.Error("error handling sync failure callback", "err", err)
 			}
 		}
+		c.done <- err
 		close(c.done)
 	}()
 }
 
-// Error returns any error that occurred during syncing.
-func (c *CallbackLeafSyncer) Error() error { return c.err }
-
-// Done returns a channel that is closed when the leaf syncer has completed.
-func (c *CallbackLeafSyncer) Done() <-chan struct{} { return c.done }
+// Done returns a channel which produces any error that occurred during syncing or nil on success.
+func (c *CallbackLeafSyncer) Done() <-chan error { return c.done }
 
 // addTasks adds [tasks] to [c.tasks] and returns nil if all tasks were added.
 // if [ctx] finishes before all tasks are added, the error from [ctx] is returned.

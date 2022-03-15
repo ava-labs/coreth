@@ -7,11 +7,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -143,8 +143,7 @@ func TestSyncer(t *testing.T) {
 		name             string
 		prepareForTest   func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) // return trie database and trie root to sync
 		assertSyncResult func(t *testing.T, result testSyncResult)
-		expectError      bool
-		assertError      func(t *testing.T, err error)
+		expectedError    error
 	}{
 		{
 			name: "accounts_only_trie",
@@ -177,20 +176,14 @@ func TestSyncer(t *testing.T) {
 
 				return serverTrieDB, map[common.Hash]types.StateAccount{}, common.BytesToHash([]byte("totally-fake-root"))
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "failed to fetch leafs")
-			},
+			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "empty_server_trie",
 			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
 				return trie.NewDatabase(memorydb.New()), map[common.Hash]types.StateAccount{}, common.BytesToHash([]byte("some empty bytes"))
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "failed to fetch leafs")
-			},
+			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "inconsistent_server_trie",
@@ -228,10 +221,7 @@ func TestSyncer(t *testing.T) {
 				}
 				return serverTrieDB, accounts, root
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "failed to fetch leafs")
-			},
+			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "sync_non-latest_root",
@@ -286,7 +276,6 @@ func TestSyncer(t *testing.T) {
 
 				return serverTrieDB, accounts, root
 			},
-			expectError: false,
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
 				// ensure tries are consistent
 				assertAccountsTrieConsistency(t, result)
@@ -342,10 +331,7 @@ func TestSyncer(t *testing.T) {
 
 				return serverTrieDB, accounts, root
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "rlp: expected input list for types.StateAccount")
-			},
+			expectedError: errors.New("rlp: expected input list for types.StateAccount"),
 		},
 		{
 			name: "accounts_with_storage",
@@ -410,10 +396,7 @@ func TestSyncer(t *testing.T) {
 
 				return serverTrieDB, accounts, root
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "failed to fetch leafs")
-			},
+			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "accounts_with_missing_code",
@@ -448,10 +431,7 @@ func TestSyncer(t *testing.T) {
 
 				return serverTrieDB, accounts, root
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "error getting code bytes for code hash")
-			},
+			expectedError: errors.New("error getting code bytes for code hash"),
 		},
 		{
 			name: "code_hash_mismatch",
@@ -489,10 +469,7 @@ func TestSyncer(t *testing.T) {
 
 				return serverTrieDB, accounts, root
 			},
-			expectError: true,
-			assertError: func(t *testing.T, err error) {
-				assert.Contains(t, err.Error(), "error getting code bytes for code hash")
-			},
+			expectedError: errors.New("error getting code bytes for code hash"),
 		},
 	}
 	for _, test := range tests {
@@ -517,21 +494,9 @@ func TestSyncer(t *testing.T) {
 			}
 			// begin sync
 			s.Start(context.Background())
-			select {
-			case <-s.Done():
-			// expect sync to be done in a reasonable time.
-			case <-time.After(30 * time.Second):
-				t.Fatal("unexpected timeout in test")
-			}
+			waitFor(t, s.Done(), test.expectedError, testSyncTimeout)
 
-			err = s.Error()
-			isError := err != nil
-			if isError != test.expectError {
-				t.Fatalf("unexpected error in test, err=%v", err)
-			} else if test.expectError {
-				assert.Error(t, err)
-				test.assertError(t, err)
-			} else {
+			if test.expectedError == nil {
 				clientTrieDB = trie.NewDatabase(clientDB)
 				test.assertSyncResult(t, testSyncResult{
 					root:         root,
@@ -670,10 +635,6 @@ func fillAccounts(t *testing.T, tr *trie.Trie, accountsLen int64, onAccount func
 	return accounts
 }
 
-func defaultDeadline() time.Time {
-	return time.Now().Add(5 * time.Second)
-}
-
 func getSyncCodec(t *testing.T) codec.Manager {
 	codec := codec.NewDefaultManager()
 	c := linearcodec.NewDefault()
@@ -736,18 +697,7 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	}
 	// begin sync
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-	// expect sync to be done in a reasonable time.
-	case <-time.After(30 * time.Second):
-		t.Fatal("timeout not expected in test")
-		return
-	}
-
-	err = s.Error()
-	if err != nil {
-		t.Fatalf("unexpected error in test, err=%v", err)
-	}
+	waitFor(t, s.Done(), nil, testSyncTimeout)
 
 	assertAccountsTrieConsistency(t, testSyncResult{
 		root:         root1,
@@ -803,17 +753,7 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	}
 	// begin sync
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-	// expect sync to be done in a reasonable time.
-	case <-time.After(30 * time.Second):
-		t.Fatal("timeout not expected in test")
-		return
-	}
-
-	if err = s.Error(); err != nil {
-		t.Fatalf("unexpected error in test, err=%v", err)
-	}
+	waitFor(t, s.Done(), nil, testSyncTimeout)
 
 	if _, err = trie.New(root2, clientTrieDB); err != nil {
 		t.Fatal(err)
@@ -866,14 +806,7 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 
 	// begin sync
 	s.Start(context.Background())
-	select {
-	case <-s.Done():
-		// expect sync to be done in a reasonable time.
-	case <-time.After(1 * time.Minute): // TODO restore after debugging is complete
-		assert.Fail(t, "sync not complete in a reasonable time")
-		return
-	}
-	assert.NoError(t, s.Error())
+	waitFor(t, s.Done(), nil, testSyncTimeout)
 
 	// get the two tries and ensure they have equal nodes
 	clientTrieDB := trie.NewDatabase(clientDB)

@@ -69,8 +69,7 @@ type stateSyncConfig struct {
 // Error returns an error if any was encountered.
 type Syncer interface {
 	Start(ctx context.Context)
-	Error() error
-	Done() <-chan struct{}
+	Done() <-chan error
 }
 
 type stateSyncer struct {
@@ -367,9 +366,9 @@ func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 		stats.NewStats(),
 	)
 	vm.syncer.Start(ctx)
-	<-vm.syncer.Done()
-	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", vm.syncer.Error())
-	return vm.syncer.Error()
+	err := <-vm.syncer.Done()
+	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", err)
+	return err
 }
 
 func (vm *stateSyncer) syncStateTrie(ctx context.Context, commitCap int) error {
@@ -381,9 +380,9 @@ func (vm *stateSyncer) syncStateTrie(ctx context.Context, commitCap int) error {
 	}
 	vm.syncer = syncer
 	vm.syncer.Start(ctx)
-	<-vm.syncer.Done()
-	log.Info("state sync: sync finished", "root", vm.stateSyncBlock.BlockRoot, "err", vm.syncer.Error())
-	return vm.syncer.Error()
+	err = <-vm.syncer.Done()
+	log.Info("state sync: sync finished", "root", vm.stateSyncBlock.BlockRoot, "err", err)
+	return err
 }
 
 func containsSummary(summaries []commonEng.Summary, summary commonEng.Summary) bool {
