@@ -12,13 +12,13 @@ import (
 )
 
 var (
-	_ Client = &client{}
+	_ NetworkClient = &client{}
 
 	errRequestFailed = errors.New("request failed")
 )
 
-// Client defines ability to send request / response through the Network
-type Client interface {
+// NetworkClient defines ability to send request / response through the Network
+type NetworkClient interface {
 	// RequestAny synchronously sends request to the first connected peer that matches the specified minVersion in
 	// random order.
 	// A peer is considered a match if its version is greater than or equal to the specified minVersion
@@ -35,10 +35,17 @@ type Client interface {
 	Gossip(gossip []byte) error
 }
 
-// client implements Client interface
+// client implements NetworkClient interface
 // provides ability to send request / responses through the Network
 type client struct {
 	network Network
+}
+
+// NewNetworkClient returns Client for a given network
+func NewNetworkClient(network Network) NetworkClient {
+	return &client{
+		network: network,
+	}
 }
 
 // RequestAny synchronously sends request to the first connected peer that matches the specified minVersion in
@@ -73,11 +80,4 @@ func (c *client) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
 
 func (c *client) Gossip(gossip []byte) error {
 	return c.network.Gossip(gossip)
-}
-
-// NewClient returns Client for a given network
-func NewClient(network Network) Client {
-	return &client{
-		network: network,
-	}
 }

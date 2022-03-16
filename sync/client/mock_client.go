@@ -1,7 +1,7 @@
 // (c) 2021-2022, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package statesync
+package statesyncclient
 
 import (
 	"context"
@@ -10,13 +10,14 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers"
+	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var _ Client = &mockClient{}
+var _ Client = &MockClient{}
 
-type mockClient struct {
+// TODO replace with gomock library
+type MockClient struct {
 	codec          codec.Manager
 	leafsHandler   *handlers.LeafsRequestHandler
 	LeavesReceived int
@@ -31,20 +32,20 @@ type mockClient struct {
 	// GetCodesIntercept is called on every GetCode request if set to a non-nil callback.
 	// Takes in the result returned by the handler and can return a replacement response or
 	// error.
-	GetCodeIntercept func(message.CodeResponse) ([]byte, error)
+	GetCodeIntercept func([]byte) ([]byte, error)
 	// GetBlocksIntercept is called on every GetBlocks request if set to a non-nil callback.
 	// Takes in the result returned by the handler and can return a replacement response or
 	// error.
 	GetBlocksIntercept func(types.Blocks) (types.Blocks, error)
 }
 
-func NewMockLeafClient(
+func NewMockClient(
 	codec codec.Manager,
 	leafHandler *handlers.LeafsRequestHandler,
 	codesHandler *handlers.CodeRequestHandler,
 	blocksHandler *handlers.BlockRequestHandler,
-) *mockClient {
-	return &mockClient{
+) *MockClient {
+	return &MockClient{
 		codec:         codec,
 		leafsHandler:  leafHandler,
 		codesHandler:  codesHandler,
@@ -52,13 +53,13 @@ func NewMockLeafClient(
 	}
 }
 
-func (ml *mockClient) GetLeafs(request message.LeafsRequest) (message.LeafsResponse, error) {
+func (ml *MockClient) GetLeafs(request message.LeafsRequest) (message.LeafsResponse, error) {
 	response, err := ml.leafsHandler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}
 
-	leafResponseIntf, err := parseLeafsResponse(ml.codec, request, response)
+	leafResponseIntf, numLeaves, err := parseLeafsResponse(ml.codec, request, response)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}
@@ -67,11 +68,11 @@ func (ml *mockClient) GetLeafs(request message.LeafsRequest) (message.LeafsRespo
 		leafsResponse, err = ml.GetLeafsIntercept(leafsResponse)
 	}
 	// Increment the number of leaves received by the mock client
-	ml.LeavesReceived += len(leafsResponse.Keys)
+	ml.LeavesReceived += numLeaves
 	return leafsResponse, err
 }
 
-func (ml *mockClient) GetCode(codeHash common.Hash) ([]byte, error) {
+func (ml *MockClient) GetCode(codeHash common.Hash) ([]byte, error) {
 	if ml.codesHandler == nil {
 		panic("no code handler for mock client")
 	}
@@ -81,22 +82,21 @@ func (ml *mockClient) GetCode(codeHash common.Hash) ([]byte, error) {
 		return nil, err
 	}
 
-	codeResponseIntf, err := parseCode(ml.codec, request, response)
+	codeBytesIntf, lenCode, err := parseCode(ml.codec, request, response)
 	if err != nil {
 		return nil, err
 	}
-	codeResponse := codeResponseIntf.(message.CodeResponse)
-	code := codeResponse.Data
+	code := codeBytesIntf.([]byte)
 	if ml.GetCodeIntercept != nil {
-		code, err = ml.GetCodeIntercept(codeResponse)
+		code, err = ml.GetCodeIntercept(code)
 	}
 	if err == nil {
-		ml.CodeReceived++
+		ml.CodeReceived += lenCode
 	}
 	return code, err
 }
 
-func (ml *mockClient) GetBlocks(blockHash common.Hash, height uint64, numParents uint16) ([]*types.Block, error) {
+func (ml *MockClient) GetBlocks(blockHash common.Hash, height uint64, numParents uint16) ([]*types.Block, error) {
 	if ml.blocksHandler == nil {
 		panic("no blocks handler for mock client")
 	}
@@ -110,7 +110,7 @@ func (ml *mockClient) GetBlocks(blockHash common.Hash, height uint64, numParents
 		return nil, err
 	}
 
-	blocksRes, err := parseBlocks(ml.codec, request, response)
+	blocksRes, numBlocks, err := parseBlocks(ml.codec, request, response)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +118,6 @@ func (ml *mockClient) GetBlocks(blockHash common.Hash, height uint64, numParents
 	if ml.GetBlocksIntercept != nil {
 		blocks, err = ml.GetBlocksIntercept(blocks)
 	}
-	ml.BlocksReceived += len(blocks)
+	ml.BlocksReceived += numBlocks
 	return blocks, err
 }

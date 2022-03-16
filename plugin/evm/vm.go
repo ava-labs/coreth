@@ -31,9 +31,8 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ava-labs/coreth/statesync/handlers"
-	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/sync/handlers"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 
 	"github.com/prometheus/client_golang/prometheus"
 	// Force-load tracer engine to trigger registration
@@ -235,7 +234,7 @@ type VM struct {
 	profiler profiler.ContinuousProfiler
 
 	peer.Network
-	client       peer.Client
+	client       peer.NetworkClient
 	networkCodec codec.Manager
 
 	// Metrics
@@ -455,7 +454,7 @@ func (vm *VM) Initialize(
 
 	// initialize peer network
 	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
-	vm.client = peer.NewClient(vm.Network)
+	vm.client = peer.NewNetworkClient(vm.Network)
 	vm.initGossipHandling()
 
 	if err = vm.initializeStateSync(toEngine); err != nil {
@@ -542,26 +541,14 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 	})
 
 	var handlerStats handlerstats.HandlerStats
-	if metrics.Enabled {
+	if metrics.Enabled && vm.config.StateSyncMetricsEnabled {
 		// TODO: add separate metrics for atomic trie & state trie
 		handlerStats = handlerstats.NewHandlerStats()
 	} else {
 		handlerStats = handlerstats.NewNoopHandlerStats()
 	}
 
-	blockRequestHandler := handlers.NewBlockRequestHandler(vm.chain.BlockChain().GetBlock, vm.networkCodec, handlerStats)
-	codeRequestHandler := handlers.NewCodeRequestHandler(vm.chaindb, handlerStats, vm.networkCodec)
-	stateTrieLeafsRequestHandler := handlers.NewLeafsRequestHandler(
-		trie.NewDatabaseWithConfig(vm.chaindb, &trie.Config{Cache: vm.config.StateSyncServerTrieCache}),
-		handlerStats,
-		vm.networkCodec,
-	)
-	atomicTrieLeafsRequestHandler := handlers.NewLeafsRequestHandler(
-		vm.atomicTrie.TrieDB(),
-		handlerStats,
-		vm.networkCodec,
-	)
-	requestHandler := handlers.NewSyncHandler(stateTrieLeafsRequestHandler, atomicTrieLeafsRequestHandler, blockRequestHandler, codeRequestHandler)
+	requestHandler := handlers.NewSyncHandler(vm.chain.BlockChain(), vm.atomicTrie.TrieDB(), vm.networkCodec, handlerStats)
 	vm.Network.SetRequestHandler(requestHandler)
 	return nil
 }

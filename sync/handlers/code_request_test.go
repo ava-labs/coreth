@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers/stats"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +34,7 @@ func TestCodeRequestHandler(t *testing.T) {
 	rawdb.WriteCode(database, codeHash, codeBytes)
 
 	mockHandlerStats := &stats.MockHandlerStats{}
-	codeRequestHandler := NewCodeRequestHandler(database, mockHandlerStats, codec)
+	codeRequestHandler := NewCodeRequestHandler(database, codec, mockHandlerStats)
 
 	// query for known code entry
 	responseBytes, err := codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestShortID(), 1, message.CodeRequest{Hash: codeHash})

@@ -11,16 +11,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ava-labs/avalanchego/utils/units"
-
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers"
-	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
+	syncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/handlers"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -384,16 +383,20 @@ func TestStateSyncerSync(t *testing.T) {
 			codec, err := message.BuildCodec()
 			assert.NoError(t, err)
 
-			leafClient := NewMockLeafClient(
+			mockClient := syncclient.NewMockClient(
 				codec,
-				handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec),
-				handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec),
+				handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats()),
+				handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats()),
 				nil,
 			)
 
 			clientDB := memorydb.New()
 
-			syncer, err := NewEVMStateSyncer(root, leafClient, 4, clientDB, 10*units.MiB)
+			syncer, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+				Client: mockClient,
+				Root:   root,
+				DB:     clientDB,
+			})
 			if err != nil {
 				t.Fatalf("error creating new state syncer: %v", err)
 			}

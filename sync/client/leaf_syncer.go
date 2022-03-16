@@ -1,7 +1,7 @@
 // (c) 2021-2022, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package statesync
+package statesyncclient
 
 import (
 	"context"
@@ -126,7 +126,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 		// Update start to be one bit past the last returned key for the next request.
 		// Note: since more was true, this cannot cause an overflow.
 		start = leafsResponse.Keys[len(leafsResponse.Keys)-1]
-		incrOne(start)
+		IncrOne(start)
 	}
 }
 
@@ -200,4 +200,18 @@ func (c *CallbackLeafSyncer) addTasks(ctx context.Context, tasks []*LeafSyncTask
 		}
 	}
 	return nil
+}
+
+// IncrOne increments bytes value by one
+func IncrOne(bytes []byte) {
+	index := len(bytes) - 1
+	for index >= 0 {
+		if bytes[index] < 255 {
+			bytes[index]++
+			break
+		} else {
+			bytes[index] = 0
+			index--
+		}
+	}
 }

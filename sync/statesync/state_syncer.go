@@ -9,14 +9,21 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+const (
+	defaultCommitCap  int = 10 * units.MiB
+	defaultNumThreads int = 4
 )
 
 type TrieProgress struct {
@@ -65,50 +72,56 @@ type stateSyncer struct {
 	progressMarker *StateSyncProgress
 	numThreads     int
 
-	syncer    *CallbackLeafSyncer
+	syncer    *syncclient.CallbackLeafSyncer
 	trieDB    *trie.Database
 	db        ethdb.Database
 	commitCap int
-	client    Client
+	client    syncclient.Client
 }
 
-func NewEVMStateSyncer(root common.Hash, client Client, numThreads int, db ethdb.Database, commitCap int) (*stateSyncer, error) {
-	progressMarker, err := loadProgress(db, root)
+type EVMStateSyncerConfig struct {
+	Root   common.Hash
+	Client syncclient.Client
+	DB     ethdb.Database
+}
+
+func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
+	progressMarker, err := loadProgress(config.DB, config.Root)
 	if err != nil {
 		return nil, err
 	}
 
 	// initialise tries in the progress marker
-	progressMarker.MainTrie = NewTrieProgress(db, commitCap)
-	if err := RestoreMainTrieProgressFromSnapshot(db, progressMarker.MainTrie); err != nil {
+	progressMarker.MainTrie = NewTrieProgress(config.DB, defaultCommitCap)
+	if err := RestoreMainTrieProgressFromSnapshot(config.DB, progressMarker.MainTrie); err != nil {
 		return nil, err
 	}
 
 	for _, storageProgress := range progressMarker.StorageTries {
-		storageProgress.TrieProgress = NewTrieProgress(db, commitCap)
+		storageProgress.TrieProgress = NewTrieProgress(config.DB, defaultCommitCap)
 		// the first account's storage snapshot contains the key/value pairs we need to restore
 		// the stack trie. if other in-progress accounts happen to share the same storage root,
 		// their storage snapshot remains empty until the storage trie is fully synced, then copied
 		// from the first account's storage snapshot
-		if err := RestoreStorageTrieProgressFromSnapshot(db, storageProgress.TrieProgress, storageProgress.Account); err != nil {
+		if err := RestoreStorageTrieProgressFromSnapshot(config.DB, storageProgress.TrieProgress, storageProgress.Account); err != nil {
 			return nil, err
 		}
 	}
 
 	return &stateSyncer{
 		progressMarker: progressMarker,
-		commitCap:      commitCap,
-		client:         client,
-		trieDB:         trie.NewDatabase(db),
-		db:             db,
-		numThreads:     numThreads,
-		syncer:         NewCallbackLeafSyncer(client),
+		commitCap:      defaultCommitCap,
+		client:         config.Client,
+		trieDB:         trie.NewDatabase(config.DB),
+		db:             config.DB,
+		numThreads:     defaultNumThreads,
+		syncer:         syncclient.NewCallbackLeafSyncer(config.Client),
 	}, nil
 }
 
 // Start starts the leaf syncer on the root task as well as any in-progress storage tasks.
 func (s *stateSyncer) Start(ctx context.Context) {
-	rootTask := &LeafSyncTask{
+	rootTask := &syncclient.LeafSyncTask{
 		Root:          s.progressMarker.Root,
 		Start:         s.progressMarker.MainTrie.startFrom,
 		NodeType:      message.StateTrieNode,
@@ -117,9 +130,9 @@ func (s *stateSyncer) Start(ctx context.Context) {
 		OnSyncFailure: s.onSyncFailure,
 	}
 
-	storageTasks := make([]*LeafSyncTask, 0, len(s.progressMarker.StorageTries))
+	storageTasks := make([]*syncclient.LeafSyncTask, 0, len(s.progressMarker.StorageTries))
 	for expectedHash, storageTrieProgress := range s.progressMarker.StorageTries {
-		storageTasks = append(storageTasks, &LeafSyncTask{
+		storageTasks = append(storageTasks, &syncclient.LeafSyncTask{
 			Root:          expectedHash,
 			Start:         storageTrieProgress.startFrom,
 			NodeType:      message.StateTrieNode,
@@ -132,9 +145,9 @@ func (s *stateSyncer) Start(ctx context.Context) {
 	s.syncer.Start(ctx, s.numThreads, rootTask, storageTasks...)
 }
 
-func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]byte) ([]*LeafSyncTask, error) {
+func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]byte) ([]*syncclient.LeafSyncTask, error) {
 	var (
-		tasks    []*LeafSyncTask
+		tasks    []*syncclient.LeafSyncTask
 		mainTrie = s.progressMarker.MainTrie
 	)
 
@@ -188,7 +201,7 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 	return tasks, nil
 }
 
-func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, values [][]byte) ([]*LeafSyncTask, error) {
+func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, values [][]byte) ([]*syncclient.LeafSyncTask, error) {
 	// Note this method does not need to hold a lock:
 	// - handleLeafs is called synchronously by CallbackLeafSyncer
 	// - if additional account is encountered with the same storage trie,
@@ -211,7 +224,7 @@ func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, valu
 	return nil, nil // storage tries never add new tasks to the leaf syncer
 }
 
-func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot common.Hash) (*LeafSyncTask, error) {
+func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot common.Hash) (*syncclient.LeafSyncTask, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -245,7 +258,7 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 		Account:      accountHash,
 	}
 	s.progressMarker.StorageTries[storageRoot] = progress
-	return &LeafSyncTask{
+	return &syncclient.LeafSyncTask{
 		Root:          storageRoot,
 		Start:         bytes.Repeat([]byte{0x00}, common.HashLength),
 		NodeType:      message.StateTrieNode,

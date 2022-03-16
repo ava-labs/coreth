@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers/stats"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -29,15 +29,15 @@ const maxLeavesLimit = uint16(1024)
 // serving requested trie data
 type LeafsRequestHandler struct {
 	trieDB *trie.Database
-	stats  stats.HandlerStats
 	codec  codec.Manager
+	stats  stats.HandlerStats
 }
 
-func NewLeafsRequestHandler(trieDB *trie.Database, syncerStats stats.HandlerStats, codec codec.Manager) *LeafsRequestHandler {
+func NewLeafsRequestHandler(trieDB *trie.Database, codec codec.Manager, syncerStats stats.HandlerStats) *LeafsRequestHandler {
 	return &LeafsRequestHandler{
 		trieDB: trieDB,
-		stats:  syncerStats,
 		codec:  codec,
+		stats:  syncerStats,
 	}
 }
 

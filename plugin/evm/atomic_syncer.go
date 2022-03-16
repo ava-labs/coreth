@@ -12,7 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -25,7 +25,7 @@ type atomicSyncer struct {
 	targetHeight uint64
 
 	// syncer is used to sync leaves from the network.
-	syncer *statesync.CallbackLeafSyncer
+	syncer *syncclient.CallbackLeafSyncer
 
 	// nextHeight is the height which key / values
 	// are being inserted into [atomicTrie] for
@@ -44,7 +44,7 @@ func addZeroes(height uint64) []byte {
 	return packer.Bytes
 }
 
-func newAtomicSyncer(atomicTrie *atomicTrie, targetRoot common.Hash, targetHeight uint64, client statesync.LeafClient) *atomicSyncer {
+func newAtomicSyncer(client syncclient.LeafClient, atomicTrie *atomicTrie, targetRoot common.Hash, targetHeight uint64) *atomicSyncer {
 	_, lastCommit := atomicTrie.LastCommitted()
 
 	return &atomicSyncer{
@@ -53,13 +53,13 @@ func newAtomicSyncer(atomicTrie *atomicTrie, targetRoot common.Hash, targetHeigh
 		targetHeight: targetHeight,
 		nextCommit:   lastCommit + atomicTrie.commitHeightInterval,
 		nextHeight:   lastCommit + 1,
-		syncer:       statesync.NewCallbackLeafSyncer(client),
+		syncer:       syncclient.NewCallbackLeafSyncer(client),
 	}
 }
 
 // Start begins syncing the target atomic root.
 func (s *atomicSyncer) Start(ctx context.Context) {
-	s.syncer.Start(ctx, 1, &statesync.LeafSyncTask{
+	s.syncer.Start(ctx, 1, &syncclient.LeafSyncTask{
 		NodeType:      message.AtomicTrieNode,
 		Root:          s.targetRoot,
 		Start:         addZeroes(s.nextHeight),
@@ -70,7 +70,7 @@ func (s *atomicSyncer) Start(ctx context.Context) {
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
-func (s *atomicSyncer) onLeafs(_ common.Hash, keys [][]byte, values [][]byte) ([]*statesync.LeafSyncTask, error) {
+func (s *atomicSyncer) onLeafs(_ common.Hash, keys [][]byte, values [][]byte) ([]*syncclient.LeafSyncTask, error) {
 	for i, key := range keys {
 		if len(key) != atomicKeyLength {
 			return nil, fmt.Errorf("unexpected key len (%d) in atomic trie sync", len(key))

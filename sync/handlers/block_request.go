@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers/stats"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -33,7 +33,11 @@ type BlockRequestHandler struct {
 }
 
 func NewBlockRequestHandler(getter func(common.Hash, uint64) *types.Block, codec codec.Manager, handlerStats stats.HandlerStats) *BlockRequestHandler {
-	return &BlockRequestHandler{getter: getter, codec: codec, stats: handlerStats}
+	return &BlockRequestHandler{
+		getter: getter,
+		codec:  codec,
+		stats:  handlerStats,
+	}
 }
 
 // OnBlockRequest handles incoming message.BlockRequest, returning blocks as requested

@@ -23,7 +23,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/statesync"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -173,7 +173,7 @@ func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
 
 	// connect peer to stateSyncVM
 	assert.NoError(t, stateSyncVM.SetState(snow.StateSyncing))
-	assert.NoError(t, stateSyncVM.Connected(syncedVMNodeID, statesync.StateSyncVersion))
+	assert.NoError(t, stateSyncVM.Connected(syncedVMNodeID, syncclient.StateSyncVersion))
 
 	// override stateSyncVM's SendAppRequest function such that it triggers AppRequest on
 	// the syncedVM

@@ -20,8 +20,9 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers"
-	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/handlers"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -41,10 +42,15 @@ func TestSimpleTrieSync(t *testing.T) {
 	// setup client
 	clientDB := memorydb.New()
 	codec := getSyncCodec(t)
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-	client := NewMockLeafClient(codec, leafsRequestHandler, nil, nil)
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(nil, codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
-	s, err := NewEVMStateSyncer(root, client, 4, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -65,13 +71,17 @@ func TestErrorsPropagateFromGoroutines(t *testing.T) {
 	defer clientDB.Close()
 	trieDB := trie.NewDatabase(clientDB)
 	root, _, _ := trie.GenerateTrie(t, trieDB, 1, common.HashLength)
-	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewHandlerStats(), codec)
-	client := NewMockLeafClient(codec, leafsHandler, nil, nil)
+	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, codec, handlerstats.NewHandlerStats())
+	mockClient := statesyncclient.NewMockClient(codec, leafsHandler, nil, nil)
 	testErr := errors.New("always returns this error")
-	client.GetLeafsIntercept = func(message.LeafsResponse) (message.LeafsResponse, error) {
+	mockClient.GetLeafsIntercept = func(message.LeafsResponse) (message.LeafsResponse, error) {
 		return message.LeafsResponse{}, testErr
 	}
-	s, err := NewEVMStateSyncer(root, client, 2, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -85,21 +95,25 @@ func TestCancel(t *testing.T) {
 	clientDB := memorydb.New()
 	defer clientDB.Close()
 	trieDB := trie.NewDatabase(clientDB)
-	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewHandlerStats(), codec)
+	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, codec, handlerstats.NewHandlerStats())
 	root, _, _ := trie.GenerateTrie(t, trieDB, 1, common.HashLength)
-	client := NewMockLeafClient(codec, leafsHandler, nil, nil)
+	mockClient := statesyncclient.NewMockClient(codec, leafsHandler, nil, nil)
 
 	// setup GetLeafsIntercept with waitCh so it blocks after serving 1 request
 	// that gives us time to cancel the context and assert the correct error
 	waitCh := make(chan struct{}, 1)
 	waitCh <- struct{}{}
-	client.GetLeafsIntercept = func(response message.LeafsResponse) (message.LeafsResponse, error) {
+	mockClient.GetLeafsIntercept = func(response message.LeafsResponse) (message.LeafsResponse, error) {
 		<-waitCh
 		response.More = true // set more to true so client will attempt more requests
 		return response, nil
 	}
 
-	s, err := NewEVMStateSyncer(root, client, 2, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -117,21 +131,20 @@ func TestResumeSync(t *testing.T) {
 
 	trieDB := trie.NewDatabase(serverDB)
 	root, serverTrie := setupTestTrie(t, trieDB)
-	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
+	leafsHandler := handlers.NewLeafsRequestHandler(trieDB, codec, handlerstats.NewNoopHandlerStats())
 
 	clientDB := memorydb.New()
 	defer clientDB.Close()
 	// setup the testingClient with waitCh so it blocks after serving 1 request
 	// that gives us time to cancel the context and perform a resume
 	waitCh := make(chan struct{})
-	numThreads := 2
 	ctx, cancel := context.WithCancel(context.Background())
 	clientCtx, clientCancel := context.WithCancel(context.Background())
 	defer clientCancel()
 
 	count := uint32(0)
-	client := NewMockLeafClient(codec, leafsHandler, nil, nil)
-	client.GetLeafsIntercept = func(response message.LeafsResponse) (message.LeafsResponse, error) {
+	mockClient := statesyncclient.NewMockClient(codec, leafsHandler, nil, nil)
+	mockClient.GetLeafsIntercept = func(response message.LeafsResponse) (message.LeafsResponse, error) {
 		limit := 1
 		if len(response.Keys) > limit {
 			response.Keys = response.Keys[:limit]
@@ -146,7 +159,11 @@ func TestResumeSync(t *testing.T) {
 			return message.LeafsResponse{}, errors.New("generic error")
 		}
 	}
-	s, err := NewEVMStateSyncer(root, client, numThreads, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -167,7 +184,11 @@ func TestResumeSync(t *testing.T) {
 	waitFor(t, s.Done(), context.Canceled, testSyncTimeout)
 
 	// resume
-	s, err = NewEVMStateSyncer(root, client, numThreads, clientDB, s.commitCap)
+	s, err = NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -202,7 +223,11 @@ func TestResumeSync(t *testing.T) {
 	// reset count and do another sync
 	count = 0
 	<-snapshot.WipeSnapshot(clientDB, true)
-	s, err = NewEVMStateSyncer(newRoot, client, numThreads, clientDB, commitCap)
+	s, err = NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   newRoot,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}

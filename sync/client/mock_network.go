@@ -1,16 +1,20 @@
 // (c) 2021-2022, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package statesync
+package statesyncclient
 
 import (
 	"errors"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/peer"
 
 	"github.com/ava-labs/avalanchego/version"
 )
 
+var _ peer.NetworkClient = &mockNetwork{}
+
+// TODO replace with gomock library
 type mockNetwork struct {
 	// captured request data
 	numCalls         uint

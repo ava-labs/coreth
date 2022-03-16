@@ -25,8 +25,9 @@ import (
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers"
-	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/handlers"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -480,12 +481,16 @@ func TestSyncer(t *testing.T) {
 			)
 			serverTrieDB, accounts, root = test.prepareForTest(t)
 			codec := getSyncCodec(t)
-			leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-			codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec)
-			client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
+			leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
+			codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
+			mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
 			clientDB = memorydb.New()
-			s, err := NewEVMStateSyncer(root, client, 4, clientDB, commitCap)
+			s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+				Client: mockClient,
+				Root:   root,
+				DB:     clientDB,
+			})
 			if err != nil {
 				t.Fatal("could not create StateSyncer", err)
 			}
@@ -679,14 +684,18 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 		clientTrieDB *trie.Database
 	)
 	codec := getSyncCodec(t)
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec)
-	client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
 	clientDB = memorydb.New()
 	clientTrieDB = trie.NewDatabase(clientDB)
 
-	s, err := NewEVMStateSyncer(root1, client, 4, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root1,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -702,8 +711,8 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 		syncer:       s,
 	})
 
-	assert.True(t, client.LeavesReceived > 0)
-	assert.True(t, client.CodeReceived > 0)
+	assert.True(t, mockClient.LeavesReceived > 0)
+	assert.True(t, mockClient.CodeReceived > 0)
 
 	db := clientTrieDB.DiskDB()
 
@@ -735,7 +744,11 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	iter.Release()
 
 	// now sync to new root
-	s, err = NewEVMStateSyncer(root2, client, 4, clientDB, commitCap)
+	s, err = NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root2,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}
@@ -755,8 +768,8 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 		syncer:       s,
 	})
 
-	assert.True(t, client.LeavesReceived > 0)
-	assert.True(t, client.CodeReceived > 0)
+	assert.True(t, mockClient.LeavesReceived > 0)
+	assert.True(t, mockClient.CodeReceived > 0)
 }
 
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
@@ -769,11 +782,15 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 	// setup client
 	clientDB := memorydb.New()
 	codec := getSyncCodec(t)
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, handlerstats.NewNoopHandlerStats(), codec)
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), handlerstats.NewNoopHandlerStats(), codec)
-	client := NewMockLeafClient(codec, leafsRequestHandler, codeRequestHandler, nil)
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
 
-	s, err := NewEVMStateSyncer(root, client, 4, clientDB, commitCap)
+	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
+		Client: mockClient,
+		Root:   root,
+		DB:     clientDB,
+	})
 	if err != nil {
 		t.Fatal("could not create StateSyncer", err)
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers/stats"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +31,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
 
-	leafsHandler := NewLeafsRequestHandler(trieDB, mockHandlerStats, codec)
+	leafsHandler := NewLeafsRequestHandler(trieDB, codec, mockHandlerStats)
 
 	tests := map[string]struct {
 		prepareTestFn    func() (context.Context, message.LeafsRequest)

@@ -10,23 +10,10 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 )
-
-// increment byte array value by one
-func incrOne(bytes []byte) {
-	index := len(bytes) - 1
-	for index >= 0 {
-		if bytes[index] < 255 {
-			bytes[index]++
-			break
-		} else {
-			bytes[index] = 0
-			index--
-		}
-	}
-}
 
 // WriteAccountSnapshot stores the account represented by [acc] to the snapshot at [accHash], using
 // SlimAccountRLP format (omitting empty code/storage).
@@ -115,7 +102,7 @@ func RestoreMainTrieProgressFromSnapshot(db ethdb.Iteratee, tr *TrieProgress) er
 		// since lastKey is already added to the stack trie,
 		// we should start syncing from the next key.
 		tr.startFrom = lastKey
-		incrOne(tr.startFrom)
+		syncclient.IncrOne(tr.startFrom)
 	}
 	return it.Error()
 }
@@ -149,7 +136,7 @@ func RestoreStorageTrieProgressFromSnapshot(db ethdb.Iteratee, tr *TrieProgress,
 		// since lastKey is already added to the stack trie,
 		// we should start syncing from the next key.
 		tr.startFrom = lastKey
-		incrOne(tr.startFrom)
+		syncclient.IncrOne(tr.startFrom)
 	}
 	return it.Error()
 }

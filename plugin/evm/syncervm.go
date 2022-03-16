@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 
 	"github.com/ava-labs/coreth/core"
@@ -24,17 +23,15 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync"
-	"github.com/ava-labs/coreth/statesync/stats"
+	syncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
-	// state sync commit cap
-	commitCap = 1 * units.MiB
-
 	// maximum number of blocks to fetch after the fast sync block
 	// Note: The last 256 block hashes are necessary to support
 	// the BLOCKHASH opcode.
@@ -42,6 +39,8 @@ const (
 
 	// maximum number of retry attempts for a single state sync request
 	maxRetryAttempts = uint8(32)
+	// maximum delay in between successive requests
+	defaultMaxRetryDelay = 10 * time.Second
 )
 
 var (
@@ -57,7 +56,7 @@ type stateSyncConfig struct {
 	codec        codec.Manager
 	netCodec     codec.Manager
 	network      peer.Network
-	client       peer.Client
+	client       peer.NetworkClient
 	toEngine     chan<- commonEng.Message
 	stateSyncIDs []ids.ShortID
 }
@@ -72,13 +71,14 @@ type Syncer interface {
 }
 
 type stateSyncer struct {
+	*stateSyncConfig
+
+	client syncclient.Client
+
 	syncer           Syncer
 	stateSyncError   error
 	stateSyncSummary []byte
 	stateSyncBlock   message.SyncableBlock
-
-	client statesync.Client
-	*stateSyncConfig
 
 	// used to stop syncer
 	cancel func()
@@ -93,7 +93,14 @@ func NewStateSyncer(config *stateSyncConfig) *stateSyncer {
 	}
 	return &stateSyncer{
 		stateSyncConfig: config,
-		client:          statesync.NewClient(config.client, syncerStats, maxRetryAttempts, statesync.DefaultMaxRetryDelay, config.netCodec, config.stateSyncIDs),
+		client: syncclient.NewClient(&syncclient.ClientConfig{
+			NetworkClient:    config.client,
+			Codec:            config.netCodec,
+			Stats:            syncerStats,
+			MaxAttempts:      maxRetryAttempts,
+			MaxRetryDelay:    defaultMaxRetryDelay,
+			StateSyncNodeIDs: config.stateSyncIDs,
+		}),
 	}
 }
 
@@ -324,7 +331,7 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 		return
 	}
 
-	stateSync := func() error { return vm.syncStateTrie(ctx, commitCap) }
+	stateSync := func() error { return vm.syncStateTrie(ctx) }
 	if err := vm.stateSyncStepWithMarker(stateSyncDoneKey, "state sync", stateSync); err != nil {
 		vm.stateSyncError = err
 		return
@@ -355,16 +362,20 @@ func (vm *stateSyncer) stateSyncStepWithMarker(doneKey []byte, name string, work
 
 func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", vm.stateSyncBlock.AtomicRoot)
-	vm.syncer = newAtomicSyncer(vm.atomicTrie, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber, vm.client)
+	vm.syncer = newAtomicSyncer(vm.client, vm.atomicTrie, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
 	vm.syncer.Start(ctx)
 	err := <-vm.syncer.Done()
 	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", err)
 	return err
 }
 
-func (vm *stateSyncer) syncStateTrie(ctx context.Context, commitCap int) error {
+func (vm *stateSyncer) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", vm.stateSyncBlock.BlockRoot)
-	syncer, err := statesync.NewEVMStateSyncer(vm.stateSyncBlock.BlockRoot, vm.client, 4, vm.chaindb, commitCap)
+	syncer, err := statesync.NewEVMStateSyncer(&statesync.EVMStateSyncerConfig{
+		Client: vm.client,
+		Root:   vm.stateSyncBlock.BlockRoot,
+		DB:     vm.chaindb,
+	})
 	if err != nil {
 		return err
 	}

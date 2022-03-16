@@ -1,7 +1,7 @@
 // (c) 2021-2022, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package statesync
+package statesyncclient
 
 import (
 	"bytes"
@@ -21,9 +21,9 @@ import (
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/statesync/handlers"
-	handlerstats "github.com/ava-labs/coreth/statesync/handlers/stats"
-	clientstats "github.com/ava-labs/coreth/statesync/stats"
+	clientstats "github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/sync/handlers"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -37,7 +37,7 @@ func TestGetCode(t *testing.T) {
 		t.Fatal("error building codec", err)
 	}
 
-	testNetClient := &mockNetwork{}
+	mockNetClient := &mockNetwork{}
 
 	// test happy path - code response is valid
 	codeResponse := message.CodeResponse{
@@ -47,25 +47,32 @@ func TestGetCode(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not marshal response", err)
 	}
-	testNetClient.mockResponse(1, response)
+	mockNetClient.mockResponse(1, response)
 	codeHash := crypto.Keccak256Hash(codeResponse.Data)
 
-	stateSyncClient := NewClient(testNetClient, clientstats.NewNoOpStats(), maxAttempts, 1, codec, nil)
+	stateSyncClient := NewClient(&ClientConfig{
+		NetworkClient:    mockNetClient,
+		Codec:            codec,
+		Stats:            clientstats.NewNoOpStats(),
+		MaxAttempts:      maxAttempts,
+		MaxRetryDelay:    1,
+		StateSyncNodeIDs: nil,
+	})
 	codeBytes, err := stateSyncClient.GetCode(codeHash)
 	if err != nil {
 		t.Fatal("unexpected error in test", err)
 	}
-	assert.EqualValues(t, 1, testNetClient.numCalls)
+	assert.EqualValues(t, 1, mockNetClient.numCalls)
 	assert.Equal(t, codeBytes, codeResponse.Data)
 
 	// test where code data does not match the code hash
 	codeHash = common.BytesToHash([]byte("some hash that does not match data"))
-	testNetClient.mockResponse(maxAttempts, response)
+	mockNetClient.mockResponse(maxAttempts, response)
 
 	codeBytes, err = stateSyncClient.GetCode(codeHash)
 	assert.Nil(t, codeBytes)
 	assert.Error(t, err)
-	assert.EqualValues(t, maxAttempts, testNetClient.numCalls)
+	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)
 }
 
 func TestGetBlocks(t *testing.T) {
@@ -91,8 +98,15 @@ func TestGetBlocks(t *testing.T) {
 	assert.Equal(t, numBlocks, len(blocks))
 
 	// Construct client
-	testNetClient := &mockNetwork{}
-	stateSyncClient := NewClient(testNetClient, clientstats.NewNoOpStats(), 1, 1, codec, nil)
+	mockNetClient := &mockNetwork{}
+	stateSyncClient := NewClient(&ClientConfig{
+		NetworkClient:    mockNetClient,
+		Codec:            codec,
+		Stats:            clientstats.NewNoOpStats(),
+		MaxAttempts:      1,
+		MaxRetryDelay:    1,
+		StateSyncNodeIDs: nil,
+	})
 
 	blocksRequestHandler := handlers.NewBlockRequestHandler(buildGetter(blocks), codec, handlerstats.NewNoopHandlerStats())
 
@@ -292,7 +306,7 @@ func TestGetBlocks(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			responseBytes := test.getResponse(t, test.request)
-			testNetClient.mockResponse(1, responseBytes)
+			mockNetClient.mockResponse(1, responseBytes)
 
 			blockResponse, err := stateSyncClient.GetBlocks(test.request.Hash, test.request.Height, test.request.Parents)
 			if len(test.expectedErr) != 0 {
@@ -336,8 +350,15 @@ func TestGetLeafs(t *testing.T) {
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, leafsLimit, common.HashLength)
 
-	handler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
-	client := NewClient(&mockNetwork{}, clientstats.NewNoOpStats(), 1, 1, codec, nil)
+	handler := handlers.NewLeafsRequestHandler(trieDB, codec, handlerstats.NewNoopHandlerStats())
+	client := NewClient(&ClientConfig{
+		NetworkClient:    &mockNetwork{},
+		Codec:            codec,
+		Stats:            clientstats.NewNoOpStats(),
+		MaxAttempts:      1,
+		MaxRetryDelay:    1,
+		StateSyncNodeIDs: nil,
+	})
 
 	tests := map[string]struct {
 		request        message.LeafsRequest
@@ -670,7 +691,7 @@ func TestGetLeafs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			responseBytes := test.getResponse(t, test.request)
 
-			response, err := parseLeafsResponse(client.codec, test.request, responseBytes)
+			response, _, err := parseLeafsResponse(client.codec, test.request, responseBytes)
 			if test.expectedErr != nil {
 				if err == nil {
 					t.Fatalf("Expected error: %s, but found no error", test.expectedErr)
@@ -701,11 +722,18 @@ func TestGetLeafsRetries(t *testing.T) {
 	trieDB := trie.NewDatabase(memorydb.New())
 	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 
-	handler := handlers.NewLeafsRequestHandler(trieDB, handlerstats.NewNoopHandlerStats(), codec)
-	netClient := &mockNetwork{}
+	handler := handlers.NewLeafsRequestHandler(trieDB, codec, handlerstats.NewNoopHandlerStats())
+	mockNetClient := &mockNetwork{}
 
 	const maxAttempts = 8
-	client := NewClient(netClient, clientstats.NewNoOpStats(), maxAttempts, 1, codec, nil)
+	client := NewClient(&ClientConfig{
+		NetworkClient:    mockNetClient,
+		Codec:            codec,
+		Stats:            clientstats.NewNoOpStats(),
+		MaxAttempts:      maxAttempts,
+		MaxRetryDelay:    1,
+		StateSyncNodeIDs: nil,
+	})
 
 	request := message.LeafsRequest{
 		Root:     root,
@@ -716,7 +744,7 @@ func TestGetLeafsRetries(t *testing.T) {
 	}
 	goodResponse, responseErr := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
 	assert.NoError(t, responseErr)
-	netClient.mockResponse(1, goodResponse)
+	mockNetClient.mockResponse(1, goodResponse)
 
 	res, err := client.GetLeafs(request)
 	if err != nil {
@@ -727,7 +755,7 @@ func TestGetLeafsRetries(t *testing.T) {
 
 	// Succeeds within the allotted number of attempts
 	invalidResponse := []byte("invalid response")
-	netClient.mockResponses(invalidResponse, invalidResponse, goodResponse)
+	mockNetClient.mockResponses(invalidResponse, invalidResponse, goodResponse)
 
 	res, err = client.GetLeafs(request)
 	if err != nil {
@@ -737,7 +765,7 @@ func TestGetLeafsRetries(t *testing.T) {
 	assert.Equal(t, 1024, len(res.Vals))
 
 	// Test that we hit the retry limit
-	netClient.mockResponse(maxAttempts, invalidResponse)
+	mockNetClient.mockResponse(maxAttempts, invalidResponse)
 	_, err = client.GetLeafs(request)
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), errExceededRetryLimit.Error()))
@@ -749,7 +777,7 @@ func TestStateSyncNodes(t *testing.T) {
 		t.Fatal("error building codec", err)
 	}
 
-	netClient := &mockNetwork{}
+	mockNetClient := &mockNetwork{}
 
 	stateSyncNodes := []ids.ShortID{
 		ids.GenerateTestShortID(),
@@ -757,8 +785,15 @@ func TestStateSyncNodes(t *testing.T) {
 		ids.GenerateTestShortID(),
 		ids.GenerateTestShortID(),
 	}
-	client := NewClient(netClient, clientstats.NewNoOpStats(), 4, 1, codec, stateSyncNodes)
-	netClient.response = [][]byte{{1}, {2}, {3}, {4}}
+	client := NewClient(&ClientConfig{
+		NetworkClient:    mockNetClient,
+		Codec:            codec,
+		Stats:            clientstats.NewNoOpStats(),
+		MaxAttempts:      4,
+		MaxRetryDelay:    1,
+		StateSyncNodeIDs: stateSyncNodes,
+	})
+	mockNetClient.response = [][]byte{{1}, {2}, {3}, {4}}
 
 	// send some request, doesn't matter what it is because we're testing the interaction with state sync nodes here
 	response, err := client.GetLeafs(message.LeafsRequest{})
@@ -766,8 +801,8 @@ func TestStateSyncNodes(t *testing.T) {
 	assert.Empty(t, response)
 
 	// assert all nodes were called
-	assert.Contains(t, netClient.nodesRequested, stateSyncNodes[0])
-	assert.Contains(t, netClient.nodesRequested, stateSyncNodes[1])
-	assert.Contains(t, netClient.nodesRequested, stateSyncNodes[2])
-	assert.Contains(t, netClient.nodesRequested, stateSyncNodes[3])
+	assert.Contains(t, mockNetClient.nodesRequested, stateSyncNodes[0])
+	assert.Contains(t, mockNetClient.nodesRequested, stateSyncNodes[1])
+	assert.Contains(t, mockNetClient.nodesRequested, stateSyncNodes[2])
+	assert.Contains(t, mockNetClient.nodesRequested, stateSyncNodes[3])
 }

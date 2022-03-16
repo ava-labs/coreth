@@ -11,7 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-var _ ClientSyncerStats = &clientSyncerStats{}
+var (
+	_ ClientSyncerStats = &clientSyncerStats{}
+	_ ClientSyncerStats = &noopStats{}
+)
 
 type ClientSyncerStats interface {
 	GetMetric(message.Request) (MessageMetric, error)
@@ -89,7 +92,6 @@ func NewClientSyncerStats() ClientSyncerStats {
 }
 
 // GetMetric returns the appropriate messaage metric for the given request
-// Note: this function will panic if an unexpected request type is passed in.
 func (c *clientSyncerStats) GetMetric(msgIntf message.Request) (MessageMetric, error) {
 	switch msg := msgIntf.(type) {
 	case message.BlockRequest:
@@ -109,3 +111,30 @@ func (c *clientSyncerStats) GetMetric(msgIntf message.Request) (MessageMetric, e
 		return nil, fmt.Errorf("attempted to get metric for invalid request with type %T", msg)
 	}
 }
+
+// no-op implementation of ClientSyncerStats
+type noopStats struct {
+	noop noopMsgMetric
+}
+
+type noopMsgMetric struct{}
+
+func (noopMsgMetric) IncRequested()                      {}
+func (noopMsgMetric) IncSucceeded()                      {}
+func (noopMsgMetric) IncFailed()                         {}
+func (noopMsgMetric) IncInvalidResponse()                {}
+func (noopMsgMetric) UpdateReceived(int64)               {}
+func (noopMsgMetric) UpdateRequestLatency(time.Duration) {}
+
+func NewNoOpStats() ClientSyncerStats {
+	return &noopStats{}
+}
+
+func (n noopStats) GetMetric(_ message.Request) (MessageMetric, error) {
+	return n.noop, nil
+}
+
+// all operations are no-ops
+func (n *noopStats) IncLeavesRequested()                    {}
+func (n *noopStats) UpdateLeavesReceived(int64)             {}
+func (n *noopStats) UpdateLeafRequestLatency(time.Duration) {}

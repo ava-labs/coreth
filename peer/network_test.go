@@ -79,7 +79,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	net = NewNetwork(sender, codecManager, ids.ShortEmpty, 16)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
-	client := NewClient(net)
+	client := NewNetworkClient(net)
 	nodeID := ids.GenerateTestShortID()
 	assert.NoError(t, net.Connected(nodeID, defaultPeerVersion))
 
@@ -153,7 +153,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	net = NewNetwork(sender, codecManager, ids.ShortEmpty, 16)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
-	client := NewClient(net)
+	client := NewNetworkClient(net)
 
 	nodes := []ids.ShortID{
 		ids.GenerateTestShortID(),
@@ -238,7 +238,7 @@ func TestRequestMinVersion(t *testing.T) {
 
 	// passing nil as codec works because the net.AppRequest is never called
 	net = NewNetwork(sender, codecManager, ids.ShortEmpty, 1)
-	client := NewClient(net)
+	client := NewNetworkClient(net)
 	requestMessage := TestMessage{Message: "this is a request"}
 	requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 	assert.NoError(t, err)
@@ -325,7 +325,7 @@ func TestGossip(t *testing.T) {
 
 	assert.NoError(t, clientNetwork.Connected(nodeID, defaultPeerVersion))
 
-	client := NewClient(clientNetwork)
+	client := NewNetworkClient(clientNetwork)
 	defer clientNetwork.Shutdown()
 
 	b, err := buildGossip(codecManager, HelloGossip{Msg: "hello there!"})
