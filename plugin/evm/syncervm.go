@@ -244,13 +244,7 @@ func (vm *stateSyncer) getSummaryToSync(proposedSummaries []commonEng.Summary) (
 		}
 	}
 	// marshal the summaryToSync and save it in DB for next time
-	stateSyncSummaryBytes, err := vm.codec.Marshal(codecVersion, summaryToSync)
-	if err != nil {
-		log.Error("failed to marshal state summary bytes", "err", err)
-		return nil, message.SyncableBlock{}, false, err
-	}
-
-	if err = vm.db.Put(stateSyncSummaryKey, stateSyncSummaryBytes); err != nil {
+	if err = vm.db.Put(stateSyncSummaryKey, summaryToSync.Bytes()); err != nil {
 		log.Error("error saving state sync summary to disk", "err", err)
 		return nil, message.SyncableBlock{}, false, err
 	}
