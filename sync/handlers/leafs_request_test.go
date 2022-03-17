@@ -6,6 +6,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -19,6 +20,7 @@ import (
 )
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
+	rand.Seed(1)
 	codec, err := message.BuildCodec()
 	if err != nil {
 		t.Fatal("unexpected error building codec", err)

@@ -6,6 +6,7 @@ package evm
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -114,6 +115,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 }
 
 func TestAtomicSyncer(t *testing.T) {
+	rand.Seed(1)
 	targetHeight := 10 * uint64(commitInterval)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	root, _, _ := trie.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicKeyLength)
@@ -126,6 +128,7 @@ func TestAtomicSyncer(t *testing.T) {
 }
 
 func TestAtomicSyncerResume(t *testing.T) {
+	rand.Seed(1)
 	targetHeight := 10 * uint64(commitInterval)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
@@ -146,6 +149,7 @@ func TestAtomicSyncerResume(t *testing.T) {
 }
 
 func TestAtomicSyncerResumeNewRootCheckpoint(t *testing.T) {
+	rand.Seed(1)
 	targetHeight1 := 10 * uint64(commitInterval)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis

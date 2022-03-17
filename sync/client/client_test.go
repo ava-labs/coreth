@@ -338,6 +338,7 @@ func buildGetter(blocks []*types.Block) func(hash common.Hash, height uint64) *t
 }
 
 func TestGetLeafs(t *testing.T) {
+	rand.Seed(1)
 	codec, err := message.BuildCodec()
 	if err != nil {
 		t.Fatal("error building codec", err)
@@ -346,7 +347,6 @@ func TestGetLeafs(t *testing.T) {
 	const leafsLimit = 1024
 
 	trieDB := trie.NewDatabase(memorydb.New())
-
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, leafsLimit, common.HashLength)
 
@@ -714,6 +714,7 @@ func TestGetLeafs(t *testing.T) {
 }
 
 func TestGetLeafsRetries(t *testing.T) {
+	rand.Seed(1)
 	codec, err := message.BuildCodec()
 	if err != nil {
 		t.Fatal("error building codec", err)

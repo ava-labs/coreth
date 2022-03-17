@@ -6,7 +6,6 @@ package statesync
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -21,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
@@ -40,7 +40,6 @@ var (
 )
 
 func makeStateTrie(t *testing.T, accountsLen, commitFrequency uint) (map[common.Hash]types.StateAccount, []common.Hash, ethdb.KeyValueStore, *trie.Database) {
-	rand.Seed(1)
 	assert.Greater(t, accountsLen, commitFrequency, "number of accounts must be greater than commit frequency to generate test state")
 	roots := make([]common.Hash, accountsLen%commitFrequency)
 	accounts := make(map[common.Hash]types.StateAccount, accountsLen)
@@ -523,27 +522,11 @@ func fillAccountsWithStorage(t *testing.T, serverTrie *trie.Trie, serverTrieDB *
 
 			codeHash := crypto.Keccak256Hash(codeBytes)
 			rawdb.WriteCode(serverTrieDB.DiskDB(), codeHash, codeBytes)
+			account.CodeHash = codeHash[:]
 
 			// now create state trie
-			stateTrie, err := trie.NewSecure(common.Hash{}, serverTrieDB)
-			if err != nil {
-				t.Fatalf("error opening storage trie: %v", err)
-			}
-			for i := index; i < index+rand.Int63n(32)+2; i++ {
-				prefix := make([]byte, wrappers.LongLen)
-				binary.BigEndian.PutUint64(prefix, uint64(i))
-				if err = stateTrie.TryUpdate(prefix, []byte(fmt.Sprintf("some value %d", i))); err != nil {
-					t.Fatalf("error updating state trie: %v", err)
-				}
-			}
-
-			stateRoot, _, err := stateTrie.Commit(nil)
-			if err != nil {
-				t.Fatalf("error committing state trie: %v", err)
-			}
-
-			account.CodeHash = codeHash[:]
-			account.Root = stateRoot
+			numKeys := 16
+			account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, numKeys, wrappers.LongLen+1)
 		}
 		return account
 	})
@@ -580,26 +563,15 @@ func assertAccountsTrieConsistency(t *testing.T, result testSyncResult) {
 		assert.NotEmpty(t, serverCodeBytes)
 		assert.Equal(t, serverCodeBytes, clientCodeBytes)
 
-		if acc.Root == types.EmptyRootHash {
-			continue
-		}
-
-		serverStorageTrie, err := trie.New(acc.Root, result.serverTrieDB)
-		if err != nil {
-			t.Fatalf("could not open storage trie on server, root=%s, err=%v", acc.Root, err)
-		}
-		clientStorageTrie, err := trie.New(acc.Root, result.clientTrieDB)
-		if err != nil {
-			t.Fatalf("could not open storage trie on client, root=%s, err=%v", acc.Root, err)
-		}
-
-		serverStorageTrieIter := trie.NewIterator(serverStorageTrie.NodeIterator(nil))
-		clientStorageTrieIter := trie.NewIterator(clientStorageTrie.NodeIterator(nil))
-		for serverStorageTrieIter.Next() && clientStorageTrieIter.Next() {
-			assert.Equal(t, serverStorageTrieIter.Key, clientStorageTrieIter.Key)
-			assert.Equal(t, serverStorageTrieIter.Value, clientStorageTrieIter.Value)
+		if acc.Root != types.EmptyRootHash {
+			trie.AssertTrieConsistency(t, acc.Root, result.serverTrieDB, result.clientTrieDB)
 		}
 	}
+	assert.NoError(t, serverTrieIter.Err)
+	assert.NoError(t, clientTrieIter.Err)
+	assert.False(t, serverTrieIter.Next())
+	assert.False(t, clientTrieIter.Next())
+	assert.Greater(t, count, 0)
 }
 
 func fillAccounts(t *testing.T, tr *trie.Trie, accountsLen int64, onAccount func(*testing.T, int64, types.StateAccount, *trie.Trie) types.StateAccount) map[common.Hash]types.StateAccount {
@@ -650,6 +622,98 @@ func getSyncCodec(t *testing.T) codec.Manager {
 }
 
 func TestSyncerSyncsToNewRoot(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		deleteBetweenSyncs func(common.Hash, *trie.Database) error
+	}{
+		{
+			name: "delete_snapshot_and_code",
+			deleteBetweenSyncs: func(_ common.Hash, clientTrieDB *trie.Database) error {
+				db := clientTrieDB.DiskDB()
+				<-snapshot.WipeSnapshot(db, false)
+
+				// delete code
+				it := db.NewIterator(rawdb.CodePrefix, nil)
+				defer it.Release()
+				for it.Next() {
+					if len(it.Key()) != len(rawdb.CodePrefix)+common.HashLength {
+						continue
+					}
+					if err := db.Delete(it.Key()); err != nil {
+						return err
+					}
+				}
+				return it.Error()
+			},
+		},
+		{
+			name: "delete_snapshot_and_some_trie_nodes",
+			deleteBetweenSyncs: func(root common.Hash, clientTrieDB *trie.Database) error {
+				// delete snapshot first
+				db := clientTrieDB.DiskDB()
+				<-snapshot.WipeSnapshot(db, false)
+
+				// next delete some trie nodes
+				tr, err := trie.New(root, clientTrieDB)
+				if err != nil {
+					return err
+				}
+				it := trie.NewIterator(tr.NodeIterator(nil))
+				accountsWithStorage := 0
+				for it.Next() {
+					var acc types.StateAccount
+					if err := rlp.DecodeBytes(it.Value, &acc); err != nil {
+						return err
+					}
+					if acc.Root == types.EmptyRootHash {
+						continue
+					}
+					accountsWithStorage++
+					if accountsWithStorage%2 != 0 {
+						continue
+					}
+					storageTrie, err := trie.New(acc.Root, clientTrieDB)
+					if err != nil {
+						return err
+					}
+					storageIt := storageTrie.NodeIterator(nil)
+					storageTrieNodes := 0
+					deleteBatch := clientTrieDB.DiskDB().NewBatch()
+					for storageIt.Next(true) {
+						if storageIt.Leaf() {
+							// only delete intermediary nodes, leafs are
+							// represented as logical nodes with an empty hash
+							continue
+						}
+
+						storageTrieNodes++
+						if storageTrieNodes%2 != 0 {
+							continue
+						}
+						if err := deleteBatch.Delete(storageIt.Hash().Bytes()); err != nil {
+							return err
+						}
+					}
+					if err := storageIt.Error(); err != nil {
+						return err
+					}
+					if err := deleteBatch.Write(); err != nil {
+						return err
+					}
+				}
+				return it.Err
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			testSyncerSyncsToNewRoot(t, test.deleteBetweenSyncs)
+		})
+	}
+}
+
+func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash, *trie.Database) error) {
+	rand.Seed(1)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
 	assert.NoError(t, err)
@@ -714,34 +778,9 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	assert.True(t, mockClient.LeavesReceived > 0)
 	assert.True(t, mockClient.CodeReceived > 0)
 
-	db := clientTrieDB.DiskDB()
-
-	// delete all account snapshot entries
-	iter := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	for iter.Next() {
-		if err = db.Delete(iter.Key()); err != nil {
-			t.Fatalf("could not delete account snapshot entry: %v", err)
-		}
+	if err := deleteBetweenSyncs(root1, clientTrieDB); err != nil {
+		t.Fatalf("could not delete storage snapshot entry: %v", err)
 	}
-	iter.Release()
-
-	// delete all storage snapshot entries
-	iter = db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
-	for iter.Next() {
-		if err = db.Delete(iter.Key()); err != nil {
-			t.Fatalf("could not delete storage snapshot entry: %v", err)
-		}
-	}
-	iter.Release()
-
-	// delete all codes
-	iter = db.NewIterator(rawdb.CodePrefix, nil)
-	for iter.Next() {
-		if err = db.Delete(iter.Key()); err != nil {
-			t.Fatalf("could not delete storage snapshot entry: %v", err)
-		}
-	}
-	iter.Release()
 
 	// now sync to new root
 	s, err = NewEVMStateSyncer(&EVMStateSyncerConfig{
@@ -756,10 +795,6 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 	s.Start(context.Background())
 	waitFor(t, s.Done(), nil, testSyncTimeout)
 
-	if _, err = trie.New(root2, clientTrieDB); err != nil {
-		t.Fatal(err)
-	}
-
 	assertAccountsTrieConsistency(t, testSyncResult{
 		root:         root2,
 		accounts:     accounts,
@@ -773,6 +808,7 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 }
 
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
+	rand.Seed(1)
 	accounts, roots, _, serverTrieDB := makeStateTrie(t, 10_000, 1000) // _ = accounts
 	root := roots[len(roots)-1]
 

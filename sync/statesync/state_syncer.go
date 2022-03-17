@@ -4,7 +4,6 @@
 package statesync
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -46,6 +45,7 @@ type StorageTrieProgress struct {
 	*TrieProgress
 	Account            common.Hash
 	AdditionalAccounts []common.Hash
+	Skipped            bool
 }
 
 // StateSyncProgress tracks the progress of syncing the main trie and the
@@ -228,22 +228,6 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// check if this storage root is on disk
-	if storageTrie, err := trie.New(storageRoot, s.trieDB); err == nil {
-		// If the storage trie is already on disk, we only need to copy the storage snapshot over to [accountHash].
-		// There is no need to re-sync the trie, since it is already present
-		if err := WriteAccountStorageSnapshotFromTrie(s.db.NewBatch(), s.commitCap, accountHash, storageTrie); err != nil {
-			// If the storage trie cannot be iterated (due to an incomplete trie from pruning this storage trie in the past)
-			// then we re-sync it here. Therefore, this error is not fatal and we can safely continue here.
-			// TODO: make sure this case is tested.
-			log.Info("could not populate storage snapshot from trie with existing root, syncing from peers instead", "account", accountHash, "root", storageRoot, "err", err)
-		} else {
-			// If populating the snapshot from the existing storage trie was successful, then there is no need
-			// to add an additional sync task here.
-			return nil, nil
-		}
-	}
-
 	// check if we're already syncing this storage trie
 	// if we are: add this account hash to the progress marker,
 	// when the trie is downloaded, the snapshot will be copied
@@ -260,11 +244,28 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 	s.progressMarker.StorageTries[storageRoot] = progress
 	return &syncclient.LeafSyncTask{
 		Root:          storageRoot,
-		Start:         bytes.Repeat([]byte{0x00}, common.HashLength),
 		NodeType:      message.StateTrieNode,
 		OnLeafs:       progress.handleLeafs,
 		OnFinish:      s.onFinish,
 		OnSyncFailure: s.onSyncFailure,
+		OnStart: func(common.Hash) (bool, error) {
+			// check if this storage root is on disk
+			if storageTrie, err := trie.New(storageRoot, s.trieDB); err == nil {
+				// If the storage trie is already on disk, we only need to copy the storage snapshot over to [accountHash].
+				// There is no need to re-sync the trie, since it is already present
+				if err := WriteAccountStorageSnapshotFromTrie(s.db.NewBatch(), s.commitCap, accountHash, storageTrie); err != nil {
+					// If the storage trie cannot be iterated (due to an incomplete trie from pruning this storage trie in the past)
+					// then we re-sync it here. Therefore, this error is not fatal and we can safely continue here.
+					log.Info("could not populate storage snapshot from trie with existing root, syncing from peers instead", "account", accountHash, "root", storageRoot, "err", err)
+				} else {
+					// If populating the snapshot from the existing storage trie was successful,
+					// return true to skip this task
+					progress.Skipped = true              // set skipped to true to avoid committing the stack trie in onFinish
+					return true, s.onFinish(storageRoot) // call onFinish to delete this task from the map. onFinish will take [s.lock]
+				}
+			}
+			return false, nil
+		},
 	}, nil
 }
 
@@ -287,12 +288,14 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 		return fmt.Errorf("unknown root [%s] finished syncing", root)
 	}
 
-	storageRoot, err := storageTrieProgress.trie.Commit()
-	if err != nil {
-		return err
-	}
-	if storageRoot != root {
-		return fmt.Errorf("unexpected storage root, expected=%s, actual=%s account=%s", root, storageRoot, storageTrieProgress.Account)
+	if !storageTrieProgress.Skipped {
+		storageRoot, err := storageTrieProgress.trie.Commit()
+		if err != nil {
+			return err
+		}
+		if storageRoot != root {
+			return fmt.Errorf("unexpected storage root, expected=%s, actual=%s account=%s", root, storageRoot, storageTrieProgress.Account)
+		}
 	}
 	// Note: we hold the lock when copying storage snapshots as well as when adding new accounts to ensure there is
 	// no race condition between adding accounts and copying them.
@@ -316,13 +319,8 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 	}
 	delete(s.progressMarker.StorageTries, root)
 	// clear the progress marker on completion of the trie
-	if err := removeInProgressTrie(storageTrieProgress.batch, root, storageTrieProgress.Account); err != nil {
+	if err := removeInProgressStorageTrie(storageTrieProgress.batch, root, storageTrieProgress); err != nil {
 		return err
-	}
-	for _, account := range storageTrieProgress.AdditionalAccounts {
-		if err := removeInProgressTrie(storageTrieProgress.batch, root, account); err != nil {
-			return err
-		}
 	}
 	if err := storageTrieProgress.batch.Write(); err != nil {
 		return err
@@ -349,7 +347,7 @@ func (s *stateSyncer) checkAllDone() error {
 		return fmt.Errorf("expected main trie root [%s] not same as actual [%s]", s.progressMarker.Root, mainTrieRoot)
 	}
 	// remove main trie from progress marker, after this there should be no more
-	// entries in the progress db
+	// progress entries in the db
 	if err := removeInProgressTrie(mainTrie.batch, mainTrieRoot, common.Hash{}); err != nil {
 		return err
 	}

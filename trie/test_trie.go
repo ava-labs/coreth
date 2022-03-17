@@ -18,6 +18,7 @@ import (
 // with a total of [numKeys] key-value pairs.
 // Returns the root of the generated trie, the slice of keys inserted into the trie in lexicographical
 // order and the slice of corresponding values.
+// GenerateTrie reads from [rand] and the caller should call rand.Seed(n) for deterministic results
 func GenerateTrie(t *testing.T, trieDB *Database, numKeys int, keySize int) (common.Hash, [][]byte, [][]byte) {
 	if keySize < wrappers.LongLen+1 {
 		t.Fatal("key size must be at least 9 bytes (8 bytes for uint64 and 1 random byte)")
@@ -38,12 +39,10 @@ func GenerateTrie(t *testing.T, trieDB *Database, numKeys int, keySize int) (com
 
 // FillTrie fills a given trie with [numKeys] number of keys, each of size [keySize]
 // returns inserted keys and values
+// FillTrie reads from [rand] and the caller should call rand.Seed(n) for deterministic results
 func FillTrie(t *testing.T, numKeys int, keySize int, testTrie *Trie) ([][]byte, [][]byte) {
 	keys := make([][]byte, 0, numKeys)
 	values := make([][]byte, 0, numKeys)
-
-	// Set random seed for repeatable outcome
-	rand.Seed(1)
 
 	// Generate key-value pairs
 	for i := 0; i < numKeys; i++ {

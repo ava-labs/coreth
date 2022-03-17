@@ -72,13 +72,8 @@ func loadProgress(db ethdb.Database, root common.Hash) (*StateSyncProgress, erro
 		}
 		// clear account storage trie markers
 		for root, storageTrie := range progress.StorageTries {
-			if err := removeInProgressTrie(db, root, storageTrie.Account); err != nil {
+			if err := removeInProgressStorageTrie(db, root, storageTrie); err != nil {
 				return nil, err
-			}
-			for _, account := range storageTrie.AdditionalAccounts {
-				if err := removeInProgressTrie(db, root, account); err != nil {
-					return nil, err
-				}
 			}
 		}
 	}
@@ -89,6 +84,16 @@ func loadProgress(db ethdb.Database, root common.Hash) (*StateSyncProgress, erro
 
 func addInProgressTrie(db ethdb.KeyValueWriter, root common.Hash, account common.Hash) error {
 	return db.Put(packKey(root, account), []byte{0x1})
+}
+
+// removeInProgressStorageTrie removes progress markers for all accounts associated with storageTrie
+func removeInProgressStorageTrie(db ethdb.KeyValueWriter, root common.Hash, storageTrie *StorageTrieProgress) error {
+	for _, account := range storageTrie.AdditionalAccounts {
+		if err := removeInProgressTrie(db, root, account); err != nil {
+			return err
+		}
+	}
+	return removeInProgressTrie(db, root, storageTrie.Account)
 }
 
 func removeInProgressTrie(db ethdb.KeyValueWriter, root common.Hash, account common.Hash) error {

@@ -14,6 +14,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// OnStart is the callback used by LeafSyncTask to determine if work can be skipped.
+// Returns true if work should be skipped (eg, because data was available on disk)
+type OnStart func(root common.Hash) (bool, error)
+
 // OnLeafs is the callback used by LeafSyncTask when there are new leaves received from the network.
 // Returns a slice of LeafSyncTasks that will be added to the tasks of the LeafSyncer.
 type OnLeafs func(root common.Hash, keys [][]byte, values [][]byte) ([]*LeafSyncTask, error)
@@ -31,6 +35,7 @@ type LeafSyncTask struct {
 	Root          common.Hash      // Root of the trie to sync
 	Start         []byte           // Starting key to request new leaves
 	NodeType      message.NodeType // Specifies the message type (atomic/state trie) for the leaf syncer to send
+	OnStart       OnStart          // Callback when tasks begins, returns true if work can be skipped
 	OnLeafs       OnLeafs          // Callback when new leaves are received from the network
 	OnFinish      OnFinish         // Callback when there are no more leaves in the trie to sync
 	OnSyncFailure OnSyncFailure    // Callback when the leaf syncer fails while performing the task.
@@ -84,6 +89,15 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 		root  = task.Root
 		start = task.Start
 	)
+
+	if task.OnStart != nil {
+		if skip, err := task.OnStart(root); err != nil {
+			return err
+		} else if skip {
+			return nil
+		}
+	}
+
 	for {
 		// If [ctx] has finished, return early.
 		select {

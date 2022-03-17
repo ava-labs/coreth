@@ -8,13 +8,12 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"math/rand"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/ava-labs/avalanchego/utils/units"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
@@ -28,10 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	commitCap       = 1 * units.MiB
-	testSyncTimeout = 20 * time.Second
-)
+const testSyncTimeout = 20 * time.Second
 
 func TestSimpleTrieSync(t *testing.T) {
 	// setup server
@@ -66,6 +62,7 @@ func TestSimpleTrieSync(t *testing.T) {
 }
 
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
+	rand.Seed(1)
 	codec := getSyncCodec(t)
 	clientDB := memorydb.New()
 	defer clientDB.Close()
@@ -91,6 +88,7 @@ func TestErrorsPropagateFromGoroutines(t *testing.T) {
 }
 
 func TestCancel(t *testing.T) {
+	rand.Seed(1)
 	codec := getSyncCodec(t)
 	clientDB := memorydb.New()
 	defer clientDB.Close()
