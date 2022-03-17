@@ -15,13 +15,11 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
-	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -32,95 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-func makeStateTrie(t *testing.T, accountsLen, commitFrequency uint) (map[common.Hash]types.StateAccount, []common.Hash, ethdb.KeyValueStore, *trie.Database) {
-	assert.Greater(t, accountsLen, commitFrequency, "number of accounts must be greater than commit frequency to generate test state")
-	roots := make([]common.Hash, accountsLen%commitFrequency)
-	accounts := make(map[common.Hash]types.StateAccount, accountsLen)
-	db := memorydb.New()
-	trieDB := trie.NewDatabase(db)
-	tree, err := trie.New(common.Hash{}, trieDB)
-	assert.NoError(t, err)
-	assert.NotNil(t, tree)
-
-	// produce a canary account which is consistent and can be relied upon for testing
-	acc := types.StateAccount{
-		Nonce:    2,
-		Balance:  big.NewInt(100000),
-		CodeHash: types.EmptyCodeHash[:],
-	}
-
-	// produce storage root
-	storageTree, err := trie.NewSecure(common.Hash{}, trieDB)
-	assert.NoError(t, err)
-	storageTree.Update([]byte("hello this is"), []byte("canary"))
-	root, _, err := storageTree.Commit(nil)
-	assert.NoError(t, err)
-	acc.Root = root
-
-	// encode the account and update the trie
-	b, err := rlp.EncodeToBytes(acc)
-	assert.NoError(t, err)
-	hash := crypto.Keccak256Hash(b)
-	tree.Update(hash[:], b) // hash = 0x009494c23cd024da48d009f4de322c2fcac23dbb60d016fe8afcc3fabf920005
-	accounts[hash] = acc
-
-	for i := uint(1); i < accountsLen; i++ {
-		acc = types.StateAccount{
-			Nonce:    uint64(i % 15),
-			Balance:  big.NewInt(int64(i % 10)),
-			Root:     types.EmptyRootHash,
-			CodeHash: types.EmptyCodeHash[:],
-		}
-
-		if i%3 == 0 {
-			codeData := []byte{byte(i % 100)}
-			if i%10000 == 0 {
-				codeData = utils.RandomBytes(64)
-			}
-			codeHash := crypto.Keccak256Hash(codeData)
-			acc.CodeHash = codeHash.Bytes()
-			rawdb.WriteCode(db, codeHash, codeData)
-		} else if i%6 == 0 {
-			// create storage trie
-			storageTree, err = trie.NewSecure(common.Hash{}, trieDB)
-			assert.NoError(t, err)
-			storageTree.Update(append([]byte("storagekey1-"), byte(i%100)), append([]byte("storagevalue1-"), byte(i%100)))
-			storageTree.Update(append([]byte("storagekey2-"), byte(i%100)), append([]byte("storagevalue2-"), byte(i%100)))
-
-			if i%100 == 0 {
-				storageTree.Update(utils.RandomBytes(16), utils.RandomBytes(32))
-				storageTree.Update(utils.RandomBytes(16), utils.RandomBytes(32))
-				storageTree.Update(utils.RandomBytes(16), utils.RandomBytes(32))
-			}
-
-			root, _, err := storageTree.Commit(nil)
-			assert.NoError(t, err)
-			acc.Root = root
-		}
-
-		b, err := rlp.EncodeToBytes(acc)
-		assert.NoError(t, err)
-		accountHash := crypto.Keccak256Hash(b)
-		tree.Update(accountHash[:], b)
-
-		if i%commitFrequency == 0 {
-			hash, _, err := tree.Commit(nil)
-			assert.NoError(t, err)
-			assert.NotEqual(t, common.Hash{}, hash)
-			roots = append(roots, hash)
-		}
-
-		accounts[accountHash] = acc
-	}
-
-	hash, _, err = tree.Commit(nil)
-	assert.NoError(t, err)
-	assert.NotEqual(t, common.Hash{}, hash)
-	roots = append(roots, hash)
-
-	return accounts, roots, db, trieDB
-}
 
 type testSyncResult struct {
 	root                       common.Hash
@@ -748,8 +657,20 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 	rand.Seed(1)
-	_, roots, _, serverTrieDB := makeStateTrie(t, 10_000, 1000) // _ = accounts
-	root := roots[len(roots)-1]
+	serverTrieDB := trie.NewDatabase(memorydb.New())
+	serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
+	if err != nil {
+		t.Fatalf("error opening trie: %v", err)
+	}
+	fillAccountsWithStorage(t, serverTrie, serverTrieDB)
+	root, _, err := serverTrie.Commit(nil)
+	if err != nil {
+		t.Fatalf("could not commit trie: %v", err)
+	}
+
+	if err = serverTrieDB.Commit(root, false, nil); err != nil {
+		t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
+	}
 
 	// setup client
 	clientDB := memorydb.New()
