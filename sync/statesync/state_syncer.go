@@ -71,6 +71,7 @@ type stateSyncer struct {
 	lock           sync.Mutex
 	progressMarker *StateSyncProgress
 	numThreads     int
+	eta            syncETA
 
 	syncer    *syncclient.CallbackLeafSyncer
 	trieDB    *trie.Database
@@ -142,6 +143,7 @@ func (s *stateSyncer) Start(ctx context.Context) {
 		})
 	}
 
+	s.eta.start(s.progressMarker.MainTrie.startFrom)
 	s.syncer.Start(ctx, s.numThreads, rootTask, storageTasks...)
 }
 
@@ -198,6 +200,7 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 			mainTrie.batch.Reset()
 		}
 	}
+	s.eta.notifyProgress(keys[len(keys)-1])
 	return tasks, nil
 }
 
@@ -325,6 +328,7 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 	if err := storageTrieProgress.batch.Write(); err != nil {
 		return err
 	}
+	s.eta.notifyTrieSynced(storageTrieProgress.Skipped)
 	return s.checkAllDone()
 }
 
@@ -334,7 +338,11 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 func (s *stateSyncer) checkAllDone() error {
 	// Note: this check ensures that we do not commit the main trie until all of the storage tries
 	// have been committed.
-	if !s.progressMarker.MainTrieDone || len(s.progressMarker.StorageTries) > 0 {
+	if !s.progressMarker.MainTrieDone {
+		return nil
+	}
+	if len(s.progressMarker.StorageTries) > 0 {
+		s.eta.notifyLastStorageTries(len(s.progressMarker.StorageTries))
 		return nil
 	}
 
