@@ -5,6 +5,7 @@ package statesyncclient
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
@@ -20,11 +21,11 @@ var _ Client = &MockClient{}
 type MockClient struct {
 	codec          codec.Manager
 	leafsHandler   *handlers.LeafsRequestHandler
-	LeavesReceived int
+	leavesReceived int32
 	codesHandler   *handlers.CodeRequestHandler
-	CodeReceived   int
+	codeReceived   int32
 	blocksHandler  *handlers.BlockRequestHandler
-	BlocksReceived int
+	blocksReceived int32
 	// GetLeafsIntercept is called on every GetLeafs request if set to a non-nil callback.
 	// Takes in the result returned by the handler and can return a replacement response or
 	// error.
@@ -68,8 +69,12 @@ func (ml *MockClient) GetLeafs(request message.LeafsRequest) (message.LeafsRespo
 		leafsResponse, err = ml.GetLeafsIntercept(leafsResponse)
 	}
 	// Increment the number of leaves received by the mock client
-	ml.LeavesReceived += numLeaves
+	atomic.AddInt32(&ml.leavesReceived, int32(numLeaves))
 	return leafsResponse, err
+}
+
+func (ml *MockClient) LeavesReceived() int32 {
+	return atomic.LoadInt32(&ml.leavesReceived)
 }
 
 func (ml *MockClient) GetCode(codeHash common.Hash) ([]byte, error) {
@@ -91,9 +96,13 @@ func (ml *MockClient) GetCode(codeHash common.Hash) ([]byte, error) {
 		code, err = ml.GetCodeIntercept(code)
 	}
 	if err == nil {
-		ml.CodeReceived += lenCode
+		atomic.AddInt32(&ml.codeReceived, int32(lenCode))
 	}
 	return code, err
+}
+
+func (ml *MockClient) CodeReceived() int32 {
+	return atomic.LoadInt32(&ml.codeReceived)
 }
 
 func (ml *MockClient) GetBlocks(blockHash common.Hash, height uint64, numParents uint16) ([]*types.Block, error) {
@@ -118,6 +127,10 @@ func (ml *MockClient) GetBlocks(blockHash common.Hash, height uint64, numParents
 	if ml.GetBlocksIntercept != nil {
 		blocks, err = ml.GetBlocksIntercept(blocks)
 	}
-	ml.BlocksReceived += numBlocks
+	atomic.AddInt32(&ml.blocksReceived, int32(numBlocks))
 	return blocks, err
+}
+
+func (ml *MockClient) BlocksReceived() int32 {
+	return atomic.LoadInt32(&ml.blocksReceived)
 }

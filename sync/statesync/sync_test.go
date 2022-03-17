@@ -775,8 +775,8 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 		syncer:       s,
 	})
 
-	assert.True(t, mockClient.LeavesReceived > 0)
-	assert.True(t, mockClient.CodeReceived > 0)
+	assert.True(t, mockClient.LeavesReceived() > 0)
+	assert.True(t, mockClient.CodeReceived() > 0)
 
 	if err := deleteBetweenSyncs(root1, clientTrieDB); err != nil {
 		t.Fatalf("could not delete storage snapshot entry: %v", err)
@@ -803,8 +803,8 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 		syncer:       s,
 	})
 
-	assert.True(t, mockClient.LeavesReceived > 0)
-	assert.True(t, mockClient.CodeReceived > 0)
+	assert.True(t, mockClient.LeavesReceived() > 0)
+	assert.True(t, mockClient.CodeReceived() > 0)
 }
 
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
