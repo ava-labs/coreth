@@ -534,44 +534,22 @@ func fillAccountsWithStorage(t *testing.T, serverTrie *trie.Trie, serverTrieDB *
 
 // assertAccountsTrieConsistency ensures given serverTrieDB has same entries in the same order as clientTrieDB at given root
 func assertAccountsTrieConsistency(t *testing.T, result testSyncResult) {
-	serverTrie, err := trie.New(result.root, result.serverTrieDB)
-	if err != nil {
-		t.Fatalf("error creating server trie, root=%s, err=%v", result.root, err)
-	}
-	clientTrie, err := trie.New(result.root, result.clientTrieDB)
-	if err != nil {
-		t.Fatalf("error creating client trie, root=%s, err=%v", result.root, err)
-	}
-
-	serverTrieIter := trie.NewIterator(serverTrie.NodeIterator(nil))
-	clientTrieIter := trie.NewIterator(clientTrie.NodeIterator(nil))
-	count := 0
-	for serverTrieIter.Next() && clientTrieIter.Next() {
-		count++
-		assert.Equal(t, serverTrieIter.Key, clientTrieIter.Key)
-		assert.Equal(t, serverTrieIter.Value, clientTrieIter.Value)
-
-		hash := common.BytesToHash(serverTrieIter.Key)
+	trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, func(key, val []byte) error {
+		hash := common.BytesToHash(key)
 		acc := result.accounts[hash]
-
 		if acc.CodeHash == nil || common.BytesToHash(acc.CodeHash) == types.EmptyCodeHash {
-			continue
+			return nil
 		}
-
 		serverCodeBytes := rawdb.ReadCode(result.serverTrieDB.DiskDB(), common.BytesToHash(acc.CodeHash))
 		clientCodeBytes := rawdb.ReadCode(result.clientTrieDB.DiskDB(), common.BytesToHash(acc.CodeHash))
 		assert.NotEmpty(t, serverCodeBytes)
 		assert.Equal(t, serverCodeBytes, clientCodeBytes)
 
 		if acc.Root != types.EmptyRootHash {
-			trie.AssertTrieConsistency(t, acc.Root, result.serverTrieDB, result.clientTrieDB)
+			trie.AssertTrieConsistency(t, acc.Root, result.serverTrieDB, result.clientTrieDB, nil)
 		}
-	}
-	assert.NoError(t, serverTrieIter.Err)
-	assert.NoError(t, clientTrieIter.Err)
-	assert.False(t, serverTrieIter.Next())
-	assert.False(t, clientTrieIter.Next())
-	assert.Greater(t, count, 0)
+		return nil
+	})
 }
 
 func fillAccounts(t *testing.T, tr *trie.Trie, accountsLen int64, onAccount func(*testing.T, int64, types.StateAccount, *trie.Trie) types.StateAccount) map[common.Hash]types.StateAccount {
@@ -855,7 +833,7 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 			continue
 		}
 
-		trie.AssertTrieConsistency(t, acc.Root, serverTrieDB, clientTrieDB)
+		trie.AssertTrieConsistency(t, acc.Root, serverTrieDB, clientTrieDB, nil)
 
 		clientStorage, err := trie.NewSecure(acc.Root, clientTrieDB)
 		assert.NoError(t, err, "client must have storage root")
@@ -879,5 +857,5 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 
 	// ensure trie hashes are the same
 	assert.Equal(t, serverTrie.Hash(), clientTrie.Hash(), "server trie hash and client trie hash must match")
-	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB)
+	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB, nil)
 }

@@ -113,7 +113,7 @@ func TestStateSyncerSync(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
 
 				// assert snapshot has correct values
 				assert.Equal(t, len(result.accounts), len(result.expectedSnapshot.accounts))
@@ -160,7 +160,7 @@ func TestStateSyncerSync(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
 
 				// assert snapshot has correct values
 				assert.Equal(t, len(result.accounts), len(result.expectedSnapshot.accounts))
@@ -289,7 +289,7 @@ func TestStateSyncerSync(t *testing.T) {
 			expectError: false,
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
 				// ensure tries are consistent
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
 
 				clientTrie, err := trie.New(result.root, result.clientTrieDB)
 				if err != nil {
@@ -368,7 +368,7 @@ func TestStateSyncerSync(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
 			},
 		},
 	}

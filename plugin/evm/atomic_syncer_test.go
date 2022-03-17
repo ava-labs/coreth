@@ -104,7 +104,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 	// we re-initialise trie DB for asserting the trie to make sure any issues with unflushed writes
 	// are caught here as this will only pass if all trie nodes have been written to the underlying DB
 	clientTrieDB := atomicTrie.TrieDB()
-	trie.AssertTrieConsistency(t, syncTrie.Hash(), serverTrieDB, clientTrieDB)
+	trie.AssertTrieConsistency(t, syncTrie.Hash(), serverTrieDB, clientTrieDB, nil)
 
 	// check all commit heights are created
 	for height := atomicTrie.commitHeightInterval; height <= targetHeight; height += atomicTrie.commitHeightInterval {

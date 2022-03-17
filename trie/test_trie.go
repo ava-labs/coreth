@@ -67,7 +67,7 @@ func FillTrie(t *testing.T, numKeys int, keySize int, testTrie *Trie) ([][]byte,
 
 // AssertTrieConsistency ensures given trieDB [a] and [b] both have the same
 // non-empty trie at [root]. (all key/value pairs must be equal)
-func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database) {
+func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLeaf func(key, val []byte) error) {
 	trieA, err := New(root, a)
 	if err != nil {
 		t.Fatalf("error creating trieA, root=%s, err=%v", root, err)
@@ -84,6 +84,11 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database) {
 		count++
 		assert.Equal(t, itA.Key, itB.Key)
 		assert.Equal(t, itA.Value, itB.Value)
+		if onLeaf != nil {
+			if err := onLeaf(itA.Key, itA.Value); err != nil {
+				t.Fatalf("error in onLeaf callback: %v", err)
+			}
+		}
 	}
 	assert.NoError(t, itA.Err)
 	assert.NoError(t, itB.Err)
