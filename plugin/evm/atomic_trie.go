@@ -310,14 +310,18 @@ func (a *atomicTrie) initialize(lastAcceptedBlockNumber uint64) error {
 	if lastAcceptedBlockNumber == 0 {
 		return nil
 	}
-	// now that all heights < finalCommitHeight have been processed
-	// commit the trie
-	if err := a.commit(finalCommitHeight); err != nil {
-		return err
-	}
-	// Flush any remaining changes that have not been committed yet in the versiondb.
-	if err := a.db.Commit(); err != nil {
-		return err
+	// now that all heights less than [finalCommitHeight] have been processed
+	// commit the trie. If [a.lastCommittedHeight] is already the same as
+	// [finalCommitHeight] (or higher, which can occur if we resume a state sync)
+	// we skip this commit.
+	if finalCommitHeight > a.lastCommittedHeight {
+		if err := a.commit(finalCommitHeight); err != nil {
+			return err
+		}
+		// Flush any remaining changes that have not been committed yet in the versiondb.
+		if err := a.db.Commit(); err != nil {
+			return err
+		}
 	}
 
 	// process uncommitted ops for heights > finalCommitHeight
@@ -336,7 +340,10 @@ func (a *atomicTrie) initialize(lastAcceptedBlockNumber uint64) error {
 	a.log.Info(
 		"finished initializing atomic trie",
 		"lastAcceptedBlockNumber", lastAcceptedBlockNumber,
-		"preCommitEntriesIndexed", preCommitBlockIndexed, "postCommitEntriesIndexed", postCommitTxIndexed,
+		"preCommitEntriesIndexed", preCommitBlockIndexed,
+		"postCommitEntriesIndexed", postCommitTxIndexed,
+		"lastCommittedHash", a.lastCommittedHash,
+		"lastCommitedHeight", a.lastCommittedHeight,
 		"time", time.Since(start),
 	)
 	return nil

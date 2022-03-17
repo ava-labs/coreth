@@ -9,8 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ava-labs/coreth/core"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
@@ -20,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -376,6 +375,44 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 
 	// key assertion of the test
 	assert.Equal(t, root1, root2)
+}
+
+func TestInitializeDoesNotOverwriteHigherCommitHeight(t *testing.T) {
+	db := versiondb.New(memdb.New())
+	codec := testTxCodec()
+	commitInterval := uint64(10)
+	repo, err := NewAtomicTxRepository(db, codec, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastAcceptedHeight := commitInterval
+	atomicTrie, err := newAtomicTrie(db, testSharedMemory(), nil, repo, codec, lastAcceptedHeight, commitInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// add some tx
+	nextCommitInterval := lastAcceptedHeight + commitInterval
+	ops := testDataImportTx().mustAtomicOps()
+	if err := atomicTrie.Index(nextCommitInterval, ops); err != nil {
+		t.Fatal(err)
+	}
+
+	// get the new root
+	root, height := atomicTrie.LastCommitted()
+	assert.NotZero(t, root)
+	assert.Equal(t, nextCommitInterval, height)
+
+	// re-initialize to a lower height
+	atomicTrie, err = newAtomicTrie(db, testSharedMemory(), nil, repo, codec, lastAcceptedHeight, commitInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify root and height do not change
+	root2, height2 := atomicTrie.LastCommitted()
+	assert.Equal(t, root, root2)
+	assert.Equal(t, height, height2)
 }
 
 type sharedMemories struct {
