@@ -12,9 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
@@ -26,62 +24,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type expectedSnapshot struct {
-	accounts map[common.Hash]types.StateAccount
-	codes    map[common.Hash][]byte
-}
-
-func newExpectedSnapshot(db ethdb.Iteratee) (*expectedSnapshot, error) {
-	expected := &expectedSnapshot{
-		accounts: make(map[common.Hash]types.StateAccount),
-		codes:    make(map[common.Hash][]byte),
-	}
-	codePrefixLen := len(rawdb.CodePrefix)
-	codeIt := db.NewIterator(rawdb.CodePrefix, nil)
-	defer codeIt.Release()
-	for codeIt.Next() {
-		keyLen := len(codeIt.Key())
-		if keyLen != codePrefixLen+common.HashLength {
-			continue
-		}
-		key := common.BytesToHash(codeIt.Key()[codePrefixLen:])
-		expected.codes[key] = codeIt.Value()
-	}
-	if err := codeIt.Error(); err != nil {
-		return nil, err
-	}
-
-	prefixLen := len(rawdb.SnapshotAccountPrefix)
-	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	defer it.Release()
-	for it.Next() {
-		keyLen := len(it.Key())
-		if keyLen != prefixLen+common.HashLength {
-			continue
-		}
-		key := common.BytesToHash(it.Key()[prefixLen:])
-		fullAccount, err := snapshot.FullAccountRLP(it.Value())
-		if err != nil {
-			return nil, err
-		}
-		var account types.StateAccount
-		if err := rlp.DecodeBytes(fullAccount, &account); err != nil {
-			return nil, err
-		}
-		expected.accounts[key] = account
-	}
-	if err := it.Error(); err != nil {
-		return nil, err
-	}
-	return expected, nil
-}
-
 type stateSyncResult struct {
 	root                       common.Hash
 	syncer                     *stateSyncer
 	accounts                   map[common.Hash]types.StateAccount
 	serverTrieDB, clientTrieDB *trie.Database
-	expectedSnapshot           *expectedSnapshot
 }
 
 func TestStateSyncerSync(t *testing.T) {
@@ -113,18 +60,7 @@ func TestStateSyncerSync(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
-
-				// assert snapshot has correct values
-				assert.Equal(t, len(result.accounts), len(result.expectedSnapshot.accounts))
-				assert.Len(t, result.expectedSnapshot.accounts, 1000)
-				assert.Len(t, result.expectedSnapshot.codes, 0)
-
-				for hash := range result.accounts {
-					if _, exists := result.expectedSnapshot.accounts[hash]; !exists {
-						t.Fatalf("expected snapshot to contain account has [%s]", hash)
-					}
-				}
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 		"accounts with codes trie": {
@@ -160,18 +96,7 @@ func TestStateSyncerSync(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
-
-				// assert snapshot has correct values
-				assert.Equal(t, len(result.accounts), len(result.expectedSnapshot.accounts))
-				assert.Len(t, result.expectedSnapshot.accounts, 1000)
-				assert.Equal(t, (1000/3)+1, len(result.expectedSnapshot.codes))
-
-				for hash := range result.accounts {
-					if _, exists := result.expectedSnapshot.accounts[hash]; !exists {
-						t.Fatalf("expected snapshot to contain account has [%s]", hash)
-					}
-				}
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 		"missing sync root": {
@@ -289,7 +214,7 @@ func TestStateSyncerSync(t *testing.T) {
 			expectError: false,
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
 				// ensure tries are consistent
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 
 				clientTrie, err := trie.New(result.root, result.clientTrieDB)
 				if err != nil {
@@ -368,7 +293,7 @@ func TestStateSyncerSync(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result stateSyncResult) {
-				trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, nil)
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 	}
@@ -412,17 +337,12 @@ func TestStateSyncerSync(t *testing.T) {
 				test.assertError(t, err)
 			} else {
 				clientTrieDB = trie.NewDatabase(clientDB)
-				expectedSnapshot, err := newExpectedSnapshot(clientDB)
-				if err != nil {
-					t.Fatal("could not parse snapshot", err)
-				}
 				test.assertSyncResult(t, stateSyncResult{
-					root:             root,
-					accounts:         accounts,
-					serverTrieDB:     serverTrieDB,
-					clientTrieDB:     clientTrieDB,
-					syncer:           syncer,
-					expectedSnapshot: expectedSnapshot,
+					root:         root,
+					accounts:     accounts,
+					serverTrieDB: serverTrieDB,
+					clientTrieDB: clientTrieDB,
+					syncer:       syncer,
 				})
 			}
 		})

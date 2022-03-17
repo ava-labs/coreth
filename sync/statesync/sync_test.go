@@ -4,7 +4,6 @@
 package statesync
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -32,11 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-)
-
-var (
-	canaryHash      = common.HexToHash("0x2f036f99d0917de46ff7e399f62bd629e6bc9764a5c6f2fb52fe494ff0c63f56")
-	hashedCanaryKey = crypto.Keccak256Hash([]byte("hello this is"))
 )
 
 func makeStateTrie(t *testing.T, accountsLen, commitFrequency uint) (map[common.Hash]types.StateAccount, []common.Hash, ethdb.KeyValueStore, *trie.Database) {
@@ -164,7 +158,7 @@ func TestSyncer(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertAccountsTrieConsistency(t, result)
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 		{
@@ -276,7 +270,7 @@ func TestSyncer(t *testing.T) {
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
 				// ensure tries are consistent
-				assertAccountsTrieConsistency(t, result)
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 
 				clientTrie, err := trie.New(result.root, result.clientTrieDB)
 				if err != nil {
@@ -354,7 +348,7 @@ func TestSyncer(t *testing.T) {
 				return serverTrieDB, accounts, root
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertAccountsTrieConsistency(t, result)
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 		{
@@ -529,26 +523,6 @@ func fillAccountsWithStorage(t *testing.T, serverTrie *trie.Trie, serverTrieDB *
 			account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, numKeys, wrappers.LongLen+1)
 		}
 		return account
-	})
-}
-
-// assertAccountsTrieConsistency ensures given serverTrieDB has same entries in the same order as clientTrieDB at given root
-func assertAccountsTrieConsistency(t *testing.T, result testSyncResult) {
-	trie.AssertTrieConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB, func(key, val []byte) error {
-		hash := common.BytesToHash(key)
-		acc := result.accounts[hash]
-		if acc.CodeHash == nil || common.BytesToHash(acc.CodeHash) == types.EmptyCodeHash {
-			return nil
-		}
-		serverCodeBytes := rawdb.ReadCode(result.serverTrieDB.DiskDB(), common.BytesToHash(acc.CodeHash))
-		clientCodeBytes := rawdb.ReadCode(result.clientTrieDB.DiskDB(), common.BytesToHash(acc.CodeHash))
-		assert.NotEmpty(t, serverCodeBytes)
-		assert.Equal(t, serverCodeBytes, clientCodeBytes)
-
-		if acc.Root != types.EmptyRootHash {
-			trie.AssertTrieConsistency(t, acc.Root, result.serverTrieDB, result.clientTrieDB, nil)
-		}
-		return nil
 	})
 }
 
@@ -745,13 +719,7 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 	s.Start(context.Background())
 	waitFor(t, s.Done(), nil, testSyncTimeout)
 
-	assertAccountsTrieConsistency(t, testSyncResult{
-		root:         root1,
-		accounts:     accounts,
-		serverTrieDB: serverTrieDB,
-		clientTrieDB: clientTrieDB,
-		syncer:       s,
-	})
+	assertDBConsistency(t, root1, serverTrieDB, clientTrieDB)
 
 	assert.True(t, mockClient.LeavesReceived() > 0)
 	assert.True(t, mockClient.CodeReceived() > 0)
@@ -773,25 +741,15 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 	s.Start(context.Background())
 	waitFor(t, s.Done(), nil, testSyncTimeout)
 
-	assertAccountsTrieConsistency(t, testSyncResult{
-		root:         root2,
-		accounts:     accounts,
-		serverTrieDB: serverTrieDB,
-		clientTrieDB: clientTrieDB,
-		syncer:       s,
-	})
-
+	assertDBConsistency(t, root2, serverTrieDB, clientTrieDB)
 	assert.True(t, mockClient.LeavesReceived() > 0)
 	assert.True(t, mockClient.CodeReceived() > 0)
 }
 
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 	rand.Seed(1)
-	accounts, roots, _, serverTrieDB := makeStateTrie(t, 10_000, 1000) // _ = accounts
+	_, roots, _, serverTrieDB := makeStateTrie(t, 10_000, 1000) // _ = accounts
 	root := roots[len(roots)-1]
-
-	serverTrie, err := trie.New(root, serverTrieDB)
-	assert.NoError(t, err)
 
 	// setup client
 	clientDB := memorydb.New()
@@ -809,53 +767,11 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 		t.Fatal("could not create StateSyncer", err)
 	}
 
-	canaryAccount, exists := accounts[canaryHash]
-	assert.True(t, exists)
-
-	canaryStorage, err := serverTrieDB.Node(canaryAccount.Root)
-	assert.NoError(t, err)
-	assert.Greater(t, len(canaryStorage), 0)
-	err = clientDB.Put(canaryHash[:], canaryStorage)
-	assert.NoError(t, err)
-
 	// begin sync
 	s.Start(context.Background())
 	waitFor(t, s.Done(), nil, testSyncTimeout)
 
 	// get the two tries and ensure they have equal nodes
 	clientTrieDB := trie.NewDatabase(clientDB)
-	clientTrie, err := trie.New(root, clientTrieDB)
-	assert.NoError(t, err, "client trie must initialise with synced root")
-
-	// ensure storage root can be initialized
-	for _, acc := range accounts {
-		if acc.Root == types.EmptyRootHash {
-			continue
-		}
-
-		trie.AssertTrieConsistency(t, acc.Root, serverTrieDB, clientTrieDB, nil)
-
-		clientStorage, err := trie.NewSecure(acc.Root, clientTrieDB)
-		assert.NoError(t, err, "client must have storage root")
-		clientStorageIter := trie.NewIterator(clientStorage.NodeIterator(nil))
-		canaryFound := false
-		for clientStorageIter.Next() {
-			if common.BytesToHash(clientStorageIter.Key) == hashedCanaryKey {
-				canaryFound = true
-			}
-		}
-		assert.True(t, canaryFound, "expected to find the canary accounts")
-
-		if common.BytesToHash(acc.CodeHash) != types.EmptyCodeHash {
-			serverCodeData := serverTrie.Get(acc.CodeHash)
-			assert.NotEmpty(t, serverCodeData)
-			clientCodeData := clientTrie.Get(acc.CodeHash)
-			assert.NotEmpty(t, clientCodeData)
-			assert.True(t, bytes.Equal(serverCodeData, clientCodeData))
-		}
-	}
-
-	// ensure trie hashes are the same
-	assert.Equal(t, serverTrie.Hash(), clientTrie.Hash(), "server trie hash and client trie hash must match")
-	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB, nil)
+	assertDBConsistency(t, root, serverTrieDB, clientTrieDB)
 }

@@ -24,7 +24,6 @@ import (
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -58,23 +57,7 @@ func TestSimpleTrieSync(t *testing.T) {
 	// ensure client trie has same nodes as server trie
 	clientTrieDB := trie.NewDatabase(clientDB)
 	assert.NoError(t, err, "client trie must initialise with synced root")
-
-	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
-		accHash := common.BytesToHash(key)
-		var acc types.StateAccount
-		if err := rlp.DecodeBytes(val, &acc); err != nil {
-			return err
-		}
-		if acc.Root == types.EmptyRootHash {
-			return nil
-		}
-		trie.AssertTrieConsistency(t, acc.Root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
-			snapshotVal := rawdb.ReadStorageSnapshot(clientTrieDB.DiskDB(), accHash, common.BytesToHash(key))
-			assert.Equal(t, val, snapshotVal)
-			return nil
-		})
-		return nil
-	})
+	assertDBConsistency(t, root, serverTrieDB, clientTrieDB)
 }
 
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
