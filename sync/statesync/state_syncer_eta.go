@@ -47,9 +47,9 @@ func (s *syncETA) notifyProgress(key []byte) {
 		return
 	}
 
-	progress := float32(currentPos) / math.MaxInt16
+	progress := float32(currentPos) / math.MaxUint16
 	timeSpent := time.Since(s.startTime)
-	estimatedTotalDuration := float64(timeSpent) * float64(math.MaxInt16-s.startPos) / float64(currentPos-s.startPos)
+	estimatedTotalDuration := float64(timeSpent) * float64(math.MaxUint16-s.startPos) / float64(currentPos-s.startPos)
 	eta := time.Duration(estimatedTotalDuration) - timeSpent
 
 	s.lastUpdate = time.Now()
