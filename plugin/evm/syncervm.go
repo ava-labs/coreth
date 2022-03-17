@@ -230,7 +230,7 @@ func (vm *stateSyncer) getSummaryToSync(proposedSummaries []commonEng.Summary) (
 		return nil, message.SyncableBlock{}, false, err
 	}
 
-	if err == nil && len(localSummaryBytes) > 0 {
+	if err == nil {
 		// If it exists in the DB, check if it is still supported by peers
 		// A summary is supported if it is in the proposedSummaries list
 		localSyncableBlock, err := summaryToSyncableBlock(vm.codec, localSummaryBytes)
