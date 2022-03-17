@@ -136,15 +136,17 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) 
 	db.AddBalance(recipient, amount)
 
 	// [EVM++]
-	db.AddLog(&types.Log{
-		Address: common.Address{},
-		Topics: []common.Hash{
-			params.TopicTransfer,
-			sender.Hash(),
-			recipient.Hash(),
-		},
-		Data: common.BigToHash(amount).Bytes(),
-	})
+	if amount.Sign() != 0 {
+		db.AddLog(&types.Log{
+			Address: common.Address{},
+			Topics: []common.Hash{
+				params.TopicTransfer,
+				sender.Hash(),
+				recipient.Hash(),
+			},
+			Data: common.BigToHash(amount).Bytes(),
+		})
+	}
 	// [EVM--]
 }
 
