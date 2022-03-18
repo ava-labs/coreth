@@ -33,8 +33,7 @@ import (
 
 type testSyncResult struct {
 	root                       common.Hash
-	syncer                     *stateSyncer
-	accounts                   map[common.Hash]types.StateAccount
+	additionalRoots            []common.Hash
 	serverTrieDB, clientTrieDB *trie.Database
 }
 
@@ -42,29 +41,16 @@ func TestSyncer(t *testing.T) {
 	rand.Seed(1)
 	tests := []struct {
 		name             string
-		prepareForTest   func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) // return trie database and trie root to sync
+		prepareForTest   func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) // return trie database and trie root to sync, and any additional roots needed for verification
 		assertSyncResult func(t *testing.T, result testSyncResult)
 		expectedError    error
 	}{
 		{
 			name: "accounts_only_trie",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening server trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, nil)
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-				return serverTrieDB, accounts, root
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
+				return serverTrieDB, root, nil
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
 				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
@@ -72,14 +58,9 @@ func TestSyncer(t *testing.T) {
 		},
 		{
 			name: "accounts_with_codes_trie",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening server trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, func(t *testing.T, index int64, account types.StateAccount, trie *trie.Trie) types.StateAccount {
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, trie *trie.Trie) types.StateAccount {
 					if index%3 == 0 {
 						codeBytes := make([]byte, 256)
 						_, err := rand.Read(codeBytes)
@@ -93,15 +74,7 @@ func TestSyncer(t *testing.T) {
 					}
 					return account
 				})
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-				return serverTrieDB, accounts, root
+				return serverTrieDB, root, nil
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
 				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
@@ -109,42 +82,27 @@ func TestSyncer(t *testing.T) {
 		},
 		{
 			name: "missing_sync_root",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-
-				return serverTrieDB, map[common.Hash]types.StateAccount{}, common.BytesToHash([]byte("totally-fake-root"))
+				return serverTrieDB, common.BytesToHash([]byte("totally-fake-root")), nil
 			},
 			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "empty_server_trie",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
-				return trie.NewDatabase(memorydb.New()), map[common.Hash]types.StateAccount{}, common.BytesToHash([]byte("some empty bytes"))
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
+				return trie.NewDatabase(memorydb.New()), common.BytesToHash([]byte("some empty bytes")), nil
 			},
 			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "inconsistent_server_trie",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening server trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, nil)
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-
-				diskDB := serverTrieDB.DiskDB()
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
 
 				// delete some random entries from the diskDB
+				diskDB := serverTrieDB.DiskDB()
 				iter := diskDB.NewIterator(nil, nil)
 				defer iter.Release()
 
@@ -157,62 +115,17 @@ func TestSyncer(t *testing.T) {
 					}
 					i++
 				}
-				return serverTrieDB, accounts, root
+				return serverTrieDB, root, nil
 			},
 			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "sync_non_latest_root",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening server trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, nil)
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-
-				// add new accounts
-				accountsLen := len(accounts)
-				for i := accountsLen; i < accountsLen+500; i++ {
-					acc := types.StateAccount{
-						Nonce:    uint64(i),
-						Balance:  big.NewInt(int64(i % 1337)),
-						CodeHash: types.EmptyCodeHash[:],
-						Root:     types.EmptyRootHash,
-					}
-
-					accBytes, err := rlp.EncodeToBytes(acc)
-					if err != nil {
-						t.Fatalf("failed to rlp encode account: %v", err)
-					}
-
-					hash := crypto.Keccak256(accBytes)
-					if err = serverTrie.TryUpdate(hash, accBytes); err != nil {
-						t.Fatalf("error updating trie with account, hash=%s, err=%v", hash, err)
-					}
-
-					accounts[common.BytesToHash(hash)] = acc
-				}
-
-				newRoot, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit server trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(newRoot, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", newRoot, err)
-				}
-
-				return serverTrieDB, accounts, root
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
+				newRoot := fillAccounts(t, serverTrieDB, root, 500, nil)
+				return serverTrieDB, root, []common.Hash{newRoot}
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
 				// ensure tries are consistent
@@ -222,6 +135,11 @@ func TestSyncer(t *testing.T) {
 				if err != nil {
 					t.Fatalf("error opening client trie, root=%s, err=%v", result.root, err)
 				}
+				// open server trie at the newer root
+				serverTrie, err := trie.New(result.additionalRoots[0], result.serverTrieDB)
+				if err != nil {
+					t.Fatalf("error opening server trie, root=%s, err=%v", result.additionalRoots[0], err)
+				}
 
 				foundHash := make(map[common.Hash]struct{}, 1000)
 				clientTrieIter := trie.NewIterator(clientTrie.NodeIterator(nil))
@@ -230,27 +148,30 @@ func TestSyncer(t *testing.T) {
 					foundHash[hash] = struct{}{}
 				}
 
+				// look for entries in the serverTrie at the newer root missing in the client trie
 				notFound := 0
-				for hash := range result.accounts {
+				serverTrieIter := trie.NewIterator(serverTrie.NodeIterator(nil))
+				for serverTrieIter.Next() {
+					hash := common.BytesToHash(serverTrieIter.Key)
 					if _, exists := foundHash[hash]; !exists {
 						notFound++
 					}
 				}
 
+				// there should be 500 of them
 				assert.EqualValues(t, 500, notFound)
 			},
 		},
 		{
 			name: "malformed_account",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
+
+				serverTrie, err := trie.New(root, serverTrieDB)
 				if err != nil {
-					t.Fatalf("error opening trie: %v", err)
+					t.Fatalf("error opening server trie: %v", err)
 				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, nil)
-
 				// input one malformed account
 				accountBytes := []byte("some malformed account is here yo")
 				accountHash := crypto.Keccak256Hash(accountBytes)
@@ -258,40 +179,24 @@ func TestSyncer(t *testing.T) {
 					t.Fatalf("error updating server trie: %v", err)
 				}
 
-				root, _, err := serverTrie.Commit(nil)
+				root, _, err = serverTrie.Commit(nil)
 				if err != nil {
 					t.Fatalf("could not commit trie: %v", err)
 				}
-
 				if err = serverTrieDB.Commit(root, false, nil); err != nil {
 					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
 				}
 
-				return serverTrieDB, accounts, root
+				return serverTrieDB, root, nil
 			},
 			expectedError: errors.New("rlp: expected input list for types.StateAccount"),
 		},
 		{
 			name: "accounts_with_storage",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening trie: %v", err)
-				}
-
-				accounts := fillAccountsWithStorage(t, serverTrie, serverTrieDB)
-
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-
-				return serverTrieDB, accounts, root
+				root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{})
+				return serverTrieDB, root, nil
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
 				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
@@ -299,14 +204,9 @@ func TestSyncer(t *testing.T) {
 		},
 		{
 			name: "accounts_with_missing_storage",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
 					if index%20 == 0 {
 						codeBytes := make([]byte, 256)
 						_, err := rand.Read(codeBytes)
@@ -322,30 +222,15 @@ func TestSyncer(t *testing.T) {
 					}
 					return account
 				})
-
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-
-				return serverTrieDB, accounts, root
+				return serverTrieDB, root, nil
 			},
 			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
 			name: "accounts_with_missing_code",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
 					if index%20 == 0 {
 						codeBytes := make([]byte, 256)
 						_, err := rand.Read(codeBytes)
@@ -357,30 +242,15 @@ func TestSyncer(t *testing.T) {
 					}
 					return account
 				})
-
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-
-				return serverTrieDB, accounts, root
+				return serverTrieDB, root, nil
 			},
 			expectedError: errors.New("error getting code bytes for code hash"),
 		},
 		{
 			name: "code_hash_mismatch",
-			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-				if err != nil {
-					t.Fatalf("error opening trie: %v", err)
-				}
-
-				accounts := fillAccounts(t, serverTrie, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
 					if index%3 == 0 {
 						codeBytes := make([]byte, 256)
 						_, err := rand.Read(codeBytes)
@@ -395,17 +265,7 @@ func TestSyncer(t *testing.T) {
 					}
 					return account
 				})
-
-				root, _, err := serverTrie.Commit(nil)
-				if err != nil {
-					t.Fatalf("could not commit trie: %v", err)
-				}
-
-				if err = serverTrieDB.Commit(root, false, nil); err != nil {
-					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-				}
-
-				return serverTrieDB, accounts, root
+				return serverTrieDB, root, nil
 			},
 			expectedError: errors.New("error getting code bytes for code hash"),
 		},
@@ -415,10 +275,10 @@ func TestSyncer(t *testing.T) {
 			var (
 				clientDB                   *memorydb.Database
 				serverTrieDB, clientTrieDB *trie.Database
-				accounts                   map[common.Hash]types.StateAccount
 				root                       common.Hash
+				additionalRoots            []common.Hash
 			)
-			serverTrieDB, accounts, root = test.prepareForTest(t)
+			serverTrieDB, root, additionalRoots = test.prepareForTest(t)
 			codec := getSyncCodec(t)
 			leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
 			codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
@@ -440,19 +300,18 @@ func TestSyncer(t *testing.T) {
 			if test.expectedError == nil {
 				clientTrieDB = trie.NewDatabase(clientDB)
 				test.assertSyncResult(t, testSyncResult{
-					root:         root,
-					accounts:     accounts,
-					serverTrieDB: serverTrieDB,
-					clientTrieDB: clientTrieDB,
-					syncer:       s,
+					root:            root,
+					additionalRoots: additionalRoots,
+					serverTrieDB:    serverTrieDB,
+					clientTrieDB:    clientTrieDB,
 				})
 			}
 		})
 	}
 }
 
-func fillAccountsWithStorage(t *testing.T, serverTrie *trie.Trie, serverTrieDB *trie.Database) map[common.Hash]types.StateAccount {
-	return fillAccounts(t, serverTrie, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root common.Hash) common.Hash {
+	return fillAccounts(t, serverTrieDB, root, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
 		if index%3 == 0 {
 			codeBytes := make([]byte, 256)
 			_, err := rand.Read(codeBytes)
@@ -472,8 +331,14 @@ func fillAccountsWithStorage(t *testing.T, serverTrie *trie.Trie, serverTrieDB *
 	})
 }
 
-func fillAccounts(t *testing.T, tr *trie.Trie, accountsLen int64, onAccount func(*testing.T, int64, types.StateAccount, *trie.Trie) types.StateAccount) map[common.Hash]types.StateAccount {
-	accounts := make(map[common.Hash]types.StateAccount, accountsLen)
+func fillAccounts(
+	t *testing.T, trieDB *trie.Database, root common.Hash, accountsLen int64,
+	onAccount func(*testing.T, int64, types.StateAccount, *trie.Trie) types.StateAccount,
+) common.Hash {
+	tr, err := trie.New(root, trieDB)
+	if err != nil {
+		t.Fatalf("error opening trie: %v", err)
+	}
 	for i := int64(0); i < accountsLen; i++ {
 		acc := types.StateAccount{
 			Nonce:    uint64(i),
@@ -495,15 +360,22 @@ func fillAccounts(t *testing.T, tr *trie.Trie, accountsLen int64, onAccount func
 			t.Fatalf("failed to rlp encode account: %v", err)
 		}
 
-		hash := crypto.Keccak256(accBytes)
-		if err = tr.TryUpdate(hash, accBytes); err != nil {
-			t.Fatalf("error updating trie with account, hash=%s, err=%v", hash, err)
+		accHash := make([]byte, common.HashLength)
+		if _, err := rand.Read(accHash); err != nil {
+			t.Fatalf("error reading random bytes: %v", err)
 		}
-
-		accounts[common.BytesToHash(hash)] = acc
+		if err = tr.TryUpdate(accHash, accBytes); err != nil {
+			t.Fatalf("error updating trie with account, hash=%s, err=%v", common.BytesToHash(accHash), err)
+		}
 	}
-
-	return accounts
+	newRoot, _, err := tr.Commit(nil)
+	if err != nil {
+		t.Fatalf("error committing trie: %v", err)
+	}
+	if err := trieDB.Commit(newRoot, false, nil); err != nil {
+		t.Fatalf("error committing trieDB: %v", err)
+	}
+	return newRoot
 }
 
 func getSyncCodec(t *testing.T) codec.Manager {
@@ -613,32 +485,11 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash, *trie.Database) error) {
 	rand.Seed(1)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
-	serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-	assert.NoError(t, err)
-
-	accounts := fillAccountsWithStorage(t, serverTrie, serverTrieDB)
-	root1, _, err := serverTrie.Commit(nil)
-	assert.NoError(t, err)
-	err = serverTrieDB.Commit(root1, false, nil)
-	assert.NoError(t, err)
-
-	serverTrie, err = trie.New(root1, serverTrieDB)
-	assert.NoError(t, err)
-	{
-		accounts2 := fillAccountsWithStorage(t, serverTrie, serverTrieDB)
-		// add all new accounts to original accounts map
-		for hash, account := range accounts2 {
-			accounts[hash] = account
-		}
-	}
-
-	root2, _, err := serverTrie.Commit(nil)
-	assert.NoError(t, err)
-	err = serverTrieDB.Commit(root2, false, nil)
-	assert.NoError(t, err)
+	root1 := fillAccountsWithStorage(t, serverTrieDB, common.Hash{})
+	root2 := fillAccountsWithStorage(t, serverTrieDB, root1)
 
 	if root1 == root2 {
-		t.Fatalf("expected generated test trie roots to be different, root1=%s, root2=%s, accountsLen=%d", root1, root2, len(accounts))
+		t.Fatalf("expected generated test trie roots to be different, root1=%s, root2=%s", root1, root2)
 	}
 
 	var (
@@ -695,19 +546,7 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 	rand.Seed(1)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
-	serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
-	if err != nil {
-		t.Fatalf("error opening trie: %v", err)
-	}
-	fillAccountsWithStorage(t, serverTrie, serverTrieDB)
-	root, _, err := serverTrie.Commit(nil)
-	if err != nil {
-		t.Fatalf("could not commit trie: %v", err)
-	}
-
-	if err = serverTrieDB.Commit(root, false, nil); err != nil {
-		t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
-	}
+	root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{})
 
 	// setup client
 	clientDB := memorydb.New()
