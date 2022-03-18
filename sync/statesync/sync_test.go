@@ -71,6 +71,43 @@ func TestSyncer(t *testing.T) {
 			},
 		},
 		{
+			name: "accounts_with_codes_trie",
+			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
+				serverTrieDB := trie.NewDatabase(memorydb.New())
+				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
+				if err != nil {
+					t.Fatalf("error opening server trie: %v", err)
+				}
+
+				accounts := fillAccounts(t, serverTrie, 1000, func(t *testing.T, index int64, account types.StateAccount, trie *trie.Trie) types.StateAccount {
+					if index%3 == 0 {
+						codeBytes := make([]byte, 256)
+						_, err := rand.Read(codeBytes)
+						if err != nil {
+							t.Fatalf("error reading random code bytes: %v", err)
+						}
+
+						codeHash := crypto.Keccak256Hash(codeBytes)
+						rawdb.WriteCode(serverTrieDB.DiskDB(), codeHash, codeBytes)
+						account.CodeHash = codeHash[:]
+					}
+					return account
+				})
+				root, _, err := serverTrie.Commit(nil)
+				if err != nil {
+					t.Fatalf("could not commit trie: %v", err)
+				}
+
+				if err = serverTrieDB.Commit(root, false, nil); err != nil {
+					t.Fatalf("error committing server trie DB, root=%s, err=%v", root, err)
+				}
+				return serverTrieDB, accounts, root
+			},
+			assertSyncResult: func(t *testing.T, result testSyncResult) {
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+			},
+		},
+		{
 			name: "missing_sync_root",
 			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
@@ -125,7 +162,7 @@ func TestSyncer(t *testing.T) {
 			expectedError: errors.New("failed to fetch leafs"),
 		},
 		{
-			name: "sync_non-latest_root",
+			name: "sync_non_latest_root",
 			prepareForTest: func(t *testing.T) (*trie.Database, map[common.Hash]types.StateAccount, common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				serverTrie, err := trie.New(common.Hash{}, serverTrieDB)
