@@ -67,7 +67,7 @@ func loadProgress(db ethdb.Database, root common.Hash) (*StateSyncProgress, erro
 		return progress, nil
 	} else if progress.Root != root {
 		// marker found but does not match, delete it
-		if err := removeInProgressTrie(db, root, common.Hash{}); err != nil {
+		if err := removeInProgressTrie(db, progress.Root, common.Hash{}); err != nil {
 			return nil, err
 		}
 		// clear account storage trie markers

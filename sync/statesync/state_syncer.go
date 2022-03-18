@@ -132,9 +132,9 @@ func (s *stateSyncer) Start(ctx context.Context) {
 	}
 
 	storageTasks := make([]*syncclient.LeafSyncTask, 0, len(s.progressMarker.StorageTries))
-	for expectedHash, storageTrieProgress := range s.progressMarker.StorageTries {
+	for storageRoot, storageTrieProgress := range s.progressMarker.StorageTries {
 		storageTasks = append(storageTasks, &syncclient.LeafSyncTask{
-			Root:          expectedHash,
+			Root:          storageRoot,
 			Start:         storageTrieProgress.startFrom,
 			NodeType:      message.StateTrieNode,
 			OnLeafs:       storageTrieProgress.handleLeafs,
@@ -172,9 +172,7 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 				return nil, err
 			} else if storageTask != nil {
 				tasks = append(tasks, storageTask)
-				// it is critical to persist the storage marker in the same batch as the account leaf itself
-				// otherwise we will not know to kick off syncing this account on resume.
-				if err := addInProgressTrie(mainTrie.batch, acc.Root, accountHash); err != nil {
+				if err := addInProgressTrie(s.db, acc.Root, accountHash); err != nil {
 					return nil, err
 				}
 			}
@@ -322,10 +320,10 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 	}
 	delete(s.progressMarker.StorageTries, root)
 	// clear the progress marker on completion of the trie
-	if err := removeInProgressStorageTrie(storageTrieProgress.batch, root, storageTrieProgress); err != nil {
+	if err := storageTrieProgress.batch.Write(); err != nil {
 		return err
 	}
-	if err := storageTrieProgress.batch.Write(); err != nil {
+	if err := removeInProgressStorageTrie(s.db, root, storageTrieProgress); err != nil {
 		return err
 	}
 	s.eta.notifyTrieSynced(storageTrieProgress.Skipped)
@@ -354,12 +352,11 @@ func (s *stateSyncer) checkAllDone() error {
 	if mainTrieRoot != s.progressMarker.Root {
 		return fmt.Errorf("expected main trie root [%s] not same as actual [%s]", s.progressMarker.Root, mainTrieRoot)
 	}
-	// remove main trie from progress marker, after this there should be no more
-	// progress entries in the db
-	if err := removeInProgressTrie(mainTrie.batch, mainTrieRoot, common.Hash{}); err != nil {
+	if err := mainTrie.batch.Write(); err != nil {
 		return err
 	}
-	return mainTrie.batch.Write()
+	// remove the main trie storage marker, after which there should be none in the db.
+	return removeInProgressTrie(s.db, mainTrieRoot, common.Hash{})
 }
 
 // Done returns a channel which produces any error that occurred during syncing or nil on success.
