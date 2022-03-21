@@ -28,6 +28,7 @@ package core
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/types"
@@ -63,6 +64,17 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
+
+	Transfer := Transfer
+
+	bc, ok := chain.(*BlockChain)
+	if ok {
+		chainId := bc.chainConfig.ChainID.Uint64()
+		if chainId == 2613 && header.Time < uint64(time.Date(2022, 8, 21, 14, 0, 0, 0, time.UTC).Unix()) {
+			Transfer = Transfer1
+		}
+	}
+
 	return vm.BlockContext{
 		CanTransfer:       CanTransfer,
 		CanTransferMC:     CanTransferMC,
@@ -147,6 +159,25 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) 
 			Data: common.BigToHash(amount).Bytes(),
 		})
 	}
+	// [EVM--]
+}
+
+// [EVM++] HARDFORK
+// Transfer subtracts amount from sender and adds amount to recipient using the given Db
+func Transfer1(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+	db.SubBalance(sender, amount)
+	db.AddBalance(recipient, amount)
+
+	// [EVM++]
+	db.AddLog(&types.Log{
+		Address: common.Address{},
+		Topics: []common.Hash{
+			params.TopicTransfer,
+			sender.Hash(),
+			recipient.Hash(),
+		},
+		Data: common.BigToHash(amount).Bytes(),
+	})
 	// [EVM--]
 }
 
