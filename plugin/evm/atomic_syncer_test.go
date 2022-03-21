@@ -20,20 +20,21 @@ import (
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const commitInterval = 1024
 
 type atomicSyncTestCheckpoint struct {
-	expectedNumLeavesSynced int64      // expected number of leaves to have synced at this checkpoint
-	leafCutoff              int        // Number of leafs to sync before cutting off responses
-	trie                    *trie.Trie // Trie to resume syncing from after stopping
-	targetHeight            uint64     // Height to sync to after stopping
+	expectedNumLeavesSynced int64       // expected number of leaves to have synced at this checkpoint
+	leafCutoff              int         // Number of leafs to sync before cutting off responses
+	targetRoot              common.Hash // Root of trie to resume syncing from after stopping
+	targetHeight            uint64      // Height to sync to after stopping
 }
 
 // testAtomicSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
-// starting at [syncTrie], and stopping and resuming at each of the [checkpoints].
-func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight uint64, syncTrie *trie.Trie, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64) {
+// starting at [targetRoot], and stopping and resuming at each of the [checkpoints].
+func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight uint64, targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64) {
 	codec, err := message.BuildCodec()
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +62,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 	// next trie.
 	for i, checkpoint := range checkpoints {
 		// Create syncer targeting the current [syncTrie].
-		syncer := newAtomicSyncer(mockClient, atomicTrie, syncTrie.Hash(), targetHeight)
+		syncer := newAtomicSyncer(mockClient, atomicTrie, targetRoot, targetHeight)
 		mockClient.GetLeafsIntercept = func(leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
 			if numLeaves+len(leafsResponse.Keys) > checkpoint.leafCutoff {
@@ -79,13 +80,13 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 		}
 
 		assert.Equal(t, checkpoint.expectedNumLeavesSynced, int64(numLeaves), "unexpected number of leaves received at checkpoint %d", i)
-		// Replace the trie and target height for the next checkpoint
-		syncTrie = checkpoint.trie
+		// Replace the target root and height for the next checkpoint
+		targetRoot = checkpoint.targetRoot
 		targetHeight = checkpoint.targetHeight
 	}
 
-	// Create syncer targeting the current [syncTrie].
-	syncer := newAtomicSyncer(mockClient, atomicTrie, syncTrie.Hash(), targetHeight)
+	// Create syncer targeting the current [targetRoot].
+	syncer := newAtomicSyncer(mockClient, atomicTrie, targetRoot, targetHeight)
 
 	// Update intercept to only count the leaves
 	mockClient.GetLeafsIntercept = func(leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
@@ -104,7 +105,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 	// we re-initialise trie DB for asserting the trie to make sure any issues with unflushed writes
 	// are caught here as this will only pass if all trie nodes have been written to the underlying DB
 	clientTrieDB := atomicTrie.TrieDB()
-	trie.AssertTrieConsistency(t, syncTrie.Hash(), serverTrieDB, clientTrieDB, nil)
+	trie.AssertTrieConsistency(t, targetRoot, serverTrieDB, clientTrieDB, nil)
 
 	// check all commit heights are created
 	for height := atomicTrie.commitHeightInterval; height <= targetHeight; height += atomicTrie.commitHeightInterval {
@@ -119,12 +120,8 @@ func TestAtomicSyncer(t *testing.T) {
 	targetHeight := 10 * uint64(commitInterval)
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	root, _, _ := trie.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicKeyLength)
-	serverTrie, err := trie.New(root, serverTrieDB)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	testAtomicSyncer(t, serverTrieDB, targetHeight, serverTrie, nil, int64(targetHeight))
+	testAtomicSyncer(t, serverTrieDB, targetHeight, root, nil, int64(targetHeight))
 }
 
 func TestAtomicSyncerResume(t *testing.T) {
@@ -133,14 +130,10 @@ func TestAtomicSyncerResume(t *testing.T) {
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
 	root, _, _ := trie.GenerateTrie(t, serverTrieDB, numTrieKeys, atomicKeyLength)
-	serverTrie, err := trie.New(root, serverTrieDB)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	testAtomicSyncer(t, serverTrieDB, targetHeight, serverTrie, []atomicSyncTestCheckpoint{
+	testAtomicSyncer(t, serverTrieDB, targetHeight, root, []atomicSyncTestCheckpoint{
 		{
-			trie:                    serverTrie,
+			targetRoot:              root,
 			targetHeight:            targetHeight,
 			leafCutoff:              commitInterval*5 - 1,
 			expectedNumLeavesSynced: commitInterval * 4,
@@ -154,21 +147,15 @@ func TestAtomicSyncerResumeNewRootCheckpoint(t *testing.T) {
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis
 	root1, _, _ := trie.GenerateTrie(t, serverTrieDB, numTrieKeys1, atomicKeyLength)
-	serverTrie1, err := trie.New(root1, serverTrieDB)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	rand.Seed(1) // seed rand again to get the same leafs in GenerateTrie
 	targetHeight2 := 20 * uint64(commitInterval)
 	numTrieKeys2 := int(targetHeight2) - 1 // no atomic ops for genesis
 	root2, _, _ := trie.GenerateTrie(t, serverTrieDB, numTrieKeys2, atomicKeyLength)
-	serverTrie2, err := trie.New(root2, serverTrieDB)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	testAtomicSyncer(t, serverTrieDB, targetHeight1, serverTrie1, []atomicSyncTestCheckpoint{
+	testAtomicSyncer(t, serverTrieDB, targetHeight1, root1, []atomicSyncTestCheckpoint{
 		{
-			trie:                    serverTrie2,
+			targetRoot:              root2,
 			targetHeight:            targetHeight2,
 			leafCutoff:              commitInterval*5 - 1,
 			expectedNumLeavesSynced: commitInterval * 4,
