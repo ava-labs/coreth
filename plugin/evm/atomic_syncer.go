@@ -89,7 +89,6 @@ func (s *atomicSyncer) onLeafs(_ common.Hash, keys [][]byte, values [][]byte) ([
 			s.nextCommit += s.atomicTrie.commitHeightInterval
 		}
 
-		s.nextHeight = height
 		if err := s.atomicTrie.trie.TryUpdate(key, values[i]); err != nil {
 			return nil, err
 		}
