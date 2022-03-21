@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultServerCacheSize int = 75
+	defaultServerCacheSize int = 128
 )
 
 var _ message.RequestHandler = &syncHandler{}
