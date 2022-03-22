@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/core"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -75,6 +76,10 @@ type AtomicTrie interface {
 	// from [previousLastAcceptedHeight+1] to the [lastAcceptedHeight] set by state sync
 	// will not have been executed on shared memory.
 	MarkApplyToSharedMemoryCursor(previousLastAcceptedHeight uint64) error
+
+	// Syncer creates and returns a new Syncer object that can be used to sync the
+	// state of the atomic trie from peers
+	Syncer(client syncclient.LeafClient, targetRoot common.Hash, targetHeight uint64) Syncer
 }
 
 // AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie
@@ -126,7 +131,7 @@ type atomicTrie struct {
 func NewAtomicTrie(
 	db *versiondb.Database, sharedMemory atomic.SharedMemory,
 	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository, codec codec.Manager, lastAcceptedHeight uint64,
-) (*atomicTrie, error) {
+) (AtomicTrie, error) {
 	return newAtomicTrie(db, sharedMemory, bonusBlocks, repo, codec, lastAcceptedHeight, commitHeightInterval)
 }
 
@@ -584,4 +589,10 @@ func (a *atomicTrie) MarkApplyToSharedMemoryCursor(previousLastAcceptedHeight ui
 	// Set the cursor to [previousLastAcceptedHeight+1] so that we begin the iteration at the
 	// first item that has not been applied to shared memory.
 	return database.PutUInt64(a.metadataDB, appliedSharedMemoryCursorKey, previousLastAcceptedHeight+1)
+}
+
+// Syncer creates and returns a new Syncer object that can be used to sync the
+// state of the atomic trie from peers
+func (a *atomicTrie) Syncer(client syncclient.LeafClient, targetRoot common.Hash, targetHeight uint64) Syncer {
+	return newAtomicSyncer(client, a, targetRoot, targetHeight)
 }

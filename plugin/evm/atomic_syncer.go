@@ -107,7 +107,8 @@ func (s *atomicSyncer) onFinish(_ common.Hash) error {
 		return err
 	}
 
-	// check the root matches expected value
+	// the root of the trie should always match the targetRoot  since we already verified the proofs,
+	// here we check the root mainly for correctness of the atomicTrie's pointers and it should never fail.
 	root, _ := s.atomicTrie.LastCommitted()
 	if s.targetRoot != root {
 		return fmt.Errorf("synced root (%s) does not match expected (%s) for atomic trie ", root, s.targetRoot)

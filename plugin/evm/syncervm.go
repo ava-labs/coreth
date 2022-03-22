@@ -129,7 +129,7 @@ func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBloc
 		BlockRoot:   blk.Root(),
 		BlockNumber: height,
 	}
-	log.Info("sync roots returned", "roots", response, "height", height)
+	log.Debug("sync roots returned", "roots", response, "height", height)
 	return response, nil
 }
 
@@ -319,14 +319,13 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 	vm.cancel = cancel
 	defer cancel()
 
-	atomicSync := func() error { return vm.syncAtomicTrie(ctx) }
-	if err := vm.stateSyncStepWithMarker(atomicSyncDoneKey, "atomic sync", atomicSync); err != nil {
+	// Here we sync the atomic trie and the EVM state trie. These steps could be done
+	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
+	if err := vm.stateSyncStepWithMarker(ctx, atomicSyncDoneKey, "atomic sync", vm.syncAtomicTrie); err != nil {
 		vm.stateSyncError = err
 		return
 	}
-
-	stateSync := func() error { return vm.syncStateTrie(ctx) }
-	if err := vm.stateSyncStepWithMarker(stateSyncDoneKey, "state sync", stateSync); err != nil {
+	if err := vm.stateSyncStepWithMarker(ctx, stateSyncDoneKey, "state sync", vm.syncStateTrie); err != nil {
 		vm.stateSyncError = err
 		return
 	}
@@ -336,14 +335,14 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 // Sets marker in doneKey if work function returns no errors
 // Does nothing if marker in doneKey is already set
 // name is for logging purposes only
-func (vm *stateSyncer) stateSyncStepWithMarker(doneKey []byte, name string, work func() error) error {
+func (vm *stateSyncer) stateSyncStepWithMarker(ctx context.Context, doneKey []byte, name string, work func(context.Context) error) error {
 	if done, err := vm.db.Has(doneKey); err != nil {
 		return err
 	} else if done {
 		log.Info("skipping already completed sync step", "step", name)
 		return nil
 	}
-	if err := work(); err != nil {
+	if err := work(ctx); err != nil {
 		log.Error("could not complete sync step", "step", name)
 		return err
 	}
@@ -356,7 +355,7 @@ func (vm *stateSyncer) stateSyncStepWithMarker(doneKey []byte, name string, work
 
 func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", vm.stateSyncBlock.AtomicRoot)
-	vm.syncer = newAtomicSyncer(vm.client, vm.atomicTrie, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
+	vm.syncer = vm.atomicTrie.Syncer(vm.client, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
 	vm.syncer.Start(ctx)
 	err := <-vm.syncer.Done()
 	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", err)
@@ -418,7 +417,6 @@ func (vm *stateSyncer) syncBlocks(fromHash common.Hash, fromHeight uint64, paren
 	// get any blocks we couldn't find on disk from peers and write
 	// them to disk.
 	batch := vm.chaindb.NewBatch()
-	lastUpdate := time.Now()
 	for i := parentsToGet - 1; i >= 0 && (nextHash != common.Hash{}); {
 		blocks, err := vm.client.GetBlocks(nextHash, nextHeight, parentsPerRequest)
 		if err != nil {
@@ -433,10 +431,7 @@ func (vm *stateSyncer) syncBlocks(fromHash common.Hash, fromHeight uint64, paren
 			nextHash = block.ParentHash()
 			nextHeight--
 		}
-		if time.Since(lastUpdate) > 8*time.Second {
-			log.Info("fetching blocks from peer", "remaining", i+1, "total", parentsToGet)
-			lastUpdate = time.Now()
-		}
+		log.Info("fetching blocks from peer", "remaining", i+1, "total", parentsToGet)
 	}
 	log.Info("fetched blocks from peer", "total", parentsToGet)
 	return batch.Write()

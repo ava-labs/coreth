@@ -740,7 +740,7 @@ func TestGetLeafsRetries(t *testing.T) {
 		Root:     root,
 		Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 		End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-		Limit:    1024,
+		Limit:    defaultLeafRequestLimit,
 		NodeType: message.StateTrieNode,
 	}
 	goodResponse, responseErr := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)

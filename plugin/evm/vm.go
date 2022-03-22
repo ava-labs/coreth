@@ -195,7 +195,7 @@ type vmState struct {
 	// block.
 	acceptedBlockDB database.Database
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie *atomicTrie
+	atomicTrie AtomicTrie
 }
 
 // VM implements the snowman.ChainVM interface

@@ -14,6 +14,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const defaultLeafRequestLimit = 1024
+
 // OnStart is the callback used by LeafSyncTask to determine if work can be skipped.
 // Returns true if work should be skipped (eg, because data was available on disk)
 type OnStart func(root common.Hash) (bool, error)
@@ -110,7 +112,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 			Root:     root,
 			Start:    start,
 			End:      nil, // will request until the end of the trie
-			Limit:    1024,
+			Limit:    defaultLeafRequestLimit,
 			NodeType: task.NodeType,
 		})
 
