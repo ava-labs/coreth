@@ -28,12 +28,13 @@ const (
 	commitHeightInterval       = core.CommitInterval
 	progressLogUpdate          = 30 * time.Second
 	atomicKeyLength            = wrappers.LongLen + common.HashLength
-	sharedMemoryApplyBatchSize = 2000 // sepcifies the number of atomic operations to batch progress updates
+	sharedMemoryApplyBatchSize = 2000 // specifies the number of atomic operations to batch progress updates
 )
 
 var (
-	lastCommittedKey             = []byte("atomicTrieLastCommittedBlock")
-	appliedSharedMemoryCursorKey = []byte("atomicTrieLastAppliedToSharedMemory")
+	_                            AtomicTrie = &atomicTrie{}
+	lastCommittedKey                        = []byte("atomicTrieLastCommittedBlock")
+	appliedSharedMemoryCursorKey            = []byte("atomicTrieLastAppliedToSharedMemory")
 )
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
@@ -79,7 +80,7 @@ type AtomicTrie interface {
 // AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie
 type AtomicTrieIterator interface {
 	// Next advances the iterator to the next node in the atomic trie and
-	// returns true if there are more nodes to iterate
+	// returns true if there are more leaves to iterate
 	Next() bool
 
 	// Key returns the current database key that the iterator is iterating
@@ -117,8 +118,6 @@ type atomicTrie struct {
 	log                  log.Logger // struct logger
 	sharedMemory         atomic.SharedMemory
 }
-
-var _ AtomicTrie = &atomicTrie{}
 
 // NewAtomicTrie returns a new instance of a atomicTrie with the default commitHeightInterval.
 // Initializes the trie before returning it.
