@@ -519,13 +519,17 @@ func (vm *VM) Initialize(
 // expected by engine for VMs that support state sync.
 func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 	// parse nodeIDs from state sync IDs in vm config
-	stateSyncIDs := make([]ids.ShortID, len(vm.config.StateSyncIDs))
-	for i, nodeIDString := range vm.config.StateSyncIDs {
-		nodeID, err := ids.ShortFromPrefixedString(nodeIDString, constants.NodeIDPrefix)
-		if err != nil {
-			return fmt.Errorf("failed to parse %s as ShortID: %w", nodeIDString, err)
+	var stateSyncIDs []ids.ShortID
+	if vm.config.StateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
+		nodeIDs := strings.Split(vm.config.StateSyncIDs, ",")
+		stateSyncIDs = make([]ids.ShortID, len(nodeIDs))
+		for i, nodeIDString := range nodeIDs {
+			nodeID, err := ids.ShortFromPrefixedString(nodeIDString, constants.NodeIDPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to parse %s as ShortID: %w", nodeIDString, err)
+			}
+			stateSyncIDs[i] = nodeID
 		}
-		stateSyncIDs[i] = nodeID
 	}
 
 	vm.stateSyncer = NewStateSyncer(&stateSyncConfig{

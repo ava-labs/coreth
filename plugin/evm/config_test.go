@@ -52,8 +52,8 @@ func TestUnmarshalConfig(t *testing.T) {
 		},
 		{
 			"state sync sources",
-			[]byte(`{"state-sync-ids": ["NodeID-CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"]}`),
-			Config{StateSyncIDs: []string{"NodeID-CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"}},
+			[]byte(`{"state-sync-ids": "NodeID-CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"}`),
+			Config{StateSyncIDs: "NodeID-CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"},
 			false,
 		},
 	}
