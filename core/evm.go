@@ -70,7 +70,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	bc, ok := chain.(*BlockChain)
 	if ok {
 		chainId := bc.chainConfig.ChainID.Uint64()
-		if chainId == 2613 && header.Time < uint64(time.Date(2022, 3, 21, 14, 0, 0, 0, time.UTC).Unix()) {
+		if (chainId == 2613 && header.Time < uint64(time.Date(2022, 3, 21, 14, 0, 0, 0, time.UTC).Unix())) ||
+			(chainId == 2612 && header.Time < uint64(time.Date(2022, 3, 23, 16, 0, 0, 0, time.UTC).Unix())) {
 			Transfer = Transfer1
 		}
 	}
