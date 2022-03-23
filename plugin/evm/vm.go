@@ -60,7 +60,9 @@ import (
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+
 	//"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -1082,8 +1084,7 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 		return ids.ID{}, ids.ShortID{}, err
 	}
 
-	//expectedHRP := constants.GetHRP(vm.ctx.NetworkID)
-	expectedHRP := "fuji"
+	expectedHRP := constants.GetHRP(vm.ctx.NetworkID)
 	if hrp != expectedHRP {
 		return ids.ID{}, ids.ShortID{}, fmt.Errorf("expected hrp %q but got %q",
 			expectedHRP, hrp)
