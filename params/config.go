@@ -45,9 +45,9 @@ var (
 // Avalanche ChainIDs
 var (
 	// AvalancheMainnetChainID ...
-	AvalancheMainnetChainID = big.NewInt(43114)
+	AvalancheMainnetChainID = big.NewInt(2612)
 	// AvalancheFujiChainID ...
-	AvalancheFujiChainID = big.NewInt(43113)
+	AvalancheFujiChainID = big.NewInt(2613)
 	// AvalancheLocalChainID ...
 	AvalancheLocalChainID = big.NewInt(43112)
 
