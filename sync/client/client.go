@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -62,13 +63,13 @@ type Client interface {
 type parseResponseFn func(codec codec.Manager, request message.Request, response []byte) (interface{}, int, error)
 
 type client struct {
-	networkClient  peer.NetworkClient
-	codec          codec.Manager
-	maxAttempts    uint8
-	maxRetryDelay  time.Duration
-	stateSyncNodes []ids.ShortID
-	nodeIdx        int
-	stats          stats.ClientSyncerStats
+	networkClient    peer.NetworkClient
+	codec            codec.Manager
+	maxAttempts      uint8
+	maxRetryDelay    time.Duration
+	stateSyncNodes   []ids.ShortID
+	stateSyncNodeIdx uint32
+	stats            stats.ClientSyncerStats
 }
 
 type ClientConfig struct {
@@ -305,8 +306,8 @@ func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time
 		} else {
 			// get the next nodeID using the nodeIdx offset. If we're out of nodes, loop back to 0
 			// we do this every attempt to ensure we get a different node each time if possible.
-			c.nodeIdx = (c.nodeIdx + 1) % len(c.stateSyncNodes)
-			nodeID = c.stateSyncNodes[c.nodeIdx]
+			nodeIdx := atomic.AddUint32(&c.stateSyncNodeIdx, 1)
+			nodeID = c.stateSyncNodes[nodeIdx%uint32(len(c.stateSyncNodes))]
 
 			response, err = c.networkClient.Request(nodeID, requestBytes)
 		}
