@@ -508,7 +508,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		gasBeforeTx := st.gas
+
+		var trimGas uint64
 
 		if tx != nil {
 			payeeInstrinsicGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), false, homestead, istanbul)
@@ -520,6 +521,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				return nil, fmt.Errorf("payee: %w: have %d, want %d", ErrIntrinsicGas, st.gas, payeeInstrinsicGas)
 			}
 			st.gas -= payeeInstrinsicGas
+
+			if st.gas > tx.Gas()-payeeInstrinsicGas {
+				trimGas = st.gas - (tx.Gas() - payeeInstrinsicGas)
+			}
+			st.gas -= trimGas
 
 			signer := types.MakeSigner(st.evm.ChainConfig(), st.evm.Context.BlockNumber, st.evm.Context.Time)
 			payee, err = types.Sender(signer, tx)
@@ -572,13 +578,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			ret, st.gas, vmerr = st.evm.Call(sender, to, data, st.gas, st.value)
 		}
 
-		if tx != nil && st.gas+tx.Gas() < gasBeforeTx {
-			return &ExecutionResult{
-				UsedGas:    st.gasUsed(),
-				Err:        vmerr,
-				ReturnData: errorRevertMessage("payee: out of gas"),
-			}, nil
-		}
+		st.gas += trimGas
 	}
 	st.refundGas(apricotPhase1)
 	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
