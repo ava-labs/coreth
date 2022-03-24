@@ -505,30 +505,21 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 
 		tx, err := st.decodeFeePayerTx()
-
 		if err != nil {
 			return nil, err
 		}
+		gasBeforeTx := st.gas
 
-		var (
-			payeeGas           uint64
-			payeeInstrinsicGas uint64
-		)
 		if tx != nil {
-			payeeInstrinsicGas, err = IntrinsicGas(tx.Data(), tx.AccessList(), false, homestead, istanbul)
+			payeeInstrinsicGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), false, homestead, istanbul)
 			if err != nil {
 				return nil, err
 			}
 
-			if tx.Gas() < payeeInstrinsicGas {
-				return &ExecutionResult{
-					UsedGas:    st.gasUsed(),
-					Err:        vmerr,
-					ReturnData: errorRevertMessage("payee: out of gas"),
-				}, nil
+			if st.gas < payeeInstrinsicGas {
+				return nil, fmt.Errorf("payee: %w: have %d, want %d", ErrIntrinsicGas, st.gas, payeeInstrinsicGas)
 			}
-
-			payeeGas = tx.Gas() - payeeInstrinsicGas
+			st.gas -= payeeInstrinsicGas
 
 			signer := types.MakeSigner(st.evm.ChainConfig(), st.evm.Context.BlockNumber, st.evm.Context.Time)
 			payee, err = types.Sender(signer, tx)
@@ -555,12 +546,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				}, nil
 			}
 
+			// Increment the nonce for payee account
 			st.state.SetNonce(payee, payeeNonce+1)
 
 			// transfer value from Payer to Payee account
 			st.state.SubBalance(st.msg.From(), st.value)
 			st.state.AddBalance(payee, st.value)
-
 		}
 
 		txs, err := decodeBatchTx(to, data)
@@ -577,11 +568,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					break
 				}
 			}
-		} else if tx != nil {
-			ret, payeeGas, vmerr = st.evm.Call(sender, to, data, payeeGas, st.value)
-			st.gas -= tx.Gas() - payeeGas
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, to, data, st.gas, st.value)
+		}
+
+		if tx != nil && st.gas+tx.Gas() < gasBeforeTx {
+			return &ExecutionResult{
+				UsedGas:    st.gasUsed(),
+				Err:        vmerr,
+				ReturnData: errorRevertMessage("payee: out of gas"),
+			}, nil
 		}
 	}
 	st.refundGas(apricotPhase1)
