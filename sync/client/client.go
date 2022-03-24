@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	StateSyncVersion      = version.NewDefaultApplication(constants.PlatformName, 1, 7, 7)
+	StateSyncVersion      = version.NewDefaultApplication(constants.PlatformName, 1, 7, 9)
 	errEmptyResponse      = errors.New("empty response")
 	errTooManyBlocks      = errors.New("response contains more blocks than requested")
 	errHashMismatch       = errors.New("hash does not match expected value")
