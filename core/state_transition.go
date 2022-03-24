@@ -510,7 +510,26 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 
+		var (
+			payeeGas           uint64
+			payeeInstrinsicGas uint64
+		)
 		if tx != nil {
+			payeeInstrinsicGas, err = IntrinsicGas(tx.Data(), tx.AccessList(), false, homestead, istanbul)
+			if err != nil {
+				return nil, err
+			}
+
+			if tx.Gas() < payeeInstrinsicGas {
+				return &ExecutionResult{
+					UsedGas:    st.gasUsed(),
+					Err:        vmerr,
+					ReturnData: errorRevertMessage("payee: out of gas"),
+				}, nil
+			}
+
+			payeeGas = tx.Gas() - payeeInstrinsicGas
+
 			signer := types.MakeSigner(st.evm.ChainConfig(), st.evm.Context.BlockNumber, st.evm.Context.Time)
 			payee, err = types.Sender(signer, tx)
 
@@ -518,14 +537,25 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				return &ExecutionResult{
 					UsedGas:    st.gasUsed(),
 					Err:        vmerr,
-					ReturnData: errorRevertMessage("invalid payee signature"),
+					ReturnData: errorRevertMessage("payee: invalid signature"),
 				}, nil
 			}
 
 			sender = vm.AccountRef(payee)
 			to = *tx.To()
 			data = tx.Data()
-			st.state.SetNonce(payee, st.state.GetNonce(payee)+1)
+
+			payeeNonce := st.state.GetNonce(payee)
+
+			if payeeNonce != tx.Nonce() {
+				return &ExecutionResult{
+					UsedGas:    st.gasUsed(),
+					Err:        vmerr,
+					ReturnData: errorRevertMessage("payee: invalid nonce"),
+				}, nil
+			}
+
+			st.state.SetNonce(payee, payeeNonce+1)
 
 			// transfer value from Payer to Payee account
 			st.state.SubBalance(st.msg.From(), st.value)
@@ -547,6 +577,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					break
 				}
 			}
+		} else if tx != nil {
+			ret, payeeGas, vmerr = st.evm.Call(sender, to, data, payeeGas, st.value)
+			st.gas -= tx.Gas() - payeeGas
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, to, data, st.gas, st.value)
 		}
