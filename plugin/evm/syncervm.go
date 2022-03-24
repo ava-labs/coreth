@@ -41,6 +41,11 @@ const (
 	maxRetryAttempts = uint8(32)
 	// maximum delay in between successive requests
 	defaultMaxRetryDelay = 10 * time.Second
+	// minimum number of blocks the blockchain should be ahead of
+	// local last accepted to perform state sync
+	defaultStateSyncMinBlocks = 300_000
+	// syncable interval must be a multiple of [core.CommitInterval]
+	defaultSyncableInterval = 4 * core.CommitInterval
 )
 
 var (
@@ -51,14 +56,16 @@ var (
 
 type stateSyncConfig struct {
 	*vmState
-	statsEnabled bool
-	enabled      bool
-	codec        codec.Manager
-	netCodec     codec.Manager
-	network      peer.Network
-	client       peer.NetworkClient
-	toEngine     chan<- commonEng.Message
-	stateSyncIDs []ids.ShortID
+	statsEnabled     bool
+	enabled          bool
+	codec            codec.Manager
+	netCodec         codec.Manager
+	network          peer.Network
+	client           peer.NetworkClient
+	toEngine         chan<- commonEng.Message
+	stateSyncIDs     []ids.ShortID
+	minBlocks        uint64
+	syncableInterval uint64
 }
 
 // Syncer represents a step in state sync,
@@ -105,12 +112,17 @@ func NewStateSyncer(config *stateSyncConfig) *stateSyncer {
 }
 
 func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBlock, error) {
-	atomicHash, err := vm.atomicTrie.Root(height)
+	if height == 0 {
+		// return empty in case last accepted is before the first [core.CommitInterval]
+		return message.SyncableBlock{}, nil
+	}
+
+	atomicRoot, err := vm.atomicTrie.Root(height)
 	if err != nil {
 		return message.SyncableBlock{}, fmt.Errorf("error getting atomic trie root for height (%d): %w", height, err)
 	}
 
-	if (atomicHash == common.Hash{}) {
+	if (atomicRoot == common.Hash{}) {
 		return message.SyncableBlock{}, fmt.Errorf("atomic trie root not found for height (%d)", height)
 	}
 
@@ -124,7 +136,7 @@ func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBloc
 	}
 
 	response := message.SyncableBlock{
-		AtomicRoot:  atomicHash,
+		AtomicRoot:  atomicRoot,
 		BlockHash:   blk.Hash(),
 		BlockRoot:   blk.Root(),
 		BlockNumber: height,
@@ -160,7 +172,7 @@ func (vm *VM) ParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
 // Called on nodes that serve fast sync data.
 func (vm *stateSyncer) StateSyncGetLastSummary() (commonEng.Summary, error) {
 	lastHeight := vm.LastAcceptedBlock().Height()
-	lastSyncableBlockNumber := lastHeight - lastHeight%core.CommitInterval
+	lastSyncableBlockNumber := lastHeight - lastHeight%vm.syncableInterval
 
 	syncableBlock, err := vm.stateSummaryAtHeight(lastSyncableBlockNumber)
 	if err != nil {
@@ -176,7 +188,7 @@ func (vm *stateSyncer) StateSyncGetSummary(key commonEng.SummaryKey) (commonEng.
 	summaryBlock := vm.chain.GetBlockByNumber(uint64(key))
 	if summaryBlock == nil ||
 		summaryBlock.NumberU64() > vm.LastAcceptedBlock().Height() ||
-		summaryBlock.NumberU64()%core.CommitInterval != 0 {
+		summaryBlock.NumberU64()%vm.syncableInterval != 0 {
 		return nil, commonEng.ErrUnknownStateSummary
 	}
 
@@ -193,15 +205,23 @@ func (vm *stateSyncer) StateSyncGetSummary(key commonEng.SummaryKey) (commonEng.
 // Performs state sync on a background go routine to avoid blocking engine.
 // Returns before state sync is completed
 func (vm *stateSyncer) StateSync(summaries []commonEng.Summary) error {
-	// TODO: check edge case where node is restarted after fully completed state sync
-	// does it try to sync to state root older than last accepted? (if chain hasn't moved yet)
-	if len(summaries) == 0 {
-		log.Info("no summaries in state sync, skipping")
-		return nil
-	}
-
 	log.Info("Starting state sync", "summaries", len(summaries))
-	go vm.stateSync(summaries)
+	go func() {
+		completed, err := vm.stateSync(summaries)
+		if err != nil {
+			vm.stateSyncError = err
+			log.Error("error occurred in stateSync", "err", err)
+		}
+		if completed {
+			// notify engine regardless of whether err == nil,
+			// engine will call GetLastSummaryBlockID to retrieve the ID and check the error.
+			log.Info("stateSync completed, notifying engine")
+			vm.toEngine <- commonEng.StateSyncDone
+		} else {
+			log.Info("stateSync skipped, notifying engine")
+			vm.toEngine <- commonEng.StateSyncSkipped
+		}
+	}()
 	return nil
 }
 
@@ -252,32 +272,8 @@ func (vm *stateSyncer) getSummaryToSync(proposedSummaries []commonEng.Summary) (
 	return summaryToSync.Bytes(), stateSyncBlock, false, err
 }
 
-// stateSync blockingly performs the state sync for both the eth state and the atomic state
-// Notifies engine commonEng.StateSyncDone regardless of the state sync result
-func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
-	// notify engine at the end of this function regardless of success
-	// engine will call GetLastSummaryBlockID to retrieve the ID
-	// of the successfully synced block and the error result if one occurred.
-	defer func() {
-		if vm.stateSyncError != nil {
-			log.Error("error occurred in stateSync, notifying engine", "err", vm.stateSyncError)
-		} else {
-			log.Info("stateSync completed successfully, notifying engine")
-		}
-		vm.toEngine <- commonEng.StateSyncDone
-	}()
-
-	var (
-		resuming bool
-		err      error
-	)
-
-	vm.stateSyncSummary, vm.stateSyncBlock, resuming, err = vm.getSummaryToSync(summaries)
-	if err != nil {
-		vm.stateSyncError = err
-		return
-	}
-
+// wipeSnapshotAndResumeMarkers clears resume related state if needed
+func (vm *stateSyncer) wipeSnapshotAndResumeMarkersIfNeeded(resuming bool) error {
 	// in the rare case that we have a previous unclean shutdown
 	// initializing the blockchain will try to rebuild the snapshot.
 	// we need to stop the async snapshot generation, because it will
@@ -292,27 +288,58 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 		<-snapshot.WipeSnapshot(vm.chaindb, false)
 	}
 
-	if !resuming {
-		log.Info("not resuming a previous sync, wipe snapshot & resume markers")
-		<-snapshot.WipeSnapshot(vm.chaindb, false)
-		if err := vm.db.Delete(atomicSyncDoneKey); err != nil {
-			vm.stateSyncError = err
-			return
-		}
-		if err := vm.db.Delete(stateSyncDoneKey); err != nil {
-			vm.stateSyncError = err
-			return
-		}
+	if resuming {
+		return nil
 	}
 
+	log.Info("not resuming a previous sync, wipe snapshot & resume markers")
+	<-snapshot.WipeSnapshot(vm.chaindb, false)
+	if err := vm.db.Delete(atomicSyncDoneKey); err != nil {
+		return err
+	}
+	return vm.db.Delete(stateSyncDoneKey)
+}
+
+// stateSync blockingly performs the state sync for the EVM state and the atomic state
+// returns true if state sync was completed/attempted and false if it was skipped, along with
+// an error if one occurred.
+func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
+	var (
+		resuming bool
+		err      error
+	)
+
+	if len(summaries) == 0 {
+		log.Info("no summaries available, skipping state sync")
+		return false, nil
+	}
+
+	vm.stateSyncSummary, vm.stateSyncBlock, resuming, err = vm.getSummaryToSync(summaries)
+	if err != nil {
+		return true, err
+	}
+
+	// ensure blockchain is significantly ahead of local last accepted block,
+	// to make sure state sync is worth it.
+	lastAcceptedHeight := vm.LastAcceptedBlock().Height()
+	if lastAcceptedHeight+vm.minBlocks > vm.stateSyncBlock.BlockNumber {
+		log.Info(
+			"last accepted too close to most recent syncable block, skipping state sync",
+			"lastAccepted", lastAcceptedHeight,
+			"syncableHeight", vm.stateSyncBlock.BlockNumber,
+		)
+		return false, nil
+	}
+
+	if err = vm.wipeSnapshotAndResumeMarkersIfNeeded(resuming); err != nil {
+		return true, err
+	}
 	if err = vm.db.Commit(); err != nil {
-		vm.stateSyncError = err
-		return
+		return true, err
 	}
 
-	if err := vm.syncBlocks(vm.stateSyncBlock.BlockHash, vm.stateSyncBlock.BlockNumber, parentsToGet); err != nil {
-		vm.stateSyncError = err
-		return
+	if err = vm.syncBlocks(vm.stateSyncBlock.BlockHash, vm.stateSyncBlock.BlockNumber, parentsToGet); err != nil {
+		return true, err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -321,14 +348,10 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) {
 
 	// Here we sync the atomic trie and the EVM state trie. These steps could be done
 	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
-	if err := vm.stateSyncStepWithMarker(ctx, atomicSyncDoneKey, "atomic sync", vm.syncAtomicTrie); err != nil {
-		vm.stateSyncError = err
-		return
+	if err = vm.stateSyncStepWithMarker(ctx, atomicSyncDoneKey, "atomic sync", vm.syncAtomicTrie); err != nil {
+		return true, err
 	}
-	if err := vm.stateSyncStepWithMarker(ctx, stateSyncDoneKey, "state sync", vm.syncStateTrie); err != nil {
-		vm.stateSyncError = err
-		return
-	}
+	return true, vm.stateSyncStepWithMarker(ctx, stateSyncDoneKey, "state sync", vm.syncStateTrie)
 }
 
 // stateSyncStepWithMarker executes work function if marker specified in doneKey is not set

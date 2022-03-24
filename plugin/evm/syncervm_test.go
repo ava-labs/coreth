@@ -28,7 +28,36 @@ import (
 )
 
 func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
-	t.Parallel()
+	tests := []struct {
+		name             string
+		syncableInterval uint64
+		blocksToBuild    int
+		minBlocks        uint64
+		expectedMessage  commonEng.Message
+	}{
+		{
+			name:             "state sync skipped",
+			syncableInterval: core.CommitInterval,
+			blocksToBuild:    100,
+			minBlocks:        1000,
+			expectedMessage:  commonEng.StateSyncSkipped,
+		},
+		{
+			name:             "state sync performed",
+			syncableInterval: core.CommitInterval,      // must be multiple of [core.CommitInterval]
+			blocksToBuild:    core.CommitInterval + 50, // must be greater than [syncableInterval]
+			minBlocks:        core.CommitInterval - 50, // arbitrary choice less than [syncableInterval]
+			expectedMessage:  commonEng.StateSyncDone,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testSyncerVM(t, test.blocksToBuild, test.minBlocks, test.syncableInterval, test.expectedMessage)
+		})
+	}
+}
+
+func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInterval uint64, expectedMessage commonEng.Message) {
 	importAmount := 2000000 * units.Avax // 2M avax
 	issuer, syncedVM, _, _, syncedVMAppSender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
@@ -94,7 +123,6 @@ func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
 		}
 	}
 
-	blocksToBuild := 9000
 	nonce := uint64(0)
 	for i := 0; i < blocksToBuild; i++ {
 		txs := make([]*types.Transaction, 10)
@@ -143,6 +171,9 @@ func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
 		}
 	}
 
+	// patch syncableInterval for test
+	syncedVM.stateSyncer.syncableInterval = syncableInterval
+
 	summary, err := syncedVM.StateSyncGetLastSummary()
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
@@ -187,13 +218,21 @@ func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
 		return nil
 	}
 
+	// patch minBlocks for test
+	stateSyncVM.minBlocks = minBlocks
+
 	// set VM state to state syncing
 	err = stateSyncVM.StateSync([]commonEng.Summary{summary})
 	if err != nil {
 		t.Fatal("unexpected error when initiating state sync")
 	}
 	msg := <-stateSyncEngineChan
-	assert.Equal(t, commonEng.StateSyncDone, msg)
+	assert.Equal(t, expectedMessage, msg)
+	if expectedMessage == commonEng.StateSyncSkipped {
+		// if state sync should be skipped, don't expect
+		// the state to have been updated and return early
+		return
+	}
 
 	blockID, err := stateSyncVM.GetLastSummaryBlockID()
 	if err != nil {
