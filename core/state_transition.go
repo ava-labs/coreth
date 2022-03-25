@@ -509,7 +509,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 
-		var trimGas uint64
+		var payeeGas uint64
 
 		if tx != nil {
 			payeeInstrinsicGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), false, homestead, istanbul)
@@ -517,15 +517,27 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				return nil, err
 			}
 
-			if st.gas < payeeInstrinsicGas {
-				return nil, fmt.Errorf("payee: %w: have %d, want %d", ErrIntrinsicGas, st.gas, payeeInstrinsicGas)
+			if tx.Gas() < payeeInstrinsicGas {
+				return &ExecutionResult{
+					UsedGas:    st.gasUsed(),
+					Err:        vmerr,
+					ReturnData: errorRevertMessage("payee: gas too low"),
+				}, nil
 			}
+
+			if st.gas < tx.Gas() {
+				return &ExecutionResult{
+					UsedGas:    st.gasUsed(),
+					Err:        vm.ErrOutOfGas,
+					ReturnData: errorRevertMessage("payer: gas too low"),
+				}, nil
+			}
+
 			st.gas -= payeeInstrinsicGas
 
-			if st.gas > tx.Gas()-payeeInstrinsicGas {
-				trimGas = st.gas - (tx.Gas() - payeeInstrinsicGas)
-			}
-			st.gas -= trimGas
+			payeeGas = tx.Gas() - payeeInstrinsicGas
+
+			st.gas -= payeeGas
 
 			signer := types.MakeSigner(st.evm.ChainConfig(), st.evm.Context.BlockNumber, st.evm.Context.Time)
 			payee, err = types.Sender(signer, tx)
@@ -574,11 +586,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					break
 				}
 			}
+		} else if tx != nil {
+			ret, payeeGas, vmerr = st.evm.Call(sender, to, data, payeeGas, st.value)
+			st.gas += payeeGas
+
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, to, data, st.gas, st.value)
 		}
 
-		st.gas += trimGas
 	}
 	st.refundGas(apricotPhase1)
 	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
