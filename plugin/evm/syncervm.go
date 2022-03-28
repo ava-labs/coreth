@@ -48,11 +48,7 @@ const (
 	defaultSyncableInterval = 4 * core.CommitInterval
 )
 
-var (
-	stateSyncSummaryKey = []byte("stateSyncSummary")
-	atomicSyncDoneKey   = []byte("atomicSyncDone")
-	stateSyncDoneKey    = []byte("stateSyncDone")
-)
+var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 type stateSyncConfig struct {
 	*vmState
@@ -272,8 +268,8 @@ func (vm *stateSyncer) getSummaryToSync(proposedSummaries []commonEng.Summary) (
 	return summaryToSync.Bytes(), stateSyncBlock, false, err
 }
 
-// wipeSnapshotAndResumeMarkers clears resume related state if needed
-func (vm *stateSyncer) wipeSnapshotAndResumeMarkersIfNeeded(resuming bool) error {
+// wipeSnapshotIfNeeded clears resume related state if needed
+func (vm *stateSyncer) wipeSnapshotIfNeeded(resuming bool) error {
 	// in the rare case that we have a previous unclean shutdown
 	// initializing the blockchain will try to rebuild the snapshot.
 	// we need to stop the async snapshot generation, because it will
@@ -288,16 +284,12 @@ func (vm *stateSyncer) wipeSnapshotAndResumeMarkersIfNeeded(resuming bool) error
 		<-snapshot.WipeSnapshot(vm.chaindb, false)
 	}
 
-	if resuming {
-		return nil
+	if !resuming {
+		log.Info("not resuming a previous sync, wiping snapshot")
+		<-snapshot.WipeSnapshot(vm.chaindb, false)
 	}
 
-	log.Info("not resuming a previous sync, wipe snapshot & resume markers")
-	<-snapshot.WipeSnapshot(vm.chaindb, false)
-	if err := vm.db.Delete(atomicSyncDoneKey); err != nil {
-		return err
-	}
-	return vm.db.Delete(stateSyncDoneKey)
+	return nil
 }
 
 // stateSync blockingly performs the state sync for the EVM state and the atomic state
@@ -331,7 +323,7 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 		return false, nil
 	}
 
-	if err = vm.wipeSnapshotAndResumeMarkersIfNeeded(resuming); err != nil {
+	if err = vm.wipeSnapshotIfNeeded(resuming); err != nil {
 		return true, err
 	}
 	if err = vm.db.Commit(); err != nil {
@@ -348,32 +340,10 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 
 	// Here we sync the atomic trie and the EVM state trie. These steps could be done
 	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
-	if err = vm.stateSyncStepWithMarker(ctx, atomicSyncDoneKey, "atomic sync", vm.syncAtomicTrie); err != nil {
+	if err = vm.syncAtomicTrie(ctx); err != nil {
 		return true, err
 	}
-	return true, vm.stateSyncStepWithMarker(ctx, stateSyncDoneKey, "state sync", vm.syncStateTrie)
-}
-
-// stateSyncStepWithMarker executes work function if marker specified in doneKey is not set
-// Sets marker in doneKey if work function returns no errors
-// Does nothing if marker in doneKey is already set
-// name is for logging purposes only
-func (vm *stateSyncer) stateSyncStepWithMarker(ctx context.Context, doneKey []byte, name string, work func(context.Context) error) error {
-	if done, err := vm.db.Has(doneKey); err != nil {
-		return err
-	} else if done {
-		log.Info("skipping already completed sync step", "step", name)
-		return nil
-	}
-	if err := work(ctx); err != nil {
-		log.Error("could not complete sync step", "step", name)
-		return err
-	}
-	if err := vm.db.Put(doneKey, nil); err != nil {
-		return err
-	}
-	log.Info("sync step completed", "step", name)
-	return vm.db.Commit()
+	return true, vm.syncStateTrie(ctx)
 }
 
 func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
@@ -536,12 +506,6 @@ func (vm *stateSyncer) updateVMMarkers() error {
 		return err
 	}
 	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, vm.stateSyncBlock.BlockHash[:]); err != nil {
-		return err
-	}
-	if err := vm.db.Delete(atomicSyncDoneKey); err != nil {
-		return err
-	}
-	if err := vm.db.Delete(stateSyncDoneKey); err != nil {
 		return err
 	}
 	if err := vm.db.Delete(stateSyncSummaryKey); err != nil {
