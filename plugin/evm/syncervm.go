@@ -41,10 +41,30 @@ const (
 	maxRetryAttempts = uint8(32)
 	// maximum delay in between successive requests
 	defaultMaxRetryDelay = 10 * time.Second
-	// minimum number of blocks the blockchain should be ahead of
-	// local last accepted to perform state sync
+
+	// defaultStateSyncMinBlocks is the minimum number of blocks the blockchain
+	// should be ahead of local last accepted to perform state sync.
+	// This constant is chosen so if normal bootstrapping would be faster than
+	// state sync, normal bootstrapping is preferred.
+	// time assumptions:
+	// - normal bootstrap processing time: ~14 blocks / second
+	// - state sync time: ~6 hrs.
 	defaultStateSyncMinBlocks = 300_000
-	// syncable interval must be a multiple of [core.CommitInterval]
+
+	// defaultSyncableInterval is chosen to balance the number of historical
+	// trie roots nodes participating in the state sync protocol need to keep,
+	// and the time nodes joining the network have to complete the sync.
+	// Higher values also add to the worst case number of blocks new nodes
+	// joining the network must process after state sync.
+	// defaultSyncableInterval must be a multiple of [core.CommitInterval]
+	// time assumptions:
+	// - block issuance time ~2s (time per 4096 blocks ~2hrs).
+	// - state sync time: ~6 hrs. (assuming even slow nodes will complete in ~12hrs)
+	// - normal bootstrap processing time: ~14 blocks / second
+	// 4 * 4096 allows a sync time of up to 16 hrs and keeping two historical
+	// trie roots (in addition to the current state trie), while adding a
+	// worst case overhead of ~15 mins in form of post-sync block processing
+	// time for new nodes.
 	defaultSyncableInterval = 4 * core.CommitInterval
 )
 
