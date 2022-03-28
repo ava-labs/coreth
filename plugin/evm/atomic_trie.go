@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/types"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
@@ -478,6 +479,13 @@ func (a *atomicTrie) TrieDB() *trie.Database {
 // if trie was not committed at provided height, it returns
 // common.Hash{} instead
 func (a *atomicTrie) Root(height uint64) (common.Hash, error) {
+	if height == 0 {
+		// if root is queried at height == 0, return the empty root hash
+		// this may occur if peers ask for the most recent state summary
+		// and number of accepted blocks is less than the commit interval.
+		return types.EmptyRootHash, nil
+	}
+
 	heightBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(heightBytes, height)
 

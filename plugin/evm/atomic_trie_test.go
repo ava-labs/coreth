@@ -234,8 +234,8 @@ func TestIndexerWriteAndRead(t *testing.T) {
 	lastCommittedBlockHeight := uint64(0)
 	var lastCommittedBlockHash common.Hash
 
-	// process 205 blocks so that we get three commits (0, 100, 200)
-	for height := uint64(0); height <= testCommitInterval*2+5; /*=205*/ height++ {
+	// process 305 blocks so that we get three commits (100, 200, 300)
+	for height := uint64(1); height <= testCommitInterval*3+5; /*=305*/ height++ {
 		atomicRequests := testDataImportTx().mustAtomicOps()
 		err := atomicTrie.Index(height, atomicRequests)
 		assert.NoError(t, err)
@@ -264,13 +264,13 @@ func TestIndexerWriteAndRead(t *testing.T) {
 	// Ensure that Index refuses to accept blocks older than the last committed height
 	err := atomicTrie.Index(10, testDataExportTx().mustAtomicOps())
 	assert.Error(t, err)
-	assert.Equal(t, "height 10 must be after last committed height 200", err.Error())
+	assert.Equal(t, "height 10 must be after last committed height 300", err.Error())
 
 	// Ensure Index does not accept blocks beyond the next commit interval
 	nextCommitHeight := lastCommittedBlockHeight + testCommitInterval + 1 // =301
 	err = atomicTrie.Index(nextCommitHeight, testDataExportTx().mustAtomicOps())
 	assert.Error(t, err)
-	assert.Equal(t, "height 301 not within the next commit height 300", err.Error())
+	assert.Equal(t, "height 401 not within the next commit height 400", err.Error())
 }
 
 func TestAtomicOpsAreNotTxOrderDependent(t *testing.T) {

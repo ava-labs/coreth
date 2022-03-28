@@ -108,11 +108,6 @@ func NewStateSyncer(config *stateSyncConfig) *stateSyncer {
 }
 
 func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBlock, error) {
-	if height == 0 {
-		// return empty in case last accepted is before the first [core.CommitInterval]
-		return message.SyncableBlock{}, nil
-	}
-
 	atomicRoot, err := vm.atomicTrie.Root(height)
 	if err != nil {
 		return message.SyncableBlock{}, fmt.Errorf("error getting atomic trie root for height (%d): %w", height, err)
