@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const updateInterval = 30 * time.Second
+const updateInterval = 1 * time.Minute
 
 type syncETA struct {
 	startTime  time.Time
