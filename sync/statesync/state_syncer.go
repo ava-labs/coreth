@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -30,14 +31,20 @@ type TrieProgress struct {
 	batch     ethdb.Batch
 	batchSize int
 	startFrom []byte
+
+	// used for ETA calculations
+	startTime time.Time
+	eta       *syncETA
 }
 
-func NewTrieProgress(db ethdb.Batcher, batchSize int) *TrieProgress {
+func NewTrieProgress(db ethdb.Batcher, batchSize int, eta *syncETA) *TrieProgress {
 	batch := db.NewBatch()
 	return &TrieProgress{
 		batch:     batch,
 		batchSize: batchSize,
 		trie:      trie.NewStackTrie(batch),
+		eta:       eta,
+		startTime: time.Now(),
 	}
 }
 
@@ -71,13 +78,15 @@ type stateSyncer struct {
 	lock           sync.Mutex
 	progressMarker *StateSyncProgress
 	numThreads     int
-	eta            syncETA
 
 	syncer    *syncclient.CallbackLeafSyncer
 	trieDB    *trie.Database
 	db        ethdb.Database
 	commitCap int
 	client    syncclient.Client
+
+	// pointer to ETA struct, shared with all TrieProgress structs
+	eta *syncETA
 }
 
 type EVMStateSyncerConfig struct {
@@ -87,19 +96,20 @@ type EVMStateSyncerConfig struct {
 }
 
 func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
+	eta := &syncETA{}
 	progressMarker, err := loadProgress(config.DB, config.Root)
 	if err != nil {
 		return nil, err
 	}
 
 	// initialise tries in the progress marker
-	progressMarker.MainTrie = NewTrieProgress(config.DB, defaultCommitCap)
+	progressMarker.MainTrie = NewTrieProgress(config.DB, defaultCommitCap, eta)
 	if err := RestoreMainTrieProgressFromSnapshot(config.DB, progressMarker.MainTrie); err != nil {
 		return nil, err
 	}
 
 	for _, storageProgress := range progressMarker.StorageTries {
-		storageProgress.TrieProgress = NewTrieProgress(config.DB, defaultCommitCap)
+		storageProgress.TrieProgress = NewTrieProgress(config.DB, defaultCommitCap, eta)
 		// the first account's storage snapshot contains the key/value pairs we need to restore
 		// the stack trie. if other in-progress accounts happen to share the same storage root,
 		// their storage snapshot remains empty until the storage trie is fully synced, then copied
@@ -117,6 +127,7 @@ func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
 		db:             config.DB,
 		numThreads:     defaultNumThreads,
 		syncer:         syncclient.NewCallbackLeafSyncer(config.Client),
+		eta:            eta,
 	}, nil
 }
 
@@ -130,6 +141,7 @@ func (s *stateSyncer) Start(ctx context.Context) {
 		OnFinish:      s.onFinish,
 		OnSyncFailure: s.onSyncFailure,
 	}
+	s.eta.mainTrieRoot = s.progressMarker.Root
 
 	storageTasks := make([]*syncclient.LeafSyncTask, 0, len(s.progressMarker.StorageTries))
 	for storageRoot, storageTrieProgress := range s.progressMarker.StorageTries {
@@ -142,8 +154,6 @@ func (s *stateSyncer) Start(ctx context.Context) {
 			OnSyncFailure: s.onSyncFailure,
 		})
 	}
-
-	s.eta.start(s.progressMarker.MainTrie.startFrom)
 	s.syncer.Start(ctx, s.numThreads, rootTask, storageTasks...)
 }
 
@@ -199,7 +209,8 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 		}
 	}
 	if len(keys) > 0 {
-		s.eta.notifyProgress(keys[len(keys)-1])
+		// notify progress for eta calculations on the last key
+		mainTrie.eta.notifyProgress(root, mainTrie.startTime, mainTrie.startFrom, keys[len(keys)-1])
 	}
 	return tasks, nil
 }
@@ -224,6 +235,10 @@ func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, valu
 			tp.batch.Reset()
 		}
 	}
+	if len(keys) > 0 {
+		// notify progress for eta calculations on the last key
+		tp.eta.notifyProgress(root, tp.startTime, tp.startFrom, keys[len(keys)-1])
+	}
 	return nil, nil // storage tries never add new tasks to the leaf syncer
 }
 
@@ -241,7 +256,7 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 	}
 
 	progress := &StorageTrieProgress{
-		TrieProgress: NewTrieProgress(s.db, s.commitCap),
+		TrieProgress: NewTrieProgress(s.db, s.commitCap, s.eta),
 		Account:      accountHash,
 	}
 	s.progressMarker.StorageTries[storageRoot] = progress
@@ -328,7 +343,7 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 	if err := removeInProgressStorageTrie(s.db, root, storageTrieProgress); err != nil {
 		return err
 	}
-	s.eta.notifyTrieSynced(storageTrieProgress.Skipped)
+	s.eta.notifyTrieSynced(root, storageTrieProgress.Skipped)
 	return s.checkAllDone()
 }
 
@@ -338,11 +353,7 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 func (s *stateSyncer) checkAllDone() error {
 	// Note: this check ensures that we do not commit the main trie until all of the storage tries
 	// have been committed.
-	if !s.progressMarker.MainTrieDone {
-		return nil
-	}
-	if len(s.progressMarker.StorageTries) > 0 {
-		s.eta.notifyLastStorageTries(len(s.progressMarker.StorageTries))
+	if !s.progressMarker.MainTrieDone || len(s.progressMarker.StorageTries) > 0 {
 		return nil
 	}
 
