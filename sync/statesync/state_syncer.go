@@ -198,7 +198,9 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 			mainTrie.batch.Reset()
 		}
 	}
-	s.eta.notifyProgress(keys[len(keys)-1])
+	if len(keys) > 0 {
+		s.eta.notifyProgress(keys[len(keys)-1])
+	}
 	return tasks, nil
 }
 
