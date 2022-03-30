@@ -34,7 +34,6 @@ func BuildCodec() (codec.Manager, error) {
 		c.RegisterType(LeafsResponse{}),
 		c.RegisterType(CodeRequest{}),
 		c.RegisterType(CodeResponse{}),
-		c.RegisterType(SerializedMap{}),
 
 		codecManager.RegisterCodec(Version, c),
 	)

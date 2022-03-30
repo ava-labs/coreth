@@ -4,7 +4,6 @@
 package evm
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -72,15 +71,31 @@ var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 type stateSyncConfig struct {
 	*vmState
-	statsEnabled     bool
-	enabled          bool
-	codec            codec.Manager
-	netCodec         codec.Manager
-	network          peer.Network
-	client           peer.NetworkClient
-	toEngine         chan<- commonEng.Message
-	stateSyncIDs     []ids.ShortID
-	minBlocks        uint64
+	// Enable fast sync stats
+	statsEnabled bool
+	// Enable fast sync, falls back to original bootstrapping algorithm if false.
+	enabled bool
+	// Forces state syncer to continue ongoing sync if present.
+	// Defaults to false.
+	forceContinueSync bool
+
+	// Codec for handling network messages
+	netCodec codec.Manager
+
+	client peer.NetworkClient
+
+	toEngine chan<- commonEng.Message
+	// [stateSyncIDs] is the list of IDs to perform state sync from
+	// If empty, state sync is performed across the entire network.
+	stateSyncIDs []ids.ShortID
+
+	// minBlocks is the minimum number of blocks our last accepted block should be behind the network
+	// for us to perform state sync instead of falling back to the normal bootstrapping algorithm.
+	minBlocks uint64
+
+	// syncableInterval is the interval over block heights for which we keep a state summary.
+	// Ie if the block height is divisible by [syncableInterval] it is eligible for supporting a state
+	// summary at that block.
 	syncableInterval uint64
 }
 
@@ -98,10 +113,11 @@ type stateSyncer struct {
 
 	client syncclient.Client
 
-	syncer           Syncer
-	stateSyncError   error
-	stateSyncSummary []byte
-	stateSyncBlock   message.SyncableBlock
+	syncer Syncer
+
+	// These fields are used to return the results of state sync
+	stateSyncBlock message.SyncableBlock
+	stateSyncError error
 
 	// used to stop syncer
 	cancel func()
@@ -164,7 +180,7 @@ func (vm *stateSyncer) StateSyncEnabled() (bool, error) {
 // ParseSummary implements StateSyncableVM and returns a Summary interface
 // represented by [summaryBytes].
 func (vm *VM) ParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
-	summaryBlk, err := summaryToSyncableBlock(vm.codec, summaryBytes)
+	summaryBlk, err := parseSummary(vm.codec, summaryBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +206,7 @@ func (vm *stateSyncer) StateSyncGetLastSummary() (commonEng.Summary, error) {
 		return nil, err
 	}
 
-	return syncableBlockToSummary(vm.codec, syncableBlock)
+	return syncableBlockToSummary(vm.netCodec, syncableBlock)
 }
 
 // StateSyncGetSummary implements StateSyncableVM and returns a summary corresponding
@@ -208,7 +224,7 @@ func (vm *stateSyncer) StateSyncGetSummary(key commonEng.SummaryKey) (commonEng.
 		return nil, err
 	}
 
-	return syncableBlockToSummary(vm.codec, syncableBlock)
+	return syncableBlockToSummary(vm.netCodec, syncableBlock)
 }
 
 // StateSync performs state sync given a list of summaries
@@ -236,51 +252,62 @@ func (vm *stateSyncer) StateSync(summaries []commonEng.Summary) error {
 	return nil
 }
 
-// getSummaryToSync returns summary, block to sync and whether it is a resume from existing summary
-// Expects parameter proposedSummaries to be a list of Summary sorted by stake weight (descending order)
-// Expects parameter proposedSummaries to contain at least one Summary
-// Updates [stateSyncSummaryKey] to the selected summary on disk if needed.
-// Returns either an existing Summary from a previous run (if set in DB) if within proposedSummaries
-// or first Summary from proposedSummaries (max stake weight).
-// Return bool value resume is set to true if returned summary is local and active (contained within proposedSummaries)
-// Returns error if:
-// - Local or Summary in proposedSummaries could not be marshalled
-// - Local or Summary in proposedSummaries could not be verified
-// - Other DB related error
-func (vm *stateSyncer) getSummaryToSync(proposedSummaries []commonEng.Summary) ([]byte, message.SyncableBlock, bool, error) {
-	// Assume summaryToSync is the first of the proposedSummaries (with maximum stake weight)
-	summaryToSync := proposedSummaries[0] // by default prefer first summary
-	stateSyncBlock, err := summaryToSyncableBlock(vm.codec, summaryToSync.Bytes())
-	if err != nil {
-		return nil, message.SyncableBlock{}, false, err
-	}
-
-	// check if we have saved summary in the DB from previous run
+// selectSyncSummary returns the summary block to sync, whether it is resuming an ongoing operation, and an error
+// if a summary block could not be determined.
+// Assumes that [proposedSummaries] to be a non-empty list of the summaries that received an alpha threshold of votes
+// from the network.
+// Updates [stateSummaryKey] to the selected summary on disk if changed from its previous value.
+// Note: selectSyncSummary will return the proposed summary with the highest block number unless there is an ongoing sync
+// for a syncable block included in [proposedSummaries]
+func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) (message.SyncableBlock, bool, error) {
+	var (
+		localSyncableBlock       message.SyncableBlock
+		highestSummaryBlock      message.SyncableBlock
+		highestSummaryBlockBytes []byte
+	)
+	// Fetch any in-progress syncable block
 	localSummaryBytes, err := vm.db.Get(stateSyncSummaryKey)
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
-		return nil, message.SyncableBlock{}, false, err
+		return message.SyncableBlock{}, false, err
 	}
 
+	// If it exists in the DB, check if it is still supported by peers
+	// A summary is supported if it is in the proposedSummaries list
 	if err == nil {
-		// If it exists in the DB, check if it is still supported by peers
-		// A summary is supported if it is in the proposedSummaries list
-		localSyncableBlock, err := summaryToSyncableBlock(vm.codec, localSummaryBytes)
+		localSyncableBlock, err = parseSummary(vm.netCodec, localSummaryBytes)
 		if err != nil {
-			return nil, message.SyncableBlock{}, false, fmt.Errorf("failed to parse saved state sync summary to SyncableBlock: %w", err)
+			return message.SyncableBlock{}, false, fmt.Errorf("failed to parse saved state sync summary to SyncableBlock: %w", err)
 		}
 
-		// if local summary is in preferred summary, resume state sync using the local summary
-		if containsSummary(proposedSummaries, localSummaryBytes) {
-			return localSummaryBytes, localSyncableBlock, true, nil
+		// If [forceContinueSync] is enabled, return the local syncable block and ignore the contents of [proposedSummaries].
+		if vm.forceContinueSync {
+			return localSyncableBlock, true, nil
 		}
 	}
-	// marshal the summaryToSync and save it in DB for next time
-	if err = vm.db.Put(stateSyncSummaryKey, summaryToSync.Bytes()); err != nil {
-		log.Error("error saving state sync summary to disk", "err", err)
-		return nil, message.SyncableBlock{}, false, err
+
+	for _, proposedSummary := range proposedSummaries {
+		syncableBlock, err := parseSummary(vm.netCodec, proposedSummary.Bytes())
+		if err != nil {
+			return message.SyncableBlock{}, false, err
+		}
+
+		// If the actively syncing block is included in [proposedSummaries] resume syncing it.
+		if localSyncableBlock.BlockHash == syncableBlock.BlockHash {
+			return localSyncableBlock, true, nil
+		}
+
+		if syncableBlock.BlockNumber > highestSummaryBlock.BlockNumber {
+			highestSummaryBlock = syncableBlock
+			highestSummaryBlockBytes = proposedSummary.Bytes()
+		}
 	}
 
-	return summaryToSync.Bytes(), stateSyncBlock, false, err
+	// Otherwise, update the current state sync summary key in the database
+	if err = vm.db.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
+		return message.SyncableBlock{}, false, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
+	}
+
+	return highestSummaryBlock, false, nil
 }
 
 // wipeSnapshotIfNeeded clears resume related state if needed
@@ -321,7 +348,7 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 		return false, nil
 	}
 
-	vm.stateSyncSummary, vm.stateSyncBlock, resuming, err = vm.getSummaryToSync(summaries)
+	vm.stateSyncBlock, resuming, err = vm.selectSyncSummary(summaries)
 	if err != nil {
 		return true, err
 	}
@@ -345,13 +372,13 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 		return true, err
 	}
 
-	if err = vm.syncBlocks(vm.stateSyncBlock.BlockHash, vm.stateSyncBlock.BlockNumber, parentsToGet); err != nil {
-		return true, err
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	vm.cancel = cancel
 	defer cancel()
+
+	if err = vm.syncBlocks(ctx, vm.stateSyncBlock.BlockHash, vm.stateSyncBlock.BlockNumber, parentsToGet); err != nil {
+		return true, err
+	}
 
 	// Here we sync the atomic trie and the EVM state trie. These steps could be done
 	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
@@ -387,21 +414,11 @@ func (vm *stateSyncer) syncStateTrie(ctx context.Context) error {
 	return err
 }
 
-func containsSummary(summaries []commonEng.Summary, summaryBytes []byte) bool {
-	for _, s := range summaries {
-		if bytes.Equal(s.Bytes(), summaryBytes) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // syncBlocks fetches (up to) [parentsToGet] blocks from peers
 // using [client] and writes them to disk.
 // the process begins with [fromHash] and it fetches parents recursively.
 // fetching starts from the first ancestor not found on disk
-func (vm *stateSyncer) syncBlocks(fromHash common.Hash, fromHeight uint64, parentsToGet int) error {
+func (vm *stateSyncer) syncBlocks(ctx context.Context, fromHash common.Hash, fromHeight uint64, parentsToGet int) error {
 	nextHash := fromHash
 	nextHeight := fromHeight
 	parentsPerRequest := uint16(32)
@@ -426,6 +443,9 @@ func (vm *stateSyncer) syncBlocks(fromHash common.Hash, fromHeight uint64, paren
 	// them to disk.
 	batch := vm.chaindb.NewBatch()
 	for i := parentsToGet - 1; i >= 0 && (nextHash != common.Hash{}); {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		blocks, err := vm.client.GetBlocks(nextHash, nextHeight, parentsPerRequest)
 		if err != nil {
 			log.Warn("could not get blocks from peer", "err", err, "nextHash", nextHash, "remaining", i+1)
@@ -450,12 +470,7 @@ func (vm *stateSyncer) syncBlocks(fromHash common.Hash, fromHeight uint64, paren
 // Engine calls this function after state sync is done and VM has sent
 // the StateSyncDone message to Engine.
 func (vm *stateSyncer) GetLastSummaryBlockID() (ids.ID, error) {
-	var summary block.CoreSummaryContent
-	if _, err := vm.codec.Unmarshal(vm.stateSyncSummary, &summary); err != nil {
-		return ids.Empty, err
-	}
-
-	return summary.BlkID, vm.stateSyncError
+	return ids.ID(vm.stateSyncBlock.BlockHash), vm.stateSyncError
 }
 
 // SetLastSummaryBlock sets the given container bytes as the last summary block

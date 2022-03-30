@@ -44,8 +44,8 @@ func syncableBlockToSummary(codec codec.Manager, syncableBlock message.SyncableB
 	}, err
 }
 
-// summaryToSyncableBlock parses common.Summary into a message.SyncableBlock
-func summaryToSyncableBlock(codec codec.Manager, summaryBytes []byte) (message.SyncableBlock, error) {
+// parseSummary parses common.Summary into a message.SyncableBlock
+func parseSummary(codec codec.Manager, summaryBytes []byte) (message.SyncableBlock, error) {
 	var engineSummary block.CoreSummaryContent
 	if _, err := codec.Unmarshal(summaryBytes, &engineSummary); err != nil {
 		return message.SyncableBlock{}, err
