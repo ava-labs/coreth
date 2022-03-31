@@ -29,37 +29,6 @@ import (
 
 const testSyncTimeout = 20 * time.Second
 
-func TestSimpleTrieSync(t *testing.T) {
-	// setup server
-	serverDB := memorydb.New()
-	serverTrieDB := trie.NewDatabase(serverDB)
-	root, _ := setupTestTrie(t, serverTrieDB)
-
-	// setup client
-	clientDB := memorydb.New()
-	codec := getSyncCodec(t)
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
-	codeRequestHandler := handlers.NewCodeRequestHandler(nil, codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
-
-	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
-		Client: mockClient,
-		Root:   root,
-		DB:     clientDB,
-	})
-	if err != nil {
-		t.Fatal("could not create StateSyncer", err)
-	}
-	// begin sync
-	s.Start(context.Background())
-	waitFor(t, s.Done(), nil, testSyncTimeout)
-
-	// ensure client trie has same nodes as server trie
-	clientTrieDB := trie.NewDatabase(clientDB)
-	assert.NoError(t, err, "client trie must initialise with synced root")
-	assertDBConsistency(t, root, serverTrieDB, clientTrieDB)
-}
-
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
 	rand.Seed(1)
 	codec := getSyncCodec(t)
