@@ -44,7 +44,6 @@ func NewTrieProgress(db ethdb.Batcher, batchSize int, eta *syncETA) *TrieProgres
 		batchSize: batchSize,
 		trie:      trie.NewStackTrie(batch),
 		eta:       eta,
-		startTime: time.Now(),
 	}
 }
 
@@ -162,6 +161,9 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 		tasks    []*syncclient.LeafSyncTask
 		mainTrie = s.progressMarker.MainTrie
 	)
+	if mainTrie.startTime.IsZero() {
+		mainTrie.startTime = time.Now()
+	}
 
 	for i, key := range keys {
 		value := values[i]
@@ -220,6 +222,9 @@ func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, valu
 	// - handleLeafs is called synchronously by CallbackLeafSyncer
 	// - if additional account is encountered with the same storage trie,
 	//   it will be appended to [tp.AdditionalAccounts] (not accessed here)
+	if tp.startTime.IsZero() {
+		tp.startTime = time.Now()
+	}
 	for i, key := range keys {
 		if err := tp.trie.TryUpdate(key, values[i]); err != nil {
 			return nil, err
