@@ -533,7 +533,7 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 	}
 
 	vm.stateSyncer = NewStateSyncer(&stateSyncConfig{
-		vmState:           &vm.vmState,
+		state:             &vm.vmState,
 		statsEnabled:      vm.config.StateSyncMetricsEnabled,
 		enabled:           vm.config.StateSyncEnabled,
 		forceContinueSync: vm.config.StateSyncForceContinue,

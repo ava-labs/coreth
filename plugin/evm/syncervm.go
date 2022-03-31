@@ -70,7 +70,7 @@ const (
 var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 type stateSyncConfig struct {
-	*vmState
+	state *vmState
 	// Enable fast sync stats
 	statsEnabled bool
 	// Enable fast sync, falls back to original bootstrapping algorithm if false.
@@ -137,7 +137,7 @@ func NewStateSyncer(config *stateSyncConfig) *stateSyncer {
 }
 
 func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBlock, error) {
-	atomicRoot, err := vm.atomicTrie.Root(height)
+	atomicRoot, err := vm.state.atomicTrie.Root(height)
 	if err != nil {
 		return message.SyncableBlock{}, fmt.Errorf("error getting atomic trie root for height (%d): %w", height, err)
 	}
@@ -146,12 +146,12 @@ func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBloc
 		return message.SyncableBlock{}, fmt.Errorf("atomic trie root not found for height (%d)", height)
 	}
 
-	blk := vm.chain.GetBlockByNumber(height)
+	blk := vm.state.chain.GetBlockByNumber(height)
 	if blk == nil {
 		return message.SyncableBlock{}, fmt.Errorf("block not found for height (%d)", height)
 	}
 
-	if !vm.chain.BlockChain().HasState(blk.Root()) {
+	if !vm.state.chain.BlockChain().HasState(blk.Root()) {
 		return message.SyncableBlock{}, fmt.Errorf("block root does not exist for height (%d), root (%s)", height, blk.Root())
 	}
 
@@ -191,7 +191,7 @@ func (vm *stateSyncer) ParseSummary(summaryBytes []byte) (commonEng.Summary, err
 // that is divisible by core.CommitInterval.
 // Called on nodes that serve fast sync data.
 func (vm *stateSyncer) StateSyncGetLastSummary() (commonEng.Summary, error) {
-	lastHeight := vm.LastAcceptedBlock().Height()
+	lastHeight := vm.state.LastAcceptedBlock().Height()
 	lastSyncableBlockNumber := lastHeight - lastHeight%vm.syncableInterval
 
 	syncableBlock, err := vm.stateSummaryAtHeight(lastSyncableBlockNumber)
@@ -205,9 +205,9 @@ func (vm *stateSyncer) StateSyncGetLastSummary() (commonEng.Summary, error) {
 // StateSyncGetSummary implements StateSyncableVM and returns a summary corresponding
 // to the provided [key] if the node can serve state sync data for that key.
 func (vm *stateSyncer) StateSyncGetSummary(key commonEng.SummaryKey) (commonEng.Summary, error) {
-	summaryBlock := vm.chain.GetBlockByNumber(uint64(key))
+	summaryBlock := vm.state.chain.GetBlockByNumber(uint64(key))
 	if summaryBlock == nil ||
-		summaryBlock.NumberU64() > vm.LastAcceptedBlock().Height() ||
+		summaryBlock.NumberU64() > vm.state.LastAcceptedBlock().Height() ||
 		summaryBlock.NumberU64()%vm.syncableInterval != 0 {
 		return nil, commonEng.ErrUnknownStateSummary
 	}
@@ -259,7 +259,7 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 		highestSummaryBlockBytes []byte
 	)
 	// Fetch any in-progress syncable block
-	localSummaryBytes, err := vm.db.Get(stateSyncSummaryKey)
+	localSummaryBytes, err := vm.state.db.Get(stateSyncSummaryKey)
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return message.SyncableBlock{}, false, err
 	}
@@ -296,7 +296,7 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 	}
 
 	// Otherwise, update the current state sync summary key in the database
-	if err = vm.db.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
+	if err = vm.state.db.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
 		return message.SyncableBlock{}, false, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
 	}
 
@@ -311,17 +311,17 @@ func (vm *stateSyncer) wipeSnapshotIfNeeded(resuming bool) error {
 	// interfere with the sync.
 	// We also clear the marker, since state sync will update the
 	// snapshot correctly.
-	inProgress, err := snapshot.IsSnapshotGenerationInProgress(vm.chaindb)
+	inProgress, err := snapshot.IsSnapshotGenerationInProgress(vm.state.chaindb)
 	if inProgress || err != nil {
 		log.Info("unclean shutdown prior to state sync detected, wiping snapshot", "err", err)
-		vm.chain.BlockChain().Snapshots().AbortGeneration()
-		snapshot.ResetSnapshotGeneration(vm.chaindb)
-		<-snapshot.WipeSnapshot(vm.chaindb, false)
+		vm.state.chain.BlockChain().Snapshots().AbortGeneration()
+		snapshot.ResetSnapshotGeneration(vm.state.chaindb)
+		<-snapshot.WipeSnapshot(vm.state.chaindb, false)
 	}
 
 	if !resuming {
 		log.Info("not resuming a previous sync, wiping snapshot")
-		<-snapshot.WipeSnapshot(vm.chaindb, false)
+		<-snapshot.WipeSnapshot(vm.state.chaindb, false)
 	}
 
 	return nil
@@ -348,7 +348,7 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 
 	// ensure blockchain is significantly ahead of local last accepted block,
 	// to make sure state sync is worth it.
-	lastAcceptedHeight := vm.LastAcceptedBlock().Height()
+	lastAcceptedHeight := vm.state.LastAcceptedBlock().Height()
 	if lastAcceptedHeight+vm.minBlocks > vm.stateSyncBlock.BlockNumber {
 		log.Info(
 			"last accepted too close to most recent syncable block, skipping state sync",
@@ -361,7 +361,7 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 	if err = vm.wipeSnapshotIfNeeded(resuming); err != nil {
 		return true, err
 	}
-	if err = vm.db.Commit(); err != nil {
+	if err = vm.state.db.Commit(); err != nil {
 		return true, err
 	}
 
@@ -383,7 +383,7 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 
 func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", vm.stateSyncBlock.AtomicRoot)
-	atomicSyncer := vm.atomicTrie.Syncer(vm.client, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
+	atomicSyncer := vm.state.atomicTrie.Syncer(vm.client, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
 	atomicSyncer.Start(ctx)
 	err := <-atomicSyncer.Done()
 	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", err)
@@ -395,7 +395,7 @@ func (vm *stateSyncer) syncStateTrie(ctx context.Context) error {
 	evmSyncer, err := statesync.NewEVMStateSyncer(&statesync.EVMStateSyncerConfig{
 		Client: vm.client,
 		Root:   vm.stateSyncBlock.BlockRoot,
-		DB:     vm.chaindb,
+		DB:     vm.state.chaindb,
 	})
 	if err != nil {
 		return err
@@ -418,7 +418,7 @@ func (vm *stateSyncer) syncBlocks(ctx context.Context, fromHash common.Hash, fro
 	// first, check for blocks already available on disk so we don't
 	// request them from peers.
 	for parentsToGet >= 0 {
-		blk := vm.chain.GetBlockByHash(nextHash)
+		blk := vm.state.chain.GetBlockByHash(nextHash)
 		if blk != nil {
 			// block exists
 			nextHash = blk.ParentHash()
@@ -433,7 +433,7 @@ func (vm *stateSyncer) syncBlocks(ctx context.Context, fromHash common.Hash, fro
 
 	// get any blocks we couldn't find on disk from peers and write
 	// them to disk.
-	batch := vm.chaindb.NewBatch()
+	batch := vm.state.chaindb.NewBatch()
 	for i := parentsToGet - 1; i >= 0 && (nextHash != common.Hash{}); {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -470,7 +470,7 @@ func (vm *stateSyncer) GetLastSummaryBlockID() (ids.ID, error) {
 // peers. It is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
 func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
-	block, err := vm.ParseBlock(blockBytes)
+	block, err := vm.state.ParseBlock(blockBytes)
 	if err != nil {
 		return fmt.Errorf("error parsing block, blockBytes=%s, err=%w", common.Bytes2Hex(blockBytes), err)
 	}
@@ -493,15 +493,15 @@ func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
 	// by [params.BloomBitsBlocks].
 	parentHeight := evmBlock.Height() - 1
 	parentHash := evmBlock.ethBlock.ParentHash()
-	vm.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
+	vm.state.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
-	if err = vm.chain.BlockChain().ResetState(evmBlock.ethBlock); err != nil {
+	if err = vm.state.chain.BlockChain().ResetState(evmBlock.ethBlock); err != nil {
 		return fmt.Errorf("error resetting blockchain state, height=%d, hash=%s, err=%w", block.Height(), evmBlock.ethBlock.Hash(), err)
 	}
 	if err := vm.updateVMMarkers(); err != nil {
 		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.Height(), evmBlock.ethBlock.Hash(), err)
 	}
-	if err := vm.State.SetLastAcceptedBlock(evmBlock); err != nil {
+	if err := vm.state.SetLastAcceptedBlock(evmBlock); err != nil {
 		return fmt.Errorf("error setting chain state, height=%d, hash=%s, err=%w", block.Height(), evmBlock.ethBlock.Hash(), err)
 	}
 	log.Info("SetLastSummaryBlock updated VM state", "height", evmBlock.Height(), "hash", evmBlock.ethBlock.Hash())
@@ -511,7 +511,7 @@ func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
 	// ApplyToSharedMemory does this, and even if the VM is stopped
 	// (gracefully or ungracefully), since MarkApplyToSharedMemoryCursor
 	// is called, VM will resume ApplyToSharedMemory on Initialize.
-	return vm.atomicTrie.ApplyToSharedMemory(evmBlock.ethBlock.NumberU64())
+	return vm.state.atomicTrie.ApplyToSharedMemory(evmBlock.ethBlock.NumberU64())
 }
 
 // updateVMMarkers updates the following markers in the VM's database
@@ -524,16 +524,16 @@ func (vm *stateSyncer) updateVMMarkers() error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.stateSyncBlock] when ApplyToSharedMemory
 	// is called.
-	if err := vm.atomicTrie.MarkApplyToSharedMemoryCursor(vm.LastAcceptedBlock().Height()); err != nil {
+	if err := vm.state.atomicTrie.MarkApplyToSharedMemoryCursor(vm.state.LastAcceptedBlock().Height()); err != nil {
 		return err
 	}
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, vm.stateSyncBlock.BlockHash[:]); err != nil {
+	if err := vm.state.acceptedBlockDB.Put(lastAcceptedKey, vm.stateSyncBlock.BlockHash[:]); err != nil {
 		return err
 	}
-	if err := vm.db.Delete(stateSyncSummaryKey); err != nil {
+	if err := vm.state.db.Delete(stateSyncSummaryKey); err != nil {
 		return err
 	}
-	return vm.db.Commit()
+	return vm.state.db.Commit()
 }
 
 func (vm *stateSyncer) Shutdown() error {
