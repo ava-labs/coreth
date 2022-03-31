@@ -31,7 +31,7 @@ const testSyncTimeout = 20 * time.Second
 
 func TestErrorsPropagateFromGoroutines(t *testing.T) {
 	rand.Seed(1)
-	codec := getSyncCodec(t)
+	codec := message.MustBuildCodec()
 	clientDB := memorydb.New()
 	defer clientDB.Close()
 	trieDB := trie.NewDatabase(clientDB)
@@ -57,7 +57,7 @@ func TestErrorsPropagateFromGoroutines(t *testing.T) {
 
 func TestCancel(t *testing.T) {
 	rand.Seed(1)
-	codec := getSyncCodec(t)
+	codec := message.MustBuildCodec()
 	clientDB := memorydb.New()
 	defer clientDB.Close()
 	trieDB := trie.NewDatabase(clientDB)
@@ -91,7 +91,7 @@ func TestCancel(t *testing.T) {
 }
 
 func TestResumeSync(t *testing.T) {
-	codec := getSyncCodec(t)
+	codec := message.MustBuildCodec()
 	serverDB := memorydb.New()
 	defer serverDB.Close()
 

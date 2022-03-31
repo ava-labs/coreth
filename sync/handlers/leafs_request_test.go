@@ -21,10 +21,7 @@ import (
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	rand.Seed(1)
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("unexpected error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockHandlerStats := &stats.MockHandlerStats{}
 	memdb := memorydb.New()

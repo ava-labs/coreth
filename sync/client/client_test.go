@@ -32,10 +32,7 @@ import (
 const maxAttempts = 5
 
 func TestGetCode(t *testing.T) {
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockNetClient := &mockNetwork{}
 
@@ -79,10 +76,7 @@ func TestGetBlocks(t *testing.T) {
 	// set random seed for deterministic tests
 	rand.Seed(1)
 
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	var gspec = &core.Genesis{
 		Config: params.TestChainConfig,
@@ -339,10 +333,7 @@ func buildGetter(blocks []*types.Block) func(hash common.Hash, height uint64) *t
 
 func TestGetLeafs(t *testing.T) {
 	rand.Seed(1)
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	const leafsLimit = 1024
 
@@ -386,9 +377,6 @@ func TestGetLeafs(t *testing.T) {
 				return response
 			},
 			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				if err != nil {
-					t.Fatal(err)
-				}
 				assert.False(t, response.More)
 				assert.Equal(t, leafsLimit, len(response.Keys))
 				assert.Equal(t, leafsLimit, len(response.Vals))
@@ -437,9 +425,6 @@ func TestGetLeafs(t *testing.T) {
 				return response
 			},
 			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				if err != nil {
-					t.Fatal(err)
-				}
 				assert.True(t, response.More)
 				assert.Equal(t, leafsLimit, len(response.Keys))
 				assert.Equal(t, leafsLimit, len(response.Vals))
@@ -715,10 +700,7 @@ func TestGetLeafs(t *testing.T) {
 
 func TestGetLeafsRetries(t *testing.T) {
 	rand.Seed(1)
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	trieDB := trie.NewDatabase(memorydb.New())
 	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
@@ -773,10 +755,7 @@ func TestGetLeafsRetries(t *testing.T) {
 }
 
 func TestStateSyncNodes(t *testing.T) {
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockNetClient := &mockNetwork{}
 

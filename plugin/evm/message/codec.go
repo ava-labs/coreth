@@ -39,3 +39,13 @@ func BuildCodec() (codec.Manager, error) {
 	)
 	return codecManager, errs.Err
 }
+
+// MustBuildCodec returns the codec for serializing messages in this package
+// Panics if an error is returned
+func MustBuildCodec() codec.Manager {
+	codec, err := BuildCodec()
+	if err != nil {
+		panic(err)
+	}
+	return codec
+}

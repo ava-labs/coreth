@@ -35,10 +35,7 @@ type atomicSyncTestCheckpoint struct {
 // testAtomicSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
 // starting at [targetRoot], and stopping and resuming at each of the [checkpoints].
 func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight uint64, targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64) {
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal(err)
-	}
+	codec := message.MustBuildCodec()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

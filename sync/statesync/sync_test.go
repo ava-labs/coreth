@@ -13,8 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ava-labs/avalanchego/codec"
-	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -279,7 +277,7 @@ func TestSyncer(t *testing.T) {
 				additionalRoots            []common.Hash
 			)
 			serverTrieDB, root, additionalRoots = test.prepareForTest(t)
-			codec := getSyncCodec(t)
+			codec := message.MustBuildCodec()
 			leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
 			codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
 			mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
@@ -376,19 +374,6 @@ func fillAccounts(
 		t.Fatalf("error committing trieDB: %v", err)
 	}
 	return newRoot
-}
-
-func getSyncCodec(t *testing.T) codec.Manager {
-	codec := codec.NewDefaultManager()
-	c := linearcodec.NewDefault()
-	assert.NoError(t, c.RegisterType(message.BlockRequest{}))
-	assert.NoError(t, c.RegisterType(message.BlockResponse{}))
-	assert.NoError(t, c.RegisterType(message.LeafsRequest{}))
-	assert.NoError(t, c.RegisterType(message.LeafsResponse{}))
-	assert.NoError(t, c.RegisterType(message.CodeRequest{}))
-	assert.NoError(t, c.RegisterType(message.CodeResponse{}))
-	assert.NoError(t, codec.RegisterCodec(message.Version, c))
-	return codec
 }
 
 func TestSyncerSyncsToNewRoot(t *testing.T) {
@@ -496,7 +481,7 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 		clientDB     *memorydb.Database
 		clientTrieDB *trie.Database
 	)
-	codec := getSyncCodec(t)
+	codec := message.MustBuildCodec()
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
 	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
@@ -550,7 +535,7 @@ func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
 
 	// setup client
 	clientDB := memorydb.New()
-	codec := getSyncCodec(t)
+	codec := message.MustBuildCodec()
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
 	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
