@@ -84,13 +84,6 @@ func TestSyncer(t *testing.T) {
 			expectedError: statesyncclient.ErrFailedToFetchLeafs,
 		},
 		{
-			name: "empty_server_trie",
-			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
-				return trie.NewDatabase(memorydb.New()), common.BytesToHash([]byte("some empty bytes")), nil
-			},
-			expectedError: statesyncclient.ErrFailedToFetchLeafs,
-		},
-		{
 			name: "inconsistent_server_trie",
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
