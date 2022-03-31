@@ -259,7 +259,7 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 		highestSummaryBlockBytes []byte
 	)
 	// Fetch any in-progress syncable block
-	localSummaryBytes, err := vm.state.db.Get(stateSyncSummaryKey)
+	localSummaryBytes, err := vm.state.metadataDB.Get(stateSyncSummaryKey)
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return message.SyncableBlock{}, false, err
 	}
@@ -296,7 +296,7 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 	}
 
 	// Otherwise, update the current state sync summary key in the database
-	if err = vm.state.db.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
+	if err = vm.state.metadataDB.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
 		return message.SyncableBlock{}, false, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
 	}
 
@@ -530,7 +530,7 @@ func (vm *stateSyncer) updateVMMarkers() error {
 	if err := vm.state.acceptedBlockDB.Put(lastAcceptedKey, vm.stateSyncBlock.BlockHash[:]); err != nil {
 		return err
 	}
-	if err := vm.state.db.Delete(stateSyncSummaryKey); err != nil {
+	if err := vm.state.metadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return err
 	}
 	return vm.state.db.Commit()
