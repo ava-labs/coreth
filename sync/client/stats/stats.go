@@ -138,3 +138,12 @@ func (n noopStats) GetMetric(_ message.Request) (MessageMetric, error) {
 func (n *noopStats) IncLeavesRequested()                    {}
 func (n *noopStats) UpdateLeavesReceived(int64)             {}
 func (n *noopStats) UpdateLeafRequestLatency(time.Duration) {}
+
+// NewStats returns syncer stats if enabled or a no-op version if disabled.
+func NewStats(enabled bool) ClientSyncerStats {
+	if enabled {
+		return NewClientSyncerStats()
+	} else {
+		return NewNoOpStats()
+	}
+}

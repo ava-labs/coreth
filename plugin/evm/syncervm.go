@@ -111,9 +111,8 @@ type Syncer interface {
 type stateSyncer struct {
 	*stateSyncConfig
 
+	// Client to request data from the network
 	client syncclient.Client
-
-	syncer Syncer
 
 	// These fields are used to return the results of state sync
 	stateSyncBlock message.SyncableBlock
@@ -124,18 +123,12 @@ type stateSyncer struct {
 }
 
 func NewStateSyncer(config *stateSyncConfig) *stateSyncer {
-	var syncerStats stats.ClientSyncerStats
-	if config.statsEnabled {
-		syncerStats = stats.NewClientSyncerStats()
-	} else {
-		syncerStats = stats.NewNoOpStats()
-	}
 	return &stateSyncer{
 		stateSyncConfig: config,
 		client: syncclient.NewClient(&syncclient.ClientConfig{
 			NetworkClient:    config.client,
 			Codec:            config.netCodec,
-			Stats:            syncerStats,
+			Stats:            stats.NewStats(config.statsEnabled),
 			MaxAttempts:      maxRetryAttempts,
 			MaxRetryDelay:    defaultMaxRetryDelay,
 			StateSyncNodeIDs: config.stateSyncIDs,
@@ -179,8 +172,8 @@ func (vm *stateSyncer) StateSyncEnabled() (bool, error) {
 
 // ParseSummary implements StateSyncableVM and returns a Summary interface
 // represented by [summaryBytes].
-func (vm *VM) ParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
-	summaryBlk, err := parseSummary(vm.codec, summaryBytes)
+func (vm *stateSyncer) ParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
+	summaryBlk, err := parseSummary(vm.netCodec, summaryBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -390,16 +383,16 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 
 func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", vm.stateSyncBlock.AtomicRoot)
-	vm.syncer = vm.atomicTrie.Syncer(vm.client, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
-	vm.syncer.Start(ctx)
-	err := <-vm.syncer.Done()
+	atomicSyncer := vm.atomicTrie.Syncer(vm.client, vm.stateSyncBlock.AtomicRoot, vm.stateSyncBlock.BlockNumber)
+	atomicSyncer.Start(ctx)
+	err := <-atomicSyncer.Done()
 	log.Info("atomic tx: sync finished", "root", vm.stateSyncBlock.AtomicRoot, "err", err)
 	return err
 }
 
 func (vm *stateSyncer) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", vm.stateSyncBlock.BlockRoot)
-	syncer, err := statesync.NewEVMStateSyncer(&statesync.EVMStateSyncerConfig{
+	evmSyncer, err := statesync.NewEVMStateSyncer(&statesync.EVMStateSyncerConfig{
 		Client: vm.client,
 		Root:   vm.stateSyncBlock.BlockRoot,
 		DB:     vm.chaindb,
@@ -407,9 +400,8 @@ func (vm *stateSyncer) syncStateTrie(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	vm.syncer = syncer
-	vm.syncer.Start(ctx)
-	err = <-vm.syncer.Done()
+	evmSyncer.Start(ctx)
+	err = <-evmSyncer.Done()
 	log.Info("state sync: sync finished", "root", vm.stateSyncBlock.BlockRoot, "err", err)
 	return err
 }
