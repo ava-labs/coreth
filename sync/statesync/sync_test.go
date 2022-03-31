@@ -34,14 +34,13 @@ type testSyncResult struct {
 
 func TestSyncer(t *testing.T) {
 	rand.Seed(1)
-	tests := []struct {
+	tests := map[string]struct {
 		name             string
 		prepareForTest   func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) // return trie database and trie root to sync, and any additional roots needed for verification
 		assertSyncResult func(t *testing.T, result testSyncResult)
 		expectedError    error
 	}{
-		{
-			name: "accounts_only_trie",
+		"accounts_only_trie": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
@@ -51,8 +50,7 @@ func TestSyncer(t *testing.T) {
 				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
-		{
-			name: "accounts_with_codes_trie",
+		"accounts_with_codes_trie": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, trie *trie.Trie) types.StateAccount {
@@ -75,16 +73,14 @@ func TestSyncer(t *testing.T) {
 				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
-		{
-			name: "missing_sync_root",
+		"missing_sync_root": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				return serverTrieDB, common.BytesToHash([]byte("totally-fake-root")), nil
 			},
 			expectedError: statesyncclient.ErrFailedToFetchLeafs,
 		},
-		{
-			name: "inconsistent_server_trie",
+		"inconsistent_server_trie": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
@@ -107,8 +103,7 @@ func TestSyncer(t *testing.T) {
 			},
 			expectedError: statesyncclient.ErrFailedToFetchLeafs,
 		},
-		{
-			name: "sync_non_latest_root",
+		"sync_non_latest_root": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
@@ -150,8 +145,7 @@ func TestSyncer(t *testing.T) {
 				assert.EqualValues(t, 500, notFound)
 			},
 		},
-		{
-			name: "malformed_account",
+		"malformed_account": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
@@ -179,8 +173,7 @@ func TestSyncer(t *testing.T) {
 			},
 			expectedError: errors.New("rlp: expected input list for types.StateAccount"),
 		},
-		{
-			name: "accounts_with_storage",
+		"accounts_with_storage": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{})
@@ -190,8 +183,7 @@ func TestSyncer(t *testing.T) {
 				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
-		{
-			name: "accounts_with_missing_storage",
+		"accounts_with_missing_storage": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
@@ -214,8 +206,7 @@ func TestSyncer(t *testing.T) {
 			},
 			expectedError: statesyncclient.ErrFailedToFetchLeafs,
 		},
-		{
-			name: "accounts_with_missing_code",
+		"accounts_with_missing_code": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
@@ -234,8 +225,7 @@ func TestSyncer(t *testing.T) {
 			},
 			expectedError: errors.New("error getting code bytes for code hash"),
 		},
-		{
-			name: "code_hash_mismatch",
+		"code_hash_mismatch": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
@@ -299,12 +289,10 @@ func TestSyncer(t *testing.T) {
 }
 
 func TestSyncerSyncsToNewRoot(t *testing.T) {
-	for _, test := range []struct {
-		name               string
+	for name, test := range map[string]struct {
 		deleteBetweenSyncs func(common.Hash, *trie.Database) error
 	}{
-		{
-			name: "delete_snapshot_and_code",
+		"delete_snapshot_and_code": {
 			deleteBetweenSyncs: func(_ common.Hash, clientTrieDB *trie.Database) error {
 				db := clientTrieDB.DiskDB()
 				<-snapshot.WipeSnapshot(db, false)
@@ -323,8 +311,7 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 				return it.Error()
 			},
 		},
-		{
-			name: "delete_snapshot_and_some_trie_nodes",
+		"delete_snapshot_and_some_trie_nodes": {
 			deleteBetweenSyncs: func(root common.Hash, clientTrieDB *trie.Database) error {
 				// delete snapshot first
 				db := clientTrieDB.DiskDB()
@@ -382,7 +369,7 @@ func TestSyncerSyncsToNewRoot(t *testing.T) {
 			},
 		},
 	} {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			testSyncerSyncsToNewRoot(t, test.deleteBetweenSyncs)
 		})
