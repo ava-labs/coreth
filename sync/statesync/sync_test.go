@@ -80,6 +80,7 @@ func TestSyncer(t *testing.T) {
 			},
 			expectedError: statesyncclient.ErrFailedToFetchLeafs,
 		},
+		// The method by which we get to this shouldn't matter
 		"inconsistent_server_trie": {
 			prepareForTest: func(t *testing.T) (*trie.Database, common.Hash, []common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
@@ -435,34 +436,4 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 	assertDBConsistency(t, root2, serverTrieDB, clientTrieDB)
 	assert.True(t, mockClient.LeavesReceived() > 0)
 	assert.True(t, mockClient.CodeReceived() > 0)
-}
-
-func Test_Sync2FullEthTrieSync_ResumeFromPartialAccount(t *testing.T) {
-	rand.Seed(1)
-	serverTrieDB := trie.NewDatabase(memorydb.New())
-	root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{})
-
-	// setup client
-	clientDB := memorydb.New()
-	codec := message.MustBuildCodec()
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
-
-	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
-		Client: mockClient,
-		Root:   root,
-		DB:     clientDB,
-	})
-	if err != nil {
-		t.Fatal("could not create StateSyncer", err)
-	}
-
-	// begin sync
-	s.Start(context.Background())
-	waitFor(t, s.Done(), nil, testSyncTimeout)
-
-	// get the two tries and ensure they have equal nodes
-	clientTrieDB := trie.NewDatabase(clientDB)
-	assertDBConsistency(t, root, serverTrieDB, clientTrieDB)
 }
