@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -29,6 +30,35 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
+
+	// Note: corruptedTrie will have some intermediate trie nodes deleted to corrupt it.
+	// Therefore, it relies on not having any overlap with the other tries in this test.
+	// Since the tries are generated randomly and starting with the deterministic seed this
+	// will not be flaky.
+	corruptedTrieRoot, corruptedTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100, common.HashLength)
+
+	tr, err := trie.New(corruptedTrieRoot, trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt the trie by deleting every 5th trie node
+	it := tr.NodeIterator(nil)
+	i := 0
+	for it.Next(true) {
+		i++
+		if i%5 == 0 {
+			rawdb.DeleteTrieNode(trieDB.DiskDB(), it.Hash())
+		}
+	}
+	// Remove every 5th key from the diskDB of the trieDB
+	for i, key := range corruptedTrieKeys {
+		if i%5 == 0 {
+			if err := memdb.Delete(key); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 
 	leafsHandler := NewLeafsRequestHandler(trieDB, codec, mockHandlerStats)
 
@@ -98,6 +128,22 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.Nil(t, response)
 				assert.Nil(t, err)
 				assert.EqualValues(t, 1, mockHandlerStats.MissingRootCount)
+			},
+		},
+		"corrupted trie drops request": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				return context.Background(), message.LeafsRequest{
+					Root:     corruptedTrieRoot,
+					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
+					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.Nil(t, response)
+				assert.Nil(t, err)
+				assert.EqualValues(t, uint32(1), mockHandlerStats.TrieErrorCount)
 			},
 		},
 		"cancelled context dropped": {

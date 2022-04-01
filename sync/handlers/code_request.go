@@ -23,10 +23,10 @@ import (
 type CodeRequestHandler struct {
 	codeReader ethdb.KeyValueReader
 	codec      codec.Manager
-	stats      stats.HandlerStats
+	stats      stats.CodeRequestHandlerStats
 }
 
-func NewCodeRequestHandler(codeReader ethdb.KeyValueReader, codec codec.Manager, stats stats.HandlerStats) *CodeRequestHandler {
+func NewCodeRequestHandler(codeReader ethdb.KeyValueReader, codec codec.Manager, stats stats.CodeRequestHandlerStats) *CodeRequestHandler {
 	handler := &CodeRequestHandler{
 		codeReader: codeReader,
 		codec:      codec,

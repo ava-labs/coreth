@@ -31,10 +31,10 @@ const maxLeavesLimit = uint16(1024)
 type LeafsRequestHandler struct {
 	trieDB *trie.Database
 	codec  codec.Manager
-	stats  stats.HandlerStats
+	stats  stats.LeafsRequestHandlerStats
 }
 
-func NewLeafsRequestHandler(trieDB *trie.Database, codec codec.Manager, syncerStats stats.HandlerStats) *LeafsRequestHandler {
+func NewLeafsRequestHandler(trieDB *trie.Database, codec codec.Manager, syncerStats stats.LeafsRequestHandlerStats) *LeafsRequestHandler {
 	return &LeafsRequestHandler{
 		trieDB: trieDB,
 		codec:  codec,
@@ -121,6 +121,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 
 	if it.Err != nil {
 		log.Debug("failed to iterate trie, dropping request", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest, "err", it.Err)
+		lrh.stats.IncTrieError()
 		return nil, nil
 	}
 
@@ -149,6 +150,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		// Generate the proof and add it to the response.
 		if err != nil {
 			log.Debug("failed to create valid proof serving leafs request", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest, "err", err)
+			lrh.stats.IncTrieError()
 			return nil, nil
 		}
 	}

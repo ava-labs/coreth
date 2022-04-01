@@ -23,6 +23,7 @@ import (
 // assertDBConsistency checks [serverTrieDB] and [clientTrieDB] have the same EVM state trie at [root],
 // and that [clientTrieDB.DiskDB] has corresponding account & snapshot values.
 // Also verifies any code referenced by [clientTrieDB] is present the hash is correct.
+// TODO ensure snapshot does not contain any extra data
 func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTrieDB *trie.Database) {
 	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
 		accHash := common.BytesToHash(key)
@@ -56,8 +57,9 @@ func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTri
 	})
 }
 
-func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root common.Hash) common.Hash {
-	return fillAccounts(t, serverTrieDB, root, 1000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root common.Hash, numAccounts int64) common.Hash {
+	return fillAccounts(t, serverTrieDB, root, numAccounts, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+		// Add code and storage for every third account
 		if index%3 == 0 {
 			codeBytes := make([]byte, 256)
 			_, err := rand.Read(codeBytes)
@@ -78,14 +80,14 @@ func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root com
 }
 
 func fillAccounts(
-	t *testing.T, trieDB *trie.Database, root common.Hash, accountsLen int64,
+	t *testing.T, trieDB *trie.Database, root common.Hash, numAccounts int64,
 	onAccount func(*testing.T, int64, types.StateAccount, *trie.Trie) types.StateAccount,
 ) common.Hash {
 	tr, err := trie.New(root, trieDB)
 	if err != nil {
 		t.Fatalf("error opening trie: %v", err)
 	}
-	for i := int64(0); i < accountsLen; i++ {
+	for i := int64(0); i < numAccounts; i++ {
 		acc := types.StateAccount{
 			Nonce:    uint64(i),
 			Balance:  big.NewInt(i % 1337),

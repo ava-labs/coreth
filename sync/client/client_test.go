@@ -638,6 +638,37 @@ func TestGetLeafs(t *testing.T) {
 			},
 			expectedErr: errInvalidRangeProof,
 		},
+		"corrupted value in middle of response": {
+			request: message.LeafsRequest{
+				Root:     largeTrieRoot,
+				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit:    leafsLimit,
+				NodeType: message.StateTrieNode,
+			},
+			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				if err != nil {
+					t.Fatal("unexpected error in calling leafs request handler", err)
+				}
+				if len(response) == 0 {
+					t.Fatal("Failed to create valid response")
+				}
+				var leafResponse message.LeafsResponse
+				if _, err := codec.Unmarshal(response, &leafResponse); err != nil {
+					t.Fatal(err)
+				}
+				// Remove middle key-value pair response
+				leafResponse.Vals[100] = []byte("garbage value data")
+
+				modifiedResponse, err := codec.Marshal(message.Version, leafResponse)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return modifiedResponse
+			},
+			expectedErr: errInvalidRangeProof,
+		},
 		"all proof keys removed from response": {
 			request: message.LeafsRequest{
 				Root:     largeTrieRoot,
