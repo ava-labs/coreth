@@ -27,7 +27,7 @@ type syncHandler struct {
 	codeRequestHandler            *CodeRequestHandler
 }
 
-// NewSyncHandler constructs the handler for serving fast sync.
+// NewSyncHandler constructs the handler for serving state sync.
 func NewSyncHandler(
 	blockchain *core.BlockChain,
 	atomicTrieDB *trie.Database,

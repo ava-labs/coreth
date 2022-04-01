@@ -116,7 +116,6 @@ type Config struct {
 
 	// Sync settings
 	StateSyncEnabled         bool   `json:"state-sync-enabled"`
-	StateSyncForceContinue   bool   `json:"state-sync-force-continue"` // Forces state sync to continue any active syncing session if enabled
 	StateSyncMetricsEnabled  bool   `json:"state-sync-metrics-enabled"`
 	StateSyncServerTrieCache int    `json:"state-sync-server-trie-cache"`
 	StateSyncIDs             string `json:"state-sync-ids"`

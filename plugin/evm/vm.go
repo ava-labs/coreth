@@ -533,16 +533,15 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 	}
 
 	vm.stateSyncer = NewStateSyncer(&stateSyncConfig{
-		vmState:           &vm.vmState,
-		statsEnabled:      vm.config.StateSyncMetricsEnabled,
-		enabled:           vm.config.StateSyncEnabled,
-		forceContinueSync: vm.config.StateSyncForceContinue,
-		netCodec:          vm.networkCodec,
-		toEngine:          toEngine,
-		client:            vm.client,
-		stateSyncIDs:      stateSyncIDs,
-		minBlocks:         defaultStateSyncMinBlocks,
-		syncableInterval:  defaultSyncableInterval,
+		vmState:          &vm.vmState,
+		statsEnabled:     vm.config.StateSyncMetricsEnabled,
+		enabled:          vm.config.StateSyncEnabled,
+		netCodec:         vm.networkCodec,
+		toEngine:         toEngine,
+		client:           vm.client,
+		stateSyncIDs:     stateSyncIDs,
+		minBlocks:        defaultStateSyncMinBlocks,
+		syncableInterval: defaultSyncableInterval,
 	})
 
 	var handlerStats handlerstats.HandlerStats
