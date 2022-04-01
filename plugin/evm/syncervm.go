@@ -273,7 +273,7 @@ func (vm *stateSyncer) StateSync(summaries []commonEng.Summary) error {
 		}
 		if completed {
 			// notify engine regardless of whether err == nil,
-			// engine will call GetLastSummaryBlockID to retrieve the ID and check the error.
+			// engine will call GetStateSyncResult to retrieve the ID and check the error.
 			log.Info("stateSync completed, notifying engine")
 			vm.toEngine <- commonEng.StateSyncDone
 		} else {

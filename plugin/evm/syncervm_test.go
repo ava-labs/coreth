@@ -234,7 +234,7 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 		return
 	}
 
-	blockID, err := stateSyncVM.GetLastSummaryBlockID()
+	blockID, syncedHeight, err := stateSyncVM.GetStateSyncResult()
 	if err != nil {
 		t.Fatal("state sync failed", err)
 	}
@@ -253,6 +253,7 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 	// Assert that the [stateSyncVMHeight] matches the most recent commit.
 	expectedCommitHeight := lastAcceptedHeight - (lastAcceptedHeight % core.CommitInterval)
 	assert.Equal(t, expectedCommitHeight, stateSyncVMHeight)
+	assert.Equal(t, expectedCommitHeight, syncedHeight)
 
 	blkID, err := syncedVM.LastAccepted()
 	if err != nil {
