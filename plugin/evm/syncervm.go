@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -428,9 +429,10 @@ func (vm *stateSyncer) syncAtomicTrie(ctx context.Context) error {
 func (vm *stateSyncer) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", vm.stateSyncBlock.BlockRoot)
 	evmSyncer, err := statesync.NewEVMStateSyncer(&statesync.EVMStateSyncerConfig{
-		Client: vm.client,
-		Root:   vm.stateSyncBlock.BlockRoot,
-		DB:     vm.state.chaindb,
+		Client:    vm.client,
+		Root:      vm.stateSyncBlock.BlockRoot,
+		DB:        vm.state.chaindb,
+		BatchSize: ethdb.IdealBatchSize,
 	})
 	if err != nil {
 		return err
