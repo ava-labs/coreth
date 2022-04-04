@@ -125,3 +125,24 @@ func fillAccounts(
 	}
 	return newRoot
 }
+
+func fillAccountsWithOverlappingStorage(t *testing.T, trieDB *trie.Database, root common.Hash, numAccounts int64, numOverlappingStorageRoots int) common.Hash {
+	storageRoots := make([]common.Hash, 0, numOverlappingStorageRoots)
+	for i := 0; i < numOverlappingStorageRoots; i++ {
+		storageRoot, _, _ := trie.GenerateTrie(t, trieDB, 16, common.HashLength)
+		storageRoots = append(storageRoots, storageRoot)
+	}
+	storageRootIndex := 0
+	return fillAccounts(t, trieDB, root, numAccounts, func(t *testing.T, i int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+		switch i % 3 {
+		case 0: // unmodified account
+		case 1: // account with overlapping storage root
+			account.Root = storageRoots[storageRootIndex%numOverlappingStorageRoots]
+			storageRootIndex++
+		case 2: // account with unique storage root
+			account.Root, _, _ = trie.GenerateTrie(t, trieDB, 16, common.HashLength)
+		}
+
+		return account
+	})
+}

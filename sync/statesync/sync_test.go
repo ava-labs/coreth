@@ -168,25 +168,7 @@ func TestSimpleSyncCases(t *testing.T) {
 		"accounts with overlapping storage": {
 			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
-				numStorageRoots := 3
-				storageRoots := make([]common.Hash, 0, numStorageRoots)
-				for i := 0; i < numStorageRoots; i++ {
-					storageRoot, _, _ := trie.GenerateTrie(t, serverTrieDB, 100, common.HashLength)
-					storageRoots = append(storageRoots, storageRoot)
-				}
-				storageRootIndex := 0
-				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, i int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
-					switch i % 3 {
-					case 0: // unmodified account
-					case 1: // account with overlapping storage root
-						account.Root = storageRoots[storageRootIndex%numStorageRoots]
-						storageRootIndex++
-					case 2: // account with unique storage root
-						account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, 16, common.HashLength)
-					}
-
-					return account
-				})
+				root := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
 				return memorydb.New(), serverTrieDB, root
 			},
 			assertSyncResult: func(t *testing.T, result testSyncResult) {
@@ -246,8 +228,7 @@ func TestCancelSync(t *testing.T) {
 
 func TestResumeSync(t *testing.T) {
 	serverTrieDB := trie.NewDatabase(memorydb.New())
-	// Create trie with 2000 accounts (more than one leaf request)
-	root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{}, 10_000)
+	root := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
 	ctx, cancel := context.WithCancel(context.Background())
 	clientDB := memorydb.New()
 	leafRequests := 0
@@ -391,8 +372,10 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 	rand.Seed(1)
 	clientDB := memorydb.New()
 	serverTrieDB := trie.NewDatabase(memorydb.New())
-	root1 := fillAccountsWithStorage(t, serverTrieDB, common.Hash{}, 1000)
-	root2 := fillAccountsWithStorage(t, serverTrieDB, root1, 1000)
+
+	root1 := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
+	root2 := fillAccountsWithOverlappingStorage(t, serverTrieDB, root1, 1000, 3)
+
 	called := false
 
 	testSyncResumes(t, []syncTest{
