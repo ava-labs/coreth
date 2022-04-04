@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
@@ -21,10 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	defaultCommitCap  int = 10 * units.MiB
-	defaultNumThreads int = 4
-)
+const defaultNumThreads int = 4
 
 type TrieProgress struct {
 	trie      *trie.StackTrie
@@ -81,7 +77,7 @@ type stateSyncer struct {
 	syncer    *syncclient.CallbackLeafSyncer
 	trieDB    *trie.Database
 	db        ethdb.Database
-	commitCap int
+	batchSize int
 	client    syncclient.Client
 
 	// pointer to ETA struct, shared with all TrieProgress structs
@@ -89,9 +85,10 @@ type stateSyncer struct {
 }
 
 type EVMStateSyncerConfig struct {
-	Root   common.Hash
-	Client syncclient.Client
-	DB     ethdb.Database
+	Root      common.Hash
+	Client    syncclient.Client
+	DB        ethdb.Database
+	BatchSize int
 }
 
 func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
@@ -102,13 +99,13 @@ func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
 	}
 
 	// initialise tries in the progress marker
-	progressMarker.MainTrie = NewTrieProgress(config.DB, defaultCommitCap, eta)
+	progressMarker.MainTrie = NewTrieProgress(config.DB, config.BatchSize, eta)
 	if err := RestoreMainTrieProgressFromSnapshot(config.DB, progressMarker.MainTrie); err != nil {
 		return nil, err
 	}
 
 	for _, storageProgress := range progressMarker.StorageTries {
-		storageProgress.TrieProgress = NewTrieProgress(config.DB, defaultCommitCap, eta)
+		storageProgress.TrieProgress = NewTrieProgress(config.DB, config.BatchSize, eta)
 		// the first account's storage snapshot contains the key/value pairs we need to restore
 		// the stack trie. if other in-progress accounts happen to share the same storage root,
 		// their storage snapshot remains empty until the storage trie is fully synced, then copied
@@ -120,7 +117,7 @@ func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
 
 	return &stateSyncer{
 		progressMarker: progressMarker,
-		commitCap:      defaultCommitCap,
+		batchSize:      config.BatchSize,
 		client:         config.Client,
 		trieDB:         trie.NewDatabase(config.DB),
 		db:             config.DB,
@@ -261,7 +258,7 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 	}
 
 	progress := &StorageTrieProgress{
-		TrieProgress: NewTrieProgress(s.db, s.commitCap, s.eta),
+		TrieProgress: NewTrieProgress(s.db, s.batchSize, s.eta),
 		Account:      accountHash,
 	}
 	s.progressMarker.StorageTries[storageRoot] = progress
@@ -273,21 +270,24 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 		OnSyncFailure: s.onSyncFailure,
 		OnStart: func(common.Hash) (bool, error) {
 			// check if this storage root is on disk
-			if storageTrie, err := trie.New(storageRoot, s.trieDB); err == nil {
-				// If the storage trie is already on disk, we only need to copy the storage snapshot over to [accountHash].
-				// There is no need to re-sync the trie, since it is already present
-				if err := WriteAccountStorageSnapshotFromTrie(s.db.NewBatch(), s.commitCap, accountHash, storageTrie); err != nil {
-					// If the storage trie cannot be iterated (due to an incomplete trie from pruning this storage trie in the past)
-					// then we re-sync it here. Therefore, this error is not fatal and we can safely continue here.
-					log.Info("could not populate storage snapshot from trie with existing root, syncing from peers instead", "account", accountHash, "root", storageRoot, "err", err)
-				} else {
-					// If populating the snapshot from the existing storage trie was successful,
-					// return true to skip this task
-					progress.Skipped = true              // set skipped to true to avoid committing the stack trie in onFinish
-					return true, s.onFinish(storageRoot) // call onFinish to delete this task from the map. onFinish will take [s.lock]
-				}
+			storageTrie, err := trie.New(storageRoot, s.trieDB)
+			if err != nil {
+				return false, nil
 			}
-			return false, nil
+
+			// If the storage trie is already on disk, we only need to copy the storage snapshot over to [accountHash].
+			// There is no need to re-sync the trie, since it is already present
+			if err := WriteAccountStorageSnapshotFromTrie(s.db.NewBatch(), s.batchSize, accountHash, storageTrie); err != nil {
+				// If the storage trie cannot be iterated (due to an incomplete trie from pruning this storage trie in the past)
+				// then we re-sync it here. Therefore, this error is not fatal and we can safely continue here.
+				log.Info("could not populate storage snapshot from trie with existing root, syncing from peers instead", "account", accountHash, "root", storageRoot, "err", err)
+				return false, nil
+			}
+
+			// If populating the snapshot from the existing storage trie was successful,
+			// return true to skip this task
+			progress.Skipped = true              // set skipped to true to avoid committing the stack trie in onFinish
+			return true, s.onFinish(storageRoot) // call onFinish to delete this task from the map. onFinish will take [s.lock]
 		},
 	}, nil
 }

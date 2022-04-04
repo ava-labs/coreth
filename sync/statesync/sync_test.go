@@ -57,9 +57,10 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
 	s, err := NewEVMStateSyncer(&EVMStateSyncerConfig{
-		Client: mockClient,
-		Root:   root,
-		DB:     clientDB,
+		Client:    mockClient,
+		Root:      root,
+		DB:        clientDB,
+		BatchSize: 1000,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +75,15 @@ func testSync(t *testing.T, test syncTest) {
 			serverTrieDB: serverTrieDB,
 			clientTrieDB: trie.NewDatabase(clientDB),
 		})
+	}
+}
+
+// testSyncResumes tests a series of syncs works as expected invoking a callback function after each
+// successive test.
+func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
+	for _, test := range steps {
+		testSync(t, test)
+		stepCallback()
 	}
 }
 
@@ -144,6 +154,34 @@ func TestSimpleSyncCases(t *testing.T) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, i int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
 					if i%5 == 0 {
+						account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, 16, common.HashLength)
+					}
+
+					return account
+				})
+				return memorydb.New(), serverTrieDB, root
+			},
+			assertSyncResult: func(t *testing.T, result testSyncResult) {
+				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+			},
+		},
+		"accounts with overlapping storage": {
+			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
+				serverTrieDB := trie.NewDatabase(memorydb.New())
+				numStorageRoots := 3
+				storageRoots := make([]common.Hash, 0, numStorageRoots)
+				for i := 0; i < numStorageRoots; i++ {
+					storageRoot, _, _ := trie.GenerateTrie(t, serverTrieDB, 100, common.HashLength)
+					storageRoots = append(storageRoots, storageRoot)
+				}
+				storageRootIndex := 0
+				root := fillAccounts(t, serverTrieDB, common.Hash{}, 1000, func(t *testing.T, i int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+					switch i % 3 {
+					case 0: // unmodified account
+					case 1: // account with overlapping storage root
+						account.Root = storageRoots[storageRootIndex%numStorageRoots]
+						storageRootIndex++
+					case 2: // account with unique storage root
 						account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, 16, common.HashLength)
 					}
 
@@ -245,11 +283,9 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 	for name, test := range map[string]struct {
 		deleteBetweenSyncs func(common.Hash, *trie.Database) error
 	}{
-		"delete snapshot and code": {
+		"delete code": {
 			deleteBetweenSyncs: func(_ common.Hash, clientTrieDB *trie.Database) error {
 				db := clientTrieDB.DiskDB()
-				<-snapshot.WipeSnapshot(db, false)
-
 				// delete code
 				it := db.NewIterator(rawdb.CodePrefix, nil)
 				defer it.Release()
@@ -264,13 +300,8 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 				return it.Error()
 			},
 		},
-		// delete some random nodes (simulate offline pruning)
-		"delete snapshot and trie nodes": {
+		"delete intermediate storage nodes": {
 			deleteBetweenSyncs: func(root common.Hash, clientTrieDB *trie.Database) error {
-				// delete snapshot first
-				db := clientTrieDB.DiskDB()
-				<-snapshot.WipeSnapshot(db, false)
-
 				// next delete some trie nodes
 				tr, err := trie.New(root, clientTrieDB)
 				if err != nil {
@@ -322,9 +353,35 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 				return it.Err
 			},
 		},
+		"delete intermediate account trie nodes": {
+			deleteBetweenSyncs: func(root common.Hash, clientTrieDB *trie.Database) error {
+				// delete snapshot first
+				batch := clientTrieDB.DiskDB().NewBatch()
+				// next delete some trie nodes
+				tr, err := trie.New(root, clientTrieDB)
+				if err != nil {
+					return err
+				}
+
+				nodeIt := tr.NodeIterator(nil)
+				count := 0
+				for nodeIt.Next(true) {
+					count++
+					if count%5 == 0 {
+						if err := batch.Delete(nodeIt.Hash().Bytes()); err != nil {
+							return err
+						}
+					}
+				}
+				if err := nodeIt.Error(); err != nil {
+					return err
+				}
+
+				return batch.Write()
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			testSyncerSyncsToNewRoot(t, test.deleteBetweenSyncs)
 		})
 	}
@@ -336,33 +393,36 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	root1 := fillAccountsWithStorage(t, serverTrieDB, common.Hash{}, 1000)
 	root2 := fillAccountsWithStorage(t, serverTrieDB, root1, 1000)
+	called := false
 
-	if root1 == root2 {
-		t.Fatalf("expected generated test trie roots to be different, root1=%s, root2=%s", root1, root2)
-	}
+	testSyncResumes(t, []syncTest{
+		{
+			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
+				return clientDB, serverTrieDB, root1
+			},
+			assertSyncResult: func(t *testing.T, result testSyncResult) {
+				assertDBConsistency(t, root1, serverTrieDB, trie.NewDatabase(clientDB))
+			},
+		},
+		{
+			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
+				return clientDB, serverTrieDB, root2
+			},
+			assertSyncResult: func(t *testing.T, result testSyncResult) {
+				assertDBConsistency(t, root2, serverTrieDB, trie.NewDatabase(clientDB))
+			},
+		},
+	}, func() {
+		// Only perform the delete stage once
+		if called {
+			return
+		}
+		called = true
+		// delete snapshot first since this is not the responsibility of the EVM State Syncer
+		<-snapshot.WipeSnapshot(clientDB, false)
 
-	// Test syncing to [root1]
-	testSync(t, syncTest{
-		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
-			return clientDB, serverTrieDB, root1
-		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, root1, serverTrieDB, trie.NewDatabase(clientDB))
-		},
-	})
-
-	// Use callback to delete arbitrary data from between syncs
-	if err := deleteBetweenSyncs(root1, trie.NewDatabase(clientDB)); err != nil {
-		t.Fatal(err)
-	}
-
-	// Test syncing to [root2] after perfomring arbitrary deletions
-	testSync(t, syncTest{
-		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
-			return clientDB, serverTrieDB, root2
-		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, root2, serverTrieDB, trie.NewDatabase(clientDB))
-		},
+		if err := deleteBetweenSyncs(root1, trie.NewDatabase(clientDB)); err != nil {
+			t.Fatal(err)
+		}
 	})
 }
