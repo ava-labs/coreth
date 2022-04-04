@@ -25,7 +25,23 @@ import (
 // Also verifies any code referenced by [clientTrieDB] is present the hash is correct.
 // TODO ensure snapshot does not contain any extra data
 func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTrieDB *trie.Database) {
+	clientDB := clientTrieDB.DiskDB()
+	numSnapshotAccounts := 0
+	accountIt := rawdb.IterateAccountSnapshots(clientDB)
+	defer accountIt.Release()
+	for accountIt.Next() {
+		if !bytes.HasPrefix(accountIt.Key(), rawdb.SnapshotAccountPrefix) || len(accountIt.Key()) != len(rawdb.SnapshotAccountPrefix)+common.HashLength {
+			continue
+		}
+		numSnapshotAccounts++
+	}
+	if err := accountIt.Error(); err != nil {
+		t.Fatal(err)
+	}
+	trieAccountLeaves := 0
+
 	trie.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
+		trieAccountLeaves++
 		accHash := common.BytesToHash(key)
 		var acc types.StateAccount
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
@@ -47,14 +63,31 @@ func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTri
 		if acc.Root == types.EmptyRootHash {
 			return nil
 		}
+
+		storageIt := rawdb.IterateStorageSnapshots(clientDB, accHash)
+		defer storageIt.Release()
+
+		snapshotStorageKeysCount := 0
+		for storageIt.Next() {
+			snapshotStorageKeysCount++
+		}
+
+		storageTrieLeavesCount := 0
+
 		// check storage trie and storage snapshot consistency
 		trie.AssertTrieConsistency(t, acc.Root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
+			storageTrieLeavesCount++
 			snapshotVal := rawdb.ReadStorageSnapshot(clientTrieDB.DiskDB(), accHash, common.BytesToHash(key))
 			assert.Equal(t, val, snapshotVal)
 			return nil
 		})
+
+		assert.Equal(t, storageTrieLeavesCount, snapshotStorageKeysCount)
 		return nil
 	})
+
+	// Check that the number of accounts in the snapshot matches the number of leaves in the accounts trie
+	assert.Equal(t, trieAccountLeaves, numSnapshotAccounts)
 }
 
 func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root common.Hash, numAccounts int64) common.Hash {
