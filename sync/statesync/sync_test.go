@@ -229,40 +229,6 @@ func TestCancelSync(t *testing.T) {
 	})
 }
 
-func TestResumeSync(t *testing.T) {
-	serverTrieDB := trie.NewDatabase(memorydb.New())
-	root := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	clientDB := memorydb.New()
-	leafRequests := 0
-	// Test sync and cancel after 5 leaf requests
-	testSync(t, syncTest{
-		getContext: func() context.Context {
-			return ctx
-		},
-		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
-			return clientDB, serverTrieDB, root
-		},
-		expectedError: context.Canceled,
-		GetLeafsIntercept: func(request message.LeafsRequest, response message.LeafsResponse) (message.LeafsResponse, error) {
-			leafRequests++
-			if leafRequests > 5 {
-				cancel()
-			}
-			return response, nil
-		},
-	})
-	testSync(t, syncTest{
-		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
-			return clientDB, serverTrieDB, root
-		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-		},
-	})
-}
-
 func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	root := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 2000, 3)
