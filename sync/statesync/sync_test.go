@@ -341,6 +341,8 @@ func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
 		},
 	})
 
+	<-snapshot.WipeSnapshot(clientDB, false)
+
 	testSync(t, syncTest{
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root2
