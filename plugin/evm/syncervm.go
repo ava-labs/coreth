@@ -323,6 +323,7 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 }
 
 // wipeSnapshotIfNeeded wipes the snapshot and resets the snapshot generation state if needed.
+// TODO: fix issue where snapshot may be corrupted when switching from fast sync enabled to disabled.
 func (vm *stateSyncer) wipeSnapshotIfNeeded(resuming bool) error {
 	// In the rare case of a previous unclean shutdown, initializing
 	// the chain will try to rebuild the snapshot. We need to stop the
