@@ -384,6 +384,8 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 
 	// ensure blockchain is significantly ahead of local last accepted block,
 	// to make sure state sync is worth it.
+	// Note: this additionally ensures we do not mistakenly attempt to fast sync to a block
+	// behind our own last accepted block.
 	lastAcceptedHeight := vm.state.LastAcceptedBlock().Height()
 	if lastAcceptedHeight+vm.minBlocks > vm.stateSyncBlock.BlockNumber {
 		log.Info(
