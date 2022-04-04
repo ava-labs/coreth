@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -231,7 +232,7 @@ func TestResumeSync(t *testing.T) {
 	root := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
 	ctx, cancel := context.WithCancel(context.Background())
 	clientDB := memorydb.New()
-	leafRequests := 0
+	leafRequests := uint32(0)
 	// Test sync and cancel after 5 leaf requests
 	testSync(t, syncTest{
 		getContext: func() context.Context {
@@ -242,7 +243,7 @@ func TestResumeSync(t *testing.T) {
 		},
 		expectedError: context.Canceled,
 		GetLeafsIntercept: func(_ message.LeafsRequest, lr message.LeafsResponse) (message.LeafsResponse, error) {
-			leafRequests++
+			leafRequests := atomic.AddUint32(&leafRequests, 1)
 			if leafRequests > 5 {
 				cancel()
 			}
@@ -290,6 +291,11 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 				}
 				it := trie.NewIterator(tr.NodeIterator(nil))
 				accountsWithStorage := 0
+
+				// keep track of storage tries we delete trie nodes from
+				// so we don't try to do it again if another account has
+				// the same storage root.
+				corruptedStorageRoots := make(map[common.Hash]struct{})
 				for it.Next() {
 					var acc types.StateAccount
 					if err := rlp.DecodeBytes(it.Value, &acc); err != nil {
@@ -298,10 +304,15 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 					if acc.Root == types.EmptyRootHash {
 						continue
 					}
+					if _, found := corruptedStorageRoots[acc.Root]; found {
+						// avoid trying to delete nodes from a trie we have already deleted nodes from
+						continue
+					}
 					accountsWithStorage++
 					if accountsWithStorage%2 != 0 {
 						continue
 					}
+					corruptedStorageRoots[acc.Root] = struct{}{}
 					storageTrie, err := trie.New(acc.Root, clientTrieDB)
 					if err != nil {
 						return err
