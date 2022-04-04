@@ -23,7 +23,6 @@ import (
 // assertDBConsistency checks [serverTrieDB] and [clientTrieDB] have the same EVM state trie at [root],
 // and that [clientTrieDB.DiskDB] has corresponding account & snapshot values.
 // Also verifies any code referenced by [clientTrieDB] is present the hash is correct.
-// TODO ensure snapshot does not contain any extra data
 func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTrieDB *trie.Database) {
 	clientDB := clientTrieDB.DiskDB()
 	numSnapshotAccounts := 0
@@ -92,22 +91,19 @@ func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTri
 
 func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root common.Hash, numAccounts int64) common.Hash {
 	return fillAccounts(t, serverTrieDB, root, numAccounts, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
-		// Add code and storage for every third account
-		if index%3 == 0 {
-			codeBytes := make([]byte, 256)
-			_, err := rand.Read(codeBytes)
-			if err != nil {
-				t.Fatalf("error reading random code bytes: %v", err)
-			}
-
-			codeHash := crypto.Keccak256Hash(codeBytes)
-			rawdb.WriteCode(serverTrieDB.DiskDB(), codeHash, codeBytes)
-			account.CodeHash = codeHash[:]
-
-			// now create state trie
-			numKeys := 16
-			account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, numKeys, wrappers.LongLen+1)
+		codeBytes := make([]byte, 256)
+		_, err := rand.Read(codeBytes)
+		if err != nil {
+			t.Fatalf("error reading random code bytes: %v", err)
 		}
+
+		codeHash := crypto.Keccak256Hash(codeBytes)
+		rawdb.WriteCode(serverTrieDB.DiskDB(), codeHash, codeBytes)
+		account.CodeHash = codeHash[:]
+
+		// now create state trie
+		numKeys := 16
+		account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, numKeys, wrappers.LongLen+1)
 		return account
 	})
 }

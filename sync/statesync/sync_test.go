@@ -416,10 +416,10 @@ func TestResumeSyncLargeStorageTrieWithSpreadOutDuplicatesInterrupted(t *testing
 
 func TestResyncNewRootAfterDeletes(t *testing.T) {
 	for name, test := range map[string]struct {
-		deleteBetweenSyncs func(common.Hash, *trie.Database) error
+		deleteBetweenSyncs func(*testing.T, common.Hash, *trie.Database)
 	}{
 		"delete code": {
-			deleteBetweenSyncs: func(_ common.Hash, clientTrieDB *trie.Database) error {
+			deleteBetweenSyncs: func(t *testing.T, _ common.Hash, clientTrieDB *trie.Database) {
 				db := clientTrieDB.DiskDB()
 				// delete code
 				it := db.NewIterator(rawdb.CodePrefix, nil)
@@ -429,25 +429,26 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 						continue
 					}
 					if err := db.Delete(it.Key()); err != nil {
-						return err
+						t.Fatal(err)
 					}
 				}
-				return it.Error()
+				if err := it.Error(); err != nil {
+					t.Fatal(err)
+				}
 			},
 		},
 		"delete intermediate storage nodes": {
-			deleteBetweenSyncs: func(root common.Hash, clientTrieDB *trie.Database) error {
-				// next delete some trie nodes
+			deleteBetweenSyncs: func(t *testing.T, root common.Hash, clientTrieDB *trie.Database) {
 				tr, err := trie.New(root, clientTrieDB)
 				if err != nil {
-					return err
+					t.Fatal(err)
 				}
 				it := trie.NewIterator(tr.NodeIterator(nil))
 				accountsWithStorage := 0
 				for it.Next() {
 					var acc types.StateAccount
 					if err := rlp.DecodeBytes(it.Value, &acc); err != nil {
-						return err
+						t.Fatal(err)
 					}
 					if acc.Root == types.EmptyRootHash {
 						continue
@@ -456,63 +457,16 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 					if accountsWithStorage%2 != 0 {
 						continue
 					}
-					storageTrie, err := trie.New(acc.Root, clientTrieDB)
-					if err != nil {
-						return err
-					}
-					storageIt := storageTrie.NodeIterator(nil)
-					storageTrieNodes := 0
-					deleteBatch := clientTrieDB.DiskDB().NewBatch()
-					for storageIt.Next(true) {
-						if storageIt.Leaf() {
-							// only delete intermediary nodes, leafs are
-							// represented as logical nodes with an empty hash
-							continue
-						}
-
-						storageTrieNodes++
-						if storageTrieNodes%2 != 0 {
-							continue
-						}
-						if err := deleteBatch.Delete(storageIt.Hash().Bytes()); err != nil {
-							return err
-						}
-					}
-					if err := storageIt.Error(); err != nil {
-						return err
-					}
-					if err := deleteBatch.Write(); err != nil {
-						return err
-					}
+					trie.CorruptTrie(t, clientTrieDB, acc.Root, 2)
 				}
-				return it.Err
+				if err := it.Err; err != nil {
+					t.Fatal(err)
+				}
 			},
 		},
 		"delete intermediate account trie nodes": {
-			deleteBetweenSyncs: func(root common.Hash, clientTrieDB *trie.Database) error {
-				// delete snapshot first
-				batch := clientTrieDB.DiskDB().NewBatch()
-				// next delete some trie nodes
-				tr, err := trie.New(root, clientTrieDB)
-				if err != nil {
-					return err
-				}
-
-				nodeIt := tr.NodeIterator(nil)
-				count := 0
-				for nodeIt.Next(true) {
-					count++
-					if count%5 == 0 {
-						if err := batch.Delete(nodeIt.Hash().Bytes()); err != nil {
-							return err
-						}
-					}
-				}
-				if err := nodeIt.Error(); err != nil {
-					return err
-				}
-
-				return batch.Write()
+			deleteBetweenSyncs: func(t *testing.T, root common.Hash, clientTrieDB *trie.Database) {
+				trie.CorruptTrie(t, clientTrieDB, root, 5)
 			},
 		},
 	} {
@@ -522,7 +476,7 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 	}
 }
 
-func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash, *trie.Database) error) {
+func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(*testing.T, common.Hash, *trie.Database)) {
 	rand.Seed(1)
 	clientDB := memorydb.New()
 	serverTrieDB := trie.NewDatabase(memorydb.New())
@@ -558,8 +512,6 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(common.Hash,
 		// delete snapshot first since this is not the responsibility of the EVM State Syncer
 		<-snapshot.WipeSnapshot(clientDB, false)
 
-		if err := deleteBetweenSyncs(root1, trie.NewDatabase(clientDB)); err != nil {
-			t.Fatal(err)
-		}
+		deleteBetweenSyncs(t, root1, trie.NewDatabase(clientDB))
 	})
 }
