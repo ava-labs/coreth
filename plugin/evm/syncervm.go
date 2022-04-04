@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/choices"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
@@ -384,6 +385,8 @@ func (vm *stateSyncer) stateSync(summaries []commonEng.Summary) (bool, error) {
 
 	// ensure blockchain is significantly ahead of local last accepted block,
 	// to make sure state sync is worth it.
+	// Note: this additionally ensures we do not mistakenly attempt to fast sync to a block
+	// behind our own last accepted block.
 	lastAcceptedHeight := vm.state.LastAcceptedBlock().Height()
 	if lastAcceptedHeight+vm.minBlocks > vm.stateSyncBlock.BlockNumber {
 		log.Info(
@@ -518,6 +521,7 @@ func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
 	if !ok {
 		return fmt.Errorf("could not convert block(%T) to evm.Block", block)
 	}
+	evmBlock.SetStatus(choices.Accepted)
 
 	// BloomIndexer needs to know that some parts of the chain are not available
 	// and cannot be indexed. This is done by calling [AddCheckpoint] here.
