@@ -69,6 +69,9 @@ type StateSyncProgress struct {
 // ensuring the number of tries in progress remains less than or equal to [numThreads].
 // Once fewer than [numThreads] storage tries are in progress, the main trie sync will
 // continue concurrently.
+//
+// Note: stateSyncer assumes that the snapshot will be wiped completely prior to starting
+// a new sync task (the target root changes or the snapshot is modified by normal operation).
 type stateSyncer struct {
 	lock           sync.Mutex
 	progressMarker *StateSyncProgress

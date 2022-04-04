@@ -33,6 +33,7 @@ func unpackKey(bytes []byte) (common.Hash, common.Hash) {
 
 // loadProgressMarker checks for a progress marker serialized to [db] and returns it if it matches [root].
 // if the existing marker does not match [root] or one is not found, a new one is created, persisted, and returned.
+// Additionally, any previous progress marker is wiped if this is the case.
 func loadProgress(db ethdb.Database, root common.Hash) (*StateSyncProgress, error) {
 	progress := &StateSyncProgress{
 		StorageTries: make(map[common.Hash]*StorageTrieProgress),
