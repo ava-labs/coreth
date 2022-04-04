@@ -68,14 +68,15 @@ func testSync(t *testing.T, test syncTest) {
 	// begin sync
 	s.Start(ctx)
 	waitFor(t, s.Done(), test.expectedError, testSyncTimeout)
-
-	if test.expectedError == nil {
-		test.assertSyncResult(t, testSyncResult{
-			root:         root,
-			serverTrieDB: serverTrieDB,
-			clientTrieDB: trie.NewDatabase(clientDB),
-		})
+	if test.expectedError != nil {
+		return
 	}
+
+	test.assertSyncResult(t, testSyncResult{
+		root:         root,
+		serverTrieDB: serverTrieDB,
+		clientTrieDB: trie.NewDatabase(clientDB),
+	})
 }
 
 // testSyncResumes tests a series of syncs works as expected invoking a callback function after each
@@ -296,6 +297,53 @@ func TestResumeSyncLargeStorageTrieInterrupted(t *testing.T) {
 	testSync(t, syncTest{
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root
+		},
+		assertSyncResult: func(t *testing.T, result testSyncResult) {
+			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
+		},
+	})
+}
+
+func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
+	serverTrieDB := trie.NewDatabase(memorydb.New())
+
+	largeStorageRoot1, _, _ := trie.GenerateTrie(t, serverTrieDB, 2000, common.HashLength)
+	largeStorageRoot2, _, _ := trie.GenerateTrie(t, serverTrieDB, 2000, common.HashLength)
+	root1 := fillAccounts(t, serverTrieDB, common.Hash{}, 2000, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+		// Set the root for a single account
+		if index == 10 {
+			account.Root = largeStorageRoot1
+		}
+		return account
+	})
+	root2 := fillAccounts(t, serverTrieDB, root1, 100, func(t *testing.T, index int64, account types.StateAccount, tr *trie.Trie) types.StateAccount {
+		if index == 20 {
+			account.Root = largeStorageRoot2
+		}
+		return account
+	})
+	errInterrupted := errors.New("interrupted sync")
+	clientDB := memorydb.New()
+	largeStorageRootRequests := 0
+	testSync(t, syncTest{
+		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
+			return clientDB, serverTrieDB, root1
+		},
+		expectedError: errInterrupted,
+		GetLeafsIntercept: func(request message.LeafsRequest, response message.LeafsResponse) (message.LeafsResponse, error) {
+			if request.Root == largeStorageRoot1 && largeStorageRootRequests >= 1 {
+				return message.LeafsResponse{}, errInterrupted
+			}
+			if request.Root == largeStorageRoot1 {
+				largeStorageRootRequests++
+			}
+			return response, nil
+		},
+	})
+
+	testSync(t, syncTest{
+		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
+			return clientDB, serverTrieDB, root2
 		},
 		assertSyncResult: func(t *testing.T, result testSyncResult) {
 			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
