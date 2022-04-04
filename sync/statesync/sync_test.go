@@ -38,8 +38,8 @@ type syncTest struct {
 	prepareForTest    func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) // return trie database and trie root to sync
 	assertSyncResult  func(t *testing.T, result testSyncResult)
 	expectedError     error
-	GetLeafsIntercept func(message.LeafsResponse) (message.LeafsResponse, error)
-	GetCodeIntercept  func([]byte) ([]byte, error)
+	GetLeafsIntercept func(message.LeafsRequest, message.LeafsResponse) (message.LeafsResponse, error)
+	GetCodeIntercept  func(common.Hash, []byte) ([]byte, error)
 }
 
 func testSync(t *testing.T, test syncTest) {
@@ -161,7 +161,7 @@ func TestSimpleSyncCases(t *testing.T) {
 				root := fillAccounts(t, serverTrieDB, common.Hash{}, 100, nil)
 				return memorydb.New(), serverTrieDB, root
 			},
-			GetLeafsIntercept: func(_ message.LeafsResponse) (message.LeafsResponse, error) {
+			GetLeafsIntercept: func(_ message.LeafsRequest, _ message.LeafsResponse) (message.LeafsResponse, error) {
 				return message.LeafsResponse{}, clientErr
 			},
 			expectedError: clientErr,
@@ -172,7 +172,7 @@ func TestSimpleSyncCases(t *testing.T) {
 				root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{}, 100)
 				return memorydb.New(), serverTrieDB, root
 			},
-			GetCodeIntercept: func(b []byte) ([]byte, error) {
+			GetCodeIntercept: func(_ common.Hash, b []byte) ([]byte, error) {
 				return nil, clientErr
 			},
 			expectedError: clientErr,
@@ -199,7 +199,7 @@ func TestCancelSync(t *testing.T) {
 			return memorydb.New(), serverTrieDB, root
 		},
 		expectedError: context.Canceled,
-		GetLeafsIntercept: func(lr message.LeafsResponse) (message.LeafsResponse, error) {
+		GetLeafsIntercept: func(_ message.LeafsRequest, lr message.LeafsResponse) (message.LeafsResponse, error) {
 			cancel()
 			return lr, nil
 		},
@@ -222,7 +222,7 @@ func TestResumeSync(t *testing.T) {
 			return clientDB, serverTrieDB, root
 		},
 		expectedError: context.Canceled,
-		GetLeafsIntercept: func(lr message.LeafsResponse) (message.LeafsResponse, error) {
+		GetLeafsIntercept: func(_ message.LeafsRequest, lr message.LeafsResponse) (message.LeafsResponse, error) {
 			leafRequests++
 			if leafRequests > 5 {
 				cancel()
