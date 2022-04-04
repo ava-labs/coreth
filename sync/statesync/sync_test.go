@@ -213,6 +213,7 @@ func TestCancelSync(t *testing.T) {
 	// Create trie with 2000 accounts (more than one leaf request)
 	root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{}, 2000)
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	testSync(t, syncTest{
 		getContext: func() context.Context {
 			return ctx
@@ -232,6 +233,7 @@ func TestResumeSync(t *testing.T) {
 	serverTrieDB := trie.NewDatabase(memorydb.New())
 	root := fillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	clientDB := memorydb.New()
 	leafRequests := 0
 	// Test sync and cancel after 5 leaf requests
