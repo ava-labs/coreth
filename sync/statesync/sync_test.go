@@ -413,6 +413,11 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 				}
 				it := trie.NewIterator(tr.NodeIterator(nil))
 				accountsWithStorage := 0
+
+				// keep track of storage tries we delete trie nodes from
+				// so we don't try to do it again if another account has
+				// the same storage root.
+				corruptedStorageRoots := make(map[common.Hash]struct{})
 				for it.Next() {
 					var acc types.StateAccount
 					if err := rlp.DecodeBytes(it.Value, &acc); err != nil {
@@ -421,10 +426,15 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 					if acc.Root == types.EmptyRootHash {
 						continue
 					}
+					if _, found := corruptedStorageRoots[acc.Root]; found {
+						// avoid trying to delete nodes from a trie we have already deleted nodes from
+						continue
+					}
 					accountsWithStorage++
 					if accountsWithStorage%2 != 0 {
 						continue
 					}
+					corruptedStorageRoots[acc.Root] = struct{}{}
 					trie.CorruptTrie(t, clientTrieDB, acc.Root, 2)
 				}
 				if err := it.Err; err != nil {

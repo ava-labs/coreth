@@ -177,13 +177,10 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 
 		// check if this account has storage root that we need to fetch
 		if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
-			if storageTask, err := s.getStorageTrieTask(accountHash, acc.Root); err != nil {
+			if storageTask, err := s.createStorageTrieTask(accountHash, acc.Root); err != nil {
 				return nil, err
 			} else if storageTask != nil {
 				tasks = append(tasks, storageTask)
-				if err := addInProgressTrie(s.db, acc.Root, accountHash); err != nil {
-					return nil, err
-				}
 			}
 		}
 
@@ -244,7 +241,9 @@ func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, valu
 	return nil, nil // storage tries never add new tasks to the leaf syncer
 }
 
-func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot common.Hash) (*syncclient.LeafSyncTask, error) {
+// createStorageTrieTask creates a LeafSyncTask to be returned from the callback,
+// and records the storage trie as in progress for resume purposes.
+func (s *stateSyncer) createStorageTrieTask(accountHash common.Hash, storageRoot common.Hash) (*syncclient.LeafSyncTask, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -254,7 +253,7 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 	// to this account as well
 	if storageProgress, exists := s.progressMarker.StorageTries[storageRoot]; exists {
 		storageProgress.AdditionalAccounts = append(storageProgress.AdditionalAccounts, accountHash)
-		return nil, nil
+		return nil, addInProgressTrie(s.db, storageRoot, accountHash)
 	}
 
 	progress := &StorageTrieProgress{
@@ -289,7 +288,7 @@ func (s *stateSyncer) getStorageTrieTask(accountHash common.Hash, storageRoot co
 			progress.Skipped = true              // set skipped to true to avoid committing the stack trie in onFinish
 			return true, s.onFinish(storageRoot) // call onFinish to delete this task from the map. onFinish will take [s.lock]
 		},
-	}, nil
+	}, addInProgressTrie(s.db, storageRoot, accountHash)
 }
 
 // onFinish marks the task corresponding to [root] as finished.

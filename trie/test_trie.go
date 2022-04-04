@@ -98,6 +98,7 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLea
 }
 
 // CorruptTrie wipes every [n]th node from the trie given by [root] from the trieDB.
+// Assumes  that the trie given by root can be iterated without issue.
 func CorruptTrie(t *testing.T, trieDB *Database, root common.Hash, n int) {
 	batch := trieDB.DiskDB().NewBatch()
 	// next delete some trie nodes
