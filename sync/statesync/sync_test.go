@@ -35,7 +35,7 @@ type testSyncResult struct {
 
 type syncTest struct {
 	getContext        func() context.Context
-	prepareForTest    func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) // return trie database and trie root to sync
+	prepareForTest    func(t *testing.T) (clientDB ethdb.Database, serverTrieDB *trie.Database, syncRoot common.Hash)
 	assertSyncResult  func(t *testing.T, result testSyncResult)
 	expectedError     error
 	GetLeafsIntercept func(message.LeafsRequest, message.LeafsResponse) (message.LeafsResponse, error)
@@ -60,7 +60,7 @@ func testSync(t *testing.T, test syncTest) {
 		Client:    mockClient,
 		Root:      root,
 		DB:        clientDB,
-		BatchSize: 1000,
+		BatchSize: 1000, // Use a lower batch size in order to get test coverage of batches being written early.
 	})
 	if err != nil {
 		t.Fatal(err)
