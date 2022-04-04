@@ -80,9 +80,9 @@ type stateSyncConfig struct {
 	// statsEnabled controls whether stats are emitted during state sync
 	statsEnabled bool
 
-	// Forces state syncer to continue ongoing sync if present.
-	// Defaults to false.
-	forceContinueSync bool
+	// Force state syncer to select the highest available summary block regardless of
+	// whether the local summary block is available.
+	forceSyncHighestSummary bool
 
 	// netCodec is used to encode and decode network messages
 	netCodec codec.Manager
@@ -292,29 +292,9 @@ func (vm *stateSyncer) StateSync(summaries []commonEng.Summary) error {
 // for a syncable block included in [proposedSummaries]
 func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) (message.SyncableBlock, bool, error) {
 	var (
-		localSyncableBlock       message.SyncableBlock
 		highestSummaryBlock      message.SyncableBlock
 		highestSummaryBlockBytes []byte
 	)
-	// Fetch any in-progress syncable block
-	localSummaryBytes, err := vm.state.metadataDB.Get(stateSyncSummaryKey)
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
-		return message.SyncableBlock{}, false, err
-	}
-
-	// If it exists in the DB, check if it is still supported by peers
-	// A summary is supported if it is in the proposedSummaries list
-	if err == nil {
-		localSyncableBlock, err = parseSummary(vm.netCodec, localSummaryBytes)
-		if err != nil {
-			return message.SyncableBlock{}, false, fmt.Errorf("failed to parse saved state sync summary to SyncableBlock: %w", err)
-		}
-
-		// If [forceContinueSync] is enabled, return the local syncable block and ignore the contents of [proposedSummaries].
-		if vm.forceContinueSync {
-			return localSyncableBlock, true, nil
-		}
-	}
 
 	for _, proposedSummary := range proposedSummaries {
 		syncableBlock, err := parseSummary(vm.netCodec, proposedSummary.Bytes())
@@ -322,8 +302,9 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 			return message.SyncableBlock{}, false, err
 		}
 
-		// If the actively syncing block is included in [proposedSummaries] resume syncing it.
-		if vm.localSyncableBlock.BlockHash == syncableBlock.BlockHash {
+		// If the actively syncing block is included in [proposedSummaries] resume syncing it
+		// unless [forceSyncHighestSummary] is enabled.
+		if vm.localSyncableBlock.BlockHash == syncableBlock.BlockHash && !vm.forceSyncHighestSummary {
 			return vm.localSyncableBlock, true, nil
 		}
 
@@ -334,7 +315,7 @@ func (vm *stateSyncer) selectSyncSummary(proposedSummaries []commonEng.Summary) 
 	}
 
 	// Otherwise, update the current state sync summary key in the database
-	if err = vm.state.metadataDB.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
+	if err := vm.state.metadataDB.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
 		return message.SyncableBlock{}, false, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
 	}
 
