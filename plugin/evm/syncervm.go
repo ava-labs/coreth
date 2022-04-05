@@ -81,7 +81,7 @@ type stateSyncConfig struct {
 	statsEnabled bool
 
 	// Force state syncer to select the highest available summary block regardless of
-	// whether the local summary block is available.
+	// whether there is an in-progress summary that could be resumed.
 	forceSyncHighestSummary bool
 
 	// netCodec is used to encode and decode network messages
@@ -503,6 +503,7 @@ func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
 	if !ok {
 		return fmt.Errorf("could not convert block(%T) to evm.Block", block)
 	}
+	// Set the status of the parsed block to Accepted, so that it reports the correct status.
 	evmBlock.SetStatus(choices.Accepted)
 
 	// BloomIndexer needs to know that some parts of the chain are not available
