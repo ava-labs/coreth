@@ -127,6 +127,7 @@ var (
 	// Set last accepted key to be longer than the keys used to store accepted block IDs.
 	lastAcceptedKey        = []byte("last_accepted_key")
 	acceptedPrefix         = []byte("snowman_accepted")
+	metadataPrefix         = []byte("metadata")
 	ethDBPrefix            = []byte("ethdb")
 	pruneRejectedBlocksKey = []byte("pruned_rejected_blocks")
 
@@ -189,6 +190,8 @@ type vmState struct {
 	chain *coreth.ETHChain
 	// [db] is the VM's current database managed by ChainState
 	db *versiondb.Database
+	// metadataDB is used to store one off keys.
+	metadataDB database.Database
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb Database
 	// [acceptedBlockDB] is the database to store the last accepted
@@ -321,6 +324,7 @@ func (vm *VM) Initialize(
 	vm.chaindb = Database{prefixdb.NewNested(ethDBPrefix, baseDB)}
 	vm.db = versiondb.New(baseDB)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
+	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
 	g := new(core.Genesis)
 	if err := json.Unmarshal(genesisBytes, g); err != nil {
 		return err
@@ -533,15 +537,16 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 	}
 
 	vm.stateSyncer = NewStateSyncer(&stateSyncConfig{
-		vmState:          &vm.vmState,
-		statsEnabled:     vm.config.StateSyncMetricsEnabled,
-		enabled:          vm.config.StateSyncEnabled,
-		netCodec:         vm.networkCodec,
-		toEngine:         toEngine,
-		client:           vm.client,
-		stateSyncIDs:     stateSyncIDs,
-		minBlocks:        defaultStateSyncMinBlocks,
-		syncableInterval: defaultSyncableInterval,
+		state:                   &vm.vmState,
+		statsEnabled:            vm.config.StateSyncMetricsEnabled,
+		enabled:                 vm.config.StateSyncEnabled,
+		forceSyncHighestSummary: vm.config.StateSyncForceHighestSummary,
+		netCodec:                vm.networkCodec,
+		toEngine:                toEngine,
+		client:                  vm.client,
+		stateSyncIDs:            stateSyncIDs,
+		minBlocks:               defaultStateSyncMinBlocks,
+		syncableInterval:        defaultSyncableInterval,
 	})
 
 	var handlerStats handlerstats.HandlerStats

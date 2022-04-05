@@ -6,6 +6,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -30,10 +31,10 @@ const maxLeavesLimit = uint16(1024)
 type LeafsRequestHandler struct {
 	trieDB *trie.Database
 	codec  codec.Manager
-	stats  stats.HandlerStats
+	stats  stats.LeafsRequestHandlerStats
 }
 
-func NewLeafsRequestHandler(trieDB *trie.Database, codec codec.Manager, syncerStats stats.HandlerStats) *LeafsRequestHandler {
+func NewLeafsRequestHandler(trieDB *trie.Database, codec codec.Manager, syncerStats stats.LeafsRequestHandlerStats) *LeafsRequestHandler {
 	return &LeafsRequestHandler{
 		trieDB: trieDB,
 		codec:  codec,
@@ -120,6 +121,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 
 	if it.Err != nil {
 		log.Debug("failed to iterate trie, dropping request", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest, "err", it.Err)
+		lrh.stats.IncTrieError()
 		return nil, nil
 	}
 
@@ -131,7 +133,12 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		// If [start] in the request is empty, populate it with the appropriate length
 		// key starting at 0.
 		if len(start) == 0 {
-			start = bytes.Repeat([]byte{0x00}, getKeyLength(leafsRequest.NodeType))
+			keyLength, err := getKeyLength(leafsRequest.NodeType)
+			if err != nil {
+				log.Error("Failed to get key length for leafs request", "err", err)
+				return nil, nil
+			}
+			start = bytes.Repeat([]byte{0x00}, keyLength)
 		}
 		// If there is a non-zero number of keys, set [end] for the range proof to the
 		// last key included in the response.
@@ -143,6 +150,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		// Generate the proof and add it to the response.
 		if err != nil {
 			log.Debug("failed to create valid proof serving leafs request", "nodeID", nodeID, "requestID", requestID, "request", leafsRequest, "err", err)
+			lrh.stats.IncTrieError()
 			return nil, nil
 		}
 	}
@@ -187,12 +195,12 @@ func GenerateRangeProof(t *trie.Trie, start, end []byte) ([][]byte, [][]byte, er
 
 // getKeyLength returns trie key length for given nodeType
 // expects nodeType to be one of message.AtomicTrieNode or message.StateTrieNode
-func getKeyLength(nodeType message.NodeType) int {
+func getKeyLength(nodeType message.NodeType) (int, error) {
 	switch nodeType {
 	case message.AtomicTrieNode:
-		return wrappers.LongLen + common.HashLength
+		return wrappers.LongLen + common.HashLength, nil
 	case message.StateTrieNode:
-		return common.HashLength
+		return common.HashLength, nil
 	}
-	return 0
+	return 0, fmt.Errorf("cannot get key length for unknown node type: %s", nodeType)
 }

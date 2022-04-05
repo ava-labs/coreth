@@ -21,17 +21,18 @@ import (
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	rand.Seed(1)
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("unexpected error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockHandlerStats := &stats.MockHandlerStats{}
 	memdb := memorydb.New()
 	trieDB := trie.NewDatabase(memdb)
 
+	corruptedTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 100, common.HashLength)
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
+
+	// Corrupt [corruptedTrieRoot]
+	trie.CorruptTrie(t, trieDB, corruptedTrieRoot, 5)
 
 	leafsHandler := NewLeafsRequestHandler(trieDB, codec, mockHandlerStats)
 
@@ -101,6 +102,22 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.Nil(t, response)
 				assert.Nil(t, err)
 				assert.EqualValues(t, 1, mockHandlerStats.MissingRootCount)
+			},
+		},
+		"corrupted trie drops request": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				return context.Background(), message.LeafsRequest{
+					Root:     corruptedTrieRoot,
+					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
+					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.Nil(t, response)
+				assert.Nil(t, err)
+				assert.EqualValues(t, uint32(1), mockHandlerStats.TrieErrorCount)
 			},
 		},
 		"cancelled context dropped": {

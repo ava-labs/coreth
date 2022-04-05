@@ -5,6 +5,7 @@ package statesyncclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -12,6 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	ErrFailedToFetchLeafs = errors.New("failed to fetch leafs")
 )
 
 const defaultLeafRequestLimit = 1024
@@ -117,7 +122,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 		})
 
 		if err != nil {
-			return fmt.Errorf("failed to fetch leafs: %w", err)
+			return fmt.Errorf("%s: %w", ErrFailedToFetchLeafs, err)
 		}
 
 		if tasks, err := task.OnLeafs(task.Root, leafsResponse.Keys, leafsResponse.Vals); err != nil {

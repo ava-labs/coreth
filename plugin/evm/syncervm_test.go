@@ -243,6 +243,9 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 	if err != nil {
 		t.Fatal("error getting block", blockID, err)
 	}
+	if blk.Height() != syncedHeight {
+		t.Fatalf("Expected block height to be %d, but found %d", syncedHeight, blk.Height())
+	}
 
 	assert.NoError(t, stateSyncVM.SetLastSummaryBlock(blk.Bytes()))
 

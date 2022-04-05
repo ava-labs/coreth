@@ -115,10 +115,11 @@ type Config struct {
 	MaxOutboundActiveRequests int64 `json:"max-outbound-active-requests"`
 
 	// Sync settings
-	StateSyncEnabled         bool   `json:"state-sync-enabled"`
-	StateSyncMetricsEnabled  bool   `json:"state-sync-metrics-enabled"`
-	StateSyncServerTrieCache int    `json:"state-sync-server-trie-cache"`
-	StateSyncIDs             string `json:"state-sync-ids"`
+	StateSyncEnabled             bool   `json:"state-sync-enabled"`
+	StateSyncForceHighestSummary bool   `json:"state-sync-force-highest-summary"` // Forces state sync to use the highest available summary block
+	StateSyncMetricsEnabled      bool   `json:"state-sync-metrics-enabled"`
+	StateSyncServerTrieCache     int    `json:"state-sync-server-trie-cache"`
+	StateSyncIDs                 string `json:"state-sync-ids"`
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled

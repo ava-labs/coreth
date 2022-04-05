@@ -27,17 +27,14 @@ type MockClient struct {
 	blocksHandler  *handlers.BlockRequestHandler
 	blocksReceived int32
 	// GetLeafsIntercept is called on every GetLeafs request if set to a non-nil callback.
-	// Takes in the result returned by the handler and can return a replacement response or
-	// error.
-	GetLeafsIntercept func(message.LeafsResponse) (message.LeafsResponse, error)
+	// The returned response will be returned by MockClient to the caller.
+	GetLeafsIntercept func(req message.LeafsRequest, res message.LeafsResponse) (message.LeafsResponse, error)
 	// GetCodesIntercept is called on every GetCode request if set to a non-nil callback.
-	// Takes in the result returned by the handler and can return a replacement response or
-	// error.
-	GetCodeIntercept func([]byte) ([]byte, error)
+	// The returned response will be returned by MockClient to the caller.
+	GetCodeIntercept func(codeHash common.Hash, codeBytes []byte) ([]byte, error)
 	// GetBlocksIntercept is called on every GetBlocks request if set to a non-nil callback.
-	// Takes in the result returned by the handler and can return a replacement response or
-	// error.
-	GetBlocksIntercept func(types.Blocks) (types.Blocks, error)
+	// The returned response will be returned by MockClient to the caller.
+	GetBlocksIntercept func(blockReq message.BlockRequest, blocks types.Blocks) (types.Blocks, error)
 }
 
 func NewMockClient(
@@ -66,7 +63,7 @@ func (ml *MockClient) GetLeafs(request message.LeafsRequest) (message.LeafsRespo
 	}
 	leafsResponse := leafResponseIntf.(message.LeafsResponse)
 	if ml.GetLeafsIntercept != nil {
-		leafsResponse, err = ml.GetLeafsIntercept(leafsResponse)
+		leafsResponse, err = ml.GetLeafsIntercept(request, leafsResponse)
 	}
 	// Increment the number of leaves received by the mock client
 	atomic.AddInt32(&ml.leavesReceived, int32(numLeaves))
@@ -93,7 +90,7 @@ func (ml *MockClient) GetCode(codeHash common.Hash) ([]byte, error) {
 	}
 	code := codeBytesIntf.([]byte)
 	if ml.GetCodeIntercept != nil {
-		code, err = ml.GetCodeIntercept(code)
+		code, err = ml.GetCodeIntercept(codeHash, code)
 	}
 	if err == nil {
 		atomic.AddInt32(&ml.codeReceived, int32(lenCode))
@@ -125,7 +122,7 @@ func (ml *MockClient) GetBlocks(blockHash common.Hash, height uint64, numParents
 	}
 	blocks := blocksRes.(types.Blocks)
 	if ml.GetBlocksIntercept != nil {
-		blocks, err = ml.GetBlocksIntercept(blocks)
+		blocks, err = ml.GetBlocksIntercept(request, blocks)
 	}
 	atomic.AddInt32(&ml.blocksReceived, int32(numBlocks))
 	return blocks, err

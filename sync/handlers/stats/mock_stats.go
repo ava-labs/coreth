@@ -25,7 +25,8 @@ type MockHandlerStats struct {
 	LeafsRequestCount,
 	InvalidLeafsRequestCount,
 	LeafsReturnedSum,
-	MissingRootCount uint32
+	MissingRootCount,
+	TrieErrorCount uint32
 	LeafRequestProcessingTimeSum time.Duration
 }
 
@@ -123,4 +124,10 @@ func (m *MockHandlerStats) IncMissingRoot() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.MissingRootCount++
+}
+
+func (m *MockHandlerStats) IncTrieError() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.TrieErrorCount++
 }

@@ -40,10 +40,7 @@ func TestBlockRequestHandler(t *testing.T) {
 		blocksDB[blk.Hash()] = blk
 	}
 
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockHandlerStats := &stats.MockHandlerStats{}
 	blockRequestHandler := NewBlockRequestHandler(func(hash common.Hash, height uint64) *types.Block {
@@ -161,10 +158,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 		blocksDB[blk.Hash()] = blk
 	}
 
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	cancelAfterNumRequests := 2
 	ctx, cancel := context.WithCancel(context.Background())

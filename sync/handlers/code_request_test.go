@@ -22,10 +22,7 @@ import (
 )
 
 func TestCodeRequestHandler(t *testing.T) {
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("unexpected error when building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	database := memorydb.New()
 

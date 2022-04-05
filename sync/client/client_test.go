@@ -32,10 +32,7 @@ import (
 const maxAttempts = 5
 
 func TestGetCode(t *testing.T) {
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockNetClient := &mockNetwork{}
 
@@ -79,10 +76,7 @@ func TestGetBlocks(t *testing.T) {
 	// set random seed for deterministic tests
 	rand.Seed(1)
 
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	var gspec = &core.Genesis{
 		Config: params.TestChainConfig,
@@ -339,10 +333,7 @@ func buildGetter(blocks []*types.Block) func(hash common.Hash, height uint64) *t
 
 func TestGetLeafs(t *testing.T) {
 	rand.Seed(1)
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	const leafsLimit = 1024
 
@@ -386,9 +377,6 @@ func TestGetLeafs(t *testing.T) {
 				return response
 			},
 			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				if err != nil {
-					t.Fatal(err)
-				}
 				assert.False(t, response.More)
 				assert.Equal(t, leafsLimit, len(response.Keys))
 				assert.Equal(t, leafsLimit, len(response.Vals))
@@ -437,9 +425,6 @@ func TestGetLeafs(t *testing.T) {
 				return response
 			},
 			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				if err != nil {
-					t.Fatal(err)
-				}
 				assert.True(t, response.More)
 				assert.Equal(t, leafsLimit, len(response.Keys))
 				assert.Equal(t, leafsLimit, len(response.Vals))
@@ -653,6 +638,37 @@ func TestGetLeafs(t *testing.T) {
 			},
 			expectedErr: errInvalidRangeProof,
 		},
+		"corrupted value in middle of response": {
+			request: message.LeafsRequest{
+				Root:     largeTrieRoot,
+				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit:    leafsLimit,
+				NodeType: message.StateTrieNode,
+			},
+			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				if err != nil {
+					t.Fatal("unexpected error in calling leafs request handler", err)
+				}
+				if len(response) == 0 {
+					t.Fatal("Failed to create valid response")
+				}
+				var leafResponse message.LeafsResponse
+				if _, err := codec.Unmarshal(response, &leafResponse); err != nil {
+					t.Fatal(err)
+				}
+				// Remove middle key-value pair response
+				leafResponse.Vals[100] = []byte("garbage value data")
+
+				modifiedResponse, err := codec.Marshal(message.Version, leafResponse)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return modifiedResponse
+			},
+			expectedErr: errInvalidRangeProof,
+		},
 		"all proof keys removed from response": {
 			request: message.LeafsRequest{
 				Root:     largeTrieRoot,
@@ -715,10 +731,7 @@ func TestGetLeafs(t *testing.T) {
 
 func TestGetLeafsRetries(t *testing.T) {
 	rand.Seed(1)
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	trieDB := trie.NewDatabase(memorydb.New())
 	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
@@ -773,10 +786,7 @@ func TestGetLeafsRetries(t *testing.T) {
 }
 
 func TestStateSyncNodes(t *testing.T) {
-	codec, err := message.BuildCodec()
-	if err != nil {
-		t.Fatal("error building codec", err)
-	}
+	codec := message.MustBuildCodec()
 
 	mockNetClient := &mockNetwork{}
 

@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.9.0
-	github.com/ava-labs/avalanchego v1.7.8
+	github.com/ava-labs/avalanchego v1.7.10-0.20220401143450-98c4c08d5b4f
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
@@ -39,5 +39,3 @@ require (
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
-
-replace github.com/ava-labs/avalanchego => ../avalanchego
