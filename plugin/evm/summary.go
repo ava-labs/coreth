@@ -10,8 +10,22 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 )
+
+// syncableBlockSummary is a basic implementation of common.Summary
+// used in syncableBlockToSummary to convert message.SyncableBlock
+// to common.Summary
+type syncableBlockSummary struct {
+	bytes []byte
+	key   uint64
+	id    ids.ID
+}
+
+var _ common.Summary = &syncableBlockSummary{}
+
+func (s *syncableBlockSummary) Bytes() []byte { return s.bytes }
+func (s *syncableBlockSummary) Key() uint64   { return s.key }
+func (s *syncableBlockSummary) ID() ids.ID    { return s.id }
 
 // syncableBlockToSummary builds common.Summary given a message.SyncableBlock
 // Marshals message.SyncableBlock as Content in Summary
@@ -22,38 +36,18 @@ func syncableBlockToSummary(codec codec.Manager, syncableBlock message.SyncableB
 		return nil, err
 	}
 
-	// engine needs to access block ID and height,
-	// so we use this intermediary struct.
-	engineSummary := block.CoreSummaryContent{
-		BlkID:   ids.ID(syncableBlock.BlockHash),
-		Height:  syncableBlock.BlockNumber,
-		Content: contentBytes,
-	}
-	// engineSummary needs to be deserialized by the engine, so we use the same version
-	// as the engine does in the codec here
-	summary, err := codec.Marshal(block.StateSyncDefaultKeysVersion, engineSummary)
-	if err != nil {
-		return nil, err
-	}
-
-	summaryID, err := ids.ToID(crypto.Keccak256(summary))
-	return &block.Summary{
-		SummaryKey:   common.SummaryKey(engineSummary.Height),
-		SummaryID:    common.SummaryID(summaryID),
-		ContentBytes: summary,
+	summaryID, err := ids.ToID(crypto.Keccak256(contentBytes))
+	return &syncableBlockSummary{
+		key:   syncableBlock.BlockNumber,
+		id:    summaryID,
+		bytes: contentBytes,
 	}, err
 }
 
-// parseSummary parses common.Summary into a message.SyncableBlock
+// parseSummary parses summaryBytes into a message.SyncableBlock
 func parseSummary(codec codec.Manager, summaryBytes []byte) (message.SyncableBlock, error) {
-	var engineSummary block.CoreSummaryContent
-	if _, err := codec.Unmarshal(summaryBytes, &engineSummary); err != nil {
-		return message.SyncableBlock{}, err
-	}
-
-	// TODO: currently encodes height and block ID twice.
 	var syncableBlock message.SyncableBlock
-	if _, err := codec.Unmarshal(engineSummary.Content, &syncableBlock); err != nil {
+	if _, err := codec.Unmarshal(summaryBytes, &syncableBlock); err != nil {
 		return message.SyncableBlock{}, err
 	}
 

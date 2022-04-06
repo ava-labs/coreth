@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 
 	"github.com/ava-labs/coreth/core"
@@ -28,7 +27,6 @@ import (
 	"github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -191,12 +189,7 @@ func (vm *stateSyncer) ParseSummary(summaryBytes []byte) (commonEng.Summary, err
 		return nil, err
 	}
 
-	summaryID, err := ids.ToID(crypto.Keccak256(summaryBytes))
-	return &block.Summary{
-		SummaryKey:   commonEng.SummaryKey(summaryBlk.BlockNumber),
-		SummaryID:    commonEng.SummaryID(summaryID),
-		ContentBytes: summaryBytes,
-	}, err
+	return syncableBlockToSummary(vm.netCodec, summaryBlk)
 }
 
 // GetOngoingStateSyncSummary is called by engine so the state sync summary
@@ -216,12 +209,7 @@ func (vm *stateSyncer) GetOngoingStateSyncSummary() (commonEng.Summary, error) {
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncableBlock: %w", err)
 	}
 
-	summaryID, err := ids.ToID(crypto.Keccak256(localSummaryBytes))
-	return &block.Summary{
-		SummaryKey:   commonEng.SummaryKey(vm.localSyncableBlock.BlockNumber),
-		SummaryID:    commonEng.SummaryID(summaryID),
-		ContentBytes: localSummaryBytes,
-	}, err
+	return syncableBlockToSummary(vm.netCodec, vm.localSyncableBlock)
 }
 
 // StateSyncGetLastSummary returns the latest state summary.
@@ -242,8 +230,8 @@ func (vm *stateSyncer) StateSyncGetLastSummary() (commonEng.Summary, error) {
 
 // StateSyncGetSummary implements StateSyncableVM and returns a summary corresponding
 // to the provided [key] if the node can serve state sync data for that key.
-func (vm *stateSyncer) StateSyncGetSummary(key commonEng.SummaryKey) (commonEng.Summary, error) {
-	summaryBlock := vm.state.chain.GetBlockByNumber(uint64(key))
+func (vm *stateSyncer) StateSyncGetSummary(key uint64) (commonEng.Summary, error) {
+	summaryBlock := vm.state.chain.GetBlockByNumber(key)
 	if summaryBlock == nil ||
 		summaryBlock.NumberU64() > vm.state.LastAcceptedBlock().Height() ||
 		summaryBlock.NumberU64()%vm.syncableInterval != 0 {
