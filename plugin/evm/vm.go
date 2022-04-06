@@ -33,6 +33,7 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	"github.com/ava-labs/coreth/trie"
 
 	"github.com/prometheus/client_golang/prometheus"
 	// Force-load tracer engine to trigger registration
@@ -459,7 +460,6 @@ func (vm *VM) Initialize(
 	// initialize peer network
 	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
-	vm.initGossipHandling()
 
 	if err = vm.initializeStateSync(toEngine); err != nil {
 		return err
@@ -549,16 +549,6 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 		syncableInterval:        defaultSyncableInterval,
 	})
 
-	var handlerStats handlerstats.HandlerStats
-	if metrics.Enabled && vm.config.StateSyncMetricsEnabled {
-		// TODO: add separate metrics for atomic trie & state trie
-		handlerStats = handlerstats.NewHandlerStats()
-	} else {
-		handlerStats = handlerstats.NewNoopHandlerStats()
-	}
-
-	requestHandler := handlers.NewSyncHandler(vm.chain.BlockChain(), vm.atomicTrie.TrieDB(), vm.networkCodec, handlerStats)
-	vm.Network.SetRequestHandler(requestHandler)
 	return nil
 }
 
@@ -603,13 +593,11 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block, metricsEnabled bool
 	return vm.multiGatherer.Register(chainStateMetricsPrefix, chainStateRegisterer)
 }
 
+// initGossipHandling sets the gossip handler to use the push gossiper if ApricotPhase4 (activation of Snowman++) is enabled
 func (vm *VM) initGossipHandling() {
 	if vm.chainConfig.ApricotPhase4BlockTimestamp != nil {
 		vm.gossiper = vm.newPushGossiper()
 		vm.Network.SetGossipHandler(NewGossipHandler(vm))
-	} else {
-		vm.gossiper = &noopGossiper{}
-		vm.Network.SetGossipHandler(message.NoopMempoolGossipHandler{})
 	}
 }
 
@@ -832,18 +820,38 @@ func (vm *VM) pruneChain() error {
 
 func (vm *VM) SetState(state snow.State) error {
 	switch state {
+	case snow.StateSyncing:
+		vm.bootstrapped = false
+		return nil
 	case snow.Bootstrapping:
 		vm.bootstrapped = false
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
+		vm.setAppMessageHandlers()
 		vm.bootstrapped = true
 		return vm.fx.Bootstrapped()
-	case snow.StateSyncing:
-		vm.bootstrapped = false
-		return nil
 	default:
 		return snow.ErrUnknownState
 	}
+}
+
+// setAppMessageHandlers sets the message handlers for the VM.
+// Note: this is called when snow.State is set to NormalOp since the VM should
+// not serve these requests until it has finished bootstrapping.
+func (vm *VM) setAppMessageHandlers() {
+	vm.initGossipHandling()
+
+	// Create separate EVM TrieDB (read only) for serving leafs requests.
+	// We create a separate TrieDB here, so that it has a separate cache from the one
+	// used by the node when processing blocks.
+	evmTrieDB := trie.NewDatabaseWithConfig(
+		vm.chaindb,
+		&trie.Config{
+			Cache: vm.config.StateSyncServerTrieCache,
+		},
+	)
+	syncRequestHandler := handlers.NewSyncHandler(vm.chain.BlockChain().GetBlock, evmTrieDB, vm.atomicTrie.TrieDB(), vm.networkCodec, handlerstats.NewHandlerStats(metrics.Enabled && vm.config.StateSyncMetricsEnabled))
+	vm.Network.SetRequestHandler(syncRequestHandler)
 }
 
 // Shutdown implements the snowman.ChainVM interface

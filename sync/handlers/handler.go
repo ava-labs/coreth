@@ -8,14 +8,11 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
-)
-
-const (
-	defaultServerCacheSize int = 128
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var _ message.RequestHandler = &syncHandler{}
@@ -29,24 +26,16 @@ type syncHandler struct {
 
 // NewSyncHandler constructs the handler for serving state sync.
 func NewSyncHandler(
-	blockchain *core.BlockChain,
+	getBlock func(common.Hash, uint64) *types.Block,
+	evmTrieDB *trie.Database,
 	atomicTrieDB *trie.Database,
 	networkCodec codec.Manager,
 	stats stats.HandlerStats,
 ) message.RequestHandler {
-	// Create separate EVM TrieDB (read only) for serving leafs requests.
-	// We create a separate TrieDB here, so that it has a separate cache from the one
-	// used by the node when processing blocks.
-	evmTrieDB := trie.NewDatabaseWithConfig(
-		blockchain.StateCache().TrieDB().DiskDB(),
-		&trie.Config{
-			Cache: defaultServerCacheSize,
-		},
-	)
 	return &syncHandler{
 		stateTrieLeafsRequestHandler:  NewLeafsRequestHandler(evmTrieDB, networkCodec, stats), // TODO standardize argument ordering
 		atomicTrieLeafsRequestHandler: NewLeafsRequestHandler(atomicTrieDB, networkCodec, stats),
-		blockRequestHandler:           NewBlockRequestHandler(blockchain.GetBlock, networkCodec, stats),
+		blockRequestHandler:           NewBlockRequestHandler(getBlock, networkCodec, stats),
 		codeRequestHandler:            NewCodeRequestHandler(evmTrieDB.DiskDB(), networkCodec, stats),
 	}
 }

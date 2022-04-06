@@ -52,3 +52,21 @@ type ResponseHandler interface {
 	// The FailureReason outlines the underlying cause.
 	OnFailure(nodeID ids.ShortID, requestID uint32) error
 }
+
+type NoopRequestHandler struct{}
+
+func (NoopRequestHandler) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
+	return nil, nil
+}
+
+func (NoopRequestHandler) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
+	return nil, nil
+}
+
+func (NoopRequestHandler) HandleBlockRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, request BlockRequest) ([]byte, error) {
+	return nil, nil
+}
+
+func (NoopRequestHandler) HandleCodeRequest(ctx context.Context, nodeID ids.ShortID, requestID uint32, codeRequest CodeRequest) ([]byte, error) {
+	return nil, nil
+}

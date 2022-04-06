@@ -86,6 +86,8 @@ func NewNetwork(appSender common.AppSender, codec codec.Manager, self ids.ShortI
 		outstandingResponseHandlerMap: make(map[uint32]message.ResponseHandler),
 		peers:                         make(map[ids.ShortID]version.Application),
 		activeRequests:                semaphore.NewWeighted(maxActiveRequests),
+		gossipHandler:                 message.NoopMempoolGossipHandler{},
+		requestHandler:                message.NoopRequestHandler{},
 	}
 }
 

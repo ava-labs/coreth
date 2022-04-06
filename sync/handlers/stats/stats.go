@@ -117,7 +117,10 @@ func (h *handlerStats) IncTrieError() {
 	h.trieError.Inc(1)
 }
 
-func NewHandlerStats() HandlerStats {
+func NewHandlerStats(enabled bool) HandlerStats {
+	if !enabled {
+		return NewNoopHandlerStats()
+	}
 	return &handlerStats{
 		// initialise block request stats
 		blockRequest:               metrics.GetOrRegisterCounter("block_request_count", nil),
