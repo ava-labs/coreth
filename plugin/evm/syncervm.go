@@ -172,7 +172,7 @@ func (vm *stateSyncer) stateSummaryAtHeight(height uint64) (message.SyncableBloc
 		BlockRoot:   blk.Root(),
 		BlockNumber: height,
 	}
-	log.Debug("sync roots returned", "roots", response, "height", height)
+	log.Debug("sync summary returned", "summary", response, "height", height)
 	return response, nil
 }
 
@@ -181,9 +181,9 @@ func (vm *stateSyncer) StateSyncEnabled() (bool, error) {
 	return vm.enabled, nil
 }
 
-// ParseSummary implements StateSyncableVM and returns a Summary interface
+// StateSyncParseSummary implements StateSyncableVM and returns a Summary interface
 // represented by [summaryBytes].
-func (vm *stateSyncer) ParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
+func (vm *stateSyncer) StateSyncParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
 	summaryBlk, err := parseSummary(vm.netCodec, summaryBytes)
 	if err != nil {
 		return nil, err
@@ -192,11 +192,11 @@ func (vm *stateSyncer) ParseSummary(summaryBytes []byte) (commonEng.Summary, err
 	return syncableBlockToSummary(vm.netCodec, summaryBlk)
 }
 
-// GetOngoingStateSyncSummary is called by engine so the state sync summary
+// StateSyncGetOngoingSummary is called by engine so the state sync summary
 // we could resume gets included in summaries passed to [StateSync], if this
 // summary is still supported by enough peers.
 // returns ErrNoStateSyncOngoing if no in progress summary is available.
-func (vm *stateSyncer) GetOngoingStateSyncSummary() (commonEng.Summary, error) {
+func (vm *stateSyncer) StateSyncGetOngoingSummary() (commonEng.Summary, error) {
 	localSummaryBytes, err := vm.state.metadataDB.Get(stateSyncSummaryKey)
 	if errors.Is(err, database.ErrNotFound) {
 		return nil, commonEng.ErrNoStateSyncOngoing
@@ -222,7 +222,8 @@ func (vm *stateSyncer) StateSyncGetLastSummary() (commonEng.Summary, error) {
 
 	syncableBlock, err := vm.stateSummaryAtHeight(lastSyncableBlockNumber)
 	if err != nil {
-		return nil, err
+		log.Warn("could not find last state sync summary", "err", err)
+		return nil, commonEng.ErrUnknownStateSummary
 	}
 
 	return syncableBlockToSummary(vm.netCodec, syncableBlock)
@@ -240,7 +241,8 @@ func (vm *stateSyncer) StateSyncGetSummary(key uint64) (commonEng.Summary, error
 
 	syncableBlock, err := vm.stateSummaryAtHeight(summaryBlock.NumberU64())
 	if err != nil {
-		return nil, err
+		log.Debug("could not find state sync summary", "key", key, "err", err)
+		return nil, commonEng.ErrUnknownStateSummary
 	}
 
 	return syncableBlockToSummary(vm.netCodec, syncableBlock)
@@ -467,18 +469,18 @@ func (vm *stateSyncer) syncBlocks(ctx context.Context, fromHash common.Hash, fro
 	return batch.Write()
 }
 
-// GetStateSyncResult returns the ID of the block synced to, its height, and an
+// StateSyncGetResult returns the ID of the block synced to, its height, and an
 // error if one occurred during syncing.
 // Engine calls this method after VM has StateSyncDone to Engine.
-func (vm *stateSyncer) GetStateSyncResult() (ids.ID, uint64, error) {
+func (vm *stateSyncer) StateSyncGetResult() (ids.ID, uint64, error) {
 	return ids.ID(vm.stateSyncBlock.BlockHash), vm.stateSyncBlock.BlockNumber, vm.stateSyncError
 }
 
-// SetLastSummaryBlock sets the given container bytes as the last summary block
+// StateSyncSetLastSummaryBlock sets the given container bytes as the last summary block
 // Engine invokes this method after state sync has completed copying information from
 // peers. It is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (vm *stateSyncer) SetLastSummaryBlock(blockBytes []byte) error {
+func (vm *stateSyncer) StateSyncSetLastSummaryBlock(blockBytes []byte) error {
 	block, err := vm.state.ParseBlock(blockBytes)
 	if err != nil {
 		return fmt.Errorf("error parsing block, blockBytes=%s, err=%w", common.Bytes2Hex(blockBytes), err)

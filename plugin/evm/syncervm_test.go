@@ -178,7 +178,7 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	parsedSummary, err := syncedVM.ParseSummary(summary.Bytes())
+	parsedSummary, err := syncedVM.StateSyncParseSummary(summary.Bytes())
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
@@ -234,7 +234,7 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 		return
 	}
 
-	blockID, syncedHeight, err := stateSyncVM.GetStateSyncResult()
+	blockID, syncedHeight, err := stateSyncVM.StateSyncGetResult()
 	if err != nil {
 		t.Fatal("state sync failed", err)
 	}
@@ -247,7 +247,7 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 		t.Fatalf("Expected block height to be %d, but found %d", syncedHeight, blk.Height())
 	}
 
-	assert.NoError(t, stateSyncVM.SetLastSummaryBlock(blk.Bytes()))
+	assert.NoError(t, stateSyncVM.StateSyncSetLastSummaryBlock(blk.Bytes()))
 
 	assert.NoError(t, stateSyncVM.SetState(snow.Bootstrapping))
 
