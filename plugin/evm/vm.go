@@ -467,8 +467,9 @@ func (vm *VM) Initialize(
 
 	// start goroutines to manage block building
 	//
-	// NOTE: gossip network must be initialized first otherwie ETH tx gossip will
+	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will
 	// not work.
+	vm.gossiper = vm.createGossiper()
 	vm.builder = vm.NewBlockBuilder(toEngine)
 	vm.chain.Start()
 
@@ -596,7 +597,6 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block, metricsEnabled bool
 // initGossipHandling sets the gossip handler to use the push gossiper if ApricotPhase4 (activation of Snowman++) is enabled
 func (vm *VM) initGossipHandling() {
 	if vm.chainConfig.ApricotPhase4BlockTimestamp != nil {
-		vm.gossiper = vm.newPushGossiper()
 		vm.Network.SetGossipHandler(NewGossipHandler(vm))
 	}
 }
