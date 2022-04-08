@@ -125,6 +125,7 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 
 func NewContext() *snow.Context {
 	ctx := snow.DefaultContextTest()
+	ctx.NodeID = ids.GenerateTestShortID()
 	ctx.NetworkID = testNetworkID
 	ctx.ChainID = testCChainID
 	ctx.AVAXAssetID = testAvaxAssetID

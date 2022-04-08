@@ -4,8 +4,8 @@
 package evm
 
 import (
-	"crypto/rand"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -13,220 +13,205 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/choices"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/units"
 
-	"github.com/ava-labs/coreth/accounts/keystore"
+	coreth "github.com/ava-labs/coreth/chain"
+	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/params"
-	syncclient "github.com/ava-labs/coreth/sync/client"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/statesync"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func TestSyncerVMReturnsStateSyncLastSummary(t *testing.T) {
+func TestSyncerVME2E(t *testing.T) {
 	tests := []struct {
 		name             string
 		syncableInterval uint64
-		blocksToBuild    int
 		minBlocks        uint64
 		expectedMessage  commonEng.Message
 	}{
 		{
 			name:             "state sync skipped",
-			syncableInterval: core.CommitInterval,
-			blocksToBuild:    100,
-			minBlocks:        1000,
+			syncableInterval: 256,
+			minBlocks:        300, // must be greater than [syncableInterval] to skip sync
 			expectedMessage:  commonEng.StateSyncSkipped,
 		},
 		{
 			name:             "state sync performed",
-			syncableInterval: core.CommitInterval,      // must be multiple of [core.CommitInterval]
-			blocksToBuild:    core.CommitInterval + 50, // must be greater than [syncableInterval]
-			minBlocks:        core.CommitInterval - 50, // arbitrary choice less than [syncableInterval]
+			syncableInterval: 256,
+			minBlocks:        50, // must be less than [syncableInterval] to perform sync
 			expectedMessage:  commonEng.StateSyncDone,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testSyncerVM(t, test.blocksToBuild, test.minBlocks, test.syncableInterval, test.expectedMessage)
+			rand.Seed(1)
+			testSyncerVM(t, test.minBlocks, test.syncableInterval, test.expectedMessage)
 		})
 	}
 }
 
-func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInterval uint64, expectedMessage commonEng.Message) {
+func testSyncerVM(t *testing.T, minBlocks uint64, syncableInterval uint64, expectedMessage commonEng.Message) {
+	// configure [serverVM]
 	importAmount := 2000000 * units.Avax // 2M avax
-	issuer, syncedVM, _, _, syncedVMAppSender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
-		testShortIDAddrs[0]: importAmount,
-	})
-	syncedVMNodeID := ids.GenerateTestShortID()
-
+	_, serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
+		t,
+		true,
+		genesisJSONApricotPhase5,
+		"",
+		"",
+		map[ids.ShortID]uint64{
+			testShortIDAddrs[0]: importAmount,
+		},
+	)
 	defer func() {
-		if err := syncedVM.Shutdown(); err != nil {
+		if err := serverVM.Shutdown(); err != nil {
 			t.Fatal(err)
 		}
 	}()
 
-	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
-	syncedVM.chain.GetTxPool().SubscribeNewReorgEvent(newTxPoolHeadChan)
-
-	key, err := keystore.NewKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	importTx, err := syncedVM.newImportTx(syncedVM.ctx.XChainID, key.Address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := syncedVM.issueTx(importTx, true /*=local*/); err != nil {
-		t.Fatal(err)
-	}
-
-	<-issuer
-
-	blk1, err := syncedVM.BuildBlock()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk1.Verify(); err != nil {
-		t.Fatal(err)
-	}
-
-	if status := blk1.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-	}
-
-	if err := syncedVM.SetPreference(blk1.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk1.Accept(); err != nil {
-		t.Fatal(err)
-	}
-
-	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk1.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
-
-	keys := make([]*keystore.Key, 10)
-	for i := 0; i < 10; i++ {
-		keys[i], err = keystore.NewKey(rand.Reader)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	nonce := uint64(0)
-	for i := 0; i < blocksToBuild; i++ {
-		txs := make([]*types.Transaction, 10)
-		for i := 0; i < 10; i++ {
-			tx := types.NewTransaction(nonce, keys[i].Address, big.NewInt(1), 21000, big.NewInt(params.ApricotPhase1MinGasPrice), nil)
-			nonce++
-			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(syncedVM.chainID), key.PrivateKey)
+	var (
+		importTx, exportTx *Tx
+		err                error
+	)
+	generateAndAcceptBlocks(t, serverVM, parentsToGet, func(i int, gen *core.BlockGen) {
+		switch i {
+		case 0:
+			// spend the UTXOs from shared memory
+			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
-			txs[i] = signedTx
-		}
-		errs := syncedVM.chain.AddRemoteTxsSync(txs)
-		for i, err := range errs {
-			if err != nil {
-				t.Fatalf("Failed to add tx at index %d: %s", i, err)
+			if err := serverVM.issueTx(importTx, true /*=local*/); err != nil {
+				t.Fatal(err)
 			}
+		case 1:
+			// export some of the imported UTXOs to test exportTx is properly synced
+			exportTx, err = serverVM.newExportTx(
+				serverVM.ctx.AVAXAssetID,
+				importAmount/2,
+				serverVM.ctx.XChainID,
+				testShortIDAddrs[0],
+				initialBaseFee,
+				[]*crypto.PrivateKeySECP256K1R{testKeys[0]},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := serverVM.issueTx(exportTx, true /*=local*/); err != nil {
+				t.Fatal(err)
+			}
+		default: // Generate simple transfer transactions.
+			pk := testKeys[0].ToECDSA()
+			tx := types.NewTransaction(gen.TxNonce(testEthAddrs[0]), testEthAddrs[1], common.Big1, params.TxGas, initialBaseFee, nil)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(serverVM.chainID), pk)
+			if err != nil {
+				t.Fatal(t)
+			}
+			gen.AddTx(signedTx)
 		}
+	})
 
-		<-issuer
+	// override atomicTrie's commitHeightInterval so the call to [atomicTrie.Index]
+	// creates a commit at the height [syncableInterval]. This is necessary to support
+	// fetching a state summary.
+	serverVM.atomicTrie.(*atomicTrie).commitHeightInterval = syncableInterval
+	assert.NoError(t, serverVM.atomicTrie.Index(syncableInterval, nil))
+	assert.NoError(t, serverVM.db.Commit())
 
-		blk2, err := syncedVM.BuildBlock()
-		if err != nil {
-			t.Fatal(err)
-		}
+	serverSharedMemories := newSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
+	serverSharedMemories.assertOpsApplied(t, importTx.mustAtomicOps())
+	serverSharedMemories.assertOpsApplied(t, exportTx.mustAtomicOps())
 
-		if err := blk2.Verify(); err != nil {
-			t.Fatal(err)
-		}
+	// make some accounts
+	trieDB := trie.NewDatabase(serverVM.chaindb)
+	root, accounts := statesync.FillAccountsWithOverlappingStorage(t, trieDB, types.EmptyRootHash, 1000, 16)
 
-		if status := blk2.Status(); status != choices.Processing {
-			t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-		}
-
-		if err := blk2.Accept(); err != nil {
-			t.Fatal(err)
-		}
-
-		newHead = <-newTxPoolHeadChan
-		if newHead.Head.Hash() != common.Hash(blk2.ID()) {
-			t.Fatalf("Expected new block to match")
-		}
-
-		if status := blk2.Status(); status != choices.Accepted {
-			t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
-		}
-	}
+	// patch serverVM's lastAcceptedBlock to have the new root
+	// and update the vm's state so the trie with accounts will
+	// be returned by StateSyncGetLastSummary
+	lastAccepted := serverVM.chain.LastAcceptedBlock()
+	patchedBlock := patchBlock(lastAccepted, root, serverVM.chaindb)
+	assert.NoError(t, serverVM.initChainState(patchedBlock, false))
 
 	// patch syncableInterval for test
-	syncedVM.stateSyncer.syncableInterval = syncableInterval
+	serverVM.stateSyncer.syncableInterval = syncableInterval
 
-	summary, err := syncedVM.StateSyncGetLastSummary()
+	// get last summary and test related methods
+	summary, err := serverVM.StateSyncGetLastSummary()
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	parsedSummary, err := syncedVM.StateSyncParseSummary(summary.Bytes())
+	parsedSummary, err := serverVM.StateSyncParseSummary(summary.Bytes())
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	retrievedSummary, err := syncedVM.StateSyncGetSummary(parsedSummary.Key())
+	retrievedSummary, err := serverVM.StateSyncGetSummary(parsedSummary.Key())
 	if err != nil {
 		t.Fatal("error when checking if summary is accepted", "err", err)
 	}
 	assert.Equal(t, summary, retrievedSummary)
 
-	// initialise stateSyncVM with blank genesis state
-	stateSyncEngineChan, stateSyncVM, _, _, stateSyncAppSender := GenesisVM(t, false, genesisJSONApricotPhase2, "{\"state-sync-enabled\":true}", "")
-	enabled, err := stateSyncVM.StateSyncEnabled()
+	// initialise [syncerVM] with blank genesis state
+	stateSyncEnabledJSON := "{\"state-sync-enabled\":true}"
+	syncerEngineChan, syncerVM, _, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
+		t,
+		true,
+		genesisJSONApricotPhase5,
+		stateSyncEnabledJSON,
+		"",
+		map[ids.ShortID]uint64{
+			testShortIDAddrs[0]: importAmount,
+		},
+	)
+	defer func() {
+		if err := syncerVM.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	enabled, err := syncerVM.StateSyncEnabled()
 	assert.NoError(t, err)
 	assert.True(t, enabled)
 
-	// override syncedVM's SendAppResponse function such that it triggers AppResponse on
-	// the stateSyncVM
-	syncedVMAppSender.CantSendAppResponse = true
-	syncedVMAppSender.SendAppResponseF = func(nodeID ids.ShortID, requestID uint32, response []byte) error {
-		go stateSyncVM.AppResponse(nodeID, requestID, response)
+	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
+	serverAppSender.CantSendAppResponse = true
+	serverAppSender.SendAppResponseF = func(nodeID ids.ShortID, requestID uint32, response []byte) error {
+		go syncerVM.AppResponse(nodeID, requestID, response)
 		return nil
 	}
 
-	// connect peer to stateSyncVM
-	assert.NoError(t, stateSyncVM.SetState(snow.StateSyncing))
-	assert.NoError(t, stateSyncVM.Connected(syncedVMNodeID, syncclient.StateSyncVersion))
+	// connect peer to [syncerVM]
+	assert.NoError(t, syncerVM.Connected(serverVM.ctx.NodeID, statesyncclient.StateSyncVersion))
 
-	// override stateSyncVM's SendAppRequest function such that it triggers AppRequest on
-	// the syncedVM
-	stateSyncAppSender.CantSendAppRequest = true
-	stateSyncAppSender.SendAppRequestF = func(nodeSet ids.ShortSet, requestID uint32, request []byte) error {
+	// override [syncerVM]'s SendAppRequest function to trigger AppRequest on [serverVM]
+	syncerAppSender.CantSendAppRequest = true
+	syncerAppSender.SendAppRequestF = func(nodeSet ids.ShortSet, requestID uint32, request []byte) error {
 		nodeID, hasItem := nodeSet.Pop()
 		if !hasItem {
 			t.Fatal("expected nodeSet to contain at least 1 nodeID")
 		}
-		go syncedVM.AppRequest(nodeID, requestID, time.Now().Add(1*time.Second), request)
+		go serverVM.AppRequest(nodeID, requestID, time.Now().Add(1*time.Second), request)
 		return nil
 	}
 
 	// patch minBlocks for test
-	stateSyncVM.minBlocks = minBlocks
+	syncerVM.minBlocks = minBlocks
 
-	// set VM state to state syncing
-	err = stateSyncVM.StateSync([]commonEng.Summary{summary})
+	// set [syncerVM] state to state syncing & perform state sync
+	assert.NoError(t, syncerVM.SetState(snow.StateSyncing))
+	err = syncerVM.StateSync([]commonEng.Summary{summary})
 	if err != nil {
 		t.Fatal("unexpected error when initiating state sync")
 	}
-	msg := <-stateSyncEngineChan
+	msg := <-syncerEngineChan
 	assert.Equal(t, expectedMessage, msg)
 	if expectedMessage == commonEng.StateSyncSkipped {
 		// if state sync should be skipped, don't expect
@@ -234,61 +219,111 @@ func testSyncerVM(t *testing.T, blocksToBuild int, minBlocks uint64, syncableInt
 		return
 	}
 
-	blockID, syncedHeight, err := stateSyncVM.StateSyncGetResult()
+	// verify state sync completed with the expected height and blockID
+	blockID, syncedHeight, err := syncerVM.StateSyncGetResult()
 	if err != nil {
 		t.Fatal("state sync failed", err)
 	}
+	assert.Equal(t, serverVM.LastAcceptedBlock().Height(), syncedHeight)
 
-	blk, err := syncedVM.GetBlock(blockID)
+	// get the last block from [serverVM] and call [syncerVM.SetLastSummaryBlock]
+	// as the final step
+	blk, err := serverVM.GetBlock(blockID)
 	if err != nil {
 		t.Fatal("error getting block", blockID, err)
 	}
 	if blk.Height() != syncedHeight {
 		t.Fatalf("Expected block height to be %d, but found %d", syncedHeight, blk.Height())
 	}
+	assert.NoError(t, syncerVM.StateSyncSetLastSummaryBlock(blk.Bytes()))
+	assert.Equal(t, serverVM.LastAcceptedBlock().Height(), syncerVM.LastAcceptedBlock().Height())
 
-	assert.NoError(t, stateSyncVM.StateSyncSetLastSummaryBlock(blk.Bytes()))
+	// set [syncerVM] to bootstrapping and verify we can process some blocks
+	assert.NoError(t, syncerVM.SetState(snow.Bootstrapping))
+	blocksToBuild := 10
+	txsPerBlock := 10
+	toAddress := testEthAddrs[2] // arbitrary choice
+	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, gen *core.BlockGen) {
+		i := 0
+		for k := range accounts {
+			tx := types.NewTransaction(gen.TxNonce(k.Address), toAddress, big.NewInt(1), 21000, initialBaseFee, nil)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(serverVM.chainID), k.PrivateKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(signedTx)
+			i++
+			if i >= txsPerBlock {
+				break
+			}
+		}
+	})
 
-	assert.NoError(t, stateSyncVM.SetState(snow.Bootstrapping))
+	// check we can transition to [NormalOp] state
+	assert.NoError(t, syncerVM.SetState(snow.NormalOp))
+	assert.True(t, syncerVM.bootstrapped)
 
-	stateSyncVMHeight := stateSyncVM.LastAcceptedBlock().Height()
-	lastAcceptedHeight := syncedVM.LastAcceptedBlock().Height()
-	// Assert that the [stateSyncVMHeight] matches the most recent commit.
-	expectedCommitHeight := lastAcceptedHeight - (lastAcceptedHeight % core.CommitInterval)
-	assert.Equal(t, expectedCommitHeight, stateSyncVMHeight)
-	assert.Equal(t, expectedCommitHeight, syncedHeight)
+	// check atomic memory was synced properly
+	syncerSharedMemories := newSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
+	syncerSharedMemories.assertOpsApplied(t, importTx.mustAtomicOps())
+	syncerSharedMemories.assertOpsApplied(t, exportTx.mustAtomicOps())
+}
 
-	blkID, err := syncedVM.LastAccepted()
+// patchBlock returns a copy of [blk] with [root] and updates [db] to
+// include the new block as canonical for [blk]'s height.
+// This breaks the digestibility of the chain since after this call
+// [blk] does not necessarily define a state transition from its parent
+// state to the new state root.
+func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Block {
+	header := blk.Header()
+	header.Root = root
+	receipts := rawdb.ReadRawReceipts(db, blk.Hash(), blk.NumberU64())
+	newBlk := types.NewBlock(
+		header, blk.Transactions(), blk.Uncles(), receipts, trie.NewStackTrie(nil), blk.ExtData(), true,
+	)
+	rawdb.WriteBlock(db, newBlk)
+	rawdb.WriteCanonicalHash(db, newBlk.Hash(), newBlk.NumberU64())
+	return newBlk
+}
+
+// generateAndAcceptBlocks uses [core.GenerateChain] to generate blocks, then
+// calls Verify and Accept on each generated block
+// TODO: consider using this helper function in vm_test.go and elsewhere in this package to clean up tests
+func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, *core.BlockGen)) {
+	t.Helper()
+
+	// acceptExternalBlock defines a function to parse, verify, and accept a block once it has been
+	// generated by GenerateChain
+	acceptExternalBlock := func(block *types.Block) {
+		bytes, err := rlp.EncodeToBytes(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		vmBlock, err := vm.ParseBlock(bytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := vmBlock.Verify(); err != nil {
+			t.Fatal(err)
+		}
+		if err := vmBlock.Accept(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, err := core.GenerateChain(
+		vm.chainConfig,
+		vm.chain.LastAcceptedBlock(),
+		dummy.NewDummyEngine(vm.createConsensusCallbacks()),
+		vm.chaindb,
+		numBlocks,
+		10,
+		func(i int, g *core.BlockGen) {
+			g.SetOnFinish(acceptExternalBlock)
+			g.SetCoinbase(coreth.BlackholeAddr) // necessary for syntactic validation of the block
+			gen(i, g)
+		},
+	)
 	if err != nil {
-		t.Fatal("error getting last accepted block ID", err)
+		t.Fatal(err)
 	}
-
-	blks := make([]snowman.Block, lastAcceptedHeight-stateSyncVMHeight)
-	for i := len(blks) - 1; i >= 0; i-- {
-		blk, err = syncedVM.getBlock(blkID)
-		if err != nil {
-			t.Fatal("error getting block", err)
-		}
-		blks[i] = blk
-		blkID = blk.Parent()
-	}
-
-	for _, blk := range blks {
-		blk, err := stateSyncVM.ParseBlock(blk.Bytes())
-		if err != nil {
-			t.Fatal("error parsing block", err)
-		}
-
-		if err = blk.Verify(); err != nil {
-			t.Fatal("error verifying block", err)
-		}
-
-		if err = blk.Accept(); err != nil {
-			t.Fatal("error accepting block", err)
-		}
-	}
-
-	assert.Equal(t, lastAcceptedHeight, stateSyncVM.LastAcceptedBlock().Height(), "%d!=%d")
-	assert.NoError(t, stateSyncVM.SetState(snow.NormalOp))
-	assert.True(t, stateSyncVM.bootstrapped)
 }

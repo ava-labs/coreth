@@ -420,7 +420,6 @@ type sharedMemories struct {
 	peerChain   atomic.SharedMemory
 	thisChainID ids.ID
 	peerChainID ids.ID
-	db          *versiondb.Database
 }
 
 func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.Requests) error {
@@ -431,11 +430,7 @@ func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 			val := []byte{0x1}
 			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
 		}
-		batch, err := s.db.CommitBatch()
-		if err != nil {
-			return err
-		}
-		if err := s.peerChain.Apply(puts, batch); err != nil {
+		if err := s.peerChain.Apply(puts); err != nil {
 			return err
 		}
 	}
@@ -478,16 +473,12 @@ func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 	}
 }
 
-func newSharedMemories(db *versiondb.Database, thisChainID, peerChainID ids.ID) *sharedMemories {
-	m := &atomic.Memory{}
-	m.Initialize(logging.NoLog{}, db)
-
+func newSharedMemories(atomicMemory *atomic.Memory, thisChainID, peerChainID ids.ID) *sharedMemories {
 	return &sharedMemories{
-		thisChain:   m.NewSharedMemory(thisChainID),
-		peerChain:   m.NewSharedMemory(peerChainID),
+		thisChain:   atomicMemory.NewSharedMemory(thisChainID),
+		peerChain:   atomicMemory.NewSharedMemory(peerChainID),
 		thisChainID: thisChainID,
 		peerChainID: peerChainID,
-		db:          db,
 	}
 }
 
@@ -532,7 +523,9 @@ func TestApplyToSharedMemory(t *testing.T) {
 			writeTxs(t, repo, 1, test.lastAcceptedHeight+1, constTxsPerHeight(2), nil, operationsMap)
 
 			// Initialize atomic repository
-			sharedMemories := newSharedMemories(db, testCChainID, blockChainID)
+			m := &atomic.Memory{}
+			m.Initialize(logging.NoLog{}, db)
+			sharedMemories := newSharedMemories(m, testCChainID, blockChainID)
 			atomicTrie, err := newAtomicTrie(db, sharedMemories.thisChain, nil, repo, codec, test.lastAcceptedHeight, test.commitInterval)
 			assert.NoError(t, err)
 
