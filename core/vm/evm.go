@@ -230,8 +230,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 	}
 
+	var true32Byte = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 	if isPrecompile {
-		ret, gas, err = p.Run(evm, caller, addr, input, gas, evm.interpreter.readOnly)
+		if evm.Config.DisableVDF && addr == common.BytesToAddress([]byte{0xF1}) {
+			ret = true32Byte
+		} else {
+			ret, gas, err = p.Run(evm, caller, addr, input, gas, evm.interpreter.readOnly)
+		}
+
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -438,6 +444,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth

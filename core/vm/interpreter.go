@@ -43,6 +43,7 @@ var (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
+	DisableVDF              bool
 	Debug                   bool      // Enables debugging
 	Tracer                  EVMLogger // Opcode logger
 	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
