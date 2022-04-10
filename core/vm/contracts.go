@@ -528,8 +528,10 @@ func (c *vdfVerify) RequiredGas(input []byte) uint64 {
 
 	return gas
 }
-
 func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
+	return c.run(input, false)
+}
+func (c *vdfVerify) run(input []byte, skipCalculation bool) (valid []byte, err error) {
 	log.Debug("VDFVerify", "input", common.Bytes2Hex(input))
 
 	bitSize := new(big.Int).SetBytes(getData(input, 32, 8)).Uint64()
@@ -572,7 +574,11 @@ func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 		}
 	}()
 
-	ok := vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
+	var ok = true
+	if !skipCalculation {
+		ok = vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
+	}
+
 	log.Debug("VDFVerify", "valid", ok)
 
 	vdfCache.Add(key, ok)
