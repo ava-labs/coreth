@@ -54,6 +54,9 @@ type Config struct {
 
 	// AllowUnfinalizedQueries allow unfinalized queries
 	AllowUnfinalizedQueries bool
+
+	// VDF Verification always returns true
+	SkipVDF bool
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,

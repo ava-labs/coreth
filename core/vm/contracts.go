@@ -154,12 +154,22 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the _remaining_ gas,
 // - any error that occurred
 func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	return RunPrecompiledContractWithConfig(p, input, suppliedGas, nil)
+}
+
+func RunPrecompiledContractWithConfig(p PrecompiledContract, input []byte, suppliedGas uint64, config *Config) (output []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
 	}
 	suppliedGas -= gasCost
-	output, err := p.Run(input)
+	vdf, ok := p.(*vdfVerify)
+	if ok && config != nil && config.SkipVDF {
+		output, err = vdf.run(input, true)
+	} else {
+		output, err = p.Run(input)
+	}
+
 	return output, suppliedGas, err
 }
 
@@ -528,8 +538,11 @@ func (c *vdfVerify) RequiredGas(input []byte) uint64 {
 
 	return gas
 }
-
 func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
+	return c.run(input, false)
+}
+
+func (c *vdfVerify) run(input []byte, skipCalculation bool) (valid []byte, err error) {
 	log.Debug("VDFVerify", "input", common.Bytes2Hex(input))
 
 	bitSize := new(big.Int).SetBytes(getData(input, 32, 8)).Uint64()
@@ -541,6 +554,11 @@ func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 			"actual", len(input)-32-8-8,
 		)
 		return nil, errBadVDFInputLen
+	}
+
+	if skipCalculation {
+		log.Debug("VDFVerify: skipped")
+		return true32Byte, nil
 	}
 
 	key := common.Bytes2Hex(input)

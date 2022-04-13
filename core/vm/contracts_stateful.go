@@ -46,7 +46,7 @@ func newWrappedPrecompiledContract(p PrecompiledContract) StatefulPrecompiledCon
 
 // Run implements the StatefulPrecompiledContract interface
 func (w *wrappedPrecompiledContract) Run(evm *EVM, caller ContractRef, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	return RunPrecompiledContract(w.p, input, suppliedGas)
+	return RunPrecompiledContractWithConfig(w.p, input, suppliedGas, &evm.Config)
 }
 
 // nativeAssetBalance is a precompiled contract used to retrieve the native asset balance
