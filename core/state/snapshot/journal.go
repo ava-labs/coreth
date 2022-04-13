@@ -132,24 +132,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	return snapshot, generator.Done, nil
 }
 
-// IsSnapshotGenerationInProgress returns true if the snapshot generator marker
-// stored on [diskdb] indicates it has not completed yet.
-func IsSnapshotGenerationInProgress(diskdb ethdb.KeyValueReader) (bool, error) {
-	// Retrieve the disk layer generator. It must exist, no matter the
-	// snapshot is fully generated or not. Otherwise the entire disk
-	// layer is invalid.
-	generatorBlob := rawdb.ReadSnapshotGenerator(diskdb)
-	if len(generatorBlob) == 0 {
-		return false, errors.New("missing snapshot generator")
-	}
-	var generator journalGenerator
-	if err := rlp.DecodeBytes(generatorBlob, &generator); err != nil {
-		return false, fmt.Errorf("failed to decode snapshot generator: %v", err)
-	}
-
-	return !generator.Done, nil
-}
-
 // ResetSnapshotGeneration writes a clean snapshot generator marker to [db]
 // so no re-generation is performed after.
 func ResetSnapshotGeneration(db ethdb.KeyValueWriter) {

@@ -99,7 +99,7 @@ func NewClient(config *ClientConfig) *client {
 // - response does not contain a valid merkle proof.
 // Returns error if retries have been exceeded
 func (c *client) GetLeafs(req message.LeafsRequest) (message.LeafsResponse, error) {
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseLeafsResponse)
+	data, err := c.get(req, parseLeafsResponse)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}
@@ -185,7 +185,7 @@ func (c *client) GetBlocks(hash common.Hash, height uint64, parents uint16) ([]*
 		Parents: parents,
 	}
 
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseBlocks)
+	data, err := c.get(req, parseBlocks)
 	if err != nil {
 		return nil, fmt.Errorf("could not get blocks (%s) due to %w", hash, err)
 	}
@@ -236,7 +236,7 @@ func parseBlocks(codec codec.Manager, req message.Request, data []byte) (interfa
 func (c *client) GetCode(hash common.Hash) ([]byte, error) {
 	req := message.NewCodeRequest(hash)
 
-	data, err := c.get(req, c.maxAttempts, c.maxRetryDelay, parseCode)
+	data, err := c.get(req, parseCode)
 	if err != nil {
 		return nil, fmt.Errorf("could not get code (%s): %w", hash, err)
 	}
@@ -270,7 +270,7 @@ func parseCode(codec codec.Manager, req message.Request, data []byte) (interface
 // returns parsed struct as interface{} returned by parseResponseFn
 // retries given request for maximum of [attempts] times with maximum delay of [maxRetryDelay] between attempts
 // Thread safe
-func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time.Duration, parseFn parseResponseFn) (interface{}, error) {
+func (c *client) get(request message.Request, parseFn parseResponseFn) (interface{}, error) {
 	// marshal the request into requestBytes
 	requestBytes, err := message.RequestToBytes(c.codec, request)
 	if err != nil {
@@ -286,12 +286,12 @@ func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time
 		numElements  int
 	)
 	// Loop until we run out of attempts or receive a valid response.
-	for attempt := uint8(0); attempt < attempts; attempt++ {
+	for attempt := uint8(0); attempt < c.maxAttempts; attempt++ {
 		// If this is a retry attempt, wait for random duration to ensure
 		// that we do not spin through the maximum attempts during a period
 		// where the node may not be well connected to the network.
 		if attempt > 0 {
-			randTime := rand.Int63n(maxRetryDelay.Nanoseconds())
+			randTime := rand.Int63n(c.maxRetryDelay.Nanoseconds())
 			time.Sleep(time.Duration(randTime))
 		}
 		metric.IncRequested()
@@ -332,5 +332,5 @@ func (c *client) get(request message.Request, attempts uint8, maxRetryDelay time
 	}
 
 	// we only get this far if we've run out of attempts
-	return nil, fmt.Errorf("%s (%d): %w", errExceededRetryLimit, attempts, err)
+	return nil, fmt.Errorf("%s (%d): %w", errExceededRetryLimit, c.maxAttempts, err)
 }

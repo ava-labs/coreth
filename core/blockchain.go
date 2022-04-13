@@ -109,6 +109,7 @@ type CacheConfig struct {
 	PopulateMissingTries            *uint64 // If non-nil, sets the starting height for re-generating historical tries.
 	PopulateMissingTriesParallelism int     // Is the number of readers to use when trying to populate missing tries.
 	AllowMissingTries               bool    // Whether to allow an archive node to run with pruning enabled
+	SnapshotDelayInit               bool    // Whether to initialize snapshots on startup or wait for external call
 	SnapshotLimit                   int     // Memory allowance (MB) to use for caching snapshot entries in memory
 	SnapshotAsync                   bool    // Generate snapshot tree async
 	SnapshotVerify                  bool    // Verify generated snapshots
@@ -257,20 +258,39 @@ func NewBlockChain(
 		return nil, fmt.Errorf("could not populate missing tries: %v", err)
 	}
 
-	// Load any existing snapshot, regenerating it if loading failed
-	if bc.cacheConfig.SnapshotLimit > 0 {
-		// If we are starting from genesis, generate the original snapshot disk layer
-		// up front, so we can use it while executing blocks in bootstrapping. This
-		// also avoids a costly async generation process when reaching tip.
-		async := bc.cacheConfig.SnapshotAsync && head.NumberU64() > 0
-		log.Info("Initializing snapshots", "async", async)
-		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Hash(), head.Root(), async, true, bc.cacheConfig.SnapshotVerify)
-		if err != nil {
-			log.Error("failed to initialize snapshots", "headHash", head.Hash(), "headRoot", head.Root(), "err", err, "async", async)
-		}
+	if !bc.cacheConfig.SnapshotDelayInit {
+		bc.initializeSnapshots()
 	}
 
 	return bc, nil
+}
+
+// initializeSnapshots initializes the snapshot tree.
+// Note: this can only be called when there are no blocks in processing.
+func (bc *BlockChain) initializeSnapshots() {
+	// Load any existing snapshot, regenerating it if loading failed
+	if bc.cacheConfig.SnapshotLimit <= 0 {
+		return
+	}
+
+	head := bc.CurrentBlock()
+	// If we are starting from genesis, generate the original snapshot disk layer
+	// up front, so we can use it while executing blocks in bootstrapping. This
+	// also avoids a costly async generation process when reaching tip.
+	async := bc.cacheConfig.SnapshotAsync && head.NumberU64() > 0
+	var err error
+	log.Info("Initializing snapshots", "async", async)
+	bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Hash(), head.Root(), async, true, bc.cacheConfig.SnapshotVerify)
+	if err != nil {
+		log.Error("failed to initialize snapshots", "headHash", head.Hash(), "headRoot", head.Root(), "err", err)
+	}
+}
+
+func (bc *BlockChain) InitializeSnapshots() {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	bc.initializeSnapshots()
 }
 
 // SenderCacher returns the *TxSenderCacher used within the core package.
@@ -1517,22 +1537,10 @@ func (bc *BlockChain) ResetState(block *types.Block) error {
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
-	if _, err := state.New(head.Root(), bc.stateCache, nil); err != nil {
+	if !bc.HasState(head.Root()) {
 		return fmt.Errorf("head state missing %d:%s", head.Number(), head.Hash())
 	}
 
-	// Load any existing snapshot, regenerating it if loading failed
-	if bc.cacheConfig.SnapshotLimit > 0 {
-		var err error
-		// If we are starting from genesis, generate the original snapshot disk layer
-		// up front, so we can use it while executing blocks in bootstrapping. This
-		// also avoids a costly async generation process when reaching tip.
-		async := bc.cacheConfig.SnapshotAsync && head.NumberU64() > 0
-		log.Info("Initializing snapshots", "async", async)
-		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Hash(), head.Root(), async, true, bc.cacheConfig.SnapshotVerify)
-		if err != nil {
-			log.Error("failed to initialize snapshots", "headHash", head.Hash(), "headRoot", head.Root(), "err", err, "async", async)
-		}
-	}
+	bc.initializeSnapshots()
 	return nil
 }

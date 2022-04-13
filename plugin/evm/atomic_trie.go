@@ -149,6 +149,15 @@ func newAtomicTrie(
 	if err != nil {
 		return nil, err
 	}
+	// If the last committed height is above the last accepted height, then we fall back to
+	// the last commit below the last accepted height.
+	if height > lastAcceptedHeight {
+		height = nearestCommitHeight(lastAcceptedHeight, commitHeightInterval)
+		root, err = getRoot(metadataDB, height)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	triedb := trie.NewDatabaseWithConfig(
 		Database{atomicTrieDB},
@@ -479,6 +488,12 @@ func (a *atomicTrie) TrieDB() *trie.Database {
 // if trie was not committed at provided height, it returns
 // common.Hash{} instead
 func (a *atomicTrie) Root(height uint64) (common.Hash, error) {
+	return getRoot(a.metadataDB, height)
+}
+
+// getRoot is a helper function to return the committed atomic trie root hash at [height]
+// from [metadataDB].
+func getRoot(metadataDB database.Database, height uint64) (common.Hash, error) {
 	if height == 0 {
 		// if root is queried at height == 0, return the empty root hash
 		// this may occur if peers ask for the most recent state summary
@@ -489,7 +504,7 @@ func (a *atomicTrie) Root(height uint64) (common.Hash, error) {
 	heightBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(heightBytes, height)
 
-	hash, err := a.metadataDB.Get(heightBytes)
+	hash, err := metadataDB.Get(heightBytes)
 	switch {
 	case err == database.ErrNotFound:
 		return common.Hash{}, nil

@@ -377,44 +377,6 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 	assert.Equal(t, root1, root2)
 }
 
-func TestInitializeDoesNotOverwriteHigherCommitHeight(t *testing.T) {
-	db := versiondb.New(memdb.New())
-	codec := testTxCodec()
-	commitInterval := uint64(10)
-	repo, err := NewAtomicTxRepository(db, codec, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lastAcceptedHeight := commitInterval
-	atomicTrie, err := newAtomicTrie(db, testSharedMemory(), nil, repo, codec, lastAcceptedHeight, commitInterval)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// add some tx
-	nextCommitInterval := lastAcceptedHeight + commitInterval
-	ops := testDataImportTx().mustAtomicOps()
-	if err := atomicTrie.Index(nextCommitInterval, ops); err != nil {
-		t.Fatal(err)
-	}
-
-	// get the new root
-	root, height := atomicTrie.LastCommitted()
-	assert.NotZero(t, root)
-	assert.Equal(t, nextCommitInterval, height)
-
-	// re-initialize to a lower height
-	atomicTrie, err = newAtomicTrie(db, testSharedMemory(), nil, repo, codec, lastAcceptedHeight, commitInterval)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// verify root and height do not change
-	root2, height2 := atomicTrie.LastCommitted()
-	assert.Equal(t, root, root2)
-	assert.Equal(t, height, height2)
-}
-
 type sharedMemories struct {
 	thisChain   atomic.SharedMemory
 	peerChain   atomic.SharedMemory
@@ -438,6 +400,7 @@ func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 }
 
 func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+	t.Helper()
 	for _, reqs := range ops {
 		// should be able to get put requests
 		for _, elem := range reqs.PutRequests {
@@ -457,6 +420,7 @@ func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 }
 
 func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+	t.Helper()
 	for _, reqs := range ops {
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {

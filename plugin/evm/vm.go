@@ -22,9 +22,11 @@ import (
 	coreth "github.com/ava-labs/coreth/chain"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/ethdb"
 	corethPrometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
@@ -186,35 +188,43 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(originalStderr, log.TerminalFormat(false))))
 }
 
-type vmState struct {
-	// *chain.State helps to implement the VM interface by wrapping blocks
-	// with an efficient caching layer.
-	*chain.State
-	chain *coreth.ETHChain
-	// [db] is the VM's current database managed by ChainState
-	db *versiondb.Database
-	// metadataDB is used to store one off keys.
-	metadataDB database.Database
-	// [chaindb] is the database supplied to the Ethereum backend
-	chaindb Database
-	// [acceptedBlockDB] is the database to store the last accepted
-	// block.
-	acceptedBlockDB database.Database
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
-}
-
 // VM implements the snowman.ChainVM interface
 type VM struct {
 	ctx *snow.Context
-	vmState
+
+	// *chain.State helps to implement the VM interface by wrapping blocks
+	// with an efficient caching layer.
+	*chain.State
+
+	chain *coreth.ETHChain
+
+	// [db] is the VM's current database managed by ChainState
+	db *versiondb.Database
+
+	// metadataDB is used to store one off keys.
+	metadataDB database.Database
+
+	// [chaindb] is the database supplied to the Ethereum backend
+	chaindb ethdb.Database
+
+	// [acceptedBlockDB] is the database to store the last accepted
+	// block.
+
+	acceptedBlockDB database.Database
+
+	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
+	atomicTrie AtomicTrie
+
+	toEngine chan<- commonEng.Message
 
 	config Config
 
 	chainID     *big.Int
 	networkID   uint64
-	genesisHash common.Hash
 	chainConfig *params.ChainConfig
+	ethConfig   ethconfig.Config
+
+	genesisHash common.Hash
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
@@ -248,8 +258,10 @@ type VM struct {
 
 	bootstrapped bool
 
-	// State sync
-	*stateSyncer
+	// State sync server and client
+	StateSyncServer
+	StateSyncClient
+
 	IsPlugin bool
 }
 
@@ -360,6 +372,7 @@ func (vm *VM) Initialize(
 	metrics.Enabled = vm.config.MetricsEnabled
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
 
+	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 	baseDB := dbManager.Current().Database
 	// Use NewNested rather than New so that the structure of the database
@@ -392,76 +405,55 @@ func (vm *VM) Initialize(
 
 	vm.chainID = g.Config.ChainID
 
-	ethConfig := ethconfig.NewDefaultConfig()
-	ethConfig.Genesis = g
-	ethConfig.NetworkId = vm.chainID.Uint64()
+	vm.ethConfig = ethconfig.NewDefaultConfig()
+	vm.ethConfig.Genesis = g
+	vm.ethConfig.NetworkId = vm.chainID.Uint64()
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
-	ethConfig.RPCGasCap = vm.config.RPCGasCap
-	ethConfig.RPCEVMTimeout = vm.config.APIMaxDuration.Duration
-	ethConfig.RPCTxFeeCap = vm.config.RPCTxFeeCap
-	ethConfig.TxPool.NoLocals = !vm.config.LocalTxsEnabled
-	ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
-	ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
-	ethConfig.Preimages = vm.config.Preimages
-	ethConfig.Pruning = vm.config.Pruning
-	ethConfig.PopulateMissingTries = vm.config.PopulateMissingTries
-	ethConfig.PopulateMissingTriesParallelism = vm.config.PopulateMissingTriesParallelism
-	ethConfig.AllowMissingTries = vm.config.AllowMissingTries
-	ethConfig.SnapshotAsync = vm.config.SnapshotAsync
-	ethConfig.SnapshotVerify = vm.config.SnapshotVerify
-	ethConfig.OfflinePruning = vm.config.OfflinePruning
-	ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
-	ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
+	vm.ethConfig.RPCGasCap = vm.config.RPCGasCap
+	vm.ethConfig.RPCEVMTimeout = vm.config.APIMaxDuration.Duration
+	vm.ethConfig.RPCTxFeeCap = vm.config.RPCTxFeeCap
+	vm.ethConfig.TxPool.NoLocals = !vm.config.LocalTxsEnabled
+	vm.ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
+	vm.ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
+	vm.ethConfig.Preimages = vm.config.Preimages
+	vm.ethConfig.Pruning = vm.config.Pruning
+	vm.ethConfig.PopulateMissingTries = vm.config.PopulateMissingTries
+	vm.ethConfig.PopulateMissingTriesParallelism = vm.config.PopulateMissingTriesParallelism
+	vm.ethConfig.AllowMissingTries = vm.config.AllowMissingTries
+	vm.ethConfig.SnapshotDelayInit = vm.config.StateSyncEnabled
+	vm.ethConfig.SnapshotAsync = vm.config.SnapshotAsync
+	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
+	vm.ethConfig.OfflinePruning = vm.config.OfflinePruning
+	vm.ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
+	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
 
 	// Create directory for offline pruning
-	if len(ethConfig.OfflinePruningDataDirectory) != 0 {
-		if err := os.MkdirAll(ethConfig.OfflinePruningDataDirectory, perms.ReadWriteExecute); err != nil {
+	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
+		if err := os.MkdirAll(vm.ethConfig.OfflinePruningDataDirectory, perms.ReadWriteExecute); err != nil {
 			log.Error("failed to create offline pruning data directory", "error", err)
 			return err
 		}
 	}
 
-	vm.chainConfig = g.Config
-	vm.networkID = ethConfig.NetworkId
-	vm.secpFactory = crypto.FactorySECP256K1R{Cache: cache.LRU{Size: secpFactoryCacheSize}}
+	vm.genesisHash = vm.ethConfig.Genesis.ToBlock(nil).Hash()
 
-	nodecfg := node.Config{
-		CorethVersion:         Version,
-		KeyStoreDir:           vm.config.KeystoreDirectory,
-		ExternalSigner:        vm.config.KeystoreExternalSigner,
-		InsecureUnlockAllowed: vm.config.KeystoreInsecureUnlockAllowed,
-	}
+	vm.chainConfig = g.Config
+	vm.networkID = vm.ethConfig.NetworkId
+	vm.secpFactory = crypto.FactorySECP256K1R{Cache: cache.LRU{Size: secpFactoryCacheSize}}
 
 	vm.codec = Codec
 
 	// TODO: read size from settings
 	vm.mempool = NewMempool(ctx.AVAXAssetID, defaultMempoolSize)
 
-	// Attempt to load last accepted block to determine if it is necessary to
-	// initialize state with the genesis block.
-	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
-	var lastAcceptedHash common.Hash
-	switch {
-	case lastAcceptedErr == database.ErrNotFound:
-		// Set [lastAcceptedHash] to the genesis block hash.
-		lastAcceptedHash = ethConfig.Genesis.ToBlock(nil).Hash()
-	case lastAcceptedErr != nil:
-		return fmt.Errorf("failed to get last accepted block ID due to: %w", lastAcceptedErr)
-	case len(lastAcceptedBytes) != common.HashLength:
-		return fmt.Errorf("last accepted bytes should have been length %d, but found %d", common.HashLength, len(lastAcceptedBytes))
-	default:
-		lastAcceptedHash = common.BytesToHash(lastAcceptedBytes)
-	}
-	ethChain, err := coreth.NewETHChain(&ethConfig, &nodecfg, vm.chaindb, vm.config.EthBackendSettings(), vm.createConsensusCallbacks(), lastAcceptedHash, &vm.clock)
+	lastAcceptedHash, lastAcceptedHeight, err := vm.readLastAccepted()
 	if err != nil {
 		return err
 	}
-	vm.chain = ethChain
-	lastAccepted := vm.chain.LastAcceptedBlock()
 
-	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.db, vm.codec, lastAccepted.NumberU64())
+	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.db, vm.codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
@@ -478,13 +470,10 @@ func (vm *VM) Initialize(
 	); err != nil {
 		return fmt.Errorf("failed to repair atomic repository: %w", err)
 	}
-	vm.atomicTrie, err = NewAtomicTrie(vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, vm.codec, lastAccepted.NumberU64())
+	vm.atomicTrie, err = NewAtomicTrie(vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, vm.codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic trie: %w", err)
 	}
-
-	// start goroutines to update the tx pool gas minimum gas price when upgrades go into effect
-	vm.handleGasPriceUpdates()
 
 	vm.networkCodec, err = message.BuildCodec()
 	if err != nil {
@@ -495,32 +484,10 @@ func (vm *VM) Initialize(
 	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
-	if err = vm.initializeStateSync(toEngine); err != nil {
-		return err
-	}
-
-	// start goroutines to manage block building
-	//
-	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will
-	// not work.
-	vm.gossiper = vm.createGossiper()
-	vm.builder = vm.NewBlockBuilder(toEngine)
-	vm.chain.Start()
-
-	vm.genesisHash = vm.chain.GetGenesisBlock().Hash()
-	log.Info(fmt.Sprintf("lastAccepted = %s", lastAccepted.Hash().Hex()))
+	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
 
 	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
 
-	// if performing state syncs, metrics will be initialized
-	// with the final state, so in that case we pass false to
-	// registerMetrics here.
-	registerMetrics := !vm.config.StateSyncEnabled
-	if err := vm.initChainState(lastAccepted, registerMetrics); err != nil {
-		return err
-	}
-
-	vm.builder.awaitSubmittedTxs()
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
@@ -529,34 +496,67 @@ func (vm *VM) Initialize(
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
 
-	// pruneChain removes all rejected blocks stored in the database.
-	//
-	// TODO: This function can take over 60 minutes to run on mainnet and
-	// should be converted to run asynchronously.
-	// if err := vm.pruneChain(); err != nil {
-	// 	return err
-	// }
-
 	// If metrics are enabled, register the default metrics regitry
 	if metrics.Enabled {
 		gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
 		if err := vm.multiGatherer.Register(ethMetricsPrefix, gatherer); err != nil {
 			return err
 		}
+		// Register [multiGatherer] after registerers have been registered to it
+		if err := ctx.Metrics.Register(vm.multiGatherer); err != nil {
+			return err
+		}
 	}
-	// Register [multiGatherer] after registerers have been registered to it
-	if err := ctx.Metrics.Register(vm.multiGatherer); err != nil {
+
+	if err := vm.fx.Initialize(vm); err != nil {
 		return err
 	}
 
-	return vm.fx.Initialize(vm)
+	if err := vm.initializeChain(lastAcceptedHash); err != nil {
+		return err
+	}
+
+	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
-// initializeStateSync is called from Initialize and registers
-// state sync handlers and [vm.stateSyncer].
-// [vm.stateSyncer] implements the StateSyncableVM interface
-// expected by engine for VMs that support state sync.
-func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
+func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
+	nodecfg := node.Config{
+		CorethVersion:         Version,
+		KeyStoreDir:           vm.config.KeystoreDirectory,
+		ExternalSigner:        vm.config.KeystoreExternalSigner,
+		InsecureUnlockAllowed: vm.config.KeystoreInsecureUnlockAllowed,
+	}
+
+	ethChain, err := coreth.NewETHChain(&vm.ethConfig, &nodecfg, vm.chaindb, vm.config.EthBackendSettings(), vm.createConsensusCallbacks(), lastAcceptedHash, &vm.clock)
+	if err != nil {
+		return err
+	}
+	vm.chain = ethChain
+
+	// start goroutines to update the tx pool gas minimum gas price when upgrades go into effect
+	vm.handleGasPriceUpdates()
+
+	// start goroutines to manage block building
+	//
+	// NOTE: gossip network must be initialized first otherwie ETH tx gossip will
+	// not work.
+	vm.gossiper = vm.createGossiper()
+	vm.builder = vm.NewBlockBuilder(vm.toEngine)
+	vm.builder.awaitSubmittedTxs()
+
+	vm.chain.Start()
+
+	// Initialize StateSyncServer here after [chain] has been initialized.
+	vm.StateSyncServer = NewStateSyncServer(vm.chain.BlockChain(), vm.atomicTrie, vm.networkCodec)
+	vm.setAppRequestHandlers()
+
+	return vm.initChainState(vm.chain.LastAcceptedBlock())
+}
+
+// initializeStateSyncClient initializes the client for performing state sync.
+// If state sync is disabled, this function will wipe any ongoing summary from
+// disk to ensure that we do not continue syncing from an invalid snapshot.
+func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.ShortID
 	if vm.config.StateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
@@ -571,23 +571,35 @@ func (vm *VM) initializeStateSync(toEngine chan<- commonEng.Message) error {
 		}
 	}
 
-	vm.stateSyncer = NewStateSyncer(&stateSyncConfig{
-		state:                   &vm.vmState,
-		statsEnabled:            vm.config.StateSyncMetricsEnabled,
-		enabled:                 vm.config.StateSyncEnabled,
-		forceSyncHighestSummary: vm.config.StateSyncForceHighestSummary,
-		netCodec:                vm.networkCodec,
-		toEngine:                toEngine,
-		client:                  vm.client,
-		stateSyncIDs:            stateSyncIDs,
-		minBlocks:               defaultStateSyncMinBlocks,
-		syncableInterval:        defaultSyncableInterval,
+	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
+		chain:                    vm.chain,
+		state:                    vm.State,
+		netClient:                vm.client,
+		enabled:                  vm.config.StateSyncEnabled,
+		metricsEnabled:           vm.config.MetricsEnabled,
+		forceSyncHighestSummary:  vm.config.StateSyncForceHighestSummary,
+		lastAcceptedHeight:       lastAcceptedHeight, // TODO clean up how this is passed around
+		minBlocksBehindStateSync: defaultStateSyncMinBlocks,
+		chaindb:                  vm.chaindb,
+		metadataDB:               vm.metadataDB,
+		acceptedBlockDB:          vm.acceptedBlockDB,
+		db:                       vm.db,
+		atomicTrie:               vm.atomicTrie,
+		netCodec:                 vm.networkCodec,
+		toEngine:                 vm.toEngine,
+		stateSyncNodeIDs:         stateSyncIDs,
 	})
+
+	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
+	// sync using a snapshot that has been modified by the node running normal operations.
+	if !vm.config.StateSyncEnabled {
+		return vm.StateSyncClient.StateSyncClearOngoingSummary()
+	}
 
 	return nil
 }
 
-func (vm *VM) initChainState(lastAcceptedBlock *types.Block, metricsEnabled bool) error {
+func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(new(big.Int).SetUint64(lastAcceptedBlock.Time()))
 	atomicTxs, err := ExtractAtomicTxs(lastAcceptedBlock.ExtData(), isApricotPhase5, vm.codec)
 	if err != nil {
@@ -612,7 +624,7 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block, metricsEnabled bool
 			atomicTxs: atomicTxs,
 		},
 	}
-	if !metricsEnabled {
+	if !vm.config.MetricsEnabled {
 		vm.State = chain.NewState(config)
 		return nil
 	}
@@ -870,7 +882,8 @@ func (vm *VM) SetState(state snow.State) error {
 		vm.bootstrapped = false
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
-		vm.setAppMessageHandlers()
+		// Initialize gossip handling once we enter normal operation as there is no need to handle mempool gossip before this point.
+		vm.initGossipHandling()
 		vm.bootstrapped = true
 		return vm.fx.Bootstrapped()
 	default:
@@ -878,12 +891,9 @@ func (vm *VM) SetState(state snow.State) error {
 	}
 }
 
-// setAppMessageHandlers sets the message handlers for the VM.
-// Note: this is called when snow.State is set to NormalOp since the VM should
-// not serve these requests until it has finished bootstrapping.
-func (vm *VM) setAppMessageHandlers() {
-	vm.initGossipHandling()
-
+// setAppRequestHandlers sets the request handlers for the VM to serve state sync
+// requests.
+func (vm *VM) setAppRequestHandlers() {
 	// Create separate EVM TrieDB (read only) for serving leafs requests.
 	// We create a separate TrieDB here, so that it has a separate cache from the one
 	// used by the node when processing blocks.
@@ -903,7 +913,7 @@ func (vm *VM) Shutdown() error {
 		return nil
 	}
 	vm.Network.Shutdown()
-	if err := vm.stateSyncer.Shutdown(); err != nil {
+	if err := vm.StateSyncClient.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)
 	}
 	close(vm.shutdownChan)
@@ -1669,4 +1679,30 @@ func repairAtomicRepositoryForBonusBlockTxs(
 	}
 	log.Info("repairAtomicRepositoryForBonusBlockTxs complete", "repairedEntries", repairedEntries)
 	return db.Commit()
+}
+
+// readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the
+// last accepted block hash and height by reading directly from [vm.chaindb] instead of relying
+// on [chain].
+// Note: assumes chaindb, ethConfig, and genesisHash have been initialized.
+func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
+	// Attempt to load last accepted block to determine if it is necessary to
+	// initialize state with the genesis block.
+	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
+	switch {
+	case lastAcceptedErr == database.ErrNotFound:
+		// If there is nothing in the database, return the genesis block hash and height
+		return vm.genesisHash, 0, nil
+	case lastAcceptedErr != nil:
+		return common.Hash{}, 0, fmt.Errorf("failed to get last accepted block ID due to: %w", lastAcceptedErr)
+	case len(lastAcceptedBytes) != common.HashLength:
+		return common.Hash{}, 0, fmt.Errorf("last accepted bytes should have been length %d, but found %d", common.HashLength, len(lastAcceptedBytes))
+	default:
+		lastAcceptedHash := common.BytesToHash(lastAcceptedBytes)
+		height := rawdb.ReadHeaderNumber(vm.chaindb, lastAcceptedHash)
+		if height == nil {
+			return common.Hash{}, 0, fmt.Errorf("failed to retrieve header number of last accepted block: %s", lastAcceptedHash)
+		}
+		return lastAcceptedHash, *height, nil
+	}
 }

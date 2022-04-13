@@ -23,7 +23,7 @@ func BuildCodec() (codec.Manager, error) {
 		c.RegisterType(EthTxsGossip{}),
 
 		// Types for state sync frontier consensus
-		c.RegisterType(SyncableBlock{}),
+		c.RegisterType(SyncSummary{}),
 
 		// state sync types
 		c.RegisterType(BlockRequest{}),

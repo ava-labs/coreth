@@ -204,6 +204,7 @@ func New(
 			PopulateMissingTries:            config.PopulateMissingTries,
 			PopulateMissingTriesParallelism: config.PopulateMissingTriesParallelism,
 			AllowMissingTries:               config.AllowMissingTries,
+			SnapshotDelayInit:               config.SnapshotDelayInit,
 			SnapshotLimit:                   config.SnapshotCache,
 			SnapshotAsync:                   config.SnapshotAsync,
 			SnapshotVerify:                  config.SnapshotVerify,

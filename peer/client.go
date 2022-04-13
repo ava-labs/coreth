@@ -14,7 +14,7 @@ import (
 var (
 	_ NetworkClient = &client{}
 
-	errRequestFailed = errors.New("request failed")
+	ErrRequestFailed = errors.New("request failed")
 )
 
 // NetworkClient defines ability to send request / response through the Network
@@ -23,12 +23,12 @@ type NetworkClient interface {
 	// random order.
 	// A peer is considered a match if its version is greater than or equal to the specified minVersion
 	// Returns errNoPeersMatchingVersion if no peer could be found matching specified version
-	// and errRequestFailed if the request should be retried.
+	// and ErrRequestFailed if the request should be retried.
 	RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error)
 
 	// Request synchronously sends request to the selected nodeID
 	// Returns response bytes
-	// Returns errRequestFailed if request should be retried
+	// Returns ErrRequestFailed if request should be retried
 	Request(nodeID ids.ShortID, request []byte) ([]byte, error)
 
 	// Gossip sends given gossip message to peers
@@ -59,7 +59,7 @@ func (c *client) RequestAny(minVersion version.Application, request []byte) ([]b
 	}
 	response := <-waitingHandler.responseChan
 	if waitingHandler.failed {
-		return nil, ids.ShortEmpty, errRequestFailed
+		return nil, ids.ShortEmpty, ErrRequestFailed
 	}
 	return response, nodeID, nil
 }
@@ -73,7 +73,7 @@ func (c *client) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
 	}
 	response := <-waitingHandler.responseChan
 	if waitingHandler.failed {
-		return nil, errRequestFailed
+		return nil, ErrRequestFailed
 	}
 	return response, nil
 }
