@@ -297,12 +297,12 @@ func mustCreateNewType() abi.Type {
 }
 
 var (
-	batchCallFuncName = "call"
-	batchAbi          = abi.ABI{
+	batchFuncName = "callBatch"
+	batchAbi      = abi.ABI{
 		Methods: map[string]abi.Method{
-			batchCallFuncName: abi.NewMethod(
-				batchCallFuncName,
-				batchCallFuncName,
+			batchFuncName: abi.NewMethod(
+				batchFuncName,
+				batchFuncName,
 				abi.Function,
 				"",
 				false,
@@ -317,7 +317,7 @@ func isBatchTx(addr common.Address, input []byte) bool {
 	if input == nil || len(input) < 4 {
 		return false
 	}
-	return bytes.Equal(input[:4], batchAbi.Methods[batchCallFuncName].ID) && addr == params.EVMPP
+	return bytes.Equal(input[:4], batchAbi.Methods[batchFuncName].ID) && addr == params.EVMPP
 }
 
 func decodeBatchTx(addr common.Address, encodedData []byte) (txs []*Tx, err error) {
@@ -325,7 +325,7 @@ func decodeBatchTx(addr common.Address, encodedData []byte) (txs []*Tx, err erro
 		return nil, nil
 	}
 
-	params, err := batchAbi.Methods[batchCallFuncName].Inputs.Unpack(encodedData[4:])
+	params, err := batchAbi.Methods[batchFuncName].Inputs.Unpack(encodedData[4:])
 	if err != nil {
 		return nil, err
 	}
@@ -350,12 +350,12 @@ var (
 	Uint256, _ = abi.NewType("uint256", "", nil)
 	String, _  = abi.NewType("string", "", nil)
 
-	FeePayerFuncName = "call"
+	feePayerFuncName = "payFor"
 	feePayerAbi      = abi.ABI{
 		Methods: map[string]abi.Method{
-			FeePayerFuncName: abi.NewMethod(
-				FeePayerFuncName,
-				FeePayerFuncName,
+			feePayerFuncName: abi.NewMethod(
+				feePayerFuncName,
+				feePayerFuncName,
 				abi.Function,
 				"",
 				false,
@@ -400,7 +400,7 @@ func isFeePayerTx(input []byte, addr common.Address) bool {
 		return false
 	}
 
-	return bytes.Equal(input[:4], feePayerAbi.Methods[FeePayerFuncName].ID) && addr == params.EVMPP
+	return bytes.Equal(input[:4], feePayerAbi.Methods[feePayerFuncName].ID) && addr == params.EVMPP
 }
 
 func (st *StateTransition) decodeFeePayerTx() (*types.Transaction, error) {
@@ -408,7 +408,7 @@ func (st *StateTransition) decodeFeePayerTx() (*types.Transaction, error) {
 		return nil, nil
 	}
 
-	params, err := feePayerAbi.Methods[FeePayerFuncName].Inputs.Unpack(st.data[4:])
+	params, err := feePayerAbi.Methods[feePayerFuncName].Inputs.Unpack(st.data[4:])
 	if err != nil {
 		return nil, err
 	}
