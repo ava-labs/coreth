@@ -164,7 +164,7 @@ func RunPrecompiledContractWithConfig(p PrecompiledContract, input []byte, suppl
 	}
 	suppliedGas -= gasCost
 	vdf, ok := p.(*vdfVerify)
-	if ok && config != nil && config.DisableVDF {
+	if ok && config != nil && config.SkipVDF {
 		output, err = vdf.run(input, true)
 	} else {
 		output, err = p.Run(input)
@@ -541,6 +541,7 @@ func (c *vdfVerify) RequiredGas(input []byte) uint64 {
 func (c *vdfVerify) Run(input []byte) (valid []byte, err error) {
 	return c.run(input, false)
 }
+
 func (c *vdfVerify) run(input []byte, skipCalculation bool) (valid []byte, err error) {
 	log.Debug("VDFVerify", "input", common.Bytes2Hex(input))
 
@@ -553,6 +554,11 @@ func (c *vdfVerify) run(input []byte, skipCalculation bool) (valid []byte, err e
 			"actual", len(input)-32-8-8,
 		)
 		return nil, errBadVDFInputLen
+	}
+
+	if skipCalculation {
+		log.Debug("VDFVerify: skipped")
+		return true32Byte, nil
 	}
 
 	key := common.Bytes2Hex(input)
@@ -584,11 +590,7 @@ func (c *vdfVerify) run(input []byte, skipCalculation bool) (valid []byte, err e
 		}
 	}()
 
-	var ok = true
-	if !skipCalculation {
-		ok = vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
-	}
-
+	ok := vdf_go.VerifyVDF(seed, output, int(iteration), int(bitSize))
 	log.Debug("VDFVerify", "valid", ok)
 
 	vdfCache.Add(key, ok)
