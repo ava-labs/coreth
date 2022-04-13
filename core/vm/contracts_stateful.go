@@ -46,18 +46,7 @@ func newWrappedPrecompiledContract(p PrecompiledContract) StatefulPrecompiledCon
 
 // Run implements the StatefulPrecompiledContract interface
 func (w *wrappedPrecompiledContract) Run(evm *EVM, caller ContractRef, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	vdf, ok := w.p.(*vdfVerify)
-
-	if evm.Config.DisableVDF && ok {
-		gasCost := w.p.RequiredGas(input)
-		if suppliedGas < gasCost {
-			return nil, 0, ErrOutOfGas
-		}
-		suppliedGas -= gasCost
-		output, err := vdf.run(input, true)
-		return output, suppliedGas, err
-	}
-	return RunPrecompiledContract(w.p, input, suppliedGas)
+	return RunPrecompiledContractWithConfig(w.p, input, suppliedGas, &evm.Config)
 }
 
 // nativeAssetBalance is a precompiled contract used to retrieve the native asset balance

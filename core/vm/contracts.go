@@ -154,12 +154,22 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the _remaining_ gas,
 // - any error that occurred
 func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	return RunPrecompiledContractWithConfig(p, input, suppliedGas, nil)
+}
+
+func RunPrecompiledContractWithConfig(p PrecompiledContract, input []byte, suppliedGas uint64, config *Config) (output []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
 	}
 	suppliedGas -= gasCost
-	output, err := p.Run(input)
+	vdf, ok := p.(*vdfVerify)
+	if ok && config != nil && config.DisableVDF {
+		output, err = vdf.run(input, true)
+	} else {
+		output, err = p.Run(input)
+	}
+
 	return output, suppliedGas, err
 }
 
