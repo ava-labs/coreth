@@ -903,7 +903,7 @@ func (vm *VM) setAppRequestHandlers() {
 			Cache: vm.config.StateSyncServerTrieCache,
 		},
 	)
-	syncRequestHandler := handlers.NewSyncHandler(vm.chain.BlockChain().GetBlock, evmTrieDB, vm.atomicTrie.TrieDB(), vm.networkCodec, handlerstats.NewHandlerStats(metrics.Enabled && vm.config.StateSyncMetricsEnabled))
+	syncRequestHandler := handlers.NewSyncHandler(vm.chain.BlockChain().GetBlock, evmTrieDB, vm.atomicTrie.TrieDB(), vm.networkCodec, handlerstats.NewHandlerStats(metrics.Enabled))
 	vm.Network.SetRequestHandler(syncRequestHandler)
 }
 

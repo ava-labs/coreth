@@ -32,7 +32,6 @@ const (
 	defaultPopulateMissingTriesParallelism        = 1024
 	defaultMaxOutboundActiveRequests              = 8
 	defaultStateSyncServerTrieCache               = 64 // MB
-	defaultStateSyncMetricsEnabled                = true
 )
 
 var defaultEnabledAPIs = []string{
@@ -117,7 +116,6 @@ type Config struct {
 	// Sync settings
 	StateSyncEnabled             bool   `json:"state-sync-enabled"`
 	StateSyncForceHighestSummary bool   `json:"state-sync-force-highest-summary"` // Forces state sync to use the highest available summary block
-	StateSyncMetricsEnabled      bool   `json:"state-sync-metrics-enabled"`
 	StateSyncServerTrieCache     int    `json:"state-sync-server-trie-cache"`
 	StateSyncIDs                 string `json:"state-sync-ids"`
 }
@@ -152,7 +150,6 @@ func (c *Config) SetDefaults() {
 	c.PopulateMissingTriesParallelism = defaultPopulateMissingTriesParallelism
 	c.MaxOutboundActiveRequests = defaultMaxOutboundActiveRequests
 	c.StateSyncServerTrieCache = defaultStateSyncServerTrieCache
-	c.StateSyncMetricsEnabled = defaultStateSyncMetricsEnabled
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
