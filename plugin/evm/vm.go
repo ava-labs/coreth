@@ -193,12 +193,18 @@ func init() {
 // VM implements the snowman.ChainVM interface
 type VM struct {
 	ctx *snow.Context
-
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
 	*chain.State
 
-	chain *coreth.ETHChain
+	config Config
+
+	chainID     *big.Int
+	networkID   uint64
+	genesisHash common.Hash
+	chain       *coreth.ETHChain
+	chainConfig *params.ChainConfig
+	ethConfig   ethconfig.Config
 
 	// [db] is the VM's current database managed by ChainState
 	db *versiondb.Database
@@ -211,27 +217,16 @@ type VM struct {
 
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
-
 	acceptedBlockDB database.Database
 
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
-
 	toEngine chan<- commonEng.Message
-
-	config Config
-
-	chainID     *big.Int
-	networkID   uint64
-	chainConfig *params.ChainConfig
-	ethConfig   ethconfig.Config
-
-	genesisHash common.Hash
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
 	atomicTxRepository AtomicTxRepository
+	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
+	atomicTrie AtomicTrie
 
 	builder *blockBuilder
 
@@ -259,12 +254,11 @@ type VM struct {
 	multiGatherer avalanchegoMetrics.MultiGatherer
 
 	bootstrapped bool
+	IsPlugin     bool
 
 	// State sync server and client
 	StateSyncServer
 	StateSyncClient
-
-	IsPlugin bool
 }
 
 // Codec implements the secp256k1fx interface
