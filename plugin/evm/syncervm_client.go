@@ -21,10 +21,8 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -55,11 +53,9 @@ var (
 	stateSyncSummaryKey = []byte("stateSyncSummary")
 )
 
-// stateSyncClientConfig defines the
+// stateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
 type stateSyncClientConfig struct {
-	netClient               peer.NetworkClient
 	enabled                 bool
-	metricsEnabled          bool
 	forceSyncHighestSummary bool
 
 	lastAcceptedHeight uint64
@@ -76,19 +72,14 @@ type stateSyncClientConfig struct {
 	db              *versiondb.Database
 	atomicTrie      AtomicTrie
 
+	client   syncclient.Client
 	netCodec codec.Manager
 
 	toEngine chan<- commonEng.Message
-
-	// stateSyncNodeIDs specifies a list of nodeIDs that should be used to perform state sync
-	// If the list is empty, defaults to query any node in the network with a high enough version.
-	stateSyncNodeIDs []ids.ShortID
 }
 
 type stateSyncerClient struct {
 	*stateSyncClientConfig
-
-	client syncclient.Client
 
 	resumableSummary message.SyncSummary
 
@@ -102,14 +93,6 @@ type stateSyncerClient struct {
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 	return &stateSyncerClient{
 		stateSyncClientConfig: config,
-		client: syncclient.NewClient(&syncclient.ClientConfig{
-			NetworkClient:    config.netClient,
-			Codec:            config.netCodec,
-			Stats:            stats.NewStats(config.metricsEnabled),
-			MaxAttempts:      maxRetryAttempts,
-			MaxRetryDelay:    defaultMaxRetryDelay,
-			StateSyncNodeIDs: config.stateSyncNodeIDs,
-		}),
 	}
 }
 

@@ -33,6 +33,8 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/rpc"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
@@ -572,11 +574,19 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	}
 
 	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
-		chain:                    vm.chain,
-		state:                    vm.State,
-		netClient:                vm.client,
+		chain: vm.chain,
+		state: vm.State,
+		client: statesyncclient.NewClient(
+			&statesyncclient.ClientConfig{
+				NetworkClient:    vm.client,
+				Codec:            vm.networkCodec,
+				Stats:            stats.NewStats(vm.config.MetricsEnabled),
+				MaxAttempts:      maxRetryAttempts,
+				MaxRetryDelay:    defaultMaxRetryDelay,
+				StateSyncNodeIDs: stateSyncIDs,
+			},
+		),
 		enabled:                  vm.config.StateSyncEnabled,
-		metricsEnabled:           vm.config.MetricsEnabled,
 		forceSyncHighestSummary:  vm.config.StateSyncForceHighestSummary,
 		lastAcceptedHeight:       lastAcceptedHeight, // TODO clean up how this is passed around
 		minBlocksBehindStateSync: defaultStateSyncMinBlocks,
@@ -587,7 +597,6 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		atomicTrie:               vm.atomicTrie,
 		netCodec:                 vm.networkCodec,
 		toEngine:                 vm.toEngine,
-		stateSyncNodeIDs:         stateSyncIDs,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
