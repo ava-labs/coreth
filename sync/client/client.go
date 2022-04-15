@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	StateSyncVersion      = version.NewDefaultApplication(constants.PlatformName, 1, 7, 9)
+	StateSyncVersion      = version.NewDefaultApplication(constants.PlatformName, 1, 7, 11)
 	errEmptyResponse      = errors.New("empty response")
 	errTooManyBlocks      = errors.New("response contains more blocks than requested")
 	errHashMismatch       = errors.New("hash does not match expected value")
@@ -58,7 +58,7 @@ type Client interface {
 
 // parseResponseFn parses given response bytes in context of specified request
 // Validates response in context of the request
-// Ensures that the returned interface matches the expected response type of the request
+// Ensures the returned interface matches the expected response type of the request
 // Returns the number of elements in the response (specific to the response type, used in metrics)
 type parseResponseFn func(codec codec.Manager, request message.Request, response []byte) (interface{}, int, error)
 
@@ -124,7 +124,7 @@ func parseLeafsResponse(codec codec.Manager, reqIntf message.Request, data []byt
 
 	leafsRequest := reqIntf.(message.LeafsRequest)
 
-	// Ensure that the response does not contain more than the maximum requested number of leaves.
+	// Ensure the response does not contain more than the maximum requested number of leaves.
 	if len(leafsResponse.Keys) > int(leafsRequest.Limit) || len(leafsResponse.Vals) > int(leafsRequest.Limit) {
 		return nil, 0, fmt.Errorf("%w: (%d) > %d)", errTooManyLeaves, len(leafsResponse.Keys), leafsRequest.Limit)
 	}

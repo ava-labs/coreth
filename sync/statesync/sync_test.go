@@ -28,24 +28,18 @@ import (
 
 const testSyncTimeout = 20 * time.Second
 
-type testSyncResult struct {
-	root                       common.Hash
-	serverTrieDB, clientTrieDB *trie.Database
-}
-
 type syncTest struct {
-	getContext        func() context.Context
+	ctx               context.Context
 	prepareForTest    func(t *testing.T) (clientDB ethdb.Database, serverTrieDB *trie.Database, syncRoot common.Hash)
-	assertSyncResult  func(t *testing.T, result testSyncResult)
 	expectedError     error
 	GetLeafsIntercept func(message.LeafsRequest, message.LeafsResponse) (message.LeafsResponse, error)
 	GetCodeIntercept  func(common.Hash, []byte) ([]byte, error)
 }
 
 func testSync(t *testing.T, test syncTest) {
-	ctx := context.TODO()
-	if test.getContext != nil {
-		ctx = test.getContext()
+	ctx := context.Background()
+	if test.ctx != nil {
+		ctx = test.ctx
 	}
 	clientDB, serverTrieDB, root := test.prepareForTest(t)
 	codec := message.MustBuildCodec()
@@ -72,15 +66,11 @@ func testSync(t *testing.T, test syncTest) {
 		return
 	}
 
-	test.assertSyncResult(t, testSyncResult{
-		root:         root,
-		serverTrieDB: serverTrieDB,
-		clientTrieDB: trie.NewDatabase(clientDB),
-	})
+	assertDBConsistency(t, root, serverTrieDB, trie.NewDatabase(clientDB))
 }
 
-// testSyncResumes tests a series of syncs works as expected invoking a callback function after each
-// successive test.
+// testSyncResumes tests a series of syncTests work as expected, invoking a callback function after each
+// successive step.
 func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 	for _, test := range steps {
 		testSync(t, test)
@@ -115,9 +105,6 @@ func TestSimpleSyncCases(t *testing.T) {
 				root, _ := FillAccounts(t, serverTrieDB, common.Hash{}, 1000, nil)
 				return memorydb.New(), serverTrieDB, root
 			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-			},
 		},
 		"accounts with code": {
 			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
@@ -138,18 +125,12 @@ func TestSimpleSyncCases(t *testing.T) {
 				})
 				return memorydb.New(), serverTrieDB, root
 			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-			},
 		},
 		"accounts with code and storage": {
 			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root := fillAccountsWithStorage(t, serverTrieDB, common.Hash{}, 1000)
 				return memorydb.New(), serverTrieDB, root
-			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 		"accounts with storage": {
@@ -164,18 +145,12 @@ func TestSimpleSyncCases(t *testing.T) {
 				})
 				return memorydb.New(), serverTrieDB, root
 			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-			},
 		},
 		"accounts with overlapping storage": {
 			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 				serverTrieDB := trie.NewDatabase(memorydb.New())
 				root, _ := FillAccountsWithOverlappingStorage(t, serverTrieDB, common.Hash{}, 1000, 3)
 				return memorydb.New(), serverTrieDB, root
-			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 			},
 		},
 		"failed to fetch leafs": {
@@ -216,9 +191,7 @@ func TestCancelSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	testSync(t, syncTest{
-		getContext: func() context.Context {
-			return ctx
-		},
+		ctx: ctx,
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return memorydb.New(), serverTrieDB, root
 		},
@@ -258,9 +231,6 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root
 		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-		},
 	})
 }
 
@@ -297,9 +267,6 @@ func TestResumeSyncLargeStorageTrieInterrupted(t *testing.T) {
 	testSync(t, syncTest{
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root
-		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 		},
 	})
 }
@@ -347,9 +314,6 @@ func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root2
 		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-		},
 	})
 }
 
@@ -387,9 +351,6 @@ func TestResumeSyncLargeStorageTrieWithConsecutiveDuplicatesInterrupted(t *testi
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root
 		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
-		},
 	})
 }
 
@@ -425,9 +386,6 @@ func TestResumeSyncLargeStorageTrieWithSpreadOutDuplicatesInterrupted(t *testing
 	testSync(t, syncTest{
 		prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 			return clientDB, serverTrieDB, root
-		},
-		assertSyncResult: func(t *testing.T, result testSyncResult) {
-			assertDBConsistency(t, result.root, result.serverTrieDB, result.clientTrieDB)
 		},
 	})
 }
@@ -519,16 +477,10 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(*testing.T, 
 			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 				return clientDB, serverTrieDB, root1
 			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, root1, serverTrieDB, trie.NewDatabase(clientDB))
-			},
 		},
 		{
 			prepareForTest: func(t *testing.T) (ethdb.Database, *trie.Database, common.Hash) {
 				return clientDB, serverTrieDB, root2
-			},
-			assertSyncResult: func(t *testing.T, result testSyncResult) {
-				assertDBConsistency(t, root2, serverTrieDB, trie.NewDatabase(clientDB))
 			},
 		},
 	}, func() {

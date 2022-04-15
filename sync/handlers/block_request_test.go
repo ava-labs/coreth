@@ -89,7 +89,7 @@ func TestBlockRequestHandler(t *testing.T) {
 			requestedParents:  64,
 			expectNilResponse: true,
 			assertResponse: func(t *testing.T, _ []byte) {
-				assert.Equal(t, 1, mockHandlerStats.MissingBlockHashCount)
+				assert.Equal(t, uint32(1), mockHandlerStats.MissingBlockHashCount)
 			},
 		},
 	}
@@ -109,6 +109,9 @@ func TestBlockRequestHandler(t *testing.T) {
 			responseBytes, err := blockRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestShortID(), 1, blockRequest)
 			if err != nil {
 				t.Fatal("unexpected error during block request", err)
+			}
+			if test.assertResponse != nil {
+				test.assertResponse(t, responseBytes)
 			}
 
 			if test.expectNilResponse {

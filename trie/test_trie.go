@@ -14,10 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// GenerateTrie creates a trie inside of [trieDB] coming from a deterministic random seed
-// with a total of [numKeys] key-value pairs.
+// GenerateTrie creates a trie with [numKeys] key-value pairs inside of [trieDB].
 // Returns the root of the generated trie, the slice of keys inserted into the trie in lexicographical
-// order and the slice of corresponding values.
+// order, and the slice of corresponding values.
 // GenerateTrie reads from [rand] and the caller should call rand.Seed(n) for deterministic results
 func GenerateTrie(t *testing.T, trieDB *Database, numKeys int, keySize int) (common.Hash, [][]byte, [][]byte) {
 	if keySize < wrappers.LongLen+1 {
@@ -97,7 +96,7 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLea
 	assert.Greater(t, count, 0)
 }
 
-// CorruptTrie wipes every [n]th node from the trie given by [root] from the trieDB.
+// CorruptTrie deletes every [n]th trie node from the trie given by [root] from the trieDB.
 // Assumes that the trie given by root can be iterated without issue.
 func CorruptTrie(t *testing.T, trieDB *Database, root common.Hash, n int) {
 	batch := trieDB.DiskDB().NewBatch()

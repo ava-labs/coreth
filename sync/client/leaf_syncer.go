@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrFailedToFetchLeafs = errors.New("failed to fetch leafs")
+	errFailedToFetchLeafs = errors.New("failed to fetch leafs")
 )
 
 const defaultLeafRequestLimit = 1024
@@ -87,8 +87,8 @@ func (c *CallbackLeafSyncer) workerLoop(ctx context.Context) error {
 	}
 }
 
-// syncTask performs [task] requesting the leaves of the trie corresponding to [task.Root]
-// starting at [task.Start] and performing the callbacks as necessary.
+// syncTask performs [task], requesting the leaves of the trie corresponding to [task.Root]
+// starting at [task.Start] and invoking the callbacks as necessary.
 func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) error {
 	defer c.wg.Done()
 
@@ -122,7 +122,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 		})
 
 		if err != nil {
-			return fmt.Errorf("%s: %w", ErrFailedToFetchLeafs, err)
+			return fmt.Errorf("%s: %w", errFailedToFetchLeafs, err)
 		}
 
 		if tasks, err := task.OnLeafs(task.Root, leafsResponse.Keys, leafsResponse.Vals); err != nil {
@@ -175,10 +175,10 @@ func (c *CallbackLeafSyncer) Start(ctx context.Context, numThreads int, task *Le
 
 	tasks := make([]*LeafSyncTask, 0, len(subtasks)+1)
 	tasks = append(tasks, subtasks...) // add [subtasks] first, they are not allowed to add additional tasks
-	tasks = append(tasks, task)        // [task] is allowed to add tasks, so we start it last to ensure progress
+	tasks = append(tasks, task)        // [task] can add tasks. Start it last to keep number of in-progress tries <= [numThreads]
 
-	// Start a goroutine to pass the given tasks in. This ensures that we do not
-	// block here if there are more tasks than there are worker threads.
+	// Start a goroutine to pass the given tasks in. This ensures we do not
+	// block here if there are more tasks than worker threads.
 	eg.Go(func() error {
 		err := c.addTasks(egCtx, tasks)
 		c.wg.Wait() // wait for all tasks added to [c.tasks] to finish

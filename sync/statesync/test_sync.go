@@ -24,7 +24,7 @@ import (
 
 // assertDBConsistency checks [serverTrieDB] and [clientTrieDB] have the same EVM state trie at [root],
 // and that [clientTrieDB.DiskDB] has corresponding account & snapshot values.
-// Also verifies any code referenced by [clientTrieDB] is present the hash is correct.
+// Also verifies any code referenced by the EVM state is present in [clientTrieDB] and the hash is correct.
 func assertDBConsistency(t testing.TB, root common.Hash, serverTrieDB, clientTrieDB *trie.Database) {
 	clientDB := clientTrieDB.DiskDB()
 	numSnapshotAccounts := 0

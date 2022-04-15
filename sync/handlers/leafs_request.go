@@ -135,6 +135,7 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.S
 		if len(start) == 0 {
 			keyLength, err := getKeyLength(leafsRequest.NodeType)
 			if err != nil {
+				// Note: LeafsRequest.Handle checks NodeType's validity so clients cannot cause the server to spam this error
 				log.Error("Failed to get key length for leafs request", "err", err)
 				return nil, nil
 			}

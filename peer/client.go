@@ -19,16 +19,14 @@ var (
 
 // NetworkClient defines ability to send request / response through the Network
 type NetworkClient interface {
-	// RequestAny synchronously sends request to the first connected peer that matches the specified minVersion in
-	// random order.
-	// A peer is considered a match if its version is greater than or equal to the specified minVersion
-	// Returns errNoPeersMatchingVersion if no peer could be found matching specified version
-	// and ErrRequestFailed if the request should be retried.
+	// RequestAny synchronously sends request to a randomly chosen peer with a
+	// node version greater than or equal to minVersion.
+	// Returns response bytes, the ID of the chosen peer, and ErrRequestFailed if
+	// the request should be retried.
 	RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error)
 
-	// Request synchronously sends request to the selected nodeID
-	// Returns response bytes
-	// Returns ErrRequestFailed if request should be retried
+	// Request synchronously sends request to the specified nodeID
+	// Returns response bytes and ErrRequestFailed if request should be retried
 	Request(nodeID ids.ShortID, request []byte) ([]byte, error)
 
 	// Gossip sends given gossip message to peers
@@ -48,9 +46,10 @@ func NewNetworkClient(network Network) NetworkClient {
 	}
 }
 
-// RequestAny synchronously sends request to the first connected peer that matches the specified minVersion in
-// random order and blocks until it receives a response or the request could not be sent or times out.
-// Returns the response bytes from the peer.
+// RequestAny synchronously sends request to a randomly chosen peer with a
+// node version greater than or equal to minVersion.
+// Returns response bytes, the ID of the chosen peer, and ErrRequestFailed if
+// the request should be retried.
 func (c *client) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error) {
 	waitingHandler := newWaitingResponseHandler()
 	nodeID, err := c.network.RequestAny(minVersion, request, waitingHandler)
@@ -64,8 +63,8 @@ func (c *client) RequestAny(minVersion version.Application, request []byte) ([]b
 	return response, nodeID, nil
 }
 
-// Request synchronously sends [request] message to specified [nodeID]
-// This function blocks until a response is received from the peer
+// Request synchronously sends request to the specified nodeID
+// Returns response bytes and ErrRequestFailed if request should be retried
 func (c *client) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
 	waitingHandler := newWaitingResponseHandler()
 	if err := c.network.Request(nodeID, request, waitingHandler); err != nil {

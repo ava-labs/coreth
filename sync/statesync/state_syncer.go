@@ -59,19 +59,19 @@ type StateSyncProgress struct {
 	StorageTries map[common.Hash]*StorageTrieProgress
 }
 
-// stateSyncer manages the process of syncing the main trie and storage tries
-// concurrently from peers, while maintaining resumability by persisting [progressMarker].
-// Invariant: Each account with a corresponding entry in the snapshot and a non-empty storage root
-// MUST either (a) have its storage trie fully on disk and its snapshot populated with
-// the same data as the trie, or (b) have an entry in the progress marker persisted to disk.
+// stateSyncer manages syncing the main trie and storage tries concurrently from peers.
+// Invariant that allows resumability: Each account with a snapshot entry and a non-empty
+// storage trie MUST either:
+// (a) have its storage trie fully on disk and its snapshot populated with the same data as the trie, or
+// (b) have an entry in the progress marker persisted to disk.
 // In case there is an entry for a storage trie in the progress marker, the in progress
-// sync for that storage trie will be resumed prior to resuming the main trie sync,
-// ensuring the number of tries in progress remains less than or equal to [numThreads].
+// sync for that storage trie will be resumed prior to resuming the main trie sync.
+// This ensures the number of tries in progress remains less than or equal to [numThreads].
 // Once fewer than [numThreads] storage tries are in progress, the main trie sync will
 // continue concurrently.
 //
 // Note: stateSyncer assumes that the snapshot will be wiped completely prior to starting
-// a new sync task (the target root changes or the snapshot is modified by normal operation).
+// a new sync task (or if the target sync root changes or the snapshot is modified by normal operation).
 type stateSyncer struct {
 	lock           sync.Mutex
 	progressMarker *StateSyncProgress
@@ -111,8 +111,8 @@ func NewEVMStateSyncer(config *EVMStateSyncerConfig) (*stateSyncer, error) {
 		storageProgress.TrieProgress = NewTrieProgress(config.DB, config.BatchSize, eta)
 		// the first account's storage snapshot contains the key/value pairs we need to restore
 		// the stack trie. if other in-progress accounts happen to share the same storage root,
-		// their storage snapshot remains empty until the storage trie is fully synced, then copied
-		// from the first account's storage snapshot
+		// their storage snapshot remains empty until the storage trie is fully synced, then it
+		// will be copied from the first account's storage snapshot.
 		if err := RestoreStorageTrieProgressFromSnapshot(config.DB, storageProgress.TrieProgress, storageProgress.Account); err != nil {
 			return nil, err
 		}
@@ -217,7 +217,7 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, values [][]byte) ([]*syncclient.LeafSyncTask, error) {
 	// Note this method does not need to hold a lock:
 	// - handleLeafs is called synchronously by CallbackLeafSyncer
-	// - if additional account is encountered with the same storage trie,
+	// - if an additional account is encountered with the same storage trie,
 	//   it will be appended to [tp.AdditionalAccounts] (not accessed here)
 	if tp.startTime.IsZero() {
 		tp.startTime = time.Now()
@@ -245,13 +245,13 @@ func (tp *StorageTrieProgress) handleLeafs(root common.Hash, keys [][]byte, valu
 }
 
 // createStorageTrieTask creates a LeafSyncTask to be returned from the callback,
-// and records the storage trie as in progress for resume purposes.
+// and records the storage trie as in progress to maintain the resumability invariant.
 func (s *stateSyncer) createStorageTrieTask(accountHash common.Hash, storageRoot common.Hash) (*syncclient.LeafSyncTask, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// check if we're already syncing this storage trie
-	// if we are: add this account hash to the progress marker,
+	// check if we're already syncing this storage trie.
+	// if we are: add this account hash to the progress marker so
 	// when the trie is downloaded, the snapshot will be copied
 	// to this account as well
 	if storageProgress, exists := s.progressMarker.StorageTries[storageRoot]; exists {
@@ -277,8 +277,8 @@ func (s *stateSyncer) createStorageTrieTask(accountHash common.Hash, storageRoot
 				return false, nil
 			}
 
-			// If the storage trie is already on disk, we only need to copy the storage snapshot over to [accountHash].
-			// There is no need to re-sync the trie, since it is already present
+			// If the storage trie is already on disk, we only need to populate the storage snapshot for [accountHash]
+			// with the trie contents. There is no need to re-sync the trie, since it is already present.
 			if err := WriteAccountStorageSnapshotFromTrie(s.db.NewBatch(), s.batchSize, accountHash, storageTrie); err != nil {
 				// If the storage trie cannot be iterated (due to an incomplete trie from pruning this storage trie in the past)
 				// then we re-sync it here. Therefore, this error is not fatal and we can safely continue here.
@@ -301,13 +301,15 @@ func (s *stateSyncer) createStorageTrieTask(accountHash common.Hash, storageRoot
 func (s *stateSyncer) onFinish(root common.Hash) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	// handle the case where root is the main trie's root
 	if root == s.progressMarker.Root {
 		// mark main trie as done.
 		s.progressMarker.MainTrieDone = true
 		return s.checkAllDone()
 	}
 
-	// is a storage trie
+	// since root was not the main trie, it must belong to a storage trie.
 	storageTrieProgress, exists := s.progressMarker.StorageTries[root]
 	if !exists {
 		return fmt.Errorf("unknown root [%s] finished syncing", root)
@@ -322,12 +324,12 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 			return fmt.Errorf("unexpected storage root, expected=%s, actual=%s account=%s", root, storageRoot, storageTrieProgress.Account)
 		}
 	}
-	// Note: we hold the lock when copying storage snapshots as well as when adding new accounts to ensure there is
-	// no race condition between adding accounts and copying them.
+	// Note: we hold the lock when copying storage snapshots and adding new accounts.
+	// This prevents race conditions between these two operations.
 	if len(storageTrieProgress.AdditionalAccounts) > 0 {
-		// necessary to flush the batch here to write
+		// It is necessary to flush the batch here to write
 		// any pending items to the storage snapshot before
-		// we copy to other accounts.
+		// we use that as a source to copy to other accounts.
 		if err := storageTrieProgress.batch.Write(); err != nil {
 			return err
 		}
@@ -358,7 +360,7 @@ func (s *stateSyncer) onFinish(root common.Hash) error {
 // this will write the main trie's root to disk, and is the last step of stateSyncer's process.
 // assumes lock is held
 func (s *stateSyncer) checkAllDone() error {
-	// Note: this check ensures that we do not commit the main trie until all of the storage tries
+	// Note: this check ensures we do not commit the main trie until all of the storage tries
 	// have been committed.
 	if !s.progressMarker.MainTrieDone || len(s.progressMarker.StorageTries) > 0 {
 		return nil
