@@ -509,7 +509,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 
-		var payeeGas uint64
+		var savedGas uint64
 
 		if tx != nil {
 			if st.gas < tx.Gas() {
@@ -519,7 +519,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					ReturnData: ret,
 				}, nil
 			}
-			st.gas -= tx.Gas()
+			savedGas = st.gas - tx.Gas() // save the remaining gas of payer
+			st.gas = tx.Gas()
 
 			payeeInstrinsicGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), false, homestead, istanbul)
 			if err != nil {
@@ -534,7 +535,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				}, nil
 			}
 
-			payeeGas = tx.Gas() - payeeInstrinsicGas
+			st.gas -= payeeInstrinsicGas
 
 			signer := types.MakeSigner(st.evm.ChainConfig(), st.evm.Context.BlockNumber, st.evm.Context.Time)
 			payee, err = types.Sender(signer, tx)
@@ -570,10 +571,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 
 		txs, err := decodeBatchTx(to, data)
-
 		if err != nil {
 			return nil, err
 		}
+
 		if txs != nil {
 			snapshot := st.evm.StateDB.Snapshot()
 			for _, tx := range txs {
@@ -583,13 +584,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 					break
 				}
 			}
-		} else if tx != nil {
-			ret, payeeGas, vmerr = st.evm.Call(sender, to, data, payeeGas, st.value)
-			st.gas += payeeGas
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, to, data, st.gas, st.value)
 		}
 
+		if savedGas > 0 {
+			st.gas += savedGas
+		}
 	}
 	st.refundGas(apricotPhase1)
 	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
