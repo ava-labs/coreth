@@ -103,7 +103,7 @@ type StateSyncClient interface {
 	StateSyncParseSummary(summaryBytes []byte) (commonEng.Summary, error)
 	StateSync(summaries []commonEng.Summary) error
 	StateSyncGetResult() (ids.ID, uint64, error)
-	StateSyncSetLastSummaryBlock(blockBytes []byte) error
+	StateSyncSetLastSummaryBlockID(blockID ids.ID) error
 	Shutdown() error
 }
 
@@ -393,14 +393,14 @@ func (client *stateSyncerClient) Shutdown() error {
 	return nil
 }
 
-// StateSyncSetLastSummaryBlock sets the given container bytes as the last summary block
+// StateSyncSetLastSummaryBlockID sets block matching given blkID as the last summary block
 // Engine invokes this method after state sync has completed copying information from
 // peers. It is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (client *stateSyncerClient) StateSyncSetLastSummaryBlock(blockBytes []byte) error {
-	stateBlock, err := client.state.ParseBlock(blockBytes)
+func (client *stateSyncerClient) StateSyncSetLastSummaryBlockID(blkID ids.ID) error {
+	stateBlock, err := client.state.GetBlock(blkID)
 	if err != nil {
-		return fmt.Errorf("error parsing block, blockBytes=%s, err=%w", common.Bytes2Hex(blockBytes), err)
+		return fmt.Errorf("error retrieving block, blkID=%s, err=%w", blkID, err)
 	}
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
 	if !ok {
@@ -410,6 +410,7 @@ func (client *stateSyncerClient) StateSyncSetLastSummaryBlock(blockBytes []byte)
 	if !ok {
 		return fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
 	}
+
 	evmBlock.SetStatus(choices.Accepted)
 	block := evmBlock.ethBlock
 

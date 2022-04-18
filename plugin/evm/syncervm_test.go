@@ -477,7 +477,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if blk.Height() != syncedHeight {
 		t.Fatalf("Expected block height to be %d, but found %d", syncedHeight, blk.Height())
 	}
-	assert.NoError(t, syncerVM.StateSyncSetLastSummaryBlock(blk.Bytes()))
+	assert.NoError(t, syncerVM.StateSyncSetLastSummaryBlockID(blk.ID()))
 	// set [syncerVM] to bootstrapping and verify the last accepted block has been updated correctly
 	// and that we can boottrap and process some blocks.
 	if err := syncerVM.SetState(snow.Bootstrapping); err != nil {
