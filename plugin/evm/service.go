@@ -13,6 +13,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
@@ -127,7 +128,7 @@ func (service *AvaxAPI) ExportKey(r *http.Request, args *ExportKeyArgs, reply *E
 	if err != nil {
 		return fmt.Errorf("problem retrieving private key: %w", err)
 	}
-	encodedKey, err := formatting.EncodeWithChecksum(formatting.CB58, sk.Bytes())
+	encodedKey, err := cb58.Encode(sk.Bytes())
 	if err != nil {
 		return fmt.Errorf("problem encoding bytes as cb58: %w", err)
 	}
@@ -151,7 +152,7 @@ func (service *AvaxAPI) ImportKey(r *http.Request, args *ImportKeyArgs, reply *a
 	}
 
 	trimmedPrivateKey := strings.TrimPrefix(args.PrivateKey, constants.SecretKeyPrefix)
-	pkBytes, err := formatting.Decode(formatting.CB58, trimmedPrivateKey)
+	pkBytes, err := cb58.Decode(trimmedPrivateKey)
 	if err != nil {
 		return fmt.Errorf("problem parsing private key: %w", err)
 	}

@@ -31,6 +31,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/formatting"
@@ -91,7 +92,7 @@ func init() {
 		"2MMvUMsxx6zsHSNXJdFD8yc5XkancvwyKPwpw4xUK3TCGDuNBY",
 		"cxb7KpGWhDMALTjNNSJ7UQkkomPesyWAPUaWRGdyeBNzR6f35",
 	} {
-		b, _ = formatting.Decode(formatting.CB58, key)
+		b, _ = cb58.Decode(key)
 		pk, _ := factory.ToPrivateKey(b)
 		secpKey := pk.(*crypto.PrivateKeySECP256K1R)
 		testKeys = append(testKeys, secpKey)
