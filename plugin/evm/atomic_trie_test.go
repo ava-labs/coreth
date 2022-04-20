@@ -18,7 +18,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
-	"github.com/ava-labs/coreth/core"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -40,12 +39,12 @@ func TestNearestCommitHeight(t *testing.T) {
 	for _, test := range []test{
 		{
 			height:               4500,
-			commitInterval:       core.CommitInterval,
+			commitInterval:       4096,
 			expectedCommitHeight: 4096,
 		},
 		{
 			height:               8500,
-			commitInterval:       core.CommitInterval,
+			commitInterval:       4096,
 			expectedCommitHeight: 8192,
 		},
 		{

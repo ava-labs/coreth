@@ -57,12 +57,12 @@ var (
 type stateSyncClientConfig struct {
 	enabled                 bool
 	forceSyncHighestSummary bool
-
-	lastAcceptedHeight uint64
 	// Specifies the number of blocks behind the latest state summary that the chain must be
 	// in order to prefer performing state sync over falling back to the normal bootstrapping
 	// algorithm.
-	minBlocksBehindStateSync uint64
+	stateSyncMinBlocks uint64
+
+	lastAcceptedHeight uint64
 
 	chain           *coreth.ETHChain
 	state           *chain.State
@@ -266,7 +266,7 @@ func (client *stateSyncerClient) selectSyncSummary(proposedSummaries []commonEng
 	// to make sure state sync is worth it.
 	// Note: this additionally ensures we do not mistakenly attempt to sync to a height
 	// less than the client's last accepted block.
-	if client.lastAcceptedHeight+client.minBlocksBehindStateSync > client.syncSummary.BlockNumber {
+	if client.lastAcceptedHeight+client.stateSyncMinBlocks > client.syncSummary.BlockNumber {
 		log.Info(
 			"last accepted too close to most recent syncable block, skipping state sync",
 			"lastAccepted", client.lastAcceptedHeight,

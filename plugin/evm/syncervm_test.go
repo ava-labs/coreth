@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -46,9 +47,9 @@ func init() {
 func TestSkipStateSync(t *testing.T) {
 	rand.Seed(1)
 	test := syncTest{
-		syncableInterval:         256,
-		minBlocksBehindStateSync: 300, // must be greater than [syncableInterval] to skip sync
-		expectedMessage:          commonEng.StateSyncSkipped,
+		syncableInterval:   256,
+		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
+		expectedMessage:    commonEng.StateSyncSkipped,
 	}
 	vmSetup := createSyncServerAndClientVMs(t, test)
 	defer vmSetup.Teardown(t)
@@ -59,9 +60,9 @@ func TestSkipStateSync(t *testing.T) {
 func TestStateSyncFromScratch(t *testing.T) {
 	rand.Seed(1)
 	test := syncTest{
-		syncableInterval:         256,
-		minBlocksBehindStateSync: 50, // must be less than [syncableInterval] to perform sync
-		expectedMessage:          commonEng.StateSyncDone,
+		syncableInterval:   256,
+		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
+		expectedMessage:    commonEng.StateSyncDone,
 	}
 	vmSetup := createSyncServerAndClientVMs(t, test)
 	defer vmSetup.Teardown(t)
@@ -75,9 +76,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	var lock sync.Mutex
 	reqCount := 0
 	test := syncTest{
-		syncableInterval:         256,
-		minBlocksBehindStateSync: 50, // must be less than [syncableInterval] to perform sync
-		expectedMessage:          commonEng.StateSyncDone,
+		syncableInterval:   256,
+		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
+		expectedMessage:    commonEng.StateSyncDone,
 		responseIntercept: func(syncerVM *VM, nodeID ids.ShortID, requestID uint32, response []byte) {
 			lock.Lock()
 			defer lock.Unlock()
@@ -174,7 +175,10 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	// Create a new VM from the same database with state sync enabled.
 	syncReEnabledVM := &VM{}
 	// Disable metrics to prevent duplicate registerer
-	configJSON = "{\"metrics-enabled\":false, \"state-sync-enabled\":true}"
+	configJSON = fmt.Sprintf(
+		"{\"metrics-enabled\":false, \"state-sync-enabled\":true, \"state-sync-min-blocks\":%d}",
+		test.stateSyncMinBlocks,
+	)
 	if err := syncReEnabledVM.Initialize(
 		vmSetup.syncerVM.ctx,
 		vmSetup.syncerDBManager,
@@ -205,8 +209,6 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	enabled, err = syncReEnabledVM.StateSyncEnabled()
 	assert.NoError(t, err)
 	assert.True(t, enabled, "sync should be enabled")
-
-	syncReEnabledVM.StateSyncClient.(*stateSyncerClient).minBlocksBehindStateSync = test.minBlocksBehindStateSync
 
 	vmSetup.syncerVM = syncReEnabledVM
 	testSyncerVM(t, vmSetup, test)
@@ -329,7 +331,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 	serverVM.StateSyncServer.(*stateSyncServer).syncableInterval = test.syncableInterval
 
 	// initialise [syncerVM] with blank genesis state
-	stateSyncEnabledJSON := "{\"state-sync-enabled\":true}"
+	stateSyncEnabledJSON := fmt.Sprintf("{\"state-sync-enabled\":true, \"state-sync-min-blocks\": %d}", test.stateSyncMinBlocks)
 	syncerEngineChan, syncerVM, syncerDBManager, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
 		t,
 		false,
@@ -371,8 +373,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 		return nil
 	}
 
-	syncerVM.StateSyncClient.(*stateSyncerClient).minBlocksBehindStateSync = test.minBlocksBehindStateSync
-
 	return &syncVMSetup{
 		serverVM:        serverVM,
 		serverAppSender: serverAppSender,
@@ -412,11 +412,11 @@ func (s *syncVMSetup) Teardown(t *testing.T) {
 
 // syncTest contains both the actual VMs as well as the parameters with the expected output.
 type syncTest struct {
-	responseIntercept        func(vm *VM, nodeID ids.ShortID, requestID uint32, response []byte)
-	minBlocksBehindStateSync uint64
-	syncableInterval         uint64
-	expectedMessage          commonEng.Message
-	expectedErr              error
+	responseIntercept  func(vm *VM, nodeID ids.ShortID, requestID uint32, response []byte)
+	stateSyncMinBlocks uint64
+	syncableInterval   uint64
+	expectedMessage    commonEng.Message
+	expectedErr        error
 }
 
 func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {

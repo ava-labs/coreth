@@ -14,6 +14,8 @@ import (
 
 const (
 	defaultPruningEnabled                         = true
+	defaultCommitInterval                         = 4096
+	defaultSyncableCommitInterval                 = defaultCommitInterval * 4
 	defaultSnapshotAsync                          = true
 	defaultRpcGasCap                              = 50_000_000 // Default to 50M Gas Limit
 	defaultRpcTxFeeCap                            = 100        // 100 AVAX
@@ -75,6 +77,7 @@ type Config struct {
 
 	// Pruning Settings
 	Pruning                         bool    `json:"pruning-enabled"`                    // If enabled, trie roots are only persisted every 4096 blocks
+	CommitInterval                  uint64  `json:"commit-interval"`                    // Specifies the commit interval at which to persist EVM and atomic tries.
 	AllowMissingTries               bool    `json:"allow-missing-tries"`                // If enabled, warnings preventing an incomplete trie index are suppressed
 	PopulateMissingTries            *uint64 `json:"populate-missing-tries,omitempty"`   // Sets the starting point for re-populating missing tries. Disables re-generation if nil.
 	PopulateMissingTriesParallelism int     `json:"populate-missing-tries-parallelism"` // Number of concurrent readers to use when re-populating missing tries on startup.
@@ -118,6 +121,8 @@ type Config struct {
 	StateSyncForceHighestSummary bool   `json:"state-sync-force-highest-summary"` // Forces state sync to use the highest available summary block
 	StateSyncServerTrieCache     int    `json:"state-sync-server-trie-cache"`
 	StateSyncIDs                 string `json:"state-sync-ids"`
+	StateSyncCommitInterval      uint64 `json:"state-sync-commit-interval"`
+	StateSyncMinBlocks           uint64 `json:"state-sync-min-blocks"`
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled
@@ -150,6 +155,9 @@ func (c *Config) SetDefaults() {
 	c.PopulateMissingTriesParallelism = defaultPopulateMissingTriesParallelism
 	c.MaxOutboundActiveRequests = defaultMaxOutboundActiveRequests
 	c.StateSyncServerTrieCache = defaultStateSyncServerTrieCache
+	c.CommitInterval = defaultCommitInterval
+	c.StateSyncCommitInterval = defaultSyncableCommitInterval
+	c.StateSyncMinBlocks = defaultStateSyncMinBlocks
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

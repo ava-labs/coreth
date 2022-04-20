@@ -105,6 +105,7 @@ const (
 type CacheConfig struct {
 	TrieCleanLimit                  int     // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieDirtyLimit                  int     // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	CommitInterval                  uint64  // Commit the trie every [CommitInterval] blocks.
 	Pruning                         bool    // Whether to disable trie write caching and GC altogether (archive node)
 	PopulateMissingTries            *uint64 // If non-nil, sets the starting height for re-generating historical tries.
 	PopulateMissingTriesParallelism int     // Is the number of readers to use when trying to populate missing tries.
@@ -362,7 +363,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState is necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	return bc.reprocessState(bc.lastAccepted, 2*CommitInterval)
+	return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
 }
 
 // removeIndices removes all transaction lookup entries for the transactions contained in the canonical chain

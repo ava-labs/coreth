@@ -201,6 +201,7 @@ func New(
 			TrieCleanLimit:                  config.TrieCleanCache,
 			TrieDirtyLimit:                  config.TrieDirtyCache,
 			Pruning:                         config.Pruning,
+			CommitInterval:                  config.CommitInterval,
 			PopulateMissingTries:            config.PopulateMissingTries,
 			PopulateMissingTriesParallelism: config.PopulateMissingTriesParallelism,
 			AllowMissingTries:               config.AllowMissingTries,

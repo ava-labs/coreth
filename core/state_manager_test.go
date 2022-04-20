@@ -38,9 +38,10 @@ func (t *MockTrieDB) Cap(limit common.StorageSize) error {
 
 func TestCappedMemoryTrieWriter(t *testing.T) {
 	m := &MockTrieDB{}
-	w := NewTrieWriter(m, &CacheConfig{Pruning: true})
+	cacheConfig := &CacheConfig{Pruning: true, CommitInterval: 4096}
+	w := NewTrieWriter(m, cacheConfig)
 	assert := assert.New(t)
-	for i := 0; i < CommitInterval+1; i++ {
+	for i := 0; i < int(cacheConfig.CommitInterval)+1; i++ {
 		bigI := big.NewInt(int64(i))
 		block := types.NewBlock(
 			&types.Header{
@@ -64,7 +65,7 @@ func TestCappedMemoryTrieWriter(t *testing.T) {
 			assert.Equal(common.BigToHash(big.NewInt(int64(i-tipBufferSize))), m.LastDereference, "should have dereferenced old block on last accept")
 			m.LastDereference = common.Hash{}
 		}
-		if i < CommitInterval {
+		if i < int(cacheConfig.CommitInterval) {
 			assert.Equal(common.Hash{}, m.LastCommit, "should not have committed block on accept")
 		} else {
 			assert.Equal(block.Root(), m.LastCommit, "should have committed block after CommitInterval")

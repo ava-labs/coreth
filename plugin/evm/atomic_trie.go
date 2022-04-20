@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
-	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/trie"
@@ -27,7 +26,6 @@ import (
 
 const (
 	trieCommitSizeCap          = 10 * units.MiB
-	commitHeightInterval       = core.CommitInterval
 	progressLogUpdate          = 30 * time.Second
 	atomicKeyLength            = wrappers.LongLen + common.HashLength
 	sharedMemoryApplyBatchSize = 2000 // specifies the number of atomic operations to batch progress updates
@@ -131,7 +129,7 @@ type atomicTrie struct {
 // during initialization (blocks until ApplyToSharedMemory completes).
 func NewAtomicTrie(
 	db *versiondb.Database, sharedMemory atomic.SharedMemory,
-	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository, codec codec.Manager, lastAcceptedHeight uint64,
+	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository, codec codec.Manager, lastAcceptedHeight uint64, commitHeightInterval uint64,
 ) (AtomicTrie, error) {
 	return newAtomicTrie(db, sharedMemory, bonusBlocks, repo, codec, lastAcceptedHeight, commitHeightInterval)
 }

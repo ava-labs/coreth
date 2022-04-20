@@ -15,23 +15,14 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	// defaultSyncableInterval is chosen to balance the number of historical
-	// trie roots nodes participating in the state sync protocol need to keep,
-	// and the time nodes joining the network have to complete the sync.
-	// Higher values also add to the worst case number of blocks new nodes
-	// joining the network must process after state sync.
-	// defaultSyncableInterval must be a multiple of [core.CommitInterval]
-	// time assumptions:
-	// - block issuance time ~2s (time per 4096 blocks ~2hrs).
-	// - state sync time: ~6 hrs. (assuming even slow nodes will complete in ~12hrs)
-	// - normal bootstrap processing time: ~14 blocks / second
-	// 4 * 4096 allows a sync time of up to 16 hrs and keeping two historical
-	// trie roots (in addition to the current state trie), while adding a
-	// worst case overhead of ~15 mins in form of post-sync block processing
-	// time for new nodes.
-	defaultSyncableInterval = uint64(4 * core.CommitInterval)
-)
+type stateSyncServerConfig struct {
+	NetCodec   codec.Manager
+	Chain      *core.BlockChain
+	AtomicTrie AtomicTrie
+
+	// SyncableInterval is the interval at which blocks are eligible to provide syncable block summaries.
+	SyncableInterval uint64
+}
 
 type stateSyncServer struct {
 	chain      *core.BlockChain
@@ -47,12 +38,12 @@ type StateSyncServer interface {
 	StateSyncGetSummary(uint64) (commonEng.Summary, error)
 }
 
-func NewStateSyncServer(chain *core.BlockChain, atomicTrie AtomicTrie, netCodec codec.Manager) StateSyncServer {
+func NewStateSyncServer(config *stateSyncServerConfig) StateSyncServer {
 	return &stateSyncServer{
-		chain:            chain,
-		atomicTrie:       atomicTrie,
-		netCodec:         netCodec,
-		syncableInterval: defaultSyncableInterval,
+		chain:            config.Chain,
+		atomicTrie:       config.AtomicTrie,
+		netCodec:         config.NetCodec,
+		syncableInterval: config.SyncableInterval,
 	}
 }
 

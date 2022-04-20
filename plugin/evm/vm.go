@@ -394,6 +394,16 @@ func (vm *VM) Initialize(
 		g.Config = params.AvalancheLocalChainConfig
 	}
 
+	// Ensure that non-standard commit interval is only allowed for the local network
+	if g.Config.ChainID.Cmp(params.AvalancheLocalChainID) != 0 {
+		if vm.config.CommitInterval != defaultCommitInterval {
+			return fmt.Errorf("cannot start non-local network with commit interval %d", vm.config.CommitInterval)
+		}
+		if vm.config.StateSyncCommitInterval != defaultSyncableCommitInterval {
+			return fmt.Errorf("cannot start non-local network with syncable interval %d", vm.config.StateSyncCommitInterval)
+		}
+	}
+
 	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
 	// config, free fuji)
 	fujiExtDataHashes = nil
@@ -424,6 +434,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.OfflinePruning = vm.config.OfflinePruning
 	vm.ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
+	vm.ethConfig.CommitInterval = vm.config.CommitInterval
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -466,7 +477,7 @@ func (vm *VM) Initialize(
 	); err != nil {
 		return fmt.Errorf("failed to repair atomic repository: %w", err)
 	}
-	vm.atomicTrie, err = NewAtomicTrie(vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, vm.codec, lastAcceptedHeight)
+	vm.atomicTrie, err = NewAtomicTrie(vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, vm.codec, lastAcceptedHeight, vm.config.CommitInterval)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic trie: %w", err)
 	}
@@ -543,7 +554,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	vm.chain.Start()
 
 	// Initialize StateSyncServer here after [chain] has been initialized.
-	vm.StateSyncServer = NewStateSyncServer(vm.chain.BlockChain(), vm.atomicTrie, vm.networkCodec)
+	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
+		Chain:            vm.chain.BlockChain(),
+		AtomicTrie:       vm.atomicTrie,
+		NetCodec:         vm.networkCodec,
+		SyncableInterval: vm.config.StateSyncCommitInterval,
+	})
 	vm.setAppRequestHandlers()
 
 	return vm.initChainState(vm.chain.LastAcceptedBlock())
@@ -580,17 +596,17 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 				StateSyncNodeIDs: stateSyncIDs,
 			},
 		),
-		enabled:                  vm.config.StateSyncEnabled,
-		forceSyncHighestSummary:  vm.config.StateSyncForceHighestSummary,
-		lastAcceptedHeight:       lastAcceptedHeight, // TODO clean up how this is passed around
-		minBlocksBehindStateSync: defaultStateSyncMinBlocks,
-		chaindb:                  vm.chaindb,
-		metadataDB:               vm.metadataDB,
-		acceptedBlockDB:          vm.acceptedBlockDB,
-		db:                       vm.db,
-		atomicTrie:               vm.atomicTrie,
-		netCodec:                 vm.networkCodec,
-		toEngine:                 vm.toEngine,
+		enabled:                 vm.config.StateSyncEnabled,
+		forceSyncHighestSummary: vm.config.StateSyncForceHighestSummary,
+		stateSyncMinBlocks:      vm.config.StateSyncMinBlocks,
+		lastAcceptedHeight:      lastAcceptedHeight, // TODO clean up how this is passed around
+		chaindb:                 vm.chaindb,
+		metadataDB:              vm.metadataDB,
+		acceptedBlockDB:         vm.acceptedBlockDB,
+		db:                      vm.db,
+		atomicTrie:              vm.atomicTrie,
+		netCodec:                vm.networkCodec,
+		toEngine:                vm.toEngine,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

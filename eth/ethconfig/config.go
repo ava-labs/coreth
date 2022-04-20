@@ -83,6 +83,7 @@ type Config struct {
 	DiscoveryURLs []string
 
 	Pruning                         bool    // Whether to disable pruning and flush everything to disk
+	CommitInterval                  uint64  // If pruning is enabled, specified the interval at which to commit an entire trie to disk.
 	PopulateMissingTries            *uint64 // Height at which to start re-populating missing tries on startup.
 	PopulateMissingTriesParallelism int     // Number of concurrent readers to use when re-populating missing tries on startup.
 	AllowMissingTries               bool    // Whether to allow an archival node to run with pruning enabled and corrupt a complete index.
