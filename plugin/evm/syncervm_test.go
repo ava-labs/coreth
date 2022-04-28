@@ -49,7 +49,7 @@ func TestSkipStateSync(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
-		expectedMessage:    commonEng.StateSyncSkipped,
+		shouldSync:         false,
 	}
 	vmSetup := createSyncServerAndClientVMs(t, test)
 	defer vmSetup.Teardown(t)
@@ -62,7 +62,7 @@ func TestStateSyncFromScratch(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
-		expectedMessage:    commonEng.StateSyncDone,
+		shouldSync:         true,
 	}
 	vmSetup := createSyncServerAndClientVMs(t, test)
 	defer vmSetup.Teardown(t)
@@ -78,7 +78,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
-		expectedMessage:    commonEng.StateSyncDone,
+		shouldSync:         true,
 		responseIntercept: func(syncerVM *VM, nodeID ids.NodeID, requestID uint32, response []byte) {
 			lock.Lock()
 			defer lock.Unlock()
@@ -101,7 +101,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, vmSetup, test)
 
-	test.expectedMessage = commonEng.StateSyncDone
+	test.shouldSync = true
 	test.responseIntercept = nil
 	test.expectedErr = nil
 
@@ -415,7 +415,7 @@ type syncTest struct {
 	responseIntercept  func(vm *VM, nodeID ids.NodeID, requestID uint32, response []byte)
 	stateSyncMinBlocks uint64
 	syncableInterval   uint64
-	expectedMessage    commonEng.Message
+	shouldSync         bool
 	expectedErr        error
 }
 
@@ -434,31 +434,31 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	parsedSummary, err := serverVM.ParseStateSummary(summary.Bytes())
+	parsedSummary, err := syncerVM.ParseStateSummary(summary.Bytes())
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	retrievedSummary, err := serverVM.GetStateSummary(parsedSummary.Key())
+	retrievedSummary, err := serverVM.GetStateSummary(parsedSummary.Height())
 	if err != nil {
 		t.Fatal("error when checking if summary is accepted", "err", err)
 	}
 	assert.Equal(t, summary, retrievedSummary)
 
-	err = syncerVM.SetSyncableStateSummaries([]commonEng.Summary{summary})
+	shouldSync, err := parsedSummary.Accept()
 	if err != nil {
-		t.Fatal("unexpected error when initiating state sync")
+		t.Fatal("unexpected error accepting state summary", "err", err)
 	}
-	msg := <-syncerEngineChan
-	assert.Equal(t, test.expectedMessage, msg)
-	if test.expectedMessage == commonEng.StateSyncSkipped {
-		// if state sync should be skipped, don't expect
-		// the state to have been updated and return early
+	if shouldSync != test.shouldSync {
+		t.Fatal("unexpected value returned from accept", "expected", test.shouldSync, "got", shouldSync)
+	}
+	if !shouldSync {
 		return
 	}
+	msg := <-syncerEngineChan
+	assert.Equal(t, commonEng.StateSyncDone, msg)
 
-	// verify state sync completed with the expected height and blockID
-	blockID, syncedHeight, err := syncerVM.GetStateSyncResult()
 	// If the test is expected to error, assert the correct error is returned and finish the test.
+	err = syncerVM.StateSyncClient.Error()
 	if test.expectedErr != nil {
 		assert.ErrorIs(t, err, test.expectedErr)
 		return
@@ -466,20 +466,9 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if err != nil {
 		t.Fatal("state sync failed", err)
 	}
-	assert.Equal(t, serverVM.LastAcceptedBlock().Height(), syncedHeight)
 
-	// get the last block from [serverVM] and call [syncerVM.SetLastSummaryBlock]
-	// as the final step
-	blk, err := serverVM.GetBlock(blockID)
-	if err != nil {
-		t.Fatal("error getting block", blockID, err)
-	}
-	if blk.Height() != syncedHeight {
-		t.Fatalf("Expected block height to be %d, but found %d", syncedHeight, blk.Height())
-	}
-	assert.NoError(t, syncerVM.SetLastStateSummaryBlock(blk.Bytes()))
 	// set [syncerVM] to bootstrapping and verify the last accepted block has been updated correctly
-	// and that we can boottrap and process some blocks.
+	// and that we can bootstrap and process some blocks.
 	if err := syncerVM.SetState(snow.Bootstrapping); err != nil {
 		t.Fatal(err)
 	}

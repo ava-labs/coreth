@@ -5,7 +5,6 @@ package evm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	coreth "github.com/ava-labs/coreth/chain"
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -97,14 +97,15 @@ func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 }
 
 type StateSyncClient interface {
+	// methods that implement the client side of [block.StateSyncableVM]
 	StateSyncEnabled() (bool, error)
-	GetOngoingStateSyncSummary() (commonEng.Summary, error)
+	GetOngoingSyncStateSummary() (block.StateSummary, error)
+	ParseStateSummary(summaryBytes []byte) (block.StateSummary, error)
+
+	// additional methods required by the evm package
 	StateSyncClearOngoingSummary() error
-	ParseStateSummary(summaryBytes []byte) (commonEng.Summary, error)
-	SetSyncableStateSummaries(summaries []commonEng.Summary) error
-	GetStateSyncResult() (ids.ID, uint64, error)
-	SetLastStateSummaryBlock([]byte) error
 	Shutdown() error
+	Error() error
 }
 
 // Syncer represents a step in state sync,
@@ -116,20 +117,20 @@ type Syncer interface {
 	Done() <-chan error
 }
 
-// StateSyncEnabled always returns true as the client
+// StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
 func (client *stateSyncerClient) StateSyncEnabled() (bool, error) { return client.enabled, nil }
 
-// GetOngoingStateSyncSummary returns a state summary that was previously started
-// and not finished, and sets [localSyncableBlock] if one was found
-func (client *stateSyncerClient) GetOngoingStateSyncSummary() (commonEng.Summary, error) {
+// GetOngoingSyncStateSummary returns a state summary that was previously started
+// and not finished, and sets [resumableSummary] if one was found.
+// Returns [database.ErrNotFound] if no ongoing summary is found.
+func (client *stateSyncerClient) GetOngoingSyncStateSummary() (block.StateSummary, error) {
+
 	summaryBytes, err := client.metadataDB.Get(stateSyncSummaryKey)
-	if errors.Is(err, database.ErrNotFound) {
-		return nil, commonEng.ErrNoStateSyncOngoing
-	} else if err != nil {
-		return nil, err
+	if err != nil {
+		return nil, err // includes the [database.ErrNotFound] case
 	}
 
-	summary, err := message.NewSyncSummaryFromBytes(client.netCodec, summaryBytes)
+	summary, err := message.NewSyncSummaryFromBytes(client.netCodec, summaryBytes, client.acceptSyncSummary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncSummary: %w", err)
 	}
@@ -150,155 +151,90 @@ func (client *stateSyncerClient) StateSyncClearOngoingSummary() error {
 }
 
 // ParseStateSummary parses [summaryBytes] to [commonEng.Summary]
-func (client *stateSyncerClient) ParseStateSummary(summaryBytes []byte) (commonEng.Summary, error) {
-	return message.NewSyncSummaryFromBytes(client.netCodec, summaryBytes)
-}
-
-// SetSyncableStateSummaries is called from the engine with a slice of [summaries] the
-// network will support syncing to.
-// The client selects one summary and performs state sync without blocking,
-// returning before state sync is completed.
-// The client sends a message on [toEngine] after syncing was completed or skipped.
-func (client *stateSyncerClient) SetSyncableStateSummaries(summaries []commonEng.Summary) error {
-	log.Info("Starting state sync", "summaries", len(summaries))
-	go func() {
-		completed, err := client.stateSync(summaries)
-		if err != nil {
-			client.stateSyncErr = err
-			log.Error("error occurred in stateSync", "err", err)
-		}
-		if completed {
-			// notify engine regardless of whether err == nil,
-			// engine will call StateSyncGetResult to retrieve the ID and check the error.
-			log.Info("stateSync completed, notifying engine")
-			client.toEngine <- commonEng.StateSyncDone
-		} else {
-			log.Info("stateSync skipped, notifying engine")
-			// Initialize snapshots if we're skipping state sync, since it will not have been initialized on
-			// startup.
-			if err := client.StateSyncClearOngoingSummary(); err != nil {
-				log.Error("failed to clear ongoing summary after skipping state sync", "err", err)
-			}
-			client.chain.BlockChain().InitializeSnapshots()
-			client.toEngine <- commonEng.StateSyncSkipped
-		}
-	}()
-	return nil
+func (client *stateSyncerClient) ParseStateSummary(summaryBytes []byte) (block.StateSummary, error) {
+	return message.NewSyncSummaryFromBytes(client.netCodec, summaryBytes, client.acceptSyncSummary)
 }
 
 // stateSync blockingly performs the state sync for the EVM state and the atomic state
-// returns true if state sync was completed/attempted and false if it was skipped, along with
-// an error if one occurred.
-func (client *stateSyncerClient) stateSync(summaries []commonEng.Summary) (bool, error) {
-	if len(summaries) == 0 {
-		log.Info("no summaries available, skipping state sync")
-		return false, nil
-	}
-
-	performSync, err := client.selectSyncSummary(summaries)
-	if err != nil {
-		return true, err
-	}
-
-	if !performSync {
-		return false, nil
-	}
-
+// to [client.syncSummary]. returns an error if one occurred.
+func (client *stateSyncerClient) stateSync() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	client.cancel = cancel
 	defer cancel()
 
 	if err := client.syncBlocks(ctx, client.syncSummary.BlockHash, client.syncSummary.BlockNumber, parentsToGet); err != nil {
-		return true, err
+		return err
 	}
 
 	// Sync the EVM trie and then the atomic trie. These steps could be done
 	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
 	if err := client.syncStateTrie(ctx); err != nil {
-		return true, err
+		return err
 	}
 
-	return true, client.syncAtomicTrie(ctx)
+	return client.syncAtomicTrie(ctx)
 }
 
-// selectSyncSummary returns the summary block to sync, whether it is resuming an ongoing operation, and an error
-// if a summary block could not be determined.
-// Assumes that [proposedSummaries] to be a non-empty list of the summaries that received an alpha threshold of votes
-// from the network.
-// Updates [stateSummaryKey] to the selected summary on disk if changed from its previous value.
-// Note: selectSyncSummary will return the proposed summary with the highest block number unless there is an ongoing sync
-// for a syncable block included in [proposedSummaries]
-// TODO update comment
-func (client *stateSyncerClient) selectSyncSummary(proposedSummaries []commonEng.Summary) (bool, error) {
-	var (
-		highestSummaryBlock      message.SyncSummary
-		highestSummaryBlockBytes []byte
-	)
-
-	for _, proposedSummary := range proposedSummaries {
-		// Note: we could typecast the summary to syncable block here, but this would complicate serving state sync over gRPC.
-		syncSummary, err := message.NewSyncSummaryFromBytes(client.netCodec, proposedSummary.Bytes())
-		if err != nil {
-			return false, fmt.Errorf("failed to parse syncable block from proposed summary: %w", err)
+// acceptSyncSummary returns true if sync will be performed and launches the state sync process
+// in a goroutine.
+func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncSummary) (bool, error) {
+	isResume := proposedSummary.BlockHash == client.resumableSummary.BlockHash
+	if !isResume {
+		// Skip syncing if the blockchain is not significantly ahead of local state,
+		// since bootstrapping would be faster.
+		// (Also ensures we don't sync to a height prior to local state.)
+		if client.lastAcceptedHeight+client.stateSyncMinBlocks > proposedSummary.Height() {
+			log.Info(
+				"last accepted too close to most recent syncable block, skipping state sync",
+				"lastAccepted", client.lastAcceptedHeight,
+				"syncableHeight", proposedSummary.Height(),
+			)
+			if err := client.StateSyncClearOngoingSummary(); err != nil {
+				return false, fmt.Errorf("failed to clear ongoing summary after skipping state sync: %w", err)
+			}
+			// Initialize snapshots if we're skipping state sync, since it will not have been initialized on
+			// startup.
+			client.chain.BlockChain().InitializeSnapshots()
+			return false, nil
 		}
 
-		// If the actively syncing block is included in [proposedSummaries] resume syncing it
-		// unless [forceSyncHighestSummary] is enabled.
-		// TODO add a comment explaining why we do not need to wipe the snapshot in this case and we don't need to check
-		// the min blocks behind condition
-		// Note: we do not need to wipe the snapshot when resuming from the local summary, since it was already wiped
-		// when
-		if client.resumableSummary.BlockHash == syncSummary.BlockHash && !client.forceSyncHighestSummary {
-			client.syncSummary = client.resumableSummary
-			return true, nil
-		}
-
-		if syncSummary.BlockNumber > highestSummaryBlock.BlockNumber {
-			highestSummaryBlock = syncSummary
-			highestSummaryBlockBytes = proposedSummary.Bytes()
-		}
-	}
-
-	// Set the state sync block based on the result.
-	client.syncSummary = highestSummaryBlock
-
-	// ensure blockchain is significantly ahead of local last accepted block,
-	// to make sure state sync is worth it.
-	// Note: this additionally ensures we do not mistakenly attempt to sync to a height
-	// less than the client's last accepted block.
-	if client.lastAcceptedHeight+client.stateSyncMinBlocks > client.syncSummary.BlockNumber {
-		log.Info(
-			"last accepted too close to most recent syncable block, skipping state sync",
-			"lastAccepted", client.lastAcceptedHeight,
-			"syncableHeight", client.syncSummary.BlockNumber,
-		)
-		return false, nil
-	}
-
-	// Wipe the snapshot completely if we are not resuming from an existing sync, so that we do not
-	// use a corrupted snapshot.
-	// Note: this assumes that when the node is started with state sync disabled, the in-progress state
-	// sync marker will be wiped, so we do not accidentally resume progress from an incorrect version
-	// of the snapshot. (if switching between versions that come before this change and back this could
-	// lead to the snapshot not being cleaned up correctly)
-	if client.syncSummary.BlockHash != client.resumableSummary.BlockHash {
+		// Wipe the snapshot completely if we are not resuming from an existing sync, so that we do not
+		// use a corrupted snapshot.
+		// Note: this assumes that when the node is started with state sync disabled, the in-progress state
+		// sync marker will be wiped, so we do not accidentally resume progress from an incorrect version
+		// of the snapshot. (if switching between versions that come before this change and back this could
+		// lead to the snapshot not being cleaned up correctly)
 		<-snapshot.WipeSnapshot(client.chaindb, true)
 		// Reset the snapshot generator here so that when state sync completes, snapshots will not attempt to read an
 		// invalid generator.
 		// Note: this must be called after WipeSnapshot is called so that we do not invalidate a partially generated snapshot.
 		snapshot.ResetSnapshotGeneration(client.chaindb)
 	}
+	client.syncSummary = proposedSummary
 
-	// Otherwise, update the current state sync summary key in the database
+	// Update the current state sync summary key in the database
 	// Note: this must be performed after WipeSnapshot finishes so that we do not start a state sync
 	// session from a partially wiped snapshot.
-	if err := client.metadataDB.Put(stateSyncSummaryKey, highestSummaryBlockBytes); err != nil {
+	if err := client.metadataDB.Put(stateSyncSummaryKey, proposedSummary.Bytes()); err != nil {
 		return false, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
 	}
 	if err := client.db.Commit(); err != nil {
 		return false, fmt.Errorf("failed to commit db: %w", err)
 	}
 
+	log.Info("Starting state sync", "summary", proposedSummary)
+	go func() {
+		if err := client.stateSync(); err != nil {
+			client.stateSyncErr = err
+		} else {
+			client.stateSyncErr = client.finishSync()
+		}
+		// notify engine regardless of whether err == nil,
+		// this error will be propagated to the engine when it calls
+		// vm.SetState(snow.Bootstrapping)
+		log.Info("stateSync completed, notifying engine", "err", client.stateSyncErr)
+		client.toEngine <- commonEng.StateSyncDone
+	}()
 	return true, nil
 }
 
@@ -379,13 +315,6 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	return err
 }
 
-// At the end of StateSync process, VM will have rebuilt the state of its blockchain
-// up to a given height. However the block associated with that height may be not known
-// to the VM yet. GetStateSyncResult allows retrival of this block from network
-func (client *stateSyncerClient) GetStateSyncResult() (ids.ID, uint64, error) {
-	return ids.ID(client.syncSummary.BlockHash), client.syncSummary.BlockNumber, client.stateSyncErr
-}
-
 func (client *stateSyncerClient) Shutdown() error {
 	if client.cancel != nil {
 		client.cancel()
@@ -393,15 +322,14 @@ func (client *stateSyncerClient) Shutdown() error {
 	return nil
 }
 
-// SetLastStateSummaryBlock sets block matching destribed by [blkBytes] as the last summary block
-// Engine invokes this method after state sync has completed copying information from
-// peers. It is responsible for updating disk and memory pointers so the VM is prepared
+// finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (client *stateSyncerClient) SetLastStateSummaryBlock(blkBytes []byte) error {
-	stateBlock, err := client.state.ParseBlock(blkBytes)
+func (client *stateSyncerClient) finishSync() error {
+	stateBlock, err := client.state.GetBlock(ids.ID(client.syncSummary.BlockHash))
 	if err != nil {
-		return fmt.Errorf("error retrieving block, bytes=%s, err=%w", blkBytes, err)
+		return fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
 	}
+
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
 	if !ok {
 		return fmt.Errorf("could not convert block(%T) to *chain.BlockWrapper", wrapper)
@@ -475,3 +403,6 @@ func (client *stateSyncerClient) updateVMMarkers() error {
 	}
 	return client.db.Commit()
 }
+
+// Error returns a non-nil error if one occurred during the sync.
+func (client *stateSyncerClient) Error() error { return client.stateSyncErr }

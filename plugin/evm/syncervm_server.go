@@ -7,7 +7,8 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/codec"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -34,8 +35,8 @@ type stateSyncServer struct {
 }
 
 type StateSyncServer interface {
-	GetLastStateSummary() (commonEng.Summary, error)
-	GetStateSummary(uint64) (commonEng.Summary, error)
+	GetLastStateSummary() (block.StateSummary, error)
+	GetStateSummary(uint64) (block.StateSummary, error)
 }
 
 func NewStateSyncServer(config *stateSyncServerConfig) StateSyncServer {
@@ -71,30 +72,43 @@ func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (message.Sync
 	if err != nil {
 		return message.SyncSummary{}, fmt.Errorf("failed to construct syncable block at height %d: %w", height, err)
 	}
-
-	log.Debug("Serving syncable block", "height", height, "summary", summary)
 	return summary, nil
 }
 
 // GetLastStateSummary returns the latest state summary.
 // State summary is calculated by the block nearest to last accepted
 // that is divisible by [syncableInterval]
-func (server *stateSyncServer) GetLastStateSummary() (commonEng.Summary, error) {
+// If no summary is available, [database.ErrNotFound] must be returned.
+func (server *stateSyncServer) GetLastStateSummary() (block.StateSummary, error) {
 	lastHeight := server.chain.LastAcceptedBlock().NumberU64()
 	lastSyncSummaryNumber := lastHeight - lastHeight%server.syncableInterval
 
-	return server.stateSummaryAtHeight(lastSyncSummaryNumber)
+	summary, err := server.stateSummaryAtHeight(lastSyncSummaryNumber)
+	if err != nil {
+		log.Debug("could not get latest state summary", "err", err)
+		return nil, database.ErrNotFound
+	}
+	log.Debug("Serving syncable block at latest height", "summary", summary)
+	return summary, nil
 }
 
 // GetStateSummary implements StateSyncableVM and returns a summary corresponding
-// to the provided [key] if the node can serve state sync data for that key.
-func (server *stateSyncServer) GetStateSummary(key uint64) (commonEng.Summary, error) {
-	summaryBlock := server.chain.GetBlockByNumber(key)
+// to the provided [height] if the node can serve state sync data for that key.
+// If not, [database.ErrNotFound] must be returned.
+func (server *stateSyncServer) GetStateSummary(height uint64) (block.StateSummary, error) {
+	summaryBlock := server.chain.GetBlockByNumber(height)
 	if summaryBlock == nil ||
 		summaryBlock.NumberU64() > server.chain.LastAcceptedBlock().NumberU64() ||
 		summaryBlock.NumberU64()%server.syncableInterval != 0 {
-		return nil, commonEng.ErrUnknownStateSummary
+		return nil, database.ErrNotFound
 	}
 
-	return server.stateSummaryAtHeight(summaryBlock.NumberU64())
+	summary, err := server.stateSummaryAtHeight(summaryBlock.NumberU64())
+	if err != nil {
+		log.Debug("could not get state summary", "height", height, "err", err)
+		return nil, database.ErrNotFound
+	}
+
+	log.Debug("Serving syncable block at requested height", "height", height, "summary", summary)
+	return summary, nil
 }

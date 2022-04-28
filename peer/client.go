@@ -25,7 +25,7 @@ type NetworkClient interface {
 	// the request should be retried.
 	RequestAny(minVersion version.Application, request []byte) ([]byte, ids.NodeID, error)
 
-	// Request synchronously sends request to the specified nodeID
+	// Request synchronously sends request to the selected nodeID
 	// Returns response bytes, and ErrRequestFailed if the request should be retried.
 	Request(nodeID ids.NodeID, request []byte) ([]byte, error)
 
@@ -64,7 +64,7 @@ func (c *client) RequestAny(minVersion version.Application, request []byte) ([]b
 }
 
 // Request synchronously sends request to the specified nodeID
-// Returns response bytes and ErrRequestFailed if request should be retried
+// Returns response bytes and ErrRequestFailed if the request should be retried.
 func (c *client) Request(nodeID ids.NodeID, request []byte) ([]byte, error) {
 	waitingHandler := newWaitingResponseHandler()
 	if err := c.network.Request(nodeID, request, waitingHandler); err != nil {

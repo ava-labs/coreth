@@ -577,7 +577,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		for i, nodeIDString := range nodeIDs {
 			nodeID, err := ids.NodeIDFromString(nodeIDString)
 			if err != nil {
-				return fmt.Errorf("failed to parse %s as ShortID: %w", nodeIDString, err)
+				return fmt.Errorf("failed to parse %s as NodeID: %w", nodeIDString, err)
 			}
 			stateSyncIDs[i] = nodeID
 		}
@@ -899,6 +899,9 @@ func (vm *VM) SetState(state snow.State) error {
 		return nil
 	case snow.Bootstrapping:
 		vm.bootstrapped = false
+		if err := vm.StateSyncClient.Error(); err != nil {
+			return err
+		}
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
 		// Initialize gossip handling once we enter normal operation as there is no need to handle mempool gossip before this point.

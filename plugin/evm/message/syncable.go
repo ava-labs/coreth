@@ -4,6 +4,7 @@
 package message
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -11,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 )
 
-var _ commonEng.Summary = &SyncSummary{}
+var _ block.StateSummary = &SyncSummary{}
 
 // SyncSummary provides the information necessary to sync a node starting
 // at the given block.
@@ -24,11 +25,14 @@ type SyncSummary struct {
 	BlockRoot   common.Hash `serialize:"true"`
 	AtomicRoot  common.Hash `serialize:"true"`
 
-	summaryID ids.ID
-	bytes     []byte
+	summaryID  ids.ID
+	bytes      []byte
+	acceptImpl func(SyncSummary) (bool, error)
 }
 
-func NewSyncSummaryFromBytes(codec codec.Manager, summaryBytes []byte) (SyncSummary, error) {
+func NewSyncSummaryFromBytes(
+	codec codec.Manager, summaryBytes []byte, acceptImpl func(SyncSummary) (bool, error),
+) (SyncSummary, error) {
 	summary := SyncSummary{}
 	if codecVersion, err := codec.Unmarshal(summaryBytes, &summary); err != nil {
 		return SyncSummary{}, err
@@ -42,6 +46,7 @@ func NewSyncSummaryFromBytes(codec codec.Manager, summaryBytes []byte) (SyncSumm
 		return SyncSummary{}, err
 	}
 	summary.summaryID = summaryID
+	summary.acceptImpl = acceptImpl
 	return summary, nil
 }
 
@@ -71,7 +76,7 @@ func (s SyncSummary) Bytes() []byte {
 	return s.bytes
 }
 
-func (s SyncSummary) Key() uint64 {
+func (s SyncSummary) Height() uint64 {
 	return s.BlockNumber
 }
 
@@ -81,4 +86,11 @@ func (s SyncSummary) ID() ids.ID {
 
 func (s SyncSummary) String() string {
 	return fmt.Sprintf("SyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", s.BlockHash, s.BlockNumber, s.BlockRoot, s.AtomicRoot)
+}
+
+func (s SyncSummary) Accept() (bool, error) {
+	if s.acceptImpl == nil {
+		return false, errors.New("accept implementation not specified")
+	}
+	return s.acceptImpl(s)
 }
