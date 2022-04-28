@@ -570,12 +570,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // disk to ensure that we do not continue syncing from an invalid snapshot.
 func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	// parse nodeIDs from state sync IDs in vm config
-	var stateSyncIDs []ids.ShortID
+	var stateSyncIDs []ids.NodeID
 	if vm.config.StateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
 		nodeIDs := strings.Split(vm.config.StateSyncIDs, ",")
-		stateSyncIDs = make([]ids.ShortID, len(nodeIDs))
+		stateSyncIDs = make([]ids.NodeID, len(nodeIDs))
 		for i, nodeIDString := range nodeIDs {
-			nodeID, err := ids.ShortFromPrefixedString(nodeIDString, constants.NodeIDPrefix)
+			nodeID, err := ids.NodeIDFromString(nodeIDString)
 			if err != nil {
 				return fmt.Errorf("failed to parse %s as ShortID: %w", nodeIDString, err)
 			}

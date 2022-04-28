@@ -34,8 +34,8 @@ type stateSyncServer struct {
 }
 
 type StateSyncServer interface {
-	StateSyncGetLastSummary() (commonEng.Summary, error)
-	StateSyncGetSummary(uint64) (commonEng.Summary, error)
+	GetLastStateSummary() (commonEng.Summary, error)
+	GetStateSummary(uint64) (commonEng.Summary, error)
 }
 
 func NewStateSyncServer(config *stateSyncServerConfig) StateSyncServer {
@@ -76,19 +76,19 @@ func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (message.Sync
 	return summary, nil
 }
 
-// StateSyncGetLastSummary returns the latest state summary.
+// GetLastStateSummary returns the latest state summary.
 // State summary is calculated by the block nearest to last accepted
 // that is divisible by [syncableInterval]
-func (server *stateSyncServer) StateSyncGetLastSummary() (commonEng.Summary, error) {
+func (server *stateSyncServer) GetLastStateSummary() (commonEng.Summary, error) {
 	lastHeight := server.chain.LastAcceptedBlock().NumberU64()
 	lastSyncSummaryNumber := lastHeight - lastHeight%server.syncableInterval
 
 	return server.stateSummaryAtHeight(lastSyncSummaryNumber)
 }
 
-// StateSyncGetSummary implements StateSyncableVM and returns a summary corresponding
+// GetStateSummary implements StateSyncableVM and returns a summary corresponding
 // to the provided [key] if the node can serve state sync data for that key.
-func (server *stateSyncServer) StateSyncGetSummary(key uint64) (commonEng.Summary, error) {
+func (server *stateSyncServer) GetStateSummary(key uint64) (commonEng.Summary, error) {
 	summaryBlock := server.chain.GetBlockByNumber(key)
 	if summaryBlock == nil ||
 		summaryBlock.NumberU64() > server.chain.LastAcceptedBlock().NumberU64() ||

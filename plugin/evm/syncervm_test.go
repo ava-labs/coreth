@@ -79,7 +79,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		expectedMessage:    commonEng.StateSyncDone,
-		responseIntercept: func(syncerVM *VM, nodeID ids.ShortID, requestID uint32, response []byte) {
+		responseIntercept: func(syncerVM *VM, nodeID ids.NodeID, requestID uint32, response []byte) {
 			lock.Lock()
 			defer lock.Unlock()
 
@@ -108,7 +108,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	syncDisabledVM := &VM{}
 	appSender := &commonEng.SenderTest{T: t}
 	appSender.SendAppGossipF = func([]byte) error { return nil }
-	appSender.SendAppRequestF = func(nodeSet ids.ShortSet, requestID uint32, request []byte) error {
+	appSender.SendAppRequestF = func(nodeSet ids.NodeIDSet, requestID uint32, request []byte) error {
 		nodeID, hasItem := nodeSet.Pop()
 		if !hasItem {
 			t.Fatal("expected nodeSet to contain at least 1 nodeID")
@@ -193,7 +193,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	}
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
-	vmSetup.serverAppSender.SendAppResponseF = func(nodeID ids.ShortID, requestID uint32, response []byte) error {
+	vmSetup.serverAppSender.SendAppResponseF = func(nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go syncReEnabledVM.AppResponse(nodeID, requestID, response)
 		} else {
@@ -350,7 +350,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 	assert.True(t, enabled)
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
-	serverAppSender.SendAppResponseF = func(nodeID ids.ShortID, requestID uint32, response []byte) error {
+	serverAppSender.SendAppResponseF = func(nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go syncerVM.AppResponse(nodeID, requestID, response)
 		} else {
@@ -364,7 +364,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 	assert.NoError(t, syncerVM.Connected(serverVM.ctx.NodeID, statesyncclient.StateSyncVersion))
 
 	// override [syncerVM]'s SendAppRequest function to trigger AppRequest on [serverVM]
-	syncerAppSender.SendAppRequestF = func(nodeSet ids.ShortSet, requestID uint32, request []byte) error {
+	syncerAppSender.SendAppRequestF = func(nodeSet ids.NodeIDSet, requestID uint32, request []byte) error {
 		nodeID, hasItem := nodeSet.Pop()
 		if !hasItem {
 			t.Fatal("expected nodeSet to contain at least 1 nodeID")
@@ -412,7 +412,7 @@ func (s *syncVMSetup) Teardown(t *testing.T) {
 
 // syncTest contains both the actual VMs as well as the parameters with the expected output.
 type syncTest struct {
-	responseIntercept  func(vm *VM, nodeID ids.ShortID, requestID uint32, response []byte)
+	responseIntercept  func(vm *VM, nodeID ids.NodeID, requestID uint32, response []byte)
 	stateSyncMinBlocks uint64
 	syncableInterval   uint64
 	expectedMessage    commonEng.Message
@@ -430,21 +430,21 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	)
 
 	// get last summary and test related methods
-	summary, err := serverVM.StateSyncGetLastSummary()
+	summary, err := serverVM.GetLastStateSummary()
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	parsedSummary, err := serverVM.StateSyncParseSummary(summary.Bytes())
+	parsedSummary, err := serverVM.ParseStateSummary(summary.Bytes())
 	if err != nil {
 		t.Fatal("error getting state sync last summary", "err", err)
 	}
-	retrievedSummary, err := serverVM.StateSyncGetSummary(parsedSummary.Key())
+	retrievedSummary, err := serverVM.GetStateSummary(parsedSummary.Key())
 	if err != nil {
 		t.Fatal("error when checking if summary is accepted", "err", err)
 	}
 	assert.Equal(t, summary, retrievedSummary)
 
-	err = syncerVM.StateSync([]commonEng.Summary{summary})
+	err = syncerVM.SetSyncableStateSummaries([]commonEng.Summary{summary})
 	if err != nil {
 		t.Fatal("unexpected error when initiating state sync")
 	}
@@ -457,7 +457,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	}
 
 	// verify state sync completed with the expected height and blockID
-	blockID, syncedHeight, err := syncerVM.StateSyncGetResult()
+	blockID, syncedHeight, err := syncerVM.GetStateSyncResult()
 	// If the test is expected to error, assert the correct error is returned and finish the test.
 	if test.expectedErr != nil {
 		assert.ErrorIs(t, err, test.expectedErr)
@@ -477,7 +477,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if blk.Height() != syncedHeight {
 		t.Fatalf("Expected block height to be %d, but found %d", syncedHeight, blk.Height())
 	}
-	assert.NoError(t, syncerVM.StateSyncSetLastSummaryBlockID(blk.ID()))
+	assert.NoError(t, syncerVM.SetLastStateSummaryBlock(blk.Bytes()))
 	// set [syncerVM] to bootstrapping and verify the last accepted block has been updated correctly
 	// and that we can boottrap and process some blocks.
 	if err := syncerVM.SetState(snow.Bootstrapping); err != nil {

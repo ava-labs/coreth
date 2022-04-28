@@ -24,21 +24,21 @@ type mockNetwork struct {
 	// response mocking for RequestAny and Request calls
 	response       [][]byte
 	requestErr     []error
-	nodesRequested []ids.ShortID
+	nodesRequested []ids.NodeID
 }
 
-func (t *mockNetwork) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error) {
+func (t *mockNetwork) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.NodeID, error) {
 	if len(t.response) == 0 {
-		return nil, ids.ShortEmpty, errors.New("no mocked response to return in mockNetwork")
+		return nil, ids.EmptyNodeID, errors.New("no mocked response to return in mockNetwork")
 	}
 
 	t.requestedVersion = minVersion
 
 	response, err := t.processMock(request)
-	return response, ids.ShortEmpty, err
+	return response, ids.EmptyNodeID, err
 }
 
-func (t *mockNetwork) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
+func (t *mockNetwork) Request(nodeID ids.NodeID, request []byte) ([]byte, error) {
 	if len(t.response) == 0 {
 		return nil, errors.New("no mocked response to return in mockNetwork")
 	}

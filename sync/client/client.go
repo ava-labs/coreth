@@ -67,7 +67,7 @@ type client struct {
 	codec            codec.Manager
 	maxAttempts      uint8
 	maxRetryDelay    time.Duration
-	stateSyncNodes   []ids.ShortID
+	stateSyncNodes   []ids.NodeID
 	stateSyncNodeIdx uint32
 	stats            stats.ClientSyncerStats
 }
@@ -78,7 +78,7 @@ type ClientConfig struct {
 	Stats            stats.ClientSyncerStats
 	MaxAttempts      uint8
 	MaxRetryDelay    time.Duration
-	StateSyncNodeIDs []ids.ShortID
+	StateSyncNodeIDs []ids.NodeID
 }
 
 func NewClient(config *ClientConfig) *client {
@@ -298,7 +298,7 @@ func (c *client) get(request message.Request, parseFn parseResponseFn) (interfac
 
 		var (
 			response []byte
-			nodeID   ids.ShortID
+			nodeID   ids.NodeID
 			start    time.Time = time.Now()
 		)
 		if len(c.stateSyncNodes) == 0 {

@@ -98,12 +98,12 @@ func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 
 type StateSyncClient interface {
 	StateSyncEnabled() (bool, error)
-	StateSyncGetOngoingSummary() (commonEng.Summary, error)
+	GetOngoingStateSyncSummary() (commonEng.Summary, error)
 	StateSyncClearOngoingSummary() error
-	StateSyncParseSummary(summaryBytes []byte) (commonEng.Summary, error)
-	StateSync(summaries []commonEng.Summary) error
-	StateSyncGetResult() (ids.ID, uint64, error)
-	StateSyncSetLastSummaryBlockID(blockID ids.ID) error
+	ParseStateSummary(summaryBytes []byte) (commonEng.Summary, error)
+	SetSyncableStateSummaries(summaries []commonEng.Summary) error
+	GetStateSyncResult() (ids.ID, uint64, error)
+	SetLastStateSummaryBlock([]byte) error
 	Shutdown() error
 }
 
@@ -119,9 +119,9 @@ type Syncer interface {
 // StateSyncEnabled always returns true as the client
 func (client *stateSyncerClient) StateSyncEnabled() (bool, error) { return client.enabled, nil }
 
-// StateSyncGetOngoingSummary returns a state summary that was previously started
+// GetOngoingStateSyncSummary returns a state summary that was previously started
 // and not finished, and sets [localSyncableBlock] if one was found
-func (client *stateSyncerClient) StateSyncGetOngoingSummary() (commonEng.Summary, error) {
+func (client *stateSyncerClient) GetOngoingStateSyncSummary() (commonEng.Summary, error) {
 	summaryBytes, err := client.metadataDB.Get(stateSyncSummaryKey)
 	if errors.Is(err, database.ErrNotFound) {
 		return nil, commonEng.ErrNoStateSyncOngoing
@@ -149,17 +149,17 @@ func (client *stateSyncerClient) StateSyncClearOngoingSummary() error {
 	return nil
 }
 
-// StateSyncParseSummary parses [summaryBytes] to [commonEng.Summary]
-func (client *stateSyncerClient) StateSyncParseSummary(summaryBytes []byte) (commonEng.Summary, error) {
+// ParseStateSummary parses [summaryBytes] to [commonEng.Summary]
+func (client *stateSyncerClient) ParseStateSummary(summaryBytes []byte) (commonEng.Summary, error) {
 	return message.NewSyncSummaryFromBytes(client.netCodec, summaryBytes)
 }
 
-// StateSync is called from the engine with a slice of [summaries] the
+// SetSyncableStateSummaries is called from the engine with a slice of [summaries] the
 // network will support syncing to.
 // The client selects one summary and performs state sync without blocking,
 // returning before state sync is completed.
 // The client sends a message on [toEngine] after syncing was completed or skipped.
-func (client *stateSyncerClient) StateSync(summaries []commonEng.Summary) error {
+func (client *stateSyncerClient) SetSyncableStateSummaries(summaries []commonEng.Summary) error {
 	log.Info("Starting state sync", "summaries", len(summaries))
 	go func() {
 		completed, err := client.stateSync(summaries)
@@ -381,8 +381,8 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 
 // At the end of StateSync process, VM will have rebuilt the state of its blockchain
 // up to a given height. However the block associated with that height may be not known
-// to the VM yet. StateSyncGetResult allows retrival of this block from network
-func (client *stateSyncerClient) StateSyncGetResult() (ids.ID, uint64, error) {
+// to the VM yet. GetStateSyncResult allows retrival of this block from network
+func (client *stateSyncerClient) GetStateSyncResult() (ids.ID, uint64, error) {
 	return ids.ID(client.syncSummary.BlockHash), client.syncSummary.BlockNumber, client.stateSyncErr
 }
 
@@ -393,14 +393,14 @@ func (client *stateSyncerClient) Shutdown() error {
 	return nil
 }
 
-// StateSyncSetLastSummaryBlockID sets block matching given blkID as the last summary block
+// SetLastStateSummaryBlock sets block matching destribed by [blkBytes] as the last summary block
 // Engine invokes this method after state sync has completed copying information from
 // peers. It is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (client *stateSyncerClient) StateSyncSetLastSummaryBlockID(blkID ids.ID) error {
-	stateBlock, err := client.state.GetBlock(blkID)
+func (client *stateSyncerClient) SetLastStateSummaryBlock(blkBytes []byte) error {
+	stateBlock, err := client.state.ParseBlock(blkBytes)
 	if err != nil {
-		return fmt.Errorf("error retrieving block, blkID=%s, err=%w", blkID, err)
+		return fmt.Errorf("error retrieving block, bytes=%s, err=%w", blkBytes, err)
 	}
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
 	if !ok {

@@ -23,11 +23,11 @@ type NetworkClient interface {
 	// node version greater than or equal to minVersion.
 	// Returns response bytes, the ID of the chosen peer, and ErrRequestFailed if
 	// the request should be retried.
-	RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error)
+	RequestAny(minVersion version.Application, request []byte) ([]byte, ids.NodeID, error)
 
 	// Request synchronously sends request to the specified nodeID
-	// Returns response bytes and ErrRequestFailed if request should be retried
-	Request(nodeID ids.ShortID, request []byte) ([]byte, error)
+	// Returns response bytes, and ErrRequestFailed if the request should be retried.
+	Request(nodeID ids.NodeID, request []byte) ([]byte, error)
 
 	// Gossip sends given gossip message to peers
 	Gossip(gossip []byte) error
@@ -50,22 +50,22 @@ func NewNetworkClient(network Network) NetworkClient {
 // node version greater than or equal to minVersion.
 // Returns response bytes, the ID of the chosen peer, and ErrRequestFailed if
 // the request should be retried.
-func (c *client) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.ShortID, error) {
+func (c *client) RequestAny(minVersion version.Application, request []byte) ([]byte, ids.NodeID, error) {
 	waitingHandler := newWaitingResponseHandler()
 	nodeID, err := c.network.RequestAny(minVersion, request, waitingHandler)
 	if err != nil {
-		return nil, ids.ShortEmpty, err
+		return nil, ids.EmptyNodeID, err
 	}
 	response := <-waitingHandler.responseChan
 	if waitingHandler.failed {
-		return nil, ids.ShortEmpty, ErrRequestFailed
+		return nil, ids.EmptyNodeID, ErrRequestFailed
 	}
 	return response, nodeID, nil
 }
 
 // Request synchronously sends request to the specified nodeID
 // Returns response bytes and ErrRequestFailed if request should be retried
-func (c *client) Request(nodeID ids.ShortID, request []byte) ([]byte, error) {
+func (c *client) Request(nodeID ids.NodeID, request []byte) ([]byte, error) {
 	waitingHandler := newWaitingResponseHandler()
 	if err := c.network.Request(nodeID, request, waitingHandler); err != nil {
 		return nil, err

@@ -131,7 +131,7 @@ func TestGetBlocks(t *testing.T) {
 				Parents: 16,
 			},
 			getResponse: func(t *testing.T, request message.BlockRequest) []byte {
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -154,7 +154,7 @@ func TestGetBlocks(t *testing.T) {
 			},
 			getResponse: func(t *testing.T, request message.BlockRequest) []byte {
 				request.Parents -= 5
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -188,7 +188,7 @@ func TestGetBlocks(t *testing.T) {
 				Parents: 16,
 			},
 			getResponse: func(t *testing.T, request message.BlockRequest) []byte {
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatalf("failed to get block response: %s", err)
 				}
@@ -214,7 +214,7 @@ func TestGetBlocks(t *testing.T) {
 				Parents: 16,
 			},
 			getResponse: func(t *testing.T, _ message.BlockRequest) []byte {
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestShortID(), 1, message.BlockRequest{
+				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, message.BlockRequest{
 					Hash:    blocks[99].Hash(),
 					Height:  99,
 					Parents: 16,
@@ -366,7 +366,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -393,7 +393,7 @@ func TestGetLeafs(t *testing.T) {
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				modifiedRequest := request
 				modifiedRequest.Limit = leafsLimit
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, modifiedRequest)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, modifiedRequest)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -414,7 +414,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -439,7 +439,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -464,7 +464,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -488,7 +488,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -513,7 +513,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -544,7 +544,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -584,7 +584,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -615,7 +615,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -647,7 +647,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -678,7 +678,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 				if err != nil {
 					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
@@ -756,7 +756,7 @@ func TestGetLeafsRetries(t *testing.T) {
 		Limit:    defaultLeafRequestLimit,
 		NodeType: message.StateTrieNode,
 	}
-	goodResponse, responseErr := handler.OnLeafsRequest(context.Background(), ids.GenerateTestShortID(), 1, request)
+	goodResponse, responseErr := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
 	assert.NoError(t, responseErr)
 	mockNetClient.mockResponse(1, goodResponse)
 
@@ -790,11 +790,11 @@ func TestStateSyncNodes(t *testing.T) {
 
 	mockNetClient := &mockNetwork{}
 
-	stateSyncNodes := []ids.ShortID{
-		ids.GenerateTestShortID(),
-		ids.GenerateTestShortID(),
-		ids.GenerateTestShortID(),
-		ids.GenerateTestShortID(),
+	stateSyncNodes := []ids.NodeID{
+		ids.GenerateTestNodeID(),
+		ids.GenerateTestNodeID(),
+		ids.GenerateTestNodeID(),
+		ids.GenerateTestNodeID(),
 	}
 	client := NewClient(&ClientConfig{
 		NetworkClient:    mockNetClient,
