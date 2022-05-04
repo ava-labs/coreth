@@ -601,17 +601,17 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 				StateSyncNodeIDs: stateSyncIDs,
 			},
 		),
-		enabled:                 vm.config.StateSyncEnabled,
-		forceSyncHighestSummary: vm.config.StateSyncForceHighestSummary,
-		stateSyncMinBlocks:      vm.config.StateSyncMinBlocks,
-		lastAcceptedHeight:      lastAcceptedHeight, // TODO clean up how this is passed around
-		chaindb:                 vm.chaindb,
-		metadataDB:              vm.metadataDB,
-		acceptedBlockDB:         vm.acceptedBlockDB,
-		db:                      vm.db,
-		atomicTrie:              vm.atomicTrie,
-		netCodec:                vm.networkCodec,
-		toEngine:                vm.toEngine,
+		enabled:            vm.config.StateSyncEnabled,
+		skipResume:         vm.config.StateSyncSkipResume,
+		stateSyncMinBlocks: vm.config.StateSyncMinBlocks,
+		lastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
+		chaindb:            vm.chaindb,
+		metadataDB:         vm.metadataDB,
+		acceptedBlockDB:    vm.acceptedBlockDB,
+		db:                 vm.db,
+		atomicTrie:         vm.atomicTrie,
+		netCodec:           vm.networkCodec,
+		toEngine:           vm.toEngine,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

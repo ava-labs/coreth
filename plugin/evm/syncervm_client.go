@@ -55,8 +55,8 @@ var (
 
 // stateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
 type stateSyncClientConfig struct {
-	enabled                 bool
-	forceSyncHighestSummary bool
+	enabled    bool
+	skipResume bool
 	// Specifies the number of blocks behind the latest state summary that the chain must be
 	// in order to prefer performing state sync over falling back to the normal bootstrapping
 	// algorithm.
@@ -122,8 +122,11 @@ func (client *stateSyncerClient) StateSyncEnabled() (bool, error) { return clien
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
 // and not finished, and sets [resumableSummary] if one was found.
-// Returns [database.ErrNotFound] if no ongoing summary is found.
+// Returns [database.ErrNotFound] if no ongoing summary is found or if [client.skipResume] is true.
 func (client *stateSyncerClient) GetOngoingSyncStateSummary() (block.StateSummary, error) {
+	if client.skipResume {
+		return nil, database.ErrNotFound
+	}
 
 	summaryBytes, err := client.metadataDB.Get(stateSyncSummaryKey)
 	if err != nil {
