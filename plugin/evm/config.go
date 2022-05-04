@@ -123,6 +123,7 @@ type Config struct {
 	StateSyncIDs                 string `json:"state-sync-ids"`
 	StateSyncCommitInterval      uint64 `json:"state-sync-commit-interval"`
 	StateSyncMinBlocks           uint64 `json:"state-sync-min-blocks"`
+	StateSyncDisableRequests     bool   `json:"state-sync-disable-requests"` // Disables serving state sync data on incoming requests
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled

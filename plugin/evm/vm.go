@@ -560,7 +560,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		NetCodec:         vm.networkCodec,
 		SyncableInterval: vm.config.StateSyncCommitInterval,
 	})
-	vm.setAppRequestHandlers()
+
+	if !vm.config.StateSyncDisableRequests {
+		// if state sync requests are disabled, do not initialize app request handlers
+		// this leaves the default no-op implementation in place.
+		vm.setAppRequestHandlers()
+	}
 
 	return vm.initChainState(vm.chain.LastAcceptedBlock())
 }
