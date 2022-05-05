@@ -30,11 +30,11 @@ type Client interface {
 	Import(ctx context.Context, userPass api.UserPass, to string, sourceChain string) (ids.ID, error)
 	ExportAVAX(ctx context.Context, userPass api.UserPass, amount uint64, to string) (ids.ID, error)
 	Export(ctx context.Context, userPass api.UserPass, amount uint64, to string, assetID string) (ids.ID, error)
-	StartCPUProfiler(ctx context.Context) (bool, error)
-	StopCPUProfiler(ctx context.Context) (bool, error)
-	MemoryProfile(ctx context.Context) (bool, error)
-	LockProfile(ctx context.Context) (bool, error)
-	SetLogLevel(ctx context.Context, level log.Lvl) (bool, error)
+	StartCPUProfiler(ctx context.Context) error
+	StopCPUProfiler(ctx context.Context) error
+	MemoryProfile(ctx context.Context) error
+	LockProfile(ctx context.Context) error
+	SetLogLevel(ctx context.Context, level log.Lvl) error
 	GetVMConfig(ctx context.Context) (*Config, error)
 }
 
@@ -196,37 +196,32 @@ func (c *client) Export(
 	return res.TxID, err
 }
 
-func (c *client) StartCPUProfiler(ctx context.Context) (bool, error) {
-	res := &api.SuccessResponse{}
-	err := c.adminRequester.SendRequest(ctx, "startCPUProfiler", struct{}{}, res)
-	return res.Success, err
+func (c *client) StartCPUProfiler(ctx context.Context) error {
+	res := &api.EmptyReply{}
+	return c.adminRequester.SendRequest(ctx, "startCPUProfiler", struct{}{}, res)
 }
 
-func (c *client) StopCPUProfiler(ctx context.Context) (bool, error) {
-	res := &api.SuccessResponse{}
-	err := c.adminRequester.SendRequest(ctx, "stopCPUProfiler", struct{}{}, res)
-	return res.Success, err
+func (c *client) StopCPUProfiler(ctx context.Context) error {
+	res := &api.EmptyReply{}
+	return c.adminRequester.SendRequest(ctx, "stopCPUProfiler", struct{}{}, res)
 }
 
-func (c *client) MemoryProfile(ctx context.Context) (bool, error) {
-	res := &api.SuccessResponse{}
-	err := c.adminRequester.SendRequest(ctx, "memoryProfile", struct{}{}, res)
-	return res.Success, err
+func (c *client) MemoryProfile(ctx context.Context) error {
+	res := &api.EmptyReply{}
+	return c.adminRequester.SendRequest(ctx, "memoryProfile", struct{}{}, res)
 }
 
-func (c *client) LockProfile(ctx context.Context) (bool, error) {
-	res := &api.SuccessResponse{}
-	err := c.adminRequester.SendRequest(ctx, "lockProfile", struct{}{}, res)
-	return res.Success, err
+func (c *client) LockProfile(ctx context.Context) error {
+	res := &api.EmptyReply{}
+	return c.adminRequester.SendRequest(ctx, "lockProfile", struct{}{}, res)
 }
 
 // SetLogLevel dynamically sets the log level for the C Chain
-func (c *client) SetLogLevel(ctx context.Context, level log.Lvl) (bool, error) {
-	res := &api.SuccessResponse{}
-	err := c.adminRequester.SendRequest(ctx, "setLogLevel", &SetLogLevelArgs{
+func (c *client) SetLogLevel(ctx context.Context, level log.Lvl) error {
+	res := &api.EmptyReply{}
+	return c.adminRequester.SendRequest(ctx, "setLogLevel", &SetLogLevelArgs{
 		Level: level.String(),
 	}, res)
-	return res.Success, err
 }
 
 // GetVMConfig returns the current config of the VM
