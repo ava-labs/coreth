@@ -11,7 +11,10 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 )
 
-var _ GossipHandler = NoopMempoolGossipHandler{}
+var (
+	_ GossipHandler  = NoopMempoolGossipHandler{}
+	_ RequestHandler = NoopRequestHandler{}
+)
 
 // GossipHandler handles incoming gossip messages
 type GossipHandler interface {
