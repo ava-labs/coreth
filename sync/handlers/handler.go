@@ -33,7 +33,7 @@ func NewSyncHandler(
 	stats stats.HandlerStats,
 ) message.RequestHandler {
 	return &syncHandler{
-		stateTrieLeafsRequestHandler:  NewLeafsRequestHandler(evmTrieDB, networkCodec, stats), // TODO standardize argument ordering
+		stateTrieLeafsRequestHandler:  NewLeafsRequestHandler(evmTrieDB, networkCodec, stats)
 		atomicTrieLeafsRequestHandler: NewLeafsRequestHandler(atomicTrieDB, networkCodec, stats),
 		blockRequestHandler:           NewBlockRequestHandler(getBlock, networkCodec, stats),
 		codeRequestHandler:            NewCodeRequestHandler(evmTrieDB.DiskDB(), networkCodec, stats),
