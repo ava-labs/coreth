@@ -4,7 +4,6 @@
 package message
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -90,7 +89,7 @@ func (s SyncSummary) String() string {
 
 func (s SyncSummary) Accept() (bool, error) {
 	if s.acceptImpl == nil {
-		return false, errors.New("accept implementation not specified")
+		return false, fmt.Errorf("accept implementation not specified for summary: %s", s)
 	}
 	return s.acceptImpl(s)
 }
