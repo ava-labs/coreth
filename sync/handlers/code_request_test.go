@@ -22,8 +22,6 @@ import (
 )
 
 func TestCodeRequestHandler(t *testing.T) {
-	codec := message.MustBuildCodec()
-
 	database := memorydb.New()
 
 	codeBytes := []byte("some code goes here")
@@ -31,14 +29,14 @@ func TestCodeRequestHandler(t *testing.T) {
 	rawdb.WriteCode(database, codeHash, codeBytes)
 
 	mockHandlerStats := &stats.MockHandlerStats{}
-	codeRequestHandler := NewCodeRequestHandler(database, codec, mockHandlerStats)
+	codeRequestHandler := NewCodeRequestHandler(database, message.Codec, mockHandlerStats)
 
 	// query for known code entry
 	responseBytes, err := codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 1, message.CodeRequest{Hash: codeHash})
 	assert.NoError(t, err)
 
 	var response message.CodeResponse
-	if _, err = codec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling CodeResponse", err)
 	}
 	assert.True(t, bytes.Equal(codeBytes, response.Data))
@@ -66,7 +64,7 @@ func TestCodeRequestHandler(t *testing.T) {
 	assert.NotNil(t, responseBytes)
 
 	response = message.CodeResponse{}
-	if _, err = codec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling CodeResponse", err)
 	}
 	assert.True(t, bytes.Equal(codeBytes, response.Data))

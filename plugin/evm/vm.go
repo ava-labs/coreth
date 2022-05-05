@@ -466,10 +466,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.networkCodec, err = message.BuildCodec()
-	if err != nil {
-		return err
-	}
+	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 

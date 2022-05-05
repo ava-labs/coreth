@@ -35,22 +35,24 @@ type atomicSyncTestCheckpoint struct {
 // testAtomicSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
 // starting at [targetRoot], and stopping and resuming at each of the [checkpoints].
 func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight uint64, targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64) {
-	codec := message.MustBuildCodec()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	numLeaves := 0
 	mockClient := syncclient.NewMockClient(
-		codec, handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats()), nil, nil)
+		message.Codec,
+		handlers.NewLeafsRequestHandler(serverTrieDB, message.Codec, handlerstats.NewNoopHandlerStats()),
+		nil,
+		nil,
+	)
 
 	clientDB := versiondb.New(memdb.New())
 
-	repo, err := NewAtomicTxRepository(clientDB, codec, 0)
+	repo, err := NewAtomicTxRepository(clientDB, message.Codec, 0)
 	if err != nil {
 		t.Fatal("could not initialize atomix tx repository", err)
 	}
-	atomicTrie, err := newAtomicTrie(clientDB, testSharedMemory(), nil, repo, codec, 0, commitInterval)
+	atomicTrie, err := newAtomicTrie(clientDB, testSharedMemory(), nil, repo, message.Codec, 0, commitInterval)
 	if err != nil {
 		t.Fatal("could not initialize atomic trie", err)
 	}

@@ -42,10 +42,9 @@ func testSync(t *testing.T, test syncTest) {
 		ctx = test.ctx
 	}
 	clientDB, serverTrieDB, root := test.prepareForTest(t)
-	codec := message.MustBuildCodec()
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, codec, handlerstats.NewNoopHandlerStats())
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewMockClient(codec, leafsRequestHandler, codeRequestHandler, nil)
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverTrieDB.DiskDB(), message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewMockClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
 	// Set intercept functions for the mock client
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept

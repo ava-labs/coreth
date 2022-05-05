@@ -21,8 +21,6 @@ import (
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	rand.Seed(1)
-	codec := message.MustBuildCodec()
-
 	mockHandlerStats := &stats.MockHandlerStats{}
 	memdb := memorydb.New()
 	trieDB := trie.NewDatabase(memdb)
@@ -34,7 +32,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	// Corrupt [corruptedTrieRoot]
 	trie.CorruptTrie(t, trieDB, corruptedTrieRoot, 5)
 
-	leafsHandler := NewLeafsRequestHandler(trieDB, codec, mockHandlerStats)
+	leafsHandler := NewLeafsRequestHandler(trieDB, message.Codec, mockHandlerStats)
 
 	tests := map[string]struct {
 		prepareTestFn    func() (context.Context, message.LeafsRequest)
@@ -150,7 +148,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.Len(t, leafsResponse.Keys, 500)
 				assert.Len(t, leafsResponse.Vals, 500)
@@ -171,7 +169,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.Len(t, leafsResponse.Keys, 500)
 				assert.Len(t, leafsResponse.Vals, 500)
@@ -225,7 +223,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
 				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
@@ -246,7 +244,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
 				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
@@ -279,7 +277,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
 				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
@@ -315,7 +313,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.EqualValues(t, 40, len(leafsResponse.Keys))
 				assert.EqualValues(t, 40, len(leafsResponse.Vals))
@@ -348,7 +346,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.EqualValues(t, 600, len(leafsResponse.Keys))
 				assert.EqualValues(t, 600, len(leafsResponse.Vals))
@@ -381,7 +379,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				assert.NoError(t, err)
 				var leafsResponse message.LeafsResponse
-				_, err = codec.Unmarshal(response, &leafsResponse)
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
 				assert.EqualValues(t, len(leafsResponse.Keys), 0)
 				assert.EqualValues(t, len(leafsResponse.Vals), 0)
@@ -415,7 +413,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.NotEmpty(t, response)
 
 				var leafsResponse message.LeafsResponse
-				if _, err = codec.Unmarshal(response, &leafsResponse); err != nil {
+				if _, err = message.Codec.Unmarshal(response, &leafsResponse); err != nil {
 					t.Fatalf("unexpected error when unmarshalling LeafsResponse: %v", err)
 				}
 

@@ -40,8 +40,6 @@ func TestBlockRequestHandler(t *testing.T) {
 		blocksDB[blk.Hash()] = blk
 	}
 
-	codec := message.MustBuildCodec()
-
 	mockHandlerStats := &stats.MockHandlerStats{}
 	blockRequestHandler := NewBlockRequestHandler(func(hash common.Hash, height uint64) *types.Block {
 		blk, ok := blocksDB[hash]
@@ -49,7 +47,7 @@ func TestBlockRequestHandler(t *testing.T) {
 			return nil
 		}
 		return blk
-	}, codec, mockHandlerStats)
+	}, message.Codec, mockHandlerStats)
 
 	tests := []struct {
 		name string
@@ -122,7 +120,7 @@ func TestBlockRequestHandler(t *testing.T) {
 			assert.NotEmpty(t, responseBytes)
 
 			var response message.BlockResponse
-			if _, err = codec.Unmarshal(responseBytes, &response); err != nil {
+			if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 				t.Fatal("error unmarshalling", err)
 			}
 			assert.Len(t, response.Blocks, test.expectedBlocks)
@@ -161,8 +159,6 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 		blocksDB[blk.Hash()] = blk
 	}
 
-	codec := message.MustBuildCodec()
-
 	cancelAfterNumRequests := 2
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -178,7 +174,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 			return nil
 		}
 		return blk
-	}, codec, stats.NewNoopHandlerStats())
+	}, message.Codec, stats.NewNoopHandlerStats())
 
 	responseBytes, err := blockRequestHandler.OnBlockRequest(ctx, ids.GenerateTestNodeID(), 1, message.BlockRequest{
 		Hash:    blocks[10].Hash(),
@@ -191,7 +187,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = codec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling", err)
 	}
 	// requested 8 blocks, received cancelAfterNumRequests because of timeout
