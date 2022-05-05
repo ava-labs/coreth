@@ -35,15 +35,6 @@ const (
 
 	// maximum number of retry attempts for a single state sync request
 	maxRetryAttempts = uint8(32)
-
-	// defaultStateSyncMinBlocks is the minimum number of blocks the blockchain
-	// should be ahead of local last accepted to perform state sync.
-	// This constant is chosen so if normal bootstrapping would be faster than
-	// state sync, normal bootstrapping is preferred.
-	// time assumptions:
-	// - normal bootstrap processing time: ~14 blocks / second
-	// - state sync time: ~6 hrs.
-	defaultStateSyncMinBlocks = 300_000
 )
 
 var (

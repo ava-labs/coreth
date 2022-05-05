@@ -34,6 +34,15 @@ const (
 	defaultPopulateMissingTriesParallelism        = 1024
 	defaultMaxOutboundActiveRequests              = 8
 	defaultStateSyncServerTrieCache               = 64 // MB
+
+	// defaultStateSyncMinBlocks is the minimum number of blocks the blockchain
+	// should be ahead of local last accepted to perform state sync.
+	// This constant is chosen so normal bootstrapping is preferred when it would
+	// be faster than state sync.
+	// time assumptions:
+	// - normal bootstrap processing time: ~14 blocks / second
+	// - state sync time: ~6 hrs.
+	defaultStateSyncMinBlocks = 300_000
 )
 
 var defaultEnabledAPIs = []string{
