@@ -459,12 +459,29 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
+	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
 
+	if err := vm.initializeMetrics(); err != nil {
+		return err
+	}
+
+	// initialize peer network
+	vm.networkCodec, err = message.BuildCodec()
+	if err != nil {
+		return err
+	}
+	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.client = peer.NewNetworkClient(vm.Network)
+
+	if err := vm.initializeChain(lastAcceptedHash); err != nil {
+		return err
+	}
+
+	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.db, vm.codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-
 	bonusBlockHeights := make(map[uint64]ids.ID)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
 		bonusBlockHeights = bonusBlockMainnetHeights
@@ -482,19 +499,6 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create atomic trie: %w", err)
 	}
 
-	vm.networkCodec, err = message.BuildCodec()
-	if err != nil {
-		return err
-	}
-
-	// initialize peer network
-	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, ctx.NodeID, vm.config.MaxOutboundActiveRequests)
-	vm.client = peer.NewNetworkClient(vm.Network)
-
-	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
-
-	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
-
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// The Codec explicitly registers the types it requires from the secp256k1fx
@@ -503,6 +507,16 @@ func (vm *VM) Initialize(
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
 
+	if err := vm.fx.Initialize(vm); err != nil {
+		return err
+	}
+
+	vm.initializeStateSyncServer()
+	return vm.initializeStateSyncClient(lastAcceptedHeight)
+}
+
+func (vm *VM) initializeMetrics() error {
+	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
 	// If metrics are enabled, register the default metrics regitry
 	if metrics.Enabled {
 		gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
@@ -510,20 +524,11 @@ func (vm *VM) Initialize(
 			return err
 		}
 		// Register [multiGatherer] after registerers have been registered to it
-		if err := ctx.Metrics.Register(vm.multiGatherer); err != nil {
+		if err := vm.ctx.Metrics.Register(vm.multiGatherer); err != nil {
 			return err
 		}
 	}
-
-	if err := vm.fx.Initialize(vm); err != nil {
-		return err
-	}
-
-	if err := vm.initializeChain(lastAcceptedHash); err != nil {
-		return err
-	}
-
-	return vm.initializeStateSyncClient(lastAcceptedHeight)
+	return nil
 }
 
 func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
@@ -545,28 +550,13 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 
 	// start goroutines to manage block building
 	//
-	// NOTE: gossip network must be initialized first otherwie ETH tx gossip will
+	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will
 	// not work.
 	vm.gossiper = vm.createGossiper()
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 
 	vm.chain.Start()
-
-	// Initialize StateSyncServer here after [chain] has been initialized.
-	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
-		Chain:            vm.chain.BlockChain(),
-		AtomicTrie:       vm.atomicTrie,
-		NetCodec:         vm.networkCodec,
-		SyncableInterval: vm.config.StateSyncCommitInterval,
-	})
-
-	if !vm.config.StateSyncDisableRequests {
-		// if state sync requests are disabled, do not initialize app request handlers
-		// this leaves the default no-op implementation in place.
-		vm.setAppRequestHandlers()
-	}
-
 	return vm.initChainState(vm.chain.LastAcceptedBlock())
 }
 
@@ -621,6 +611,22 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	}
 
 	return nil
+}
+
+// initializeStateSyncServer should be called after [vm.chain] is initialized.
+func (vm *VM) initializeStateSyncServer() {
+	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
+		Chain:            vm.chain.BlockChain(),
+		AtomicTrie:       vm.atomicTrie,
+		NetCodec:         vm.networkCodec,
+		SyncableInterval: vm.config.StateSyncCommitInterval,
+	})
+
+	if !vm.config.StateSyncDisableRequests {
+		// if state sync requests are disabled, do not initialize app request handlers
+		// this leaves the default no-op implementation in place.
+		vm.setAppRequestHandlers()
+	}
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
