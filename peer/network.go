@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
@@ -20,7 +22,6 @@ import (
 
 	"github.com/ava-labs/coreth/peer/stats"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Minimum amount of time to handle a request
