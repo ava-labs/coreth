@@ -36,14 +36,17 @@ func TestGetCode(t *testing.T) {
 
 	// test happy path - code response is valid
 	codeResponse := message.CodeResponse{
-		Data: []byte("this is the code"),
+		Data: [][]byte{[]byte("this is the code")},
 	}
 	response, err := message.Codec.Marshal(message.Version, codeResponse)
 	if err != nil {
 		t.Fatal("could not marshal response", err)
 	}
 	mockNetClient.mockResponse(1, response)
-	codeHash := crypto.Keccak256Hash(codeResponse.Data)
+	codeHashes := make([]common.Hash, len(codeResponse.Data))
+	for i, code := range codeResponse.Data {
+		codeHashes[i] = crypto.Keccak256Hash(code)
+	}
 
 	stateSyncClient := NewClient(&ClientConfig{
 		NetworkClient:    mockNetClient,
@@ -53,7 +56,7 @@ func TestGetCode(t *testing.T) {
 		MaxRetryDelay:    1,
 		StateSyncNodeIDs: nil,
 	})
-	codeBytes, err := stateSyncClient.GetCode(codeHash)
+	codeBytes, err := stateSyncClient.GetCode(codeHashes)
 	if err != nil {
 		t.Fatal("unexpected error in test", err)
 	}
@@ -61,10 +64,10 @@ func TestGetCode(t *testing.T) {
 	assert.Equal(t, codeBytes, codeResponse.Data)
 
 	// test where code data does not match the code hash
-	codeHash = common.BytesToHash([]byte("some hash that does not match data"))
+	codeHashes = []common.Hash{common.BytesToHash([]byte("some hash that does not match data"))}
 	mockNetClient.mockResponse(maxAttempts, response)
 
-	codeBytes, err = stateSyncClient.GetCode(codeHash)
+	codeBytes, err = stateSyncClient.GetCode(codeHashes)
 	assert.Nil(t, codeBytes)
 	assert.Error(t, err)
 	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)

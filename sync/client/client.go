@@ -52,8 +52,8 @@ type Client interface {
 	// specified range from height to height-parents is inclusive
 	GetBlocks(blockHash common.Hash, height uint64, parents uint16) ([]*types.Block, error)
 
-	// GetCode synchronously retrieves code associated with given common.Hash
-	GetCode(common.Hash) ([]byte, error)
+	// GetCode synchronously retrieves code associated with given [common.Hash]es
+	GetCode([]common.Hash) ([][]byte, error)
 }
 
 // parseResponseFn parses given response bytes in context of specified request
@@ -233,15 +233,15 @@ func parseBlocks(codec codec.Manager, req message.Request, data []byte) (interfa
 	return blocks, len(blocks), nil
 }
 
-func (c *client) GetCode(hash common.Hash) ([]byte, error) {
-	req := message.NewCodeRequest(hash)
+func (c *client) GetCode(hashes []common.Hash) ([][]byte, error) {
+	req := message.NewCodeRequest(hashes)
 
 	data, err := c.get(req, parseCode)
 	if err != nil {
-		return nil, fmt.Errorf("could not get code (%s): %w", hash, err)
+		return nil, fmt.Errorf("could not get code (%s): %w", req, err)
 	}
 
-	return data.([]byte), nil
+	return data.([][]byte), nil
 }
 
 // parseCode validates given object as a code object
@@ -256,13 +256,17 @@ func parseCode(codec codec.Manager, req message.Request, data []byte) (interface
 		return nil, 0, errEmptyResponse
 	}
 
-	hash := crypto.Keccak256Hash(response.Data)
-	expected := req.(message.CodeRequest).Hash
-	if hash != expected {
-		return nil, 0, fmt.Errorf("%w for code: (got %v) (expected %v)", errHashMismatch, hash, expected)
+	expectedHashes := req.(message.CodeRequest).Hashes
+	totalBytes := 0
+	for i, code := range response.Data {
+		hash := crypto.Keccak256Hash(code)
+		if hash != expectedHashes[i] {
+			return nil, 0, fmt.Errorf("%w for code at index %d: (got %v) (expected %v)", errHashMismatch, i, hash, expectedHashes[i])
+		}
+		totalBytes += len(code)
 	}
 
-	return response.Data, len(response.Data), nil
+	return response.Data, totalBytes, nil
 }
 
 // get submits given request and blockingly returns with either a parsed response object or error

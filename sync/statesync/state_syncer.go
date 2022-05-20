@@ -190,11 +190,11 @@ func (s *stateSyncer) handleLeafs(root common.Hash, keys [][]byte, values [][]by
 		// check if this account has code and fetch it
 		codeHash := common.BytesToHash(acc.CodeHash)
 		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash && !rawdb.HasCodeWithPrefix(s.db, codeHash) {
-			codeBytes, err := s.client.GetCode(codeHash)
-			if err != nil {
+			codeBytes, err := s.client.GetCode([]common.Hash{codeHash})
+			if err != nil || len(codeBytes) < 1 {
 				return nil, fmt.Errorf("error getting code bytes for code hash [%s] from network: %w", codeHash, err)
 			}
-			rawdb.WriteCode(mainTrie.batch, codeHash, codeBytes)
+			rawdb.WriteCode(mainTrie.batch, codeHash, codeBytes[0])
 		}
 
 		// write account snapshot

@@ -26,6 +26,7 @@ type BlockRequestHandlerStats interface {
 type CodeRequestHandlerStats interface {
 	IncCodeRequest()
 	IncMissingCodeHash()
+	IncTooManyHashesRequested()
 	UpdateCodeReadTime(duration time.Duration)
 	UpdateCodeBytesReturned(bytes uint32)
 }
@@ -47,10 +48,11 @@ type handlerStats struct {
 	blockRequestProcessingTime metrics.Timer
 
 	// CodeRequestHandler stats
-	codeRequest       metrics.Counter
-	missingCodeHash   metrics.Counter
-	codeBytesReturned metrics.Histogram
-	codeReadDuration  metrics.Timer
+	codeRequest            metrics.Counter
+	missingCodeHash        metrics.Counter
+	tooManyHashesRequested metrics.Counter
+	codeBytesReturned      metrics.Histogram
+	codeReadDuration       metrics.Timer
 
 	// LeafsRequestHandler stats
 	leafsRequest               metrics.Counter
@@ -83,6 +85,10 @@ func (h *handlerStats) IncCodeRequest() {
 
 func (h *handlerStats) IncMissingCodeHash() {
 	h.missingCodeHash.Inc(1)
+}
+
+func (h *handlerStats) IncTooManyHashesRequested() {
+	h.tooManyHashesRequested.Inc(1)
 }
 
 func (h *handlerStats) UpdateCodeReadTime(duration time.Duration) {
@@ -158,6 +164,7 @@ func (n *noopHandlerStats) UpdateBlocksReturned(uint16)                    {}
 func (n *noopHandlerStats) UpdateBlockRequestProcessingTime(time.Duration) {}
 func (n *noopHandlerStats) IncCodeRequest()                                {}
 func (n *noopHandlerStats) IncMissingCodeHash()                            {}
+func (n *noopHandlerStats) IncTooManyHashesRequested()                     {}
 func (n *noopHandlerStats) UpdateCodeReadTime(time.Duration)               {}
 func (n *noopHandlerStats) UpdateCodeBytesReturned(uint32)                 {}
 func (n *noopHandlerStats) IncLeafsRequest()                               {}

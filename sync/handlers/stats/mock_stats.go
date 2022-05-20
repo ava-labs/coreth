@@ -19,6 +19,7 @@ type MockHandlerStats struct {
 
 	CodeRequestCount,
 	MissingCodeHashCount,
+	TooManyHashesRequested,
 	CodeBytesReturnedSum uint32
 	CodeReadTimeSum time.Duration
 
@@ -39,6 +40,7 @@ func (m *MockHandlerStats) Reset() {
 	m.BlockRequestProcessingTimeSum = 0
 	m.CodeRequestCount = 0
 	m.MissingCodeHashCount = 0
+	m.TooManyHashesRequested = 0
 	m.CodeBytesReturnedSum = 0
 	m.CodeReadTimeSum = 0
 	m.LeafsRequestCount = 0
@@ -83,6 +85,12 @@ func (m *MockHandlerStats) IncMissingCodeHash() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.MissingCodeHashCount++
+}
+
+func (m *MockHandlerStats) IncTooManyHashesRequested() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.TooManyHashesRequested++
 }
 
 func (m *MockHandlerStats) UpdateCodeReadTime(duration time.Duration) {
