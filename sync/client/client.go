@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 
 	"github.com/ava-labs/coreth/ethdb/memorydb"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/sync/client/stats"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -41,6 +42,7 @@ var (
 	errTooManyLeaves          = errors.New("response contains more than requested leaves")
 	errUnmarshalResponse      = errors.New("failed to unmarshal response")
 	errInvalidCodeResponseLen = errors.New("number of code bytes in response does not match requested hashes")
+	errMaxCodeSizeExceeded    = errors.New("max code size exceeded")
 )
 var _ Client = &client{}
 
@@ -261,6 +263,10 @@ func parseCode(codec codec.Manager, req message.Request, data []byte) (interface
 
 	totalBytes := 0
 	for i, code := range response.Data {
+		if len(code) > params.MaxCodeSize {
+			return nil, 0, fmt.Errorf("%w: (hash %s) (size %d)", errMaxCodeSizeExceeded, codeRequest.Hashes[i], len(code))
+		}
+
 		hash := crypto.Keccak256Hash(code)
 		if hash != codeRequest.Hashes[i] {
 			return nil, 0, fmt.Errorf("%w for code at index %d: (got %v) (expected %v)", errHashMismatch, i, hash, codeRequest.Hashes[i])

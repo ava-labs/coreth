@@ -74,6 +74,10 @@ func TestGetCode(t *testing.T) {
 
 	// test where returned code data length does not match the request
 	codeResponse.Data = append(codeResponse.Data, []byte("client did not request this code"))
+	response, err = message.Codec.Marshal(message.Version, codeResponse)
+	if err != nil {
+		t.Fatal("could not marshal response", err)
+	}
 	mockNetClient.mockResponse(maxAttempts, response)
 	codeBytes, err = stateSyncClient.GetCode(codeHashes)
 	assert.Nil(t, codeBytes)
@@ -81,6 +85,23 @@ func TestGetCode(t *testing.T) {
 	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)
 
 	codeResponse.Data = nil // no code returned is also an invalid response
+	response, err = message.Codec.Marshal(message.Version, codeResponse)
+	if err != nil {
+		t.Fatal("could not marshal response", err)
+	}
+	mockNetClient.mockResponse(maxAttempts, response)
+	codeBytes, err = stateSyncClient.GetCode(codeHashes)
+	assert.Nil(t, codeBytes)
+	assert.Error(t, err)
+	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)
+
+	// test where code is too large
+	codeResponse.Data = [][]byte{bytes.Repeat([]byte{0x01}, params.MaxCodeSize+1)}
+	codeHashes[0] = crypto.Keccak256Hash(codeResponse.Data[0])
+	response, err = message.Codec.Marshal(message.Version, codeResponse)
+	if err != nil {
+		t.Fatal("could not marshal response", err)
+	}
 	mockNetClient.mockResponse(maxAttempts, response)
 	codeBytes, err = stateSyncClient.GetCode(codeHashes)
 	assert.Nil(t, codeBytes)
