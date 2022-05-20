@@ -53,8 +53,8 @@ type Client interface {
 	// specified range from height to height-parents is inclusive
 	GetBlocks(blockHash common.Hash, height uint64, parents uint16) ([]*types.Block, error)
 
-	// GetCode synchronously retrieves code associated with given [common.Hash]es
-	GetCode([]common.Hash) ([][]byte, error)
+	// GetCode synchronously retrieves code associated with the given hashes
+	GetCode(hashes []common.Hash) ([][]byte, error)
 }
 
 // parseResponseFn parses given response bytes in context of specified request
