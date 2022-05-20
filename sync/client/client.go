@@ -32,14 +32,15 @@ import (
 )
 
 var (
-	StateSyncVersion      = version.NewDefaultApplication(constants.PlatformName, 1, 7, 11)
-	errEmptyResponse      = errors.New("empty response")
-	errTooManyBlocks      = errors.New("response contains more blocks than requested")
-	errHashMismatch       = errors.New("hash does not match expected value")
-	errInvalidRangeProof  = errors.New("failed to verify range proof")
-	errExceededRetryLimit = errors.New("exceeded request retry limit")
-	errTooManyLeaves      = errors.New("response contains more than requested leaves")
-	errUnmarshalResponse  = errors.New("failed to unmarshal response")
+	StateSyncVersion          = version.NewDefaultApplication(constants.PlatformName, 1, 7, 11)
+	errEmptyResponse          = errors.New("empty response")
+	errTooManyBlocks          = errors.New("response contains more blocks than requested")
+	errHashMismatch           = errors.New("hash does not match expected value")
+	errInvalidRangeProof      = errors.New("failed to verify range proof")
+	errExceededRetryLimit     = errors.New("exceeded request retry limit")
+	errTooManyLeaves          = errors.New("response contains more than requested leaves")
+	errUnmarshalResponse      = errors.New("failed to unmarshal response")
+	errInvalidCodeResponseLen = errors.New("number of code bytes in response does not match requested hashes")
 )
 var _ Client = &client{}
 
@@ -252,16 +253,17 @@ func parseCode(codec codec.Manager, req message.Request, data []byte) (interface
 	if _, err := codec.Unmarshal(data, &response); err != nil {
 		return nil, 0, err
 	}
-	if len(response.Data) == 0 {
-		return nil, 0, errEmptyResponse
+
+	codeRequest := req.(message.CodeRequest)
+	if len(response.Data) != len(codeRequest.Hashes) {
+		return nil, 0, fmt.Errorf("%w (got %d) (requested %d)", errInvalidCodeResponseLen, len(response.Data), len(codeRequest.Hashes))
 	}
 
-	expectedHashes := req.(message.CodeRequest).Hashes
 	totalBytes := 0
 	for i, code := range response.Data {
 		hash := crypto.Keccak256Hash(code)
-		if hash != expectedHashes[i] {
-			return nil, 0, fmt.Errorf("%w for code at index %d: (got %v) (expected %v)", errHashMismatch, i, hash, expectedHashes[i])
+		if hash != codeRequest.Hashes[i] {
+			return nil, 0, fmt.Errorf("%w for code at index %d: (got %v) (expected %v)", errHashMismatch, i, hash, codeRequest.Hashes[i])
 		}
 		totalBytes += len(code)
 	}

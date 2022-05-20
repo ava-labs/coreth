@@ -71,6 +71,21 @@ func TestGetCode(t *testing.T) {
 	assert.Nil(t, codeBytes)
 	assert.Error(t, err)
 	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)
+
+	// test where returned code data length does not match the request
+	codeResponse.Data = append(codeResponse.Data, []byte("client did not request this code"))
+	mockNetClient.mockResponse(maxAttempts, response)
+	codeBytes, err = stateSyncClient.GetCode(codeHashes)
+	assert.Nil(t, codeBytes)
+	assert.Error(t, err)
+	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)
+
+	codeResponse.Data = nil // no code returned is also an invalid response
+	mockNetClient.mockResponse(maxAttempts, response)
+	codeBytes, err = stateSyncClient.GetCode(codeHashes)
+	assert.Nil(t, codeBytes)
+	assert.Error(t, err)
+	assert.EqualValues(t, maxAttempts, mockNetClient.numCalls)
 }
 
 func TestGetBlocks(t *testing.T) {

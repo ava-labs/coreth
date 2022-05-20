@@ -40,17 +40,26 @@ func TestCodeRequestHandler(t *testing.T) {
 	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling CodeResponse", err)
 	}
+	assert.Len(t, response.Data, len(hashes))
 	assert.True(t, bytes.Equal(codeBytes, response.Data[0]))
 	assert.EqualValues(t, 1, mockHandlerStats.CodeRequestCount)
 	assert.EqualValues(t, len(response.Data[0]), mockHandlerStats.CodeBytesReturnedSum)
 	mockHandlerStats.Reset()
 
-	// query for too many hashes
-	hashes = make([]common.Hash, maxCodeHashesPerRequest+1)
+	// query for non-unique hashes
+	hashes = make([]common.Hash, maxCodeHashesPerRequest)
 	for i := 0; i < len(hashes); i++ {
 		hashes[i] = codeHash
 	}
 	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 2, message.CodeRequest{Hashes: hashes})
+	assert.NoError(t, err)
+	assert.Nil(t, responseBytes)
+	assert.EqualValues(t, 1, mockHandlerStats.DuplicateHashesRequested)
+	mockHandlerStats.Reset()
+
+	// query for too many hashes
+	hashes = append(hashes, codeHash)
+	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 3, message.CodeRequest{Hashes: hashes})
 	assert.NoError(t, err)
 	assert.Nil(t, responseBytes)
 	assert.EqualValues(t, 1, mockHandlerStats.TooManyHashesRequested)
@@ -58,7 +67,7 @@ func TestCodeRequestHandler(t *testing.T) {
 
 	// query for missing code entry
 	hashes = []common.Hash{common.BytesToHash([]byte("some unknown hash"))}
-	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 3, message.CodeRequest{Hashes: hashes})
+	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 4, message.CodeRequest{Hashes: hashes})
 	assert.NoError(t, err)
 	assert.Nil(t, responseBytes)
 	assert.EqualValues(t, 1, mockHandlerStats.MissingCodeHashCount)
@@ -73,7 +82,7 @@ func TestCodeRequestHandler(t *testing.T) {
 	rawdb.WriteCode(database, codeHash, codeBytes)
 
 	hashes = []common.Hash{codeHash}
-	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 4, message.CodeRequest{Hashes: hashes})
+	responseBytes, err = codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 5, message.CodeRequest{Hashes: hashes})
 	assert.NoError(t, err)
 	assert.NotNil(t, responseBytes)
 
@@ -81,6 +90,7 @@ func TestCodeRequestHandler(t *testing.T) {
 	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling CodeResponse", err)
 	}
+	assert.Len(t, response.Data, 1)
 	assert.True(t, bytes.Equal(codeBytes, response.Data[0]))
 	assert.EqualValues(t, 1, mockHandlerStats.CodeRequestCount)
 	assert.EqualValues(t, len(response.Data[0]), mockHandlerStats.CodeBytesReturnedSum)

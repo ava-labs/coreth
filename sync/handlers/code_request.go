@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -55,6 +56,11 @@ func (n *CodeRequestHandler) OnCodeRequest(_ context.Context, nodeID ids.NodeID,
 		log.Debug("too many hashes requested, dropping request", "nodeID", nodeID, "requestID", requestID, "numHashes", len(codeRequest.Hashes))
 		return nil, nil
 	}
+	if !isUnique(codeRequest.Hashes) {
+		n.stats.IncDuplicateHashesRequested()
+		log.Debug("duplicate code hashes requested, dropping request", "nodeID", nodeID, "requestID", requestID)
+		return nil, nil
+	}
 
 	codeBytes := make([][]byte, len(codeRequest.Hashes))
 	totalBytes := 0
@@ -76,4 +82,15 @@ func (n *CodeRequestHandler) OnCodeRequest(_ context.Context, nodeID ids.NodeID,
 	}
 	n.stats.UpdateCodeBytesReturned(uint32(totalBytes))
 	return responseBytes, nil
+}
+
+func isUnique(hashes []common.Hash) bool {
+	seen := make(map[common.Hash]struct{})
+	for _, hash := range hashes {
+		if _, found := seen[hash]; found {
+			return false
+		}
+		seen[hash] = struct{}{}
+	}
+	return true
 }
