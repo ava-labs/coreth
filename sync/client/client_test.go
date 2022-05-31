@@ -608,21 +608,11 @@ func TestGetLeafs(t *testing.T) {
 				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
-				leafResponse.Keys = leafResponse.Keys[1:]
-				leafResponse.Vals = leafResponse.Vals[1:]
-
-				tr, err := trie.New(largeTrieRoot, trieDB)
+				modifiedRequest := request
+				modifiedRequest.Start = leafResponse.Keys[1]
+				modifiedResponse, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 2, modifiedRequest)
 				if err != nil {
-					t.Fatal(err)
-				}
-				leafResponse.ProofKeys, leafResponse.ProofVals, err = handlers.GenerateRangeProof(tr, leafResponse.Keys[0], leafResponse.Keys[len(leafResponse.Keys)-1])
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				modifiedResponse, err := message.Codec.Marshal(message.Version, leafResponse)
-				if err != nil {
-					t.Fatal(err)
+					t.Fatal("unexpected error in calling leafs request handler", err)
 				}
 				return modifiedResponse
 			},

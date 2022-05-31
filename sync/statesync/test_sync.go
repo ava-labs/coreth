@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -105,7 +104,7 @@ func fillAccountsWithStorage(t *testing.T, serverTrieDB *trie.Database, root com
 
 		// now create state trie
 		numKeys := 16
-		account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, numKeys, wrappers.LongLen+1)
+		account.Root, _, _ = trie.GenerateTrie(t, serverTrieDB, numKeys, common.HashLength)
 		return account
 	})
 	return newRoot
