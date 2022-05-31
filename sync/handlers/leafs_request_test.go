@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -26,11 +27,12 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	trieDB := trie.NewDatabase(memdb)
 
 	corruptedTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 100, common.HashLength)
-	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
-	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
-
 	// Corrupt [corruptedTrieRoot]
 	trie.CorruptTrie(t, trieDB, corruptedTrieRoot, 5)
+
+	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
+	accountTrieRoot, _ := trie.FillAccounts(t, trieDB, common.Hash{}, 10_000, nil)
 
 	leafsHandler := NewLeafsRequestHandler(trieDB, message.Codec, mockHandlerStats)
 
@@ -430,6 +432,31 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				more, err := trie.VerifyRangeProof(smallTrieRoot, firstKey, lastKey, leafsResponse.Keys, leafsResponse.Vals, nil)
 				assert.NoError(t, err)
 				assert.False(t, more)
+			},
+		},
+		"data served from snapshot": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return context.Background(), message.LeafsRequest{
+					Root:     accountTrieRoot,
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
+				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadSuccessCount)
 			},
 		},
 	}
