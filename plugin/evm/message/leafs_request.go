@@ -42,6 +42,7 @@ func (nt NodeType) String() string {
 // NodeType outlines which trie to read from state/atomic.
 type LeafsRequest struct {
 	Root     common.Hash `serialize:"true"`
+	Account  common.Hash `serialize:"true"`
 	Start    []byte      `serialize:"true"`
 	End      []byte      `serialize:"true"`
 	Limit    uint16      `serialize:"true"`

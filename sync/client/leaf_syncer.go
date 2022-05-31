@@ -40,6 +40,7 @@ type OnSyncFailure func(error) error
 // LeafSyncTask represents a complete task to be completed by the leaf syncer.
 type LeafSyncTask struct {
 	Root          common.Hash      // Root of the trie to sync
+	Account       common.Hash      // Account hash of the trie to sync (only applicable to storage tries)
 	Start         []byte           // Starting key to request new leaves
 	NodeType      message.NodeType // Specifies the message type (atomic/state trie) for the leaf syncer to send
 	OnStart       OnStart          // Callback when tasks begins, returns true if work can be skipped
@@ -115,6 +116,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task *LeafSyncTask) e
 
 		leafsResponse, err := c.client.GetLeafs(message.LeafsRequest{
 			Root:     root,
+			Account:  task.Account,
 			Start:    start,
 			End:      nil, // will request until the end of the trie
 			Limit:    defaultLeafRequestLimit,
