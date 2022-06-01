@@ -145,7 +145,11 @@ func New(
 	config.TrieCleanCache = roundUpCacheSize(config.TrieCleanCache, 64)
 	config.SnapshotCache = roundUpCacheSize(config.SnapshotCache, 64)
 
-	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024, "dirty optimistic", common.StorageSize(config.TrieDirtyOptimisticCache)*1024*1024)
+	log.Info(
+		"Allocated trie memory caches",
+		"clean", common.StorageSize(config.TrieCleanCache)*1024*1024,
+		"dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024,
+	)
 
 	chainConfig, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if genesisErr != nil {
