@@ -53,12 +53,13 @@ var (
 	memcacheCleanReadMeter  = metrics.NewRegisteredMeter("trie/memcache/clean/read", nil)
 	memcacheCleanWriteMeter = metrics.NewRegisteredMeter("trie/memcache/clean/write", nil)
 
-	memcacheDirtyHitMeter   = metrics.NewRegisteredMeter("trie/memcache/dirty/hit", nil)
-	memcacheDirtyMissMeter  = metrics.NewRegisteredMeter("trie/memcache/dirty/miss", nil)
-	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("trie/memcache/dirty/read", nil)
-	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("trie/memcache/dirty/write", nil)
-	memcacheDirtySizeGauge  = metrics.NewRegisteredGaugeFloat64("trie/memcache/dirty/size", nil)
-	memcacheDirtyNodesGauge = metrics.NewRegisteredGauge("trie/memcache/dirty/nodes", nil)
+	memcacheDirtyHitMeter       = metrics.NewRegisteredMeter("trie/memcache/dirty/hit", nil)
+	memcacheDirtyMissMeter      = metrics.NewRegisteredMeter("trie/memcache/dirty/miss", nil)
+	memcacheDirtyReadMeter      = metrics.NewRegisteredMeter("trie/memcache/dirty/read", nil)
+	memcacheDirtyWriteMeter     = metrics.NewRegisteredMeter("trie/memcache/dirty/write", nil)
+	memcacheDirtySizeGauge      = metrics.NewRegisteredGaugeFloat64("trie/memcache/dirty/size", nil)
+	memcacheDirtyChildSizeGauge = metrics.NewRegisteredGaugeFloat64("trie/memcache/dirty/childsize", nil)
+	memcacheDirtyNodesGauge     = metrics.NewRegisteredGauge("trie/memcache/dirty/nodes", nil)
 
 	memcacheFlushTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/flush/time", nil)
 	memcacheFlushNodesMeter = metrics.NewRegisteredMeter("trie/memcache/flush/nodes", nil)
@@ -531,6 +532,7 @@ func (db *Database) Dereference(root common.Hash) {
 	db.gctime += time.Since(start)
 
 	memcacheDirtySizeGauge.Update(float64(db.dirtiesSize))
+	memcacheDirtyChildSizeGauge.Update(float64(db.childrenSize))
 	memcacheDirtyNodesGauge.Update(int64(len(db.dirties)))
 
 	memcacheGCTimeTimer.Update(time.Since(start))
@@ -734,6 +736,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	db.flushtime += time.Since(start)
 
 	memcacheDirtySizeGauge.Update(float64(db.dirtiesSize))
+	memcacheDirtyChildSizeGauge.Update(float64(db.childrenSize))
 	memcacheDirtyNodesGauge.Update(int64(len(db.dirties)))
 
 	memcacheFlushTimeTimer.Update(time.Since(start))
@@ -783,6 +786,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	}
 
 	memcacheDirtySizeGauge.Update(float64(db.dirtiesSize))
+	memcacheDirtyChildSizeGauge.Update(float64(db.childrenSize))
 	memcacheDirtyNodesGauge.Update(int64(len(db.dirties)))
 
 	memcacheCommitTimeTimer.Update(time.Since(start))
@@ -866,7 +870,7 @@ func (db *Database) removeFromDirties(hash common.Hash, rlp []byte) {
 	delete(db.dirties, hash)
 	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
-		db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 	}
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if db.cleans != nil {
