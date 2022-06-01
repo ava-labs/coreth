@@ -264,8 +264,8 @@ func (lrh *LeafsRequestHandler) handleRequest(
 					return message.LeafsResponse{}, err
 				}
 				// remove the last key added since it is snapKeys[i] and will be added back
-				// Note: this is safe because the we were able to verify the range proof
-				// that shows snapKeys[i] is part of the trie.
+				// Note: this is safe because we were able to verify the range proof that
+				// shows snapKeys[i] is part of the trie.
 				leafsResponse.Keys = leafsResponse.Keys[:len(leafsResponse.Keys)-1]
 				leafsResponse.Vals = leafsResponse.Vals[:len(leafsResponse.Vals)-1]
 			}
