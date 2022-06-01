@@ -144,44 +144,23 @@ func (lrh *LeafsRequestHandler) handleRequest(
 
 	// Reading from snapshot is only applicable to state trie
 	if leafsRequest.NodeType == message.StateTrieNode {
-		snapshotReadStart := time.Now()
+		var (
+			snapKeys, snapVals [][]byte
+			err                error
+			diskDB             = lrh.trieDB.DiskDB()
+			snapshotReadStart  = time.Now()
+		)
 		lrh.stats.IncSnapshotReadAttempt()
-
-		// Get an iterator into the account snapshot or the storage snapshot
-		var snapIt ethdb.Iterator
-		diskDB := lrh.trieDB.DiskDB()
-		if leafsRequest.Account == (common.Hash{}) {
-			snapIt = snapshot.NewAccountSnapshotIterator(diskDB, leafsRequest.Start, leafsRequest.End)
-		} else {
-			snapIt = snapshot.NewStorageSnapshotIterator(diskDB, leafsRequest.Account, leafsRequest.Start, leafsRequest.End)
-		}
-		defer snapIt.Release()
 
 		// Optimistically read leafs from the snapshot, assuming they have not been
 		// modified since the requested root. If this assumption can be verified with
 		// range proofs and data from the trie, we can skip iterating the trie as
 		// an optimization.
-		snapKeys := make([][]byte, 0, limit)
-		snapVals := make([][]byte, 0, limit)
-		for snapIt.Next() {
-			// if we're at the end, break this loop
-			if len(leafsRequest.End) > 0 && bytes.Compare(snapIt.Key(), leafsRequest.End) > 0 {
-				more = true
-				break
-			}
-			// If we've returned enough data or run out of time, set the more flag and exit
-			// this flag will determine if the proof is generated or not
-			if len(snapKeys) >= int(limit) || ctx.Err() != nil {
-				more = true
-				break
-			}
-
-			snapKeys = append(snapKeys, snapIt.Key())
-			snapVals = append(snapVals, snapIt.Value())
-		}
+		snapKeys, snapVals, more, err = readLeafsFromSnapshot(
+			ctx, diskDB, leafsRequest.Account, leafsRequest.Start, leafsRequest.End, limit)
 		// Update read snapshot time here, so that we include the case that an error occurred.
 		lrh.stats.UpdateSnapshotReadTime(time.Since(snapshotReadStart))
-		if err := snapIt.Error(); err != nil {
+		if err != nil {
 			lrh.stats.IncSnapshotReadError()
 			return message.LeafsResponse{}, err
 		}
@@ -440,7 +419,14 @@ func getKeyLength(nodeType message.NodeType) (int, error) {
 
 // getSnapshotRoot returns the root of the storage trie for [account], and
 // the root of the main account trie if [account] is empty.
+// if a root cannot be found, an empty hash will be returned, it is the
+// caller's responsibility to handle this case (eg, by checking it against
+// the root specified in the request).
 func getSnapshotRoot(db ethdb.KeyValueReader, account common.Hash) (common.Hash, error) {
+	// Note: if the snapshot is regenerating, or if it is being updated
+	// it is possible the root returned here does not correspond to the
+	// hash of all keys. The client will verify the proof and retry the
+	// request to a different node.
 	if account == (common.Hash{}) {
 		return rawdb.ReadSnapshotRoot(db), nil
 	}
@@ -453,4 +439,42 @@ func getSnapshotRoot(db ethdb.KeyValueReader, account common.Hash) (common.Hash,
 		return common.Hash{}, err
 	}
 	return common.BytesToHash(acc.Root), nil
+}
+
+// readLeafsFromSnapshot iterates the storage snapshot for [account] or the main account
+// trie if [account] is empty. Returns up to [limit] key/value pairs with for keys that
+// are in the [start, end] range (inclusive), and a boolean indicating if there are more
+// keys in the snapshot.
+func readLeafsFromSnapshot(
+	ctx context.Context, db ethdb.Iteratee, account common.Hash, start, end []byte, limit uint16,
+) ([][]byte, [][]byte, bool, error) {
+	// Get an iterator into the account snapshot or the storage snapshot
+	var snapIt ethdb.Iterator
+	if account == (common.Hash{}) {
+		snapIt = snapshot.NewAccountSnapshotIterator(db, start, end)
+	} else {
+		snapIt = snapshot.NewStorageSnapshotIterator(db, account, start, end)
+	}
+	defer snapIt.Release()
+
+	more := false
+	keys := make([][]byte, 0, limit)
+	vals := make([][]byte, 0, limit)
+	for snapIt.Next() {
+		// if we're at the end, break this loop
+		if len(end) > 0 && bytes.Compare(snapIt.Key(), end) > 0 {
+			more = true
+			break
+		}
+		// If we've returned enough data or run out of time, set the more flag and exit
+		// this flag will determine if the proof is generated or not
+		if len(keys) >= int(limit) || ctx.Err() != nil {
+			more = true
+			break
+		}
+
+		keys = append(keys, snapIt.Key())
+		vals = append(vals, snapIt.Value())
+	}
+	return keys, vals, more, snapIt.Error()
 }
