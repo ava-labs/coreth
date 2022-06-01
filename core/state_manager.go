@@ -42,6 +42,10 @@ func init() {
 
 const (
 	tipBufferSize = 32
+
+	// Most trie nodes are 128-256B, so we may write at most ~1200 trie nodes in
+	// a single optimistic flush (assuming [dirtiesSize] is equal to [idealMemoryCap]).
+	halfIdealFlushSize = ethdb.IdealBatchSize * 3 / 2
 )
 
 type TrieWriter interface {
@@ -145,18 +149,18 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 		}
 	}
 
-	// Write up to 2*[ethdb.IdealBatchSize] of the oldest nodes in the trie database dirty cache
+	// Write up to [halfIdealFlushSize * 2] of the oldest nodes in the trie database dirty cache
 	// to disk before reaching [memoryCap] to reduce the number of trie nodes
 	// that will need to be written on [Commit] (to roughly [idealMemoryCap]).
 	//
-	// We add [rand.Intn(ethdb.IdealBatchSize)] to [ethdb.IdealBatchSize] to
+	// We include a random term [rand.Intn(splitIdealBatchSize)] in [targetFlushSize] to
 	// prevent all nodes in the network from writing a large number of trie nodes to disk
 	// at the same time.
 	nodes, imgs := cm.TrieDB.Size()
 	if nodes <= cm.idealMemoryCap && imgs <= cm.imageCap {
 		return nil
 	}
-	targetFlushSize := ethdb.IdealBatchSize + common.StorageSize(rand.Intn(ethdb.IdealBatchSize))
+	targetFlushSize := halfIdealFlushSize + common.StorageSize(rand.Intn(halfIdealFlushSize))
 	if err := cm.TrieDB.Cap(cm.idealMemoryCap - targetFlushSize); err != nil {
 		return fmt.Errorf("failed to cap trie for block %s: %w", block.Hash().Hex(), err)
 	}
