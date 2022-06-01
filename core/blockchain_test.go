@@ -22,18 +22,20 @@ import (
 
 var (
 	archiveConfig = &CacheConfig{
-		TrieCleanLimit: 256,
-		TrieDirtyLimit: 256,
-		Pruning:        false, // Archive mode
-		SnapshotLimit:  256,
+		TrieCleanLimit:      256,
+		TrieDirtyLimit:      256,
+		TrieDirtyIdealLimit: 32,
+		Pruning:             false, // Archive mode
+		SnapshotLimit:       256,
 	}
 
 	pruningConfig = &CacheConfig{
-		TrieCleanLimit: 256,
-		TrieDirtyLimit: 256,
-		Pruning:        true, // Enable pruning
-		CommitInterval: 4096,
-		SnapshotLimit:  256,
+		TrieCleanLimit:      256,
+		TrieDirtyLimit:      256,
+		TrieDirtyIdealLimit: 32,
+		Pruning:             true, // Enable pruning
+		CommitInterval:      4096,
+		SnapshotLimit:       256,
 	}
 )
 
