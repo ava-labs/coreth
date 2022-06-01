@@ -113,6 +113,10 @@ type cappedMemoryTrieWriter struct {
 func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
 	cm.TrieDB.Reference(block.Root(), common.Hash{})
 
+	// We don't remove the use of [Cap] in [InsertTrie] (in favor of only calling
+	// in [Accept] in case there is a large backlog of processing blocks. In this
+	// scenario, the dirty cache could exceed the configured memory limit (and
+	// OOM).
 	nodes, imgs := cm.TrieDB.Size()
 	if nodes <= cm.memoryCap && imgs <= cm.imageCap {
 		return nil
@@ -142,8 +146,13 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	}
 
 	// Write up to 2*[ethdb.IdealBatchSize] of the oldest nodes in the trie database dirty cache
-	// to disk. [rand.Intn(ethdb.IdealBatchSize)] is used to ensure all nodes in the
-	// network don't write at the same time.
+	// to disk. We add [rand.Intn(ethdb.IdealBatchSize)] to
+	// [ethdb.IdealBatchSize] to ensure all nodes in the network don't write
+	// a large number of trie nodes to disk at the same time.
+	//
+	// A consequence of this optimistic scheme is that we should rarely end up
+	// committing more than [optimisticMemoryCap] data to disk in a single
+	// invocation of [Commit].
 	nodes, imgs := cm.TrieDB.Size()
 	if nodes <= cm.optimisticMemoryCap && imgs <= cm.imageCap {
 		return nil
