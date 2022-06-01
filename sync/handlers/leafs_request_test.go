@@ -436,12 +436,16 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.False(t, more)
 			},
 		},
-		"data served from snapshot": {
+		"account data served from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
 				if err != nil {
 					t.Fatal(err)
 				}
+				t.Cleanup(func() {
+					// wipe snapshot as a test cleanup so it runs even if the test fails
+					<-snapshot.WipeSnapshot(memdb, true)
+				})
 				return context.Background(), message.LeafsRequest{
 					Root:     accountTrieRoot,
 					Limit:    maxLeavesLimit,
@@ -460,16 +464,18 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
 				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadSuccessCount)
 
-				// cleanup
-				<-snapshot.WipeSnapshot(memdb, true)
 			},
 		},
-		"partial data served from snapshot": {
+		"partial account data served from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
 				if err != nil {
 					t.Fatal(err)
 				}
+				t.Cleanup(func() {
+					// wipe snapshot as a test cleanup so it runs even if the test fails
+					<-snapshot.WipeSnapshot(memdb, true)
+				})
 				it := snapshot.NewAccountSnapshotIterator(memdb, nil, nil)
 				defer it.Release()
 				i := 0
@@ -517,9 +523,6 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				numSegments := maxLeavesLimit / segmentLen
 				assert.EqualValues(t, numSegments/4, mockHandlerStats.SnapshotSegmentInvalidCount)
 				assert.EqualValues(t, 3*numSegments/4, mockHandlerStats.SnapshotSegmentValidCount)
-
-				// cleanup
-				<-snapshot.WipeSnapshot(memdb, true)
 			},
 		},
 	}
