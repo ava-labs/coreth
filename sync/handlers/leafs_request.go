@@ -226,14 +226,17 @@ func (lrh *LeafsRequestHandler) handleRequest(
 		leafsResponse.Vals = make([][]byte, 0, limit)
 		for i := 0; i < len(snapKeys); i += segmentLen {
 			segmentEnd := math.Min(i+segmentLen, len(snapKeys))
-			segmentStartKey := snapKeys[i]
+			var segmentStartKey []byte
 			if i == 0 {
 				segmentStartKey = leafsRequest.Start
+			} else {
+				segmentStartKey = common.CopyBytes(snapKeys[i-1])
+				incrOne(segmentStartKey)
 			}
 			proof, err := generateRangeProof(t, snapKeys[i:segmentEnd], segmentStartKey, true, keyLength, &proofTime)
 			if err != nil {
 				lrh.stats.IncProofError()
-				return message.LeafsResponse{}, nil
+				return message.LeafsResponse{}, err
 			}
 			if err := verifyRangeProof(
 				proof, leafsRequest.Root,
@@ -299,7 +302,6 @@ func (lrh *LeafsRequestHandler) handleRequest(
 		lrh.stats.IncProofError()
 		return message.LeafsResponse{}, err
 	}
-
 	return leafsResponse, nil
 }
 

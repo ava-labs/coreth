@@ -30,7 +30,7 @@ func (it *prefixIterator) Next() bool {
 		if len(it.Iterator.Key()) != it.prefixLen+common.HashLength {
 			continue
 		}
-		if it.end != nil && bytes.Compare(it.end, it.Key()) < 0 {
+		if len(it.end) > 0 && bytes.Compare(it.end, it.Key()) < 0 {
 			break
 		}
 		return true

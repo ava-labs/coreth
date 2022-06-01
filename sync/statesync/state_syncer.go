@@ -146,6 +146,7 @@ func (s *stateSyncer) Start(ctx context.Context) {
 	for storageRoot, storageTrieProgress := range s.progressMarker.StorageTries {
 		storageTasks = append(storageTasks, &syncclient.LeafSyncTask{
 			Root:          storageRoot,
+			Account:       storageTrieProgress.Account,
 			Start:         storageTrieProgress.startFrom,
 			NodeType:      message.StateTrieNode,
 			OnLeafs:       storageTrieProgress.handleLeafs,

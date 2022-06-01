@@ -197,7 +197,7 @@ func NewHandlerStats(enabled bool) HandlerStats {
 		missingRoot:                metrics.GetOrRegisterCounter("leafs_request_missing_root", nil),
 		trieError:                  metrics.GetOrRegisterCounter("leafs_request_trie_error", nil),
 		proofError:                 metrics.GetOrRegisterCounter("leafs_request_proof_error", nil),
-		snapshotReadError:          metrics.GetOrRegisterCounter("snapshot_read_counter", nil),
+		snapshotReadError:          metrics.GetOrRegisterCounter("snapshot_read_error", nil),
 		snapshotReadAttempt:        metrics.GetOrRegisterCounter("snapshot_read_attempt", nil),
 		snapshotReadSuccess:        metrics.GetOrRegisterCounter("snapshot_read_success", nil),
 		snapshotSegmentValid:       metrics.GetOrRegisterCounter("snapshot_segment_valid", nil),

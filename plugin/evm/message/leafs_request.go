@@ -51,8 +51,8 @@ type LeafsRequest struct {
 
 func (l LeafsRequest) String() string {
 	return fmt.Sprintf(
-		"LeafsRequest(Root=%s, Start=%s, End=%s, Limit=%d, NodeType=%s)",
-		l.Root, common.Bytes2Hex(l.Start), common.Bytes2Hex(l.End), l.Limit, l.NodeType,
+		"LeafsRequest(Root=%s, Account=%s, Start=%s, End=%s, Limit=%d, NodeType=%s)",
+		l.Root, l.Account, common.Bytes2Hex(l.Start), common.Bytes2Hex(l.End), l.Limit, l.NodeType,
 	)
 }
 
