@@ -47,6 +47,8 @@ type LeafsRequestHandlerStats interface {
 	IncSnapshotReadError()
 	IncSnapshotReadAttempt()
 	IncSnapshotReadSuccess()
+	IncSnapshotSegmentValid()
+	IncSnapshotSegmentInvalid()
 }
 
 type handlerStats struct {
@@ -79,6 +81,8 @@ type handlerStats struct {
 	snapshotReadError          metrics.Counter
 	snapshotReadAttempt        metrics.Counter
 	snapshotReadSuccess        metrics.Counter
+	snapshotSegmentValid       metrics.Counter
+	snapshotSegmentInvalid     metrics.Counter
 }
 
 func (h *handlerStats) IncBlockRequest() {
@@ -153,12 +157,14 @@ func (h *handlerStats) UpdateRangeProofKeysReturned(numProofKeys int64) {
 	h.proofKeysReturned.Update(numProofKeys)
 }
 
-func (h *handlerStats) IncMissingRoot()         { h.missingRoot.Inc(1) }
-func (h *handlerStats) IncTrieError()           { h.trieError.Inc(1) }
-func (h *handlerStats) IncProofError()          { h.proofError.Inc(1) }
-func (h *handlerStats) IncSnapshotReadError()   { h.snapshotReadError.Inc(1) }
-func (h *handlerStats) IncSnapshotReadAttempt() { h.snapshotReadAttempt.Inc(1) }
-func (h *handlerStats) IncSnapshotReadSuccess() { h.snapshotReadSuccess.Inc(1) }
+func (h *handlerStats) IncMissingRoot()            { h.missingRoot.Inc(1) }
+func (h *handlerStats) IncTrieError()              { h.trieError.Inc(1) }
+func (h *handlerStats) IncProofError()             { h.proofError.Inc(1) }
+func (h *handlerStats) IncSnapshotReadError()      { h.snapshotReadError.Inc(1) }
+func (h *handlerStats) IncSnapshotReadAttempt()    { h.snapshotReadAttempt.Inc(1) }
+func (h *handlerStats) IncSnapshotReadSuccess()    { h.snapshotReadSuccess.Inc(1) }
+func (h *handlerStats) IncSnapshotSegmentValid()   { h.snapshotSegmentValid.Inc(1) }
+func (h *handlerStats) IncSnapshotSegmentInvalid() { h.snapshotSegmentInvalid.Inc(1) }
 
 func NewHandlerStats(enabled bool) HandlerStats {
 	if !enabled {
@@ -194,6 +200,8 @@ func NewHandlerStats(enabled bool) HandlerStats {
 		snapshotReadError:          metrics.GetOrRegisterCounter("snapshot_read_counter", nil),
 		snapshotReadAttempt:        metrics.GetOrRegisterCounter("snapshot_read_attempt", nil),
 		snapshotReadSuccess:        metrics.GetOrRegisterCounter("snapshot_read_success", nil),
+		snapshotSegmentValid:       metrics.GetOrRegisterCounter("snapshot_segment_valid", nil),
+		snapshotSegmentInvalid:     metrics.GetOrRegisterCounter("snapshot_segment_invalid", nil),
 	}
 }
 
@@ -229,3 +237,5 @@ func (n *noopHandlerStats) IncProofError()                                      
 func (n *noopHandlerStats) IncSnapshotReadError()                               {}
 func (n *noopHandlerStats) IncSnapshotReadAttempt()                             {}
 func (n *noopHandlerStats) IncSnapshotReadSuccess()                             {}
+func (n *noopHandlerStats) IncSnapshotSegmentValid()                            {}
+func (n *noopHandlerStats) IncSnapshotSegmentInvalid()                          {}

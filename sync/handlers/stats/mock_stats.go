@@ -34,7 +34,9 @@ type MockHandlerStats struct {
 	ProofErrorCount,
 	SnapshotReadErrorCount,
 	SnapshotReadAttemptCount,
-	SnapshotReadSuccessCount uint32
+	SnapshotReadSuccessCount,
+	SnapshotSegmentValidCount,
+	SnapshotSegmentInvalidCount uint32
 	ProofKeysReturned int64
 	LeafsReadTime,
 	SnapshotReadTime,
@@ -64,6 +66,8 @@ func (m *MockHandlerStats) Reset() {
 	m.SnapshotReadErrorCount = 0
 	m.SnapshotReadAttemptCount = 0
 	m.SnapshotReadSuccessCount = 0
+	m.SnapshotSegmentValidCount = 0
+	m.SnapshotSegmentInvalidCount = 0
 	m.ProofKeysReturned = 0
 	m.LeafsReadTime = 0
 	m.SnapshotReadTime = 0
@@ -213,4 +217,16 @@ func (m *MockHandlerStats) IncSnapshotReadSuccess() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.SnapshotReadSuccessCount++
+}
+
+func (m *MockHandlerStats) IncSnapshotSegmentValid() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.SnapshotSegmentValidCount++
+}
+
+func (m *MockHandlerStats) IncSnapshotSegmentInvalid() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.SnapshotSegmentInvalidCount++
 }

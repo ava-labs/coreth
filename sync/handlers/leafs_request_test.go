@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
@@ -17,6 +18,7 @@ import (
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -451,12 +453,67 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
 				assert.NoError(t, err)
-				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
-				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
 				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
 				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
 				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
 				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadSuccessCount)
+			},
+		},
+		"partial data served from snapshot": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				it := snapshot.NewAccountSnapshotIterator(memdb, nil, nil)
+				defer it.Release()
+				i := 0
+				for it.Next() {
+					if i > int(maxLeavesLimit) {
+						// no need to modify beyond the request limit
+						break
+					}
+					// modify one entry of 1 in 4 segments
+					if i%(segmentLen*4) == 0 {
+						var acc snapshot.Account
+						if err := rlp.DecodeBytes(it.Value(), &acc); err != nil {
+							t.Fatalf("could not parse snapshot account: %v", err)
+						}
+						acc.Nonce++
+						accHash := common.BytesToHash(it.Key())
+						bytes, err := rlp.EncodeToBytes(acc)
+						if err != nil {
+							t.Fatalf("coult not encode snapshot account to bytes: %v", err)
+						}
+						rawdb.WriteAccountSnapshot(memdb, accHash, bytes)
+					}
+					i++
+				}
+
+				return context.Background(), message.LeafsRequest{
+					Root:     accountTrieRoot,
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
+				assert.EqualValues(t, 0, mockHandlerStats.SnapshotReadSuccessCount)
+
+				// expect 1/4th of segments to be invalid
+				numSegments := maxLeavesLimit / segmentLen
+				assert.EqualValues(t, numSegments/4, mockHandlerStats.SnapshotSegmentInvalidCount)
+				assert.EqualValues(t, 3*numSegments/4, mockHandlerStats.SnapshotSegmentValidCount)
 			},
 		},
 	}

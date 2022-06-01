@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -25,10 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Maximum number of leaves to return in a message.LeafsResponse
-// This parameter overrides any other Limit specified
-// in message.LeafsRequest if it is greater than this value
-const maxLeavesLimit = uint16(1024)
+const (
+	// Maximum number of leaves to return in a message.LeafsResponse
+	// This parameter overrides any other Limit specified
+	// in message.LeafsRequest if it is greater than this value
+	maxLeavesLimit = uint16(1024)
+
+	segmentLen = 64 // divide data from snapshot to segments of this size
+)
 
 // LeafsRequestHandler is a peer.RequestHandler for types.LeafsRequest
 // serving requested trie data
@@ -120,11 +125,14 @@ func (lrh *LeafsRequestHandler) handleRequest(
 	ctx context.Context, leafsRequest message.LeafsRequest, t *trie.Trie, keyLength int,
 ) (message.LeafsResponse, error) {
 	var (
-		leafsResponse  message.LeafsResponse
-		rangeProofTime time.Duration
+		leafsResponse message.LeafsResponse
+		proofTime     time.Duration
+		trieReadTime  time.Duration
+		more          bool
 	)
 	defer func() {
-		lrh.stats.UpdateGenerateRangeProofTime(rangeProofTime)
+		lrh.stats.UpdateGenerateRangeProofTime(proofTime)
+		lrh.stats.UpdateReadLeafsTime(trieReadTime)
 	}()
 
 	// override limit if it is greater than the configured maxLeavesLimit
@@ -152,7 +160,6 @@ func (lrh *LeafsRequestHandler) handleRequest(
 		// modified since the requested root. If this assumption can be verified with
 		// range proofs and data from the trie, we can skip iterating the trie as
 		// an optimization.
-		more := false
 		snapKeys := make([][]byte, 0, limit)
 		snapVals := make([][]byte, 0, limit)
 		for snapIt.Next() {
@@ -179,9 +186,7 @@ func (lrh *LeafsRequestHandler) handleRequest(
 		}
 
 		// Check if the entire range read from the snapshot is valid according to the trie.
-		rangeProofStart := time.Now()
-		proof, err := generateRangeProof(t, snapKeys, leafsRequest.Start, more, keyLength)
-		rangeProofTime += time.Since(rangeProofStart)
+		proof, err := generateRangeProof(t, snapKeys, leafsRequest.Start, more, keyLength, &proofTime)
 		if err != nil {
 			lrh.stats.IncProofError()
 			return message.LeafsResponse{}, err
@@ -199,10 +204,9 @@ func (lrh *LeafsRequestHandler) handleRequest(
 				return leafsResponse, nil
 			}
 		} else {
-			verifyRangeProofStart := time.Now()
-			err := verifyRangeProof(proof, leafsRequest.Root, snapKeys, snapVals, leafsRequest.Start, keyLength)
-			rangeProofTime += time.Since(verifyRangeProofStart)
-			if err == nil {
+			if err := verifyRangeProof(
+				proof, leafsRequest.Root, snapKeys, snapVals, leafsRequest.Start, keyLength, &proofTime,
+			); err == nil {
 				// success
 				leafsResponse.Keys, leafsResponse.Vals = snapKeys, snapVals
 				leafsResponse.ProofKeys, leafsResponse.ProofVals, err = iterateKeyVals(proof)
@@ -214,54 +218,83 @@ func (lrh *LeafsRequestHandler) handleRequest(
 				return leafsResponse, nil
 			}
 		}
+		// The data from the snapshot could not be validated as a whole. It is still likely
+		// most of the data from the snapshot is useable, so we try to validate smaller
+		// segments of the data and use them in the response.
+		hasGap := false
+		leafsResponse.Keys = make([][]byte, 0, limit)
+		leafsResponse.Vals = make([][]byte, 0, limit)
+		for i := 0; i < len(snapKeys); i += segmentLen {
+			segmentEnd := math.Min(i+segmentLen, len(snapKeys))
+			segmentStartKey := snapKeys[i]
+			if i == 0 {
+				segmentStartKey = leafsRequest.Start
+			}
+			proof, err := generateRangeProof(t, snapKeys[i:segmentEnd], segmentStartKey, true, keyLength, &proofTime)
+			if err != nil {
+				lrh.stats.IncProofError()
+				return message.LeafsResponse{}, nil
+			}
+			if err := verifyRangeProof(
+				proof, leafsRequest.Root,
+				snapKeys[i:segmentEnd], snapVals[i:segmentEnd],
+				segmentStartKey, keyLength,
+				&proofTime,
+			); err != nil {
+				// segment is not valid
+				lrh.stats.IncSnapshotSegmentInvalid()
+				hasGap = true
+				continue
+			}
+
+			// segment is valid
+			lrh.stats.IncSnapshotSegmentValid()
+			if hasGap {
+				// if there is a gap between valid segments, fill the gap with data from the trie
+				_, err := fillFromTrie(ctx, t, &leafsResponse, leafsRequest.Start, snapKeys[i], limit, &trieReadTime)
+				if err != nil {
+					lrh.stats.IncTrieError()
+					return message.LeafsResponse{}, err
+				}
+				// remove the last key added since it is snapKeys[i] and will be added back
+				// Note: this is safe because the we were able to verify the range proof
+				// that shows snapKeys[i] is part of the trie.
+				leafsResponse.Keys = leafsResponse.Keys[:len(leafsResponse.Keys)-1]
+				leafsResponse.Vals = leafsResponse.Vals[:len(leafsResponse.Vals)-1]
+			}
+			hasGap = false
+			// all the key/vals in the segment are valid, but possibly shorten segmentEnd
+			// here to respect limit
+			segmentEnd = math.Min(segmentEnd, i+int(limit)-len(leafsResponse.Keys))
+			leafsResponse.Keys = append(leafsResponse.Keys, snapKeys[i:segmentEnd]...)
+			leafsResponse.Vals = append(leafsResponse.Vals, snapVals[i:segmentEnd]...)
+
+			if len(leafsResponse.Keys) >= int(limit) {
+				break
+			}
+		}
+	} else {
+		leafsResponse.Keys = make([][]byte, 0, limit)
+		leafsResponse.Vals = make([][]byte, 0, limit)
 	}
 
-	// create iterator to iterate the trie
-	// Note leafsRequest.Start could be empty or it could be the next key
-	// from a partial response to a previous request
-	readFromTrieStart := time.Now()
-	it := trie.NewIterator(t.NodeIterator(leafsRequest.Start))
-
-	// more indicates whether there are more leaves in the trie
-	more := false
-	leafsResponse.Keys = make([][]byte, 0, limit)
-	leafsResponse.Vals = make([][]byte, 0, limit)
-	for it.Next() {
-		// if we're at the end, break this loop
-		if len(leafsRequest.End) > 0 && bytes.Compare(it.Key, leafsRequest.End) > 0 {
-			more = true
-			break
+	if len(leafsResponse.Keys) < int(limit) {
+		var err error
+		// more indicates whether there are more leaves in the trie
+		more, err = fillFromTrie(ctx, t, &leafsResponse, leafsRequest.Start, leafsRequest.End, limit, &trieReadTime)
+		if err != nil {
+			lrh.stats.IncTrieError()
+			return message.LeafsResponse{}, err
 		}
-
-		// If we've returned enough data or run out of time, set the more flag and exit
-		// this flag will determine if the proof is generated or not
-		if len(leafsResponse.Keys) >= int(limit) || ctx.Err() != nil {
-			more = true
-			break
-		}
-
-		// collect data to return
-		leafsResponse.Keys = append(leafsResponse.Keys, it.Key)
-		leafsResponse.Vals = append(leafsResponse.Vals, it.Value)
-	}
-	// Update read leafs time here, so that we include the case that an error occurred.
-	lrh.stats.UpdateReadLeafsTime(time.Since(readFromTrieStart))
-
-	if it.Err != nil {
-		lrh.stats.IncTrieError()
-		return message.LeafsResponse{}, it.Err
 	}
 
 	// Generate the proof and add it to the response.
-	rangeProofStart := time.Now()
-	proof, err := generateRangeProof(t, leafsResponse.Keys, leafsRequest.Start, more, keyLength)
+	proof, err := generateRangeProof(t, leafsResponse.Keys, leafsRequest.Start, more, keyLength, &proofTime)
 	if err != nil {
-		rangeProofTime += time.Since(rangeProofStart)
 		lrh.stats.IncProofError()
 		return message.LeafsResponse{}, err
 	}
 	leafsResponse.ProofKeys, leafsResponse.ProofVals, err = iterateKeyVals(proof)
-	rangeProofTime += time.Since(rangeProofStart)
 	if err != nil {
 		lrh.stats.IncProofError()
 		return message.LeafsResponse{}, err
@@ -271,14 +304,16 @@ func (lrh *LeafsRequestHandler) handleRequest(
 }
 
 // generateRangeProof generates a range proof for the range specified by [start] and [keys] using [t].
-func generateRangeProof(t *trie.Trie, keys [][]byte, start []byte, more bool, keyLength int) (*memorydb.Database, error) {
+func generateRangeProof(t *trie.Trie, keys [][]byte, start []byte, more bool, keyLength int, duration *time.Duration) (*memorydb.Database, error) {
+	startTime := time.Now()
+	defer func() { *duration += time.Since(startTime) }()
+
 	// in the case the range covers the whole trie, no proof is required (keys should hash to root)
 	if len(start) == 0 && !more {
 		return nil, nil
 	}
 
-	// If [start] in the request is empty, populate it with the appropriate length
-	// key starting at 0.
+	// If [start] is empty, populate it with the appropriate length key starting at 0.
 	if len(start) == 0 {
 		start = bytes.Repeat([]byte{0x00}, keyLength)
 	}
@@ -298,9 +333,13 @@ func generateRangeProof(t *trie.Trie, keys [][]byte, start []byte, more bool, ke
 	return proof, nil
 }
 
-func verifyRangeProof(proof *memorydb.Database, root common.Hash, keys, vals [][]byte, start []byte, keyLength int) error {
-	// If [start] in the request is empty, populate it with the appropriate length
-	// key starting at 0.
+func verifyRangeProof(
+	proof *memorydb.Database, root common.Hash, keys, vals [][]byte, start []byte, keyLength int, duration *time.Duration,
+) error {
+	startTime := time.Now()
+	defer func() { *duration += time.Since(startTime) }()
+
+	// If [start] is empty, populate it with the appropriate length key starting at 0.
 	if len(start) == 0 {
 		start = bytes.Repeat([]byte{0x00}, keyLength)
 	}
@@ -330,6 +369,51 @@ func iterateKeyVals(db *memorydb.Database) ([][]byte, [][]byte, error) {
 	return keys, vals, it.Error()
 }
 
+// fillFromTrie reads values from [t] and appends them to [leafsResponse],
+// adding to any existing values. Returns true if there are more keys in the trie.
+func fillFromTrie(
+	ctx context.Context,
+	t *trie.Trie,
+	leafsResponse *message.LeafsResponse,
+	start, end []byte,
+	limit uint16,
+	duration *time.Duration,
+) (bool, error) {
+	startTime := time.Now()
+	defer func() { *duration += time.Since(startTime) }()
+
+	var trieStartKey []byte
+	if len(leafsResponse.Keys) > 0 {
+		trieStartKey = common.CopyBytes(leafsResponse.Keys[len(leafsResponse.Keys)-1])
+		incrOne(trieStartKey)
+	} else {
+		trieStartKey = start
+	}
+
+	// create iterator to iterate the trie
+	it := trie.NewIterator(t.NodeIterator(trieStartKey))
+	more := false
+	for it.Next() {
+		// if we're at the end, break this loop
+		if len(end) > 0 && bytes.Compare(it.Key, end) > 0 {
+			more = true
+			break
+		}
+
+		// If we've returned enough data or run out of time, set the more flag and exit
+		// this flag will determine if the proof is generated or not
+		if len(leafsResponse.Keys) >= int(limit) || ctx.Err() != nil {
+			more = true
+			break
+		}
+
+		// collect data to return
+		leafsResponse.Keys = append(leafsResponse.Keys, it.Key)
+		leafsResponse.Vals = append(leafsResponse.Vals, it.Value)
+	}
+	return more, it.Err
+}
+
 // getKeyLength returns trie key length for given nodeType
 // expects nodeType to be one of message.AtomicTrieNode or message.StateTrieNode
 func getKeyLength(nodeType message.NodeType) (int, error) {
@@ -357,4 +441,18 @@ func getSnapshotRoot(db ethdb.KeyValueReader, account common.Hash) (common.Hash,
 		return common.Hash{}, err
 	}
 	return common.BytesToHash(acc.Root), nil
+}
+
+// incrOne increments bytes value by one
+func incrOne(bytes []byte) {
+	index := len(bytes) - 1
+	for index >= 0 {
+		if bytes[index] < 255 {
+			bytes[index]++
+			break
+		} else {
+			bytes[index] = 0
+			index--
+		}
+	}
 }
