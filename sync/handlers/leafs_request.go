@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -235,7 +236,7 @@ func (lrh *LeafsRequestHandler) handleRequest(
 				// To check this, the start key for generating and verifying range proofs
 				// is set to the key immediately after snapKeys[i-1].
 				segmentStartKey = common.CopyBytes(snapKeys[i-1])
-				incrOne(segmentStartKey)
+				utils.IncrOne(segmentStartKey)
 			}
 			proof, err := generateRangeProof(t, segmentStartKey, snapKeys[i:segmentEnd], true, keyLength, &proofTime)
 			if err != nil {
@@ -396,7 +397,7 @@ func fillFromTrie(
 	var trieStartKey []byte
 	if len(leafsResponse.Keys) > 0 {
 		trieStartKey = common.CopyBytes(leafsResponse.Keys[len(leafsResponse.Keys)-1])
-		incrOne(trieStartKey)
+		utils.IncrOne(trieStartKey)
 	} else {
 		trieStartKey = start
 	}
@@ -452,18 +453,4 @@ func getSnapshotRoot(db ethdb.KeyValueReader, account common.Hash) (common.Hash,
 		return common.Hash{}, err
 	}
 	return common.BytesToHash(acc.Root), nil
-}
-
-// incrOne increments bytes value by one
-func incrOne(bytes []byte) {
-	index := len(bytes) - 1
-	for index >= 0 {
-		if bytes[index] < 255 {
-			bytes[index]++
-			break
-		} else {
-			bytes[index] = 0
-			index--
-		}
-	}
 }
