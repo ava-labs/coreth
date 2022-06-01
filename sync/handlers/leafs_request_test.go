@@ -459,6 +459,9 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
 				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
 				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadSuccessCount)
+
+				// cleanup
+				<-snapshot.WipeSnapshot(memdb, true)
 			},
 		},
 		"partial data served from snapshot": {
@@ -514,6 +517,9 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				numSegments := maxLeavesLimit / segmentLen
 				assert.EqualValues(t, numSegments/4, mockHandlerStats.SnapshotSegmentInvalidCount)
 				assert.EqualValues(t, 3*numSegments/4, mockHandlerStats.SnapshotSegmentValidCount)
+
+				// cleanup
+				<-snapshot.WipeSnapshot(memdb, true)
 			},
 		},
 	}
