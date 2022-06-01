@@ -10,12 +10,16 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,11 +30,31 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	trieDB := trie.NewDatabase(memdb)
 
 	corruptedTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 100, common.HashLength)
-	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
-	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
-
 	// Corrupt [corruptedTrieRoot]
 	trie.CorruptTrie(t, trieDB, corruptedTrieRoot, 5)
+
+	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
+	accountTrieRoot, accounts := trie.FillAccounts(
+		t,
+		trieDB,
+		common.Hash{},
+		10_000,
+		func(t *testing.T, i int, acc types.StateAccount) types.StateAccount {
+			if i == 0 {
+				// set the storage trie root for a single account
+				acc.Root = largeTrieRoot
+			}
+			return acc
+		})
+	// find the hash of the account we set to have a storage
+	var accHash common.Hash
+	for key, account := range accounts {
+		if account.Root == largeTrieRoot {
+			accHash = crypto.Keccak256Hash(key.Address[:])
+			break
+		}
+	}
 
 	leafsHandler := NewLeafsRequestHandler(trieDB, message.Codec, mockHandlerStats)
 
@@ -462,6 +486,178 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				more, err := trie.VerifyRangeProof(smallTrieRoot, firstKey, lastKey, leafsResponse.Keys, leafsResponse.Vals, nil)
 				assert.NoError(t, err)
 				assert.False(t, more)
+			},
+		},
+		"account data served from snapshot": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					// wipe snapshot as a test cleanup so it runs even if the test fails
+					<-snapshot.WipeSnapshot(memdb, true)
+				})
+				return context.Background(), message.LeafsRequest{
+					Root:     accountTrieRoot,
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadSuccessCount)
+
+			},
+		},
+		"partial account data served from snapshot": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					// wipe snapshot as a test cleanup so it runs even if the test fails
+					<-snapshot.WipeSnapshot(memdb, true)
+				})
+				it := snapshot.NewAccountSnapshotIterator(memdb, nil, nil)
+				defer it.Release()
+				i := 0
+				for it.Next() {
+					if i > int(maxLeavesLimit) {
+						// no need to modify beyond the request limit
+						break
+					}
+					// modify one entry of 1 in 4 segments
+					if i%(segmentLen*4) == 0 {
+						var acc snapshot.Account
+						if err := rlp.DecodeBytes(it.Value(), &acc); err != nil {
+							t.Fatalf("could not parse snapshot account: %v", err)
+						}
+						acc.Nonce++
+						accHash := common.BytesToHash(it.Key())
+						bytes, err := rlp.EncodeToBytes(acc)
+						if err != nil {
+							t.Fatalf("coult not encode snapshot account to bytes: %v", err)
+						}
+						rawdb.WriteAccountSnapshot(memdb, accHash, bytes)
+					}
+					i++
+				}
+
+				return context.Background(), message.LeafsRequest{
+					Root:     accountTrieRoot,
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
+				assert.EqualValues(t, 0, mockHandlerStats.SnapshotReadSuccessCount)
+
+				// expect 1/4th of segments to be invalid
+				numSegments := maxLeavesLimit / segmentLen
+				assert.EqualValues(t, numSegments/4, mockHandlerStats.SnapshotSegmentInvalidCount)
+				assert.EqualValues(t, 3*numSegments/4, mockHandlerStats.SnapshotSegmentValidCount)
+			},
+		},
+		"storage data served from snapshot": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					// wipe snapshot as a test cleanup so it runs even if the test fails
+					<-snapshot.WipeSnapshot(memdb, true)
+				})
+				return context.Background(), message.LeafsRequest{
+					Root:     largeTrieRoot,
+					Account:  accHash,
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadSuccessCount)
+			},
+		},
+		"partial storage data served from snapshot": {
+			prepareTestFn: func() (context.Context, message.LeafsRequest) {
+				_, err := snapshot.New(memdb, trieDB, 64, common.Hash{}, accountTrieRoot, false, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					// wipe snapshot as a test cleanup so it runs even if the test fails
+					<-snapshot.WipeSnapshot(memdb, true)
+				})
+				it := snapshot.NewStorageSnapshotIterator(memdb, accHash, nil, nil)
+				defer it.Release()
+				i := 0
+				for it.Next() {
+					if i > int(maxLeavesLimit) {
+						// no need to modify beyond the request limit
+						break
+					}
+					// modify one entry of 1 in 4 segments
+					if i%(segmentLen*4) == 0 {
+						randomBytes := make([]byte, 5)
+						_, err := rand.Read(randomBytes)
+						assert.NoError(t, err)
+						rawdb.WriteStorageSnapshot(memdb, accHash, common.BytesToHash(it.Key()), randomBytes)
+					}
+					i++
+				}
+
+				return context.Background(), message.LeafsRequest{
+					Root:     largeTrieRoot,
+					Account:  accHash,
+					Limit:    maxLeavesLimit,
+					NodeType: message.StateTrieNode,
+				}
+			},
+			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				assert.NoError(t, err)
+				var leafsResponse message.LeafsResponse
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				assert.NoError(t, err)
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
+				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
+				assert.EqualValues(t, 1, mockHandlerStats.LeafsRequestCount)
+				assert.EqualValues(t, len(leafsResponse.Keys), mockHandlerStats.LeafsReturnedSum)
+				assert.EqualValues(t, 1, mockHandlerStats.SnapshotReadAttemptCount)
+				assert.EqualValues(t, 0, mockHandlerStats.SnapshotReadSuccessCount)
+
+				// expect 1/4th of segments to be invalid
+				numSegments := maxLeavesLimit / segmentLen
+				assert.EqualValues(t, numSegments/4, mockHandlerStats.SnapshotSegmentInvalidCount)
+				assert.EqualValues(t, 3*numSegments/4, mockHandlerStats.SnapshotSegmentValidCount)
 			},
 		},
 	}
