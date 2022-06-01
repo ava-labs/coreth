@@ -28,11 +28,17 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 const (
 	tipBufferSize = 32
@@ -56,11 +62,12 @@ type TrieDB interface {
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 	if config.Pruning {
 		return &cappedMemoryTrieWriter{
-			TrieDB:         db,
-			memoryCap:      common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
-			imageCap:       4 * 1024 * 1024,
-			commitInterval: config.CommitInterval,
-			tipBuffer:      NewBoundedBuffer(tipBufferSize, db.Dereference),
+			TrieDB:              db,
+			memoryCap:           common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
+			optimisticMemoryCap: common.StorageSize(config.TrieDirtyOptimisticLimit) * 1024 * 1024,
+			imageCap:            4 * 1024 * 1024,
+			commitInterval:      config.CommitInterval,
+			tipBuffer:           NewBoundedBuffer(tipBufferSize, db.Dereference),
 		}
 	} else {
 		return &noPruningTrieWriter{
@@ -95,9 +102,10 @@ func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
 type cappedMemoryTrieWriter struct {
 	TrieDB
-	memoryCap      common.StorageSize
-	imageCap       common.StorageSize
-	commitInterval uint64
+	memoryCap           common.StorageSize
+	optimisticMemoryCap common.StorageSize
+	imageCap            common.StorageSize
+	commitInterval      uint64
 
 	tipBuffer *BoundedBuffer
 }
@@ -131,6 +139,18 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 		if err := cm.TrieDB.Commit(root, true, nil); err != nil {
 			return fmt.Errorf("failed to commit trie for block %s: %w", block.Hash().Hex(), err)
 		}
+	}
+
+	// Write up to 2*[ethdb.IdealBatchSize] of the oldest nodes in the trie database dirty cache
+	// to disk. [rand.Intn(ethdb.IdealBatchSize)] is used to ensure all nodes in the
+	// network don't write at the same time.
+	nodes, imgs := cm.TrieDB.Size()
+	if nodes <= cm.optimisticMemoryCap && imgs <= cm.imageCap {
+		return nil
+	}
+	targetCapSize := cm.optimisticMemoryCap - ethdb.IdealBatchSize - common.StorageSize(rand.Intn(ethdb.IdealBatchSize))
+	if err := cm.TrieDB.Cap(targetCapSize); err != nil {
+		return fmt.Errorf("failed to cap trie for block %s: %w", block.Hash().Hex(), err)
 	}
 
 	return nil
