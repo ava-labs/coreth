@@ -4,23 +4,17 @@
 package evm
 
 import (
-	"errors"
-
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/coreth/ethdb"
 )
 
-var (
-	errUnknownStat = errors.New("unknown stat")
-
-	_ ethdb.Database = &Database{}
-)
+var _ ethdb.Database = &Database{}
 
 // Database implements ethdb.Database
 type Database struct{ database.Database }
 
 // Stat implements ethdb.Database
-func (db Database) Stat(string) (string, error) { return "", errUnknownStat }
+func (db Database) Stat(string) (string, error) { return "", database.ErrNotFound }
 
 // NewBatch implements ethdb.Database
 func (db Database) NewBatch() ethdb.Batch { return Batch{db.Database.NewBatch()} }
