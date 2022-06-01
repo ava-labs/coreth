@@ -186,7 +186,7 @@ func (lrh *LeafsRequestHandler) handleRequest(
 		}
 
 		// Check if the entire range read from the snapshot is valid according to the trie.
-		proof, err := generateRangeProof(t, snapKeys, leafsRequest.Start, more, keyLength, &proofTime)
+		proof, err := generateRangeProof(t, leafsRequest.Start, snapKeys, more, keyLength, &proofTime)
 		if err != nil {
 			lrh.stats.IncProofError()
 			return message.LeafsResponse{}, err
@@ -230,10 +230,14 @@ func (lrh *LeafsRequestHandler) handleRequest(
 			if i == 0 {
 				segmentStartKey = leafsRequest.Start
 			} else {
+				// We consider a segment valid only if the trie does not contain any
+				// newly inserted keys between snapKeys[i-1] and snapKeys[i].
+				// To check this, the start key for generating and verifying range proofs
+				// is set to the key immediately after snapKeys[i-1].
 				segmentStartKey = common.CopyBytes(snapKeys[i-1])
 				incrOne(segmentStartKey)
 			}
-			proof, err := generateRangeProof(t, snapKeys[i:segmentEnd], segmentStartKey, true, keyLength, &proofTime)
+			proof, err := generateRangeProof(t, segmentStartKey, snapKeys[i:segmentEnd], true, keyLength, &proofTime)
 			if err != nil {
 				lrh.stats.IncProofError()
 				return message.LeafsResponse{}, err
@@ -292,7 +296,7 @@ func (lrh *LeafsRequestHandler) handleRequest(
 	}
 
 	// Generate the proof and add it to the response.
-	proof, err := generateRangeProof(t, leafsResponse.Keys, leafsRequest.Start, more, keyLength, &proofTime)
+	proof, err := generateRangeProof(t, leafsRequest.Start, leafsResponse.Keys, more, keyLength, &proofTime)
 	if err != nil {
 		lrh.stats.IncProofError()
 		return message.LeafsResponse{}, err
@@ -306,7 +310,9 @@ func (lrh *LeafsRequestHandler) handleRequest(
 }
 
 // generateRangeProof generates a range proof for the range specified by [start] and [keys] using [t].
-func generateRangeProof(t *trie.Trie, keys [][]byte, start []byte, more bool, keyLength int, duration *time.Duration) (*memorydb.Database, error) {
+//
+// Note: A nil memorydb is returned in the case that the range contains the entire trie, such that no proof is required.
+func generateRangeProof(t *trie.Trie, start []byte, keys [][]byte, more bool, keyLength int, duration *time.Duration) (*memorydb.Database, error) {
 	startTime := time.Now()
 	defer func() { *duration += time.Since(startTime) }()
 
@@ -353,6 +359,7 @@ func verifyRangeProof(
 	return err
 }
 
+// iterateKeyVals returns the key-value pairs contained in [db]
 func iterateKeyVals(db *memorydb.Database) ([][]byte, [][]byte, error) {
 	if db == nil {
 		return nil, nil, nil
@@ -371,8 +378,10 @@ func iterateKeyVals(db *memorydb.Database) ([][]byte, [][]byte, error) {
 	return keys, vals, it.Error()
 }
 
-// fillFromTrie reads values from [t] and appends them to [leafsResponse],
-// adding to any existing values. Returns true if there are more keys in the trie.
+// fillFromTrie iterates key/values from [t], appending them to [leafsResponse.Keys/Values].
+// Iteration starts from the key immediately after the last key in [leafsResponse]
+// (or [start] if [leafsResponse] is empty) and goes up to [end].
+// Returns true if there are more keys in the trie.
 func fillFromTrie(
 	ctx context.Context,
 	t *trie.Trie,
