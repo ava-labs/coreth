@@ -51,20 +51,20 @@ var DefaultConfig = NewDefaultConfig()
 
 func NewDefaultConfig() Config {
 	return Config{
-		NetworkId:                1,
-		LightPeers:               100,
-		UltraLightFraction:       75,
-		DatabaseCache:            512,
-		TrieCleanCache:           256,
-		TrieDirtyCache:           256,
-		TrieDirtyOptimisticCache: 32,
-		SnapshotCache:            128,
-		Miner:                    miner.Config{},
-		TxPool:                   core.DefaultTxPoolConfig,
-		RPCGasCap:                25000000,
-		RPCEVMTimeout:            5 * time.Second,
-		GPO:                      DefaultFullGPOConfig,
-		RPCTxFeeCap:              1, // 1 AVAX
+		NetworkId:           1,
+		LightPeers:          100,
+		UltraLightFraction:  75,
+		DatabaseCache:       512,
+		TrieCleanCache:      256,
+		TrieDirtyCache:      256,
+		TrieDirtyIdealLimit: 32,
+		SnapshotCache:       128,
+		Miner:               miner.Config{},
+		TxPool:              core.DefaultTxPoolConfig,
+		RPCGasCap:           25000000,
+		RPCEVMTimeout:       5 * time.Second,
+		GPO:                 DefaultFullGPOConfig,
+		RPCTxFeeCap:         1, // 1 AVAX
 	}
 }
 
@@ -115,11 +115,11 @@ type Config struct {
 	DatabaseCache      int
 	// DatabaseFreezer    string
 
-	TrieCleanCache           int
-	TrieDirtyCache           int
-	TrieDirtyOptimisticCache int
-	SnapshotCache            int
-	Preimages                bool
+	TrieCleanCache      int
+	TrieDirtyCache      int
+	TrieDirtyIdealLimit int
+	SnapshotCache       int
+	Preimages           bool
 
 	// Mining options
 	Miner miner.Config
