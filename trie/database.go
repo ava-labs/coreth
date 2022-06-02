@@ -61,6 +61,7 @@ var (
 	memcacheDirtyChildSizeGauge = metrics.NewRegisteredGaugeFloat64("trie/memcache/dirty/childsize", nil)
 	memcacheDirtyNodesGauge     = metrics.NewRegisteredGauge("trie/memcache/dirty/nodes", nil)
 
+	memcacheFlushMeter         = metrics.NewRegisteredMeter("trie/memcache/flush/count", nil)
 	memcacheFlushTimeTimer     = metrics.NewRegisteredResettingTimer("trie/memcache/flush/time", nil)
 	memcacheFlushLockTimeTimer = metrics.NewRegisteredResettingTimer("trie/memcache/flush/locktime", nil)
 	memcacheFlushNodesMeter    = metrics.NewRegisteredMeter("trie/memcache/flush/nodes", nil)
@@ -70,6 +71,7 @@ var (
 	memcacheGCNodesMeter = metrics.NewRegisteredMeter("trie/memcache/gc/nodes", nil)
 	memcacheGCSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/gc/size", nil)
 
+	memcacheCommitMeter         = metrics.NewRegisteredMeter("trie/memcache/commit/count", nil)
 	memcacheCommitTimeTimer     = metrics.NewRegisteredResettingTimer("trie/memcache/commit/time", nil)
 	memcacheCommitLockTimeTimer = metrics.NewRegisteredResettingTimer("trie/memcache/commit/locktime", nil)
 	memcacheCommitNodesMeter    = metrics.NewRegisteredMeter("trie/memcache/commit/nodes", nil)
@@ -743,6 +745,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheDirtyChildSizeGauge.Update(float64(db.childrenSize))
 	memcacheDirtyNodesGauge.Update(int64(len(db.dirties)))
 
+	memcacheFlushMeter.Mark(1)
 	memcacheFlushTimeTimer.Update(time.Since(start))
 	memcacheFlushLockTimeTimer.Update(lockTime + time.Since(lockStart))
 	memcacheFlushSizeMeter.Mark(int64(storage - db.dirtiesSize))
@@ -794,6 +797,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	memcacheDirtyChildSizeGauge.Update(float64(db.childrenSize))
 	memcacheDirtyNodesGauge.Update(int64(len(db.dirties)))
 
+	memcacheCommitMeter.Mark(1)
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitLockTimeTimer.Update(lockTime + time.Since(lockStart))
 	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
