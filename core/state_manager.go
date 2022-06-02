@@ -54,17 +54,17 @@ const (
 	//
 	// We perform this optimistic flushing to reduce synchronized database IO at the
 	// [commitInterval].
-	flushWindow = 512
+	flushWindow = 768
 
 	// minFlushStepMultiplier is the minimum number of [flushStep] we will try to
 	// write during a single optimistic flush (only applicable in [pruning]
 	// mode).
-	minFlushStepMultiplier = 2 // ~800 KB with default settings
+	minFlushStepMultiplier = 2 // ~560 KB with default settings
 
 	// maxFlushStepMultiplier is the maximum number of [flushStep] we will try to
 	// write during a single optimistic flush (only applicable in [pruning]
 	// mode).
-	maxFlushStepMultiplier = 7 // ~2.8 MB with default settings
+	maxFlushStepMultiplier = 7 // ~2 MB with default settings
 )
 
 type TrieWriter interface {
@@ -183,8 +183,9 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	// We include a random term in [targetFlushSize] to prevent all nodes in the
 	// network from writing a large number of trie nodes to disk at the same time.
 	//
-	// Most trie nodes are 300B, so we may write at most ~9333 trie nodes (~2.8 MB) in
-	// a single optimistic flush (with [maxFlushStepMultiplier]=7 and [flushStepSize]=400KB).
+	// Most trie nodes are 300B, so we may write at most ~6500 trie nodes (~2 MB) in
+	// a single optimistic flush (with [maxFlushStepMultiplier]=7 and
+	// [flushStepSize]=280KB).
 	distanceFromCommit := cm.commitInterval - modCommitInterval // this cannot be 0
 	if distanceFromCommit > flushWindow {
 		return nil
