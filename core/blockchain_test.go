@@ -22,22 +22,22 @@ import (
 
 var (
 	archiveConfig = &CacheConfig{
-		TrieCleanLimit:      256,
-		TrieDirtyLimit:      256,
-		TrieDirtyIdealLimit: 32,
-		Pruning:             false, // Archive mode
-		SnapshotLimit:       256,
-		AcceptorQueueLimit:  64,
+		TrieCleanLimit:        256,
+		TrieDirtyLimit:        256,
+		TrieDirtyCommitTarget: 40,
+		Pruning:               false, // Archive mode
+		SnapshotLimit:         256,
+		AcceptorQueueLimit:    64,
 	}
 
 	pruningConfig = &CacheConfig{
-		TrieCleanLimit:      256,
-		TrieDirtyLimit:      256,
-		TrieDirtyIdealLimit: 32,
-		Pruning:             true, // Enable pruning
-		CommitInterval:      4096,
-		SnapshotLimit:       256,
-		AcceptorQueueLimit:  64,
+		TrieCleanLimit:        256,
+		TrieDirtyLimit:        256,
+		TrieDirtyCommitTarget: 40,
+		Pruning:               true, // Enable pruning
+		CommitInterval:        4096,
+		SnapshotLimit:         256,
+		AcceptorQueueLimit:    64,
 	}
 )
 
@@ -84,11 +84,12 @@ func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
 		return createBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:     256,
-				TrieDirtyLimit:     256,
-				Pruning:            false, // Archive mode
-				SnapshotLimit:      0,     // Disable snapshots
-				AcceptorQueueLimit: 64,
+				TrieCleanLimit:        256,
+				TrieDirtyLimit:        256,
+				TrieDirtyCommitTarget: 40,
+				Pruning:               false, // Archive mode
+				SnapshotLimit:         0,     // Disable snapshots
+				AcceptorQueueLimit:    64,
 			},
 			chainConfig,
 			lastAcceptedHash,
@@ -117,12 +118,13 @@ func TestPruningBlockChainSnapsDisabled(t *testing.T) {
 		return createBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:     256,
-				TrieDirtyLimit:     256,
-				Pruning:            true, // Enable pruning
-				CommitInterval:     4096,
-				SnapshotLimit:      0, // Disable snapshots
-				AcceptorQueueLimit: 64,
+				TrieCleanLimit:        256,
+				TrieDirtyLimit:        256,
+				TrieDirtyCommitTarget: 40,
+				Pruning:               true, // Enable pruning
+				CommitInterval:        4096,
+				SnapshotLimit:         0, // Disable snapshots
+				AcceptorQueueLimit:    64,
 			},
 			chainConfig,
 			lastAcceptedHash,
@@ -165,12 +167,13 @@ func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
 		blockchain, err := createBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:     256,
-				TrieDirtyLimit:     256,
-				Pruning:            true, // Enable pruning
-				CommitInterval:     4096,
-				SnapshotLimit:      0, // Disable snapshots
-				AcceptorQueueLimit: 64,
+				TrieCleanLimit:        256,
+				TrieDirtyLimit:        256,
+				TrieDirtyCommitTarget: 40,
+				Pruning:               true, // Enable pruning
+				CommitInterval:        4096,
+				SnapshotLimit:         0, // Disable snapshots
+				AcceptorQueueLimit:    64,
 			},
 			chainConfig,
 			lastAcceptedHash,
@@ -199,12 +202,13 @@ func TestEnableSnapshots(t *testing.T) {
 		blockchain, err := createBlockChain(
 			db,
 			&CacheConfig{
-				TrieCleanLimit:     256,
-				TrieDirtyLimit:     256,
-				Pruning:            true, // Enable pruning
-				CommitInterval:     4096,
-				SnapshotLimit:      snapLimit,
-				AcceptorQueueLimit: 64,
+				TrieCleanLimit:        256,
+				TrieDirtyLimit:        256,
+				TrieDirtyCommitTarget: 40,
+				Pruning:               true, // Enable pruning
+				CommitInterval:        4096,
+				SnapshotLimit:         snapLimit,
+				AcceptorQueueLimit:    64,
 			},
 			chainConfig,
 			lastAcceptedHash,
@@ -351,6 +355,7 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 		&CacheConfig{
 			TrieCleanLimit:                  256,
 			TrieDirtyLimit:                  256,
+			TrieDirtyCommitTarget:           40,
 			Pruning:                         false, // Archive mode
 			SnapshotLimit:                   256,
 			PopulateMissingTries:            &startHeight, // Starting point for re-populating.
@@ -382,13 +387,14 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 	var (
 		create = func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error) {
 			blockchain, err := createBlockChain(db, &CacheConfig{
-				TrieCleanLimit:      256,
-				TrieDirtyLimit:      256,
-				Pruning:             true,
-				CommitInterval:      4096,
-				SnapshotLimit:       256,
-				SkipSnapshotRebuild: true, // Ensure the test errors if snapshot initialization fails
-				AcceptorQueueLimit:  1000, // ensure channel doesn't block
+				TrieCleanLimit:        256,
+				TrieDirtyLimit:        256,
+				TrieDirtyCommitTarget: 40,
+				Pruning:               true,
+				CommitInterval:        4096,
+				SnapshotLimit:         256,
+				SkipSnapshotRebuild:   true, // Ensure the test errors if snapshot initialization fails
+				AcceptorQueueLimit:    1000, // ensure channel doesn't block
 			}, chainConfig, lastAcceptedHash)
 			if err != nil {
 				return nil, err

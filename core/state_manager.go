@@ -68,7 +68,7 @@ func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 		return &cappedMemoryTrieWriter{
 			TrieDB:         db,
 			memoryCap:      common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
-			idealMemoryCap: common.StorageSize(config.TrieDirtyIdealLimit) * 1024 * 1024,
+			idealMemoryCap: common.StorageSize(config.TrieDirtyCommitTarget) * 1024 * 1024,
 			imageCap:       4 * 1024 * 1024,
 			commitInterval: config.CommitInterval,
 			tipBuffer:      NewBoundedBuffer(tipBufferSize, db.Dereference),

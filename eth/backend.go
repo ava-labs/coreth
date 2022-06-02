@@ -204,7 +204,7 @@ func New(
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:                  config.TrieCleanCache,
 			TrieDirtyLimit:                  config.TrieDirtyCache,
-			TrieDirtyIdealLimit:             config.TrieDirtyIdealLimit,
+			TrieDirtyCommitTarget:             config.TrieDirtyCommitTarget,
 			Pruning:                         config.Pruning,
 			AcceptorQueueLimit:              config.AcceptorQueueLimit,
 			CommitInterval:                  config.CommitInterval,
