@@ -129,10 +129,8 @@ type cappedMemoryTrieWriter struct {
 func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
 	cm.TrieDB.Reference(block.Root(), common.Hash{})
 
-	// We don't remove the use of [Cap] in [InsertTrie] in case there is a large
-	// backlog of processing (unaccepted) blocks. In this scenario, the dirty cache
-	// could exceed the configured memory limit (and OOM) without forcing
-	// disk flushing.
+	// The use of [Cap] in [InsertTrie] prevents exceeding the configured memory
+	// limit (and OOM) in case there is a large backlog of processing (unaccepted) blocks.
 	nodes, imgs := cm.TrieDB.Size()
 	if nodes <= cm.memoryCap && imgs <= cm.imageCap {
 		return nil
@@ -169,7 +167,7 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	//
 	// To reduce the number of useless trie nodes that are committed during this
 	// capping, we only optimistically flush within the [flushWindow]. During
-	// this period, the [targetExtraMemory] decreases stepwise by [cm.flushStep]
+	// this period, the [targetMemory] decreases stepwise by [cm.flushStep]
 	// as we get closer to the commit boundary.
 	//
 	// We include a random term [rand.Intn(ethdb.IdealBatchSize)] in [targetFlushSize] to
@@ -182,17 +180,17 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	if distanceFromCommit > flushWindow {
 		return nil
 	}
-	targetExtraMemory := cm.commitTarget + cm.flushStep*common.StorageSize(distanceFromCommit)
+	targetMemory := cm.commitTarget + cm.flushStep*common.StorageSize(distanceFromCommit)
 	nodes, _ := cm.TrieDB.Size()
-	if nodes <= targetExtraMemory {
+	if nodes <= targetMemory {
 		return nil
 	}
 	targetFlushSize := ethdb.IdealBatchSize + common.StorageSize(rand.Intn(ethdb.IdealBatchSize))
-	targetMemory := targetExtraMemory - targetFlushSize
-	if targetMemory <= cm.commitTarget {
+	targetCap := targetMemory - targetFlushSize
+	if targetCap <= cm.commitTarget {
 		return nil
 	}
-	if err := cm.TrieDB.Cap(targetMemory); err != nil {
+	if err := cm.TrieDB.Cap(targetCap); err != nil {
 		return fmt.Errorf("failed to cap trie for block %s: %w", block.Hash().Hex(), err)
 	}
 	return nil
