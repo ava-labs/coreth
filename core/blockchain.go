@@ -124,7 +124,7 @@ type CacheConfig struct {
 var DefaultCacheConfig = &CacheConfig{
 	TrieCleanLimit:        256,
 	TrieDirtyLimit:        256,
-	TrieDirtyCommitTarget: 40, // 20% overhead in memory counting (this targets 32 MB)
+	TrieDirtyCommitTarget: 20, // 20% overhead in memory counting (this targets 16 MB)
 	Pruning:               true,
 	CommitInterval:        4096,
 	AcceptorQueueLimit:    64, // Provides 2 minutes of buffer (2s block target) for a commit delay

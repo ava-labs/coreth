@@ -24,7 +24,7 @@ var (
 	archiveConfig = &CacheConfig{
 		TrieCleanLimit:        256,
 		TrieDirtyLimit:        256,
-		TrieDirtyCommitTarget: 40,
+		TrieDirtyCommitTarget: 20,
 		Pruning:               false, // Archive mode
 		SnapshotLimit:         256,
 		AcceptorQueueLimit:    64,
@@ -33,7 +33,7 @@ var (
 	pruningConfig = &CacheConfig{
 		TrieCleanLimit:        256,
 		TrieDirtyLimit:        256,
-		TrieDirtyCommitTarget: 40,
+		TrieDirtyCommitTarget: 20,
 		Pruning:               true, // Enable pruning
 		CommitInterval:        4096,
 		SnapshotLimit:         256,
@@ -86,7 +86,7 @@ func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
 			&CacheConfig{
 				TrieCleanLimit:        256,
 				TrieDirtyLimit:        256,
-				TrieDirtyCommitTarget: 40,
+				TrieDirtyCommitTarget: 20,
 				Pruning:               false, // Archive mode
 				SnapshotLimit:         0,     // Disable snapshots
 				AcceptorQueueLimit:    64,
@@ -120,7 +120,7 @@ func TestPruningBlockChainSnapsDisabled(t *testing.T) {
 			&CacheConfig{
 				TrieCleanLimit:        256,
 				TrieDirtyLimit:        256,
-				TrieDirtyCommitTarget: 40,
+				TrieDirtyCommitTarget: 20,
 				Pruning:               true, // Enable pruning
 				CommitInterval:        4096,
 				SnapshotLimit:         0, // Disable snapshots
@@ -169,7 +169,7 @@ func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
 			&CacheConfig{
 				TrieCleanLimit:        256,
 				TrieDirtyLimit:        256,
-				TrieDirtyCommitTarget: 40,
+				TrieDirtyCommitTarget: 20,
 				Pruning:               true, // Enable pruning
 				CommitInterval:        4096,
 				SnapshotLimit:         0, // Disable snapshots
@@ -204,7 +204,7 @@ func TestEnableSnapshots(t *testing.T) {
 			&CacheConfig{
 				TrieCleanLimit:        256,
 				TrieDirtyLimit:        256,
-				TrieDirtyCommitTarget: 40,
+				TrieDirtyCommitTarget: 20,
 				Pruning:               true, // Enable pruning
 				CommitInterval:        4096,
 				SnapshotLimit:         snapLimit,
@@ -355,7 +355,7 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 		&CacheConfig{
 			TrieCleanLimit:                  256,
 			TrieDirtyLimit:                  256,
-			TrieDirtyCommitTarget:           40,
+			TrieDirtyCommitTarget:           20,
 			Pruning:                         false, // Archive mode
 			SnapshotLimit:                   256,
 			PopulateMissingTries:            &startHeight, // Starting point for re-populating.
@@ -389,7 +389,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 			blockchain, err := createBlockChain(db, &CacheConfig{
 				TrieCleanLimit:        256,
 				TrieDirtyLimit:        256,
-				TrieDirtyCommitTarget: 40,
+				TrieDirtyCommitTarget: 20,
 				Pruning:               true,
 				CommitInterval:        4096,
 				SnapshotLimit:         256,

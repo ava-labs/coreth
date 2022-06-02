@@ -57,7 +57,7 @@ func NewDefaultConfig() Config {
 		DatabaseCache:         512,
 		TrieCleanCache:        256,
 		TrieDirtyCache:        256,
-		TrieDirtyCommitTarget: 40,
+		TrieDirtyCommitTarget: 20,
 		SnapshotCache:         128,
 		Miner:                 miner.Config{},
 		TxPool:                core.DefaultTxPoolConfig,
