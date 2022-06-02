@@ -55,6 +55,16 @@ const (
 	// We perform this optimistic flushing to reduce synchronized database IO at the
 	// [commitInterval].
 	flushWindow = 512
+
+	// minFlushStepMultiplier is the minimum number of [flushStep] we will try to
+	// write during a single optimistic flush (only applicable in [pruning]
+	// mode).
+	minFlushStepMultiplier = 2 // ~800 KB with default settings
+
+	// maxFlushStepMultiplier is the maximum number of [flushStep] we will try to
+	// write during a single optimistic flush (only applicable in [pruning]
+	// mode).
+	maxFlushStepMultiplier = 7 // ~2.4 MB with default settings
 )
 
 type TrieWriter interface {
@@ -75,14 +85,14 @@ type TrieDB interface {
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 	if config.Pruning {
 		cm := &cappedMemoryTrieWriter{
-			TrieDB:         db,
-			memoryCap:      common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
-			commitTarget:   common.StorageSize(config.TrieDirtyCommitTarget) * 1024 * 1024,
-			imageCap:       4 * 1024 * 1024,
-			commitInterval: config.CommitInterval,
-			tipBuffer:      NewBoundedBuffer(tipBufferSize, db.Dereference),
+			TrieDB:           db,
+			memoryCap:        common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,
+			targetCommitSize: common.StorageSize(config.TrieDirtyCommitTarget) * 1024 * 1024,
+			imageCap:         4 * 1024 * 1024,
+			commitInterval:   config.CommitInterval,
+			tipBuffer:        NewBoundedBuffer(tipBufferSize, db.Dereference),
 		}
-		cm.flushStep = (cm.memoryCap - cm.commitTarget) / common.StorageSize(flushWindow)
+		cm.flushStepSize = (cm.memoryCap - cm.targetCommitSize) / common.StorageSize(flushWindow)
 		return cm
 	} else {
 		return &noPruningTrieWriter{
@@ -117,11 +127,11 @@ func (np *noPruningTrieWriter) Shutdown() error { return nil }
 
 type cappedMemoryTrieWriter struct {
 	TrieDB
-	memoryCap      common.StorageSize
-	commitTarget   common.StorageSize
-	flushStep      common.StorageSize
-	imageCap       common.StorageSize
-	commitInterval uint64
+	memoryCap        common.StorageSize
+	targetCommitSize common.StorageSize
+	flushStepSize    common.StorageSize
+	imageCap         common.StorageSize
+	commitInterval   uint64
 
 	tipBuffer *BoundedBuffer
 }
@@ -161,37 +171,40 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 		return nil
 	}
 
-	// Write up to [ethdb.IdealBatchSize * 2] of the oldest nodes in the trie database dirty cache
-	// to disk as we approach the [commitInterval] to reduce the number of trie nodes
-	// that will need to be written on [Commit] (to roughly [commitTarget]).
+	// Write up to [cm.flushStepSize * maxFlushStepsBatch] of the oldest nodes in the trie database
+	// dirty cache to disk as we approach the [commitInterval] to reduce the number of trie nodes
+	// that will need to be written at once on [Commit] (to roughly [targetCommitSize]).
 	//
 	// To reduce the number of useless trie nodes that are committed during this
 	// capping, we only optimistically flush within the [flushWindow]. During
-	// this period, the [targetMemory] decreases stepwise by [cm.flushStep]
+	// this period, the [targetMemory] decreases stepwise by [flushStepSize]
 	// as we get closer to the commit boundary.
 	//
-	// We include a random term [rand.Intn(ethdb.IdealBatchSize)] in [targetFlushSize] to
-	// prevent all nodes in the network from writing a large number of trie nodes to disk
-	// at the same time.
+	// We include a random term in [targetFlushSize] to prevent all nodes in the
+	// network from writing a large number of trie nodes to disk at the same time.
 	//
-	// Most trie nodes are 300B, so we may write at most ~670 trie nodes in
-	// a single optimistic flush.
+	// Most trie nodes are 300B, so we may write at most ~7000 trie nodes (~2 MB) in
+	// a single optimistic flush (with [maxFlushStepMultiplier]=5 and [flushStepSize]=400KB).
 	distanceFromCommit := cm.commitInterval - modCommitInterval // this cannot be 0
 	if distanceFromCommit > flushWindow {
 		return nil
 	}
-	targetMemory := cm.commitTarget + cm.flushStep*common.StorageSize(distanceFromCommit)
+	targetMemory := cm.targetCommitSize + cm.flushStepSize*common.StorageSize(distanceFromCommit)
 	nodes, _ := cm.TrieDB.Size()
 	if nodes <= targetMemory {
 		return nil
 	}
-	targetFlushSize := ethdb.IdealBatchSize + common.StorageSize(rand.Intn(ethdb.IdealBatchSize))
-	targetCap := targetMemory - targetFlushSize
-	if targetCap <= cm.commitTarget {
-		return nil
+	flushStepMultiplier := minFlushStepMultiplier + rand.Intn(maxFlushStepMultiplier-minFlushStepMultiplier)
+	targetCap := targetMemory - cm.flushStepSize*common.StorageSize(flushStepMultiplier)
+	if targetCap <= cm.targetCommitSize {
+		// It is possible we could compute a [targetCap] lower than
+		// [targetCommitSize]. In this case, we limit [targetCap] to be
+		// [ethdb.IdealBatchSize] below [targetCommitSize] to avoid flushing during
+		// each block when we are close to the [commitInterval].
+		targetCap = cm.targetCommitSize - ethdb.IdealBatchSize
 	}
 	if err := cm.TrieDB.Cap(targetCap); err != nil {
-		return fmt.Errorf("failed to cap trie for block %s: %w", block.Hash().Hex(), err)
+		return fmt.Errorf("failed to cap trie for block %s (target=%s): %w", block.Hash().Hex(), targetCap, err)
 	}
 	return nil
 }
