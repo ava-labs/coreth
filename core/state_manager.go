@@ -178,7 +178,7 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	//
 	// Most trie nodes are 300B, so we may write at most ~670 trie nodes in
 	// a single optimistic flush.
-	distanceFromCommit := cm.commitInterval - modCommitInterval
+	distanceFromCommit := cm.commitInterval - modCommitInterval // this cannot be 0
 	if distanceFromCommit > flushWindow {
 		return nil
 	}
@@ -188,7 +188,11 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 		return nil
 	}
 	targetFlushSize := ethdb.IdealBatchSize + common.StorageSize(rand.Intn(ethdb.IdealBatchSize))
-	if err := cm.TrieDB.Cap(targetExtraMemory - targetFlushSize); err != nil {
+	targetMemory := targetExtraMemory - targetFlushSize
+	if targetMemory <= cm.commitTarget {
+		return nil
+	}
+	if err := cm.TrieDB.Cap(targetMemory); err != nil {
 		return fmt.Errorf("failed to cap trie for block %s: %w", block.Hash().Hex(), err)
 	}
 	return nil
