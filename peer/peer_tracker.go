@@ -11,8 +11,10 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	utils_math "github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/version"
-	"github.com/ava-labs/coreth/metrics"
+
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/ava-labs/coreth/metrics"
 )
 
 const (
@@ -95,8 +97,9 @@ func (p *peerTracker) getResponsivePeer() (ids.NodeID, utils_math.Averager, bool
 func (p *peerTracker) GetAnyPeer(minVersion version.Application) (ids.NodeID, bool) {
 	if p.shouldTrackNewPeer() {
 		for nodeID := range p.peers {
+			zero := version.Application{}
 			// if minVersion is specified and peer's version is less, skip
-			if minVersion != nil && p.peers[nodeID].version.Compare(minVersion) < 0 {
+			if minVersion != zero && p.peers[nodeID].version.Compare(minVersion.Semantic) < 0 {
 				continue
 			}
 			// skip peers already tracked
@@ -164,7 +167,7 @@ func (p *peerTracker) Connected(nodeID ids.NodeID, nodeVersion version.Applicati
 		// Peer is already connected, update the version if it has changed.
 		// Log a warning message since the consensus engine should never call Connected on a peer
 		// that we have already marked as Connected.
-		if nodeVersion.Compare(peer.version) != 0 {
+		if nodeVersion.Compare(peer.version.Semantic) != 0 {
 			p.peers[nodeID] = &peerInfo{
 				version:   nodeVersion,
 				bandwidth: peer.bandwidth,

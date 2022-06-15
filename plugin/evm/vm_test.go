@@ -17,10 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/ava-labs/coreth/trie"
 
 	"github.com/stretchr/testify/assert"
 
@@ -168,7 +169,7 @@ func setupGenesis(t *testing.T,
 	genesisBytes := BuildGenesisTest(t, genesisJSON)
 	ctx := NewContext()
 
-	baseDBManager := manager.NewMemDB(version.NewDefaultVersion(1, 4, 5))
+	baseDBManager := manager.NewMemDB(version.NewDefaultSemantic(1, 4, 5))
 
 	m := &atomic.Memory{}
 	m.Initialize(logging.NoLog{}, prefixdb.New([]byte{0}, baseDBManager.Current().Database))
@@ -178,7 +179,7 @@ func setupGenesis(t *testing.T,
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
 
-	userKeystore := keystore.New(logging.NoLog{}, manager.NewMemDB(version.NewDefaultVersion(1, 4, 5)))
+	userKeystore := keystore.New(logging.NoLog{}, manager.NewMemDB(version.NewDefaultSemantic(1, 4, 5)))
 	if err := userKeystore.CreateUser(username, password); err != nil {
 		t.Fatal(err)
 	}
