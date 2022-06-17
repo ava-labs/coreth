@@ -27,7 +27,7 @@ type TestTx struct {
 	IDV                         ids.ID `serialize:"true" json:"id"`
 	BurnedV                     uint64 `serialize:"true"`
 	UnsignedBytesV              []byte
-	BytesV                      []byte
+	SignedBytesV                []byte
 	InputUTXOsV                 ids.Set
 	SemanticVerifyV             error
 	EVMStateTransferV           error
@@ -56,10 +56,10 @@ func (t *TestTx) ID() ids.ID { return t.IDV }
 func (t *TestTx) Burned(assetID ids.ID) (uint64, error) { return t.BurnedV, nil }
 
 // UnsignedBytes implements the UnsignedAtomicTx interface
-func (t *TestTx) UnsignedBytes() []byte { return t.UnsignedBytesV }
+func (t *TestTx) Bytes() []byte { return t.UnsignedBytesV }
 
 // Bytes implements the UnsignedAtomicTx interface
-func (t *TestTx) Bytes() []byte { return t.BytesV }
+func (t *TestTx) SignedBytes() []byte { return t.SignedBytesV }
 
 // InputUTXOs implements the UnsignedAtomicTx interface
 func (t *TestTx) InputUTXOs() ids.Set { return t.InputUTXOsV }
