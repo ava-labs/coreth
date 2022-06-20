@@ -109,7 +109,7 @@ func (utx *UnsignedExportTx) Verify(
 }
 
 func (utx *UnsignedExportTx) GasUsed(fixedFee bool) (uint64, error) {
-	byteCost := calcBytesCost(len(utx.SignedBytes()))
+	byteCost := calcBytesCost(len(utx.Bytes()))
 	numSigs := uint64(len(utx.Ins))
 	sigCost, err := math.Mul64(numSigs, secp256k1fx.CostPerSignature)
 	if err != nil {
@@ -213,7 +213,7 @@ func (utx *UnsignedExportTx) SemanticVerify(
 		if len(cred.Sigs) != 1 {
 			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
 		}
-		pubKeyIntf, err := vm.secpFactory.RecoverPublicKey(utx.SignedBytes(), cred.Sigs[0][:])
+		pubKeyIntf, err := vm.secpFactory.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
 		if err != nil {
 			return err
 		}
