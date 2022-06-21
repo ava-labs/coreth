@@ -294,7 +294,7 @@ func (n *network) AppGossip(nodeID ids.NodeID, gossipBytes []byte) error {
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
-func (n *network) Connected(nodeID ids.NodeID, nodeVersion version.Application) error {
+func (n *network) Connected(nodeID ids.NodeID, nodeVersion *version.Application) error {
 	log.Debug("adding new peer", "nodeID", nodeID)
 
 	n.lock.Lock()

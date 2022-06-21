@@ -32,7 +32,7 @@ const (
 
 // information we track on a given peer
 type peerInfo struct {
-	version   version.Application
+	version   *version.Application
 	bandwidth utils_math.Averager
 }
 
@@ -99,7 +99,7 @@ func (p *peerTracker) GetAnyPeer(minVersion version.Application) (ids.NodeID, bo
 		for nodeID := range p.peers {
 			zero := version.Application{}
 			// if minVersion is specified and peer's version is less, skip
-			if minVersion != zero && p.peers[nodeID].version.Compare(minVersion.Semantic) < 0 {
+			if minVersion != zero && p.peers[nodeID].version.Compare(&minVersion) < 0 {
 				continue
 			}
 			// skip peers already tracked
@@ -162,12 +162,12 @@ func (p *peerTracker) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 }
 
 // Connected should be called when [nodeID] connects to this node
-func (p *peerTracker) Connected(nodeID ids.NodeID, nodeVersion version.Application) {
+func (p *peerTracker) Connected(nodeID ids.NodeID, nodeVersion *version.Application) {
 	if peer := p.peers[nodeID]; peer != nil {
 		// Peer is already connected, update the version if it has changed.
 		// Log a warning message since the consensus engine should never call Connected on a peer
 		// that we have already marked as Connected.
-		if nodeVersion.Compare(peer.version.Semantic) != 0 {
+		if nodeVersion.Compare(peer.version) != 0 {
 			p.peers[nodeID] = &peerInfo{
 				version:   nodeVersion,
 				bandwidth: peer.bandwidth,
