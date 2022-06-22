@@ -22,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var _ UnsignedAtomicTx = &UnsignedImportTx{}
+
 // UnsignedImportTx is an unsigned ImportTx
 type UnsignedImportTx struct {
 	avax.Metadata
