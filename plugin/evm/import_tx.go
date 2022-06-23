@@ -22,7 +22,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var _ UnsignedAtomicTx = &UnsignedImportTx{}
+var (
+	_ UnsignedAtomicTx       = &UnsignedImportTx{}
+	_ secp256k1fx.UnsignedTx = &UnsignedImportTx{}
+)
 
 // UnsignedImportTx is an unsigned ImportTx
 type UnsignedImportTx struct {
