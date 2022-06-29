@@ -66,6 +66,8 @@ github.com/ava-labs/avalanchego v1.7.14-rc.0.0.20220629000614-e78e9be310de h1:JP
 github.com/ava-labs/avalanchego v1.7.14-rc.0.0.20220629000614-e78e9be310de/go.mod h1:eiPIRqAuzjPA8jzqV5CVcktFcy+xQMLLjubi9gKz9Yw=
 github.com/ava-labs/avalanchego v1.7.14-rc.0.0.20220629173540-71da0e2705e4 h1:Q0P63e+KR+PvoPgWShKSSeVfk0/meTjErZH6U5ubUso=
 github.com/ava-labs/avalanchego v1.7.14-rc.0.0.20220629173540-71da0e2705e4/go.mod h1:eiPIRqAuzjPA8jzqV5CVcktFcy+xQMLLjubi9gKz9Yw=
+github.com/ava-labs/avalanchego v1.7.14-rc.0.0.20220629213945-ec2317845bac h1:Jo0wbpqKRMxlMx51MohuQH3gt47yOWLiV7eYO9V+tiQ=
+github.com/ava-labs/avalanchego v1.7.14-rc.0.0.20220629213945-ec2317845bac/go.mod h1:eiPIRqAuzjPA8jzqV5CVcktFcy+xQMLLjubi9gKz9Yw=
 github.com/aws/aws-sdk-go-v2 v1.2.0/go.mod h1:zEQs02YRBw1DjK0PoJv3ygDYOFTre1ejlJWl8FwAuQo=
 github.com/aws/aws-sdk-go-v2/config v1.1.1/go.mod h1:0XsVy9lBI/BCXm+2Tuvt39YmdHwS5unDQmxZOYe8F5Y=
 github.com/aws/aws-sdk-go-v2/credentials v1.1.1/go.mod h1:mM2iIjwl7LULWtS6JCACyInboHirisUUdkBPoTHMOUo=
