@@ -79,7 +79,7 @@ const (
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
-// - "latest", "earliest" or "pending" as string arguments
+// - "accepted", "finalized", "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
 // - an invalid block number error when the given argument isn't a known strings
@@ -100,7 +100,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	case "pending":
 		*bn = PendingBlockNumber
 		return nil
-	case "accepted":
+	case "accepted", "finalized": // Include "finalized" as an option for compatibility with FinalizedBlockNumber from geth.
 		*bn = AcceptedBlockNumber
 		return nil
 	}
@@ -117,7 +117,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalText implements encoding.TextMarshaler. It marshals:
-// - "latest", "earliest" or "pending" as strings
+// - "accepted", "latest", "earliest" or "pending" as strings
 // - other numbers as hex
 func (bn BlockNumber) MarshalText() ([]byte, error) {
 	switch bn {

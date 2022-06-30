@@ -29,6 +29,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -49,10 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-var (
-	ErrUnfinalizedData = errors.New("cannot query unfinalized data")
-	errExpired         = errors.New("request expired")
-)
+var ErrUnfinalizedData = errors.New("cannot query unfinalized data")
 
 // EthAPIBackend implements ethapi.Backend for full nodes
 type EthAPIBackend struct {
@@ -80,8 +78,8 @@ func (b *EthAPIBackend) LastAcceptedBlock() *types.Block {
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	// Treat requests for the pending, latest, or accepted block
 	// identically.
@@ -117,15 +115,15 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 }
 
 func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return b.eth.blockchain.GetHeaderByHash(hash), nil
 }
 
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	// Treat requests for the pending, latest, or accepted block
 	// identically.
@@ -144,8 +142,8 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
@@ -154,8 +152,8 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
 	}
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header := b.eth.blockchain.GetHeaderByHash(hash)
@@ -199,8 +197,8 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
 	}
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header, err := b.HeaderByHash(ctx, hash)
@@ -220,24 +218,24 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return nil, errExpired
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	db := b.eth.ChainDb()
 	number := rawdb.ReadHeaderNumber(db, hash)
 	if number == nil {
-		return nil, errors.New("failed to get block number from hash")
+		return nil, fmt.Errorf("failed to get block number for hash %#x", hash)
 	}
 	logs := rawdb.ReadLogs(db, hash, *number)
 	if logs == nil {
-		return nil, errors.New("failed to get logs for block")
+		return nil, fmt.Errorf("failed to get logs for block #%d (0x%s)", *number, hash.TerminalString())
 	}
 	return logs, nil
 }
@@ -289,8 +287,8 @@ func (b *EthAPIBackend) SubscribeAcceptedTransactionEvent(ch chan<- core.NewTxsE
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	if deadline, exists := ctx.Deadline(); exists && time.Until(deadline) < 0 {
-		return errExpired
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return b.eth.txPool.AddLocal(signedTx)
 }
