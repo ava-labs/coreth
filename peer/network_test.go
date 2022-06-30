@@ -24,7 +24,11 @@ import (
 )
 
 var (
-	defaultPeerVersion = version.NewDefaultApplication("corethtest", 1, 0, 0)
+	defaultPeerVersion = &version.Application{
+		Major: 1,
+		Minor: 0,
+		Patch: 0,
+	}
 
 	_ message.Request = &HelloRequest{}
 	_                 = &HelloResponse{}
@@ -43,7 +47,7 @@ var (
 func TestNetworkDoesNotConnectToItself(t *testing.T) {
 	selfNodeID := ids.GenerateTestNodeID()
 	n := NewNetwork(nil, nil, selfNodeID, 1)
-	assert.NoError(t, n.Connected(selfNodeID, version.NewDefaultApplication("avalanchego", 1, 0, 0)))
+	assert.NoError(t, n.Connected(selfNodeID, defaultPeerVersion))
 	assert.EqualValues(t, 0, n.Size())
 }
 
@@ -79,7 +83,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	net = NewNetwork(sender, codecManager, ids.EmptyNodeID, 16)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
-	client := NewClient(net)
+	client := NewNetworkClient(net)
 	nodeID := ids.GenerateTestNodeID()
 	assert.NoError(t, net.Connected(nodeID, defaultPeerVersion))
 
@@ -99,7 +103,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 			defer wg.Done()
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			assert.NoError(t, err)
-			responseBytes, err := client.RequestAny(defaultPeerVersion, requestBytes)
+			responseBytes, _, err := client.RequestAny(defaultPeerVersion, requestBytes)
 			assert.NoError(t, err)
 			assert.NotNil(t, responseBytes)
 
@@ -153,7 +157,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	net = NewNetwork(sender, codecManager, ids.EmptyNodeID, 16)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
-	client := NewClient(net)
+	client := NewNetworkClient(net)
 
 	nodes := []ids.NodeID{
 		ids.GenerateTestNodeID(),
@@ -238,19 +242,35 @@ func TestRequestMinVersion(t *testing.T) {
 
 	// passing nil as codec works because the net.AppRequest is never called
 	net = NewNetwork(sender, codecManager, ids.EmptyNodeID, 1)
-	client := NewClient(net)
+	client := NewNetworkClient(net)
 	requestMessage := TestMessage{Message: "this is a request"}
 	requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 	assert.NoError(t, err)
-	assert.NoError(t, net.Connected(nodeID, version.NewDefaultApplication("corethtest", 1, 7, 1)))
+	assert.NoError(t,
+		net.Connected(
+			nodeID,
+			&version.Application{
+				Major: 1,
+				Minor: 7,
+				Patch: 1,
+			},
+		),
+	)
 
 	// ensure version does not match
-	responseBytes, err := client.RequestAny(version.NewDefaultApplication("corethtest", 2, 0, 0), requestBytes)
-	assert.Equal(t, err.Error(), "no peers found matching version corethtest/2.0.0 out of 1 peers")
+	responseBytes, _, err := client.RequestAny(
+		&version.Application{
+			Major: 2,
+			Minor: 0,
+			Patch: 0,
+		},
+		requestBytes,
+	)
+	assert.Equal(t, err.Error(), "no peers found matching version avalanche/2.0.0 out of 1 peers")
 	assert.Nil(t, responseBytes)
 
 	// ensure version matches and the request goes through
-	responseBytes, err = client.RequestAny(version.NewDefaultApplication("corethtest", 1, 0, 0), requestBytes)
+	responseBytes, _, err = client.RequestAny(defaultPeerVersion, requestBytes)
 	assert.NoError(t, err)
 
 	var response TestMessage
@@ -325,7 +345,7 @@ func TestGossip(t *testing.T) {
 
 	assert.NoError(t, clientNetwork.Connected(nodeID, defaultPeerVersion))
 
-	client := NewClient(clientNetwork)
+	client := NewNetworkClient(clientNetwork)
 	defer clientNetwork.Shutdown()
 
 	b, err := buildGossip(codecManager, HelloGossip{Msg: "hello there!"})

@@ -42,6 +42,7 @@ func (nt NodeType) String() string {
 // NodeType outlines which trie to read from state/atomic.
 type LeafsRequest struct {
 	Root     common.Hash `serialize:"true"`
+	Account  common.Hash `serialize:"true"`
 	Start    []byte      `serialize:"true"`
 	End      []byte      `serialize:"true"`
 	Limit    uint16      `serialize:"true"`
@@ -50,8 +51,8 @@ type LeafsRequest struct {
 
 func (l LeafsRequest) String() string {
 	return fmt.Sprintf(
-		"LeafsRequest(Root=%s, Start=%s, End %s, Limit=%d, NodeType=%s)",
-		l.Root, common.Bytes2Hex(l.Start), common.Bytes2Hex(l.End), l.Limit, l.NodeType,
+		"LeafsRequest(Root=%s, Account=%s, Start=%s, End=%s, Limit=%d, NodeType=%s)",
+		l.Root, l.Account, common.Bytes2Hex(l.Start), common.Bytes2Hex(l.End), l.Limit, l.NodeType,
 	)
 }
 
@@ -70,10 +71,10 @@ func (l LeafsRequest) Handle(ctx context.Context, nodeID ids.NodeID, requestID u
 // LeafsResponse is a response to a LeafsRequest
 // Keys must be within LeafsRequest.Start and LeafsRequest.End and sorted in lexicographical order.
 //
-// ProofKeys and ProofVals are expected to be non-nil and valid range proofs if the key-value pairs
-// in the response are not the entire trie.
-// If the key-value pairs make up the entire trie, ProofKeys and ProofVals should be empty since the
-// root will be sufficient to prove that the leaves are included in the trie.
+// ProofVals must be non-empty and contain a valid range proof unless the key-value pairs in the
+// response are the entire trie.
+// If the key-value pairs make up the entire trie, ProofVals should be empty since the root will be
+// sufficient to prove that the leaves are included in the trie.
 //
 // More is a flag set in the client after verifying the response, which indicates if the last key-value
 // pair in the response has any more elements to its right within the trie.
@@ -89,8 +90,7 @@ type LeafsResponse struct {
 	// last value in this response.
 	More bool
 
-	// ProofKeys and ProofVals are the key-value pairs used in the range proof of the provided key-value
-	// pairs.
-	ProofKeys [][]byte `serialize:"true"`
+	// ProofVals contain the edge merkle-proofs for the range of keys included in the response.
+	// The keys for the proof are simply the keccak256 hashes of the values, so they are not included in the response to save bandwidth.
 	ProofVals [][]byte `serialize:"true"`
 }

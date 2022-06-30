@@ -12,14 +12,16 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/version"
 
+	"github.com/ava-labs/coreth/peer/stats"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Minimum amount of time to handle a request
@@ -36,11 +38,11 @@ type Network interface {
 	validators.Connector
 	common.AppHandler
 
-	// RequestAny synchronously sends request to the first connected peer that matches the specified minVersion in
-	// random order.
-	// A peer is considered a match if its version is greater than or equal to the specified minVersion
-	// Returns an error if the request could not be sent to a peer with the desired [minVersion].
-	RequestAny(minVersion version.Application, message []byte, handler message.ResponseHandler) error
+	// RequestAny synchronously sends request to a randomly chosen peer with a
+	// node version greater than or equal to minVersion.
+	// Returns the ID of the chosen peer, and an error if the request could not
+	// be sent to a peer with the desired [minVersion].
+	RequestAny(minVersion *version.Application, message []byte, handler message.ResponseHandler) (ids.NodeID, error)
 
 	// Request sends message to given nodeID, notifying handler when there's a response or timeout
 	Request(nodeID ids.NodeID, message []byte, handler message.ResponseHandler) error
@@ -61,59 +63,61 @@ type Network interface {
 
 	// Size returns the size of the network in number of connected peers
 	Size() uint32
+
+	// TrackBandwidth should be called for each valid request with the bandwidth
+	// (length of response divided by request time), and with 0 if the response is invalid.
+	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
 }
 
 // network is an implementation of Network that processes message requests for
 // each peer in linear fashion
 type network struct {
-	lock                          sync.RWMutex                       // lock for mutating state of this Network struct
-	self                          ids.NodeID                         // NodeID of this node
-	requestIDGen                  uint32                             // requestID counter used to track outbound requests
-	outstandingResponseHandlerMap map[uint32]message.ResponseHandler // maps avalanchego requestID => response handler
-	activeRequests                *semaphore.Weighted                // controls maximum number of active outbound requests
-	appSender                     common.AppSender                   // avalanchego AppSender for sending messages
-	codec                         codec.Manager                      // Codec used for parsing messages
-	requestHandler                message.RequestHandler             // maps request type => handler
-	gossipHandler                 message.GossipHandler              // maps gossip type => handler
-	peers                         map[ids.NodeID]version.Application // maps nodeID => version.Version
+	lock                       sync.RWMutex                       // lock for mutating state of this Network struct
+	self                       ids.NodeID                         // NodeID of this node
+	requestIDGen               uint32                             // requestID counter used to track outbound requests
+	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
+	activeRequests             *semaphore.Weighted                // controls maximum number of active outbound requests
+	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
+	codec                      codec.Manager                      // Codec used for parsing messages
+	requestHandler             message.RequestHandler             // maps request type => handler
+	gossipHandler              message.GossipHandler              // maps gossip type => handler
+	peers                      *peerTracker                       // tracking of peers & bandwidth
+	stats                      stats.RequestHandlerStats          // Provide request handler metrics
 }
 
 func NewNetwork(appSender common.AppSender, codec codec.Manager, self ids.NodeID, maxActiveRequests int64) Network {
 	return &network{
-		appSender:                     appSender,
-		codec:                         codec,
-		self:                          self,
-		outstandingResponseHandlerMap: make(map[uint32]message.ResponseHandler),
-		peers:                         make(map[ids.NodeID]version.Application),
-		activeRequests:                semaphore.NewWeighted(maxActiveRequests),
+		appSender:                  appSender,
+		codec:                      codec,
+		self:                       self,
+		outstandingRequestHandlers: make(map[uint32]message.ResponseHandler),
+		activeRequests:             semaphore.NewWeighted(maxActiveRequests),
+		gossipHandler:              message.NoopMempoolGossipHandler{},
+		requestHandler:             message.NoopRequestHandler{},
+		peers:                      NewPeerTracker(),
+		stats:                      stats.NewRequestHandlerStats(),
 	}
 }
 
-// RequestAny sends given request to the first connected peer that matches the specified minVersion
-// A peer is considered a match if its version is greater than or equal to the specified minVersion
-// If minVersion is nil, then the request will be sent to any peer regardless of their version
-// Returns a non-nil error if we were not able to send a request to a peer with >= [minVersion]
-// or we fail to send a request to the selected peer.
-func (n *network) RequestAny(minVersion version.Application, request []byte, handler message.ResponseHandler) error {
+// RequestAny synchronously sends request to a randomly chosen peer with a
+// node version greater than or equal to minVersion. If minVersion is nil,
+// the request will be sent to any peer regardless of their version.
+// Returns the ID of the chosen peer, and an error if the request could not
+// be sent to a peer with the desired [minVersion].
+func (n *network) RequestAny(minVersion *version.Application, request []byte, handler message.ResponseHandler) (ids.NodeID, error) {
 	// Take a slot from total [activeRequests] and block until a slot becomes available.
 	if err := n.activeRequests.Acquire(context.Background(), 1); err != nil {
-		return errAcquiringSemaphore
+		return ids.EmptyNodeID, errAcquiringSemaphore
 	}
 
 	n.lock.Lock()
 	defer n.lock.Unlock()
-
-	for nodeID, nodeVersion := range n.peers {
-		// map iteration is sufficiently random to avoid hitting same peer so here
-		// we get a random peerID key that we compare minimum version that
-		// we have
-		if minVersion == nil || nodeVersion.Compare(minVersion) >= 0 {
-			return n.request(nodeID, request, handler)
-		}
+	if nodeID, ok := n.peers.GetAnyPeer(minVersion); ok {
+		return nodeID, n.request(nodeID, request, handler)
 	}
 
 	n.activeRequests.Release(1)
-	return fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, len(n.peers))
+	return ids.EmptyNodeID, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, n.peers.Size())
 }
 
 // Request sends request message bytes to specified nodeID, notifying the responseHandler on response or failure
@@ -133,7 +137,7 @@ func (n *network) Request(nodeID ids.NodeID, request []byte, responseHandler mes
 	return n.request(nodeID, request, responseHandler)
 }
 
-// request sends request message bytes to specified nodeID and adds [responseHandler] to [outstandingResponseHandlerMap]
+// request sends request message bytes to specified nodeID and adds [responseHandler] to [outstandingRequestHandlers]
 // so that it can be invoked when the network receives either a response or failure message.
 // Assumes [nodeID] is never [self] since we guarantee [self] will not be added to the [peers] map.
 // Releases active requests semaphore if there was an error in sending the request
@@ -141,12 +145,13 @@ func (n *network) Request(nodeID ids.NodeID, request []byte, responseHandler mes
 // Assumes write lock is held
 func (n *network) request(nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
 	log.Debug("sending request to peer", "nodeID", nodeID, "requestLen", len(request))
+	n.peers.TrackPeer(nodeID)
 
 	// generate requestID
 	requestID := n.requestIDGen
 	n.requestIDGen++
 
-	n.outstandingResponseHandlerMap[requestID] = responseHandler
+	n.outstandingRequestHandlers[requestID] = responseHandler
 
 	nodeIDs := ids.NewNodeIDSet(1)
 	nodeIDs.Add(nodeID)
@@ -154,10 +159,10 @@ func (n *network) request(nodeID ids.NodeID, request []byte, responseHandler mes
 	// send app request to the peer
 	// on failure: release the activeRequests slot, mark message as processed and return fatal error
 	// Send app request to [nodeID].
-	// On failure, release the slot from active requests and [outstandingResponseHandlerMap].
+	// On failure, release the slot from active requests and [outstandingRequestHandlers].
 	if err := n.appSender.SendAppRequest(nodeIDs, requestID, request); err != nil {
 		n.activeRequests.Release(1)
-		delete(n.outstandingResponseHandlerMap, requestID)
+		delete(n.outstandingRequestHandlers, requestID)
 		return err
 	}
 
@@ -184,6 +189,7 @@ func (n *network) AppRequest(nodeID ids.NodeID, requestID uint32, deadline time.
 
 	// calculate how much time is left until the deadline
 	timeTillDeadline := time.Until(deadline)
+	n.stats.UpdateTimeUntilDeadline(timeTillDeadline)
 
 	// bufferedDeadline is half the time till actual deadline so that the message has a reasonable chance
 	// of completing its processing and sending the response to the peer.
@@ -194,6 +200,7 @@ func (n *network) AppRequest(nodeID ids.NodeID, requestID uint32, deadline time.
 	if time.Until(bufferedDeadline) < minRequestHandlingDuration {
 		// Drop the request if we already missed the deadline to respond.
 		log.Debug("deadline to process AppRequest has expired, skipping", "nodeID", nodeID, "requestID", requestID, "req", req)
+		n.stats.IncDeadlineDroppedRequest()
 		return nil
 	}
 
@@ -257,12 +264,12 @@ func (n *network) AppRequestFailed(nodeID ids.NodeID, requestID uint32) error {
 // This is called by either [AppResponse] or [AppRequestFailed].
 // assumes that the write lock is held.
 func (n *network) getRequestHandler(requestID uint32) (message.ResponseHandler, bool) {
-	handler, exists := n.outstandingResponseHandlerMap[requestID]
+	handler, exists := n.outstandingRequestHandlers[requestID]
 	if !exists {
 		return nil, false
 	}
 	// mark message as processed, release activeRequests slot
-	delete(n.outstandingResponseHandlerMap, requestID)
+	delete(n.outstandingRequestHandlers, requestID)
 	n.activeRequests.Release(1)
 	return handler, true
 }
@@ -287,7 +294,7 @@ func (n *network) AppGossip(nodeID ids.NodeID, gossipBytes []byte) error {
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
-func (n *network) Connected(nodeID ids.NodeID, nodeVersion version.Application) error {
+func (n *network) Connected(nodeID ids.NodeID, nodeVersion *version.Application) error {
 	log.Debug("adding new peer", "nodeID", nodeID)
 
 	n.lock.Lock()
@@ -298,20 +305,7 @@ func (n *network) Connected(nodeID ids.NodeID, nodeVersion version.Application) 
 		return nil
 	}
 
-	if storedVersion, exists := n.peers[nodeID]; exists {
-		// Peer is already connected, update the version if it has changed.
-		// Log a warning message since the consensus engine should never call Connected on a peer
-		// that we have already marked as Connected.
-		if nodeVersion.Compare(storedVersion) != 0 {
-			n.peers[nodeID] = nodeVersion
-			log.Warn("received Connected message for already connected peer, updating node version", "nodeID", nodeID, "storedVersion", storedVersion, "nodeVersion", nodeVersion)
-		} else {
-			log.Warn("ignoring peer connected event for already connected peer with identical version", "nodeID", nodeID)
-		}
-		return nil
-	}
-
-	n.peers[nodeID] = nodeVersion
+	n.peers.Connected(nodeID, nodeVersion)
 	return nil
 }
 
@@ -321,14 +315,7 @@ func (n *network) Disconnected(nodeID ids.NodeID) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// if this peer already exists, log a warning and ignore the request
-	if _, exists := n.peers[nodeID]; !exists {
-		// we're not connected to this peer, nothing to do here
-		log.Warn("received peer disconnect request to unconnected peer", "nodeID", nodeID)
-		return nil
-	}
-
-	delete(n.peers, nodeID)
+	n.peers.Disconnected(nodeID)
 	return nil
 }
 
@@ -337,8 +324,8 @@ func (n *network) Shutdown() {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// reset peers map
-	n.peers = make(map[ids.NodeID]version.Application)
+	// reset peers
+	n.peers = NewPeerTracker()
 }
 
 func (n *network) SetGossipHandler(handler message.GossipHandler) {
@@ -359,5 +346,12 @@ func (n *network) Size() uint32 {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	return uint32(len(n.peers))
+	return uint32(n.peers.Size())
+}
+
+func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	n.peers.TrackBandwidth(nodeID, bandwidth)
 }

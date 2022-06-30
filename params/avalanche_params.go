@@ -20,7 +20,7 @@ const (
 
 	ApricotPhase1GasLimit uint64 = 8_000_000
 
-	ApricotPhase3ExtraDataSize                   = 80
+	ApricotPhase3ExtraDataSize            uint64 = 80
 	ApricotPhase3MinBaseFee               int64  = 75_000_000_000
 	ApricotPhase3MaxBaseFee               int64  = 225_000_000_000
 	ApricotPhase3InitialBaseFee           int64  = 225_000_000_000
@@ -33,6 +33,11 @@ const (
 
 	// The base cost to charge per atomic transaction. Added in Apricot Phase 5.
 	AtomicTxBaseCost uint64 = 10_000
+)
+
+// Constants for message sizes
+const (
+	MaxCodeHashesPerRequest = 5
 )
 
 var (

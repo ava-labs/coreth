@@ -7,6 +7,10 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
@@ -15,8 +19,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 )
 
 const testCommitInterval = 100
@@ -231,8 +235,8 @@ func TestIndexerWriteAndRead(t *testing.T) {
 	lastCommittedBlockHeight := uint64(0)
 	var lastCommittedBlockHash common.Hash
 
-	// process 205 blocks so that we get three commits (0, 100, 200)
-	for height := uint64(0); height <= testCommitInterval*2+5; /*=205*/ height++ {
+	// process 305 blocks so that we get three commits (100, 200, 300)
+	for height := uint64(1); height <= testCommitInterval*3+5; /*=305*/ height++ {
 		atomicRequests := testDataImportTx().mustAtomicOps()
 		err := atomicTrie.Index(height, atomicRequests)
 		assert.NoError(t, err)
@@ -261,13 +265,13 @@ func TestIndexerWriteAndRead(t *testing.T) {
 	// Ensure that Index refuses to accept blocks older than the last committed height
 	err := atomicTrie.Index(10, testDataExportTx().mustAtomicOps())
 	assert.Error(t, err)
-	assert.Equal(t, "height 10 must be after last committed height 200", err.Error())
+	assert.Equal(t, "height 10 must be after last committed height 300", err.Error())
 
 	// Ensure Index does not accept blocks beyond the next commit interval
 	nextCommitHeight := lastCommittedBlockHeight + testCommitInterval + 1 // =301
 	err = atomicTrie.Index(nextCommitHeight, testDataExportTx().mustAtomicOps())
 	assert.Error(t, err)
-	assert.Equal(t, "height 301 not within the next commit height 300", err.Error())
+	assert.Equal(t, "height 401 not within the next commit height 400", err.Error())
 }
 
 func TestAtomicOpsAreNotTxOrderDependent(t *testing.T) {
@@ -379,7 +383,6 @@ type sharedMemories struct {
 	peerChain   atomic.SharedMemory
 	thisChainID ids.ID
 	peerChainID ids.ID
-	db          *versiondb.Database
 }
 
 func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.Requests) error {
@@ -390,11 +393,7 @@ func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 			val := []byte{0x1}
 			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
 		}
-		batch, err := s.db.CommitBatch()
-		if err != nil {
-			return err
-		}
-		if err := s.peerChain.Apply(puts, batch); err != nil {
+		if err := s.peerChain.Apply(puts); err != nil {
 			return err
 		}
 	}
@@ -402,6 +401,7 @@ func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 }
 
 func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+	t.Helper()
 	for _, reqs := range ops {
 		// should be able to get put requests
 		for _, elem := range reqs.PutRequests {
@@ -421,6 +421,7 @@ func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 }
 
 func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+	t.Helper()
 	for _, reqs := range ops {
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {
@@ -437,16 +438,12 @@ func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 	}
 }
 
-func newSharedMemories(db *versiondb.Database, thisChainID, peerChainID ids.ID) *sharedMemories {
-	m := &atomic.Memory{}
-	m.Initialize(logging.NoLog{}, db)
-
+func newSharedMemories(atomicMemory *atomic.Memory, thisChainID, peerChainID ids.ID) *sharedMemories {
 	return &sharedMemories{
-		thisChain:   m.NewSharedMemory(thisChainID),
-		peerChain:   m.NewSharedMemory(peerChainID),
+		thisChain:   atomicMemory.NewSharedMemory(thisChainID),
+		peerChain:   atomicMemory.NewSharedMemory(peerChainID),
 		thisChainID: thisChainID,
 		peerChainID: peerChainID,
-		db:          db,
 	}
 }
 
@@ -491,7 +488,9 @@ func TestApplyToSharedMemory(t *testing.T) {
 			writeTxs(t, repo, 1, test.lastAcceptedHeight+1, constTxsPerHeight(2), nil, operationsMap)
 
 			// Initialize atomic repository
-			sharedMemories := newSharedMemories(db, testCChainID, blockChainID)
+			m := &atomic.Memory{}
+			m.Initialize(logging.NoLog{}, db)
+			sharedMemories := newSharedMemories(m, testCChainID, blockChainID)
 			atomicTrie, err := newAtomicTrie(db, sharedMemories.thisChain, nil, repo, codec, test.lastAcceptedHeight, test.commitInterval)
 			assert.NoError(t, err)
 
@@ -535,6 +534,11 @@ func TestApplyToSharedMemory(t *testing.T) {
 					sharedMemories.assertOpsNotApplied(t, ops)
 				}
 			}
+
+			// marker should be removed after ApplyToSharedMemory is complete
+			hasMarker, err = atomicTrie.metadataDB.Has(appliedSharedMemoryCursorKey)
+			assert.NoError(t, err)
+			assert.False(t, hasMarker)
 		})
 	}
 
@@ -611,7 +615,7 @@ func BenchmarkAtomicTrieIterate(b *testing.B) {
 }
 
 func levelDB(t testing.TB) database.Database {
-	db, err := leveldb.New(t.TempDir(), nil, logging.NoLog{})
+	db, err := leveldb.New(t.TempDir(), nil, logging.NoLog{}, "", prometheus.NewRegistry())
 	if err != nil {
 		t.Fatal(err)
 	}

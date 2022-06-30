@@ -31,9 +31,7 @@
 package core
 
 import (
-	"io/ioutil"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -508,11 +506,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
-	datadir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary datadir: %v", err)
-	}
-	os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
 	db, err := rawdb.NewLevelDBDatabase(datadir, 0, 0, "", false)
 	if err != nil {
@@ -565,6 +559,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 				}
 				lastAcceptedHash = canonblocks[i].Hash()
 			}
+			chain.DrainAcceptorQueue()
 		}
 	}
 	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
@@ -574,14 +569,14 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
 
-	// Start a new blockchain back up and see where the repait leads us
+	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.NewLevelDBDatabase(datadir, 0, 0, "", false)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
 	defer db.Close()
 
-	newChain, err := NewBlockChain(db, DefaultCacheConfig, params.TestChainConfig, engine, vm.Config{}, lastAcceptedHash)
+	newChain, err := NewBlockChain(db, config, params.TestChainConfig, engine, vm.Config{}, lastAcceptedHash)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

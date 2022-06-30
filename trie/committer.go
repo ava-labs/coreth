@@ -8,7 +8,7 @@
 //
 // Much love to the original authors for their work.
 // **********
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -93,7 +93,7 @@ func (c *committer) commit(n node, db *Database) (node, int, error) {
 	if hash != nil && !dirty {
 		return hash, 0, nil
 	}
-	// Commit children, then parent, and remove remove the dirty flag.
+	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
 		// Commit child
@@ -203,9 +203,7 @@ func (c *committer) store(n node, db *Database) node {
 	} else if db != nil {
 		// No leaf-callback used, but there's still a database. Do serial
 		// insertion
-		db.lock.Lock()
-		db.insert(common.BytesToHash(hash), size, n)
-		db.lock.Unlock()
+		db.Insert(common.BytesToHash(hash), size, n)
 	}
 	return hash
 }
@@ -219,9 +217,7 @@ func (c *committer) commitLoop(db *Database) {
 			n    = item.node
 		)
 		// We are pooling the trie nodes into an intermediate memory cache
-		db.lock.Lock()
-		db.insert(hash, size, n)
-		db.lock.Unlock()
+		db.Insert(hash, size, n)
 
 		if c.onleaf != nil {
 			switch n := n.(type) {
