@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	StateSyncVersion = version.Application{
+	StateSyncVersion = &version.Application{
 		Major: 1,
 		Minor: 7,
 		Patch: 13,

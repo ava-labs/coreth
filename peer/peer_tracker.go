@@ -94,12 +94,11 @@ func (p *peerTracker) getResponsivePeer() (ids.NodeID, utils_math.Averager, bool
 	return nodeID, peer.bandwidth, true
 }
 
-func (p *peerTracker) GetAnyPeer(minVersion version.Application) (ids.NodeID, bool) {
+func (p *peerTracker) GetAnyPeer(minVersion *version.Application) (ids.NodeID, bool) {
 	if p.shouldTrackNewPeer() {
 		for nodeID := range p.peers {
-			zero := version.Application{}
 			// if minVersion is specified and peer's version is less, skip
-			if minVersion != zero && p.peers[nodeID].version.Compare(&minVersion) < 0 {
+			if minVersion != nil && p.peers[nodeID].version.Compare(minVersion) < 0 {
 				continue
 			}
 			// skip peers already tracked
