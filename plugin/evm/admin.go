@@ -29,8 +29,7 @@ func NewAdminService(vm *VM, performanceDir string) *Admin {
 func (p *Admin) StartCPUProfiler(_ *http.Request, _ *struct{}, _ *api.EmptyReply) error {
 	log.Info("Admin: StartCPUProfiler called")
 
-	err := p.profiler.StartCPUProfiler()
-	return err
+	return p.profiler.StartCPUProfiler()
 }
 
 // StopCPUProfiler stops the cpu profile
