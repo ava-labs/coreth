@@ -1000,7 +1000,6 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 //
 //	 G   (genesis)
 //	/ \
-//
 // A1  B1
 // |   |
 // A2  B2 (A2 and B2 represent two different paths to the identical state trie)
@@ -1149,7 +1148,6 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 //
 //	 G   (genesis)
 //	/ \
-//
 // A1  B1
 // |   |
 // A2  B2 (A2 and B2 represent two different paths to the identical state trie)
