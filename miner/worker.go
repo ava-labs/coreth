@@ -45,6 +45,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -286,6 +287,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
+		case errors.Is(err, vmerrs.ErrToAddrProhibited):
+			log.Warn("discarding transaction", "sender", from, "type", tx.Type(), "err", err, "data", tx.Data())
+			txs.Pop()
+			w.eth.TxPool().RemoveTx(tx.Hash())
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the

@@ -71,6 +71,7 @@ func TestPackNativeAssetCallInput(t *testing.T) {
 }
 
 func TestStatefulPrecompile(t *testing.T) {
+	t.Skip("temporary skip")
 	vmCtx := BlockContext{
 		BlockNumber:       big.NewInt(0),
 		Time:              big.NewInt(0),
