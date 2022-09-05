@@ -58,6 +58,8 @@ var (
 	acceptorQueueGauge           = metrics.NewRegisteredGauge("blockchain/acceptor/queue/size", nil)
 	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("blockchain/blocks/gas/used/processed", nil)
 	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("blockchain/blocks/gas/used/accepted", nil)
+	badBlockCounter              = metrics.NewRegisteredCounter("blockchain/blocks/badblock", nil)
+	badBlockGasUsedCounter       = metrics.NewRegisteredCounter("blockchain/block/gas/used/badblocks", nil)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
@@ -1307,13 +1309,19 @@ func (bc *BlockChain) addBadBlock(block *types.Block) {
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	bc.addBadBlock(block)
 
-	var receiptString string
+	var (
+		receiptString     string
+		cumulativeGasUsed uint64
+	)
 	for i, receipt := range receipts {
 		receiptString += fmt.Sprintf("\t %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
+		cumulativeGasUsed += receipt.GasUsed
 	}
-	log.Error(fmt.Sprintf(`
+	badBlockCounter.Inc(1)
+	badBlockGasUsedCounter.Inc(int64(cumulativeGasUsed))
+	log.Debug(fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
 
