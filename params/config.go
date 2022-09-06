@@ -324,7 +324,7 @@ func (c *ChainConfig) IsApricotPhase6(blockTimestamp *big.Int) bool {
 	return utils.IsForked(c.ApricotPhase6BlockTimestamp, blockTimestamp)
 }
 
-// IsApricotPhasePost7 returns whether [blockTimestamp] represents a block
+// IsApricotPhasePost6 returns whether [blockTimestamp] represents a block
 // with a timestamp after the Apricot Phase 6 Post upgrade time.
 func (c *ChainConfig) IsApricotPhasePost6(blockTimestamp *big.Int) bool {
 	return utils.IsForked(c.ApricotPhasePost6BlockTimestamp, blockTimestamp)
