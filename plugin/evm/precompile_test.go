@@ -9,7 +9,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 )
@@ -32,10 +31,10 @@ func TestPrecompileConfigs(t *testing.T) {
 	require.Equal(vmPost6.chainConfig.ApricotPhasePost6BlockTimestamp.Cmp(common.Big0), 0)
 }
 
-func testPrecompileBlock(t *testing.T, config *params.ChainConfig, tx *types.Transaction, expectedErr error) {
+func testPrecompileBlock(t *testing.T, genesisJSON string, tx *types.Transaction, expectedErr error) {
 	require := require.New(t)
 	importAmount := uint64(20000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "{\"pruning-enabled\":true}", "", map[ids.ShortID]uint64{
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSON, "{\"pruning-enabled\":true}", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
