@@ -107,9 +107,7 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]precompile.StatefulPr
 	NativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
 }
 
-// PrecompiledContractsApricotPhase6 contains the default set of pre-compiled Ethereum
-// contracts used in the Apricot Phase 6 release.
-var PrecompiledContractsApricotPhase6 = map[common.Address]precompile.StatefulPrecompiledContract{
+var PrecompiledContractsApricotPhase7 = map[common.Address]precompile.StatefulPrecompiledContract{
 	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
 	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
 	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
@@ -125,7 +123,7 @@ var PrecompiledContractsApricotPhase6 = map[common.Address]precompile.StatefulPr
 }
 
 var (
-	PrecompiledAddressesApricotPhase6 []common.Address
+	PrecompiledAddressesApricotPhase7 []common.Address
 	PrecompiledAddressesApricotPhase2 []common.Address
 	PrecompiledAddressesIstanbul      []common.Address
 	PrecompiledAddressesByzantium     []common.Address
@@ -146,15 +144,17 @@ func init() {
 	for k := range PrecompiledContractsApricotPhase2 {
 		PrecompiledAddressesApricotPhase2 = append(PrecompiledAddressesApricotPhase2, k)
 	}
-	for k := range PrecompiledContractsApricotPhase6 {
-		PrecompiledAddressesApricotPhase6 = append(PrecompiledAddressesApricotPhase6, k)
+	for k := range PrecompiledContractsApricotPhase7 {
+		PrecompiledAddressesApricotPhase7 = append(PrecompiledAddressesApricotPhase7, k)
 	}
+
 	// Set of all native precompile addresses that are in use
 	// Note: this will repeat some addresses, but this is cheap and makes the code clearer.
 	PrecompileAllNativeAddresses = make(map[common.Address]struct{})
 	addrsList := append(PrecompiledAddressesHomestead, PrecompiledAddressesByzantium...)
 	addrsList = append(addrsList, PrecompiledAddressesIstanbul...)
 	addrsList = append(addrsList, PrecompiledAddressesApricotPhase2...)
+	addrsList = append(addrsList, PrecompiledAddressesApricotPhase7...)
 	for _, k := range addrsList {
 		PrecompileAllNativeAddresses[k] = struct{}{}
 	}
@@ -186,8 +186,8 @@ func init() {
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
-	case rules.IsApricotPhase6:
-		return PrecompiledAddressesApricotPhase6
+	case rules.IsApricotPhase7:
+		return PrecompiledAddressesApricotPhase7
 	case rules.IsApricotPhase2:
 		return PrecompiledAddressesApricotPhase2
 	case rules.IsIstanbul:
