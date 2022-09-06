@@ -48,5 +48,4 @@ var (
 	ErrAddrProhibited           = errors.New("prohibited address cannot be sender or created contract address")
 	ErrToAddrProhibited6        = errors.New("prohibited address cannot be called")
 	ErrToAddrProhibitedSoft     = errors.New("prohibited address cannot be called")
-	ErrToAddrProhibitedHard     = errors.New("prohibited address cannot be called")
 )
