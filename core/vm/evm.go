@@ -99,8 +99,6 @@ type (
 func (evm *EVM) precompile(addr common.Address) (precompile.StatefulPrecompiledContract, bool) {
 	var precompiles map[common.Address]precompile.StatefulPrecompiledContract
 	switch {
-	case evm.chainRules.IsApricotPhase7:
-		precompiles = PrecompiledContractsApricotPhase7
 	case evm.chainRules.IsApricotPhase6: // This stayed the same
 		precompiles = PrecompiledContractsApricotPhase2
 	case evm.chainRules.IsApricotPhase2:
