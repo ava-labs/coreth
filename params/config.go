@@ -184,9 +184,9 @@ type ChainConfig struct {
 	// Apricot Phase 6 deprecates the NativeAssetBalance and NativeAssetCall precompiles. (nil = no fork, 0 = already activated)
 	ApricotPhase6BlockTimestamp *big.Int `json:"apricotPhase6BlockTimestamp,omitempty"`
 	// Apricot Phase Pre-7 deprecates the NativeAssetCall precompile (soft). (nil = no fork, 0 = already activated)
-	ApricotPhasePre7BlockTimestamp *big.Int `json:"apricotPhasePre6BlockTimestamp,omitempty"`
+	ApricotPhasePre7BlockTimestamp *big.Int `json:"apricotPhasePre7BlockTimestamp,omitempty"`
 	// Apricot Phase 7 deprecates the NativeAssetBalance and NativeAssetCall precompiles. (nil = no fork, 0 = already activated)
-	ApricotPhase7BlockTimestamp *big.Int `json:"apricotPhase6BlockTimestamp,omitempty"`
+	ApricotPhase7BlockTimestamp *big.Int `json:"apricotPhase7BlockTimestamp,omitempty"`
 	// Blueberry TODO comment. (nil = no fork, 0 = already activated)
 	BlueberryBlockTimestamp *big.Int `json:"blueberryBlockTimestamp,omitempty"`
 }
