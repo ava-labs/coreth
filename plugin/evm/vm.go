@@ -1080,7 +1080,7 @@ func (vm *VM) VerifyHeightIndex() error {
 func (vm *VM) GetBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
 	ethBlock := vm.chain.GetBlockByNumber(blkHeight)
 	if ethBlock == nil {
-		return ids.ID{}, fmt.Errorf("could not find block at height: %d", blkHeight)
+		return ids.ID{}, database.ErrNotFound
 	}
 
 	return ids.ID(ethBlock.Hash()), nil
