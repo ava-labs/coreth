@@ -103,8 +103,8 @@ var (
 	x2cRate       = big.NewInt(x2cRateInt64)
 	x2cRateMinus1 = big.NewInt(x2cRateMinus1Int64)
 
-	_ block.ChainVM                  = &VM{}
-	_ block.StateSyncableVM          = &VM{}
+	_ block.ChainVM = &VM{}
+	// _ block.StateSyncableVM          = &VM{}
 	_ block.HeightIndexedChainVM     = &VM{}
 	_ statesyncclient.EthBlockParser = &VM{}
 )

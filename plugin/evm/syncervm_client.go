@@ -6,6 +6,7 @@ package evm
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -78,7 +79,7 @@ func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 
 type StateSyncClient interface {
 	// methods that implement the client side of [block.StateSyncableVM]
-	StateSyncEnabled() (bool, error)
+	StateSyncEnabled() (bool, time.Duration, error)
 	GetOngoingSyncStateSummary() (block.StateSummary, error)
 	ParseStateSummary(summaryBytes []byte) (block.StateSummary, error)
 
@@ -98,7 +99,9 @@ type Syncer interface {
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
-func (client *stateSyncerClient) StateSyncEnabled() (bool, error) { return client.enabled, nil }
+func (client *stateSyncerClient) StateSyncEnabled() (bool, time.Duration, error) {
+	return client.enabled, 0, nil
+}
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
 // and not finished, and sets [resumableSummary] if one was found.

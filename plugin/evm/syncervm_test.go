@@ -147,7 +147,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		t.Fatalf("Unexpected last accepted height: %d", height)
 	}
 
-	enabled, err := syncDisabledVM.StateSyncEnabled()
+	enabled, _, err := syncDisabledVM.StateSyncEnabled()
 	assert.NoError(t, err)
 	assert.False(t, enabled, "sync should be disabled")
 
@@ -213,7 +213,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	// connect peer to [syncerVM]
 	assert.NoError(t, syncReEnabledVM.Connected(vmSetup.serverVM.ctx.NodeID, statesyncclient.StateSyncVersion))
 
-	enabled, err = syncReEnabledVM.StateSyncEnabled()
+	enabled, _, err = syncReEnabledVM.StateSyncEnabled()
 	assert.NoError(t, err)
 	assert.True(t, enabled, "sync should be enabled")
 
@@ -353,7 +353,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 	if err := syncerVM.SetState(snow.StateSyncing); err != nil {
 		t.Fatal(err)
 	}
-	enabled, err := syncerVM.StateSyncEnabled()
+	enabled, _, err := syncerVM.StateSyncEnabled()
 	assert.NoError(t, err)
 	assert.True(t, enabled)
 
