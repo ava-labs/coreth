@@ -78,26 +78,27 @@ var (
 
 	// AvalancheFujiChainConfig is the configuration for the Fuji Test Network
 	AvalancheFujiChainConfig = &ChainConfig{
-		ChainID:                        AvalancheFujiChainID,
-		HomesteadBlock:                 big.NewInt(0),
-		DAOForkBlock:                   big.NewInt(0),
-		DAOForkSupport:                 true,
-		EIP150Block:                    big.NewInt(0),
-		EIP150Hash:                     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:                    big.NewInt(0),
-		EIP158Block:                    big.NewInt(0),
-		ByzantiumBlock:                 big.NewInt(0),
-		ConstantinopleBlock:            big.NewInt(0),
-		PetersburgBlock:                big.NewInt(0),
-		IstanbulBlock:                  big.NewInt(0),
-		MuirGlacierBlock:               big.NewInt(0),
-		ApricotPhase1BlockTimestamp:    big.NewInt(time.Date(2021, time.March, 26, 14, 0, 0, 0, time.UTC).Unix()),
-		ApricotPhase2BlockTimestamp:    big.NewInt(time.Date(2021, time.May, 5, 14, 0, 0, 0, time.UTC).Unix()),
-		ApricotPhase3BlockTimestamp:    big.NewInt(time.Date(2021, time.August, 16, 19, 0, 0, 0, time.UTC).Unix()),
-		ApricotPhase4BlockTimestamp:    big.NewInt(time.Date(2021, time.September, 16, 21, 0, 0, 0, time.UTC).Unix()),
-		ApricotPhase5BlockTimestamp:    big.NewInt(time.Date(2021, time.November, 24, 15, 0, 0, 0, time.UTC).Unix()),
-		ApricotPhasePre6BlockTimestamp: big.NewInt(time.Date(2022, time.September, 6, 20, 0, 0, 0, time.UTC).Unix()),
-		ApricotPhase6BlockTimestamp:    big.NewInt(time.Date(2022, time.September, 6, 20, 0, 0, 0, time.UTC).Unix()),
+		ChainID:                         AvalancheFujiChainID,
+		HomesteadBlock:                  big.NewInt(0),
+		DAOForkBlock:                    big.NewInt(0),
+		DAOForkSupport:                  true,
+		EIP150Block:                     big.NewInt(0),
+		EIP150Hash:                      common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:                     big.NewInt(0),
+		EIP158Block:                     big.NewInt(0),
+		ByzantiumBlock:                  big.NewInt(0),
+		ConstantinopleBlock:             big.NewInt(0),
+		PetersburgBlock:                 big.NewInt(0),
+		IstanbulBlock:                   big.NewInt(0),
+		MuirGlacierBlock:                big.NewInt(0),
+		ApricotPhase1BlockTimestamp:     big.NewInt(time.Date(2021, time.March, 26, 14, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhase2BlockTimestamp:     big.NewInt(time.Date(2021, time.May, 5, 14, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhase3BlockTimestamp:     big.NewInt(time.Date(2021, time.August, 16, 19, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhase4BlockTimestamp:     big.NewInt(time.Date(2021, time.September, 16, 21, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhase5BlockTimestamp:     big.NewInt(time.Date(2021, time.November, 24, 15, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhasePre6BlockTimestamp:  big.NewInt(time.Date(2022, time.September, 6, 20, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhase6BlockTimestamp:     big.NewInt(time.Date(2022, time.September, 6, 20, 0, 0, 0, time.UTC).Unix()),
+		ApricotPhasePost6BlockTimestamp: big.NewInt(time.Date(2022, time.September, 7, 6, 0, 0, 0, time.UTC).Unix()),
 		// TODO Add Blueberry
 	}
 
@@ -409,9 +410,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "apricotPhase3BlockTimestamp", block: c.ApricotPhase3BlockTimestamp},
 		{name: "apricotPhase4BlockTimestamp", block: c.ApricotPhase4BlockTimestamp},
 		{name: "apricotPhase5BlockTimestamp", block: c.ApricotPhase5BlockTimestamp},
-		{name: "apricotPhasePre6BlockTimestamp", block: c.ApricotPhasePre6BlockTimestamp},
-		{name: "apricotPhase6BlockTimestamp", block: c.ApricotPhase6BlockTimestamp},
-		{name: "apricotPhasePost6BlockTimestamp", block: c.ApricotPhasePost6BlockTimestamp},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -493,15 +491,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headHeight *big.Int, 
 	}
 	if isForkIncompatible(c.ApricotPhase5BlockTimestamp, newcfg.ApricotPhase5BlockTimestamp, headTimestamp) {
 		return newCompatError("ApricotPhase5 fork block timestamp", c.ApricotPhase5BlockTimestamp, newcfg.ApricotPhase5BlockTimestamp)
-	}
-	if isForkIncompatible(c.ApricotPhasePre6BlockTimestamp, newcfg.ApricotPhasePre6BlockTimestamp, headTimestamp) {
-		return newCompatError("ApricotPhasePre6 fork block timestamp", c.ApricotPhasePre6BlockTimestamp, newcfg.ApricotPhasePre6BlockTimestamp)
-	}
-	if isForkIncompatible(c.ApricotPhase6BlockTimestamp, newcfg.ApricotPhase6BlockTimestamp, headTimestamp) {
-		return newCompatError("ApricotPhase6 fork block timestamp", c.ApricotPhase6BlockTimestamp, newcfg.ApricotPhase6BlockTimestamp)
-	}
-	if isForkIncompatible(c.ApricotPhasePost6BlockTimestamp, newcfg.ApricotPhasePost6BlockTimestamp, headTimestamp) {
-		return newCompatError("ApricotPhasePost6 fork block timestamp", c.ApricotPhasePost6BlockTimestamp, newcfg.ApricotPhasePost6BlockTimestamp)
 	}
 
 	if isForkIncompatible(c.BlueberryBlockTimestamp, newcfg.BlueberryBlockTimestamp, headTimestamp) {
