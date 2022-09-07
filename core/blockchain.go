@@ -535,6 +535,13 @@ func (bc *BlockChain) Export(w io.Writer) error {
 
 // ExportN writes a subset of the active chain to the given writer.
 func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
+	return bc.ExportCallback(func(block *types.Block) error {
+		return block.EncodeRLP(w)
+	}, first, last)
+}
+
+// ExportCallback invokes [callback] for every block from [first] to [last] in order.
+func (bc *BlockChain) ExportCallback(callback func(block *types.Block) error, first uint64, last uint64) error {
 	if first > last {
 		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
 	}
@@ -554,7 +561,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 			return fmt.Errorf("export failed: chain reorg during export")
 		}
 		parentHash = block.Hash()
-		if err := block.EncodeRLP(w); err != nil {
+		if err := callback(block); err != nil {
 			return err
 		}
 		if time.Since(reported) >= statsReportLimit {
@@ -703,6 +710,10 @@ func (bc *BlockChain) Stop() {
 		log.Error("Failed to Shutdown state manager", "err", err)
 	}
 	log.Info("State manager shut down", "t", time.Since(start))
+	// Flush the collected preimages to disk
+	if err := bc.stateCache.TrieDB().CommitPreimages(); err != nil {
+		log.Error("Failed to commit trie preimages", "err", err)
+	}
 
 	// Stop senderCacher's goroutines
 	log.Info("Shutting down sender cacher")
@@ -877,7 +888,7 @@ func (bc *BlockChain) newTip(block *types.Block) bool {
 // writeBlockAndSetHead expects to be the last verification step during InsertBlock
 // since it creates a reference that will only be cleaned up by Accept/Reject.
 func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
-	if err := bc.writeBlockWithState(block, receipts, logs, state); err != nil {
+	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
 		return err
 	}
 
@@ -894,7 +905,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but it expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(hash->number map, header, body, receipts)
@@ -1302,7 +1313,7 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
 	}
-	log.Error(fmt.Sprintf(`
+	log.Debug(fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
 
@@ -1524,7 +1535,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
-			triedb.Reference(root, common.Hash{}, true)
+			triedb.Reference(root, common.Hash{})
 			if previousRoot != (common.Hash{}) {
 				triedb.Dereference(previousRoot)
 			}
