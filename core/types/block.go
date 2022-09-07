@@ -110,6 +110,9 @@ type Header struct {
 	// BlockGasCost was added by Apricot Phase 4 and is ignored in legacy
 	// headers.
 	BlockGasCost *big.Int `json:"blockGasCost" rlp:"optional"`
+
+	// ExtraStateRoot root was added by Blueberry and is ignored in legacy headers.
+	ExtraStateRoot common.Hash `json:"extraStateRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -375,7 +378,7 @@ func (b *Block) Header() *Header { return CopyHeader(b.header) }
 func (b *Block) Body() *Body { return &Body{b.transactions, b.uncles, b.version, b.extdata} }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
-// and returning it, or returning a previsouly cached value.
+// and returning it, or returning a previously cached value.
 func (b *Block) Size() common.StorageSize {
 	if size := b.size.Load(); size != nil {
 		return size.(common.StorageSize)
