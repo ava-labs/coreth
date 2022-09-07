@@ -10,7 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/params"
+	"github.com/tenderly/coreth/params"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {

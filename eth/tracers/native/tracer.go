@@ -47,7 +47,7 @@ package native
 import (
 	"errors"
 
-	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/tenderly/coreth/eth/tracers"
 )
 
 // init registers itself this packages as a lookup for tracers.

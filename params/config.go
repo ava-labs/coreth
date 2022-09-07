@@ -32,8 +32,8 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/precompile"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/tenderly/coreth/precompile"
+	"github.com/tenderly/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 )
 

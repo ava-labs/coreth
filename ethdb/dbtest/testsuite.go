@@ -32,7 +32,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ava-labs/coreth/ethdb"
+	"github.com/tenderly/coreth/ethdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database

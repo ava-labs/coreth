@@ -11,8 +11,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/tenderly/coreth/plugin/evm/message"
+	syncclient "github.com/tenderly/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 )
 

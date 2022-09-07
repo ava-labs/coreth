@@ -27,7 +27,7 @@
 package rawdb
 
 import (
-	"github.com/ava-labs/coreth/ethdb"
+	"github.com/tenderly/coreth/ethdb"
 )
 
 // table is a wrapper around a database that prefixes each key access with a pre-

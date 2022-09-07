@@ -29,7 +29,7 @@ package rpc
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth/metrics"
+	"github.com/tenderly/coreth/metrics"
 )
 
 var (

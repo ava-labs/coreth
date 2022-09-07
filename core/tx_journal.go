@@ -31,7 +31,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/tenderly/coreth/params"
 
 	"github.com/ava-labs/avalanchego/snow"
 )

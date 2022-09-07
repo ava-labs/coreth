@@ -15,8 +15,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/params"
+	"github.com/tenderly/coreth/core/state"
+	"github.com/tenderly/coreth/params"
 )
 
 type TestTx struct {

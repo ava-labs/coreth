@@ -31,7 +31,7 @@ import (
 	"container/heap"
 	"errors"
 
-	"github.com/ava-labs/coreth/ethdb"
+	"github.com/tenderly/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )

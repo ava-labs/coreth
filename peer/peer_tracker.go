@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	utils_math "github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/version"
-	"github.com/ava-labs/coreth/metrics"
+	"github.com/tenderly/coreth/metrics"
 	"github.com/ethereum/go-ethereum/log"
 )
 

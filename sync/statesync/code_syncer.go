@@ -7,9 +7,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/ethdb"
-	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/ethdb"
+	statesyncclient "github.com/tenderly/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 )
 

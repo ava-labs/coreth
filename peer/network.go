@@ -18,8 +18,8 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/version"
 
-	"github.com/ava-labs/coreth/peer/stats"
-	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/tenderly/coreth/peer/stats"
+	"github.com/tenderly/coreth/plugin/evm/message"
 	"github.com/ethereum/go-ethereum/log"
 )
 
