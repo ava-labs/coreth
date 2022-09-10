@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/event"
@@ -78,10 +79,6 @@ var (
 
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
-
-	// ErrBlacklistSender is returned if the transaction is sent from someone
-	// trying to use the NativeAssetCall precompile
-	ErrBlacklistSender = errors.New("blacklist sender")
 
 	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
 	// configured for the transaction pool.
@@ -715,7 +712,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Make sure the sender isn't on the blacklist
 	if _, ok := pool.blacklist.Get(from); ok {
-		return ErrBlacklistSender
+		return vmerrs.ErrToAddrProhibitedSoft
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
