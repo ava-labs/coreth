@@ -290,6 +290,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		case errors.Is(err, vmerrs.ErrToAddrProhibitedSoft):
 			log.Warn("Tx dropped: failed verification", "tx", tx.Hash(), "sender", from, "data", tx.Data(), "err", err)
+			w.eth.TxPool().BlacklistAddr(from)
 			w.eth.TxPool().RemoveTx(tx.Hash())
 			txs.Pop()
 		default:

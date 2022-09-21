@@ -36,6 +36,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
@@ -64,6 +65,10 @@ const (
 	//
 	// Note: the max contract size is 24KB
 	txMaxSize = 32 * 1024 // 32 KB
+
+	// blacklistSize is the number of addresses we will at most store in the
+	// blacklist
+	blacklistSize = 8192
 )
 
 var (
@@ -73,6 +78,10 @@ var (
 
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
+
+	// ErrToAddrProhibited is returned if the transaction is sent from someone
+	// trying to use the NativeAssetCall precompile
+	ErrToAddrProhibited = errors.New("prohibited address cannot be called")
 
 	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
 	// configured for the transaction pool.
@@ -295,6 +304,8 @@ type TxPool struct {
 	initDoneCh chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	blacklist *cache.LRU // TODO: remove when AssetNativeCall is deprecated
 }
 
 type txpoolResetRequest struct {
@@ -326,6 +337,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		initDoneCh:          make(chan struct{}),
 		generalShutdownChan: make(chan struct{}),
 		gasPrice:            new(big.Int).SetUint64(config.PriceLimit),
+		blacklist:           &cache.LRU{Size: blacklistSize},
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -700,6 +712,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
+	}
+	// Make sure the sender isn't on the blacklist
+	if _, ok := pool.blacklist.Get(from); ok {
+		return ErrToAddrProhibited
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
@@ -1079,6 +1095,10 @@ func (pool *TxPool) RemoveTx(hash common.Hash) {
 	defer pool.mu.Unlock()
 
 	pool.removeTx(hash, true)
+}
+
+func (pool *TxPool) BlacklistAddr(addr common.Address) {
+	pool.blacklist.Put(addr, nil)
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent
