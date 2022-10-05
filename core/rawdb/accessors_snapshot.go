@@ -27,9 +27,9 @@
 package rawdb
 
 import (
-	"github.com/tenderly/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/coreth/ethdb"
 )
 
 // ReadSnapshotRoot retrieves the root of the block whose state is contained in
@@ -131,12 +131,12 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 // IterateStorageSnapshots returns an iterator for walking the entire storage
 // space of a specific account.
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
-	return db.NewIterator(storageSnapshotsKey(accountHash), nil)
+	return NewKeyLengthIterator(db.NewIterator(storageSnapshotsKey(accountHash), nil), len(SnapshotStoragePrefix)+2*common.HashLength)
 }
 
 // IterateAccountSnapshots returns an iterator for walking all of the accounts in the snapshot
 func IterateAccountSnapshots(db ethdb.Iteratee) ethdb.Iterator {
-	return db.NewIterator(SnapshotAccountPrefix, nil)
+	return NewKeyLengthIterator(db.NewIterator(SnapshotAccountPrefix, nil), len(SnapshotAccountPrefix)+common.HashLength)
 }
 
 // ReadSnapshotGenerator retrieves the serialized snapshot generator saved at

@@ -9,15 +9,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/ethdb"
 	"github.com/tenderly/coreth/plugin/evm/message"
+	"github.com/tenderly/coreth/rlp"
 	syncclient "github.com/tenderly/coreth/sync/client"
 	"github.com/tenderly/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const defaultNumThreads int = 4

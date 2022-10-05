@@ -30,11 +30,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/tenderly/coreth/consensus/dummy"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/vm"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // Tests that DAO-fork enabled clients can properly filter out fork-commencing

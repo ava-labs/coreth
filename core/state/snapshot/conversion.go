@@ -36,12 +36,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/ethdb"
-	"github.com/tenderly/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/ethdb"
+	"github.com/tenderly/coreth/rlp"
+	"github.com/tenderly/coreth/trie"
 )
 
 // trieKV represents a trie key-value pair
@@ -53,7 +53,7 @@ type trieKV struct {
 type (
 	// trieGeneratorFn is the interface of trie generation which can
 	// be implemented by different trie algorithm.
-	trieGeneratorFn func(db ethdb.KeyValueWriter, in chan (trieKV), out chan (common.Hash))
+	trieGeneratorFn func(db ethdb.KeyValueWriter, owner common.Hash, in chan (trieKV), out chan (common.Hash))
 
 	// leafCallbackFn is the callback invoked at the leaves of the trie,
 	// returns the subtrie root with the specified subtrie identifier.
@@ -263,7 +263,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		generatorFn(db, in, out)
+		generatorFn(db, account, in, out)
 	}()
 	// Spin up a go-routine for progress logging
 	if report && stats != nil {
@@ -370,8 +370,8 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	return stop(nil)
 }
 
-func stackTrieGenerate(db ethdb.KeyValueWriter, in chan trieKV, out chan common.Hash) {
-	t := trie.NewStackTrie(db)
+func stackTrieGenerate(db ethdb.KeyValueWriter, owner common.Hash, in chan trieKV, out chan common.Hash) {
+	t := trie.NewStackTrieWithOwner(db, owner)
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
 	}

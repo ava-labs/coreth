@@ -32,14 +32,14 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/consensus"
 	"github.com/tenderly/coreth/consensus/dummy"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/core/vm"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 func verifyUnbrokenCanonchain(bc *BlockChain) error {

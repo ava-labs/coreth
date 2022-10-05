@@ -31,13 +31,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 	"github.com/tenderly/coreth/constants"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/precompile"
 	"github.com/tenderly/coreth/vmerrs"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -59,6 +59,7 @@ func IsProhibited(addr common.Address) bool {
 	return false
 }
 
+// TODO: deprecate after Banff activation.
 func (evm *EVM) isProhibitedWithTimestamp(addr common.Address) error {
 	if addr != NativeAssetCallAddr {
 		return nil
@@ -66,6 +67,8 @@ func (evm *EVM) isProhibitedWithTimestamp(addr common.Address) error {
 
 	// Return error depending on the phase
 	switch {
+	case evm.chainRules.IsBanff: // Disable the soft fork as of Banff
+		return nil
 	case evm.chainRules.IsApricotPhasePost6: // If we are in the soft fork, return the soft error
 		return vmerrs.ErrToAddrProhibitedSoft
 	case evm.chainRules.IsApricotPhase6: // If we are in Phase6, return nil
@@ -96,8 +99,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (precompile.StatefulPrecompiledContract, bool) {
 	var precompiles map[common.Address]precompile.StatefulPrecompiledContract
 	switch {
-	case evm.chainRules.IsApricotPhase6: // This stayed the same
-		precompiles = PrecompiledContractsApricotPhase2
+	case evm.chainRules.IsBanff:
+		precompiles = PrecompiledContractsBanff
 	case evm.chainRules.IsApricotPhase2:
 		precompiles = PrecompiledContractsApricotPhase2
 	case evm.chainRules.IsIstanbul:

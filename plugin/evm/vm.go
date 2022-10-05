@@ -47,10 +47,10 @@ import (
 	// inside of cmd/geth.
 	_ "github.com/tenderly/coreth/eth/tracers/native"
 
-	"github.com/tenderly/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/metrics"
+	"github.com/tenderly/coreth/rlp"
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 

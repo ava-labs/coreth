@@ -29,6 +29,10 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/accounts/keystore"
 	"github.com/tenderly/coreth/consensus/dummy"
 	"github.com/tenderly/coreth/core"
@@ -38,10 +42,6 @@ import (
 	"github.com/tenderly/coreth/eth"
 	"github.com/tenderly/coreth/eth/ethconfig"
 	"github.com/tenderly/coreth/node"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // TestMulticoin tests multicoin low-level state management and regular
@@ -73,7 +73,7 @@ func TestMulticoin(t *testing.T) {
 	//if gopath == "" {
 	//	gopath = build.Default.GOPATH
 	//}
-	//counterSrc, err := filepath.Abs(gopath + "/src/github.com/ava-labs/coreth/examples/multicoin/mc_test.sol")
+	//counterSrc, err := filepath.Abs(gopath + "/src/github.com/tenderly/coreth/examples/multicoin/mc_test.sol")
 	//if err != nil {
 	// 	t.Fatal(err)
 	// }

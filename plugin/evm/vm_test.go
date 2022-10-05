@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tenderly/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/rlp"
+	"github.com/tenderly/coreth/trie"
 
 	"github.com/stretchr/testify/assert"
 

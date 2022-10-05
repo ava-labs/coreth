@@ -8,15 +8,15 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/tenderly/coreth/accounts/keystore"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state/snapshot"
 	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/rlp"
 	"github.com/tenderly/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
 )
 
 // assertDBConsistency checks [serverTrieDB] and [clientTrieDB] have the same EVM state trie at [root],

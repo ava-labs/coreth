@@ -30,10 +30,10 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/ethdb"
 )
 
 // WipeSnapshot starts a goroutine to iterate over the entire key-value database

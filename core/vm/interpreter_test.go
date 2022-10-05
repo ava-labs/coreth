@@ -31,11 +31,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 )
 
 var loopInterruptTests = []string{
@@ -83,5 +83,4 @@ func TestLoopInterrupt(t *testing.T) {
 			}
 		}
 	}
-
 }

@@ -15,8 +15,8 @@ import (
 	"github.com/tenderly/coreth/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/tenderly/coreth/rlp"
 )
 
 // GenerateTrie creates a trie with [numKeys] key-value pairs inside of [trieDB].
@@ -27,13 +27,14 @@ func GenerateTrie(t *testing.T, trieDB *Database, numKeys int, keySize int) (com
 	if keySize < wrappers.LongLen+1 {
 		t.Fatal("key size must be at least 9 bytes (8 bytes for uint64 and 1 random byte)")
 	}
-	testTrie, err := New(common.Hash{}, trieDB)
-	assert.NoError(t, err)
+	testTrie := NewEmpty(trieDB)
 
 	keys, values := FillTrie(t, numKeys, keySize, testTrie)
 
 	// Commit the root to [trieDB]
-	root, _, err := testTrie.Commit(nil)
+	root, nodes, err := testTrie.Commit(false)
+	assert.NoError(t, err)
+	err = trieDB.Update(NewWithNodeSet(nodes))
 	assert.NoError(t, err)
 	err = trieDB.Commit(root, false, nil)
 	assert.NoError(t, err)
@@ -72,11 +73,11 @@ func FillTrie(t *testing.T, numKeys int, keySize int, testTrie *Trie) ([][]byte,
 // AssertTrieConsistency ensures given trieDB [a] and [b] both have the same
 // non-empty trie at [root]. (all key/value pairs must be equal)
 func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLeaf func(key, val []byte) error) {
-	trieA, err := New(root, a)
+	trieA, err := New(common.Hash{}, root, a)
 	if err != nil {
 		t.Fatalf("error creating trieA, root=%s, err=%v", root, err)
 	}
-	trieB, err := New(root, b)
+	trieB, err := New(common.Hash{}, root, b)
 	if err != nil {
 		t.Fatalf("error creating trieB, root=%s, err=%v", root, err)
 	}
@@ -106,7 +107,7 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLea
 func CorruptTrie(t *testing.T, trieDB *Database, root common.Hash, n int) {
 	batch := trieDB.DiskDB().NewBatch()
 	// next delete some trie nodes
-	tr, err := New(root, trieDB)
+	tr, err := New(common.Hash{}, root, trieDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,7 @@ func FillAccounts(
 		accounts    = make(map[*keystore.Key]*types.StateAccount, numAccounts)
 	)
 
-	tr, err := NewSecure(root, trieDB)
+	tr, err := NewStateTrie(common.Hash{}, root, trieDB)
 	if err != nil {
 		t.Fatalf("error opening trie: %v", err)
 	}
@@ -160,7 +161,7 @@ func FillAccounts(
 			acc = onAccount(t, i, acc)
 		}
 
-		accBytes, err := rlp.EncodeToBytes(acc)
+		accBytes, err := rlp.EncodeToBytes(&acc)
 		if err != nil {
 			t.Fatalf("failed to rlp encode account: %v", err)
 		}
@@ -175,9 +176,12 @@ func FillAccounts(
 		accounts[key] = &acc
 	}
 
-	newRoot, _, err := tr.Commit(nil)
+	newRoot, nodes, err := tr.Commit(false)
 	if err != nil {
 		t.Fatalf("error committing trie: %v", err)
+	}
+	if err := trieDB.Update(NewWithNodeSet(nodes)); err != nil {
+		t.Fatalf("error updating trieDB: %v", err)
 	}
 	if err := trieDB.Commit(newRoot, false, nil); err != nil {
 		t.Fatalf("error committing trieDB: %v", err)

@@ -10,20 +10,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state/snapshot"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/ethdb"
 	"github.com/tenderly/coreth/ethdb/memorydb"
 	"github.com/tenderly/coreth/plugin/evm/message"
+	"github.com/tenderly/coreth/rlp"
 	statesyncclient "github.com/tenderly/coreth/sync/client"
 	"github.com/tenderly/coreth/sync/handlers"
 	handlerstats "github.com/tenderly/coreth/sync/handlers/stats"
 	"github.com/tenderly/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
 )
 
 const testSyncTimeout = 20 * time.Second

@@ -33,18 +33,16 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/tenderly/coreth/constants"
-	"github.com/tenderly/coreth/params"
-	"github.com/tenderly/coreth/precompile"
-	"github.com/tenderly/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
-
-	//lint:ignore SA1019 Needed for precompile
+	"github.com/tenderly/coreth/constants"
+	"github.com/tenderly/coreth/params"
+	"github.com/tenderly/coreth/precompile"
+	"github.com/tenderly/coreth/vmerrs"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -109,9 +107,9 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]precompile.StatefulPr
 	NativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
 }
 
-// PrecompiledContractsApricotPhase6 contains the default set of pre-compiled Ethereum
-// contracts used in the Apricot Phase 6 release.
-var PrecompiledContractsApricotPhase6 = map[common.Address]precompile.StatefulPrecompiledContract{
+// PrecompiledContractsBanff contains the default set of pre-compiled Ethereum
+// contracts used in the Banff release.
+var PrecompiledContractsBanff = map[common.Address]precompile.StatefulPrecompiledContract{
 	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
 	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
 	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
@@ -127,7 +125,7 @@ var PrecompiledContractsApricotPhase6 = map[common.Address]precompile.StatefulPr
 }
 
 var (
-	PrecompiledAddressesApricotPhase6 []common.Address
+	PrecompiledAddressesBanff         []common.Address
 	PrecompiledAddressesApricotPhase2 []common.Address
 	PrecompiledAddressesIstanbul      []common.Address
 	PrecompiledAddressesByzantium     []common.Address
@@ -148,16 +146,17 @@ func init() {
 	for k := range PrecompiledContractsApricotPhase2 {
 		PrecompiledAddressesApricotPhase2 = append(PrecompiledAddressesApricotPhase2, k)
 	}
-	for k := range PrecompiledContractsApricotPhase6 {
-		PrecompiledAddressesApricotPhase6 = append(PrecompiledAddressesApricotPhase6, k)
+	for k := range PrecompiledContractsBanff {
+		PrecompiledAddressesBanff = append(PrecompiledAddressesBanff, k)
 	}
+
 	// Set of all native precompile addresses that are in use
 	// Note: this will repeat some addresses, but this is cheap and makes the code clearer.
 	PrecompileAllNativeAddresses = make(map[common.Address]struct{})
 	addrsList := append(PrecompiledAddressesHomestead, PrecompiledAddressesByzantium...)
 	addrsList = append(addrsList, PrecompiledAddressesIstanbul...)
 	addrsList = append(addrsList, PrecompiledAddressesApricotPhase2...)
-	addrsList = append(addrsList, PrecompiledAddressesApricotPhase6...)
+	addrsList = append(addrsList, PrecompiledAddressesBanff...)
 	for _, k := range addrsList {
 		PrecompileAllNativeAddresses[k] = struct{}{}
 	}
@@ -189,8 +188,8 @@ func init() {
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
-	case rules.IsApricotPhase6:
-		return PrecompiledAddressesApricotPhase6
+	case rules.IsBanff:
+		return PrecompiledAddressesBanff
 	case rules.IsApricotPhase2:
 		return PrecompiledAddressesApricotPhase2
 	case rules.IsIstanbul:
@@ -651,7 +650,7 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 	// Parse the input into the Blake2b call parameters
 	var (
 		rounds = binary.BigEndian.Uint32(input[0:4])
-		final  = (input[212] == blake2FFinalBlockBytes)
+		final  = input[212] == blake2FFinalBlockBytes
 
 		h [8]uint64
 		m [16]uint64

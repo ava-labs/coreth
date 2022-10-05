@@ -37,8 +37,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tenderly/coreth/ethdb"
-	"github.com/tenderly/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -46,6 +44,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/tenderly/coreth/ethdb"
+	"github.com/tenderly/coreth/metrics"
 )
 
 const (
@@ -220,6 +220,14 @@ func (db *Database) NewBatch() ethdb.Batch {
 	return &batch{
 		db: db.db,
 		b:  new(leveldb.Batch),
+	}
+}
+
+// NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
+func (db *Database) NewBatchWithSize(size int) ethdb.Batch {
+	return &batch{
+		db: db.db,
+		b:  leveldb.MakeBatch(size),
 	}
 }
 

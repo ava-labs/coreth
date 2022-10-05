@@ -30,10 +30,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/tenderly/coreth/core/types"
-	"github.com/tenderly/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/core/types"
+	"github.com/tenderly/coreth/rlp"
+	"github.com/tenderly/coreth/trie"
 )
 
 // NodeIterator is an iterator to traverse the entire state trie post-order,

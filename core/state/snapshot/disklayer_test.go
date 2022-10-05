@@ -30,11 +30,10 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/tenderly/coreth/core/rawdb"
-	"github.com/tenderly/coreth/ethdb"
-	"github.com/tenderly/coreth/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/core/rawdb"
+	"github.com/tenderly/coreth/ethdb/memorydb"
+	"github.com/tenderly/coreth/rlp"
 )
 
 // reverse reverses the contents of a byte slice. It's used to update random accs
@@ -514,7 +513,8 @@ func TestDiskMidAccountPartialMerge(t *testing.T) {
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
-	var db ethdb.Database = rawdb.NewMemoryDatabase()
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
 
 	// Fill even keys [0,2,4...]
 	for i := 0; i < 0xff; i += 2 {

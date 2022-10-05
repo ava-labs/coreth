@@ -27,6 +27,8 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/tenderly/coreth/consensus"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state"
@@ -34,8 +36,6 @@ import (
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/core/vm"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
 )
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -99,6 +99,9 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
+	}
+	if !bc.HasHeader(hash, number) {
+		return false
 	}
 	return rawdb.HasBody(bc.db, hash, number)
 }
@@ -233,18 +236,6 @@ func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
 // either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) ContractCode(hash common.Hash) ([]byte, error) {
 	return bc.stateCache.ContractCode(common.Hash{}, hash)
-}
-
-// ContractCodeWithPrefix retrieves a blob of data associated with a contract
-// hash either from ephemeral in-memory cache, or from persistent storage.
-//
-// If the code doesn't exist in the in-memory cache, check the storage with
-// new code scheme.
-func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
-	type codeReader interface {
-		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
-	}
-	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.

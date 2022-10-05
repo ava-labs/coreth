@@ -35,8 +35,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/coreth/core/types"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for

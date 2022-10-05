@@ -23,6 +23,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/units"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/accounts/keystore"
 	coreth "github.com/tenderly/coreth/chain"
 	"github.com/tenderly/coreth/consensus/dummy"
@@ -32,12 +34,10 @@ import (
 	"github.com/tenderly/coreth/ethdb"
 	"github.com/tenderly/coreth/metrics"
 	"github.com/tenderly/coreth/params"
+	"github.com/tenderly/coreth/rlp"
 	statesyncclient "github.com/tenderly/coreth/sync/client"
 	"github.com/tenderly/coreth/sync/statesync"
 	"github.com/tenderly/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestSkipStateSync(t *testing.T) {

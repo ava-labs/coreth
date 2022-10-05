@@ -8,16 +8,16 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 	"github.com/tenderly/coreth/consensus/dummy"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/ethdb/memorydb"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/plugin/evm/message"
+	"github.com/tenderly/coreth/rlp"
 	"github.com/tenderly/coreth/sync/handlers/stats"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestBlockRequestHandler(t *testing.T) {

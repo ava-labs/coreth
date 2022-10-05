@@ -10,18 +10,18 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state/snapshot"
 	"github.com/tenderly/coreth/core/types"
 	"github.com/tenderly/coreth/ethdb"
 	"github.com/tenderly/coreth/ethdb/memorydb"
 	"github.com/tenderly/coreth/plugin/evm/message"
+	"github.com/tenderly/coreth/rlp"
 	"github.com/tenderly/coreth/sync/handlers/stats"
 	"github.com/tenderly/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {

@@ -33,8 +33,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/coreth/core/rawdb"
 )
 
 // TestAccountIteratorBasics tests some simple single-layer(diff and disk) iteration

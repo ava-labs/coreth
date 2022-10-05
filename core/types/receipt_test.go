@@ -33,10 +33,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/params"
+	"github.com/tenderly/coreth/rlp"
 )
 
 var (
@@ -96,7 +96,7 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	input := []byte{0x80}
 	var r Receipt
 	err := rlp.DecodeBytes(input, &r)
-	if err != errEmptyTypedReceipt {
+	if err != errShortTypedReceipt {
 		t.Fatal("wrong error:", err)
 	}
 }

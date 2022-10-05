@@ -29,10 +29,10 @@ package vm
 import (
 	"errors"
 
-	"github.com/tenderly/coreth/params"
-	"github.com/tenderly/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/tenderly/coreth/params"
+	"github.com/tenderly/coreth/vmerrs"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so

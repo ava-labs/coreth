@@ -31,8 +31,8 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/tenderly/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/coreth/metrics"
 )
 
 // The fields below define the low level database schema prefixing.
@@ -84,6 +84,17 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+
+	// State sync progress keys and prefixes
+	syncRootKey            = []byte("sync_root")     // indicates the root of the main account trie currently being synced
+	syncStorageTriesPrefix = []byte("sync_storage")  // syncStorageTriesPrefix + trie root + account hash: indicates a storage trie must be fetched for the account
+	syncSegmentsPrefix     = []byte("sync_segments") // syncSegmentsPrefix + trie root + 32-byte start key: indicates the trie at root has a segment starting at the specified key
+	CodeToFetchPrefix      = []byte("CP")            // CodeToFetchPrefix + code hash -> empty value tracks the outstanding code hashes we need to fetch.
+
+	// State sync progress key lengths
+	syncStorageTriesKeyLength = len(syncStorageTriesPrefix) + 2*common.HashLength
+	syncSegmentsKeyLength     = len(syncSegmentsPrefix) + 2*common.HashLength
+	codeToFetchKeyLength      = len(CodeToFetchPrefix) + common.HashLength
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db

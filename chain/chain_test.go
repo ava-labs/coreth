@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/accounts/keystore"
 	"github.com/tenderly/coreth/consensus/dummy"
 	"github.com/tenderly/coreth/core"
@@ -20,10 +23,7 @@ import (
 	"github.com/tenderly/coreth/eth/ethconfig"
 	"github.com/tenderly/coreth/node"
 	"github.com/tenderly/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/rlp"
 )
 
 type testChain struct {

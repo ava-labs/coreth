@@ -33,11 +33,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tenderly/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/coreth/params"
+	"github.com/tenderly/coreth/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

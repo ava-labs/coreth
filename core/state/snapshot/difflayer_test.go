@@ -32,9 +32,9 @@ import (
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/tenderly/coreth/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/tenderly/coreth/ethdb/memorydb"
 )
 
 func copyDestructs(destructs map[common.Hash]struct{}) map[common.Hash]struct{} {
@@ -342,7 +342,6 @@ func BenchmarkFlatten(b *testing.B) {
 				value := make([]byte, 32)
 				rand.Read(value)
 				accStorage[randomHash()] = value
-
 			}
 			storage[accountKey] = accStorage
 		}

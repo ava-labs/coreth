@@ -27,9 +27,9 @@
 package state
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 type stateTest struct {

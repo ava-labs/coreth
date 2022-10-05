@@ -29,8 +29,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/tenderly/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/coreth/core/types"
 )
 
 // StateDB is an EVM database for full state querying.
