@@ -34,6 +34,9 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tenderly/coreth/accounts"
 	"github.com/tenderly/coreth/consensus"
 	"github.com/tenderly/coreth/consensus/dummy"
@@ -54,9 +57,6 @@ import (
 	"github.com/tenderly/coreth/node"
 	"github.com/tenderly/coreth/params"
 	"github.com/tenderly/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -151,7 +151,7 @@ func New(
 		"dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024,
 	)
 
-	chainConfig, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	chainConfig, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis, lastAcceptedHash)
 	if genesisErr != nil {
 		return nil, genesisErr
 	}

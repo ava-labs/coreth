@@ -36,6 +36,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/tenderly/coreth/core"
 	"github.com/tenderly/coreth/core/rawdb"
 	"github.com/tenderly/coreth/core/state"
@@ -43,10 +47,6 @@ import (
 	"github.com/tenderly/coreth/internal/ethapi"
 	"github.com/tenderly/coreth/rpc"
 	"github.com/tenderly/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
@@ -245,9 +245,9 @@ type BadBlockArgs struct {
 // and returns them as a JSON list of block-hashes
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
-		err     error
-		blocks  = api.eth.BlockChain().BadBlocks()
-		results = make([]*BadBlockArgs, 0, len(blocks))
+		err       error
+		blocks, _ = api.eth.BlockChain().BadBlocks()
+		results   = make([]*BadBlockArgs, 0, len(blocks))
 	)
 	for _, block := range blocks {
 		var (
@@ -434,11 +434,11 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(startBlock.Root(), triedb)
+	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(endBlock.Root(), triedb)
+	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
