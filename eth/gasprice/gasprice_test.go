@@ -188,7 +188,8 @@ func defaultOracleConfig() Config {
 	}
 }
 
-//  timeCrunchOracleConfig returns a config with [MaxLookbackSeconds] set to 5
+//	timeCrunchOracleConfig returns a config with [MaxLookbackSeconds] set to 5
+//
 // to ensure that during gas price estimation, we will hit the time based look back limit
 func timeCrunchOracleConfig() Config {
 	return Config{
