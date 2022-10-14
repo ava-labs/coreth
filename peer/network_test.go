@@ -391,22 +391,22 @@ func TestHandleInvalidMessages(t *testing.T) {
 	var nilResponse []byte
 
 	// Check for edge cases
-	assert.NoError(t, clientNetwork.AppGossip(nodeID, gossipMsg))
-	assert.NoError(t, clientNetwork.AppGossip(nodeID, requestMessage))
-	assert.NoError(t, clientNetwork.AppGossip(nodeID, garbageResponse))
-	assert.NoError(t, clientNetwork.AppGossip(nodeID, emptyResponse))
-	assert.NoError(t, clientNetwork.AppGossip(nodeID, nilResponse))
-	assert.NoError(t, clientNetwork.AppRequest(nodeID, requestID, time.Now().Add(time.Second), gossipMsg))
-	assert.NoError(t, clientNetwork.AppRequest(nodeID, requestID, time.Now().Add(time.Second), requestMessage))
-	assert.NoError(t, clientNetwork.AppRequest(nodeID, requestID, time.Now().Add(time.Second), garbageResponse))
-	assert.NoError(t, clientNetwork.AppRequest(nodeID, requestID, time.Now().Add(time.Second), emptyResponse))
-	assert.NoError(t, clientNetwork.AppRequest(nodeID, requestID, time.Now().Add(time.Second), nilResponse))
-	assert.NoError(t, clientNetwork.AppResponse(nodeID, requestID, gossipMsg))
-	assert.NoError(t, clientNetwork.AppResponse(nodeID, requestID, requestMessage))
-	assert.NoError(t, clientNetwork.AppResponse(nodeID, requestID, garbageResponse))
-	assert.NoError(t, clientNetwork.AppResponse(nodeID, requestID, emptyResponse))
-	assert.NoError(t, clientNetwork.AppResponse(nodeID, requestID, nilResponse))
-	assert.NoError(t, clientNetwork.AppRequestFailed(nodeID, requestID))
+	assert.NoError(t, clientNetwork.AppGossip(context.Background(), nodeID, gossipMsg))
+	assert.NoError(t, clientNetwork.AppGossip(context.Background(), nodeID, requestMessage))
+	assert.NoError(t, clientNetwork.AppGossip(context.Background(), nodeID, garbageResponse))
+	assert.NoError(t, clientNetwork.AppGossip(context.Background(), nodeID, emptyResponse))
+	assert.NoError(t, clientNetwork.AppGossip(context.Background(), nodeID, nilResponse))
+	assert.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), gossipMsg))
+	assert.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), requestMessage))
+	assert.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), garbageResponse))
+	assert.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), emptyResponse))
+	assert.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), nilResponse))
+	assert.NoError(t, clientNetwork.AppResponse(context.Background(), nodeID, requestID, gossipMsg))
+	assert.NoError(t, clientNetwork.AppResponse(context.Background(), nodeID, requestID, requestMessage))
+	assert.NoError(t, clientNetwork.AppResponse(context.Background(), nodeID, requestID, garbageResponse))
+	assert.NoError(t, clientNetwork.AppResponse(context.Background(), nodeID, requestID, emptyResponse))
+	assert.NoError(t, clientNetwork.AppResponse(context.Background(), nodeID, requestID, nilResponse))
+	assert.NoError(t, clientNetwork.AppRequestFailed(context.Background(), nodeID, requestID))
 }
 
 func TestNetworkPropagatesRequestHandlerError(t *testing.T) {
