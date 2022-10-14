@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -23,8 +24,10 @@ import (
 )
 
 var (
-	_ UnsignedAtomicTx       = &UnsignedImportTx{}
-	_ secp256k1fx.UnsignedTx = &UnsignedImportTx{}
+	_                           UnsignedAtomicTx       = &UnsignedImportTx{}
+	_                           secp256k1fx.UnsignedTx = &UnsignedImportTx{}
+	errImportNonAVAXInputBanff                         = errors.New("import input cannot contain non-AVAX in Banff")
+	errImportNonAVAXOutputBanff                        = errors.New("import output cannot contain non-AVAX in Banff")
 )
 
 // UnsignedImportTx is an unsigned ImportTx
@@ -86,11 +89,17 @@ func (utx *UnsignedImportTx) Verify(
 		if err := out.Verify(); err != nil {
 			return fmt.Errorf("EVM Output failed verification: %w", err)
 		}
+		if rules.IsBanff && out.AssetID != ctx.AVAXAssetID {
+			return errImportNonAVAXOutputBanff
+		}
 	}
 
 	for _, in := range utx.ImportedInputs {
 		if err := in.Verify(); err != nil {
 			return fmt.Errorf("atomic input failed verification: %w", err)
+		}
+		if rules.IsBanff && in.AssetID() != ctx.AVAXAssetID {
+			return errImportNonAVAXInputBanff
 		}
 	}
 	if !avax.IsSortedAndUniqueTransferableInputs(utx.ImportedInputs) {
@@ -158,7 +167,7 @@ func (utx *UnsignedImportTx) Burned(assetID ids.ID) (uint64, error) {
 		}
 	}
 
-	return math.Sub64(input, spent)
+	return math.Sub(input, spent)
 }
 
 // SemanticVerify this transaction is valid.

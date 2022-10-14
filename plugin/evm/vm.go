@@ -49,10 +49,11 @@ import (
 	// inside of cmd/geth.
 	_ "github.com/ava-labs/coreth/eth/tracers/native"
 
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/ava-labs/coreth/metrics"
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
@@ -428,6 +429,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
 	vm.ethConfig.CommitInterval = vm.config.CommitInterval
+	vm.ethConfig.SkipUpgradeCheck = vm.config.SkipUpgradeCheck
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -775,8 +777,8 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		size += txSize
 	}
 
-	// In Blueberry the block header must include the atomic trie root.
-	if rules.IsBlueberry {
+	// In Cortina the block header must include the atomic trie root.
+	if rules.IsCortina {
 		// Pass common.Hash{} as the current block's hash to the atomic backend, this avoids
 		// pinning changes to the atomic trie in memory, as we are still computing the header
 		// for this block and don't have its hash yet. Here we calculate the root of the atomic
@@ -848,8 +850,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		if err != nil {
 			return nil, nil, err
 		}
-		if rules.IsBlueberry {
-			// In Blueberry, the atomic trie root should be in ExtraStateRoot.
+		if rules.IsCortina {
+			// In Cortina, the atomic trie root should be in ExtraStateRoot.
 			if header.ExtraStateRoot != atomicRoot {
 				return nil, nil, fmt.Errorf(
 					"%w: (expected %s) (got %s)", errInvalidExtraStateRoot, header.ExtraStateRoot, atomicRoot,
@@ -1086,11 +1088,14 @@ func (vm *VM) VerifyHeightIndex() error {
 	return nil
 }
 
-// GetBlockIDAtHeight retrieves the blkID of the canonical block at [blkHeight]
-// if [blkHeight] is less than the height of the last accepted block, this will return
-// a canonical block. Otherwise, it may return a blkID that has not yet been accepted.
-// Note: Engine's interface requires this function returns database.ErrNotFound
-// if a block is not found.
+// GetBlockAtHeight implements the HeightIndexedChainVM interface and returns the
+// canonical block at [blkHeight].
+// If [blkHeight] is less than the height of the last accepted block, this will return
+// the block accepted at that height. Otherwise, it may return a blkID that has not yet
+// been accepted.
+// Note: the engine assumes that if a block is not found at [blkHeight], then
+// [database.ErrNotFound] will be returned. This indicates that the VM has state synced
+// and does not have all historical blocks available.
 func (vm *VM) GetBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
 	ethBlock := vm.blockChain.GetBlockByNumber(blkHeight)
 	if ethBlock == nil {
@@ -1105,10 +1110,10 @@ func (vm *VM) Version() (string, error) {
 }
 
 // NewHandler returns a new Handler for a service where:
-//   * The handler's functionality is defined by [service]
+//   - The handler's functionality is defined by [service]
 //     [service] should be a gorilla RPC service (see https://www.gorillatoolkit.org/pkg/rpc/v2)
-//   * The name of the service is [name]
-//   * The LockOption is the first element of [lockOption]
+//   - The name of the service is [name]
+//   - The LockOption is the first element of [lockOption]
 //     By default the LockOption is WriteLock
 //     [lockOption] should have either 0 or 1 elements. Elements beside the first are ignored.
 func newHandler(name string, service interface{}, lockOption ...commonEng.LockOption) (*commonEng.HTTPHandler, error) {

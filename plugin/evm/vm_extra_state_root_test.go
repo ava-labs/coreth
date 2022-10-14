@@ -21,25 +21,25 @@ import (
 )
 
 var (
-	// testBlueberryTime is an arbitrary time used to test the VM's behavior when
-	// blueberry activates.
-	testBlueberryTime = time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
-	// testBlueberryJSON is a modified genesisJSONBlueberry to include the blueberry
-	// upgrade at testBlueberryTime.
-	testBlueberryJSON string
+	// testCortinaTime is an arbitrary time used to test the VM's behavior when
+	// Cortina activates.
+	testCortinaTime = time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+	// testCortinaJSON is a modified genesisJSONCortina to include the Cortina
+	// upgrade at testCortinaTime.
+	testCortinaJSON string
 )
 
 func init() {
 	var genesis core.Genesis
-	if err := json.Unmarshal([]byte(genesisJSONBlueberry), &genesis); err != nil {
+	if err := json.Unmarshal([]byte(genesisJSONCortina), &genesis); err != nil {
 		panic(err)
 	}
-	genesis.Config.BlueberryBlockTimestamp = big.NewInt(testBlueberryTime.Unix())
+	genesis.Config.CortinaBlockTimestamp = big.NewInt(testCortinaTime.Unix())
 	json, err := json.Marshal(genesis)
 	if err != nil {
 		panic(err)
 	}
-	testBlueberryJSON = string(json)
+	testCortinaJSON = string(json)
 }
 
 type verifyExtraStateRootConfig struct {
@@ -172,10 +172,10 @@ func testVerifyExtraStateRoot(t *testing.T, test verifyExtraStateRootConfig) {
 	assert.Equal(t, expectedRoot2, extraStateRoot2)
 }
 
-// Verifies the root of the atomic trie is inclued in blueberry blocks.
-func TestIssueAtomicTxsBlueberry(t *testing.T) {
+// Verifies the root of the atomic trie is inclued in Cortina blocks.
+func TestIssueAtomicTxsCortina(t *testing.T) {
 	testVerifyExtraStateRoot(t, verifyExtraStateRootConfig{
-		genesis:    genesisJSONBlueberry,
+		genesis:    genesisJSONCortina,
 		blockTime1: time.Unix(0, 0), // genesis
 		blockTime2: time.Unix(2, 0), // a bit after, for fee purposes.
 		expectedExtraStateRoot: func(atomicRoot1, atomicRoot2 common.Hash) (common.Hash, common.Hash) {
@@ -184,23 +184,23 @@ func TestIssueAtomicTxsBlueberry(t *testing.T) {
 	})
 }
 
-// Verifies the root of the atomic trie is inclued in the first blueberry block.
-func TestIssueAtomicTxsBlueberryTransition(t *testing.T) {
+// Verifies the root of the atomic trie is inclued in the first Cortina block.
+func TestIssueAtomicTxsCortinaTransition(t *testing.T) {
 	testVerifyExtraStateRoot(t, verifyExtraStateRootConfig{
-		genesis:    testBlueberryJSON,
-		blockTime1: testBlueberryTime.Add(-2 * time.Second), // a little before blueberry, so we can test next block at the upgrade timestamp
-		blockTime2: testBlueberryTime,                       // at the upgrade timestamp
+		genesis:    testCortinaJSON,
+		blockTime1: testCortinaTime.Add(-2 * time.Second), // a little before Cortina, so we can test next block at the upgrade timestamp
+		blockTime2: testCortinaTime,                       // at the upgrade timestamp
 		expectedExtraStateRoot: func(atomicRoot1, atomicRoot2 common.Hash) (common.Hash, common.Hash) {
-			return common.Hash{}, atomicRoot2 // we only expect the blueberry block to include the atomic trie root.
+			return common.Hash{}, atomicRoot2 // we only expect the Cortina block to include the atomic trie root.
 		},
 	})
 }
 
-// Calling Verify should not succeed if the proper ExtraStateRoot is not included in a Blueberry block.
-// Calling Verify should not succeed if ExtraStateRoot is not empty pre-Blueberry
-func TestBlueberryInvalidExtraStateRootWillNotVerify(t *testing.T) {
+// Calling Verify should not succeed if the proper ExtraStateRoot is not included in a Cortina block.
+// Calling Verify should not succeed if ExtraStateRoot is not empty pre-Cortina
+func TestCortinaInvalidExtraStateRootWillNotVerify(t *testing.T) {
 	importAmount := uint64(50000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testBlueberryJSON, "", "", map[ids.ShortID]uint64{
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testCortinaJSON, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 	defer func() {
@@ -209,8 +209,8 @@ func TestBlueberryInvalidExtraStateRootWillNotVerify(t *testing.T) {
 		}
 	}()
 
-	// issue a tx and build a blueberry block
-	vm.clock.Set(testBlueberryTime)
+	// issue a tx and build a Cortina block
+	vm.clock.Set(testCortinaTime)
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
@@ -253,9 +253,9 @@ func TestBlueberryInvalidExtraStateRootWillNotVerify(t *testing.T) {
 	err = badBlk.Verify()
 	assert.ErrorIs(t, err, errInvalidExtraStateRoot)
 
-	// make a bad block by setting the timestamp before blueberry.
+	// make a bad block by setting the timestamp before Cortina.
 	badHeader = validEthBlk.Header()
-	badHeader.Time = uint64(testBlueberryTime.Add(-2 * time.Second).Unix())
+	badHeader.Time = uint64(testCortinaTime.Add(-2 * time.Second).Unix())
 	ethBlkBad = types.NewBlock(badHeader, validEthBlk.Transactions(), validEthBlk.Uncles(), nil, trie.NewStackTrie(nil), validEthBlk.ExtData(), true)
 
 	badBlk, err = vm.newBlock(ethBlkBad)
