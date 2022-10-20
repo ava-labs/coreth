@@ -385,6 +385,10 @@ func (vm *VM) Initialize(
 	case g.Config.ChainID.Cmp(params.AvalancheLocalChainID) == 0:
 		g.Config = params.AvalancheLocalChainConfig
 	}
+	// Set the Avalanche Context on the ChainConfig
+	g.Config.AvalancheContext = params.AvalancheContext{
+		BlockchainID: common.Hash(ctx.ChainID),
+	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
 
 	// Ensure that non-standard commit interval is only allowed for the local network
@@ -417,6 +421,10 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
 	vm.ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
 	vm.ethConfig.Preimages = vm.config.Preimages
+	vm.ethConfig.TrieCleanCache = vm.config.TrieCleanCache
+	vm.ethConfig.TrieDirtyCache = vm.config.TrieDirtyCache
+	vm.ethConfig.TrieDirtyCommitTarget = vm.config.TrieDirtyCommitTarget
+	vm.ethConfig.SnapshotCache = vm.config.SnapshotCache
 	vm.ethConfig.Pruning = vm.config.Pruning
 	vm.ethConfig.AcceptorQueueLimit = vm.config.AcceptorQueueLimit
 	vm.ethConfig.PopulateMissingTries = vm.config.PopulateMissingTries
