@@ -217,15 +217,15 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 	}
 
 	log.Debug("processing incoming request", "nodeID", nodeID, "requestID", requestID, "req", req)
-	ctx, cancel := context.WithDeadline(context.Background(), bufferedDeadline)
+	handleCtx, cancel := context.WithDeadline(context.Background(), bufferedDeadline)
 	defer cancel()
 
-	responseBytes, err := req.Handle(ctx, nodeID, requestID, n.requestHandler)
+	responseBytes, err := req.Handle(handleCtx, nodeID, requestID, n.requestHandler)
 	switch {
 	case err != nil && err != context.DeadlineExceeded:
 		return err // Return a fatal error
 	case responseBytes != nil:
-		return n.appSender.SendAppResponse(context.TODO(), nodeID, requestID, responseBytes) // Propagate fatal error
+		return n.appSender.SendAppResponse(ctx, nodeID, requestID, responseBytes) // Propagate fatal error
 	default:
 		return nil
 	}
