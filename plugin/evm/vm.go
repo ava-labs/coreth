@@ -384,6 +384,9 @@ func (vm *VM) Initialize(
 	if err := json.Unmarshal(genesisBytes, g); err != nil {
 		return err
 	}
+	if err := g.PreDeploy(); err != nil {
+		return err
+	}
 
 	var extDataHashes map[common.Hash]common.Hash
 	// Set the chain config for mainnet/fuji chain IDs
