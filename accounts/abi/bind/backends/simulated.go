@@ -106,10 +106,13 @@ type SimulatedBackend struct {
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64, addr common.Address) *SimulatedBackend {
 	cpcfg := params.TestChainConfig
 	cpcfg.ChainID = big.NewInt(1337)
-	genesis := core.Genesis{Config: cpcfg, GasLimit: gasLimit, Alloc: alloc}
+	genesis := core.Genesis{Config: cpcfg, GasLimit: gasLimit, Alloc: alloc, InitialAdmin: addr}
+	if addr.String() != "0x0000000000000000000000000000000000000000" {
+		genesis.PreDeploy()
+	}
 	genesis.MustCommit(database)
 	cacheConfig := &core.CacheConfig{}
 	blockchain, _ := core.NewBlockChain(database, cacheConfig, genesis.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
@@ -132,7 +135,14 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, common.Address{})
+}
+
+// NewSimulatedBackendWithInitialAdmin creates a new binding backend using a simulated blockchain
+// for testing purposes.
+// A simulated backend always uses chainID 1337.
+func NewSimulatedBackendWithInitialAdmin(alloc core.GenesisAlloc, gasLimit uint64, addr common.Address) *SimulatedBackend {
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, addr)
 }
 
 // Close terminates the underlying blockchain's update loop.
@@ -599,7 +609,6 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call interfaces.Call
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
 		failed, _, err := executable(mid)
-
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
 		// assigned. Return the error directly, don't struggle any more
