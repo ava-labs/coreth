@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -39,6 +49,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -149,8 +160,9 @@ var DefaultCacheConfig = &CacheConfig{
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
-	chainConfig *params.ChainConfig // Chain & network configuration
-	cacheConfig *CacheConfig        // Cache configuration for pruning
+	chainConfig *params.ChainConfig   // Chain & network configuration
+	cacheConfig *CacheConfig          // Cache configuration for pruning
+	adminCtrl   admin.AdminController // Block based administrative control
 
 	db ethdb.Database // Low level persistent database to store final content in
 
@@ -447,6 +459,11 @@ func (bc *BlockChain) stopAcceptor() {
 	bc.acceptorWg.Wait()
 	bc.acceptorClosed = true
 	close(bc.acceptorQueue)
+}
+
+// SetAdminController sets the admin Controller.
+func (bc *BlockChain) SetAdminController(ctrl admin.AdminController) {
+	bc.adminCtrl = ctrl
 }
 
 func (bc *BlockChain) InitializeSnapshots() {

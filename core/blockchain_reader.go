@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2021, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -28,6 +38,7 @@ package core
 
 import (
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -250,6 +261,9 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
+
+// AdminController retrieves the chain's admin controller.
+func (bc *BlockChain) AdminController() admin.AdminController { return bc.adminCtrl }
 
 // Engine retrieves the blockchain's consensus engine.
 func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }

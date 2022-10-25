@@ -45,6 +45,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
@@ -109,6 +110,7 @@ type OracleBackend interface {
 	SubscribeChainAcceptedEvent(ch chan<- core.ChainEvent) event.Subscription
 	MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error)
 	LastAcceptedBlock() *types.Block
+	AdminController() admin.AdminController
 }
 
 // Oracle recommends gas prices based on the content of recent
@@ -262,7 +264,7 @@ func (oracle *Oracle) estimateNextBaseFee(ctx context.Context) (*big.Int, error)
 	// If the block does have a baseFee, calculate the next base fee
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
-	_, nextBaseFee, err := dummy.EstimateNextBaseFee(oracle.backend.ChainConfig(), header, oracle.clock.Unix())
+	_, nextBaseFee, err := dummy.EstimateNextBaseFee(oracle.backend.ChainConfig(), oracle.backend.AdminController(), header, oracle.clock.Unix())
 	return nextBaseFee, err
 }
 
@@ -371,7 +373,7 @@ func (oracle *Oracle) suggestDynamicFees(ctx context.Context) (*big.Int, *big.In
 	}
 
 	if oracle.backend.ChainConfig().IsSunrisePhase0(new(big.Int).SetUint64(head.Time)) {
-		baseFee = new(big.Int).SetUint64(params.SunrisePhase0BaseFee)
+		baseFee = oracle.fixedBaseFee(head)
 	} else if len(baseFeeResults) > 0 {
 		sort.Sort(bigIntArray(baseFeeResults))
 		baseFee = baseFeeResults[(len(baseFeeResults)-1)*oracle.percentile/100]
@@ -405,6 +407,14 @@ func (oracle *Oracle) getFeeInfo(ctx context.Context, number uint64) (*feeInfo, 
 		return nil, err
 	}
 	return oracle.feeInfoProvider.addHeader(ctx, header)
+}
+
+func (oracle *Oracle) fixedBaseFee(head *types.Header) *big.Int {
+	if ctrl := oracle.backend.AdminController(); ctrl != nil {
+		return ctrl.GetFixedBaseFee(head, nil)
+	} else {
+		return new(big.Int).SetUint64(params.SunrisePhase0BaseFee)
+	}
 }
 
 type bigIntArray []*big.Int

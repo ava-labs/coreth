@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -33,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
@@ -312,7 +323,7 @@ func makeHeader(chain consensus.ChainReader, config *params.ChainConfig, parent 
 	}
 	if chain.Config().IsApricotPhase3(timestamp) {
 		var err error
-		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(chain.Config(), parent.Header(), time)
+		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(chain.Config(), chain.AdminController(), parent.Header(), time)
 		if err != nil {
 			panic(err)
 		}
@@ -329,6 +340,7 @@ func (cr *fakeChainReader) Config() *params.ChainConfig {
 	return cr.config
 }
 
+func (cr *fakeChainReader) AdminController() admin.AdminController                  { return nil }
 func (cr *fakeChainReader) CurrentHeader() *types.Header                            { return nil }
 func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header           { return nil }
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }

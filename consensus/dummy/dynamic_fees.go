@@ -19,6 +19,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -47,7 +48,7 @@ var (
 // and calculates the expected base fee as well as the encoding of the past
 // pricing information for the child block.
 // CalcBaseFee should only be called if [timestamp] >= [config.ApricotPhase3Timestamp]
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
+func CalcBaseFee(config *params.ChainConfig, ctrl admin.AdminController, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	bigTimestamp := new(big.Int).SetUint64(parent.Time)
@@ -68,7 +69,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	}
 
 	if isSunrisePhase0 {
-		return []byte{}, new(big.Int).SetUint64(params.SunrisePhase0BaseFee), nil
+		fixedBaseFee := new(big.Int).SetUint64(params.SunrisePhase0BaseFee)
+		if ctrl != nil {
+			fixedBaseFee = ctrl.GetFixedBaseFee(parent, nil)
+		}
+		return []byte{}, fixedBaseFee, nil
 	}
 
 	if uint64(len(parent.Extra)) != params.ApricotPhase3ExtraDataSize {
@@ -208,11 +213,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 // If [timestamp] is less than the timestamp of [parent], then it uses the same timestamp as parent.
 // Warning: This function should only be used in estimation and should not be used when calculating the canonical
 // base fee for a subsequent block.
-func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
+func EstimateNextBaseFee(config *params.ChainConfig, ctrl admin.AdminController, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
 	if timestamp < parent.Time {
 		timestamp = parent.Time
 	}
-	return CalcBaseFee(config, parent, timestamp)
+	return CalcBaseFee(config, ctrl, parent, timestamp)
 }
 
 // selectBigWithinBounds returns [value] if it is within the bounds:
