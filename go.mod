@@ -1,10 +1,11 @@
-module github.com/ava-labs/coreth
+module github.com/tedim52/coreth
 
 go 1.18
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
 	github.com/ava-labs/avalanchego v1.8.5
+	github.com/ava-labs/coreth v0.9.0-rc.13
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
