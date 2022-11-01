@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -48,7 +58,7 @@ func TestStrictTxListAdd(t *testing.T) {
 	// Insert the transactions in a random order
 	list := newTxList(true)
 	for _, v := range rand.Perm(len(txs)) {
-		list.Add(txs[v], DefaultTxPoolConfig.PriceBump)
+		list.Add(txs[v], DefaultTxPoolConfig.PriceBump, false)
 	}
 	// Verify internal state
 	if len(list.txs.items) != len(txs) {
@@ -75,7 +85,7 @@ func BenchmarkTxListAdd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		list := newTxList(true)
 		for _, v := range rand.Perm(len(txs)) {
-			list.Add(txs[v], DefaultTxPoolConfig.PriceBump)
+			list.Add(txs[v], DefaultTxPoolConfig.PriceBump, false)
 			list.Filter(priceLimit, DefaultTxPoolConfig.PriceBump)
 		}
 	}

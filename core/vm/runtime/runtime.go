@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -130,7 +140,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
+	if rules := cfg.ChainConfig.CaminoRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
 		cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
 	cfg.State.CreateAccount(address)
@@ -162,7 +172,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
+	if rules := cfg.ChainConfig.CaminoRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
 		cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
 	}
 	// Call the code with the given configuration.
@@ -188,7 +198,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	statedb := cfg.State
 
-	if rules := cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
+	if rules := cfg.ChainConfig.CaminoRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
 		statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
 	// Call the code with the given configuration.

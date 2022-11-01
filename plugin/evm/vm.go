@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
@@ -285,6 +295,8 @@ type VM struct {
 	// State sync server and client
 	StateSyncServer
 	StateSyncClient
+	// Non verifiable blocks because of missing parent
+	DeferedChecks *DeferedChecks
 }
 
 // Codec implements the secp256k1fx interface
@@ -384,12 +396,17 @@ func (vm *VM) Initialize(
 		extDataHashes = fujiExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheLocalChainID) == 0:
 		g.Config = params.AvalancheLocalChainConfig
+	case g.Config.ChainID.Cmp(params.CaminoChainID) == 0:
+		g.Config = params.CaminoChainConfig
+	case g.Config.ChainID.Cmp(params.ColumbusChainID) == 0:
+		g.Config = params.ColumbusChainConfig
 	}
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
 		BlockchainID: common.Hash(ctx.ChainID),
 	}
-	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
+
+	vm.syntacticBlockValidator = NewCaminoBlockValidator(extDataHashes)
 
 	// Ensure that non-standard commit interval is only allowed for the local network
 	if g.Config.ChainID.Cmp(params.AvalancheLocalChainID) != 0 {
@@ -546,6 +563,10 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if err != nil {
 		return err
 	}
+
+	// Initialize the map used for re-syntactic checks
+	vm.DeferedChecks = NewDeferedChecks()
+
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -679,8 +700,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules := vm.chainConfig.AvalancheRules(header.Number, new(big.Int).SetUint64(header.Time))
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
+		rules := vm.chainConfig.CaminoRules(header.Number, new(big.Int).SetUint64(header.Time))
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, &rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
@@ -719,7 +740,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		batchAtomicUTXOs  ids.Set
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.chainConfig.AvalancheRules(header.Number, new(big.Int).SetUint64(header.Time))
+		rules                      = vm.chainConfig.CaminoRules(header.Number, new(big.Int).SetUint64(header.Time))
 		size              int
 	)
 
@@ -767,7 +788,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		}
 
 		snapshot := state.Snapshot()
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, &rules); err != nil {
 			// Discard the transaction from the mempool and reset the state to [snapshot]
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
@@ -938,6 +959,9 @@ func (vm *VM) SetState(state snow.State) error {
 	case snow.NormalOp:
 		// Initialize goroutines related to block building once we enter normal operation as there is no need to handle mempool gossip before this point.
 		vm.initBlockBuilding()
+		if num := vm.DeferedChecks.Count(); num > 0 {
+			return fmt.Errorf("%d blocks has been verified", num)
+		}
 		vm.bootstrapped = true
 		return vm.fx.Bootstrapped()
 	default:
@@ -1355,7 +1379,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 		}
 	}
 
-	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
+	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, &rules)
 }
 
 // verifyTx verifies that [tx] is valid to be issued into a block with parent block [parentHash]
@@ -1363,7 +1387,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules *params.Rules) error {
 	parentIntf, err := vm.GetBlockInternal(ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1372,7 +1396,7 @@ func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *
 	if !ok {
 		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
 	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(vm, tx, parent, baseFee, rules); err != nil {
+	if err := tx.UnsignedAtomicTx.SemanticVerify(vm, tx, parent, baseFee, *rules); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
@@ -1639,10 +1663,10 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 	return state.GetNonce(address), nil
 }
 
-// currentRules returns the chain rules for the current block.
+// currentRules returns the chain rules for the current (next) block.
 func (vm *VM) currentRules() params.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.chainConfig.AvalancheRules(header.Number, big.NewInt(int64(header.Time)))
+	return vm.chainConfig.CaminoRules(header.Number, big.NewInt(int64(header.Time)))
 }
 
 func (vm *VM) startContinuousProfiler() {

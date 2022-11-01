@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
@@ -13,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
@@ -98,6 +109,37 @@ func init() {
 			panic(err)
 		}
 		bonusBlockMainnetHeights[height] = blkID
+	}
+}
+
+// DeferedChecks holds Blocks which must be re-verified
+// when the parent of a possible postFork block arrives
+type DeferedChecks struct {
+	deferedChecks map[ids.ID]*Block
+}
+
+func (d *DeferedChecks) Count() int {
+	return len(d.deferedChecks)
+}
+
+func (d *DeferedChecks) Push(id ids.ID, b *Block) {
+	d.deferedChecks[id] = b
+}
+
+func (d *DeferedChecks) Verify(b *Block, rules *params.Rules) error {
+	// Get rules for this block
+	anchestor, exists := d.deferedChecks[b.id]
+	if exists {
+		delete(d.deferedChecks, b.id)
+		// Verify that anchstor block verifies the parent rules
+		return b.vm.syntacticBlockValidator.SyntacticVerify(anchestor, *rules)
+	}
+	return nil
+}
+
+func NewDeferedChecks() *DeferedChecks {
+	return &DeferedChecks{
+		deferedChecks: make(map[ids.ID]*Block, 1),
 	}
 }
 
@@ -218,8 +260,31 @@ func (b *Block) syntacticVerify() error {
 	}
 
 	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.AvalancheRules(header.Number, new(big.Int).SetUint64(header.Time))
-	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
+	rules := b.vm.chainConfig.CaminoRules(header.Number, new(big.Int).SetUint64(header.Time))
+
+	if err := b.vm.DeferedChecks.Verify(b, &rules); err != nil {
+		return err
+	}
+
+	err := b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
+
+	if err != nil && b.ethBlock.Header().Number.Cmp(common.Big0) > 0 {
+		// camino rules will be determined by parent block
+		if parentInf, pErr := b.vm.GetBlockInternal(b.Parent()); pErr == nil {
+			if parent, ok := parentInf.(*Block); ok && parent.ethBlock != nil {
+				header := parent.ethBlock.Header()
+				rules = parent.vm.chainConfig.CaminoRules(header.Number, new(big.Int).SetUint64(header.Time))
+				err = b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
+			} else {
+				err = fmt.Errorf("cannot extract block")
+			}
+		} else {
+			// We check the syntax later using the parent block
+			b.vm.DeferedChecks.Push(b.Parent(), b)
+			err = nil
+		}
+	}
+	return err
 }
 
 // Verify implements the snowman.Block interface

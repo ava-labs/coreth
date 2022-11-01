@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
@@ -186,8 +196,9 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 // modified from consensus.go
 func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
 	var (
-		config    = chain.Config()
-		timestamp = new(big.Int).SetUint64(header.Time)
+		config          = chain.Config()
+		timestamp       = new(big.Int).SetUint64(header.Time)
+		parentTimestamp = new(big.Int).SetUint64(parent.Time)
 	)
 	// Ensure that we do not verify an uncle
 	if uncle {
@@ -197,6 +208,10 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header 
 	if !config.IsApricotPhase3(timestamp) {
 		if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 			return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
+		}
+	} else if config.IsSunrisePhase0(parentTimestamp) {
+		if len(header.Extra) != params.SunrisePhase0ExtraDataSize {
+			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.SunrisePhase0ExtraDataSize, len(header.Extra))
 		}
 	} else {
 		if uint64(len(header.Extra)) != params.ApricotPhase3ExtraDataSize {

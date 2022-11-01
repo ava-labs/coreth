@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
@@ -45,19 +55,26 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		isApricotPhase3 = config.IsApricotPhase3(bigTimestamp)
 		isApricotPhase4 = config.IsApricotPhase4(bigTimestamp)
 		isApricotPhase5 = config.IsApricotPhase5(bigTimestamp)
+		isSunrisePhase0 = config.IsSunrisePhase0(bigTimestamp)
 	)
-	if !isApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
+	if !isSunrisePhase0 && (!isApricotPhase3 || parent.Number.Cmp(common.Big0) == 0) {
 		initialSlice := make([]byte, params.ApricotPhase3ExtraDataSize)
 		initialBaseFee := big.NewInt(params.ApricotPhase3InitialBaseFee)
 		return initialSlice, initialBaseFee, nil
-	}
-	if uint64(len(parent.Extra)) != params.ApricotPhase3ExtraDataSize {
-		return nil, nil, fmt.Errorf("expected length of parent extra data to be %d, but found %d", params.ApricotPhase3ExtraDataSize, len(parent.Extra))
 	}
 
 	if timestamp < parent.Time {
 		return nil, nil, fmt.Errorf("cannot calculate base fee for timestamp (%d) prior to parent timestamp (%d)", timestamp, parent.Time)
 	}
+
+	if isSunrisePhase0 {
+		return []byte{}, new(big.Int).SetUint64(params.SunrisePhase0BaseFee), nil
+	}
+
+	if uint64(len(parent.Extra)) != params.ApricotPhase3ExtraDataSize {
+		return nil, nil, fmt.Errorf("expected length of parent extra data to be %d, but found %d", params.ApricotPhase3ExtraDataSize, len(parent.Extra))
+	}
+
 	roll := timestamp - parent.Time
 
 	// roll the window over by the difference between the timestamps to generate
