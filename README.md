@@ -1,21 +1,27 @@
-# Coreth and the C-Chain
+<div align="center">
+  <img src="resources/camino-logo.png?raw=true">
+</div>
 
-[Avalanche](https://docs.avax.network/learn/platform-overview) is a network composed of multiple blockchains.
+---
+
+# CaminoEthVm and the C-Chain
+
+[Camino](https://docs.camino.foundation/about/platform-overview) is a network composed of multiple blockchains.
 Each blockchain is an instance of a Virtual Machine (VM), much like an object in an object-oriented language is an instance of a class.
 That is, the VM defines the behavior of the blockchain.
-Coreth (from core Ethereum) is the [Virtual Machine (VM)](https://docs.avax.network/learn/platform-overview#virtual-machines) that defines the Contract Chain (C-Chain).
+CaminoEthVm is the [Virtual Machine (VM)](https://docs.camino.foundation/about/platform-overview#virtual-machines) that defines the Contract Chain (C-Chain).
 This chain implements the Ethereum Virtual Machine and supports Solidity smart contracts as well as most other Ethereum client functionality.
 
 ## Building
 
-Coreth is a dependency of AvalancheGo which is used to implement the EVM based Virtual Machine for the Avalanche C-Chain. In order to run with a local version of Coreth, users must update their Coreth dependency within AvalancheGo to point to their local Coreth directory. If Coreth and AvalancheGo are at the standard location within your GOPATH, this will look like the following:
+CaminoEthVm is a dependency of Camino-Node which is used to implement the EVM based Virtual Machine for the Camino C-Chain. In order to run with a local version of CaminoEthVm, users must update their CaminoEthVm dependency within Camino-Node to point to their local CaminoEthVm directory. If CaminoEthVm and Caino-Node are at the standard location within your GOPATH, this will look like the following:
 
 ```bash
-cd $GOPATH/src/github.com/chain4travel/caminogo
-go mod edit -replace github.com/chain4travel/caminoethvm=../coreth
+cd $GOPATH/src/github.com/chain4travel/camino-node
+go mod edit -replace github.com/chain4travel/caminoethvm=../caminoethvm
 ```
 
-Note: the C-Chain originally ran in a separate process from the main AvalancheGo process and communicated with it over a local gRPC connection. When this was the case, AvalancheGo's build script would download Coreth, compile it, and place the binary into the `caminogo/build/plugins` directory.
+Note: the C-Chain originally ran in a separate process from the main Camino-Node process and communicated with it over a local gRPC connection. When this was the case, Camino-Node's build script would download CaminoEthVm, compile it, and place the binary into the `camino-node/build/plugins` directory.
 
 ## API
 
@@ -27,28 +33,28 @@ The C-Chain supports the following API namespaces:
 - `debug`
 
 Only the `eth` namespace is enabled by default. 
-To enable the other namespaces see the instructions for passing the C-Chain config to AvalancheGo [here.](https://docs.avax.network/nodes/maintain/chain-config-flags/#c-chain-configs)
-Full documentation for the C-Chain's API can be found [here.](https://docs.avax.network/apis/avalanchego/apis/c-chain/)
+To enable the other namespaces see the instructions for passing the C-Chain config to Camino-Node [here.](https://docs.camino.foundation/nodes/references/chain-config-flags)
+Full documentation for the C-Chain's API can be found [here.](https://docs.camino.foundation/apis/caminogo-apis/c-chain)
 
 ## Compatibility
 
-The C-Chain is compatible with almost all Ethereum tooling, including [Remix,](https://docs.avax.network/build/tutorials/smart-contracts/deploy-a-smart-contract-on-camino-using-remix-and-metamask) [Metamask](https://docs.avax.network/build/tutorials/smart-contracts/deploy-a-smart-contract-on-camino-using-remix-and-metamask) and [Truffle.](https://docs.avax.network/build/tutorials/smart-contracts/using-truffle-with-the-camino-c-chain)
+The C-Chain is compatible with almost all Ethereum tooling, including [Remix](https://https://remix.ethereum.org/), Metamask, Truffle and HardHat
 
-## Differences Between Avalanche C-Chain and Ethereum
+## Differences Between Camino C-Chain and Ethereum
 
 ### Atomic Transactions
 
-As a network composed of multiple blockchains, Avalanche uses *atomic transactions* to move assets between chains. Coreth modifies the Ethereum block format by adding an *ExtraData* field, which contains the atomic transactions.
+As a network composed of multiple blockchains, Camino uses *atomic transactions* to move assets between chains. CaminoEthVm modifies the Ethereum block format by adding an *ExtraData* field, which contains the atomic transactions.
 
-### Avalanche Native Tokens (ANTs)
+### Camino Native Tokens (CNTs)
 
-The C-Chain supports Avalanche Native Tokens, which are created on the X-Chain using precompiled contracts. These precompiled contracts *nativeAssetCall* and *nativeAssetBalance* support the same interface for ANTs as *CALL* and *BALANCE* do for AVAX with the added parameter of *assetID* to specify the asset.
+The C-Chain supports Camino Native Tokens, which are created on the X-Chain using precompiled contracts. These precompiled contracts *nativeAssetCall* and *nativeAssetBalance* support the same interface for CNTs as *CALL* and *BALANCE* do for CAM with the added parameter of *assetID* to specify the asset.
 
-For the full documentation of precompiles for interacting with ANTs and using them in ARC-20s, see [here](https://docs.avax.network/build/references/coreth-arc20s).
+For the full documentation of precompiles for interacting with CNTs and using them in CRC-20s, see [here](https://docs.camino.foundation/build/references/camino-crc20s).
 
 ### Block Timing
 
-Blocks are produced asynchronously in Snowman Consensus, so the timing assumptions that apply to Ethereum do not apply to Coreth. To support block production in an async environment, a block is permitted to have the same timestamp as its parent. Since there is no general assumption that a block will be produced every 10 seconds, smart contracts built on Avalanche should use the block timestamp instead of the block number for their timing assumptions.
+Blocks are produced asynchronously in Snowman Consensus, so the timing assumptions that apply to Ethereum do not apply to CaminoEthVm. To support block production in an async environment, a block is permitted to have the same timestamp as its parent. Since there is no general assumption that a block will be produced every 10 seconds, smart contracts built on Camino should use the block timestamp instead of the block number for their timing assumptions.
 
 A block with a timestamp more than 10 seconds in the future will not be considered valid. However, a block with a timestamp more than 10 seconds in the past will still be considered valid as long as its timestamp is greater than or equal to the timestamp of its parent block.
 
@@ -56,7 +62,7 @@ A block with a timestamp more than 10 seconds in the future will not be consider
 
 Snowman consensus does not use difficulty in any way, so the difficulty of every block is required to be set to 1. This means that the DIFFICULTY opcode should not be used as a source of randomness.
 
-Additionally, with the change from the DIFFICULTY OpCode to the RANDOM OpCode (RANDOM replaces DIFFICULTY directly), there is no planned change to provide a stronger source of randomness. The RANDOM OpCode relies on the Eth2.0 Randomness Beacon, which has no direct parallel within the context of either Coreth or Snowman consensus. Therefore, instead of providing a weaker source of randomness that may be manipulated, the RANDOM OpCode will not be supported. Instead, it will continue the behavior of the DIFFICULTY OpCode of returning the block's difficulty, such that it will always return 1.
+Additionally, with the change from the DIFFICULTY OpCode to the RANDOM OpCode (RANDOM replaces DIFFICULTY directly), there is no planned change to provide a stronger source of randomness. The RANDOM OpCode relies on the Eth2.0 Randomness Beacon, which has no direct parallel within the context of either CaminoEthVM or Snowman consensus. Therefore, instead of providing a weaker source of randomness that may be manipulated, the RANDOM OpCode will not be supported. Instead, it will continue the behavior of the DIFFICULTY OpCode of returning the block's difficulty, such that it will always return 1.
 
 ## Block Format
 

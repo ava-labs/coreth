@@ -30,9 +30,6 @@ fi
 # Avalanche root directory
 CAMINOETHVM_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 
-# Load the versions
-source "$CAMINOETHVM_PATH"/scripts/versions.sh
-
 # Load the constants
 source "$CAMINOETHVM_PATH"/scripts/constants.sh
 
@@ -43,11 +40,6 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
-# Check if CAMINOETHVM_COMMIT is set, if not retrieve the last commit from the repo.
-# This is used in the Dockerfile to allow a commit hash to be passed in without
-# including the .git/ directory within the Docker image.
-caminoethvm_commit=${CAMINOETHVM_COMMIT:-$( git rev-list -1 HEAD )}
-
 # Build Caminoethvm, which is run as a subprocess
-echo "Building Caminoethvm Version: $caminoethvm_version; GitCommit: $caminoethvm_commit"
-go build -ldflags "-X github.com/chain4travel/caminoethvm/plugin/evm.GitCommit=$caminoethvm_commit -X github.com/chain4travel/caminoethvm/plugin/evm.Version=$caminoethvm_version" -o "$binary_path" "plugin/"*.go
+echo "Building Caminoethvm Version: $caminoethvm_tag; GitCommit: $caminoethvm_commit"
+go build -ldflags "-X github.com/chain4travel/caminoethvm/plugin/evm.GitCommit=$caminoethvm_short_commit -X github.com/chain4travel/caminoethvm/plugin/evm.Version=$caminoethvm_tag" -o "$binary_path" "plugin/"*.go

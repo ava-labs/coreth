@@ -2,40 +2,42 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - chain4travel
   pull_request:
+    branches:
+      - chain4travel
   workflow_dispatch:
     inputs:
-      avalanchegoRepo:
-        description: 'avalanchego github repository'
+      caminogoRepo:
+        description: 'caminogo github repository'
         required: true
-        default: 'ava-labs/avalanchego'
-      avalanchegoBranch:
-        description: 'avalanchego branch'
+        default: 'chain4travel/caminogo'
+      caminogoBranch:
+        description: 'caminogo branch'
         required: true
-        default: 'master'
+        default: 'chain4travel'
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v2
-      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+      - uses: actions/checkout@v3
+      - name: check out ${{ github.event.inputs.caminogoRepo }} ${{ github.event.inputs.caminogoBranch }}
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          repository: ${{ github.event.inputs.avalanchegoRepo }}
-          ref: ${{ github.event.inputs.avalanchegoBranch }}
-          path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
-      - uses: actions/setup-go@v1
+          repository: ${{ github.event.inputs.caminogoRepo }}
+          ref: ${{ github.event.inputs.caminogoBranch }}
+          path: caminogo
+          token: ${{ secrets.CAMINO_PAT }}
+      - uses: actions/setup-go@v2
         with:
           go-version: 1.18
-      - name: change avalanchego dep
+      - name: change caminogo dep
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
+          go mod edit -replace github.com/chain4travel/caminogo=./caminogo
           go mod tidy
           go clean -modcache # avoid conflicts with the golangci-lint-action cache
       - run: ./scripts/lint_allowed_geth_imports.sh
@@ -46,30 +48,31 @@ jobs:
           version: v1.47
           working-directory: .
           args: --timeout 3m
+          skip-go-installation: true
   test:
     name: Golang Unit Tests v${{ matrix.go }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         go: ['1.18']
-        os: [macos-11.0, ubuntu-18.04, windows-latest]
+        os: [macos-11.0, ubuntu-18.04]
     steps:
-    - uses: actions/checkout@v2
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+    - uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.caminogoRepo }} ${{ github.event.inputs.caminogoBranch }}
       if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v1
+        repository: ${{ github.event.inputs.caminogoRepo }}
+        ref: ${{ github.event.inputs.caminogoBranch }}
+        path: caminogo
+        token: ${{ secrets.CAMINO_PAT }}
+    - uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go }}
-    - name: change avalanchego dep
+    - name: change caminogo dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
       run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
+        go mod edit -replace github.com/chain4travel/caminogo=./caminogo
         go mod tidy
     - run: go mod download
       shell: bash
@@ -87,22 +90,22 @@ jobs:
         go: ['1.18']
         os: [ubuntu-20.04]
     steps:
-    - uses: actions/checkout@v2
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+    - uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.caminogoRepo }} ${{ github.event.inputs.caminogoBranch }}
       if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v1
+        repository: ${{ github.event.inputs.caminogoRepo }}
+        ref: ${{ github.event.inputs.caminogoBranch }}
+        path: caminogo
+        token: ${{ secrets.CAMINO_PAT }}
+    - uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go }}
-    - name: change avalanchego dep
+    - name: change caminogo dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
       run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
+        go mod edit -replace github.com/chain4travel/caminogo=./caminogo
         go mod tidy
     - run: go mod download
       shell: bash
@@ -110,40 +113,3 @@ jobs:
       shell: bash
     - run: ./scripts/build_test.sh -race
       shell: bash
-  e2e:
-    name: Golang E2E Tests v${{ matrix.go }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        go: [ '1.18' ]
-        os: [ ubuntu-20.04 ]
-    steps:
-    - uses: actions/checkout@v2
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v2
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v1
-      with:
-        go-version: ${{ matrix.go }}
-    - name: change avalanchego dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-        go mod tidy
-    - name: prepare avalanchego directory for docker copy
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      # mv avalanchego/ to nested dir avalanchego/avalanchego/
-      # required because docker instruction "COPY dir ." copies dir/* to .
-      run: mkdir avalanchego_tmp && mv avalanchego avalanchego_tmp && mv avalanchego_tmp avalanchego
-    - run: .github/workflows/run_e2e_tests.sh --parallelism 1 --client-id $KURTOSIS_CLIENT_ID --client-secret $KURTOSIS_CLIENT_SECRET
-      shell: bash
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
-        KURTOSIS_CLIENT_ID: ${{ secrets.KURTOSIS_CLIENT_ID }}
-        KURTOSIS_CLIENT_SECRET: ${{ secrets.KURTOSIS_CLIENT_SECRET }}
