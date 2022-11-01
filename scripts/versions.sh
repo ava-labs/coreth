@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
 # Set up the versions to be used
-coreth_version=${CORETH_VERSION:-'v0.11.1'}
+caminoethvm_version=${CAMINOETHVM_VERSION:-'v0.2.0'}
 # Don't export them as they're used in the context of other calls
-avalanche_version=${AVALANCHE_VERSION:-'v1.9.1-rc.13'}
+camino_version=${CAMINO_VERSION:-'v0.3.0'}
