@@ -22,12 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/chain4travel/caminoethvm/accounts/abi/bind"
-	"github.com/chain4travel/caminoethvm/accounts/abi/bind/backends"
-	admin "github.com/chain4travel/caminoethvm/contracts/build_contracts/admin/src"
-	"github.com/chain4travel/caminoethvm/core"
+	"github.com/ava-labs/coreth/accounts/abi/bind"
+	"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+	admin "github.com/ava-labs/coreth/contracts/build_contracts/admin/src"
+	"github.com/ava-labs/coreth/core"
 
-	"github.com/chain4travel/caminoethvm/params"
+	"github.com/ava-labs/coreth/params"
 )
 
 var (

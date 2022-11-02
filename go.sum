@@ -62,8 +62,6 @@ github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156/go.mod h1:Cb/ax
 github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883/go.mod h1:rCTlJbsFo29Kk6CurOXKm700vrz8f0KW0JNfpkRJY/8=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/apache/arrow/go/arrow v0.0.0-20191024131854-af6fa24be0db/go.mod h1:VTxUBvSJ3s3eHAg65PNgrsn5BtqCRPdmyXh6rAfdxN0=
-github.com/ava-labs/avalanche-ledger-go v0.0.10 h1:qEiTJvjuEmTYhYczk/CYvXoQuLlgd7xYyC2OcXOhAlw=
-github.com/ava-labs/avalanche-ledger-go v0.0.10/go.mod h1:60Ftil/0sHi8IwjvBFyrvRsPVAue8zAkIMGuvXXMwVM=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
@@ -108,6 +106,10 @@ github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghf
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cespare/xxhash/v2 v2.1.2 h1:YRXhKfTDauu4ajMg1TPgFO5jnlC2HCbmLXMcTG5cbYE=
 github.com/cespare/xxhash/v2 v2.1.2/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+github.com/chain4travel/camino-ledger-go v0.0.10-c4t2 h1:UTaelVnEtIsL6fOOisPcyWJMyRndNhxW+9aVrXUosDA=
+github.com/chain4travel/camino-ledger-go v0.0.10-c4t2/go.mod h1:35p0J/1xRG41QCkHhpLPCplFA+PIb/GTSuiVgIhEmD4=
+github.com/chain4travel/caminogo v0.3.0-alpha1 h1:TCkasAFA0U1aLSN2Y1SINjoB5aP8Gt5jxFUENLkyNSg=
+github.com/chain4travel/caminogo v0.3.0-alpha1/go.mod h1:t48eDion2Bx2uMLVYJ0JIfPT+Oall+cXmP0Jd6b3ueo=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
 github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMnBNeIyt5eFwwo7qiLfzFZmjNmxjkiQlU=

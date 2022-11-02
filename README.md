@@ -14,11 +14,11 @@ This chain implements the Ethereum Virtual Machine and supports Solidity smart c
 
 ## Building
 
-CaminoEthVm is a dependency of Camino-Node which is used to implement the EVM based Virtual Machine for the Camino C-Chain. In order to run with a local version of CaminoEthVm, users must update their CaminoEthVm dependency within Camino-Node to point to their local CaminoEthVm directory. If CaminoEthVm and Caino-Node are at the standard location within your GOPATH, this will look like the following:
+CaminoEthVm is a dependency of Camino-Node which is used to implement the EVM based Virtual Machine for the Camino C-Chain. In order to run with a local version of CaminoEthVm, users must update their CaminoEthVm dependency within Camino-Node to point to their local CaminoEthVm directory. If CaminoEthVm and Camino-Node are at the standard location within your GOPATH, this will look like the following:
 
 ```bash
 cd $GOPATH/src/github.com/chain4travel/camino-node
-go mod edit -replace github.com/chain4travel/caminoethvm=../caminoethvm
+go mod edit -replace github.com/ava-labs/coreth=../caminoethvm
 ```
 
 Note: the C-Chain originally ran in a separate process from the main Camino-Node process and communicated with it over a local gRPC connection. When this was the case, Camino-Node's build script would download CaminoEthVm, compile it, and place the binary into the `camino-node/build/plugins` directory.

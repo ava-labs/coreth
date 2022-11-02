@@ -18,7 +18,7 @@ WORKDIR $GOPATH/src/github.com/chain4travel/caminogo
 # Run go mod download here to improve caching of CaminoGo specific depednencies
 RUN go mod download
 # Replace the coreth dependency
-RUN go mod edit -replace github.com/chain4travel/caminoethvm=../caminoethvm
+RUN go mod edit -replace github.com/ava-labs/coreth=../caminoethvm
 RUN go mod download && go mod tidy -compat=1.18
 
 # Build the CaminoGo binary with local version of caminoethvm.

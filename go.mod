@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.9.1-0.20221020192610-3761bc705fbf
+	github.com/ava-labs/avalanchego v1.9.1
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
@@ -143,4 +143,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/ava-labs/avalanchego => ../caminogo
+replace github.com/ava-labs/avalanchego => github.com/chain4travel/caminogo v0.3.0-alpha1
+
+replace github.com/ava-labs/avalanche-ledger-go => github.com/chain4travel/camino-ledger-go v0.0.10-c4t2

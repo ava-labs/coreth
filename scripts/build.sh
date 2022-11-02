@@ -42,4 +42,4 @@ fi
 
 # Build Caminoethvm, which is run as a subprocess
 echo "Building Caminoethvm Version: $caminoethvm_tag; GitCommit: $caminoethvm_commit"
-go build -ldflags "-X github.com/chain4travel/caminoethvm/plugin/evm.GitCommit=$caminoethvm_short_commit -X github.com/chain4travel/caminoethvm/plugin/evm.Version=$caminoethvm_tag" -o "$binary_path" "plugin/"*.go
+go build -ldflags "-X github.com/ava-labs/coreth/plugin/evm.GitCommit=$caminoethvm_short_commit -X github.com/ava-labs/coreth/plugin/evm.Version=$caminoethvm_tag" -o "$binary_path" "plugin/"*.go
