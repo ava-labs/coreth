@@ -28,7 +28,7 @@ func NewCaminoBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockVal
 func (bv blockValidatorCamino) SyntacticVerify(b *Block, rules params.Rules) error {
 	// Use avalanche verification for old blocks
 	if !rules.IsSunrisePhase0 {
-		return bv.SyntacticVerify(b, rules)
+		return bv.avalancheBlockValidator.SyntacticVerify(b, rules)
 	}
 
 	if b == nil || b.ethBlock == nil {
