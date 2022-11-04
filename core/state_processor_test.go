@@ -326,7 +326,6 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		UncleHash: types.EmptyUncleHash,
 	}
 	if config.IsApricotPhase3(new(big.Int).SetUint64(header.Time)) {
-		// ToDo: AdminController
 		header.Extra, header.BaseFee, _ = dummy.CalcBaseFee(config, nil, parent.Header(), header.Time)
 	}
 	if config.IsApricotPhase4(new(big.Int).SetUint64(header.Time)) {

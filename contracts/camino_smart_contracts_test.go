@@ -1,31 +1,32 @@
 // Copyright (C) 2022, Chain4Travel AG. All rights reserved.
-//
-// This file is a derived work, based on ava-labs code whose
-// original notices appear below.
-//
-// It is distributed under the same license conditions as the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********************************************************
-
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package contracts
 
 import (
+	"crypto/rand"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+	"github.com/ava-labs/coreth/accounts/keystore"
+	"github.com/ava-labs/coreth/consensus/dummy"
 	admin "github.com/ava-labs/coreth/contracts/build_contracts/admin/src"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/eth/ethadmin"
+	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/node"
 
 	"github.com/ava-labs/coreth/params"
 )
@@ -42,12 +43,14 @@ var (
 	gasFeeKey, _    = crypto.HexToECDSA("04214cc61e1feaf005aa25b7771d33ca5c4aea959d21fe9a1429f822fa024171")
 	blacklistKey, _ = crypto.HexToECDSA("b32d5aa5b8f4028218538c8c5b14b5c14f3f2e35b236e4bbbff09b669e69e46c")
 	dummyKey, _     = crypto.HexToECDSA("62802c57c0e3c24ae0ce354f7d19f7659ddbe506547b00e9e6a722980d2fed3d")
+	blackHoleKey, _ = crypto.HexToECDSA("50cdff9c21002158e2a18b73c2504f8982332e05b5c3b26d3cffdd2f1291796a")
 
 	adminAddr     = crypto.PubkeyToAddress(adminKey.PublicKey)
 	kycAddr       = crypto.PubkeyToAddress(kycKey.PublicKey)
 	gasFeeAddr    = crypto.PubkeyToAddress(gasFeeKey.PublicKey)
 	blacklistAddr = crypto.PubkeyToAddress(blacklistKey.PublicKey)
 	dummyAddr     = crypto.PubkeyToAddress(dummyKey.PublicKey)
+	blackholeAddr = crypto.PubkeyToAddress(blackHoleKey.PublicKey)
 
 	AdminProxyAddr = common.HexToAddress("0x010000000000000000000000000000000000000a")
 
@@ -56,6 +59,10 @@ var (
 	KYC_ROLE       = big.NewInt(4)
 	BLACKLIST_ROLE = big.NewInt(8)
 )
+
+type ETHChain struct {
+	backend *eth.Ethereum
+}
 
 func TestAdminRoleFunctions(t *testing.T) {
 	contractAddr := AdminProxyAddr
@@ -312,6 +319,123 @@ func TestDummySession(t *testing.T) {
 
 	_, err = dummySession.GrantRole(dummyAddr, ADMIN_ROLE)
 	assert.EqualError(t, err, errAccessDeniedMsg)
+}
+
+func TestEthAdmin(t *testing.T) {
+	contractAddr := AdminProxyAddr
+
+	// Initialize TransactOpts for each key
+	gasFeeOpts, err := bind.NewKeyedTransactorWithChainID(gasFeeKey, big.NewInt(1337))
+	assert.NoError(t, err)
+
+	// Generate GenesisAlloc
+	alloc := makeGenesisAllocation()
+
+	// Generate SimulatedBackend
+	sim := backends.NewSimulatedBackendWithInitialAdmin(alloc, gasLimit, gasFeeAddr)
+	defer func() {
+		err := sim.Close()
+		assert.NoError(t, err)
+	}()
+
+	sim.Commit(true)
+
+	// Create a bew Eth chain to generate an AdminController from its backend
+	// Simulated backed will not do
+	ethChain := newETHChain(t)
+
+	ac := ethadmin.NewController(ethChain.backend.APIBackend)
+	sim.Blockchain().SetAdminController(ac)
+
+	latestHeader, state := getLatestHeaderAndState(t, sim)
+
+	bf := ac.GetFixedBaseFee(latestHeader, state)
+	assert.EqualValues(t, big.NewInt(0), big.NewInt(int64(bf.Cmp(big.NewInt(int64(params.SunrisePhase0BaseFee))))))
+
+	adminContract, err := admin.NewBuild(contractAddr, sim)
+	assert.NoError(t, err)
+
+	// BuildSession Initialization
+	gasFeeSession := admin.BuildSession{Contract: adminContract, TransactOpts: *gasFeeOpts}
+
+	// Add Gas Fee Role in the address
+	_, err = gasFeeSession.GrantRole(gasFeeAddr, GAS_FEE_ROLE)
+	assert.NoError(t, err)
+
+	sim.Commit(true)
+
+	_, err = gasFeeSession.SetBaseFee(big.NewInt(1))
+	assert.NoError(t, err)
+
+	sim.Commit(true)
+
+	bf = ac.GetFixedBaseFee(latestHeader, state)
+	// Despite the fact that the base fee changed, the Admin Controller still tries to get it from the previous role.
+	// Therefore, it should return the SunrisePhase0BaseFee value
+	assert.EqualValues(t, big.NewInt(0), big.NewInt(int64(bf.Cmp(big.NewInt(int64(params.SunrisePhase0BaseFee))))))
+
+	// Get new block's header
+	latestHeader, state = getLatestHeaderAndState(t, sim)
+
+	bf = ac.GetFixedBaseFee(latestHeader, state)
+
+	// Now with the new block's header, Base Fee should be the new one.
+	assert.EqualValues(t, big.NewInt(1), bf)
+}
+
+func getLatestHeaderAndState(t *testing.T, sim *backends.SimulatedBackend) (*types.Header, *state.StateDB) {
+	latestHeader := sim.Blockchain().LastAcceptedBlock().Header()
+	state, err := sim.Blockchain().State()
+	assert.NoError(t, err)
+
+	return latestHeader, state
+}
+
+// newETHChain creates an Ethereum blockchain with the given configs.
+func newETHChain(t *testing.T) *ETHChain {
+	chainID := big.NewInt(1)
+	initialBalance := big.NewInt(1000000000000000000)
+
+	fundedKey, err := keystore.NewKey(rand.Reader)
+	assert.NoError(t, err)
+
+	// configure the chain
+	config := ethconfig.NewDefaultConfig()
+	chainConfig := &params.ChainConfig{
+		ChainID:             chainID,
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+	}
+
+	config.Genesis = &core.Genesis{
+		Config:     chainConfig,
+		Nonce:      0,
+		Number:     0,
+		ExtraData:  hexutil.MustDecode("0x00"),
+		GasLimit:   gasLimit,
+		Difficulty: big.NewInt(0),
+		Alloc:      core.GenesisAlloc{fundedKey.Address: {Balance: initialBalance}},
+	}
+
+	node, err := node.New(&node.Config{})
+	assert.NoError(t, err)
+
+	backend, err := eth.New(node, &config, new(dummy.ConsensusCallbacks), rawdb.NewMemoryDatabase(), eth.DefaultSettings, common.Hash{}, &mockable.Clock{})
+	assert.NoError(t, err)
+
+	chain := &ETHChain{backend: backend}
+	backend.SetEtherbase(blackholeAddr)
+
+	return chain
 }
 
 func makeGenesisAllocation() core.GenesisAlloc {
