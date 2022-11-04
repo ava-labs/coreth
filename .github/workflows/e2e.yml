@@ -3,7 +3,7 @@ on:
   push:
     branches-ignore: ["*"]
 
-jjobs:
+jobs:
   lint:
     name: Lint
     runs-on: ubuntu-18.04
