@@ -72,7 +72,7 @@ jobs:
     - name: change caminogo dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
       run: |
-        go mod edit -replace github.com/chain4travel/caminogo=./caminogo
+        go mod edit -replace github.com/ava-labs/avalanchego=./caminogo
         go mod tidy
     - run: go mod download
       shell: bash
