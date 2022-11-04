@@ -4,51 +4,55 @@ on:
     branches:
       - chain4travel
   pull_request:
-    branches:
-      - chain4travel
   workflow_dispatch:
     inputs:
-      caminogoRepo:
-        description: 'caminogo github repository'
-        required: true
-        default: 'chain4travel/caminogo'
-      caminogoBranch:
-        description: 'caminogo branch'
+      caminoethvmBranch:
+        description: 'caminoethvm branch'
         required: true
         default: 'chain4travel'
+      caminogoBranch:
+        description: 'caminogo branch'
+        required: false
+        default: ''
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v3
-      - name: check out ${{ github.event.inputs.caminogoRepo }} ${{ github.event.inputs.caminogoBranch }}
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ github.event.inputs.caminogoRepo }}
-          ref: ${{ github.event.inputs.caminogoBranch }}
-          path: caminogo
-          token: ${{ secrets.CAMINO_PAT }}
-      - uses: actions/setup-go@v2
-        with:
-          go-version: 1.18
-      - name: change caminogo dep
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          go mod edit -replace github.com/chain4travel/caminogo=./caminogo
-          go mod tidy
-          go clean -modcache # avoid conflicts with the golangci-lint-action cache
-      - run: ./scripts/lint_allowed_geth_imports.sh
-        shell: bash
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.47
-          working-directory: .
-          args: --timeout 3m
-          skip-go-installation: true
+    - name: check out
+      if: ${{ github.event_name != 'workflow_dispatch' }}
+      uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.caminoethvmBranch }}
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.caminoethvmBranch }}
+    - name: check out ${{ github.event.inputs.caminogoBranch }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.caminogoBranch != '' }}
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.caminogoBranch }}
+        path: caminogo
+        token: ${{ secrets.CAMINO_PAT }}
+    - uses: actions/setup-go@v2
+      with:
+        go-version: 1.18
+    - name: change caminogo dep
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.caminogoBranch != '' }}
+      run: |
+        go mod edit -replace github.com/ava-labs/avalanchego=./caminogo
+        go mod tidy
+        go clean -modcache # avoid conflicts with the golangci-lint-action cache
+    - run: ./scripts/lint_allowed_geth_imports.sh
+      shell: bash
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: v1.47
+        working-directory: .
+        args: --timeout 3m
+        skip-go-installation: true
   test:
     name: Golang Unit Tests v${{ matrix.go }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -57,12 +61,18 @@ jobs:
         go: ['1.18']
         os: [macos-11.0, ubuntu-18.04]
     steps:
-    - uses: actions/checkout@v3
-    - name: check out ${{ github.event.inputs.caminogoRepo }} ${{ github.event.inputs.caminogoBranch }}
+    - name: check out
+      if: ${{ github.event_name != 'workflow_dispatch' }}
+      uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.caminoethvmBranch }}
       if: ${{ github.event_name == 'workflow_dispatch' }}
       uses: actions/checkout@v3
       with:
-        repository: ${{ github.event.inputs.caminogoRepo }}
+        ref: ${{ github.event.inputs.caminoethvmBranch }}
+    - name: check out ${{ github.event.inputs.caminogoBranch }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.caminogoBranch != '' }}
+      uses: actions/checkout@v3
+      with:
         ref: ${{ github.event.inputs.caminogoBranch }}
         path: caminogo
         token: ${{ secrets.CAMINO_PAT }}
@@ -70,7 +80,7 @@ jobs:
       with:
         go-version: ${{ matrix.go }}
     - name: change caminogo dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.caminogoBranch != '' }}
       run: |
         go mod edit -replace github.com/ava-labs/avalanchego=./caminogo
         go mod tidy
@@ -90,12 +100,19 @@ jobs:
         go: ['1.18']
         os: [ubuntu-20.04]
     steps:
-    - uses: actions/checkout@v3
-    - name: check out ${{ github.event.inputs.caminogoRepo }} ${{ github.event.inputs.caminogoBranch }}
+    - name: check out
+      if: ${{ github.event_name != 'workflow_dispatch' }}
+      uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.caminoethvmBranch }}
       if: ${{ github.event_name == 'workflow_dispatch' }}
       uses: actions/checkout@v3
       with:
-        repository: ${{ github.event.inputs.caminogoRepo }}
+        ref: ${{ github.event.inputs.caminoethvmBranch }}
+    - uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.caminogoBranch }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.caminogoBranch != '' }}
+      uses: actions/checkout@v3
+      with:
         ref: ${{ github.event.inputs.caminogoBranch }}
         path: caminogo
         token: ${{ secrets.CAMINO_PAT }}
@@ -103,9 +120,9 @@ jobs:
       with:
         go-version: ${{ matrix.go }}
     - name: change caminogo dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.caminogoBranch != '' }}
       run: |
-        go mod edit -replace github.com/chain4travel/caminogo=./caminogo
+        go mod edit -replace github.com/ava-labs/avalanchego=./caminogo
         go mod tidy
     - run: go mod download
       shell: bash
