@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
@@ -95,7 +96,7 @@ func NewFullFaker() *DummyEngine {
 	}
 }
 
-func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
+func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, ctrl admin.AdminController, header *types.Header, parent *types.Header) error {
 	timestamp := new(big.Int).SetUint64(header.Time)
 
 	// Verify that the gas limit is <= 2^63-1
@@ -131,7 +132,7 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 	} else {
 		// Verify baseFee and rollupWindow encoding as part of header verification
 		// starting in AP3
-		expectedRollupWindowBytes, expectedBaseFee, err := CalcBaseFee(config, parent, header.Time)
+		expectedRollupWindowBytes, expectedBaseFee, err := CalcBaseFee(config, ctrl, parent, header.Time)
 		if err != nil {
 			return fmt.Errorf("failed to calculate base fee: %w", err)
 		}
@@ -219,7 +220,7 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header 
 		}
 	}
 	// Ensure gas-related header fields are correct
-	if err := self.verifyHeaderGasFields(config, header, parent); err != nil {
+	if err := self.verifyHeaderGasFields(config, chain.AdminController(), header, parent); err != nil {
 		return err
 	}
 	// Verify the header's timestamp

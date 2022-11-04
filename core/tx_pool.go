@@ -47,6 +47,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
@@ -165,6 +166,7 @@ const (
 // blockChain provides the state of blockchain and current gas limit to do
 // some pre checks in tx pool and event subscribers.
 type blockChain interface {
+	AdminController() admin.AdminController
 	CurrentBlock() *types.Block
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
@@ -367,8 +369,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	pool.wg.Add(1)
 	go pool.loop()
 
-	pool.startPeriodicFeeUpdate()
-
+	if !chainconfig.IsSunrisePhase0(new(big.Int).SetUint64(chain.CurrentBlock().Header().Time)) {
+		pool.startPeriodicFeeUpdate()
+	}
 	return pool
 }
 
@@ -1285,7 +1288,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil && pool.chainconfig.IsApricotPhase3(new(big.Int).SetUint64(reset.newHead.Time)) {
-			_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, reset.newHead, uint64(time.Now().Unix()))
+			_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, pool.chain.AdminController(), reset.newHead, uint64(time.Now().Unix()))
 			if err == nil {
 				pool.priced.SetBaseFee(baseFeeEstimate)
 			}
@@ -1424,7 +1427,17 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.eip1559 = pool.chainconfig.IsApricotPhase3(timestamp)
 	if pool.chainconfig.IsSunrisePhase0(timestamp) {
 		pool.fixedBaseFee = true
-		pool.minimumFee = new(big.Int).SetUint64(params.SunrisePhase0BaseFee)
+		var newMinimumFee *big.Int
+		if ctrl := pool.chain.AdminController(); ctrl != nil {
+			newMinimumFee = ctrl.GetFixedBaseFee(newHead, statedb)
+		} else {
+			newMinimumFee = new(big.Int).SetUint64(params.SunrisePhase0BaseFee)
+		}
+		if pool.minimumFee == nil || newMinimumFee.Cmp(pool.minimumFee) != 0 {
+			pool.minimumFee = newMinimumFee
+			// ctor or pool.mu should hold the lock
+			pool.priced.SetBaseFee(newMinimumFee)
+		}
 	}
 }
 
@@ -1732,7 +1745,7 @@ func (pool *TxPool) updateBaseFee() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, pool.currentHead, uint64(time.Now().Unix()))
+	_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, pool.chain.AdminController(), pool.currentHead, uint64(time.Now().Unix()))
 	if err == nil {
 		pool.priced.SetBaseFee(baseFeeEstimate)
 	} else {
