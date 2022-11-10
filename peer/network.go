@@ -279,6 +279,11 @@ func (n *network) Gossip(gossip []byte) error {
 	return n.appSender.SendAppGossip(gossip)
 }
 
+// Gossip sends given gossip message to peers specified by [nodeIDs]
+func (n *network) GossipSpecific(gossip []byte, nodeIDs ids.NodeIDSet) error {
+	return n.appSender.SendAppGossipSpecific(nodeIDs, gossip)
+}
+
 // AppGossip is called by avalanchego -> VM when there is an incoming AppGossip from a peer
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error if request could not be parsed as message.Request or when the requestHandler returns an error
