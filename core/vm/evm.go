@@ -155,6 +155,12 @@ type BlockContext struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
+
+	FeeRewardMinAmountToExport uint64
+	FeeRewardRate              uint64
+	FeeRewardExportAddress     common.Address
+	IncentivePoolRewardRate    uint64
+	IncentivePoolRewardAddress common.Address
 }
 
 func (b *BlockContext) Number() *big.Int {

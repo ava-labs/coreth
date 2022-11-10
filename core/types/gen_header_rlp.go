@@ -42,6 +42,11 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
 	w.WriteBytes(obj.ExtDataHash[:])
+	w.WriteUint64(obj.FeeRewardMinAmountToExport)
+	w.WriteUint64(obj.FeeRewardRate)
+	w.WriteBytes(obj.FeeRewardExportAddress[:])
+	w.WriteUint64(obj.IncentivePoolRewardRate)
+	w.WriteBytes(obj.IncentivePoolRewardAddress[:])
 	_tmp1 := obj.BaseFee != nil
 	_tmp2 := obj.ExtDataGasUsed != nil
 	_tmp3 := obj.BlockGasCost != nil

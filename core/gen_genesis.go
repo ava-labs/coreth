@@ -18,20 +18,25 @@ var _ = (*genesisSpecMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (g Genesis) MarshalJSON() ([]byte, error) {
 	type Genesis struct {
-		Config       *params.ChainConfig                         `json:"config"`
-		Nonce        math.HexOrDecimal64                         `json:"nonce"`
-		Timestamp    math.HexOrDecimal64                         `json:"timestamp"`
-		ExtraData    hexutil.Bytes                               `json:"extraData"`
-		GasLimit     math.HexOrDecimal64                         `json:"gasLimit"   gencodec:"required"`
-		Difficulty   *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
-		Mixhash      common.Hash                                 `json:"mixHash"`
-		Coinbase     common.Address                              `json:"coinbase"`
-		InitialAdmin common.Address                              `json:"initialAdmin"`
-		Alloc        map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Number       math.HexOrDecimal64                         `json:"number"`
-		GasUsed      math.HexOrDecimal64                         `json:"gasUsed"`
-		ParentHash   common.Hash                                 `json:"parentHash"`
-		BaseFee      *math.HexOrDecimal256                       `json:"baseFeePerGas"`
+		Config                     *params.ChainConfig                         `json:"config"`
+		Nonce                      math.HexOrDecimal64                         `json:"nonce"`
+		Timestamp                  math.HexOrDecimal64                         `json:"timestamp"`
+		ExtraData                  hexutil.Bytes                               `json:"extraData"`
+		GasLimit                   math.HexOrDecimal64                         `json:"gasLimit"   gencodec:"required"`
+		Difficulty                 *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
+		Mixhash                    common.Hash                                 `json:"mixHash"`
+		Coinbase                   common.Address                              `json:"coinbase"`
+		InitialAdmin               common.Address                              `json:"initialAdmin"`
+		Alloc                      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
+		FeeRewardMinAmountToExport uint64                                      `json:"feeRewardMinAmountToExport"`
+		FeeRewardExportAddress     common.Address                              `json:"feeRewardExportAddress"`
+		FeeRewardRate              uint64                                      `json:"feeRewardRate"`
+		IncentivePoolRewardRate    uint64                                      `json:"incentivePoolRewardRate"`
+		IncentivePoolRewardAddress common.Address                              `json:"incentivePoolRewardAddress"`
+		Number                     math.HexOrDecimal64                         `json:"number"`
+		GasUsed                    math.HexOrDecimal64                         `json:"gasUsed"`
+		ParentHash                 common.Hash                                 `json:"parentHash"`
+		BaseFee                    *math.HexOrDecimal256                       `json:"baseFeePerGas"`
 	}
 	var enc Genesis
 	enc.Config = g.Config
@@ -49,6 +54,11 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 			enc.Alloc[common.UnprefixedAddress(k)] = v
 		}
 	}
+	enc.FeeRewardMinAmountToExport = g.FeeRewardMinAmountToExport
+	enc.FeeRewardExportAddress = g.FeeRewardExportAddress
+	enc.FeeRewardRate = g.FeeRewardRate
+	enc.IncentivePoolRewardRate = g.IncentivePoolRewardRate
+	enc.IncentivePoolRewardAddress = g.IncentivePoolRewardAddress
 	enc.Number = math.HexOrDecimal64(g.Number)
 	enc.GasUsed = math.HexOrDecimal64(g.GasUsed)
 	enc.ParentHash = g.ParentHash
@@ -59,20 +69,25 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (g *Genesis) UnmarshalJSON(input []byte) error {
 	type Genesis struct {
-		Config       *params.ChainConfig                         `json:"config"`
-		Nonce        *math.HexOrDecimal64                        `json:"nonce"`
-		Timestamp    *math.HexOrDecimal64                        `json:"timestamp"`
-		ExtraData    *hexutil.Bytes                              `json:"extraData"`
-		GasLimit     *math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
-		Difficulty   *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
-		Mixhash      *common.Hash                                `json:"mixHash"`
-		Coinbase     *common.Address                             `json:"coinbase"`
-		InitialAdmin *common.Address                             `json:"initialAdmin"`
-		Alloc        map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Number       *math.HexOrDecimal64                        `json:"number"`
-		GasUsed      *math.HexOrDecimal64                        `json:"gasUsed"`
-		ParentHash   *common.Hash                                `json:"parentHash"`
-		BaseFee      *math.HexOrDecimal256                       `json:"baseFeePerGas"`
+		Config                     *params.ChainConfig                         `json:"config"`
+		Nonce                      *math.HexOrDecimal64                        `json:"nonce"`
+		Timestamp                  *math.HexOrDecimal64                        `json:"timestamp"`
+		ExtraData                  *hexutil.Bytes                              `json:"extraData"`
+		GasLimit                   *math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
+		Difficulty                 *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
+		Mixhash                    *common.Hash                                `json:"mixHash"`
+		Coinbase                   *common.Address                             `json:"coinbase"`
+		InitialAdmin               *common.Address                             `json:"initialAdmin"`
+		Alloc                      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
+		FeeRewardMinAmountToExport *uint64                                     `json:"feeRewardMinAmountToExport"`
+		FeeRewardExportAddress     *common.Address                             `json:"feeRewardExportAddress"`
+		FeeRewardRate              *uint64                                     `json:"feeRewardRate"`
+		IncentivePoolRewardRate    *uint64                                     `json:"incentivePoolRewardRate"`
+		IncentivePoolRewardAddress *common.Address                             `json:"incentivePoolRewardAddress"`
+		Number                     *math.HexOrDecimal64                        `json:"number"`
+		GasUsed                    *math.HexOrDecimal64                        `json:"gasUsed"`
+		ParentHash                 *common.Hash                                `json:"parentHash"`
+		BaseFee                    *math.HexOrDecimal256                       `json:"baseFeePerGas"`
 	}
 	var dec Genesis
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -113,6 +128,21 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	g.Alloc = make(GenesisAlloc, len(dec.Alloc))
 	for k, v := range dec.Alloc {
 		g.Alloc[common.Address(k)] = v
+	}
+	if dec.FeeRewardMinAmountToExport != nil {
+		g.FeeRewardMinAmountToExport = *dec.FeeRewardMinAmountToExport
+	}
+	if dec.FeeRewardExportAddress != nil {
+		g.FeeRewardExportAddress = *dec.FeeRewardExportAddress
+	}
+	if dec.FeeRewardRate != nil {
+		g.FeeRewardRate = *dec.FeeRewardRate
+	}
+	if dec.IncentivePoolRewardRate != nil {
+		g.IncentivePoolRewardRate = *dec.IncentivePoolRewardRate
+	}
+	if dec.IncentivePoolRewardAddress != nil {
+		g.IncentivePoolRewardAddress = *dec.IncentivePoolRewardAddress
 	}
 	if dec.Number != nil {
 		g.Number = uint64(*dec.Number)

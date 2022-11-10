@@ -76,6 +76,17 @@ type Genesis struct {
 	InitialAdmin common.Address      `json:"initialAdmin"`
 	Alloc        GenesisAlloc        `json:"alloc"      gencodec:"required"`
 
+	// Fee collection parameters
+	FeeRewardMinAmountToExport uint64         `json:"feeRewardMinAmountToExport"`
+	FeeRewardExportAddress     common.Address `json:"feeRewardExportAddress"`
+
+	// Assumption: `FeeRewardRate` is denominated to uint64 from floating point ratio (ratio * evm.percentDenominator)
+	FeeRewardRate uint64 `json:"feeRewardRate"`
+
+	// Assumption: `IncentivePoolRewardRate` is denominated to uint64 from floating point ratio (ratio * evm.percentDenominator)
+	IncentivePoolRewardRate    uint64         `json:"incentivePoolRewardRate"`
+	IncentivePoolRewardAddress common.Address `json:"incentivePoolRewardAddress"`
+
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
 	Number     uint64      `json:"number"`
@@ -259,17 +270,22 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 
 	head := &types.Header{
-		Number:     new(big.Int).SetUint64(g.Number),
-		Nonce:      types.EncodeNonce(g.Nonce),
-		Time:       g.Timestamp,
-		ParentHash: g.ParentHash,
-		Extra:      g.ExtraData,
-		GasLimit:   g.GasLimit,
-		GasUsed:    g.GasUsed,
-		BaseFee:    g.BaseFee,
-		Difficulty: g.Difficulty,
-		MixDigest:  g.Mixhash,
-		Coinbase:   g.Coinbase,
+		Number:                     new(big.Int).SetUint64(g.Number),
+		Nonce:                      types.EncodeNonce(g.Nonce),
+		Time:                       g.Timestamp,
+		ParentHash:                 g.ParentHash,
+		Extra:                      g.ExtraData,
+		GasLimit:                   g.GasLimit,
+		GasUsed:                    g.GasUsed,
+		BaseFee:                    g.BaseFee,
+		Difficulty:                 g.Difficulty,
+		MixDigest:                  g.Mixhash,
+		Coinbase:                   g.Coinbase,
+		FeeRewardMinAmountToExport: g.FeeRewardMinAmountToExport,
+		FeeRewardExportAddress:     g.FeeRewardExportAddress,
+		FeeRewardRate:              g.FeeRewardRate,
+		IncentivePoolRewardAddress: g.IncentivePoolRewardAddress,
+		IncentivePoolRewardRate:    g.IncentivePoolRewardRate,
 	}
 
 	// Configure any stateful precompiles that should be enabled in the genesis.

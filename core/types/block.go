@@ -97,6 +97,13 @@ type Header struct {
 	Nonce       BlockNonce     `json:"nonce"`
 	ExtDataHash common.Hash    `json:"extDataHash"      gencodec:"required"`
 
+	// Fee collection parameters
+	FeeRewardMinAmountToExport uint64         `json:"feeRewardMinAmountToExport" gencodec:"required"`
+	FeeRewardRate              uint64         `json:"feeRewardRate" gencodec:"required"`
+	FeeRewardExportAddress     common.Address `json:"feeRewardExportAddress" gencodec:"required"`
+	IncentivePoolRewardRate    uint64         `json:"incentivePoolRewardRate" gencodec:"required"`
+	IncentivePoolRewardAddress common.Address `json:"incentivePoolRewardAddress" gencodec:"required"`
+
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 

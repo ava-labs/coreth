@@ -63,17 +63,22 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
 	return vm.BlockContext{
-		CanTransfer:       CanTransfer,
-		CanTransferMC:     CanTransferMC,
-		Transfer:          Transfer,
-		TransferMultiCoin: TransferMultiCoin,
-		GetHash:           GetHashFn(header, chain),
-		Coinbase:          beneficiary,
-		BlockNumber:       new(big.Int).Set(header.Number),
-		Time:              new(big.Int).SetUint64(header.Time),
-		Difficulty:        new(big.Int).Set(header.Difficulty),
-		BaseFee:           baseFee,
-		GasLimit:          header.GasLimit,
+		CanTransfer:                CanTransfer,
+		CanTransferMC:              CanTransferMC,
+		Transfer:                   Transfer,
+		TransferMultiCoin:          TransferMultiCoin,
+		GetHash:                    GetHashFn(header, chain),
+		Coinbase:                   beneficiary,
+		BlockNumber:                new(big.Int).Set(header.Number),
+		Time:                       new(big.Int).SetUint64(header.Time),
+		Difficulty:                 new(big.Int).Set(header.Difficulty),
+		BaseFee:                    baseFee,
+		GasLimit:                   header.GasLimit,
+		FeeRewardMinAmountToExport: header.FeeRewardMinAmountToExport,
+		FeeRewardExportAddress:     header.FeeRewardExportAddress,
+		FeeRewardRate:              header.FeeRewardRate,
+		IncentivePoolRewardAddress: header.IncentivePoolRewardAddress,
+		IncentivePoolRewardRate:    header.IncentivePoolRewardRate,
 	}
 }
 
