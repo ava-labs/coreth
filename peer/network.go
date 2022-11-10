@@ -50,6 +50,9 @@ type Network interface {
 	// Gossip sends given gossip message to peers
 	Gossip(gossip []byte) error
 
+	// Gossip sends given gossip message to peers specified by [nodeIDs]
+	GossipSpecific(gossip []byte, nodeIDs ids.NodeIDSet) error
+
 	// Shutdown stops all peer channel listeners and marks the node to have stopped
 	// n.Start() can be called again but the peers will have to be reconnected
 	// by calling OnPeerConnected for each peer

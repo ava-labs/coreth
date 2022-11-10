@@ -86,6 +86,11 @@ func (c *client) Gossip(gossip []byte) error {
 	return c.network.Gossip(gossip)
 }
 
+func (c *client) GossipSpecific(gossip []byte, nodeIDs ids.NodeIDSet) error {
+	return c.network.GossipSpecific(gossip, nodeIDs)
+}
+
+
 func (c *client) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	c.network.TrackBandwidth(nodeID, bandwidth)
 }
