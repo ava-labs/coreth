@@ -1095,7 +1095,7 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 
 // VerifyHeightIndex always returns a nil error since the index is maintained by
 // vm.blockChain.
-func (vm *VM) VerifyHeightIndex() error {
+func (vm *VM) VerifyHeightIndex(context.Context) error {
 	return nil
 }
 
@@ -1107,7 +1107,7 @@ func (vm *VM) VerifyHeightIndex() error {
 // Note: the engine assumes that if a block is not found at [blkHeight], then
 // [database.ErrNotFound] will be returned. This indicates that the VM has state synced
 // and does not have all historical blocks available.
-func (vm *VM) GetBlockIDAtHeight(blkHeight uint64) (ids.ID, error) {
+func (vm *VM) GetBlockIDAtHeight(_ context.Context, blkHeight uint64) (ids.ID, error) {
 	ethBlock := vm.blockChain.GetBlockByNumber(blkHeight)
 	if ethBlock == nil {
 		return ids.ID{}, database.ErrNotFound
