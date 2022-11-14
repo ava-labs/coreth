@@ -58,7 +58,7 @@ var (
 	// CaminoChainID ...
 	CaminoChainID = big.NewInt(500)
 	// CaminoChainID ...
-	ColumbusChainID = big.NewInt(502)
+	ColumbusChainID = big.NewInt(501)
 
 	errNonGenesisForkByHeight = errors.New("coreth only supports forking by height at the genesis block")
 )
