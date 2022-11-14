@@ -4,6 +4,7 @@
 package contracts
 
 import (
+	"context"
 	"crypto/rand"
 	"math/big"
 	"testing"
@@ -32,6 +33,8 @@ import (
 )
 
 var (
+	ctx = context.Background()
+
 	gasLimit = uint64(1)
 
 	errAccessDeniedMsg = "execution reverted: Access denied"
@@ -67,6 +70,9 @@ type ETHChain struct {
 func TestAdminRoleFunctions(t *testing.T) {
 	contractAddr := AdminProxyAddr
 
+	// Initialize FilterOpts for event filtering
+	filterOpts := bind.FilterOpts{Context: ctx, Start: 1, End: nil}
+
 	// Initialize TransactOpts for each key
 	adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(1337))
 	assert.NoError(t, err)
@@ -96,7 +102,7 @@ func TestAdminRoleFunctions(t *testing.T) {
 	assert.True(t, adminRole)
 
 	// Initialize role in every address (test GrantRole function)
-	addAndVerifyRoles(t, adminSession, sim)
+	expectedRoles := addAndVerifyRoles(t, adminSession, sim)
 
 	// Test Revoke Role
 	// Delete blacklist role from blacklist address
@@ -119,19 +125,53 @@ func TestAdminRoleFunctions(t *testing.T) {
 	role, err = adminSession.GetRoles(blacklistAddr)
 	assert.NoError(t, err)
 	assert.EqualValues(t, BLACKLIST_ROLE, role)
+	expectedRoles = append(expectedRoles, role)
 
 	// Test Upgrade function
 	// Initially, with an non-contract address. Should fail.
 	_, err = adminSession.Upgrade(adminAddr)
 	assert.EqualError(t, err, errNotContractMsg)
 
-	// Lastly, with a contract address
+	// Then, with a contract address
 	_, err = adminSession.Upgrade(contractAddr)
 	assert.NoError(t, err)
+
+	// Event Testing
+	dropCounter := 0 // Counter of the total drop events
+	dropItr, err := adminContract.FilterDropRole(&filterOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, dropItr)
+
+	for dropItr.Next() {
+		dropCounter++
+		event := dropItr.Event
+		assert.NotNil(t, event)
+		assert.EqualValues(t, event.Role, BLACKLIST_ROLE)
+	}
+	// Only one drop event has been emitted (Revoke Role) therefore, counter's value should be 1
+	assert.EqualValues(t, 1, dropCounter)
+
+	setCounter := 0 // Counter of the total set role events
+	setItr, err := adminContract.FilterSetRole(&filterOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, setItr)
+
+	for setItr.Next() {
+		event := setItr.Event
+		assert.NotNil(t, event)
+		assert.EqualValues(t, event.Role, expectedRoles[setCounter])
+		setCounter++
+	}
+	// Four Set Roles events have been emitted in total
+	// (including the events in addAndVerifyRoles function) therefore, counter's value should be 4
+	assert.EqualValues(t, 4, setCounter)
 }
 
 func TestKycRoleFunctions(t *testing.T) {
 	contractAddr := AdminProxyAddr
+
+	// Initialize FilterOpts for event filtering
+	filterOpts := bind.FilterOpts{Context: ctx, Start: 1, End: nil}
 
 	// Initialize TransactOpts for each key
 	kycOpts, err := bind.NewKeyedTransactorWithChainID(kycKey, big.NewInt(1337))
@@ -178,10 +218,44 @@ func TestKycRoleFunctions(t *testing.T) {
 	st, err = kycSession.GetKycState(kycAddr)
 	assert.NoError(t, err)
 	assert.EqualValues(t, big.NewInt(1), st)
+
+	// Event Testing
+	setCounter := 0 // Counter of the total set role events
+	setItr, err := adminContract.FilterSetRole(&filterOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, setItr)
+
+	for setItr.Next() {
+		setCounter++
+		event := setItr.Event
+		assert.NotNil(t, event)
+		assert.EqualValues(t, event.Role, KYC_ROLE)
+	}
+	// Only one set role event has been emitted therefore, counter's value should be 1
+	assert.EqualValues(t, 1, setCounter)
+
+	kycCounter := 0 // Counter of the total set role events
+	kycAddresses := make([]common.Address, 1)
+	kycAddresses = append(kycAddresses, kycAddr)
+	kycItr, err := adminContract.FilterKycStateChanged(&filterOpts, kycAddresses)
+	assert.NoError(t, err)
+	assert.NotNil(t, kycItr)
+
+	for kycItr.Next() {
+		kycCounter++
+		event := kycItr.Event
+		assert.NotNil(t, event)
+		assert.EqualValues(t, event.NewState, big.NewInt(1))
+	}
+	// Only one KYC State Changed event has been emitted therefore, counter's value should be 1
+	assert.EqualValues(t, 1, kycCounter)
 }
 
 func TestGasFeeFunctions(t *testing.T) {
 	contractAddr := AdminProxyAddr
+
+	// Initialize FilterOpts for event filtering
+	filterOpts := bind.FilterOpts{Context: ctx, Start: 1, End: nil}
 
 	// Initialize TransactOpts for each key
 	gasFeeOpts, err := bind.NewKeyedTransactorWithChainID(gasFeeKey, big.NewInt(1337))
@@ -228,6 +302,35 @@ func TestGasFeeFunctions(t *testing.T) {
 	bf, err = gasFeeSession.GetBaseFee()
 	assert.NoError(t, err)
 	assert.EqualValues(t, big.NewInt(1), bf)
+
+	// Event Testing
+	setCounter := 0 // Counter of the total set role events
+	setItr, err := adminContract.FilterSetRole(&filterOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, setItr)
+
+	for setItr.Next() {
+		setCounter++
+		event := setItr.Event
+		assert.NotNil(t, event)
+		assert.EqualValues(t, event.Role, GAS_FEE_ROLE)
+	}
+	// Only one set role event has been emitted therefore, counter's value should be 1
+	assert.EqualValues(t, 1, setCounter)
+
+	gasCounter := 0 // Counter of the total set role events
+	gasItr, err := adminContract.FilterGasFeeSet(&filterOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, gasItr)
+
+	for gasItr.Next() {
+		gasCounter++
+		event := gasItr.Event
+		assert.NotNil(t, event)
+		assert.EqualValues(t, event.NewGasFee, big.NewInt(1))
+	}
+	// Only one KYC State Changed event has been emitted therefore, counter's value should be 1
+	assert.EqualValues(t, 1, gasCounter)
 }
 
 func TestBlacklistFunctions(t *testing.T) {
@@ -284,6 +387,9 @@ func TestBlacklistFunctions(t *testing.T) {
 func TestDummySession(t *testing.T) {
 	contractAddr := AdminProxyAddr
 
+	// Initialize FilterOpts for event filtering
+	filterOpts := bind.FilterOpts{Context: ctx, Start: 1, End: nil}
+
 	// Initialize TransactOpts for each key
 	dummyOpts, err := bind.NewKeyedTransactorWithChainID(dummyKey, big.NewInt(1337))
 	assert.NoError(t, err)
@@ -319,6 +425,26 @@ func TestDummySession(t *testing.T) {
 
 	_, err = dummySession.GrantRole(dummyAddr, ADMIN_ROLE)
 	assert.EqualError(t, err, errAccessDeniedMsg)
+
+	// Event Testing
+	// No events have been emitted so normally, nothing should be filtered
+	setItr, err := adminContract.FilterSetRole(&filterOpts)
+	assert.NoError(t, err)
+	assert.False(t, setItr.Next())
+
+	dropItr, err := adminContract.FilterDropRole(&filterOpts)
+	assert.NoError(t, err)
+	assert.False(t, dropItr.Next())
+
+	gasItr, err := adminContract.FilterGasFeeSet(&filterOpts)
+	assert.NoError(t, err)
+	assert.False(t, gasItr.Next())
+
+	kycAddresses := make([]common.Address, 1)
+	kycAddresses = append(kycAddresses, kycAddr)
+	kycItr, err := adminContract.FilterKycStateChanged(&filterOpts, kycAddresses)
+	assert.NoError(t, err)
+	assert.False(t, kycItr.Next())
 }
 
 func TestEthAdmin(t *testing.T) {
@@ -450,7 +576,9 @@ func makeGenesisAllocation() core.GenesisAlloc {
 	return alloc
 }
 
-func addAndVerifyRoles(t *testing.T, adminSession admin.BuildSession, sim *backends.SimulatedBackend) {
+func addAndVerifyRoles(t *testing.T, adminSession admin.BuildSession, sim *backends.SimulatedBackend) []*big.Int {
+	roles := make([]*big.Int, 0)
+
 	// Add and verify Roles
 	_, err := adminSession.GrantRole(kycAddr, KYC_ROLE)
 	assert.NoError(t, err)
@@ -466,15 +594,20 @@ func addAndVerifyRoles(t *testing.T, adminSession admin.BuildSession, sim *backe
 
 	sim.Commit(true)
 
-	gasFeeRole, err := adminSession.GetRoles(gasFeeAddr)
-	assert.NoError(t, err)
-	assert.Equal(t, GAS_FEE_ROLE, gasFeeRole)
-
 	kycRole, err := adminSession.GetRoles(kycAddr)
 	assert.NoError(t, err)
 	assert.Equal(t, KYC_ROLE, kycRole)
+	roles = append(roles, kycRole)
+
+	gasFeeRole, err := adminSession.GetRoles(gasFeeAddr)
+	assert.NoError(t, err)
+	assert.Equal(t, GAS_FEE_ROLE, gasFeeRole)
+	roles = append(roles, gasFeeRole)
 
 	blacklistRole, err := adminSession.GetRoles(blacklistAddr)
 	assert.NoError(t, err)
 	assert.Equal(t, BLACKLIST_ROLE, blacklistRole)
+	roles = append(roles, blacklistRole)
+
+	return roles
 }
