@@ -33,6 +33,7 @@ func init() {
 		c.RegisterType(&secp256k1fx.Credential{}),
 		c.RegisterType(&secp256k1fx.Input{}),
 		c.RegisterType(&secp256k1fx.OutputOwners{}),
+		c.RegisterType(&UnsignedCollectRewardsTx{}),
 		Codec.RegisterCodec(codecVersion, c),
 	)
 

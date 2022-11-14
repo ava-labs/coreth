@@ -148,11 +148,16 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 	}
 	num := parent.Number()
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		GasLimit:   gasLimit,
-		Extra:      nil,
-		Time:       uint64(timestamp),
+		ParentHash:                 parent.Hash(),
+		Number:                     num.Add(num, common.Big1),
+		GasLimit:                   gasLimit,
+		Extra:                      nil,
+		Time:                       uint64(timestamp),
+		FeeRewardExportAddress:     parent.Header().FeeRewardExportAddress,
+		FeeRewardRate:              parent.Header().FeeRewardRate,
+		FeeRewardMinAmountToExport: parent.Header().FeeRewardMinAmountToExport,
+		IncentivePoolRewardAddress: parent.Header().IncentivePoolRewardAddress,
+		IncentivePoolRewardRate:    parent.Header().IncentivePoolRewardRate,
 	}
 	// Set BaseFee and Extra data field if we are post ApricotPhase3
 	bigTimestamp := big.NewInt(timestamp)

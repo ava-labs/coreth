@@ -314,6 +314,9 @@ func calcBlockGasCost(
 	parentBlockGasCost *big.Int,
 	parentTime, currentTime uint64,
 ) *big.Int {
+	//TODO: Make this only when `SunrisePhase0` is set
+	return common.Big0
+
 	// Handle AP3/AP4 boundary by returning the minimum value as the boundary.
 	if parentBlockGasCost == nil {
 		return new(big.Int).Set(minBlockGasCost)

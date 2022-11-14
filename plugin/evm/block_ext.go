@@ -42,15 +42,6 @@ func (b *Block) calculateAndCollectRewards() {
 func (b *Block) calculateRewards(state *state.StateDB) (*RewardCalculation, error) {
 	header := b.ethBlock.Header()
 
-	lastCheckTime := state.GetState(header.Coinbase, Slot0).Big().Uint64()
-	// TODO: remove time checking
-	checkInterval := uint64(0) //header.FeeRewardExportIntervalSeconds
-	log.Info("Time of rewards calculation", "lastCheckTime", lastCheckTime, "blockTime", b.ethBlock.Time())
-
-	if b.ethBlock.Time() < lastCheckTime+checkInterval {
-		return nil, fmt.Errorf("too early to collect fee rewards. Current block time: %d, last check time: %d", b.ethBlock.Time(), lastCheckTime)
-	}
-
 	feesBurned := state.GetBalance(header.Coinbase)
 	validatorRewards := state.GetState(header.Coinbase, Slot1).Big()
 	incentivePoolRewards := state.GetState(header.Coinbase, Slot2).Big()
