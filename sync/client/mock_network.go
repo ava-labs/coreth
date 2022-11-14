@@ -77,6 +77,10 @@ func (t *mockNetwork) Gossip([]byte) error {
 	panic("not implemented") // we don't care about this function for this test
 }
 
+func (t *mockNetwork) GossipSpecific(gossip []byte, nodeIDs ids.NodeIDSet) error {
+	panic("not implemented") // we don't care about this function for this test
+}
+
 func (t *mockNetwork) mockResponse(times uint8, callback func(), response []byte) {
 	t.response = make([][]byte, times)
 	for i := uint8(0); i < times; i++ {

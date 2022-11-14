@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/timer"
@@ -192,7 +193,9 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 					time.Sleep(waitBlockTime)
 					// [GossipEthTxs] will block unless [gossiper.ethTxsToGossipChan] (an
 					// unbuffered channel) is listened on
-					if err := b.gossiper.GossipEthTxs(ethTxsEvent.Txs); err != nil {
+					// Retrieve list of proposer
+					proposers := ids.NewNodeIDSet(50)
+					if err := b.gossiper.GossipEthTxsToNodes(ethTxsEvent.Txs, proposers); err != nil {
 						log.Warn(
 							"failed to gossip new eth transactions",
 							"err", err,
