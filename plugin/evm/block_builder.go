@@ -6,10 +6,10 @@ package evm
 import (
 	"sync"
 	"time"
+	"fmt"
 
 	"github.com/ava-labs/coreth/params"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/timer"
@@ -191,10 +191,16 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 					// Give time for this node to build a block before attempting to
 					// gossip
 					time.Sleep(waitBlockTime)
-					// [GossipEthTxs] will block unless [gossiper.ethTxsToGossipChan] (an
-					// unbuffered channel) is listened on
+
 					// Retrieve list of proposer
-					proposers := ids.NewNodeIDSet(50)
+					proposers, err := b.ctx.ProposerRetriever.GetCurrentProposers()
+					if err != nil {
+						log.Warn(
+							"failed to retrieve list of proposers",
+							"err", err,
+						)			
+					}
+					// Gossip transactions only to list of proposers
 					if err := b.gossiper.GossipEthTxsToNodes(ethTxsEvent.Txs, proposers); err != nil {
 						log.Warn(
 							"failed to gossip new eth transactions",
