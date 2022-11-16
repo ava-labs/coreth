@@ -389,7 +389,7 @@ func (vm *VM) Initialize(
 	}
 
 	var extDataHashes map[common.Hash]common.Hash
-	// Set the chain config for mainnet/fuji chain IDs
+	// Set the chain config for known chain IDs
 	switch {
 	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
 		g.Config = params.AvalancheMainnetChainConfig
@@ -403,6 +403,8 @@ func (vm *VM) Initialize(
 		g.Config = params.CaminoChainConfig
 	case g.Config.ChainID.Cmp(params.ColumbusChainID) == 0:
 		g.Config = params.ColumbusChainConfig
+	case g.Config.ChainID.Cmp(params.KopernikusChainID) == 0:
+		g.Config = params.KopernikusChainConfig
 	}
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
