@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches-ignore: ["*"]
+    branches-ignore: ["**"]
 
 jobs:
   lint:
