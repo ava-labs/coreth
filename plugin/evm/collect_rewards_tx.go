@@ -271,10 +271,6 @@ func (vm *VM) NewCollectRewardsTx(
 		return nil, err
 	}
 
-	log.Info("New CollectRewardsTx created.",
-		"ValidatorRewardExport", calculation.ValidatorRewardToExport,
-	)
-
 	return tx, utx.Verify(vm.ctx, vm.currentRules())
 }
 

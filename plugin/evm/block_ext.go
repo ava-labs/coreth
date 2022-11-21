@@ -23,20 +23,18 @@ import (
 // calculateAndCollectRewards calculates the rewards and issues the CollectRewardsTx
 // Errors are logged and ignored as they are not affecting the other actions
 func (b *Block) calculateAndCollectRewards() {
-	log.Info("In calculateAndCollectRewards", "block", b.ethBlock.NumberU64())
 	state, err := b.vm.blockChain.State()
 	if err == nil {
 		calc, err := b.calculateRewards(state)
-
 		if err != nil {
-			log.Info("Calculation of the rewards skipped", "error", err)
 			return
 		}
+
 		tx, err := b.createReawardsCollectionTx(calc)
 		if err != nil {
 			log.Info("Issuing of the rewards collection skipped", "error", err)
 		} else {
-			log.Info("Issuing of the rewards collection tx", "txID", tx.ID())
+			log.Info("Issuing of the rewards collection tx", "txID", tx.ID(), "rewards to export", calc.ValidatorRewardToExport)
 			b.vm.issueTx(tx, true /*=local*/)
 		}
 	}
