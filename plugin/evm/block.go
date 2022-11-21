@@ -188,6 +188,7 @@ func (b *Block) Accept() error {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
+	b.calculateAndCollectRewards()
 	for _, tx := range b.atomicTxs {
 		// Remove the accepted transaction from the mempool
 		vm.mempool.RemoveTx(tx)

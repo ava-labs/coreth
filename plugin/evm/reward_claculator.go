@@ -27,11 +27,10 @@ const (
 )
 
 var (
-	Slot0 = common.Hash{0x00}
 	Slot1 = common.Hash{0x01}
 	Slot2 = common.Hash{0x02}
 
-	errInvalidRewardCalculation        = errors.New("invalid reward calculation")
+	errZeroRewardCalculated            = errors.New("no rewards collected")
 	errRewardAndAmountToExportMismatch = errors.New("calculated reward differs with amount to export")
 )
 
@@ -41,8 +40,10 @@ type RewardCalculation struct {
 	IncentivePoolRewardAmount *big.Int
 	CoinbaseAmountToSub       *big.Int
 
-	// Needed for validation that calculation can be applied
-	PrevFeesBurned           *big.Int
+	// Needed for validation of the Tx:
+	// Current coinbase balance may differ from the one the Tx was issued with. Here to redo the calculation.
+	PrevFeesBurned *big.Int
+	// have to match the current state, hence no other RewardCollection Tx has been processed in-between.
 	PrevValidatorRewards     *big.Int
 	PrevIncentivePoolRewards *big.Int
 }
@@ -53,7 +54,6 @@ type RewardCalculationResult struct {
 	IncentivePoolRewardAmount common.Hash `serialize:"true" json:"incentivePoolRewardAmount"`
 	CoinbaseAmountToSub       common.Hash `serialize:"true" json:"coinbaseAmountToSub"`
 
-	// Needed for validation that calculation can be applied
 	PrevFeesBurned           common.Hash `serialize:"true" json:"prevFeesBurned"`
 	PrevValidatorRewards     common.Hash `serialize:"true" json:"prevValidatorRewards"`
 	PrevIncentivePoolRewards common.Hash `serialize:"true" json:"prevIncentivePoolRewards"`
@@ -75,7 +75,7 @@ func (rc RewardCalculation) Verify() error {
 	if rc.ValidatorRewardToExport == 0 ||
 		rc.ValidatorRewardAmount.Cmp(common.Big0) == 0 ||
 		rc.IncentivePoolRewardAmount.Cmp(common.Big0) == 0 {
-		return errInvalidRewardCalculation
+		return errZeroRewardCalculated
 	}
 
 	exportAmount := bigDiv(rc.ValidatorRewardAmount, x2cRateUint64).Uint64()

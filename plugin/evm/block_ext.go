@@ -23,12 +23,14 @@ import (
 // calculateAndCollectRewards calculates the rewards and issues the CollectRewardsTx
 // Errors are logged and ignored as they are not affecting the other actions
 func (b *Block) calculateAndCollectRewards() {
+	log.Info("In calculateAndCollectRewards", "block", b.ethBlock.NumberU64())
 	state, err := b.vm.blockChain.State()
 	if err == nil {
 		calc, err := b.calculateRewards(state)
 
 		if err != nil {
 			log.Info("Calculation of the rewards skipped", "error", err)
+			return
 		}
 		tx, err := b.createReawardsCollectionTx(calc)
 		if err != nil {
@@ -39,6 +41,7 @@ func (b *Block) calculateAndCollectRewards() {
 		}
 	}
 }
+
 func (b *Block) calculateRewards(state *state.StateDB) (*RewardCalculation, error) {
 	header := b.ethBlock.Header()
 
@@ -59,7 +62,7 @@ func (b *Block) calculateRewards(state *state.StateDB) (*RewardCalculation, erro
 	}
 
 	if calculation.ValidatorRewardToExport < header.FeeRewardMinAmountToExport {
-		return nil, fmt.Errorf("calculated fee reward amount %d is less than the minimum amount to export", calculation.ValidatorRewardAmount)
+		return nil, fmt.Errorf("calculated fee reward amount %d is less than the minimum amount to export", calculation.ValidatorRewardToExport)
 	}
 
 	return &calculation, nil

@@ -69,7 +69,6 @@ func (tx *UnsignedCollectRewardsTx) Verify(
 	ctx *snow.Context,
 	rules params.Rules,
 ) error {
-	log.Info("Verify...")
 	switch {
 	case tx == nil:
 		return errNilTx
@@ -79,10 +78,7 @@ func (tx *UnsignedCollectRewardsTx) Verify(
 		return errWrongBlockchainID
 	}
 
-	calculation := tx.RewardCalculation.Calculation()
-	log.Info("Sanity check of RC", "txID", tx.ID(), "calc", calculation)
 	if err := tx.RewardCalculation.Verify(); err != nil {
-		log.Info("RewardCollectionTx verification failed", "txID", tx.ID(), "error", err)
 		return err
 	}
 
@@ -94,7 +90,6 @@ func (tx *UnsignedCollectRewardsTx) Verify(
 		return errWrongChainID
 	}
 
-	log.Info("Verify completed")
 	return nil
 }
 
@@ -116,7 +111,6 @@ func (tx *UnsignedCollectRewardsTx) SemanticVerify(
 	_baseFee *big.Int,
 	rules params.Rules,
 ) error {
-	log.Info("SemanticVerify...")
 	if err := tx.Verify(vm.ctx, rules); err != nil {
 		return err
 	}
@@ -129,7 +123,6 @@ func (tx *UnsignedCollectRewardsTx) SemanticVerify(
 
 	calculation := tx.RewardCalculation.Calculation()
 
-	log.Info("SemanticVerify processing tx", "txID", tx.ID().String())
 	currValidatorRewardPayedOut := state.GetState(tx.Coinbase, Slot1).Big()
 	if calculation.PrevValidatorRewards.Cmp(currValidatorRewardPayedOut) != 0 {
 		log.Info("validator rewards mismatch", "prevFeesBurned", calculation.PrevFeesBurned, "currValidatorRewardPayedOut", currValidatorRewardPayedOut)
@@ -142,19 +135,75 @@ func (tx *UnsignedCollectRewardsTx) SemanticVerify(
 		return fmt.Errorf("incentive pool balance mismatch")
 	}
 
-	// TODO: Question should we confirm the calculation (by re-calculate) at this point?
-	// YES: We need all information to be able to fully verify the tx, inc. recalculation
+	// 1. Redo the calculation and compare the results
+	header := b.ethBlock.Header()
+	prevCalc, err := CalculateRewards(calculation.PrevFeesBurned, calculation.PrevValidatorRewards, calculation.PrevIncentivePoolRewards, header.FeeRewardRate, header.IncentivePoolRewardRate)
+	if err != nil {
+		return fmt.Errorf("cannot repeat the reward calculation on previous state: %w", err)
+	}
 
-	log.Info("SemanticVerify completed")
+	if calculation.ValidatorRewardAmount.Cmp(prevCalc.ValidatorRewardAmount) != 0 ||
+		calculation.IncentivePoolRewardAmount.Cmp(prevCalc.IncentivePoolRewardAmount) != 0 ||
+		calculation.ValidatorRewardToExport != prevCalc.ValidatorRewardToExport ||
+		calculation.CoinbaseAmountToSub.Cmp(prevCalc.CoinbaseAmountToSub) != 0 {
+		return fmt.Errorf("repeated reward calculation on previous state does not match the Tx")
+	}
+
+	// 2. Check that the state is correct - do the calculation on current state and check calculated rewards are not less than in the Tx
+	currFeesBurned := state.GetBalance(tx.Coinbase)
+	if currFeesBurned.Cmp(calculation.PrevFeesBurned) < 0 {
+		return fmt.Errorf("current Coinbase balance is less than the balance the CollectRewardsTx was issued for")
+	}
+
+	currCalc, err := CalculateRewards(currFeesBurned, currValidatorRewardPayedOut, ipRewardsPayedOut, header.FeeRewardRate, header.IncentivePoolRewardRate)
+	if err != nil {
+		return fmt.Errorf("cannot repeat the reward calculation on current state: %w", err)
+	}
+
+	if calculation.ValidatorRewardAmount.Cmp(currCalc.ValidatorRewardAmount) > 0 ||
+		calculation.IncentivePoolRewardAmount.Cmp(currCalc.IncentivePoolRewardAmount) > 0 ||
+		calculation.ValidatorRewardToExport > currCalc.ValidatorRewardToExport ||
+		calculation.CoinbaseAmountToSub.Cmp(currCalc.CoinbaseAmountToSub) > 0 {
+		return fmt.Errorf("repeated reward calculation on current state does not follow the requirements")
+	}
+
+	// 3. Check the UTXO's owner, amount & currency
+	if len(tx.ExportedOutputs) != 1 {
+		return fmt.Errorf("expected single exported output, got %d", len(tx.ExportedOutputs))
+	}
+
+	eo := tx.ExportedOutputs[0]
+	if eo.AssetID() != vm.ctx.AVAXAssetID {
+		return fmt.Errorf("expected AVAX asset in ExportedOutput, got %s", eo.AssetID())
+	}
+
+	if eo.Out.Amount() != calculation.ValidatorRewardToExport {
+		return fmt.Errorf("expected %d AVAX in ExportedOutput, got %d", calculation.ValidatorRewardToExport, eo.Out.Amount())
+	}
+
+	out, ok := eo.Out.(*secp256k1fx.TransferOutput)
+	if !ok {
+		return fmt.Errorf("expected secp256k1fx.TransferOutput in ExportedOutput, got %T", eo.Out)
+	}
+
+	if len(out.OutputOwners.Addrs) != 1 {
+		return fmt.Errorf("expected single output owner in ExportedOutput")
+	}
+	feeRewardExportAddrId, err := ids.ToShortID(out.OutputOwners.Addrs[0].Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to get short ID for fee reward export address: %w", err)
+	}
+	if out.OutputOwners.Addrs[0] != feeRewardExportAddrId {
+		return fmt.Errorf("expected %s as output owner of the fee reward, got %s", header.FeeRewardExportAddress.Hex(), out.OutputOwners.Addrs[0].Hex())
+	}
+
 	return nil
 }
 
 // AtomicOps returns the atomic operations for this transaction.
 func (tx *UnsignedCollectRewardsTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
-	log.Info("AtomicOps...")
 	txID := tx.ID()
 
-	elems := make([]*atomic.Element, 1)
 	out := tx.ExportedOutputs[0]
 	utxo := &avax.UTXO{
 		UTXOID: avax.UTXOID{
@@ -178,9 +227,7 @@ func (tx *UnsignedCollectRewardsTx) AtomicOps() (ids.ID, *atomic.Requests, error
 		elem.Traits = out.Addresses()
 	}
 
-	elems[0] = elem
-
-	log.Info("AtomicOps completed")
+	elems := []*atomic.Element{elem}
 	return tx.DestinationChain, &atomic.Requests{PutRequests: elems}, nil
 }
 
@@ -206,7 +253,6 @@ func (vm *VM) NewCollectRewardsTx(
 		IncentivePoolRewardAddress: incentivePoolRewardAddress,
 	}
 
-	// TODO: Make validatorRewardAddress ShortID typed
 	pChainAddress, _ := ids.ToShortID(validatorRewardAddress.Bytes())
 	utx.ExportedOutputs = []*avax.TransferableOutput{{
 		Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
@@ -225,13 +271,8 @@ func (vm *VM) NewCollectRewardsTx(
 		return nil, err
 	}
 
-	log.Info("New CollectionRewardTx created.",
+	log.Info("New CollectRewardsTx created.",
 		"ValidatorRewardExport", calculation.ValidatorRewardToExport,
-		"ValidatorReward", calculation.ValidatorRewardAmount,
-		"IPReward", calculation.IncentivePoolRewardAmount,
-		"Curr Coinbase balance", calculation.PrevValidatorRewards,
-		"Curr IP balance", calculation.PrevIncentivePoolRewards,
-		"Fees already burned", calculation.PrevFeesBurned,
 	)
 
 	return tx, utx.Verify(vm.ctx, vm.currentRules())
@@ -239,7 +280,6 @@ func (vm *VM) NewCollectRewardsTx(
 
 // EVMStateTransfer executes the state update from the atomic export transaction
 func (tx *UnsignedCollectRewardsTx) EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error {
-	log.Info("EVMStateTransfer...", "txID", tx.ID().String())
 	calculation := tx.RewardCalculation.Calculation()
 	state.SubBalance(tx.Coinbase, calculation.CoinbaseAmountToSub)
 	validatorRewards := new(big.Int).Add(calculation.PrevValidatorRewards, calculation.ValidatorRewardAmount)
@@ -247,10 +287,8 @@ func (tx *UnsignedCollectRewardsTx) EVMStateTransfer(ctx *snow.Context, state *s
 	ipRewards := new(big.Int).Add(calculation.PrevIncentivePoolRewards, calculation.IncentivePoolRewardAmount)
 	state.AddBalance(tx.IncentivePoolRewardAddress, calculation.IncentivePoolRewardAmount)
 
-	state.SetState(tx.Coinbase, Slot0, common.BigToHash(new(big.Int).SetUint64(tx.BlockTimestamp)))
 	state.SetState(tx.Coinbase, Slot1, common.BigToHash(validatorRewards))
 	state.SetState(tx.Coinbase, Slot2, common.BigToHash(ipRewards))
 
-	log.Info("EVMStateTransfer completed")
 	return nil
 }
