@@ -76,6 +76,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
@@ -1427,7 +1428,7 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 // referenced in.
 func (vm *VM) GetAtomicUTXOs(
 	chainID ids.ID,
-	addrs ids.ShortSet,
+	addrs set.Set[ids.ShortID],
 	startAddr ids.ShortID,
 	startUTXOID ids.ID,
 	limit int,
