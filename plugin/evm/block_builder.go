@@ -194,12 +194,14 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 
 					// Retrieve list of proposer
 					proposers, err := b.ctx.ProposerRetriever.GetCurrentProposers()
+					proposerString := fmt.Sprintf("CURRENT PROPOSERS: %v\n", proposers)
 					if err != nil {
 						log.Warn(
 							"failed to retrieve list of proposers",
 							"err", err,
 						)			
 					}
+					fmt.Println(proposerString)
 					// Gossip transactions only to list of proposers
 					if err := b.gossiper.GossipEthTxsToNodes(ethTxsEvent.Txs, proposers); err != nil {
 						log.Warn(
