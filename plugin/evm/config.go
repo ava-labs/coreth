@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/eth"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cast"
 )
 
@@ -50,15 +51,20 @@ const (
 	defaultStateSyncMinBlocks = 300_000
 )
 
-var defaultEnabledAPIs = []string{
-	"eth",
-	"eth-filter",
-	"net",
-	"web3",
-	"internal-eth",
-	"internal-blockchain",
-	"internal-transaction",
-}
+var (
+	defaultEnabledAPIs = []string{
+		"eth",
+		"eth-filter",
+		"net",
+		"web3",
+		"internal-eth",
+		"internal-blockchain",
+		"internal-transaction",
+	}
+	defaultAllowUnprotectedTxHashes = []common.Hash{
+		common.HexToHash("0xfefb2da535e927b85fe68eb81cb2e4a5827c905f78381a01ef2322aa9b0aee8e"), // EIP-1820: https://eips.ethereum.org/EIPS/eip-1820
+	}
+)
 
 type Duration struct {
 	time.Duration
@@ -85,10 +91,12 @@ type Config struct {
 	RPCTxFeeCap float64 `json:"rpc-tx-fee-cap"`
 
 	// Cache settings
-	TrieCleanCache        int `json:"trie-clean-cache"`         // Size of the trie clean cache (MB)
-	TrieDirtyCache        int `json:"trie-dirty-cache"`         // Size of the trie dirty cache (MB)
-	TrieDirtyCommitTarget int `json:"trie-dirty-commit-target"` // Memory limit to target in the dirty cache before performing a commit (MB)
-	SnapshotCache         int `json:"snapshot-cache"`           // Size of the snapshot disk layer clean cache (MB)
+	TrieCleanCache        int      `json:"trie-clean-cache"`         // Size of the trie clean cache (MB)
+	TrieCleanJournal      string   `json:"trie-clean-journal"`       // Directory to use to save the trie clean cache (must be populated to enable journaling the trie clean cache)
+	TrieCleanRejournal    Duration `json:"trie-clean-rejournal"`     // Frequency to re-journal the trie clean cache to disk (minimum 1 minute, must be populated to enable journaling the trie clean cache)
+	TrieDirtyCache        int      `json:"trie-dirty-cache"`         // Size of the trie dirty cache (MB)
+	TrieDirtyCommitTarget int      `json:"trie-dirty-commit-target"` // Memory limit to target in the dirty cache before performing a commit (MB)
+	SnapshotCache         int      `json:"snapshot-cache"`           // Size of the snapshot disk layer clean cache (MB)
 
 	// Eth Settings
 	Preimages      bool `json:"preimages-enabled"`
@@ -107,13 +115,14 @@ type Config struct {
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
 
 	// API Settings
-	LocalTxsEnabled         bool     `json:"local-txs-enabled"`
-	APIMaxDuration          Duration `json:"api-max-duration"`
-	WSCPURefillRate         Duration `json:"ws-cpu-refill-rate"`
-	WSCPUMaxStored          Duration `json:"ws-cpu-max-stored"`
-	MaxBlocksPerRequest     int64    `json:"api-max-blocks-per-request"`
-	AllowUnfinalizedQueries bool     `json:"allow-unfinalized-queries"`
-	AllowUnprotectedTxs     bool     `json:"allow-unprotected-txs"`
+	LocalTxsEnabled          bool          `json:"local-txs-enabled"`
+	APIMaxDuration           Duration      `json:"api-max-duration"`
+	WSCPURefillRate          Duration      `json:"ws-cpu-refill-rate"`
+	WSCPUMaxStored           Duration      `json:"ws-cpu-max-stored"`
+	MaxBlocksPerRequest      int64         `json:"api-max-blocks-per-request"`
+	AllowUnfinalizedQueries  bool          `json:"allow-unfinalized-queries"`
+	AllowUnprotectedTxs      bool          `json:"allow-unprotected-txs"`
+	AllowUnprotectedTxHashes []common.Hash `json:"allow-unprotected-tx-hashes"`
 
 	// Keystore Settings
 	KeystoreDirectory             string `json:"keystore-directory"` // both absolute and relative supported
@@ -150,6 +159,12 @@ type Config struct {
 	// their node before the network upgrade and their node accepts blocks that have
 	// identical state with the pre-upgrade ruleset.
 	SkipUpgradeCheck bool `json:"skip-upgrade-check"`
+
+	// TxLookupLimit is the maximum number of blocks from head whose tx indices
+	// are reserved:
+	//  * 0:   means no limit
+	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
+	TxLookupLimit uint64 `json:"tx-lookup-limit"`
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled
@@ -190,6 +205,7 @@ func (c *Config) SetDefaults() {
 	c.CommitInterval = defaultCommitInterval
 	c.StateSyncCommitInterval = defaultSyncableCommitInterval
 	c.StateSyncMinBlocks = defaultStateSyncMinBlocks
+	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

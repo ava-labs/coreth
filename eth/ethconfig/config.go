@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth/gasprice"
 	"github.com/ava-labs/coreth/miner"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // DefaultFullGPOConfig contains default gasprice oracle settings for full node.
@@ -52,9 +53,6 @@ var DefaultConfig = NewDefaultConfig()
 func NewDefaultConfig() Config {
 	return Config{
 		NetworkId:             1,
-		LightPeers:            100,
-		UltraLightFraction:    75,
-		DatabaseCache:         512,
 		TrieCleanCache:        512,
 		TrieDirtyCache:        256,
 		TrieDirtyCommitTarget: 20,
@@ -80,10 +78,6 @@ type Config struct {
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 
-	// This can be set to list of enrtree:// URLs which will be queried for
-	// for nodes to connect to.
-	DiscoveryURLs []string
-
 	Pruning                         bool    // Whether to disable pruning and flush everything to disk
 	AcceptorQueueLimit              int     // Maximum blocks to queue before blocking during acceptance
 	CommitInterval                  uint64  // If pruning is enabled, specified the interval at which to commit an entire trie to disk.
@@ -95,25 +89,13 @@ type Config struct {
 	SnapshotVerify                  bool    // Whether to verify generated snapshots
 	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
 
-	// Light client options
-	LightServ    int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
-	LightIngress int  `toml:",omitempty"` // Incoming bandwidth limit for light servers
-	LightEgress  int  `toml:",omitempty"` // Outgoing bandwidth limit for light servers
-	LightPeers   int  `toml:",omitempty"` // Maximum number of LES client peers
-	LightNoPrune bool `toml:",omitempty"` // Whether to disable light chain pruning
-
-	// Ultra Light client options
-	UltraLightServers      []string `toml:",omitempty"` // List of trusted ultra light servers
-	UltraLightFraction     int      `toml:",omitempty"` // Percentage of trusted servers to accept an announcement
-	UltraLightOnlyAnnounce bool     `toml:",omitempty"` // Whether to only announce headers, or also serve them
-
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
-	DatabaseHandles    int  `toml:"-"`
-	DatabaseCache      int
-	// DatabaseFreezer    string
 
+	// TrieDB and snapshot options
 	TrieCleanCache        int
+	TrieCleanJournal      string
+	TrieCleanRejournal    time.Duration
 	TrieDirtyCache        int
 	TrieDirtyCommitTarget int
 	SnapshotCache         int
@@ -134,9 +116,6 @@ type Config struct {
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
 
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
-
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64 `toml:",omitempty"`
 
@@ -154,6 +133,9 @@ type Config struct {
 	// Unprotected transactions are transactions that are signed without EIP-155
 	// replay protection.
 	AllowUnprotectedTxs bool
+	// AllowUnprotectedTxHashes provides a list of transaction hashes, which will be allowed
+	// to be issued without replay protection over the API even if AllowUnprotectedTxs is false.
+	AllowUnprotectedTxHashes []common.Hash
 
 	// OfflinePruning enables offline pruning on startup of the node. If a node is started
 	// with this configuration option, it must finish pruning before resuming normal operation.
@@ -166,4 +148,10 @@ type Config struct {
 	// their node before the network upgrade and their node accepts blocks that have
 	// identical state with the pre-upgrade ruleset.
 	SkipUpgradeCheck bool
+
+	// TxLookupLimit is the maximum number of blocks from head whose tx indices
+	// are reserved:
+	//  * 0:   means no limit
+	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
+	TxLookupLimit uint64
 }

@@ -1,5 +1,20 @@
 # Release Notes
 
+## [v0.11.3](https://github.com/ava-labs/coreth/releases/tag/v0.11.3)
+
+- Add counter for number of processed and accepted transactions
+- Wait for state sync goroutines to complete on shutdown
+- Bump go-ethereum dependency to v1.10.26
+- Increase soft cap on transaction size limits
+- Add back isForkIncompatible checks for all existing forks
+- Clean up Apricot Phase 6 code
+
+## [v0.11.2](https://github.com/ava-labs/coreth/releases/tag/v0.11.2)
+
+- Add trie clean cache journaling to disk to improve processing time on restart
+- Fix regression where snapshot could be marked as stale by async acceptor during block processing
+- Add fine-grained block processing metrics
+
 ## [v0.11.1](https://github.com/ava-labs/coreth/releases/tag/v0.11.1)
 
 - Add cache size config parameters for `trie-clean-cache`, `trie-dirty-cache`, `trie-dirty-commit-target`, and `snapshot-cache`
@@ -10,7 +25,9 @@
 - Record block height when performing state sync
 - Add support for VM-to-VM messaging
 - Move `eth_getChainConfig` under the `BlockChainAPI`
-- Remove block builder timer logic to rely on ProposerVM to meter block production
+- Simplify block builder timer logic to a simple retry delay
+- Add Opentelemetry support
+- Simplify caching logic for gas price estimation
 
 ## [v0.11.0](https://github.com/ava-labs/coreth/releases/tag/v0.11.0)
 

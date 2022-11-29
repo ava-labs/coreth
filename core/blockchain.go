@@ -55,10 +55,38 @@ import (
 )
 
 var (
-	acceptorQueueGauge           = metrics.NewRegisteredGauge("blockchain/acceptor/queue/size", nil)
-	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("blockchain/blocks/gas/used/processed", nil)
-	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("blockchain/blocks/gas/used/accepted", nil)
-	badBlockCounter              = metrics.NewRegisteredCounter("blockchain/blocks/bad/count", nil)
+	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", nil)
+	accountHashTimer         = metrics.NewRegisteredCounter("chain/account/hashes", nil)
+	accountUpdateTimer       = metrics.NewRegisteredCounter("chain/account/updates", nil)
+	accountCommitTimer       = metrics.NewRegisteredCounter("chain/account/commits", nil)
+	storageReadTimer         = metrics.NewRegisteredCounter("chain/storage/reads", nil)
+	storageHashTimer         = metrics.NewRegisteredCounter("chain/storage/hashes", nil)
+	storageUpdateTimer       = metrics.NewRegisteredCounter("chain/storage/updates", nil)
+	storageCommitTimer       = metrics.NewRegisteredCounter("chain/storage/commits", nil)
+	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", nil)
+	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", nil)
+	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", nil)
+	triedbCommitTimer        = metrics.NewRegisteredCounter("chain/triedb/commits", nil)
+
+	blockInsertTimer            = metrics.NewRegisteredCounter("chain/block/inserts", nil)
+	blockInsertCount            = metrics.NewRegisteredCounter("chain/block/inserts/count", nil)
+	blockContentValidationTimer = metrics.NewRegisteredCounter("chain/block/validations/content", nil)
+	blockStateInitTimer         = metrics.NewRegisteredCounter("chain/block/inits/state", nil)
+	blockExecutionTimer         = metrics.NewRegisteredCounter("chain/block/executions", nil)
+	blockTrieOpsTimer           = metrics.NewRegisteredCounter("chain/block/trie", nil)
+	blockStateValidationTimer   = metrics.NewRegisteredCounter("chain/block/validations/state", nil)
+	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", nil)
+
+	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", nil)
+	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", nil)
+	acceptorWorkCount            = metrics.NewRegisteredCounter("chain/acceptor/work/count", nil)
+	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("chain/block/gas/used/processed", nil)
+	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("chain/block/gas/used/accepted", nil)
+	badBlockCounter              = metrics.NewRegisteredCounter("chain/block/bad/count", nil)
+
+	txUnindexTimer      = metrics.NewRegisteredCounter("chain/txs/unindex", nil)
+	acceptedTxsCounter  = metrics.NewRegisteredCounter("chain/txs/accepted", nil)
+	processedTxsCounter = metrics.NewRegisteredCounter("chain/txs/processed", nil)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
@@ -72,7 +100,6 @@ const (
 	receiptsCacheLimit = 32
 	txLookupCacheLimit = 1024
 	badBlockLimit      = 10
-	TriesInMemory      = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -102,26 +129,33 @@ const (
 	// statsReportLimit is the time limit during import and export after which we
 	// always print out progress. This avoids the user wondering what's going on.
 	statsReportLimit = 8 * time.Second
+
+	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
+	// clean cache's underlying fastcache.
+	trieCleanCacheStatsNamespace = "trie/memcache/clean/fastcache"
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit                  int     // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieDirtyLimit                  int     // Memory limit (MB) at which to block on insert and force a flush of dirty trie nodes to disk
-	TrieDirtyCommitTarget           int     // Memory limit (MB) to target for the dirties cache before invoking commit
-	CommitInterval                  uint64  // Commit the trie every [CommitInterval] blocks.
-	Pruning                         bool    // Whether to disable trie write caching and GC altogether (archive node)
-	AcceptorQueueLimit              int     // Blocks to queue before blocking during acceptance
-	PopulateMissingTries            *uint64 // If non-nil, sets the starting height for re-generating historical tries.
-	PopulateMissingTriesParallelism int     // Is the number of readers to use when trying to populate missing tries.
-	AllowMissingTries               bool    // Whether to allow an archive node to run with pruning enabled
-	SnapshotDelayInit               bool    // Whether to initialize snapshots on startup or wait for external call
-	SnapshotLimit                   int     // Memory allowance (MB) to use for caching snapshot entries in memory
-	SnapshotAsync                   bool    // Generate snapshot tree async
-	SnapshotVerify                  bool    // Verify generated snapshots
-	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
-	Preimages                       bool    // Whether to store preimage of trie key to the disk
+	TrieCleanLimit                  int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanJournal                string        // Disk journal for saving clean cache entries.
+	TrieCleanRejournal              time.Duration // Time interval to dump clean cache to disk periodically
+	TrieDirtyLimit                  int           // Memory limit (MB) at which to block on insert and force a flush of dirty trie nodes to disk
+	TrieDirtyCommitTarget           int           // Memory limit (MB) to target for the dirties cache before invoking commit
+	CommitInterval                  uint64        // Commit the trie every [CommitInterval] blocks.
+	Pruning                         bool          // Whether to disable trie write caching and GC altogether (archive node)
+	AcceptorQueueLimit              int           // Blocks to queue before blocking during acceptance
+	PopulateMissingTries            *uint64       // If non-nil, sets the starting height for re-generating historical tries.
+	PopulateMissingTriesParallelism int           // Is the number of readers to use when trying to populate missing tries.
+	AllowMissingTries               bool          // Whether to allow an archive node to run with pruning enabled
+	SnapshotDelayInit               bool          // Whether to initialize snapshots on startup or wait for external call
+	SnapshotLimit                   int           // Memory allowance (MB) to use for caching snapshot entries in memory
+	SnapshotAsync                   bool          // Generate snapshot tree async
+	SnapshotVerify                  bool          // Verify generated snapshots
+	SkipSnapshotRebuild             bool          // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
+	Preimages                       bool          // Whether to store preimage of trie key to the disk
+	TxLookupLimit                   uint64        // Number of recent blocks for which to maintain transaction lookup indices
 }
 
 var DefaultCacheConfig = &CacheConfig{
@@ -215,11 +249,23 @@ type BlockChain struct {
 	// during shutdown and in tests.
 	acceptorWg sync.WaitGroup
 
+	// [wg] is used to wait for the async blockchain processes to finish on shutdown.
+	wg sync.WaitGroup
+
+	// quit channel is used to listen for when the blockchain is shut down to close
+	// async processes.
+	// WaitGroups are used to ensure that async processes have finished during shutdown.
+	quit chan struct{}
+
 	// [acceptorTip] is the last block processed by the acceptor. This is
 	// returned as the LastAcceptedBlock() to ensure clients get only fully
 	// processed blocks. This may be equal to [lastAccepted].
 	acceptorTip     *types.Block
 	acceptorTipLock sync.Mutex
+
+	// [flattenLock] prevents the [acceptor] from flattening snapshots while
+	// a block is being verified.
+	flattenLock sync.Mutex
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -243,8 +289,10 @@ func NewBlockChain(
 		cacheConfig: cacheConfig,
 		db:          db,
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
-			Cache:     cacheConfig.TrieCleanLimit,
-			Preimages: cacheConfig.Preimages,
+			Cache:       cacheConfig.TrieCleanLimit,
+			Journal:     cacheConfig.TrieCleanJournal,
+			Preimages:   cacheConfig.Preimages,
+			StatsPrefix: trieCleanCacheStatsNamespace,
 		}),
 		bodyCache:     bodyCache,
 		receiptsCache: receiptsCache,
@@ -255,6 +303,7 @@ func NewBlockChain(
 		badBlocks:     badBlocks,
 		senderCacher:  newTxSenderCacher(runtime.NumCPU()),
 		acceptorQueue: make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
+		quit:          make(chan struct{}),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -275,6 +324,13 @@ func NewBlockChain(
 
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.stateCache.TrieDB(), cacheConfig)
+
+	// loadLastState writes indices, so we should start the tx indexer after that.
+	// Start tx indexer/unindexer here.
+	if bc.cacheConfig.TxLookupLimit != 0 {
+		bc.wg.Add(1)
+		go bc.dispatchTxUnindexer()
+	}
 
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
@@ -315,7 +371,85 @@ func NewBlockChain(
 	// Start processing accepted blocks effects in the background
 	go bc.startAcceptor()
 
+	// If periodic cache journal is required, spin it up.
+	if bc.cacheConfig.TrieCleanRejournal > 0 && len(bc.cacheConfig.TrieCleanJournal) > 0 {
+		log.Info("Starting to save trie clean cache periodically", "journalDir", bc.cacheConfig.TrieCleanJournal, "freq", bc.cacheConfig.TrieCleanRejournal)
+
+		triedb := bc.stateCache.TrieDB()
+		bc.wg.Add(1)
+		go func() {
+			defer bc.wg.Done()
+			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
+		}()
+	}
+
 	return bc, nil
+}
+
+// dispatchTxUnindexer is responsible for the deletion of the
+// transaction index.
+// Invariant: If TxLookupLimit is 0, it means all tx indices will be preserved.
+// Meaning that this function should never be called.
+func (bc *BlockChain) dispatchTxUnindexer() {
+	defer bc.wg.Done()
+	txLookupLimit := bc.cacheConfig.TxLookupLimit
+
+	// If the user just upgraded to a new version which supports transaction
+	// index pruning, write the new tail and remove anything older.
+	if rawdb.ReadTxIndexTail(bc.db) == nil {
+		rawdb.WriteTxIndexTail(bc.db, 0)
+	}
+
+	// unindexes transactions depending on user configuration
+	unindexBlocks := func(tail uint64, head uint64, done chan struct{}) {
+		start := time.Now()
+		defer func() {
+			txUnindexTimer.Inc(time.Since(start).Milliseconds())
+			done <- struct{}{}
+		}()
+
+		// Update the transaction index to the new chain state
+		if head-txLookupLimit+1 >= tail {
+			// Unindex a part of stale indices and forward index tail to HEAD-limit
+			rawdb.UnindexTransactions(bc.db, tail, head-txLookupLimit+1, bc.quit)
+		}
+	}
+	// Any reindexing done, start listening to chain events and moving the index window
+	var (
+		done   chan struct{}              // Non-nil if background unindexing or reindexing routine is active.
+		headCh = make(chan ChainEvent, 1) // Buffered to avoid locking up the event feed
+	)
+	sub := bc.SubscribeChainAcceptedEvent(headCh)
+	if sub == nil {
+		log.Warn("could not create chain accepted subscription to unindex txs")
+		return
+	}
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case head := <-headCh:
+			headNum := head.Block.NumberU64()
+			if headNum < txLookupLimit {
+				break
+			}
+
+			if done == nil {
+				done = make(chan struct{})
+				// Note: tail will not be nil since it is initialized in this function.
+				tail := rawdb.ReadTxIndexTail(bc.db)
+				go unindexBlocks(*tail, headNum, done)
+			}
+		case <-done:
+			done = nil
+		case <-bc.quit:
+			if done != nil {
+				log.Info("Waiting background transaction indexer to exit")
+				<-done
+			}
+			return
+		}
+	}
 }
 
 // writeBlockAcceptedIndices writes any indices that must be persisted for accepted block.
@@ -350,6 +484,12 @@ func (bc *BlockChain) flattenSnapshot(postAbortWork func() error, hash common.Ha
 		return err
 	}
 
+	// Ensure we avoid flattening the snapshot while we are processing a block, or
+	// block execution will fallback to reading from the trie (which is much
+	// slower).
+	bc.flattenLock.Lock()
+	defer bc.flattenLock.Unlock()
+
 	// Flatten the entire snap Trie to disk
 	//
 	// Note: This resumes snapshot generation.
@@ -362,6 +502,7 @@ func (bc *BlockChain) startAcceptor() {
 	log.Info("Starting Acceptor", "queue length", bc.cacheConfig.AcceptorQueueLimit)
 
 	for next := range bc.acceptorQueue {
+		start := time.Now()
 		acceptorQueueGauge.Dec(1)
 
 		if err := bc.flattenSnapshot(func() error {
@@ -391,6 +532,9 @@ func (bc *BlockChain) startAcceptor() {
 		bc.acceptorTip = next
 		bc.acceptorTipLock.Unlock()
 		bc.acceptorWg.Done()
+
+		acceptorWorkTimer.Inc(time.Since(start).Milliseconds())
+		acceptorWorkCount.Inc(1)
 	}
 }
 
@@ -414,8 +558,8 @@ func (bc *BlockChain) addAcceptorQueue(b *types.Block) {
 // DrainAcceptorQueue blocks until all items in [acceptorQueue] have been
 // processed.
 func (bc *BlockChain) DrainAcceptorQueue() {
-	bc.acceptorClosingLock.Lock()
-	defer bc.acceptorClosingLock.Unlock()
+	bc.acceptorClosingLock.RLock()
+	defer bc.acceptorClosingLock.RUnlock()
 
 	if bc.acceptorClosed {
 		return
@@ -641,7 +785,8 @@ func (bc *BlockChain) ValidateCanonicalChain() error {
 		// Transactions are only indexed beneath the last accepted block, so we only check
 		// that the transactions have been indexed, if we are checking below the last accepted
 		// block.
-		if current.NumberU64() <= bc.lastAccepted.NumberU64() {
+		shouldIndexTxs := bc.cacheConfig.TxLookupLimit == 0 || bc.lastAccepted.NumberU64() < current.NumberU64()+bc.cacheConfig.TxLookupLimit
+		if current.NumberU64() <= bc.lastAccepted.NumberU64() && shouldIndexTxs {
 			// Ensure that all of the transactions have been stored correctly in the canonical
 			// chain
 			for txIndex, tx := range txs {
@@ -699,6 +844,8 @@ func (bc *BlockChain) Stop() {
 		return
 	}
 
+	log.Info("Closing quit channel")
+	close(bc.quit)
 	// Wait for accepted feed to process all remaining items
 	log.Info("Stopping Acceptor")
 	start := time.Now()
@@ -723,6 +870,10 @@ func (bc *BlockChain) Stop() {
 	// Unsubscribe all subscriptions registered from blockchain.
 	log.Info("Closing scope")
 	bc.scope.Close()
+
+	// Waiting for background processes to complete
+	log.Info("Waiting for background processes to complete")
+	bc.wg.Wait()
 
 	log.Info("Blockchain stopped")
 }
@@ -824,7 +975,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.lastAccepted = block
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
-
+	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
 	return nil
 }
 
@@ -1024,8 +1175,10 @@ func (bc *BlockChain) gatherBlockLogs(hash common.Hash, number uint64, removed b
 }
 
 func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
+	start := time.Now()
 	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), new(big.Int).SetUint64(block.Time())), block.Transactions())
 
+	substart := time.Now()
 	err := bc.engine.VerifyHeader(bc, block.Header())
 	if err == nil {
 		err = bc.validator.ValidateBody(block)
@@ -1057,6 +1210,8 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		bc.reportBlock(block, nil, err)
 		return err
 	}
+	blockContentValidationTimer.Inc(time.Since(substart).Milliseconds())
+
 	// No validation errors for the block
 	var activeState *state.StateDB
 	defer func() {
@@ -1069,15 +1224,21 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		}
 	}()
 
-	// Retrieve the parent block and its state to execute on top
-	start := time.Now()
-
-	// Retrieve the parent block and its state to execute block
+	// Retrieve the parent block to determine which root to build state on
+	substart = time.Now()
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+
+	// Instantiate the statedb to use for processing transactions
+	//
+	// NOTE: Flattening a snapshot during block execution requires fetching state
+	// entries directly from the trie (much slower).
+	bc.flattenLock.Lock()
+	defer bc.flattenLock.Unlock()
 	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
 	if err != nil {
 		return err
 	}
+	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
 
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain")
@@ -1086,6 +1247,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// If we have a followup block, run that against the current state to pre-cache
 	// transactions and probabilistically some of the account/storage trie nodes.
 	// Process block using the parent state as reference point
+	substart = time.Now()
 	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
 	if serr := statedb.Error(); serr != nil {
 		log.Error("statedb error encountered", "err", serr, "number", block.Number(), "hash", block.Hash())
@@ -1095,11 +1257,31 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		return err
 	}
 
+	// Update the metrics touched during block processing
+	accountReadTimer.Inc(statedb.AccountReads.Milliseconds())                 // Account reads are complete, we can mark them
+	storageReadTimer.Inc(statedb.StorageReads.Milliseconds())                 // Storage reads are complete, we can mark them
+	snapshotAccountReadTimer.Inc(statedb.SnapshotAccountReads.Milliseconds()) // Account reads are complete, we can mark them
+	snapshotStorageReadTimer.Inc(statedb.SnapshotStorageReads.Milliseconds()) // Storage reads are complete, we can mark them
+	trieproc := statedb.AccountHashes + statedb.StorageHashes                 // Save to not double count in validation
+	trieproc += statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
+	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
+	blockExecutionTimer.Inc((time.Since(substart) - trieproc).Milliseconds())
+
 	// Validate the state using the default validator
+	substart = time.Now()
 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 		bc.reportBlock(block, receipts, err)
 		return err
 	}
+
+	// Update the metrics touched during block validation
+	accountUpdateTimer.Inc(statedb.AccountUpdates.Milliseconds()) // Account updates are complete, we can mark them
+	storageUpdateTimer.Inc(statedb.StorageUpdates.Milliseconds()) // Storage updates are complete, we can mark them
+	accountHashTimer.Inc(statedb.AccountHashes.Milliseconds())    // Account hashes are complete, we can mark them
+	storageHashTimer.Inc(statedb.StorageHashes.Milliseconds())    // Storage hashes are complete, we can mark them
+	additionalTrieProc := statedb.AccountHashes + statedb.StorageHashes + statedb.AccountUpdates + statedb.StorageUpdates - trieproc
+	blockStateValidationTimer.Inc((time.Since(substart) - additionalTrieProc).Milliseconds())
+	blockTrieOpsTimer.Inc((trieproc + additionalTrieProc).Milliseconds())
 
 	// If [writes] are disabled, skip [writeBlockWithState] so that we do not write the block
 	// or the state trie to disk.
@@ -1112,9 +1294,18 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// writeBlockWithState (called within writeBlockAndSethead) creates a reference that
 	// will be cleaned up in Accept/Reject so we need to ensure an error cannot occur
 	// later in verification, since that would cause the referenced root to never be dereferenced.
+	substart = time.Now()
 	if err := bc.writeBlockAndSetHead(block, receipts, logs, statedb); err != nil {
 		return err
 	}
+	// Update the metrics touched during block commit
+	accountCommitTimer.Inc(statedb.AccountCommits.Milliseconds())   // Account commits are complete, we can mark them
+	storageCommitTimer.Inc(statedb.StorageCommits.Milliseconds())   // Storage commits are complete, we can mark them
+	snapshotCommitTimer.Inc(statedb.SnapshotCommits.Milliseconds()) // Snapshot commits are complete, we can mark them
+	triedbCommitTimer.Inc(statedb.TrieDBCommits.Milliseconds())     // Triedb commits are complete, we can mark them
+	blockWriteTimer.Inc((time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits).Milliseconds())
+	blockInsertTimer.Inc(time.Since(start).Milliseconds())
+
 	log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 		"parentHash", block.ParentHash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
@@ -1123,6 +1314,8 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	)
 
 	processedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
+	processedTxsCounter.Inc(int64(block.Transactions().Len()))
+	blockInsertCount.Inc(1)
 	return nil
 }
 
@@ -1797,8 +1990,10 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 
 	lastAcceptedHash := block.Hash()
 	bc.stateCache = state.NewDatabaseWithConfig(bc.db, &trie.Config{
-		Cache:     bc.cacheConfig.TrieCleanLimit,
-		Preimages: bc.cacheConfig.Preimages,
+		Cache:       bc.cacheConfig.TrieCleanLimit,
+		Journal:     bc.cacheConfig.TrieCleanJournal,
+		Preimages:   bc.cacheConfig.Preimages,
+		StatsPrefix: trieCleanCacheStatsNamespace,
 	})
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return err

@@ -197,6 +197,8 @@ func New(
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:                  config.TrieCleanCache,
+			TrieCleanJournal:                config.TrieCleanJournal,
+			TrieCleanRejournal:              config.TrieCleanRejournal,
 			TrieDirtyLimit:                  config.TrieDirtyCache,
 			TrieDirtyCommitTarget:           config.TrieDirtyCommitTarget,
 			Pruning:                         config.Pruning,
@@ -211,6 +213,7 @@ func New(
 			SnapshotVerify:                  config.SnapshotVerify,
 			SkipSnapshotRebuild:             config.SkipSnapshotRebuild,
 			Preimages:                       config.Preimages,
+			TxLookupLimit:                   config.TxLookupLimit,
 		}
 	)
 
@@ -235,17 +238,22 @@ func New(
 
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, clock)
 
+	allowUnprotectedTxHashes := make(map[common.Hash]struct{})
+	for _, txHash := range config.AllowUnprotectedTxHashes {
+		allowUnprotectedTxHashes[txHash] = struct{}{}
+	}
+
 	eth.APIBackend = &EthAPIBackend{
-		extRPCEnabled:       stack.Config().ExtRPCEnabled(),
-		allowUnprotectedTxs: config.AllowUnprotectedTxs,
-		eth:                 eth,
+		extRPCEnabled:            stack.Config().ExtRPCEnabled(),
+		allowUnprotectedTxs:      config.AllowUnprotectedTxs,
+		allowUnprotectedTxHashes: allowUnprotectedTxHashes,
+		eth:                      eth,
 	}
 	if config.AllowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
 	gpoParams := config.GPO
-	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
-
+	eth.APIBackend.gpo, err = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	if err != nil {
 		return nil, err
 	}
