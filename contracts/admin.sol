@@ -122,6 +122,6 @@ contract CaminoAdmin is SimpleAccessControlImpl {
         pure
         returns (uint256)
     {
-        return uint256(uint160(account)) | (uint256(uint32(signature)) << 20);
+        return uint256(uint160(account)) | (uint256(uint32(signature)) << 160);
     }
 }
