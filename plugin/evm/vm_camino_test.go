@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
@@ -54,7 +55,7 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 		})
 
 	defer func() {
-		if err := vm.Shutdown(); err != nil {
+		if err := vm.Shutdown(context.TODO()); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -77,11 +78,11 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 	<-issuer
 
 	// Block A should be validated with apricot rules
-	blkA, err := vm.BuildBlock()
+	blkA, err := vm.BuildBlock(context.TODO())
 	if err != nil {
 		t.Fatalf("Failed to build block with import transaction: %s", err)
 	}
-	if err := blkA.Verify(); err != nil {
+	if err := blkA.Verify(context.TODO()); err != nil {
 		t.Fatalf("Block failed verification on VM: %s", err)
 	}
 	if status := blkA.Status(); status != choices.Processing {
@@ -102,11 +103,11 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 	<-issuer
 
 	// Block B is the first block to be built after sunrise0 timestamp should be validated with apricot rules
-	blkB, err := vm.BuildBlock()
+	blkB, err := vm.BuildBlock(context.TODO())
 	if err != nil {
 		t.Fatalf("Failed to build block with import transaction: %s", err)
 	}
-	if err := blkB.Verify(); err != nil {
+	if err := blkB.Verify(context.TODO()); err != nil {
 		t.Fatalf("Block failed verification on VM: %s", err)
 	}
 	if status := blkB.Status(); status != choices.Processing {
@@ -123,11 +124,11 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 	<-issuer
 
 	// Block C is the second block to be built after sunrise0 timestamp should be validated with apricot rules
-	blkC, err := vm.BuildBlock()
+	blkC, err := vm.BuildBlock(context.TODO())
 	if err != nil {
 		t.Fatalf("Failed to build block with import transaction: %s", err)
 	}
-	if err := blkC.Verify(); err != nil {
+	if err := blkC.Verify(context.TODO()); err != nil {
 		t.Fatalf("Block failed verification on VM: %s", err)
 	}
 	if status := blkC.Status(); status != choices.Processing {
@@ -153,7 +154,7 @@ func DisabledTestSunrisePhase0OrphanBlock(t *testing.T) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(); err != nil {
+		if err := vm.Shutdown(context.TODO()); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -173,12 +174,12 @@ func DisabledTestSunrisePhase0OrphanBlock(t *testing.T) {
 	<-issuer
 
 	// Block A should be validated normally
-	blkA, err := vm.BuildBlock()
+	blkA, err := vm.BuildBlock(context.TODO())
 	if err != nil {
 		t.Fatalf("Failed to build block with import transaction: %s", err)
 	}
 
-	if err := blkA.Verify(); err != nil {
+	if err := blkA.Verify(context.TODO()); err != nil {
 		t.Fatalf("Block failed verification on VM: %s", err)
 	}
 
@@ -186,7 +187,7 @@ func DisabledTestSunrisePhase0OrphanBlock(t *testing.T) {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	if err := vm.SetPreference(blkA.ID()); err != nil {
+	if err := vm.SetPreference(context.TODO(), blkA.ID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -231,7 +232,7 @@ func DisabledTestSunrisePhase0OrphanBlock(t *testing.T) {
 	}
 
 	// Block B is empty created but with a valid parent therefore, its verification should return an error
-	assert.ErrorIs(t, emptyBlock.Verify(), errEmptyBlock)
+	assert.ErrorIs(t, emptyBlock.Verify(context.TODO()), errEmptyBlock)
 
 	// Manually created Eth Block with a manually created header
 	orphanEthBlock := types.NewBlock(
@@ -261,7 +262,7 @@ func DisabledTestSunrisePhase0OrphanBlock(t *testing.T) {
 	// orphanBlock does not have a valid parent therefore, it shouldn't return an error from Syntactic Verification.
 	// It should return a "rejected parent" error though, from Atomic TXs Verification where it's being ensured
 	// that the parent was verified and inserted correctly.
-	err = orphanBlock.Verify()
+	err = orphanBlock.Verify(context.TODO())
 	assert.ErrorIs(t, err, errRejectedParent)
 	checks := vm.DeferedChecks.deferedChecks
 	assert.Equal(t, checks[ids.ID(common.Hash{})], orphanBlock)

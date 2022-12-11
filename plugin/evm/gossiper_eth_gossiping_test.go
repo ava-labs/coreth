@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/set"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -104,7 +105,7 @@ func TestMempoolEthTxsAddedTxsGossipedAfterActivation(t *testing.T) {
 
 	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, "", "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	vm.txPool.SetGasPrice(common.Big1)
@@ -190,7 +191,7 @@ func TestMempoolEthTxsAddedTxsGossipedAfterActivationChunking(t *testing.T) {
 
 	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, "", "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	vm.txPool.SetGasPrice(common.Big1)
@@ -250,7 +251,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 
 	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, "", "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	vm.txPool.SetGasPrice(common.Big1)
@@ -261,7 +262,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 		txRequested bool
 	)
 	sender.CantSendAppGossip = false
-	sender.SendAppRequestF = func(context.Context, ids.NodeIDSet, uint32, []byte) error {
+	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
@@ -305,7 +306,7 @@ func TestMempoolEthTxsRegossipSingleAccount(t *testing.T) {
 
 	_, vm, _, _, _ := GenesisVM(t, true, genesisJSON, `{"local-txs-enabled":true}`, "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	vm.txPool.SetGasPrice(common.Big1)
@@ -345,7 +346,7 @@ func TestMempoolEthTxsRegossip(t *testing.T) {
 
 	_, vm, _, _, _ := GenesisVM(t, true, genesisJSON, `{"local-txs-enabled":true}`, "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	vm.txPool.SetGasPrice(common.Big1)

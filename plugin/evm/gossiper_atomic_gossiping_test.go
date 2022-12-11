@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/set"
 
 	"github.com/stretchr/testify/assert"
 
@@ -22,7 +23,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 
 	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
 	defer func() {
-		assert.NoError(vm.Shutdown())
+		assert.NoError(vm.Shutdown(context.Background()))
 	}()
 
 	// Create conflicting transactions
@@ -81,7 +82,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 
 	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
 	defer func() {
-		assert.NoError(vm.Shutdown())
+		assert.NoError(vm.Shutdown(context.Background()))
 	}()
 
 	nodeID := ids.GenerateTestNodeID()
@@ -99,7 +100,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 		txGossiped++
 		return nil
 	}
-	sender.SendAppRequestF = func(context.Context, ids.NodeIDSet, uint32, []byte) error {
+	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
@@ -152,7 +153,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 
 	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
 	defer func() {
-		assert.NoError(vm.Shutdown())
+		assert.NoError(vm.Shutdown(context.Background()))
 	}()
 	mempool := vm.mempool
 
@@ -169,7 +170,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 		txGossiped++
 		return nil
 	}
-	sender.SendAppRequestF = func(context.Context, ids.NodeIDSet, uint32, []byte) error {
+	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
