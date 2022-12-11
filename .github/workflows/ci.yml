@@ -1,8 +1,7 @@
 name: CI
 on:
   push:
-    branches:
-      - chain4travel
+    branches: [ chain4travel, dev ]
   pull_request:
   workflow_dispatch:
     inputs:
