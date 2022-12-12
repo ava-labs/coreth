@@ -14,6 +14,7 @@
 package evm
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"time"
@@ -172,7 +173,7 @@ func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 func (b *Block) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
-func (b *Block) Accept() error {
+func (b *Block) Accept(context.Context) error {
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
@@ -209,7 +210,7 @@ func (b *Block) Accept() error {
 
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
-func (b *Block) Reject() error {
+func (b *Block) Reject(context.Context) error {
 	b.status = choices.Rejected
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
@@ -254,7 +255,7 @@ func (b *Block) Timestamp() time.Time {
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() error {
+func (b *Block) syntacticVerify(ctx context.Context) error {
 	if b == nil || b.ethBlock == nil {
 		return errInvalidBlock
 	}
@@ -270,7 +271,7 @@ func (b *Block) syntacticVerify() error {
 
 	if err != nil && b.ethBlock.Header().Number.Cmp(common.Big0) > 0 {
 		// camino rules will be determined by parent block
-		if parentInf, pErr := b.vm.GetBlockInternal(b.Parent()); pErr == nil {
+		if parentInf, pErr := b.vm.GetBlockInternal(ctx, b.Parent()); pErr == nil {
 			if parent, ok := parentInf.(*Block); ok && parent.ethBlock != nil {
 				header := parent.ethBlock.Header()
 				rules = parent.vm.chainConfig.CaminoRules(header.Number, new(big.Int).SetUint64(header.Time))
@@ -288,12 +289,12 @@ func (b *Block) syntacticVerify() error {
 }
 
 // Verify implements the snowman.Block interface
-func (b *Block) Verify() error {
-	return b.verify(true)
+func (b *Block) Verify(ctx context.Context) error {
+	return b.verify(ctx, true)
 }
 
-func (b *Block) verify(writes bool) error {
-	if err := b.syntacticVerify(); err != nil {
+func (b *Block) verify(ctx context.Context, writes bool) error {
+	if err := b.syntacticVerify(ctx); err != nil {
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 

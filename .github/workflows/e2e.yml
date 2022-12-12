@@ -6,26 +6,14 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v2
-        with:
-          repository: ${{ github.event.inputs.avalanchegoRepo }}
-          ref: ${{ github.event.inputs.avalanchegoBranch }}
-          path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
-      - uses: actions/setup-go@v1
+      - uses: actions/checkout@v3
+      - name: update dependencies
+        run: git submodule update --init
+      - uses: actions/setup-go@v2
         with:
           go-version: 1.18
-      - name: change avalanchego dep
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-          go mod tidy
-          go clean -modcache # avoid conflicts with the golangci-lint-action cache
       - run: ./scripts/lint_allowed_geth_imports.sh
         shell: bash
       - name: golangci-lint
@@ -42,23 +30,12 @@ jobs:
         go: ['1.18']
         os: [macos-11.0, ubuntu-18.04, windows-latest]
     steps:
-    - uses: actions/checkout@v2
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v2
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v1
+    - uses: actions/checkout@v3
+    - name: update dependencies
+      run: git submodule update --init
+    - uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go }}
-    - name: change avalanchego dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-        go mod tidy
     - run: go mod download
       shell: bash
     - run: ./scripts/build.sh evm
@@ -75,23 +52,12 @@ jobs:
         go: ['1.18']
         os: [ubuntu-20.04]
     steps:
-    - uses: actions/checkout@v2
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v2
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v1
+    - uses: actions/checkout@v3
+    - name: update dependencies
+      run: git submodule update --init
+    - uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go }}
-    - name: change avalanchego dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-        go mod tidy
     - run: go mod download
       shell: bash
     - run: ./scripts/build.sh evm
@@ -106,23 +72,12 @@ jobs:
         go: [ '1.18' ]
         os: [ ubuntu-20.04 ]
     steps:
-    - uses: actions/checkout@v2
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v2
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v1
+    - uses: actions/checkout@v3
+    - name: update dependencies
+      run: git submodule update --init
+    - uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go }}
-    - name: change avalanchego dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-        go mod tidy
     - name: prepare avalanchego directory for docker copy
       if: ${{ github.event_name == 'workflow_dispatch' }}
       # mv avalanchego/ to nested dir avalanchego/avalanchego/

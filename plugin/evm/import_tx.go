@@ -14,8 +14,10 @@ import (
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -46,8 +48,8 @@ type UnsignedImportTx struct {
 }
 
 // InputUTXOs returns the UTXOIDs of the imported funds
-func (utx *UnsignedImportTx) InputUTXOs() ids.Set {
-	set := ids.NewSet(len(utx.ImportedInputs))
+func (utx *UnsignedImportTx) InputUTXOs() set.Set[ids.ID] {
+	set := set.NewSet[ids.ID](len(utx.ImportedInputs))
 	for _, in := range utx.ImportedInputs {
 		set.Add(in.InputID())
 	}
@@ -102,7 +104,7 @@ func (utx *UnsignedImportTx) Verify(
 			return errImportNonAVAXInputBanff
 		}
 	}
-	if !avax.IsSortedAndUniqueTransferableInputs(utx.ImportedInputs) {
+	if !utils.IsSortedAndUniqueSortable(utx.ImportedInputs) {
 		return errInputsNotSortedUnique
 	}
 
