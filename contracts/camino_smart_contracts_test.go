@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -15,11 +16,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	admin "github.com/ava-labs/coreth/contracts/build_contracts/admin/src"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
@@ -28,8 +29,10 @@ import (
 	"github.com/ava-labs/coreth/eth/ethadmin"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/node"
-
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/vmerrs"
+
+	admin "github.com/ava-labs/coreth/contracts/build_contracts/admin/src"
 )
 
 var (
@@ -65,6 +68,81 @@ var (
 
 type ETHChain struct {
 	backend *eth.Ethereum
+}
+
+func TestDeployContract(t *testing.T) {
+	const dummyContractAbi = "[{\"inputs\":[],\"name\":\"Assert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"OOG\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"PureRevert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Revert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Valid\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
+	const dummyContractBin = "0x60806040523480156100115760006000fd5b50610017565b61016e806100266000396000f3fe60806040523480156100115760006000fd5b506004361061005c5760003560e01c806350f6fe3414610062578063aa8b1d301461006c578063b9b046f914610076578063d8b9839114610080578063e09fface1461008a5761005c565b60006000fd5b61006a610094565b005b6100746100ad565b005b61007e6100b5565b005b6100886100c2565b005b610092610135565b005b6000600090505b5b808060010191505061009b565b505b565b60006000fd5b565b600015156100bf57fe5b5b565b6040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252600d8152602001807f72657665727420726561736f6e0000000000000000000000000000000000000081526020015060200191505060405180910390fd5b565b5b56fea2646970667358221220345bbcbb1a5ecf22b53a78eaebf95f8ee0eceff6d10d4b9643495084d2ec934a64736f6c63430006040033"
+
+	contractAddr := AdminProxyAddr
+
+	// Initialize TransactOpts for admin
+	adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(1337))
+	assert.NoError(t, err)
+
+	// Initialize TransactOpts for kycAddress
+	kycAddrOpts, err := bind.NewKeyedTransactorWithChainID(kycKey, big.NewInt(1337))
+	assert.NoError(t, err)
+
+	// Generate GenesisAlloc
+	alloc := makeGenesisAllocation()
+
+	// Generate SimulatedBackend
+	sim := backends.NewSimulatedBackendWithInitialAdmin(alloc, gasLimit, adminAddr)
+	defer func() {
+		err := sim.Close()
+		assert.NoError(t, err)
+	}()
+
+	sim.Commit(true)
+
+	ethChain := newETHChain(t)
+
+	ac := ethadmin.NewController(ethChain.backend.APIBackend)
+	sim.Blockchain().SetAdminController(ac)
+
+	adminContract, err := admin.NewBuild(contractAddr, sim)
+	assert.NoError(t, err)
+
+	// BuildSession Initialization for admin
+	adminSession := admin.BuildSession{Contract: adminContract, TransactOpts: *adminOpts}
+
+	// BuildSession Initialization for kycAddr
+	kycAddrSession := admin.BuildSession{Contract: adminContract, TransactOpts: *kycAddrOpts}
+
+	// Grant role to kycAddr
+	_, err = adminSession.GrantRole(kycAddr, KYC_ROLE)
+	assert.NoError(t, err)
+
+	sim.Commit(true)
+
+	// Check if the role is granted
+	kycRole, err := adminSession.HasRole(kycAddr, KYC_ROLE)
+	assert.NoError(t, err)
+	assert.True(t, kycRole)
+
+	// Add kyc state to kycAddr
+	_, err = kycAddrSession.ApplyKycState(kycAddr, false, big.NewInt(1))
+	assert.NoError(t, err)
+
+	sim.Commit(true)
+
+	// Deploy contract with kycAddr, we assume it will pass
+	parsed, _ := abi.JSON(strings.NewReader(dummyContractAbi))
+	_, _, _, err = bind.DeployContract(kycAddrOpts, parsed, common.FromHex(dummyContractBin), sim)
+	sim.Commit(true)
+	assert.NoError(t, err)
+
+	// Remove kyc state to kycAddr
+	_, err = kycAddrSession.ApplyKycState(kycAddr, true, big.NewInt(1))
+	assert.NoError(t, err)
+
+	sim.Commit(true)
+
+	// Deploy contract again with kycAddr, we assume it will fail
+	_, _, _, err = bind.DeployContract(kycAddrOpts, parsed, common.FromHex(dummyContractBin), sim)
+	sim.Commit(true)
+	assert.Error(t, err, vmerrs.ErrNotKycVerified)
 }
 
 func TestAdminRoleFunctions(t *testing.T) {
@@ -528,18 +606,19 @@ func newETHChain(t *testing.T) *ETHChain {
 	// configure the chain
 	config := ethconfig.NewDefaultConfig()
 	chainConfig := &params.ChainConfig{
-		ChainID:             chainID,
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
+		ChainID:                     chainID,
+		HomesteadBlock:              big.NewInt(0),
+		DAOForkBlock:                big.NewInt(0),
+		DAOForkSupport:              true,
+		EIP150Block:                 big.NewInt(0),
+		EIP150Hash:                  common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:                 big.NewInt(0),
+		EIP158Block:                 big.NewInt(0),
+		ByzantiumBlock:              big.NewInt(0),
+		ConstantinopleBlock:         big.NewInt(0),
+		PetersburgBlock:             big.NewInt(0),
+		IstanbulBlock:               big.NewInt(0),
+		SunrisePhase0BlockTimestamp: big.NewInt(0),
 	}
 
 	config.Genesis = &core.Genesis{

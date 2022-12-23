@@ -42,6 +42,8 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core/admin"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile"
 	"github.com/ava-labs/coreth/vmerrs"
@@ -130,6 +132,8 @@ type BlockContext struct {
 	TransferMultiCoin TransferMCFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
+	// The Admin Controller for restrictive operations
+	AdminController admin.AdminController
 
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
@@ -598,6 +602,18 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		return nil, common.Address{}, 0, vmerrs.ErrContractAddressCollision
 	}
+
+	// Check AdminController restrictions
+	if evm.Context.AdminController != nil &&
+		!evm.Context.AdminController.KycVerified(
+			&types.Header{
+				Number: evm.Context.BlockNumber,
+				Time:   evm.Context.Time.Uint64(),
+			},
+			evm.StateDB, caller.Address()) {
+		return nil, common.Address{}, 0, vmerrs.ErrNotKycVerified
+	}
+
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
 	evm.StateDB.CreateAccount(address)

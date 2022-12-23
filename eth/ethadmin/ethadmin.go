@@ -9,11 +9,13 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -29,9 +31,15 @@ var (
 	}
 )
 
+const (
+	KYC_VERIFIED = 1
+	KYC_EXPIRED  = 2
+)
+
 type AdminControllerBackend interface {
 	StateByHeader(ctx context.Context, header *types.Header) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	ChainConfig() *params.ChainConfig
 }
 
 type AdminController struct {
@@ -95,7 +103,7 @@ func (a *AdminController) process(ev *core.ChainHeadEvent) bool {
 	return changed
 }
 
-func (a *AdminController) GetFixedBaseFee(head *types.Header, state *state.StateDB) *big.Int {
+func (a *AdminController) GetFixedBaseFee(head *types.Header, state admin.StateDB) *big.Int {
 	a.lock.RLock()
 	if a.baseFee != nil && a.inScanRange(head) {
 		a.lock.RUnlock()
@@ -124,6 +132,18 @@ func (a *AdminController) GetFixedBaseFee(head *types.Header, state *state.State
 	}
 
 	return baseFee
+}
+
+func (a *AdminController) KycVerified(head *types.Header, state admin.StateDB, addr common.Address) bool {
+	if a.backend.ChainConfig().IsSunrisePhase0(big.NewInt(int64(head.Time))) {
+		// Calculate storage position
+		storagePos := crypto.Keccak256Hash(append(addr.Hash().Bytes(), common.HexToHash("0x2").Bytes()...))
+		// Get the KYC states
+		kycStates := new(big.Int).SetBytes(state.GetState(contractAddr, storagePos).Bytes()).Uint64()
+		// Return true if KYC flag is set
+		return (kycStates & KYC_VERIFIED) != 0
+	}
+	return true
 }
 
 func (a *AdminController) inScanRange(head *types.Header) bool {

@@ -1,3 +1,13 @@
+// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -30,6 +40,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
@@ -42,6 +53,9 @@ type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
 
+	// AdminController returns the admin controller interface
+	AdminController() admin.AdminController
+
 	// GetHeader returns the header corresponding to the hash/number argument pair.
 	GetHeader(common.Hash, uint64) *types.Header
 }
@@ -51,23 +65,27 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
+		controller  admin.AdminController
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	if author == nil {
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+		controller = chain.AdminController()
 	} else {
 		beneficiary = *author
 	}
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
+
 	return vm.BlockContext{
 		CanTransfer:       CanTransfer,
 		CanTransferMC:     CanTransferMC,
 		Transfer:          Transfer,
 		TransferMultiCoin: TransferMultiCoin,
 		GetHash:           GetHashFn(header, chain),
+		AdminController:   controller,
 		Coinbase:          beneficiary,
 		BlockNumber:       new(big.Int).Set(header.Number),
 		Time:              new(big.Int).SetUint64(header.Time),
