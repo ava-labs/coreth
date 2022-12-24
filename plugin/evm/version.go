@@ -21,7 +21,7 @@ var (
 	// GitCommit is set by the build script
 	GitCommit string
 	// Version is the version of caminoethvm
-	Version string = "v0.2.1"
+	Version string = "unknown"
 )
 
 func init() {
