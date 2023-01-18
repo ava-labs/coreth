@@ -604,7 +604,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	// Check AdminController restrictions
-	if evm.Context.AdminController != nil &&
+	_, isContract := caller.(*Contract)
+	if evm.Context.AdminController != nil && !isContract &&
 		!evm.Context.AdminController.KycVerified(
 			&types.Header{
 				Number: evm.Context.BlockNumber,
