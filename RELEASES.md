@@ -1,10 +1,17 @@
 # Release Notes
 
+## [v0.11.5](https://github.com/ava-labs/coreth/releases/tag/v0.11.5)
+
+- Add support for eth_call over VM2VM messaging
+- Add config flags for tx pool behavior
+
 ## [v0.11.4](https://github.com/ava-labs/coreth/releases/tag/v0.11.4)
 
 - Add config option to perform database inspection on startup
 - Add configurable transaction indexing to reduce disk usage
 - Add special case to allow transactions using Nick's Method to bypass API level replay protection
+- Add counter metrics for number of accepted/processed logs
+- Improve header and logs caching using maximum accepted depth cache
 
 ## [v0.11.3](https://github.com/ava-labs/coreth/releases/tag/v0.11.3)
 

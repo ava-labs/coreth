@@ -8,38 +8,41 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cast"
 )
 
 const (
-	defaultAcceptorQueueLimit                     = 64 // Provides 2 minutes of buffer (2s block target) for a commit delay
-	defaultPruningEnabled                         = true
-	defaultCommitInterval                         = 4096
-	defaultTrieCleanCache                         = 512
-	defaultTrieDirtyCache                         = 256
-	defaultTrieDirtyCommitTarget                  = 20
-	defaultSnapshotCache                          = 256
-	defaultSyncableCommitInterval                 = defaultCommitInterval * 4
-	defaultSnapshotAsync                          = true
-	defaultRpcGasCap                              = 50_000_000 // Default to 50M Gas Limit
-	defaultRpcTxFeeCap                            = 100        // 100 AVAX
-	defaultMetricsExpensiveEnabled                = true
-	defaultApiMaxDuration                         = 0 // Default to no maximum API call duration
-	defaultWsCpuRefillRate                        = 0 // Default to no maximum WS CPU usage
-	defaultWsCpuMaxStored                         = 0 // Default to no maximum WS CPU usage
-	defaultMaxBlocksPerRequest                    = 0 // Default to no maximum on the number of blocks per getLogs request
-	defaultContinuousProfilerFrequency            = 15 * time.Minute
-	defaultContinuousProfilerMaxFiles             = 5
-	defaultTxRegossipFrequency                    = 1 * time.Minute
-	defaultTxRegossipMaxSize                      = 15
-	defaultOfflinePruningBloomFilterSize   uint64 = 512 // Default size (MB) for the offline pruner to use
-	defaultLogLevel                               = "info"
-	defaultLogJSONFormat                          = false
-	defaultPopulateMissingTriesParallelism        = 1024
-	defaultMaxOutboundActiveRequests              = 16
-	defaultStateSyncServerTrieCache               = 64 // MB
+	defaultAcceptorQueueLimit                         = 64 // Provides 2 minutes of buffer (2s block target) for a commit delay
+	defaultPruningEnabled                             = true
+	defaultCommitInterval                             = 4096
+	defaultTrieCleanCache                             = 512
+	defaultTrieDirtyCache                             = 256
+	defaultTrieDirtyCommitTarget                      = 20
+	defaultSnapshotCache                              = 256
+	defaultSyncableCommitInterval                     = defaultCommitInterval * 4
+	defaultSnapshotAsync                              = true
+	defaultRpcGasCap                                  = 50_000_000 // Default to 50M Gas Limit
+	defaultRpcTxFeeCap                                = 100        // 100 AVAX
+	defaultMetricsExpensiveEnabled                    = true
+	defaultApiMaxDuration                             = 0 // Default to no maximum API call duration
+	defaultWsCpuRefillRate                            = 0 // Default to no maximum WS CPU usage
+	defaultWsCpuMaxStored                             = 0 // Default to no maximum WS CPU usage
+	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
+	defaultContinuousProfilerFrequency                = 15 * time.Minute
+	defaultContinuousProfilerMaxFiles                 = 5
+	defaultTxRegossipFrequency                        = 1 * time.Minute
+	defaultTxRegossipMaxSize                          = 15
+	defaultOfflinePruningBloomFilterSize       uint64 = 512 // Default size (MB) for the offline pruner to use
+	defaultLogLevel                                   = "info"
+	defaultLogJSONFormat                              = false
+	defaultPopulateMissingTriesParallelism            = 1024
+	defaultMaxOutboundActiveRequests                  = 16
+	defaultMaxOutboundActiveCrossChainRequests        = 64
+	defaultStateSyncServerTrieCache                   = 64 // MB
+	defaultAcceptedCacheSize                          = 32 // blocks
 
 	// defaultStateSyncMinBlocks is the minimum number of blocks the blockchain
 	// should be ahead of local last accepted to perform state sync.
@@ -115,7 +118,17 @@ type Config struct {
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
 
 	// API Settings
-	LocalTxsEnabled          bool          `json:"local-txs-enabled"`
+	LocalTxsEnabled bool `json:"local-txs-enabled"`
+
+	TxPoolJournal      string   `json:"tx-pool-journal"`
+	TxPoolRejournal    Duration `json:"tx-pool-rejournal"`
+	TxPoolPriceLimit   uint64   `json:"tx-pool-price-limit"`
+	TxPoolPriceBump    uint64   `json:"tx-pool-price-bump"`
+	TxPoolAccountSlots uint64   `json:"tx-pool-account-slots"`
+	TxPoolGlobalSlots  uint64   `json:"tx-pool-global-slots"`
+	TxPoolAccountQueue uint64   `json:"tx-pool-account-queue"`
+	TxPoolGlobalQueue  uint64   `json:"tx-pool-global-queue"`
+
 	APIMaxDuration           Duration      `json:"api-max-duration"`
 	WSCPURefillRate          Duration      `json:"ws-cpu-refill-rate"`
 	WSCPUMaxStored           Duration      `json:"ws-cpu-max-stored"`
@@ -144,7 +157,8 @@ type Config struct {
 	OfflinePruningDataDirectory   string `json:"offline-pruning-data-directory"`
 
 	// VM2VM network
-	MaxOutboundActiveRequests int64 `json:"max-outbound-active-requests"`
+	MaxOutboundActiveRequests           int64 `json:"max-outbound-active-requests"`
+	MaxOutboundActiveCrossChainRequests int64 `json:"max-outbound-active-cross-chain-requests"`
 
 	// Sync settings
 	StateSyncEnabled         bool   `json:"state-sync-enabled"`
@@ -162,6 +176,13 @@ type Config struct {
 	// their node before the network upgrade and their node accepts blocks that have
 	// identical state with the pre-upgrade ruleset.
 	SkipUpgradeCheck bool `json:"skip-upgrade-check"`
+
+	// AcceptedCacheSize is the depth to keep in the accepted headers cache and the
+	// accepted logs cache at the accepted tip.
+	//
+	// This is particularly useful for improving the performance of eth_getLogs
+	// on RPC nodes.
+	AcceptedCacheSize int `json:"accepted-cache-size"`
 
 	// TxLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -184,6 +205,16 @@ func (c *Config) SetDefaults() {
 	c.RPCGasCap = defaultRpcGasCap
 	c.RPCTxFeeCap = defaultRpcTxFeeCap
 	c.MetricsExpensiveEnabled = defaultMetricsExpensiveEnabled
+
+	c.TxPoolJournal = core.DefaultTxPoolConfig.Journal
+	c.TxPoolRejournal = Duration{core.DefaultTxPoolConfig.Rejournal}
+	c.TxPoolPriceLimit = core.DefaultTxPoolConfig.PriceLimit
+	c.TxPoolPriceBump = core.DefaultTxPoolConfig.PriceBump
+	c.TxPoolAccountSlots = core.DefaultTxPoolConfig.AccountSlots
+	c.TxPoolGlobalSlots = core.DefaultTxPoolConfig.GlobalSlots
+	c.TxPoolAccountQueue = core.DefaultTxPoolConfig.AccountQueue
+	c.TxPoolGlobalQueue = core.DefaultTxPoolConfig.GlobalQueue
+
 	c.APIMaxDuration.Duration = defaultApiMaxDuration
 	c.WSCPURefillRate.Duration = defaultWsCpuRefillRate
 	c.WSCPUMaxStored.Duration = defaultWsCpuMaxStored
@@ -204,11 +235,13 @@ func (c *Config) SetDefaults() {
 	c.PopulateMissingTriesParallelism = defaultPopulateMissingTriesParallelism
 	c.LogJSONFormat = defaultLogJSONFormat
 	c.MaxOutboundActiveRequests = defaultMaxOutboundActiveRequests
+	c.MaxOutboundActiveCrossChainRequests = defaultMaxOutboundActiveCrossChainRequests
 	c.StateSyncServerTrieCache = defaultStateSyncServerTrieCache
 	c.CommitInterval = defaultCommitInterval
 	c.StateSyncCommitInterval = defaultSyncableCommitInterval
 	c.StateSyncMinBlocks = defaultStateSyncMinBlocks
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
+	c.AcceptedCacheSize = defaultAcceptedCacheSize
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

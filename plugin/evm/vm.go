@@ -429,7 +429,17 @@ func (vm *VM) Initialize(
 	vm.ethConfig.RPCGasCap = vm.config.RPCGasCap
 	vm.ethConfig.RPCEVMTimeout = vm.config.APIMaxDuration.Duration
 	vm.ethConfig.RPCTxFeeCap = vm.config.RPCTxFeeCap
+
 	vm.ethConfig.TxPool.NoLocals = !vm.config.LocalTxsEnabled
+	vm.ethConfig.TxPool.Journal = vm.config.TxPoolJournal
+	vm.ethConfig.TxPool.Rejournal = vm.config.TxPoolRejournal.Duration
+	vm.ethConfig.TxPool.PriceLimit = vm.config.TxPoolPriceLimit
+	vm.ethConfig.TxPool.PriceBump = vm.config.TxPoolPriceBump
+	vm.ethConfig.TxPool.AccountSlots = vm.config.TxPoolAccountSlots
+	vm.ethConfig.TxPool.GlobalSlots = vm.config.TxPoolGlobalSlots
+	vm.ethConfig.TxPool.AccountQueue = vm.config.TxPoolAccountQueue
+	vm.ethConfig.TxPool.GlobalQueue = vm.config.TxPoolGlobalQueue
+
 	vm.ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
 	vm.ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
 	vm.ethConfig.AllowUnprotectedTxHashes = vm.config.AllowUnprotectedTxHashes
@@ -453,6 +463,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
 	vm.ethConfig.CommitInterval = vm.config.CommitInterval
 	vm.ethConfig.SkipUpgradeCheck = vm.config.SkipUpgradeCheck
+	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TxLookupLimit = vm.config.TxLookupLimit
 
 	// Create directory for offline pruning
@@ -486,7 +497,7 @@ func (vm *VM) Initialize(
 
 	// initialize peer network
 	vm.networkCodec = message.Codec
-	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
@@ -646,6 +657,7 @@ func (vm *VM) initializeStateSyncServer() {
 	})
 
 	vm.setAppRequestHandlers()
+	vm.setCrossChainAppRequestHandler()
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
@@ -991,6 +1003,13 @@ func (vm *VM) setAppRequestHandlers() {
 		handlerstats.NewHandlerStats(metrics.Enabled),
 	)
 	vm.Network.SetRequestHandler(syncRequestHandler)
+}
+
+// setCrossChainAppRequestHandler sets the request handlers for the VM to serve cross chain
+// requests.
+func (vm *VM) setCrossChainAppRequestHandler() {
+	crossChainRequestHandler := message.NewCrossChainHandler(vm.eth.APIBackend, message.CrossChainCodec)
+	vm.Network.SetCrossChainRequestHandler(crossChainRequestHandler)
 }
 
 // Shutdown implements the snowman.ChainVM interface
