@@ -604,14 +604,17 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	// Check AdminController restrictions
-	_, isContract := caller.(*Contract)
-	if evm.Context.AdminController != nil && !isContract &&
+	rootCaller := caller
+	if contract, isContract := caller.(*Contract); isContract {
+		rootCaller = contract.caller
+	}
+	if evm.Context.AdminController != nil &&
 		!evm.Context.AdminController.KycVerified(
 			&types.Header{
 				Number: evm.Context.BlockNumber,
 				Time:   evm.Context.Time.Uint64(),
 			},
-			evm.StateDB, caller.Address()) {
+			evm.StateDB, rootCaller.Address()) {
 		return nil, common.Address{}, 0, vmerrs.ErrNotKycVerified
 	}
 
