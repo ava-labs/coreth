@@ -17,12 +17,13 @@ var Codec codec.Manager
 
 func init() {
 	Codec = codec.NewDefaultManager()
-	c := linearcodec.NewDefault()
+	c := linearcodec.NewCaminoDefault()
 
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
+		c.RegisterCustomType(&UnsignedCollectRewardsTx{}),
 	)
 	c.SkipRegistrations(3)
 	errs.Add(
