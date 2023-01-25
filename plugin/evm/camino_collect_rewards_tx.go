@@ -41,10 +41,15 @@ var (
 	IncentivePoolRewardRate = new(big.Int).SetUint64(300_000)
 	RateDenominator         = new(big.Int).SetUint64(1_000_000)
 
-	errWrongInputCount  = errors.New("wrong input count")
-	errWrongExportCount = errors.New("wrong ExportedOuts count")
-	errExportLimit      = errors.New("export limit not yet reached")
-	errTimeNotPassed    = errors.New("time has not passed")
+	errWrongInputCount      = errors.New("wrong input count")
+	errWrongExportCount     = errors.New("wrong ExportedOuts count")
+	errExportLimit          = errors.New("export limit not yet reached")
+	errTimeNotPassed        = errors.New("time has not passed")
+	errInvalidInputAddress  = errors.New("invalid input address")
+	errInvalidOutputOwner   = errors.New("invalid output owner")
+	errInOutAmountMismatch  = errors.New("In/Out amount mismatch")
+	errInvalidBlockTime     = errors.New("invalid block time")
+	errRewardAmountMismatch = errors.New("calculated reward amount mismatch")
 )
 
 type UnsignedCollectRewardsTx struct {
@@ -89,33 +94,33 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 
 	// Verify sender of the rewards
 	if ucx.Ins[0].Address != gconstants.BlackholeAddr {
-		return fmt.Errorf("invalid input address")
+		return errInvalidInputAddress
 	}
 
 	// Verify receiver of the outputs
 	if len(output.OutputOwners.Addrs) != 1 || output.OutputOwners.Addrs[0] != FeeRewardAddressID {
-		return fmt.Errorf("invalid output owner")
+		return errInvalidOutputOwner
 	}
 
 	if ucx.ExportedOutputs[0].Out.Amount() != ucx.Ins[0].Amount {
-		return fmt.Errorf("amount mismatch")
+		return errInOutAmountMismatch
 	}
 
 	// Get block header
 	head := vm.blockChain.GetHeaderByHash(ucx.BlockHash)
 	if head == nil {
-		return fmt.Errorf("cannot get header")
+		return fmt.Errorf("cannot get header of tx BlockHash %s", ucx.BlockHash.Hex())
 	}
 
 	blockTime := head.Time - (head.Time % TimeInterval)
 	if blockTime != ucx.BlockTime {
-		return fmt.Errorf("invalid block time")
+		return errInvalidBlockTime
 	}
 
 	// Verify the block this tx was build from
 	state, err := vm.blockChain.StateAt(head.Root)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot get state at head root: %s", head.Root.Hex())
 	}
 
 	triggerTime := state.GetState(gconstants.BlackholeAddr, TimestampSlot).Big().Uint64()
@@ -128,7 +133,7 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 		return err
 	}
 	if balanceAvax != ucx.Ins[0].Amount {
-		return fmt.Errorf("amount mismatch")
+		return errRewardAmountMismatch
 	}
 
 	// Verify that parent would not succeed
@@ -156,6 +161,7 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 	// Check if the reward export limit is not reached
 	_, err = getReward(state)
 	if err == nil {
+		// should never happen. We expect the CollectRewardsTx is auto-issued locally at the earliest block where conditions are met
 		return fmt.Errorf("past block would execute")
 	}
 

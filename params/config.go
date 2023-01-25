@@ -143,7 +143,7 @@ var (
 		ApricotPhase3BlockTimestamp:     big.NewInt(0),
 		ApricotPhase4BlockTimestamp:     big.NewInt(0),
 		ApricotPhase5BlockTimestamp:     big.NewInt(0),
-		SunrisePhase0BlockTimestamp:     big.NewInt(0),
+		SunrisePhase0BlockTimestamp:     nil,
 		ApricotPhasePre6BlockTimestamp:  big.NewInt(0),
 		ApricotPhase6BlockTimestamp:     big.NewInt(0),
 		ApricotPhasePost6BlockTimestamp: big.NewInt(0),
