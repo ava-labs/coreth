@@ -56,6 +56,8 @@ type UnsignedCollectRewardsTx struct {
 	UnsignedExportTx `serialize:"true"`
 	BlockHash        common.Hash `serialize:"true"`
 	BlockTime        uint64      `serialize:"true"`
+	ExportRate       uint64      `serialize:"true"`
+	IncentiveRate    uint64      `serialize:"true"`
 }
 
 func (ucx *UnsignedCollectRewardsTx) GasUsed(fixedFee bool) (uint64, error) {
@@ -104,6 +106,12 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 
 	if ucx.ExportedOutputs[0].Out.Amount() != ucx.Ins[0].Amount {
 		return errInOutAmountMismatch
+	}
+
+	// Verify Rates
+	if ucx.ExportRate != ExportRewardRate.Uint64() ||
+		ucx.IncentiveRate != IncentivePoolRewardRate.Uint64() {
+		return fmt.Errorf("export / incentive rate mismatch")
 	}
 
 	// Get block header
@@ -247,8 +255,10 @@ func (vm *VM) NewCollectRewardsTx(
 				},
 			}},
 		},
-		BlockHash: hash,
-		BlockTime: blockTime,
+		BlockHash:     hash,
+		BlockTime:     blockTime,
+		ExportRate:    ExportRewardRate.Uint64(),
+		IncentiveRate: IncentivePoolRewardRate.Uint64(),
 	}
 
 	tx := &Tx{UnsignedAtomicTx: utx}
