@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
+	"github.com/ava-labs/avalanchego/vms/components/message"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	gconstants "github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/state"
@@ -280,6 +281,19 @@ func (vm *VM) TriggerRewardsTx(block *Block) {
 	if !vm.chainConfig.IsSunrisePhase0(blockTimeBN) {
 		return
 	}
+
+	// check if we need to notify p-chain for new aaceppted TX
+	for _, tx := range block.atomicTxs {
+		if _, ok := tx.UnsignedAtomicTx.(*UnsignedCollectRewardsTx); ok {
+			request, err := message.Codec.Marshal(message.CodecVersion, &message.CaminoRewardMessage{})
+			if err != nil {
+				log.Warn("cannot marshall reward message", "error", err)
+			}
+			vm.RequestCrossChain(ids.ID{}, request, nil)
+			break
+		}
+	}
+
 	blockTime := blockTimeBN.Uint64()
 	blockTime = blockTime - (blockTime % TimeInterval)
 

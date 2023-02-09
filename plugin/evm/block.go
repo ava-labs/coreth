@@ -189,8 +189,6 @@ func (b *Block) Accept(context.Context) error {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
-	vm.TriggerRewardsTx(b)
-
 	for _, tx := range b.atomicTxs {
 		// Remove the accepted transaction from the mempool
 		vm.mempool.RemoveTx(tx)
@@ -207,7 +205,15 @@ func (b *Block) Accept(context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
 	}
-	return atomicState.Accept(commitBatch)
+
+	err = atomicState.Accept(commitBatch)
+	if err != nil {
+		return err
+	}
+
+	vm.TriggerRewardsTx(b)
+
+	return nil
 }
 
 // Reject implements the snowman.Block interface
