@@ -282,7 +282,6 @@ func TestIssueCollectRewardsTxAndBuildBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parent = vm.LastAcceptedBlockInternal().(*Block)
 	state, err := vm.blockChain.State()
 	require.NoError(t, err)
 
@@ -342,7 +341,7 @@ func TestCollectRewardsAtomicOps(t *testing.T) {
 			require.Len(t, reqs.RemoveRequests, 0)
 			utxoBytes := reqs.PutRequests[0].Value
 
-			utxo := &avax.UTXO{}
+			utxo := &avax.TimedUTXO{}
 			_, err = vm.codec.Unmarshal(utxoBytes, utxo)
 			require.NoError(t, err)
 			require.Equal(t, vm.ctx.AVAXAssetID, utxo.AssetID())

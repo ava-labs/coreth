@@ -197,13 +197,16 @@ func (ucx *UnsignedCollectRewardsTx) AtomicOps() (ids.ID, *atomic.Requests, erro
 		OutputOwners: exportOut.OutputOwners,
 	}
 
-	utxo := &avax.UTXO{
-		UTXOID: avax.UTXOID{
-			TxID:        txID,
-			OutputIndex: 0,
+	utxo := &avax.TimedUTXO{
+		UTXO: avax.UTXO{
+			UTXOID: avax.UTXOID{
+				TxID:        txID,
+				OutputIndex: 0,
+			},
+			Asset: avax.Asset{ID: ucx.ExportedOutputs[0].AssetID()},
+			Out:   newOut,
 		},
-		Asset: avax.Asset{ID: ucx.ExportedOutputs[0].AssetID()},
-		Out:   newOut,
+		Timestamp: ucx.BlockTime,
 	}
 
 	utxoBytes, err := Codec.Marshal(codecVersion, utxo)
