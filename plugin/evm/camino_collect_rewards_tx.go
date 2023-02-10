@@ -270,6 +270,11 @@ func (vm *VM) NewCollectRewardsTx(
 }
 
 func (vm *VM) TriggerRewardsTx(block *Block) {
+	// Don't trigger durinc sync
+	if !vm.bootstrapped {
+		return
+	}
+
 	blockTimeBN := block.ethBlock.Timestamp()
 	// reward distribution only for sunrise configurations
 	if !vm.chainConfig.IsSunrisePhase0(blockTimeBN) {
