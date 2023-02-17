@@ -38,6 +38,7 @@ package core
 
 import (
 	"math/big"
+	"reflect"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/admin"
@@ -71,12 +72,14 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	if author == nil {
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
-		controller = chain.AdminController()
 	} else {
 		beneficiary = *author
 	}
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
+	}
+	if chain != nil && !reflect.ValueOf(chain).IsNil() {
+		controller = chain.AdminController()
 	}
 
 	return vm.BlockContext{

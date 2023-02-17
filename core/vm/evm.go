@@ -615,7 +615,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 				Time:   evm.Context.Time.Uint64(),
 			},
 			evm.StateDB, rootCaller.Address()) {
-		return nil, common.Address{}, 0, vmerrs.ErrNotKycVerified
+		return nil, common.Address{}, gas, vmerrs.ErrNotKycVerified
 	}
 
 	// Create a new account on the state
