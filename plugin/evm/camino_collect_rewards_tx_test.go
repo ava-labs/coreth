@@ -173,14 +173,6 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 			expectedTxError:    errors.New("input has no value"),
 		},
 		{
-			name:                 "Tx and block time mismatch",
-			amountToDistribute:   amount,
-			txBlockTime:          1000,
-			blockTime:            900,
-			timestampSlot:        1200,
-			expectedInvalidError: errors.New("invalid block time"),
-		},
-		{
 			name:                 "Time has not passed",
 			amountToDistribute:   amount,
 			txBlockTime:          1675080000,

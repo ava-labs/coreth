@@ -121,8 +121,8 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 		return fmt.Errorf("cannot get header of tx BlockHash %s", ucx.BlockHash.Hex())
 	}
 
-	blockTime := head.Time - (head.Time % TimeInterval)
-	if blockTime != ucx.BlockTime {
+	headTime := modTime(head.Time)
+	if headTime != modTime(ucx.BlockTime) {
 		return errInvalidBlockTime
 	}
 
@@ -133,7 +133,7 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 	}
 
 	triggerTime := state.GetState(gconstants.BlackholeAddr, TimestampSlot).Big().Uint64()
-	if blockTime < triggerTime {
+	if headTime < triggerTime {
 		return errTimeNotPassed
 	}
 
@@ -162,8 +162,7 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 	}
 
 	// Check if parent is before trigger time
-	blockTime = head.Time - (head.Time % TimeInterval)
-	if blockTime < triggerTime {
+	if modTime(head.Time) < triggerTime {
 		return nil
 	}
 
@@ -298,15 +297,13 @@ func (vm *VM) TriggerRewardsTx(block *Block) {
 	}
 
 	blockTime := blockTimeBN.Uint64()
-	blockTime = blockTime - (blockTime % TimeInterval)
-
 	state, err := vm.blockChain.StateAt(block.ethBlock.Root())
 	if err != nil {
 		return
 	}
 
 	triggerTime := state.GetState(gconstants.BlackholeAddr, TimestampSlot).Big().Uint64()
-	if blockTime < triggerTime {
+	if modTime(blockTime) < triggerTime {
 		return
 	}
 
@@ -391,7 +388,7 @@ func (ucx *UnsignedCollectRewardsTx) EVMStateTransfer(ctx *snow.Context, state *
 	state.AddBalance(common.Address(FeeRewardAddressID), amountIncentiveEVM)
 
 	// Step up timestamp for the next iteration
-	nextBig := new(big.Int).SetUint64(ucx.BlockTime + TimeInterval)
+	nextBig := new(big.Int).SetUint64(modTime(ucx.BlockTime) + TimeInterval)
 	state.SetState(from.Address, TimestampSlot, common.BigToHash(nextBig))
 
 	if state.GetNonce(from.Address) != from.Nonce {
@@ -407,6 +404,10 @@ func calculateRate(amt uint64, rate *big.Int) uint64 {
 	bn.Mul(bn, rate)
 	bn.Div(bn, RateDenominator)
 	return bn.Uint64()
+}
+
+func modTime(tm uint64) uint64 {
+	return tm - (tm % TimeInterval)
 }
 
 func getReward(state *state.StateDB) (uint64, error) {
