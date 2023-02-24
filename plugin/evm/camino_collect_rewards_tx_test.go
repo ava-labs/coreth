@@ -1,3 +1,6 @@
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package evm
 
 import (
@@ -155,7 +158,7 @@ func TestCollectRewardsEVMStateTransfer(t *testing.T) {
 }
 
 func TestCollectRewardsSemanticVerify(t *testing.T) {
-	amount := uint64(1_000_000)
+	amount := uint64(100_000_000_000)
 	tests := []struct {
 		name                 string
 		amountToDistribute   uint64
@@ -244,7 +247,7 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 }
 
 func TestIssueCollectRewardsTxAndBuildBlock(t *testing.T) {
-	amount := uint64(1_000_000)
+	amount := uint64(100_000_000_000)
 	genesisJSON := prepareGenesis(amount, uint64(0), uint64(0), uint64(0), 0)
 	issuer, vm, _, _, _ := GenesisVM(t, true, genesisJSON, "", "")
 	parent := vm.LastAcceptedBlockInternal().(*Block)

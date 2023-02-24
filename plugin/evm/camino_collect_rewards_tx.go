@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	FeeRewardMinAmountToExport = uint64(200_000)
+	FeeRewardMinAmountToExport = uint64(10_000_000_000)
 	FeeRewardAddressStr        = "0x010000000000000000000000000000000000000c"
 )
 

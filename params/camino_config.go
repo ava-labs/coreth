@@ -12,7 +12,7 @@ import (
 // Gas Price
 const (
 	SunrisePhase0ExtraDataSize        = 0
-	SunrisePhase0BaseFee       uint64 = 50_000_000_000
+	SunrisePhase0BaseFee       uint64 = 200_000_000_000
 )
 
 var (
