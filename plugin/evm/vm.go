@@ -919,11 +919,14 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 			return err
 		}
 		return vm.fx.Bootstrapping()
-	case snow.NormalOp:
+	case snow.ExtendingFrontier:
 		// Initialize goroutines related to block building once we enter normal operation as there is no need to handle mempool gossip before this point.
 		vm.initBlockBuilding()
 		vm.bootstrapped = true
 		return vm.fx.Bootstrapped()
+	case snow.SubnetSynced:
+		// TODO ABENEGIA: duly handle this
+		return nil
 	default:
 		return snow.ErrUnknownState
 	}
