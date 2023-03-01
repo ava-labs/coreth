@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
+	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -219,7 +220,7 @@ func (utx *UnsignedImportTx) SemanticVerify(
 		return fmt.Errorf("import tx contained mismatched number of inputs/credentials (%d vs. %d)", len(utx.ImportedInputs), len(stx.Creds))
 	}
 
-	if !vm.bootstrapped {
+	if !status.FullySynced(vm.vmState.Get()) {
 		// Allow for force committing during bootstrapping
 		return nil
 	}

@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.9.10-0.20230228091306-1ed6fc6a9c1f
+	github.com/ava-labs/avalanchego v1.9.10-0.20230301133947-85175f04367a
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
@@ -18,6 +18,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/go-bexpr v0.1.10
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
+	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.0
 	github.com/mattn/go-colorable v0.1.12
@@ -67,7 +68,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
 	github.com/influxdata/influxdb v1.8.3 // indirect
 	github.com/influxdata/influxdb-client-go/v2 v2.4.0 // indirect

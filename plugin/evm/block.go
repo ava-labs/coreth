@@ -18,6 +18,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 )
 
 var (
@@ -262,7 +263,7 @@ func (b *Block) verifyUTXOsPresent() error {
 		return nil
 	}
 
-	if !b.vm.bootstrapped {
+	if !status.FullySynced(b.vm.vmState.Get()) {
 		return nil
 	}
 

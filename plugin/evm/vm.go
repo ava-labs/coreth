@@ -17,6 +17,7 @@ import (
 	"time"
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
+	"github.com/ava-labs/avalanchego/utils"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	corethConstants "github.com/ava-labs/coreth/constants"
@@ -277,8 +278,8 @@ type VM struct {
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
 
-	bootstrapped bool
-	IsPlugin     bool
+	vmState  utils.Atomic[snow.State]
+	IsPlugin bool
 
 	logger CorethLogger
 	// State sync server and client
@@ -911,21 +912,23 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 func (vm *VM) SetState(_ context.Context, state snow.State) error {
 	switch state {
 	case snow.StateSyncing:
-		vm.bootstrapped = false
+		vm.vmState.Set(snow.StateSyncing)
 		return nil
 	case snow.Bootstrapping:
-		vm.bootstrapped = false
+		vm.vmState.Set(snow.Bootstrapping)
 		if err := vm.StateSyncClient.Error(); err != nil {
 			return err
 		}
 		return vm.fx.Bootstrapping()
 	case snow.ExtendingFrontier:
-		// Initialize goroutines related to block building once we enter normal operation as there is no need to handle mempool gossip before this point.
-		vm.initBlockBuilding()
-		vm.bootstrapped = true
+		vm.vmState.Set(snow.ExtendingFrontier)
 		return vm.fx.Bootstrapped()
 	case snow.SubnetSynced:
-		// TODO ABENEGIA: duly handle this
+		// Initialize goroutines related to block building once
+		// we have fully synced subnet as there is no need to handle
+		// mempool gossip before this point.
+		vm.initBlockBuilding()
+		vm.vmState.Set(snow.SubnetSynced)
 		return nil
 	default:
 		return snow.ErrUnknownState

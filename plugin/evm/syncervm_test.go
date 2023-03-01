@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -525,8 +526,9 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	})
 
 	// check we can transition to [NormalOp] state and continue to process blocks.
-	assert.NoError(t, syncerVM.SetState(context.Background(), snow.NormalOp))
-	assert.True(t, syncerVM.bootstrapped)
+	assert.NoError(t, syncerVM.SetState(context.Background(), snow.ExtendingFrontier))
+	assert.NoError(t, syncerVM.SetState(context.Background(), snow.SubnetSynced))
+	assert.True(t, status.FullySynced(syncerVM.vmState.Get()))
 
 	// check atomic memory was synced properly
 	syncerSharedMemories := newSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
