@@ -1,5 +1,9 @@
 # Release Notes
 
+## [v0.11.8](https://github.com/ava-labs/coreth/releases/tag/v0.11.8)
+
+- Update golangci-lint version to v1.51.2
+
 ## [v0.11.7](https://github.com/ava-labs/coreth/releases/tag/v0.11.7)
 
 - Enable state sync by default when syncing from an empty database
