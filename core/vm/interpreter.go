@@ -1,3 +1,13 @@
+// Copyright (C) 2023, Chain4Travel AG. All rights reserved.
+//
+// This file is a derived work, based on ava-labs code whose
+// original notices appear below.
+//
+// It is distributed under the same license conditions as the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********************************************************
 // (c) 2019-2020, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
@@ -29,6 +39,7 @@ package vm
 import (
 	"hash"
 
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -55,6 +66,9 @@ type Config struct {
 
 	// AllowUnfinalizedQueries allow unfinalized queries
 	AllowUnfinalizedQueries bool
+
+	// Admincontoller interface
+	AdminContoller admin.AdminController
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,

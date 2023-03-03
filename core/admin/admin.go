@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 
 package admin
 
@@ -18,6 +18,8 @@ type EmptyStruct struct{}
 // Admin interface to control administrative tasks, which are intended to
 // be controlled on block level like BaseFee or Blacklisting or KYC
 type AdminController interface {
+	// Starts listening to blockchain events
+	Start()
 	// Get the FixedBaseFee which should applied for blocks after height
 	GetFixedBaseFee(head *types.Header, state StateDB) *big.Int
 	// Returns true if we are in SunrisePhase0 and KYC flag is set

@@ -41,6 +41,7 @@ import (
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/admin"
 	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
@@ -106,7 +107,7 @@ type SimulatedBackend struct {
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64, addr common.Address) *SimulatedBackend {
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64, addr common.Address, ctrl admin.AdminController) *SimulatedBackend {
 	cpcfg := params.TestChainConfig
 	cpcfg.ChainID = big.NewInt(1337)
 	genesis := core.Genesis{Config: cpcfg, GasLimit: gasLimit, Alloc: alloc, InitialAdmin: addr}
@@ -115,7 +116,8 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	}
 	genesis.MustCommit(database)
 	cacheConfig := &core.CacheConfig{}
-	blockchain, _ := core.NewBlockChain(database, cacheConfig, genesis.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+
+	blockchain, _ := core.NewBlockChain(database, cacheConfig, genesis.Config, dummy.NewFaker(), vm.Config{AdminContoller: ctrl}, common.Hash{})
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -135,14 +137,21 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, common.Address{})
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, common.Address{}, nil)
 }
 
 // NewSimulatedBackendWithInitialAdmin creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackendWithInitialAdmin(alloc core.GenesisAlloc, gasLimit uint64, addr common.Address) *SimulatedBackend {
-	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, addr)
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, addr, nil)
+}
+
+// NewSimulatedBackendWithInitialAdmin creates a new binding backend using a simulated blockchain
+// for testing purposes.
+// A simulated backend always uses chainID 1337.
+func NewSimulatedBackendWithInitialAdminAndAdminController(alloc core.GenesisAlloc, gasLimit uint64, addr common.Address, ctrl admin.AdminController) *SimulatedBackend {
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, addr, ctrl)
 }
 
 // Close terminates the underlying blockchain's update loop.

@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 
 package ethadmin
 
@@ -39,12 +39,12 @@ const (
 type AdminControllerBackend interface {
 	StateByHeader(ctx context.Context, header *types.Header) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	ChainConfig() *params.ChainConfig
 }
 
 type AdminController struct {
 	ctx              context.Context
 	backend          AdminControllerBackend
+	cfg              *params.ChainConfig
 	lastHead         common.Hash // Last block hash used for validating sequence
 	scanHeight       big.Int     // Last scanned block height
 	lastChangeHeight big.Int     // Last known block where changes were made
@@ -55,21 +55,24 @@ type AdminController struct {
 }
 
 // NewAdmin returns a new Admin instance used for fast admi state retrieval
-func NewController(backend AdminControllerBackend) *AdminController {
+func NewController(backend AdminControllerBackend, config *params.ChainConfig) *AdminController {
 	admin := &AdminController{
 		ctx:     context.Background(),
 		backend: backend,
+		cfg:     config,
 	}
 
+	return admin
+}
+
+func (a *AdminController) Start() {
 	headEvent := make(chan core.ChainHeadEvent, 1)
-	backend.SubscribeChainHeadEvent(headEvent)
+	a.backend.SubscribeChainHeadEvent(headEvent)
 	go func() {
 		for ev := range headEvent {
-			admin.consume(&ev)
+			a.consume(&ev)
 		}
 	}()
-
-	return admin
 }
 
 func (a *AdminController) consume(ev *core.ChainHeadEvent) {
@@ -135,7 +138,7 @@ func (a *AdminController) GetFixedBaseFee(head *types.Header, state admin.StateD
 }
 
 func (a *AdminController) KycVerified(head *types.Header, state admin.StateDB, addr common.Address) bool {
-	if a.backend.ChainConfig().IsSunrisePhase0(big.NewInt(int64(head.Time))) {
+	if a.cfg.IsSunrisePhase0(big.NewInt(int64(head.Time))) {
 		// Calculate storage position
 		storagePos := crypto.Keccak256Hash(append(addr.Hash().Bytes(), common.HexToHash("0x2").Bytes()...))
 		// Get the KYC states

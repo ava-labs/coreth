@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 //
 // This file is a derived work, based on ava-labs code whose
 // original notices appear below.
@@ -233,6 +233,14 @@ func New(
 		return nil, err
 	}
 
+	eth.APIBackend = &EthAPIBackend{
+		extRPCEnabled:       stack.Config().ExtRPCEnabled(),
+		allowUnprotectedTxs: config.AllowUnprotectedTxs,
+		eth:                 eth,
+	}
+
+	vmConfig.AdminContoller = ethadmin.NewController(eth.APIBackend, chainConfig)
+
 	var err error
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, lastAcceptedHash)
 	if err != nil {
@@ -243,16 +251,8 @@ func New(
 		return nil, err
 	}
 
-	eth.APIBackend = &EthAPIBackend{
-		extRPCEnabled:       stack.Config().ExtRPCEnabled(),
-		allowUnprotectedTxs: config.AllowUnprotectedTxs,
-		eth:                 eth,
-	}
-
-	ac := ethadmin.NewController(eth.APIBackend)
-	eth.blockchain.SetAdminController(ac)
-
 	eth.bloomIndexer.Start(eth.blockchain)
+	vmConfig.AdminContoller.Start()
 
 	config.TxPool.Journal = ""
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
@@ -264,12 +264,7 @@ func New(
 		allowUnprotectedTxHashes[txHash] = struct{}{}
 	}
 
-	eth.APIBackend = &EthAPIBackend{
-		extRPCEnabled:            stack.Config().ExtRPCEnabled(),
-		allowUnprotectedTxs:      config.AllowUnprotectedTxs,
-		allowUnprotectedTxHashes: allowUnprotectedTxHashes,
-		eth:                      eth,
-	}
+	eth.APIBackend.allowUnprotectedTxHashes = allowUnprotectedTxHashes
 	if config.AllowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}

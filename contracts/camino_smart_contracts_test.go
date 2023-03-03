@@ -67,7 +67,8 @@ var (
 )
 
 type ETHChain struct {
-	backend *eth.Ethereum
+	backend     *eth.Ethereum
+	chainConfig *params.ChainConfig
 }
 
 func TestDeployContract(t *testing.T) {
@@ -87,19 +88,17 @@ func TestDeployContract(t *testing.T) {
 	// Generate GenesisAlloc
 	alloc := makeGenesisAllocation()
 
+	ethChain := newETHChain(t)
+	ac := ethadmin.NewController(ethChain.backend.APIBackend, ethChain.chainConfig)
+
 	// Generate SimulatedBackend
-	sim := backends.NewSimulatedBackendWithInitialAdmin(alloc, gasLimit, adminAddr)
+	sim := backends.NewSimulatedBackendWithInitialAdminAndAdminController(alloc, gasLimit, adminAddr, ac)
 	defer func() {
 		err := sim.Close()
 		assert.NoError(t, err)
 	}()
 
 	sim.Commit(true)
-
-	ethChain := newETHChain(t)
-
-	ac := ethadmin.NewController(ethChain.backend.APIBackend)
-	sim.Blockchain().SetAdminController(ac)
 
 	adminContract, err := admin.NewBuild(contractAddr, sim)
 	assert.NoError(t, err)
@@ -535,21 +534,19 @@ func TestEthAdmin(t *testing.T) {
 	// Generate GenesisAlloc
 	alloc := makeGenesisAllocation()
 
+	// Create a bew Eth chain to generate an AdminController from its backend
+	// Simulated backed will not do
+	ethChain := newETHChain(t)
+	ac := ethadmin.NewController(ethChain.backend.APIBackend, ethChain.chainConfig)
+
 	// Generate SimulatedBackend
-	sim := backends.NewSimulatedBackendWithInitialAdmin(alloc, gasLimit, gasFeeAddr)
+	sim := backends.NewSimulatedBackendWithInitialAdminAndAdminController(alloc, gasLimit, gasFeeAddr, ac)
 	defer func() {
 		err := sim.Close()
 		assert.NoError(t, err)
 	}()
 
 	sim.Commit(true)
-
-	// Create a bew Eth chain to generate an AdminController from its backend
-	// Simulated backed will not do
-	ethChain := newETHChain(t)
-
-	ac := ethadmin.NewController(ethChain.backend.APIBackend)
-	sim.Blockchain().SetAdminController(ac)
 
 	latestHeader, state := getLatestHeaderAndState(t, sim)
 
@@ -637,7 +634,7 @@ func newETHChain(t *testing.T) *ETHChain {
 	backend, err := eth.New(node, &config, new(dummy.ConsensusCallbacks), rawdb.NewMemoryDatabase(), eth.DefaultSettings, common.Hash{}, &mockable.Clock{})
 	assert.NoError(t, err)
 
-	chain := &ETHChain{backend: backend}
+	chain := &ETHChain{backend: backend, chainConfig: chainConfig}
 	backend.SetEtherbase(blackholeAddr)
 
 	return chain

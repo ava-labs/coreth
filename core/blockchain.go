@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 //
 // This file is a derived work, based on ava-labs code whose
 // original notices appear below.
@@ -307,6 +307,7 @@ func NewBlockChain(
 	bc := &BlockChain{
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
+		adminCtrl:   vmConfig.AdminContoller,
 		db:          db,
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:       cacheConfig.TrieCleanLimit,
@@ -656,11 +657,6 @@ func (bc *BlockChain) stopAcceptor() {
 	bc.acceptorWg.Wait()
 	bc.acceptorClosed = true
 	close(bc.acceptorQueue)
-}
-
-// SetAdminController sets the admin Controller.
-func (bc *BlockChain) SetAdminController(ctrl admin.AdminController) {
-	bc.adminCtrl = ctrl
 }
 
 func (bc *BlockChain) InitializeSnapshots() {
