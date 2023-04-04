@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 //
 // This file is a derived work, based on ava-labs code whose
 // original notices appear below.
@@ -65,16 +65,20 @@ var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config       *params.ChainConfig `json:"config"`
-	Nonce        uint64              `json:"nonce"`
-	Timestamp    uint64              `json:"timestamp"`
-	ExtraData    []byte              `json:"extraData"`
-	GasLimit     uint64              `json:"gasLimit"   gencodec:"required"`
-	Difficulty   *big.Int            `json:"difficulty" gencodec:"required"`
-	Mixhash      common.Hash         `json:"mixHash"`
-	Coinbase     common.Address      `json:"coinbase"`
-	InitialAdmin common.Address      `json:"initialAdmin"`
-	Alloc        GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Config     *params.ChainConfig `json:"config"`
+	Nonce      uint64              `json:"nonce"`
+	Timestamp  uint64              `json:"timestamp"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
+	Mixhash    common.Hash         `json:"mixHash"`
+	Coinbase   common.Address      `json:"coinbase"`
+	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
+
+	// Camino genesis
+	InitialAdmin                   common.Address `json:"initialAdmin"`
+	FeeRewardExportMinAmount       uint64         `json:"feeRewardExportMinAmount"`
+	FeeRewardExportMinTimeInterval uint64         `json:"feeRewardExportMinTimeInterval"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.

@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/message"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -23,8 +24,7 @@ import (
 )
 
 const (
-	FeeRewardMinAmountToExport = uint64(10_000_000_000)
-	FeeRewardAddressStr        = "0x010000000000000000000000000000000000000c"
+	FeeRewardAddressStr = "0x010000000000000000000000000000000000000c"
 )
 
 var (
@@ -37,28 +37,29 @@ var (
 	BalanceSlot   = common.Hash{0x01}
 	TimestampSlot = common.Hash{0x02}
 
-	TimeInterval            = uint64(3_600)
 	ExportRewardRate        = new(big.Int).SetUint64(300_000)
 	IncentivePoolRewardRate = new(big.Int).SetUint64(300_000)
 	RateDenominator         = new(big.Int).SetUint64(1_000_000)
 
-	errWrongInputCount      = errors.New("wrong input count")
-	errWrongExportCount     = errors.New("wrong ExportedOuts count")
-	errExportLimit          = errors.New("export limit not yet reached")
-	errTimeNotPassed        = errors.New("time has not passed")
-	errInvalidInputAddress  = errors.New("invalid input address")
-	errInvalidOutputOwner   = errors.New("invalid output owner")
-	errInOutAmountMismatch  = errors.New("In/Out amount mismatch")
-	errInvalidBlockTime     = errors.New("invalid block time")
-	errRewardAmountMismatch = errors.New("calculated reward amount mismatch")
+	errWrongInputCount                = errors.New("wrong input count")
+	errWrongExportCount               = errors.New("wrong ExportedOuts count")
+	errExportLimit                    = errors.New("export limit not yet reached")
+	errTimeNotPassed                  = errors.New("time has not passed")
+	errInvalidInputAddress            = errors.New("invalid input address")
+	errInvalidOutputOwner             = errors.New("invalid output owner")
+	errInOutAmountMismatch            = errors.New("In/Out amount mismatch")
+	errInvalidBlockTime               = errors.New("invalid block time")
+	errInvalidNextEarliestCollectTime = errors.New("invalid next earliest collect time")
+	errRewardAmountMismatch           = errors.New("calculated reward amount mismatch")
 )
 
 type UnsignedCollectRewardsTx struct {
-	UnsignedExportTx `serialize:"true"`
-	BlockHash        common.Hash `serialize:"true"`
-	BlockTime        uint64      `serialize:"true"`
-	ExportRate       uint64      `serialize:"true"`
-	IncentiveRate    uint64      `serialize:"true"`
+	UnsignedExportTx        `serialize:"true"`
+	BlockHash               common.Hash `serialize:"true"`
+	BlockTime               uint64      `serialize:"true"`
+	NextEarliestCollectTime uint64      `serialize:"true"`
+	ExportRate              uint64      `serialize:"true"`
+	IncentiveRate           uint64      `serialize:"true"`
 }
 
 func (ucx *UnsignedCollectRewardsTx) GasUsed(fixedFee bool) (uint64, error) {
@@ -121,9 +122,14 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 		return fmt.Errorf("cannot get header of tx BlockHash %s", ucx.BlockHash.Hex())
 	}
 
-	headTime := modTime(head.Time)
-	if headTime != modTime(ucx.BlockTime) {
+	headTime := modTime(vm, head.Time)
+	if headTime != modTime(vm, ucx.BlockTime) {
 		return errInvalidBlockTime
+	}
+
+	if ucx.NextEarliestCollectTime <= headTime ||
+		ucx.NextEarliestCollectTime-headTime != feeRewardExportMinTimeInterval(vm) {
+		return errInvalidNextEarliestCollectTime
 	}
 
 	// Verify the block this tx was build from
@@ -137,7 +143,7 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 		return errTimeNotPassed
 	}
 
-	balanceAvax, err := getReward(state)
+	balanceAvax, err := getReward(vm, state)
 	if err != nil {
 		return err
 	}
@@ -162,12 +168,12 @@ func (ucx *UnsignedCollectRewardsTx) SemanticVerify(
 	}
 
 	// Check if parent is before trigger time
-	if modTime(head.Time) < triggerTime {
+	if modTime(vm, head.Time) < triggerTime {
 		return nil
 	}
 
 	// Check if the reward export limit is not reached
-	_, err = getReward(state)
+	_, err = getReward(vm, state)
 	if err == nil {
 		// should never happen. We expect the CollectRewardsTx is auto-issued locally at the earliest block where conditions are met
 		return fmt.Errorf("past block would execute")
@@ -234,6 +240,11 @@ func (vm *VM) NewCollectRewardsTx(
 		return nil, err
 	}
 
+	nextEarliestCollectTime, err := math.Add64(modTime(vm, blockTime), feeRewardExportMinTimeInterval(vm))
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the transaction
 	utx := &UnsignedCollectRewardsTx{
 		UnsignedExportTx: UnsignedExportTx{
@@ -258,10 +269,11 @@ func (vm *VM) NewCollectRewardsTx(
 				},
 			}},
 		},
-		BlockHash:     hash,
-		BlockTime:     blockTime,
-		ExportRate:    ExportRewardRate.Uint64(),
-		IncentiveRate: IncentivePoolRewardRate.Uint64(),
+		BlockHash:               hash,
+		BlockTime:               blockTime,
+		NextEarliestCollectTime: nextEarliestCollectTime,
+		ExportRate:              ExportRewardRate.Uint64(),
+		IncentiveRate:           IncentivePoolRewardRate.Uint64(),
 	}
 
 	tx := &Tx{UnsignedAtomicTx: utx}
@@ -303,11 +315,11 @@ func (vm *VM) TriggerRewardsTx(block *Block) {
 	}
 
 	triggerTime := state.GetState(gconstants.BlackholeAddr, TimestampSlot).Big().Uint64()
-	if modTime(blockTime) < triggerTime {
+	if modTime(vm, blockTime) < triggerTime {
 		return
 	}
 
-	amount, err := getReward(state)
+	amount, err := getReward(vm, state)
 	if err != nil {
 		return
 	}
@@ -388,7 +400,7 @@ func (ucx *UnsignedCollectRewardsTx) EVMStateTransfer(ctx *snow.Context, state *
 	state.AddBalance(common.Address(FeeRewardAddressID), amountIncentiveEVM)
 
 	// Step up timestamp for the next iteration
-	nextBig := new(big.Int).SetUint64(modTime(ucx.BlockTime) + TimeInterval)
+	nextBig := new(big.Int).SetUint64(ucx.NextEarliestCollectTime)
 	state.SetState(from.Address, TimestampSlot, common.BigToHash(nextBig))
 
 	if state.GetNonce(from.Address) != from.Nonce {
@@ -406,19 +418,33 @@ func calculateRate(amt uint64, rate *big.Int) uint64 {
 	return bn.Uint64()
 }
 
-func modTime(tm uint64) uint64 {
-	return tm - (tm % TimeInterval)
+func modTime(vm *VM, timestamp uint64) uint64 {
+	return timestamp - (timestamp % feeRewardExportMinTimeInterval(vm))
 }
 
-func getReward(state *state.StateDB) (uint64, error) {
+func getReward(vm *VM, state *state.StateDB) (uint64, error) {
 	// balance - lastPayoutBalance is the amount we can max distribute
 	balance := state.GetBalance(gconstants.BlackholeAddr)
 	balance.Sub(balance, state.GetState(gconstants.BlackholeAddr, BalanceSlot).Big())
 	balanceAvax := balance.Div(balance, x2cRate).Uint64()
 
-	if calculateRate(balanceAvax, ExportRewardRate) < FeeRewardMinAmountToExport {
+	if calculateRate(balanceAvax, ExportRewardRate) < feeRewardExportMinAmount(vm) {
 		return 0, errExportLimit
 	}
 
 	return balanceAvax, nil
+}
+
+func feeRewardExportMinAmount(vm *VM) uint64 {
+	if vm.ethConfig.Genesis.FeeRewardExportMinAmount == 0 {
+		return 10_000_000_000
+	}
+	return vm.ethConfig.Genesis.FeeRewardExportMinAmount
+}
+
+func feeRewardExportMinTimeInterval(vm *VM) uint64 {
+	if vm.ethConfig.Genesis.FeeRewardExportMinTimeInterval == 0 {
+		return 3600
+	}
+	return vm.ethConfig.Genesis.FeeRewardExportMinTimeInterval
 }

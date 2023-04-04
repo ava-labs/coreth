@@ -167,6 +167,8 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 		balanceSlot          uint64
 		timestampSlot        uint64
 		blockTime            uint64
+		minFeeExport         uint64
+		minFeeExportInteval  uint64
 		expectedTxError      error
 		expectedInvalidError error
 	}{
@@ -181,15 +183,19 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 			txBlockTime:          1675080000,
 			blockTime:            1675081531, // trimmed to full hours
 			timestampSlot:        1675082001,
+			minFeeExport:         10_000_000_000,
+			minFeeExportInteval:  3600, // 1h
 			expectedInvalidError: errors.New("time has not passed"),
 		},
 		{
-			name:               "Happy path Tx is valid and in time",
-			amountToDistribute: amount,
-			balance:            amount,
-			txBlockTime:        1675080000,
-			blockTime:          1675081531, // trimmed to full hours
-			timestampSlot:      1675080000,
+			name:                "Happy path Tx is valid and in time",
+			amountToDistribute:  amount,
+			balance:             amount,
+			txBlockTime:         1675080000,
+			blockTime:           1675081531, // trimmed to full hours
+			timestampSlot:       1675080000,
+			minFeeExport:        10_000_000_000,
+			minFeeExportInteval: 3600, // 1h
 		},
 		{
 			name:                 "Too little to satisfy the distribution limit",
@@ -198,6 +204,8 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 			txBlockTime:          1675080000,
 			blockTime:            1675081531, // trimmed to full hours
 			timestampSlot:        1675080000,
+			minFeeExport:         10_000_000_000,
+			minFeeExportInteval:  3600, // 1h
 			expectedInvalidError: errors.New("export limit not yet reached"),
 		},
 		{
@@ -207,22 +215,34 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 			txBlockTime:          1675080000,
 			blockTime:            1675081531, // trimmed to full hours
 			timestampSlot:        1675080000,
+			minFeeExport:         10_000_000_000,
+			minFeeExportInteval:  3600, // 1h
 			expectedInvalidError: errors.New("calculated reward amount mismatch"),
 		},
 		{
-			name:               "Happy path with slot balance",
-			amountToDistribute: amount,
-			balance:            amount + amount,
-			balanceSlot:        amount,
-			txBlockTime:        1675080000,
-			blockTime:          1675081531, // trimmed to full hours
-			timestampSlot:      1675080000,
+			name:                "Happy path with slot balance",
+			amountToDistribute:  amount,
+			balance:             amount + amount,
+			balanceSlot:         amount,
+			txBlockTime:         1675080000,
+			blockTime:           1675081531, // trimmed to full hours
+			timestampSlot:       1675080000,
+			minFeeExport:        10_000_000_000,
+			minFeeExportInteval: 3600, // 1h
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			genesisJSON := prepareGenesis(tt.balance, tt.balanceSlot, tt.timestampSlot, tt.blockTime, 0)
+			genesisJSON := prepareGenesis(
+				tt.balance,
+				tt.balanceSlot,
+				tt.timestampSlot,
+				tt.blockTime,
+				0,
+				tt.minFeeExport,
+				tt.minFeeExportInteval,
+			)
 			_, vm, _, _, _ := GenesisVM(t, true, genesisJSON, "", "")
 			parent := vm.LastAcceptedBlockInternal().(*Block)
 
@@ -248,7 +268,7 @@ func TestCollectRewardsSemanticVerify(t *testing.T) {
 
 func TestIssueCollectRewardsTxAndBuildBlock(t *testing.T) {
 	amount := uint64(100_000_000_000)
-	genesisJSON := prepareGenesis(amount, uint64(0), uint64(0), uint64(0), 0)
+	genesisJSON := prepareGenesis(amount, 0, 0, 0, 0, 10_000_000_000, 3600)
 	issuer, vm, _, _, _ := GenesisVM(t, true, genesisJSON, "", "")
 	parent := vm.LastAcceptedBlockInternal().(*Block)
 
@@ -286,7 +306,7 @@ func TestIssueCollectRewardsTxAndBuildBlock(t *testing.T) {
 	require.Equal(t, expectedBalance, balanceAvax, "expected %d but got %d", amount, balanceAvax)
 
 	TimestampSlot := state.GetState(gconstants.BlackholeAddr, TimestampSlot).Big().Uint64()
-	expectedNextTimestampSlot := TimeInterval
+	expectedNextTimestampSlot := feeRewardExportMinTimeInterval(vm)
 	require.Equal(t, expectedNextTimestampSlot, TimestampSlot, "expected %d but got %d", expectedNextTimestampSlot, TimestampSlot)
 }
 
@@ -351,50 +371,68 @@ func TestCollectRewardsAtomicOps(t *testing.T) {
 
 func TestVMStateCanBeDefinedInGenesis(t *testing.T) {
 	tests := []struct {
-		name          string
-		balance       uint64
-		balanceSlot   uint64
-		timestampSlot uint64
-		blockTime     uint64
-		nonce         uint64
+		name                string
+		balance             uint64
+		balanceSlot         uint64
+		timestampSlot       uint64
+		blockTime           uint64
+		nonce               uint64
+		minFeeExport        uint64
+		minFeeExportInteval uint64
 	}{
 		{
-			name:          "Zeros everywhere",
-			balance:       0 * xPrecision,
-			balanceSlot:   0 * xPrecision,
-			timestampSlot: 0,
-			blockTime:     0,
-			nonce:         0,
+			name:                "Zeros everywhere",
+			balance:             0 * xPrecision,
+			balanceSlot:         0 * xPrecision,
+			timestampSlot:       0,
+			blockTime:           0,
+			nonce:               0,
+			minFeeExport:        0,
+			minFeeExportInteval: 0,
 		},
 		{
-			name:          "Real looking numbers",
-			balance:       10_000 * xPrecision,
-			balanceSlot:   0,
-			timestampSlot: 1674819410,
-			blockTime:     1674444431,
-			nonce:         0,
+			name:                "Real looking numbers",
+			balance:             10_000 * xPrecision,
+			balanceSlot:         0,
+			timestampSlot:       1674819410,
+			blockTime:           1674444431,
+			nonce:               0,
+			minFeeExport:        10_000_000_000,
+			minFeeExportInteval: 3600, // 1h
 		},
 		{
-			name:          "small numbers",
-			balance:       1,
-			balanceSlot:   2,
-			timestampSlot: 3,
-			blockTime:     4,
-			nonce:         0,
+			name:                "small numbers",
+			balance:             1,
+			balanceSlot:         2,
+			timestampSlot:       3,
+			blockTime:           4,
+			nonce:               0,
+			minFeeExport:        5,
+			minFeeExportInteval: 6,
 		},
 		{
-			name:          "BIG numbers",
-			balance:       math.MaxUint64,
-			balanceSlot:   math.MaxUint64,
-			timestampSlot: math.MaxUint64,
-			blockTime:     math.MaxUint64,
-			nonce:         math.MaxUint64,
+			name:                "BIG numbers",
+			balance:             math.MaxUint64,
+			balanceSlot:         math.MaxUint64,
+			timestampSlot:       math.MaxUint64,
+			blockTime:           math.MaxUint64,
+			nonce:               math.MaxUint64,
+			minFeeExport:        math.MaxUint64,
+			minFeeExportInteval: math.MaxUint64,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			genesisJSON := prepareGenesis(tt.balance, tt.balanceSlot, tt.timestampSlot, tt.blockTime, tt.nonce)
+			genesisJSON := prepareGenesis(
+				tt.balance,
+				tt.balanceSlot,
+				tt.timestampSlot,
+				tt.blockTime,
+				tt.nonce,
+				tt.minFeeExport,
+				tt.minFeeExportInteval,
+			)
 			_, vm, _, _, _ := GenesisVM(t, true, genesisJSON, "", "")
 			state, err := vm.blockChain.State()
 			require.NoError(t, err)
@@ -417,13 +455,23 @@ func TestVMStateCanBeDefinedInGenesis(t *testing.T) {
 	}
 }
 
-func prepareGenesis(balance, balanceSlot, timestampSlot, blockTime, nonce uint64) string {
+func prepareGenesis(
+	balance uint64,
+	balanceSlot uint64,
+	timestampSlot uint64,
+	blockTime uint64,
+	nonce uint64,
+	minFeeExport uint64,
+	minTimeInterval uint64,
+) string {
 	return fmt.Sprintf(
-		"{\"config\":{\"chainId\":43111,\"homesteadBlock\":0,\"daoForkBlock\":0,\"daoForkSupport\":true,\"eip150Block\":0,\"eip150Hash\":\"0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0\",\"eip155Block\":0,\"eip158Block\":0,\"byzantiumBlock\":0,\"constantinopleBlock\":0,\"petersburgBlock\":0,\"istanbulBlock\":0,\"muirGlacierBlock\":0,\"apricotPhase1BlockTimestamp\":0,\"apricotPhase2BlockTimestamp\":0,\"apricotPhase3BlockTimestamp\":0,\"apricotPhase4BlockTimestamp\":0,\"apricotPhase5BlockTimestamp\":0},\"nonce\":\"0x0\",\"timestamp\":\"0x%x\",\"extraData\":\"0x00\",\"gasLimit\":\"0x5f5e100\",\"difficulty\":\"0x0\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"coinbase\":\"0x0000000000000000000000000000000000000000\",\"alloc\":{\"0100000000000000000000000000000000000000\":{\"code\":\"0x7300000000000000000000000000000000000000003014608060405260043610603d5760003560e01c80631e010439146042578063b6510bb314606e575b600080fd5b605c60048036036020811015605657600080fd5b503560b1565b60408051918252519081900360200190f35b818015607957600080fd5b5060af60048036036080811015608e57600080fd5b506001600160a01b03813516906020810135906040810135906060013560b6565b005b30cd90565b836001600160a01b031681836108fc8690811502906040516000604051808303818888878c8acf9550505050505015801560f4573d6000803e3d6000fd5b505050505056fea26469706673582212201eebce970fe3f5cb96bf8ac6ba5f5c133fc2908ae3dcd51082cfee8f583429d064736f6c634300060a0033\",\"nonce\":\"0x%x\",\"balance\":\"0x%s\",\"storage\":{\"0x0100000000000000000000000000000000000000000000000000000000000000\":\"%s\", \"0x0200000000000000000000000000000000000000000000000000000000000000\":\"%s\"}}},\"number\":\"0x0\",\"gasUsed\":\"0x0\",\"parentHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}",
+		"{\"config\":{\"chainId\":43111,\"homesteadBlock\":0,\"daoForkBlock\":0,\"daoForkSupport\":true,\"eip150Block\":0,\"eip150Hash\":\"0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0\",\"eip155Block\":0,\"eip158Block\":0,\"byzantiumBlock\":0,\"constantinopleBlock\":0,\"petersburgBlock\":0,\"istanbulBlock\":0,\"muirGlacierBlock\":0,\"apricotPhase1BlockTimestamp\":0,\"apricotPhase2BlockTimestamp\":0,\"apricotPhase3BlockTimestamp\":0,\"apricotPhase4BlockTimestamp\":0,\"apricotPhase5BlockTimestamp\":0},\"nonce\":\"0x0\",\"timestamp\":\"0x%x\",\"extraData\":\"0x00\",\"gasLimit\":\"0x5f5e100\",\"difficulty\":\"0x0\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"coinbase\":\"0x0000000000000000000000000000000000000000\",\"alloc\":{\"0100000000000000000000000000000000000000\":{\"code\":\"0x7300000000000000000000000000000000000000003014608060405260043610603d5760003560e01c80631e010439146042578063b6510bb314606e575b600080fd5b605c60048036036020811015605657600080fd5b503560b1565b60408051918252519081900360200190f35b818015607957600080fd5b5060af60048036036080811015608e57600080fd5b506001600160a01b03813516906020810135906040810135906060013560b6565b005b30cd90565b836001600160a01b031681836108fc8690811502906040516000604051808303818888878c8acf9550505050505015801560f4573d6000803e3d6000fd5b505050505056fea26469706673582212201eebce970fe3f5cb96bf8ac6ba5f5c133fc2908ae3dcd51082cfee8f583429d064736f6c634300060a0033\",\"nonce\":\"0x%x\",\"balance\":\"0x%s\",\"storage\":{\"0x0100000000000000000000000000000000000000000000000000000000000000\":\"%s\", \"0x0200000000000000000000000000000000000000000000000000000000000000\":\"%s\"}}},\"number\":\"0x0\",\"gasUsed\":\"0x0\",\"parentHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"feeRewardExportMinAmount\":\"0x%x\",\"feeRewardExportMinTimeInterval\":\"0x%x\"}",
 		blockTime,
 		nonce,
 		/*balance*/ new(big.Int).Mul(x2cRate, new(big.Int).SetUint64(balance)).Text(16),
 		/*balanceSlot*/ common.BigToHash(new(big.Int).Mul(x2cRate, new(big.Int).SetUint64(balanceSlot))).Hex(),
 		/*timestampSlot*/ common.BigToHash(new(big.Int).SetUint64(timestampSlot)).Hex(),
+		minFeeExport,
+		minTimeInterval,
 	)
 }
