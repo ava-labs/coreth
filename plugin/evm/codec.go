@@ -9,6 +9,7 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/avalanchego/vms/components/multisig"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 )
 
@@ -23,7 +24,6 @@ func init() {
 	errs.Add(
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
-		c.RegisterCustomType(&UnsignedCollectRewardsTx{}),
 	)
 	c.SkipRegistrations(3)
 	errs.Add(
@@ -34,6 +34,10 @@ func init() {
 		c.RegisterType(&secp256k1fx.Credential{}),
 		c.RegisterType(&secp256k1fx.Input{}),
 		c.RegisterType(&secp256k1fx.OutputOwners{}),
+	)
+	errs.Add(
+		c.RegisterCustomType(&UnsignedCollectRewardsTx{}),
+		c.RegisterCustomType(&multisig.AliasWithNonce{}),
 		Codec.RegisterCodec(codecVersion, c),
 	)
 

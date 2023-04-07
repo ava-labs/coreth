@@ -270,24 +270,50 @@ func addUTXO(sharedMemory *atomic.Memory, ctx *snow.Context, txID ids.ID, index 
 			},
 		},
 	}
-	utxoBytes, err := Codec.Marshal(codecVersion, utxo)
-	if err != nil {
-		return nil, err
-	}
 
-	xChainSharedMemory := sharedMemory.NewSharedMemory(ctx.XChainID)
-	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*atomic.Requests{ctx.ChainID: {PutRequests: []*atomic.Element{{
-		Key:   inputID[:],
-		Value: utxoBytes,
-		Traits: [][]byte{
-			addr.Bytes(),
-		},
-	}}}}); err != nil {
+	if err := putUTXOToSharedMemory(
+		sharedMemory,
+		ctx.XChainID,
+		ctx.ChainID,
+		[][]byte{addr.Bytes()},
+		utxo); err != nil {
 		return nil, err
 	}
 
 	return utxo, nil
+}
+
+func putUTXOToSharedMemory(shM *atomic.Memory, srcChainID, dstChainID ids.ID, traits [][]byte, utxos ...interface{}) error {
+	var utxo *avax.UTXO
+
+	xChainSharedMemory := shM.NewSharedMemory(srcChainID)
+	for _, utxoInf := range utxos {
+		if wrappedUTXO, ok := utxoInf.(*avax.UTXOWithMSig); ok {
+			utxo = &wrappedUTXO.UTXO
+		}
+		if simpleUTXO, ok := utxoInf.(*avax.UTXO); ok {
+			utxo = simpleUTXO
+		}
+		if utxo == nil {
+			return fmt.Errorf("expected *avax.UTXO but got %T", utxoInf)
+		}
+
+		inputID := utxo.InputID()
+		utxoBytes, err := Codec.Marshal(codecVersion, utxoInf)
+		if err != nil {
+			return err
+		}
+
+		if err := xChainSharedMemory.Apply(map[ids.ID]*atomic.Requests{dstChainID: {PutRequests: []*atomic.Element{{
+			Key:    inputID[:],
+			Value:  utxoBytes,
+			Traits: traits,
+		}}}}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map

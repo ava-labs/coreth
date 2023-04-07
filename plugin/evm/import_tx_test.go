@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -17,7 +16,11 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
+	"github.com/ava-labs/avalanchego/vms/components/multisig"
+	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // createImportTxOptions adds a UTXO to shared memory and generates a list of import transactions sending this UTXO
@@ -1172,6 +1175,102 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			},
 			genesisJSON:       genesisJSONApricotPhase3,
 			semanticVerifyErr: errOutputsNotSortedUnique.Error(),
+		},
+		"successful pass": {
+			setup: func(t *testing.T, vm *VM, sharedMemory *atomic.Memory) *Tx {
+				txID := ids.GenerateTestID()
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 2, testShortIDAddrs[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tx := &Tx{UnsignedAtomicTx: &UnsignedImportTx{
+					NetworkID:    vm.ctx.NetworkID,
+					BlockchainID: vm.ctx.ChainID,
+					SourceChain:  vm.ctx.XChainID,
+					ImportedInputs: []*avax.TransferableInput{{
+						UTXOID: utxo.UTXOID,
+						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+						In: &secp256k1fx.TransferInput{
+							Amt:   2,
+							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+						},
+					}},
+					Outs: []EVMOutput{{
+						Address: testEthAddrs[0],
+						Amount:  2,
+						AssetID: vm.ctx.AVAXAssetID,
+					}},
+				}}
+				if err := tx.Sign(vm.codec, [][]*crypto.PrivateKeySECP256K1R{{testKeys[0]}}); err != nil {
+					t.Fatal(err)
+				}
+				return tx
+			},
+			semanticVerifyErr: "",
+		},
+		"Multisig UTXO": {
+			setup: func(t *testing.T, vm *VM, sharedMemory *atomic.Memory) *Tx {
+				txID := ids.GenerateTestID()
+				amount := uint64(3)
+				aliasID := ids.ShortID{1, 2, 3, 4, 5}
+				memberAddr := testKeys[0].Address()
+				msigAliasOut := &secp256k1fx.TransferOutput{
+					Amt: amount,
+					OutputOwners: secp256k1fx.OutputOwners{
+						Threshold: 1,
+						Addrs:     []ids.ShortID{aliasID},
+					},
+				}
+				msigAlias := &multisig.AliasWithNonce{
+					Alias: multisig.Alias{
+						ID: aliasID,
+						Owners: &secp256k1fx.OutputOwners{
+							Threshold: 1,
+							Addrs:     []ids.ShortID{memberAddr},
+						},
+					},
+				}
+				utxo := &avax.UTXOWithMSig{
+					UTXO: avax.UTXO{
+						UTXOID: avax.UTXOID{
+							TxID:        txID,
+							OutputIndex: 0,
+						},
+						Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
+						Out:   msigAliasOut,
+					},
+					Aliases: []verify.State{msigAlias},
+				}
+				err := putUTXOToSharedMemory(sharedMemory, vm.ctx.XChainID, vm.ctx.ChainID, [][]byte{}, utxo)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				tx := &Tx{UnsignedAtomicTx: &UnsignedImportTx{
+					NetworkID:    vm.ctx.NetworkID,
+					BlockchainID: vm.ctx.ChainID,
+					SourceChain:  vm.ctx.XChainID,
+					ImportedInputs: []*avax.TransferableInput{{
+						UTXOID: utxo.UTXOID,
+						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+						In: &secp256k1fx.TransferInput{
+							Amt:   amount,
+							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+						},
+					}},
+					Outs: []EVMOutput{{
+						Address: testEthAddrs[0],
+						Amount:  amount,
+						AssetID: vm.ctx.AVAXAssetID,
+					}},
+				}}
+				if err := tx.Sign(vm.codec, [][]*crypto.PrivateKeySECP256K1R{{testKeys[0]}}); err != nil {
+					t.Fatal(err)
+				}
+				return tx
+			},
+			semanticVerifyErr: "",
 		},
 	}
 
