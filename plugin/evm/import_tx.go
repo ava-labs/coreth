@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils"
@@ -21,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -234,14 +237,20 @@ func (utx *UnsignedImportTx) SemanticVerify(
 		return fmt.Errorf("failed to fetch import UTXOs from %s due to: %w", utx.SourceChain, err)
 	}
 
-	for i, in := range utx.ImportedInputs {
-		utxoBytes := allUTXOBytes[i]
-
-		utxo := &avax.UTXO{}
-		if _, err := vm.codec.Unmarshal(utxoBytes, utxo); err != nil {
-			return fmt.Errorf("failed to unmarshal UTXO: %w", err)
+	// populate the set first to keep latest MSig definitions
+	aliasSet := &core.AliasSet{}
+	utxos := make([]*avax.UTXO, len(utx.ImportedInputs))
+	for i, utxoBytes := range allUTXOBytes {
+		utxo, aliases, err := unmarshalUTXO(vm.codec, utxoBytes)
+		if err != nil {
+			return err
 		}
+		utxos[i] = utxo
+		aliasSet.Add(aliases...)
+	}
 
+	for i, in := range utx.ImportedInputs {
+		utxo := utxos[i]
 		cred := stx.Creds[i]
 
 		utxoAssetID := utxo.AssetID()
@@ -250,12 +259,28 @@ func (utx *UnsignedImportTx) SemanticVerify(
 			return errAssetIDMismatch
 		}
 
-		if err := vm.fx.VerifyTransfer(utx, in.In, cred, utxo.Out); err != nil {
+		if err := vm.fx.VerifyMultisigTransfer(utx, in.In, cred, utxo.Out, aliasSet); err != nil {
 			return fmt.Errorf("import tx transfer failed verification: %w", err)
 		}
 	}
 
 	return vm.conflicts(utx.InputUTXOs(), parent)
+}
+
+func unmarshalUTXO(codec codec.Manager, utxoBytes []byte) (*avax.UTXO, []verify.State, error) {
+	var err error
+
+	wrappedUTXO := &avax.UTXOWithMSig{}
+	if _, err := codec.Unmarshal(utxoBytes, wrappedUTXO); err == nil {
+		return &wrappedUTXO.UTXO, wrappedUTXO.Aliases, nil
+	}
+
+	utxo := &avax.UTXO{}
+	if _, err := codec.Unmarshal(utxoBytes, utxo); err == nil {
+		return utxo, []verify.State{}, nil
+	}
+
+	return nil, nil, fmt.Errorf("failed to unmarshal UTXO: %w", err)
 }
 
 // AtomicOps returns imported inputs spent on this transaction
