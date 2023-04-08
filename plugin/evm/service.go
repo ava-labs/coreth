@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"net/http"
 
+	json_encoder "encoding/json"
+
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto"
@@ -473,11 +475,20 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 		return fmt.Errorf("could not find tx %s", args.TxID)
 	}
 
-	txBytes, err := formatting.Encode(args.Encoding, tx.SignedBytes())
-	if err != nil {
-		return err
+	if args.Encoding == formatting.JSON {
+		txBytes, err := json_encoder.Marshal(tx)
+		if err != nil {
+			return fmt.Errorf("couldn't marshal UTXO %q: %w", tx.ID(), err)
+		}
+		reply.Tx = string(txBytes)
+	} else {
+		txBytes, err := formatting.Encode(args.Encoding, tx.SignedBytes())
+		if err != nil {
+			return err
+		}
+		reply.Tx = txBytes
 	}
-	reply.Tx = txBytes
+
 	reply.Encoding = args.Encoding
 	if status == Accepted {
 		jsonHeight := json.Uint64(height)

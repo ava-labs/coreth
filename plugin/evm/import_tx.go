@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils"
@@ -241,7 +240,7 @@ func (utx *UnsignedImportTx) SemanticVerify(
 	aliasSet := &core.AliasSet{}
 	utxos := make([]*avax.UTXO, len(utx.ImportedInputs))
 	for i, utxoBytes := range allUTXOBytes {
-		utxo, aliases, err := unmarshalUTXO(vm.codec, utxoBytes)
+		utxo, aliases, err := avax.UnmarshalUTXO(vm.codec, utxoBytes)
 		if err != nil {
 			return err
 		}
@@ -265,22 +264,6 @@ func (utx *UnsignedImportTx) SemanticVerify(
 	}
 
 	return vm.conflicts(utx.InputUTXOs(), parent)
-}
-
-func unmarshalUTXO(codec codec.Manager, utxoBytes []byte) (*avax.UTXO, []verify.State, error) {
-	var err error
-
-	wrappedUTXO := &avax.UTXOWithMSig{}
-	if _, err := codec.Unmarshal(utxoBytes, wrappedUTXO); err == nil {
-		return &wrappedUTXO.UTXO, wrappedUTXO.Aliases, nil
-	}
-
-	utxo := &avax.UTXO{}
-	if _, err := codec.Unmarshal(utxoBytes, utxo); err == nil {
-		return utxo, []verify.State{}, nil
-	}
-
-	return nil, nil, fmt.Errorf("failed to unmarshal UTXO: %w", err)
 }
 
 // AtomicOps returns imported inputs spent on this transaction

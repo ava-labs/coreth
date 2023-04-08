@@ -35,8 +35,11 @@ func init() {
 		c.RegisterType(&secp256k1fx.Input{}),
 		c.RegisterType(&secp256k1fx.OutputOwners{}),
 	)
+	// Camino custom types
+	errs.Add(c.RegisterCustomType(&UnsignedCollectRewardsTx{}))
+	c.SkipCustomRegistrations(11)
 	errs.Add(
-		c.RegisterCustomType(&UnsignedCollectRewardsTx{}),
+		c.RegisterCustomType(&secp256k1fx.MultisigCredential{}),
 		c.RegisterCustomType(&multisig.AliasWithNonce{}),
 		Codec.RegisterCodec(codecVersion, c),
 	)

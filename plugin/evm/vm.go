@@ -1506,8 +1506,8 @@ func (vm *VM) GetAtomicUTXOs(
 
 	utxos := make([]*avax.UTXO, len(allUTXOBytes))
 	for i, utxoBytes := range allUTXOBytes {
-		utxo := &avax.UTXO{}
-		if _, err := vm.codec.Unmarshal(utxoBytes, utxo); err != nil {
+		utxo, _, err := avax.UnmarshalUTXO(vm.codec, utxoBytes)
+		if err != nil {
 			return nil, ids.ShortID{}, ids.ID{}, fmt.Errorf("error parsing UTXO: %w", err)
 		}
 		utxos[i] = utxo
