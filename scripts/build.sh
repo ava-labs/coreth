@@ -34,7 +34,10 @@ CAMINOETHVM_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 source "$CAMINOETHVM_PATH"/scripts/constants.sh
 
 # Initialize dependencies
-git --git-dir $CAMINOETHVM_PATH/.git submodule update --init
+if [ ! -f $CAMINOETHVM_PATH/caminogo/.git ]; then
+    echo "Initializing git submodules..."
+    git --git-dir $CAMINOETHVM_PATH/.git submodule update --init
+fi
 
 if [[ $# -eq 1 ]]; then
     binary_path=$1

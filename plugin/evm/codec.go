@@ -41,6 +41,7 @@ func init() {
 	errs.Add(
 		c.RegisterCustomType(&secp256k1fx.MultisigCredential{}),
 		c.RegisterCustomType(&multisig.AliasWithNonce{}),
+		c.RegisterCustomType(&secp256k1fx.CrossTransferOutput{}),
 		Codec.RegisterCodec(codecVersion, c),
 	)
 

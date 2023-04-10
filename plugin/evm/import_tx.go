@@ -188,23 +188,25 @@ func (utx *UnsignedImportTx) SemanticVerify(
 
 	// Check the transaction consumes and produces the right amounts
 	fc := avax.NewFlowChecker()
+	txFee := uint64(0)
 	switch {
-	// Apply dynamic fees to import transactions as of Apricot Phase 3
+	// Calculate dynamic fees to import transactions as of Apricot Phase 3
 	case rules.IsApricotPhase3:
 		gasUsed, err := stx.GasUsed(rules.IsApricotPhase5)
 		if err != nil {
 			return err
 		}
-		txFee, err := calculateDynamicFee(gasUsed, baseFee)
+		txFee, err = calculateDynamicFee(gasUsed, baseFee)
 		if err != nil {
 			return err
 		}
-		fc.Produce(vm.ctx.AVAXAssetID, txFee)
-
-	// Apply fees to import transactions as of Apricot Phase 2
+	// Get fees to import transactions as of Apricot Phase 2
 	case rules.IsApricotPhase2:
-		fc.Produce(vm.ctx.AVAXAssetID, params.AvalancheAtomicTxFee)
+		txFee = params.AvalancheAtomicTxFee
 	}
+	// Apply fee
+	fc.Produce(vm.ctx.AVAXAssetID, txFee)
+
 	for _, out := range utx.Outs {
 		fc.Produce(out.AssetID, out.Amount)
 	}
@@ -248,6 +250,9 @@ func (utx *UnsignedImportTx) SemanticVerify(
 		aliasSet.Add(aliases...)
 	}
 
+	rcpts := make(map[ids.ShortID]map[ids.ID]uint64)
+	rcpts[ids.ShortEmpty] = make(map[ids.ID]uint64, 0)
+
 	for i, in := range utx.ImportedInputs {
 		utxo := utxos[i]
 		cred := stx.Creds[i]
@@ -257,9 +262,42 @@ func (utx *UnsignedImportTx) SemanticVerify(
 		if utxoAssetID != inAssetID {
 			return errAssetIDMismatch
 		}
+		if ct, ok := utxo.Out.(*secp256k1fx.CrossTransferOutput); ok {
+			utxoAmount := ct.Amt
+			if rcpts[ct.Recipient] == nil {
+				rcpts[ct.Recipient] = make(map[ids.ID]uint64)
+			}
+			rcpts[ct.Recipient][utxoAssetID] += utxoAmount
+		} else {
+			amounter, ok := utxo.Out.(avax.Amounter)
+			if !ok {
+				return fmt.Errorf("not amounter")
+			}
+			utxoAmount := amounter.Amount()
+			rcpts[ids.ShortEmpty][utxoAssetID] += utxoAmount
+		}
 
 		if err := vm.fx.VerifyMultisigTransfer(utx, in.In, cred, utxo.Out, aliasSet); err != nil {
 			return fmt.Errorf("import tx transfer failed verification: %w", err)
+		}
+	}
+
+	// If we have receiver addresses in CrossTransferOutput, we check
+	// that no receiver gets more than provided in inputs
+	if len(rcpts) > 1 {
+		for _, evmOut := range utx.Outs {
+			if evmOut.Amount == 0 {
+				continue
+			}
+			recipient, ok := rcpts[ids.ShortID(evmOut.Address)]
+			if !ok {
+				recipient = rcpts[ids.ShortEmpty]
+			}
+			amount, ok := recipient[evmOut.AssetID]
+			if !ok || evmOut.Amount > amount {
+				return fmt.Errorf("insufficient input amount")
+			}
+			recipient[evmOut.AssetID] = amount - evmOut.Amount
 		}
 	}
 
