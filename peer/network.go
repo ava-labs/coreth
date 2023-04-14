@@ -38,6 +38,7 @@ var (
 
 type Network interface {
 	validators.Connector
+	validators.Staker
 	common.AppHandler
 
 	// SendAppRequestAny synchronously sends request to an arbitrary peer with a
@@ -434,6 +435,16 @@ func (n *network) AppGossip(_ context.Context, nodeID ids.NodeID, gossipBytes []
 
 	log.Debug("processing AppGossip from node", "nodeID", nodeID, "msg", gossipMsg)
 	return gossipMsg.Handle(n.gossipHandler, nodeID)
+}
+
+func (*network) Staked(_ context.Context, nodeID ids.NodeID, txID ids.ID) error {
+	log.Debug("adding new staker", "nodeID", nodeID, "txID", txID)
+	return nil
+}
+
+func (n *network) Unstaked(_ context.Context, nodeID ids.NodeID, txID ids.ID) error {
+	log.Debug("removing staker", "nodeID", nodeID, "txID", txID)
+	return nil
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
