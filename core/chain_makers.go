@@ -32,7 +32,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/misc"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
@@ -222,22 +222,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, config, parent, gap, statedb, b.engine)
 
-		// Mutate the state and block according to any hard-fork specs
-		timestamp := new(big.Int).SetUint64(b.header.Time)
-		if !config.IsApricotPhase3(timestamp) {
-			// avoid dynamic fee extra data override
-			if daoBlock := config.DAOForkBlock; daoBlock != nil {
-				limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-				if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
-					if config.DAOForkSupport {
-						b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-					}
-				}
-			}
-		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
-			misc.ApplyDAOHardFork(statedb)
-		}
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
@@ -278,6 +262,19 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		parent = block
 	}
 	return blocks, receipts, nil
+}
+
+// GenerateChainWithGenesis is a wrapper of GenerateChain which will initialize
+// genesis block to database first according to the provided genesis specification
+// then generate chain on top.
+func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gap uint64, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts, error) {
+	db := rawdb.NewMemoryDatabase()
+	_, err := genesis.Commit(db)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	blocks, receipts, err := GenerateChain(genesis.Config, genesis.ToBlock(nil), engine, db, n, gap, gen)
+	return db, blocks, receipts, err
 }
 
 func makeHeader(chain consensus.ChainReader, config *params.ChainConfig, parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
