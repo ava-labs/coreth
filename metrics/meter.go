@@ -205,7 +205,6 @@ func (m *StandardMeter) Count() int64 {
 func (m *StandardMeter) Mark(n int64) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-
 	m.snapshot.temp += n
 }
 
