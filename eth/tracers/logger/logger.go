@@ -89,6 +89,13 @@ type structLogMarshaling struct {
 	ErrorString string `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
 }
 
+type wrappedLog struct {
+	parent   *wrappedLog
+	error    error
+	log      StructLog
+	children []*wrappedLog
+}
+
 // OpName formats the operand name in a human-readable format.
 func (s *StructLog) OpName() string {
 	return s.Op.String()
@@ -108,6 +115,9 @@ func (s *StructLog) ErrorString() string {
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
+	current *wrappedLog
+	depth   int
+
 	cfg Config
 	env *vm.EVM
 
@@ -143,6 +153,8 @@ func (l *StructLogger) Reset() {
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	l.depth = 0
+	l.current = &wrappedLog{}
 	l.env = env
 }
 
@@ -159,8 +171,38 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return
 	}
-	memory := scope.Memory
+
 	stack := scope.Stack
+	for ; l.depth > depth-1; l.depth = l.depth - 1 {
+		i := l.depth - (depth - 1)
+		if l.current.error == nil {
+			switch stack.Data()[len(stack.Data())-i].Bytes32()[31] {
+			case 0x00:
+				l.current.error = fmt.Errorf("call failed")
+			}
+		}
+		l.current = l.current.parent
+	}
+	if err != nil {
+		l.current.error = err
+	}
+	switch op {
+	case vm.CALL, vm.DELEGATECALL, vm.STATICCALL, vm.CALLCODE:
+		l.depth = l.depth + 1
+		wl := &wrappedLog{
+			parent: l.current,
+			error:  l.current.error,
+		}
+		l.current.children = append(l.current.children, wl)
+		l.current = wl
+	case vm.REVERT:
+		l.current.error = vmerrs.ErrExecutionReverted
+		return
+	default:
+		return
+	}
+
+	memory := scope.Memory
 	contract := scope.Contract
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
@@ -211,7 +253,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	}
 	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
-	l.logs = append(l.logs, log)
+	l.current.log = log
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault
@@ -221,6 +263,17 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+	for ; l.depth > 1; l.depth-- {
+		l.current = l.current.parent
+	}
+	l.current.log = StructLog{
+		Op:         vm.CALL,
+		GasCost:    gasUsed,
+		ReturnData: output,
+		Depth:      0,
+		Err:        err,
+	}
+
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
@@ -271,8 +324,19 @@ func (l *StructLogger) CaptureTxEnd(restGas uint64) {
 	l.usedGas = l.gasLimit - restGas
 }
 
+// Depth first append for all children (stack max depth is 1024)
+func (l *wrappedLog) getLogs() []StructLog {
+	var logs []StructLog
+	l.log.Err = l.error
+	logs = append(logs, l.log)
+	for _, child := range l.children {
+		logs = append(logs, child.getLogs()...)
+	}
+	return logs
+}
+
 // StructLogs returns the captured log entries.
-func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+func (l *StructLogger) StructLogs() []StructLog { return l.current.getLogs() }
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
@@ -429,13 +493,18 @@ type StructLogRes struct {
 func formatLogs(logs []StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
+		var errString string
+		if trace.Err != nil {
+			errString = trace.Err.Error()
+		}
+
 		formatted[index] = StructLogRes{
 			Pc:            trace.Pc,
 			Op:            trace.Op.String(),
 			Gas:           trace.Gas,
 			GasCost:       trace.GasCost,
 			Depth:         trace.Depth,
-			Error:         trace.ErrorString(),
+			Error:         errString,
 			RefundCounter: trace.RefundCounter,
 		}
 		if trace.Stack != nil {
