@@ -13,7 +13,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
-	"github.com/ava-labs/avalanchego/utils/crypto"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core"
@@ -33,7 +34,7 @@ func TestSkipStateSyncCamino(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
-		shouldSync:         false,
+		syncMode:           block.StateSyncSkipped,
 	}
 	vmSetup := createSyncServerAndClientVMsCamino(t, test)
 	defer vmSetup.Teardown(t)
@@ -89,7 +90,7 @@ func createSyncServerAndClientVMsCamino(t *testing.T, test syncTest) *syncVMSetu
 		switch i {
 		case 0:
 			// spend the UTXOs from shared memory
-			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -104,7 +105,7 @@ func createSyncServerAndClientVMsCamino(t *testing.T, test syncTest) *syncVMSetu
 				serverVM.ctx.XChainID,
 				testShortIDAddrs[0],
 				initialBaseFee,
-				[]*crypto.PrivateKeySECP256K1R{testKeys[0]},
+				[]*secp256k1.PrivateKey{testKeys[0]},
 			)
 			if err != nil {
 				t.Fatal(err)

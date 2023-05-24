@@ -21,7 +21,8 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/utils/crypto"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 
@@ -48,7 +49,7 @@ func TestSkipStateSync(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
-		shouldSync:         false,
+		syncMode:           block.StateSyncSkipped,
 	}
 	vmSetup := createSyncServerAndClientVMs(t, test)
 	defer vmSetup.Teardown(t)
@@ -61,7 +62,7 @@ func TestStateSyncFromScratch(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
-		shouldSync:         true,
+		syncMode:           block.StateSyncStatic,
 	}
 	vmSetup := createSyncServerAndClientVMs(t, test)
 	defer vmSetup.Teardown(t)
@@ -82,7 +83,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
-		shouldSync:         true,
+		syncMode:           block.StateSyncStatic,
 		responseIntercept: func(syncerVM *VM, nodeID ids.NodeID, requestID uint32, response []byte) {
 			lock.Lock()
 			defer lock.Unlock()
@@ -111,7 +112,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, vmSetup, test)
 
-	test.shouldSync = true
+	test.syncMode = block.StateSyncStatic
 	test.responseIntercept = nil
 	test.expectedErr = nil
 
@@ -127,13 +128,14 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		return nil
 	}
 	// Disable metrics to prevent duplicate registerer
+	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
 	if err := syncDisabledVM.Initialize(
 		context.Background(),
 		vmSetup.syncerVM.ctx,
 		vmSetup.syncerDBManager,
 		[]byte(genesisJSONLatest),
 		nil,
-		nil,
+		[]byte(stateSyncDisabledConfigJSON),
 		vmSetup.syncerVM.toEngine,
 		[]*commonEng.Fx{},
 		appSender,
@@ -187,7 +189,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	syncReEnabledVM := &VM{}
 	// Enable state sync in configJSON
 	configJSON := fmt.Sprintf(
-		"{\"state-sync-enabled\":true, \"state-sync-min-blocks\":%d}",
+		`{"state-sync-enabled":true, "state-sync-min-blocks":%d}`,
 		test.stateSyncMinBlocks,
 	)
 	if err := syncReEnabledVM.Initialize(
@@ -278,7 +280,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 		switch i {
 		case 0:
 			// spend the UTXOs from shared memory
-			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -293,7 +295,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 				serverVM.ctx.XChainID,
 				testShortIDAddrs[0],
 				initialBaseFee,
-				[]*crypto.PrivateKeySECP256K1R{testKeys[0]},
+				[]*secp256k1.PrivateKey{testKeys[0]},
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -439,7 +441,7 @@ type syncTest struct {
 	responseIntercept  func(vm *VM, nodeID ids.NodeID, requestID uint32, response []byte)
 	stateSyncMinBlocks uint64
 	syncableInterval   uint64
-	shouldSync         bool
+	syncMode           block.StateSyncMode
 	expectedErr        error
 }
 
@@ -469,14 +471,14 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	}
 	assert.Equal(t, summary, retrievedSummary)
 
-	shouldSync, err := parsedSummary.Accept(context.Background())
+	syncMode, err := parsedSummary.Accept(context.Background())
 	if err != nil {
 		t.Fatal("unexpected error accepting state summary", "err", err)
 	}
-	if shouldSync != test.shouldSync {
-		t.Fatal("unexpected value returned from accept", "expected", test.shouldSync, "got", shouldSync)
+	if syncMode != test.syncMode {
+		t.Fatal("unexpected value returned from accept", "expected", test.syncMode, "got", syncMode)
 	}
-	if !shouldSync {
+	if syncMode == block.StateSyncSkipped {
 		return
 	}
 	msg := <-syncerEngineChan
