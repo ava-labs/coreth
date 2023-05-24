@@ -18,10 +18,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
+	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/trie"
 
 	"github.com/stretchr/testify/assert"
@@ -34,9 +38,10 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
-	"github.com/ava-labs/avalanchego/utils/crypto"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -56,6 +61,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 
+	"github.com/ava-labs/coreth/accounts/abi"
 	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
 )
 
@@ -64,7 +70,7 @@ var (
 	testCChainID            = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
 	testXChainID            = ids.ID{'t', 'e', 's', 't', 'x'}
 	nonExistentID           = ids.ID{'F'}
-	testKeys         []*crypto.PrivateKeySECP256K1R
+	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
 	testAvaxAssetID  = ids.ID{1, 2, 3}
@@ -100,7 +106,7 @@ var (
 
 func init() {
 	var b []byte
-	factory := crypto.FactorySECP256K1R{}
+	factory := secp256k1.Factory{}
 
 	for _, key := range []string{
 		"24jUJ9vZexUM6expyMcT48LBx27k1m7xpraoV62oSQAHdziao5",
@@ -109,9 +115,8 @@ func init() {
 	} {
 		b, _ = cb58.Decode(key)
 		pk, _ := factory.ToPrivateKey(b)
-		secpKey := pk.(*crypto.PrivateKeySECP256K1R)
-		testKeys = append(testKeys, secpKey)
-		testEthAddrs = append(testEthAddrs, GetEthAddress(secpKey))
+		testKeys = append(testKeys, pk)
+		testEthAddrs = append(testEthAddrs, GetEthAddress(pk))
 		testShortIDAddrs = append(testShortIDAddrs, pk.PublicKey().Address())
 	}
 }
@@ -148,26 +153,20 @@ func NewContext() *snow.Context {
 	_ = aliaser.Alias(testCChainID, testCChainID.String())
 	_ = aliaser.Alias(testXChainID, "X")
 	_ = aliaser.Alias(testXChainID, testXChainID.String())
-	ctx.SNLookup = &snLookup{
-		chainsToSubnet: map[ids.ID]ids.ID{
-			constants.PlatformChainID: constants.PrimaryNetworkID,
-			testXChainID:              constants.PrimaryNetworkID,
-			testCChainID:              constants.PrimaryNetworkID,
+	ctx.ValidatorState = &validators.TestState{
+		GetSubnetIDF: func(_ context.Context, chainID ids.ID) (ids.ID, error) {
+			subnetID, ok := map[ids.ID]ids.ID{
+				constants.PlatformChainID: constants.PrimaryNetworkID,
+				testXChainID:              constants.PrimaryNetworkID,
+				testCChainID:              constants.PrimaryNetworkID,
+			}[chainID]
+			if !ok {
+				return ids.Empty, errors.New("unknown chain")
+			}
+			return subnetID, nil
 		},
 	}
 	return ctx
-}
-
-type snLookup struct {
-	chainsToSubnet map[ids.ID]ids.ID
-}
-
-func (sn *snLookup) SubnetID(chainID ids.ID) (ids.ID, error) {
-	subnetID, ok := sn.chainsToSubnet[chainID]
-	if !ok {
-		return ids.ID{}, errors.New("unknown chain")
-	}
-	return subnetID, nil
 }
 
 // setupGenesis sets up the genesis
@@ -344,6 +343,172 @@ func TestVMConfig(t *testing.T) {
 	assert.NoError(t, vm.Shutdown(context.Background()))
 }
 
+func TestCrossChainMessagestoVM(t *testing.T) {
+	crossChainCodec := message.CrossChainCodec
+	require := require.New(t)
+
+	//  the following is based on this contract:
+	//  contract T {
+	//  	event received(address sender, uint amount, bytes memo);
+	//  	event receivedAddr(address sender);
+	//
+	//  	function receive(bytes calldata memo) external payable returns (string memory res) {
+	//  		emit received(msg.sender, msg.value, memo);
+	//  		emit receivedAddr(msg.sender);
+	//		return "hello world";
+	//  	}
+	//  }
+
+	const abiBin = `0x608060405234801561001057600080fd5b506102a0806100206000396000f3fe60806040526004361061003b576000357c010000000000000000000000000000000000000000000000000000000090048063a69b6ed014610040575b600080fd5b6100b76004803603602081101561005657600080fd5b810190808035906020019064010000000081111561007357600080fd5b82018360208201111561008557600080fd5b803590602001918460018302840111640100000000831117156100a757600080fd5b9091929391929390505050610132565b6040518080602001828103825283818151815260200191508051906020019080838360005b838110156100f75780820151818401526020810190506100dc565b50505050905090810190601f1680156101245780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b60607f75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed33348585604051808573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001848152602001806020018281038252848482818152602001925080828437600081840152601f19601f8201169050808301925050509550505050505060405180910390a17f46923992397eac56cf13058aced2a1871933622717e27b24eabc13bf9dd329c833604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390a16040805190810160405280600b81526020017f68656c6c6f20776f726c6400000000000000000000000000000000000000000081525090509291505056fea165627a7a72305820ff0c57dad254cfeda48c9cfb47f1353a558bccb4d1bc31da1dae69315772d29e0029`
+	const abiJSON = `[ { "constant": false, "inputs": [ { "name": "memo", "type": "bytes" } ], "name": "receive", "outputs": [ { "name": "res", "type": "string" } ], "payable": true, "stateMutability": "payable", "type": "function" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "sender", "type": "address" }, { "indexed": false, "name": "amount", "type": "uint256" }, { "indexed": false, "name": "memo", "type": "bytes" } ], "name": "received", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "sender", "type": "address" } ], "name": "receivedAddr", "type": "event" } ]`
+	parsed, err := abi.JSON(strings.NewReader(abiJSON))
+	require.NoErrorf(err, "could not parse abi: %v")
+
+	calledSendCrossChainAppResponseFn := false
+	importAmount := uint64(5000000000)
+	issuer, vm, _, _, appSender := GenesisVMWithUTXOs(t, true, "", "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+
+	defer func() {
+		err := vm.Shutdown(context.Background())
+		require.NoError(err)
+	}()
+
+	appSender.SendCrossChainAppResponseF = func(ctx context.Context, respondingChainID ids.ID, requestID uint32, responseBytes []byte) {
+		calledSendCrossChainAppResponseFn = true
+
+		var response message.EthCallResponse
+		if _, err = crossChainCodec.Unmarshal(responseBytes, &response); err != nil {
+			require.NoErrorf(err, "unexpected error during unmarshal: %w")
+		}
+
+		result := core.ExecutionResult{}
+		err = json.Unmarshal(response.ExecutionResult, &result)
+		require.NoError(err)
+		require.NotNil(result.ReturnData)
+
+		finalResult, err := parsed.Unpack("receive", result.ReturnData)
+		require.NoError(err)
+		require.NotNil(finalResult)
+		require.Equal("hello world", finalResult[0])
+	}
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	require.NoError(err)
+
+	err = vm.issueTx(importTx, true /*=local*/)
+	require.NoError(err)
+
+	<-issuer
+
+	blk1, err := vm.BuildBlock(context.Background())
+	require.NoError(err)
+
+	err = blk1.Verify(context.Background())
+	require.NoError(err)
+
+	if status := blk1.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	err = vm.SetPreference(context.Background(), blk1.ID())
+	require.NoError(err)
+
+	err = blk1.Accept(context.Background())
+	require.NoError(err)
+
+	newHead := <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk1.ID()) {
+		t.Fatalf("Expected new block to match")
+	}
+
+	if status := blk1.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	lastAcceptedID, err := vm.LastAccepted(context.Background())
+	require.NoError(err)
+
+	if lastAcceptedID != blk1.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk1.ID(), lastAcceptedID)
+	}
+
+	contractTx := types.NewContractCreation(0, common.Big0, 200000, new(big.Int).Mul(big.NewInt(3), initialBaseFee), common.FromHex(abiBin))
+	contractSignedTx, err := types.SignTx(contractTx, types.NewEIP155Signer(vm.chainID), testKeys[0].ToECDSA())
+	require.NoError(err)
+
+	errs := vm.txPool.AddRemotesSync([]*types.Transaction{contractSignedTx})
+	for _, err := range errs {
+		require.NoError(err)
+	}
+	testAddr := crypto.PubkeyToAddress(testKeys[0].ToECDSA().PublicKey)
+	contractAddress := crypto.CreateAddress(testAddr, 0)
+
+	<-issuer
+
+	blk2, err := vm.BuildBlock(context.Background())
+	require.NoError(err)
+
+	err = blk2.Verify(context.Background())
+	require.NoError(err)
+
+	if status := blk2.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	err = vm.SetPreference(context.Background(), blk2.ID())
+	require.NoError(err)
+
+	err = blk2.Accept(context.Background())
+	require.NoError(err)
+
+	newHead = <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk2.ID()) {
+		t.Fatalf("Expected new block to match")
+	}
+
+	if status := blk2.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	lastAcceptedID, err = vm.LastAccepted(context.Background())
+	require.NoError(err)
+
+	if lastAcceptedID != blk2.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+	}
+
+	input, err := parsed.Pack("receive", []byte("X"))
+	require.NoError(err)
+
+	data := hexutil.Bytes(input)
+
+	requestArgs, err := json.Marshal(&ethapi.TransactionArgs{
+		To:   &contractAddress,
+		Data: &data,
+	})
+	require.NoError(err)
+
+	var ethCallRequest message.CrossChainRequest = message.EthCallRequest{
+		RequestArgs: requestArgs,
+	}
+
+	crossChainRequest, err := crossChainCodec.Marshal(message.Version, &ethCallRequest)
+	require.NoError(err)
+
+	requestingChainID := ids.ID(common.BytesToHash([]byte{1, 2, 3, 4, 5}))
+
+	// we need all items in the acceptor queue to be processed before we process a cross chain request
+	vm.blockChain.DrainAcceptorQueue()
+	err = vm.Network.CrossChainAppRequest(context.Background(), requestingChainID, 1, time.Now().Add(60*time.Second), crossChainRequest)
+	require.NoError(err)
+	require.True(calledSendCrossChainAppResponseFn, "sendCrossChainAppResponseFn was not called")
+}
+
 func TestVMConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
@@ -506,6 +671,43 @@ func TestVMUpgrades(t *testing.T) {
 	}
 }
 
+func TestImportMissingUTXOs(t *testing.T) {
+	// make a VM with a shared memory that has an importable UTXO to build a block
+	importAmount := uint64(50000000)
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+	defer func() {
+		err := vm.Shutdown(context.Background())
+		require.NoError(t, err)
+	}()
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	require.NoError(t, err)
+	err = vm.issueTx(importTx, true /*=local*/)
+	require.NoError(t, err)
+	<-issuer
+	blk, err := vm.BuildBlock(context.Background())
+	require.NoError(t, err)
+
+	// make another VM which is missing the UTXO in shared memory
+	_, vm2, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase2, "", "")
+	defer func() {
+		err := vm2.Shutdown(context.Background())
+		require.NoError(t, err)
+	}()
+
+	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
+	require.NoError(t, err)
+	err = vm2Blk.Verify(context.Background())
+	require.ErrorIs(t, err, errMissingUTXOs)
+
+	// This should not result in a bad block since the missing UTXO should
+	// prevent InsertBlockManual from being called.
+	badBlocks, _ := vm2.blockChain.BadBlocks()
+	require.Len(t, badBlocks, 0)
+}
+
 // Simple test to ensure we can issue an import transaction followed by an export transaction
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
@@ -520,7 +722,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		}
 	}()
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,7 +764,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
 
-	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -629,7 +831,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -790,14 +992,14 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	importTxs := make([]*Tx, 0, 3)
 	conflictTxs := make([]*Tx, 0, 3)
 	for i, key := range testKeys {
-		importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[i], initialBaseFee, []*crypto.PrivateKeySECP256K1R{key})
+		importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[i], initialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
 		importTxs = append(importTxs, importTx)
 
 		conflictAddr := testEthAddrs[(i+1)%len(testEthAddrs)]
-		conflictTx, err := vm.newImportTx(vm.ctx.XChainID, conflictAddr, initialBaseFee, []*crypto.PrivateKeySECP256K1R{key})
+		conflictTx, err := vm.newImportTx(vm.ctx.XChainID, conflictAddr, initialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1085,6 +1287,7 @@ func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
 		"apricotPhase4": genesisJSONApricotPhase4,
 		"apricotPhase5": genesisJSONApricotPhase5,
 	} {
+		genesis := genesis
 		t.Run(name, func(t *testing.T) {
 			testConflictingImportTxs(t, genesis)
 		})
@@ -1095,11 +1298,12 @@ func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
 // then calling SetPreference on block B (when it becomes preferred)
 // and the head of a longer chain (block D) does not corrupt the
 // canonical chain.
-//  A
-// / \
-// B  C
-//    |
-//    D
+//
+//	  A
+//	 / \
+//	B   C
+//	    |
+//	    D
 func TestSetPreferenceRace(t *testing.T) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
@@ -1126,7 +1330,7 @@ func TestSetPreferenceRace(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1370,12 +1574,12 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	importTx0A, err := vm.newImportTx(vm.ctx.XChainID, key.Address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{key0})
+	importTx0A, err := vm.newImportTx(vm.ctx.XChainID, key.Address, initialBaseFee, []*secp256k1.PrivateKey{key0})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Create a conflicting transaction
-	importTx0B, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[2], initialBaseFee, []*crypto.PrivateKeySECP256K1R{key0})
+	importTx0B, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[2], initialBaseFee, []*secp256k1.PrivateKey{key0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1433,7 +1637,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importTx1, err := vm.newImportTx(vm.ctx.XChainID, key.Address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{key1})
+	importTx1, err := vm.newImportTx(vm.ctx.XChainID, key.Address, initialBaseFee, []*secp256k1.PrivateKey{key1})
 	if err != nil {
 		t.Fatalf("Failed to issue importTx1 due to: %s", err)
 	}
@@ -1512,7 +1716,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1569,9 +1773,10 @@ func TestBonusBlocksTxs(t *testing.T) {
 // will not attempt to orphan either when verifying blocks C and D
 // from another VM (which have a common ancestor under the finalized
 // frontier).
-//   A
-//  / \
-// B   C
+//
+//	  A
+//	 / \
+//	B   C
 //
 // verifies block B and C, then Accepts block B. Then we test to ensure
 // that the VM defends against any attempt to set the preference or to
@@ -1604,7 +1809,7 @@ func TestReorgProtection(t *testing.T) {
 	key := testKeys[0].ToECDSA()
 	address := testEthAddrs[0]
 
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1755,9 +1960,10 @@ func TestReorgProtection(t *testing.T) {
 
 // Regression test to ensure that a VM that accepts block C while preferring
 // block B will trigger a reorg.
-//   A
-//  / \
-// B   C
+//
+//	  A
+//	 / \
+//	B   C
 func TestNonCanonicalAccept(t *testing.T) {
 	importAmount := uint64(1000000000)
 	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
@@ -1785,7 +1991,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	key := testKeys[0].ToECDSA()
 	address := testEthAddrs[0]
 
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1927,11 +2133,12 @@ func TestNonCanonicalAccept(t *testing.T) {
 // Regression test to ensure that a VM that verifies block B, C, then
 // D (preferring block B) does not trigger a reorg through the re-verification
 // of block C or D.
-//   A
-//  / \
-// B   C
-//     |
-//     D
+//
+//	  A
+//	 / \
+//	B   C
+//	    |
+//	    D
 func TestStickyPreference(t *testing.T) {
 	importAmount := uint64(1000000000)
 	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
@@ -1959,7 +2166,7 @@ func TestStickyPreference(t *testing.T) {
 	key := testKeys[0].ToECDSA()
 	address := testEthAddrs[0]
 
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2200,11 +2407,12 @@ func TestStickyPreference(t *testing.T) {
 // Regression test to ensure that a VM that prefers block B is able to parse
 // block C but unable to parse block D because it names B as an uncle, which
 // are not supported.
-//   A
-//  / \
-// B   C
-//     |
-//     D
+//
+//	  A
+//	 / \
+//	B   C
+//	    |
+//	    D
 func TestUncleBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
 	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
@@ -2231,7 +2439,7 @@ func TestUncleBlock(t *testing.T) {
 	key := testKeys[0].ToECDSA()
 	address := testEthAddrs[0]
 
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2414,7 +2622,7 @@ func TestEmptyBlock(t *testing.T) {
 		}
 	}()
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2462,11 +2670,12 @@ func TestEmptyBlock(t *testing.T) {
 
 // Regression test to ensure that a VM that verifies block B, C, then
 // D (preferring block B) reorgs when C and then D are accepted.
-//   A
-//  / \
-// B   C
-//     |
-//     D
+//
+//	  A
+//	 / \
+//	B   C
+//	    |
+//	    D
 func TestAcceptReorg(t *testing.T) {
 	importAmount := uint64(1000000000)
 	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
@@ -2494,7 +2703,7 @@ func TestAcceptReorg(t *testing.T) {
 	key := testKeys[0].ToECDSA()
 	address := testEthAddrs[0]
 
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2689,7 +2898,7 @@ func TestFutureBlock(t *testing.T) {
 		}
 	}()
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2754,7 +2963,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 	key := testKeys[0].ToECDSA()
 	address := testEthAddrs[0]
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2870,7 +3079,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		}
 	}()
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2948,7 +3157,7 @@ func TestReissueAtomicTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3126,7 +3335,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 		SourceChain: vm.ctx.XChainID,
 	}
 	tx := &Tx{UnsignedAtomicTx: utx}
-	if err := tx.Sign(vm.codec, [][]*crypto.PrivateKeySECP256K1R{{key0}}); err != nil {
+	if err := tx.Sign(vm.codec, [][]*secp256k1.PrivateKey{{key0}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3277,7 +3486,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3459,7 +3668,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3666,7 +3875,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	// Create a conflict set for each pair of transactions
 	conflictSets := make([]set.Set[ids.ID], len(testKeys))
 	for index, key := range testKeys {
-		importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[index], initialBaseFee, []*crypto.PrivateKeySECP256K1R{key})
+		importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[index], initialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3674,7 +3883,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 			t.Fatal(err)
 		}
 		conflictSets[index].Add(importTx.ID())
-		conflictTx, err := vm.newImportTx(vm.ctx.XChainID, conflictKey.Address, initialBaseFee, []*crypto.PrivateKeySECP256K1R{key})
+		conflictTx, err := vm.newImportTx(vm.ctx.XChainID, conflictKey.Address, initialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3794,7 +4003,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 
 	// Double the initial base fee used when estimating the cost of this transaction to ensure that when it is
 	// used in ApricotPhase5 it still pays a sufficient fee with the fixed fee per atomic transaction.
-	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3860,7 +4069,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// Since rewinding is permitted for last accepted height of 0, we must
 	// accept one block to test the SkipUpgradeCheck functionality.
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
 	require.NoError(t, vm.issueTx(importTx, true /*=local*/))
 	<-issuer

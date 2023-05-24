@@ -1498,7 +1498,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
 	} else {
-		log.Warn("Unlikely preference change (rewind to ancestor) occurred", "oldnum", oldHead.Number(), "oldhash", oldHead.Hash(), "newnum", newHead.Number(), "newhash", newHead.Hash())
+		log.Debug("Preference change (rewind to ancestor) occurred", "oldnum", oldHead.Number(), "oldhash", oldHead.Hash(), "newnum", newHead.Number(), "newhash", newHead.Hash())
 	}
 	// Insert the new chain(except the head block(reverse order)),
 	// taking care of the proper incremental order.
@@ -1558,7 +1558,7 @@ type BadBlockReason struct {
 	Receipts    types.Receipts      `json:"receipts"`
 	Number      uint64              `json:"number"`
 	Hash        common.Hash         `json:"hash"`
-	Error       error               `json:"error"`
+	Error       string              `json:"error"`
 }
 
 func (b *BadBlockReason) String() string {
@@ -1576,7 +1576,7 @@ func (b *BadBlockReason) String() string {
 	Hash: %#x
 	%v
 	
-	Error: %v
+	Error: %s
 	##############################
 	`, b.ChainConfig, b.Number, b.Hash, receiptString, b.Error)
 
@@ -1614,7 +1614,7 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 		Receipts:    receipts,
 		Number:      block.NumberU64(),
 		Hash:        block.Hash(),
-		Error:       err,
+		Error:       err.Error(),
 	}
 
 	badBlockCounter.Inc(1)

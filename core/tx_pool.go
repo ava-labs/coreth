@@ -52,6 +52,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/event"
@@ -272,6 +273,7 @@ type TxPool struct {
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
+	cortina  bool // Fork indicator whether cortina is activated. (equivalent to Shanghai in go-ethereum)
 
 	fixedBaseFee bool // Fork has introduced fixed base fee
 
@@ -690,6 +692,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if txSize := uint64(tx.Size()); txSize > txMaxSize {
 		return fmt.Errorf("%w tx size %d > max size %d", ErrOversizedData, txSize, txMaxSize)
 	}
+	// Check whether the init code size has been exceeded.
+	if pool.cortina && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+		return fmt.Errorf("%w: code size %v limit %v", vmerrs.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
+	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
@@ -731,7 +737,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Transactor should have enough funds to cover the costs
 
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
+	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.cortina)
 	if err != nil {
 		return err
 	}
@@ -1425,6 +1431,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	timestamp := new(big.Int).SetUint64(newHead.Time)
 	pool.eip2718 = pool.chainconfig.IsApricotPhase2(timestamp)
 	pool.eip1559 = pool.chainconfig.IsApricotPhase3(timestamp)
+	pool.cortina = pool.chainconfig.IsCortina(timestamp)
 	if pool.chainconfig.IsSunrisePhase0(timestamp) {
 		pool.fixedBaseFee = true
 		var newMinimumFee *big.Int

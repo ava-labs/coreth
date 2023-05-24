@@ -105,7 +105,9 @@ func awaitWatcherEventsSubside(watcher *fsnotify.Watcher, subsideTimeout time.Du
 }
 
 func TestTrieCleanJournal(t *testing.T) {
-	t.Skip("FLAKY")
+	if os.Getenv("RUN_FLAKY_TESTS") != "true" {
+		t.Skip("FLAKY")
+	}
 	require := require.New(t)
 	assert := assert.New(t)
 
@@ -372,6 +374,7 @@ func TestBlockChainOfflinePruningUngracefulShutdown(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			tt := tt
 			t.Parallel()
 			tt.testFunc(t, create)
 		})

@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -12,7 +12,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
-	"github.com/ava-labs/avalanchego/utils/crypto"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -67,7 +67,7 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 	// vm.clock.Set(apricotPhase5Timestamp.Add(time.Minute * 1))
 	vm.clock.Set(time.Unix(apricotPhase5BlockTimestamp.Int64(), 0).Add(time.Minute * 1))
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], big.NewInt(0).Mul(initialBaseFee, big.NewInt(10)), []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], big.NewInt(0).Mul(initialBaseFee, big.NewInt(10)), []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 	// vm.clock.Set(apricotPhase5Timestamp.Add(time.Minute * 21))
 	vm.clock.Set(time.Unix(sunrisePhase0BlockTimestamp.Int64(), 0).Add(time.Minute))
 
-	importTx2, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[2], sunriseBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[1]})
+	importTx2, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[2], sunriseBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestSunrisePhase0AndApricotPhase5Block(t *testing.T) {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	importTx3, err := vm.newExportTx(vm.ctx.AVAXAssetID, uint64(50000), vm.ctx.XChainID, testShortIDAddrs[0], big.NewInt(0).Mul(sunriseBaseFee, big.NewInt(100)), []*crypto.PrivateKeySECP256K1R{testKeys[1]})
+	importTx3, err := vm.newExportTx(vm.ctx.AVAXAssetID, uint64(50000), vm.ctx.XChainID, testShortIDAddrs[0], big.NewInt(0).Mul(sunriseBaseFee, big.NewInt(100)), []*secp256k1.PrivateKey{testKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func DisabledTestSunrisePhase0OrphanBlock(t *testing.T) {
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
 	address := testEthAddrs[0]
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, sunriseBaseFee, []*crypto.PrivateKeySECP256K1R{testKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, address, sunriseBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}

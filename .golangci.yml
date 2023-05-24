@@ -10,6 +10,7 @@ run:
     - caminogo
   skip-files:
     - core/genesis_alloc.go
+    - precompile/
 
 linters:
   disable-all: true

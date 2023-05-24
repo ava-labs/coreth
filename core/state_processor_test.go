@@ -1,4 +1,4 @@
-// Copyright (C) 2022, Chain4Travel AG. All rights reserved.
+// Copyright (C) 2022-2023, Chain4Travel AG. All rights reserved.
 //
 // This file is a derived work, based on ava-labs code whose
 // original notices appear below.
@@ -37,6 +37,7 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -81,6 +82,18 @@ func mkDynamicTx(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, ga
 	return tx
 }
 
+func mkDynamicCreationTx(nonce uint64, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, data []byte) *types.Transaction {
+	tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		Nonce:     nonce,
+		GasTipCap: gasTipCap,
+		GasFeeCap: gasFeeCap,
+		Gas:       gasLimit,
+		Value:     big.NewInt(0),
+		Data:      data,
+	}), signer, testKey)
+	return tx
+}
+
 // TestStateProcessorErrors tests the output from the 'core' errors
 // as defined in core/error.go. These errors are generated when the
 // blockchain imports bad blocks, meaning blocks which have valid headers but
@@ -93,11 +106,11 @@ func TestStateProcessorErrors(t *testing.T) {
 				Config: config,
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
-						Balance: big.NewInt(2000000000000000000), // 2 ether
+						Balance: big.NewInt(4000000000000000000), // 4 ether
 						Nonce:   0,
 					},
 				},
-				GasLimit: params.ApricotPhase1GasLimit,
+				GasLimit: params.CortinaGasLimit,
 			}
 			genesis       = gspec.MustCommit(db)
 			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
@@ -125,21 +138,21 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), 8000001, big.NewInt(225000000000), nil),
+					makeTx(0, common.Address{}, big.NewInt(0), 15000001, big.NewInt(225000000000), nil),
 				},
-				want: "could not apply tx 0 [0xfbe38b817aaa760c2766b56c019fcdba506560a28fd41c69ae96bdaa4569e317]: gas limit reached",
+				want: "could not apply tx 0 [0x1354370681d2ab68247073d889736f8be4a8d87e35956f0c02658d3670803a66]: gas limit reached",
 			},
 			{ // ErrInsufficientFundsForTransfer
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(2000000000000000000), params.TxGas, big.NewInt(225000000000), nil),
+					makeTx(0, common.Address{}, big.NewInt(4000000000000000000), params.TxGas, big.NewInt(225000000000), nil),
 				},
-				want: "could not apply tx 0 [0xae1601ef55b676ebb824ee7e16a0d14af725b7f9cf5ec79e21f14833c26b5b35]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 2000000000000000000 want 2004725000000000000",
+				want: "could not apply tx 0 [0x1632f2bffcce84a5c91dd8ab2016128fccdbcfbe0485d2c67457e1c793c72a4b]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 4004725000000000000",
 			},
 			{ // ErrInsufficientFunds
 				txs: []*types.Transaction{
 					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(900000000000000000), nil),
 				},
-				want: "could not apply tx 0 [0x4a69690c4b0cd85e64d0d9ea06302455b01e10a83db964d60281739752003440]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 2000000000000000000 want 18900000000000000000000",
+				want: "could not apply tx 0 [0x4a69690c4b0cd85e64d0d9ea06302455b01e10a83db964d60281739752003440]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 18900000000000000000000",
 			},
 			// ErrGasUintOverflow
 			// One missing 'core' error is ErrGasUintOverflow: "gas uint64 overflow",
@@ -153,9 +166,9 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas*381, big.NewInt(225000000000), nil),
+					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas*762, big.NewInt(225000000000), nil),
 				},
-				want: "could not apply tx 0 [0x9ee548e001369418ae53aaa11b5d823f081cc7fa9c9a7ee71a978ae17a2aece0]: gas limit reached",
+				want: "could not apply tx 0 [0x76c07cc2b32007eb1a9c3fa066d579a3d77ec4ecb79bbc266624a601d7b08e46]: gas limit reached",
 			},
 			{ // ErrFeeCapTooLow
 				txs: []*types.Transaction{
@@ -188,15 +201,15 @@ func TestStateProcessorErrors(t *testing.T) {
 				// This test is designed to have the effective cost be covered by the balance, but
 				// the extended requirement on FeeCap*gas < balance to fail
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(100000000000000)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(200000000000000)),
 				},
-				want: "could not apply tx 0 [0x3388378ed60640e75d2edf728d5528a305f599997abc4f23ec46b351b6197499]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 2000000000000000000 want 2100000000000000000",
+				want: "could not apply tx 0 [0xa3840aa3cad37eec8607b9f4846813d4a80e70b462a793fa21f64138156f849b]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 4200000000000000000",
 			},
 			{ // Another ErrInsufficientFunds, this one to ensure that feecap/tip of max u256 is allowed
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, bigNumber, bigNumber),
 				},
-				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 2000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
+				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
 			},
 		} {
 			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
@@ -277,7 +290,7 @@ func TestStateProcessorErrors(t *testing.T) {
 						Code:    common.FromHex("0xB0B0FACE"),
 					},
 				},
-				GasLimit: params.ApricotPhase1GasLimit,
+				GasLimit: params.CortinaGasLimit,
 			}
 			genesis       = gspec.MustCommit(db)
 			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
@@ -292,6 +305,79 @@ func TestStateProcessorErrors(t *testing.T) {
 					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
 				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
+			},
+		} {
+			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
+			_, err := blockchain.InsertChain(types.Blocks{block})
+			if err == nil {
+				t.Fatal("block imported without errors")
+			}
+			if have, want := err.Error(), tt.want; have != want {
+				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
+			}
+		}
+	}
+
+	// ErrMaxInitCodeSizeExceeded, for this we need extra Shanghai (Cortina/EIP-3860) enabled.
+	{
+		var (
+			db    = rawdb.NewMemoryDatabase()
+			gspec = &Genesis{
+				Config: &params.ChainConfig{
+					ChainID:                         big.NewInt(1),
+					HomesteadBlock:                  big.NewInt(0),
+					DAOForkBlock:                    big.NewInt(0),
+					DAOForkSupport:                  true,
+					EIP150Block:                     big.NewInt(0),
+					EIP150Hash:                      common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+					EIP155Block:                     big.NewInt(0),
+					EIP158Block:                     big.NewInt(0),
+					ByzantiumBlock:                  big.NewInt(0),
+					ConstantinopleBlock:             big.NewInt(0),
+					PetersburgBlock:                 big.NewInt(0),
+					IstanbulBlock:                   big.NewInt(0),
+					MuirGlacierBlock:                big.NewInt(0),
+					ApricotPhase1BlockTimestamp:     big.NewInt(0),
+					ApricotPhase2BlockTimestamp:     big.NewInt(0),
+					ApricotPhase3BlockTimestamp:     big.NewInt(0),
+					ApricotPhase4BlockTimestamp:     big.NewInt(0),
+					ApricotPhase5BlockTimestamp:     big.NewInt(0),
+					ApricotPhasePre6BlockTimestamp:  big.NewInt(0),
+					ApricotPhase6BlockTimestamp:     big.NewInt(0),
+					ApricotPhasePost6BlockTimestamp: big.NewInt(0),
+					BanffBlockTimestamp:             big.NewInt(0),
+					CortinaBlockTimestamp:           big.NewInt(0),
+				},
+				Alloc: GenesisAlloc{
+					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+						Balance: big.NewInt(1000000000000000000), // 1 ether
+						Nonce:   0,
+					},
+				},
+				GasLimit: params.CortinaGasLimit,
+			}
+			genesis        = gspec.MustCommit(db)
+			blockchain, _  = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
+			smallInitCode  = [320]byte{}
+		)
+		defer blockchain.Stop()
+		for i, tt := range []struct {
+			txs  []*types.Transaction
+			want string
+		}{
+			{ // ErrMaxInitCodeSizeExceeded
+				txs: []*types.Transaction{
+
+					mkDynamicCreationTx(0, 500000, common.Big0, big.NewInt(params.ApricotPhase3InitialBaseFee), tooBigInitCode[:]),
+				},
+				want: "could not apply tx 0 [0x18a05f40f29ff16d5287f6f88b21c9f3c7fbc268f707251144996294552c4cd6]: max initcode size exceeded: code size 49153 limit 49152",
+			},
+			{ // ErrIntrinsicGas: Not enough gas to cover init code
+				txs: []*types.Transaction{
+					mkDynamicCreationTx(0, 54299, common.Big0, big.NewInt(params.ApricotPhase3InitialBaseFee), smallInitCode[:]),
+				},
+				want: "could not apply tx 0 [0x849278f616d51ab56bba399551317213ce7a10e4d9cbc3d14bb663e50cb7ab99]: intrinsic gas too low: have 54299, want 54300",
 			},
 		} {
 			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
@@ -350,4 +436,115 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil), nil, true)
+}
+
+func CostOfUsingGasLimitEachBlock(gspec *Genesis) {
+	db := rawdb.NewMemoryDatabase()
+	genesis := gspec.MustCommit(db)
+	totalPaid := big.NewInt(0)
+	parent := genesis.Header()
+	gasLimit := new(big.Int).SetUint64(gspec.GasLimit)
+	totalGasUsed := big.NewInt(0)
+
+	for i := 1; i < 20; i++ {
+		header := nextBlock(gspec.Config, parent, gspec.GasLimit)
+		baseFee := header.BaseFee
+		gasCost := new(big.Int).Mul(baseFee, gasLimit)
+		totalGasUsed = new(big.Int).Add(totalGasUsed, gasLimit)
+		totalPaid = new(big.Int).Add(totalPaid, gasCost)
+		parent = header
+
+		avg := new(big.Int).Div(totalPaid, totalGasUsed)
+		fmt.Printf(
+			"Number: %d, BaseFee: %vGWei, TotalGasUsed: %d, TotalPaid (Ether): %d, AvgGasPrice: %dGWei\n",
+			header.Number,
+			new(big.Int).Div(baseFee, big.NewInt(params.GWei)), // baseFee in GWei
+			totalGasUsed,
+			new(big.Int).Div(totalPaid, big.NewInt(params.Ether)), // totalPaid in Ether
+			new(big.Int).Div(avg, big.NewInt(params.GWei)),        // avgGasPrice in GWei
+		)
+	}
+}
+
+func ExampleCostOfUsingGasLimitEachBlock() {
+	banff := &Genesis{
+		Config: params.TestBanffChainConfig,
+		Alloc: GenesisAlloc{
+			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+				Balance: big.NewInt(4000000000000000000), // 4 ether
+				Nonce:   0,
+			},
+		},
+		BaseFee:  big.NewInt(225 * params.GWei),
+		GasLimit: params.ApricotPhase1GasLimit,
+	}
+	cortina := &Genesis{
+		Config: params.TestCortinaChainConfig,
+		Alloc: GenesisAlloc{
+			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+				Balance: big.NewInt(4000000000000000000), // 4 ether
+				Nonce:   0,
+			},
+		},
+		BaseFee:  big.NewInt(225 * params.GWei),
+		GasLimit: params.CortinaGasLimit,
+	}
+	fmt.Println("----- banff ----")
+	CostOfUsingGasLimitEachBlock(banff)
+	fmt.Println("----- cortina ----")
+	CostOfUsingGasLimitEachBlock(cortina)
+	// Output:
+	// ----- banff ----
+	// Number: 1, BaseFee: 225GWei, TotalGasUsed: 8000000, TotalPaid (Ether): 1, AvgGasPrice: 225GWei
+	// Number: 2, BaseFee: 222GWei, TotalGasUsed: 16000000, TotalPaid (Ether): 3, AvgGasPrice: 223GWei
+	// Number: 3, BaseFee: 222GWei, TotalGasUsed: 24000000, TotalPaid (Ether): 5, AvgGasPrice: 223GWei
+	// Number: 4, BaseFee: 226GWei, TotalGasUsed: 32000000, TotalPaid (Ether): 7, AvgGasPrice: 223GWei
+	// Number: 5, BaseFee: 233GWei, TotalGasUsed: 40000000, TotalPaid (Ether): 9, AvgGasPrice: 225GWei
+	// Number: 6, BaseFee: 240GWei, TotalGasUsed: 48000000, TotalPaid (Ether): 10, AvgGasPrice: 228GWei
+	// Number: 7, BaseFee: 248GWei, TotalGasUsed: 56000000, TotalPaid (Ether): 12, AvgGasPrice: 231GWei
+	// Number: 8, BaseFee: 256GWei, TotalGasUsed: 64000000, TotalPaid (Ether): 14, AvgGasPrice: 234GWei
+	// Number: 9, BaseFee: 264GWei, TotalGasUsed: 72000000, TotalPaid (Ether): 17, AvgGasPrice: 237GWei
+	// Number: 10, BaseFee: 272GWei, TotalGasUsed: 80000000, TotalPaid (Ether): 19, AvgGasPrice: 241GWei
+	// Number: 11, BaseFee: 281GWei, TotalGasUsed: 88000000, TotalPaid (Ether): 21, AvgGasPrice: 244GWei
+	// Number: 12, BaseFee: 289GWei, TotalGasUsed: 96000000, TotalPaid (Ether): 23, AvgGasPrice: 248GWei
+	// Number: 13, BaseFee: 298GWei, TotalGasUsed: 104000000, TotalPaid (Ether): 26, AvgGasPrice: 252GWei
+	// Number: 14, BaseFee: 308GWei, TotalGasUsed: 112000000, TotalPaid (Ether): 28, AvgGasPrice: 256GWei
+	// Number: 15, BaseFee: 318GWei, TotalGasUsed: 120000000, TotalPaid (Ether): 31, AvgGasPrice: 260GWei
+	// Number: 16, BaseFee: 328GWei, TotalGasUsed: 128000000, TotalPaid (Ether): 33, AvgGasPrice: 264GWei
+	// Number: 17, BaseFee: 338GWei, TotalGasUsed: 136000000, TotalPaid (Ether): 36, AvgGasPrice: 269GWei
+	// Number: 18, BaseFee: 349GWei, TotalGasUsed: 144000000, TotalPaid (Ether): 39, AvgGasPrice: 273GWei
+	// Number: 19, BaseFee: 360GWei, TotalGasUsed: 152000000, TotalPaid (Ether): 42, AvgGasPrice: 278GWei
+	// ----- cortina ----
+	// Number: 1, BaseFee: 225GWei, TotalGasUsed: 15000000, TotalPaid (Ether): 3, AvgGasPrice: 225GWei
+	// Number: 2, BaseFee: 225GWei, TotalGasUsed: 30000000, TotalPaid (Ether): 6, AvgGasPrice: 225GWei
+	// Number: 3, BaseFee: 231GWei, TotalGasUsed: 45000000, TotalPaid (Ether): 10, AvgGasPrice: 227GWei
+	// Number: 4, BaseFee: 244GWei, TotalGasUsed: 60000000, TotalPaid (Ether): 13, AvgGasPrice: 231GWei
+	// Number: 5, BaseFee: 264GWei, TotalGasUsed: 75000000, TotalPaid (Ether): 17, AvgGasPrice: 237GWei
+	// Number: 6, BaseFee: 286GWei, TotalGasUsed: 90000000, TotalPaid (Ether): 22, AvgGasPrice: 246GWei
+	// Number: 7, BaseFee: 310GWei, TotalGasUsed: 105000000, TotalPaid (Ether): 26, AvgGasPrice: 255GWei
+	// Number: 8, BaseFee: 336GWei, TotalGasUsed: 120000000, TotalPaid (Ether): 31, AvgGasPrice: 265GWei
+	// Number: 9, BaseFee: 364GWei, TotalGasUsed: 135000000, TotalPaid (Ether): 37, AvgGasPrice: 276GWei
+	// Number: 10, BaseFee: 394GWei, TotalGasUsed: 150000000, TotalPaid (Ether): 43, AvgGasPrice: 288GWei
+	// Number: 11, BaseFee: 427GWei, TotalGasUsed: 165000000, TotalPaid (Ether): 49, AvgGasPrice: 300GWei
+	// Number: 12, BaseFee: 463GWei, TotalGasUsed: 180000000, TotalPaid (Ether): 56, AvgGasPrice: 314GWei
+	// Number: 13, BaseFee: 501GWei, TotalGasUsed: 195000000, TotalPaid (Ether): 64, AvgGasPrice: 328GWei
+	// Number: 14, BaseFee: 543GWei, TotalGasUsed: 210000000, TotalPaid (Ether): 72, AvgGasPrice: 344GWei
+	// Number: 15, BaseFee: 588GWei, TotalGasUsed: 225000000, TotalPaid (Ether): 81, AvgGasPrice: 360GWei
+	// Number: 16, BaseFee: 637GWei, TotalGasUsed: 240000000, TotalPaid (Ether): 90, AvgGasPrice: 377GWei
+	// Number: 17, BaseFee: 690GWei, TotalGasUsed: 255000000, TotalPaid (Ether): 101, AvgGasPrice: 396GWei
+	// Number: 18, BaseFee: 748GWei, TotalGasUsed: 270000000, TotalPaid (Ether): 112, AvgGasPrice: 415GWei
+	// Number: 19, BaseFee: 810GWei, TotalGasUsed: 285000000, TotalPaid (Ether): 124, AvgGasPrice: 436GWei
+}
+
+func nextBlock(config *params.ChainConfig, parent *types.Header, gasUsed uint64) *types.Header {
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     new(big.Int).Add(parent.Number, common.Big1),
+		Time:       parent.Time + 2,
+	}
+	if config.IsApricotPhase3(new(big.Int).SetUint64(header.Time)) {
+		header.Extra, header.BaseFee, _ = dummy.CalcBaseFee(config, nil, parent, header.Time)
+	}
+	header.GasUsed = gasUsed
+	return header
 }

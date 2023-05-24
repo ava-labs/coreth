@@ -173,6 +173,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	return params.NetSstoreDirtyGas, nil
 }
 
+//nolint:goimports
 // 0. If *gasleft* is less than or equal to 2300, fail the current call.
 // 1. If current value equals new value (this is a no-op), SLOAD_GAS is deducted.
 // 2. If current value does not equal new value:
@@ -228,6 +229,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	return params.SloadGasEIP2200, nil // dirty update (2.2)
 }
 
+//nolint:goimports
 // gasSStoreAP1 simplifies the dynamic gas cost of SSTORE by removing all refund logic
 //
 // 0. If *gasleft* is less than or equal to 2300, fail the current call.
@@ -340,6 +342,39 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 		return 0, vmerrs.ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
+		return 0, vmerrs.ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	size, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow || size > params.MaxInitCodeSize {
+		return 0, vmerrs.ErrGasUintOverflow
+	}
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	moreGas := params.InitCodeWordGas * ((size + 31) / 32)
+	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+		return 0, vmerrs.ErrGasUintOverflow
+	}
+	return gas, nil
+}
+func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	size, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow || size > params.MaxInitCodeSize {
+		return 0, vmerrs.ErrGasUintOverflow
+	}
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
+	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
 		return 0, vmerrs.ErrGasUintOverflow
 	}
 	return gas, nil
