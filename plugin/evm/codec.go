@@ -23,6 +23,7 @@ func init() {
 	errs.Add(
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
+		c.RegisterType(&TestUnsignedTx{}),
 	)
 	c.SkipRegistrations(3)
 	errs.Add(

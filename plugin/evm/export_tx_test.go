@@ -17,8 +17,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/coreth/params"
 )
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
@@ -59,7 +60,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 
-	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
+	if err := vm.IssueTx(importTx, true /*=local*/); err != nil {
 		t.Fatal(err)
 	}
 
@@ -371,7 +372,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.issueTx(tx, true /*=local*/); err != nil {
+			if err := vm.IssueTx(tx, true /*=local*/); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1726,7 +1727,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.issueTx(tx, true /*=local*/); err != nil {
+			if err := vm.IssueTx(tx, true /*=local*/); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1916,7 +1917,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.issueTx(tx, false); err != nil {
+			if err := vm.IssueTx(tx, false); err != nil {
 				t.Fatal(err)
 			}
 

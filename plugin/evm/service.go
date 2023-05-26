@@ -16,10 +16,11 @@ import (
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/ava-labs/coreth/params"
 )
 
 // test constants
@@ -230,7 +231,7 @@ func (service *AvaxAPI) Import(_ *http.Request, args *ImportArgs, response *api.
 	}
 
 	response.TxID = tx.ID()
-	return service.vm.issueTx(tx, true /*=local*/)
+	return service.vm.IssueTx(tx, true /*=local*/)
 }
 
 // ExportAVAXArgs are the arguments to ExportAVAX
@@ -324,7 +325,7 @@ func (service *AvaxAPI) Export(_ *http.Request, args *ExportArgs, response *api.
 	}
 
 	response.TxID = tx.ID()
-	return service.vm.issueTx(tx, true /*=local*/)
+	return service.vm.IssueTx(tx, true /*=local*/)
 }
 
 // GetUTXOs gets all utxos for passed in addresses
@@ -424,7 +425,7 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	}
 
 	response.TxID = tx.ID()
-	return service.vm.issueTx(tx, true /*=local*/)
+	return service.vm.IssueTx(tx, true /*=local*/)
 }
 
 // GetAtomicTxStatusReply defines the GetAtomicTxStatus replies returned from the API

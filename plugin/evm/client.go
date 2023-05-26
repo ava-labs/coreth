@@ -67,7 +67,7 @@ func (c *client) IssueTx(ctx context.Context, txBytes []byte) (ids.ID, error) {
 	if err != nil {
 		return res.TxID, fmt.Errorf("problem hex encoding bytes: %w", err)
 	}
-	err = c.requester.SendRequest(ctx, "avax.issueTx", &api.FormattedTx{
+	err = c.requester.SendRequest(ctx, "avax.IssueTx", &api.FormattedTx{
 		Tx:       txStr,
 		Encoding: formatting.Hex,
 	}, res)

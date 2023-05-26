@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 )
@@ -48,7 +49,10 @@ func (t *TestUnsignedTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 }
 
 // Initialize implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) Initialize(unsignedBytes, signedBytes []byte) {}
+func (t *TestUnsignedTx) Initialize(unsignedBytes, signedBytes []byte) {
+	t.UnsignedBytesV = unsignedBytes
+	t.SignedBytesV = signedBytes
+}
 
 // ID implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) ID() ids.ID { return t.IDV }

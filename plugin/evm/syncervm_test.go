@@ -284,7 +284,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := serverVM.issueTx(importTx, true /*=local*/); err != nil {
+			if err := serverVM.IssueTx(importTx, true /*=local*/); err != nil {
 				t.Fatal(err)
 			}
 		case 1:
@@ -300,7 +300,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := serverVM.issueTx(exportTx, true /*=local*/); err != nil {
+			if err := serverVM.IssueTx(exportTx, true /*=local*/); err != nil {
 				t.Fatal(err)
 			}
 		default: // Generate simple transfer transactions.

@@ -11,8 +11,9 @@ import (
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/params"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/params"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
@@ -148,7 +149,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		vm.initBlockBuilding()
 	}
 
-	if err := vm.issueTx(tx, true /*=local*/); err != nil {
+	if err := vm.IssueTx(tx, true /*=local*/); err != nil {
 		t.Fatal(err)
 	}
 	<-issuer

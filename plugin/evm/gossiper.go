@@ -470,6 +470,10 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 		return nil
 	}
 	tx.Initialize(unsignedBytes, msg.Tx)
+	signedBytes := tx.SignedBytes()
+	if len(signedBytes) == 0 {
+		log.Error("missing bytes")
+	}
 
 	txID := tx.ID()
 	h.stats.IncAtomicGossipReceived()
@@ -482,7 +486,7 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 	}
 
 	h.stats.IncAtomicGossipReceivedNew()
-	if err := h.vm.issueTx(&tx, false /*=local*/); err != nil {
+	if err := h.vm.IssueTx(&tx, false /*=local*/); err != nil {
 		log.Trace(
 			"AppGossip provided invalid transaction",
 			"peerID", nodeID,

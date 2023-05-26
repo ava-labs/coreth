@@ -1289,9 +1289,9 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	return chainID, addr, nil
 }
 
-// issueTx verifies [tx] as valid to be issued on top of the currently preferred block
+// IssueTx verifies [tx] as valid to be issued on top of the currently preferred block
 // and then issues [tx] into the mempool if valid.
-func (vm *VM) issueTx(tx *Tx, local bool) error {
+func (vm *VM) IssueTx(tx *Tx, local bool) error {
 	if err := vm.verifyTxAtTip(tx); err != nil {
 		if !local {
 			// unlike local txs, invalid remote txs are recorded as discarded
