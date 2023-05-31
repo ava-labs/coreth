@@ -57,8 +57,7 @@ const (
 
 // environment is the worker's current environment and holds all of the current state information.
 type environment struct {
-	signer types.Signer
-
+	signer  types.Signer
 	state   *state.StateDB // apply state changes here
 	tcount  int            // tx count in cycle
 	gasPool *core.GasPool  // available gas used to pack transactions
