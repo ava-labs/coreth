@@ -27,6 +27,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/coreth/consensus"
@@ -76,6 +77,20 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	}
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
+	}
+	// Blob transactions may be present after the Cancun fork.
+	var blobs int
+	for _, tx := range block.Transactions() {
+		blobs += len(tx.BlobHashes())
+	}
+	if header.DataGasUsed != nil {
+		if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.DataGasUsed, blobs*params.BlobTxDataGasPerBlob)
+		}
+	} else {
+		if blobs > 0 {
+			return errors.New("data blobs present in block body")
+		}
 	}
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {

@@ -103,7 +103,10 @@ type Header struct {
 	BlockGasCost *big.Int `json:"blockGasCost" rlp:"optional"`
 
 	// ExcessDataGas was added by EIP-4844 and is ignored in legacy headers.
-	ExcessDataGas *big.Int `json:"excessDataGas" rlp:"optional"`
+	ExcessDataGas *uint64 `json:"excessDataGas" rlp:"optional"`
+
+	// DataGasUsed was added by EIP-4844 and is ignored in legacy headers.
+	DataGasUsed *uint64 `json:"dataGasUsed" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -118,6 +121,8 @@ type headerMarshaling struct {
 	ExtDataGasUsed *hexutil.Big
 	BlockGasCost   *hexutil.Big
 	Hash           common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	ExcessDataGas  *hexutil.Uint64
+	DataGasUsed    *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -365,6 +370,24 @@ func (b *Block) BlockGasCost() *big.Int {
 		return nil
 	}
 	return new(big.Int).Set(b.header.BlockGasCost)
+}
+
+func (b *Block) ExcessDataGas() *uint64 {
+	var excessDataGas *uint64
+	if b.header.ExcessDataGas != nil {
+		excessDataGas = new(uint64)
+		*excessDataGas = *b.header.ExcessDataGas
+	}
+	return excessDataGas
+}
+
+func (b *Block) DataGasUsed() *uint64 {
+	var dataGasUsed *uint64
+	if b.header.DataGasUsed != nil {
+		dataGasUsed = new(uint64)
+		*dataGasUsed = *b.header.DataGasUsed
+	}
+	return dataGasUsed
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
