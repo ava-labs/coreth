@@ -603,11 +603,17 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, 0, vmerrs.ErrContractAddressCollision
 	}
 
-	// Check AdminController restrictions
+	// Get root caller
 	rootCaller := caller
-	if contract, isContract := caller.(*Contract); isContract {
-		rootCaller = contract.caller
+	for {
+		if contract, isContract := rootCaller.(*Contract); isContract {
+			rootCaller = contract.caller
+		} else {
+			break
+		}
 	}
+
+	// Check AdminController restrictions
 	if evm.Context.AdminController != nil &&
 		!evm.Context.AdminController.KycVerified(
 			&types.Header{

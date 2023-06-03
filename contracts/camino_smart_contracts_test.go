@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ava-labs/coreth/interfaces"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -71,9 +73,48 @@ type ETHChain struct {
 	chainConfig *params.ChainConfig
 }
 
+// Src code of factory contract:
+
+// // SPDX-License-Identifier: MIT
+// pragma solidity ^0.8.0;
+//
+//	contract Factory {
+//	    address public deployedContract;
+//
+//	    // Event emitted when a new contract is deployed
+//	    event ContractDeployed(
+//	        address indexed newContract,
+//	        address indexed creator
+//	    );
+//
+//	    // Deploy a new instance of the Contract contract
+//	    function deployNestedContract() external {
+//	        // Create a new instance of the Contract contract
+//	        Contract newContract = new Contract();
+//
+//	        // Emit an event with the address of the newly deployed contract and the creator's address
+//	        emit ContractDeployed(address(newContract), msg.sender);
+//
+//	        deployedContract = address(newContract);
+//	    }
+//
+//	    function deployNestedContract2() external {
+//	        Factory(address(this)).deployNestedContract();
+//	    }
+//	}
+//
+//	contract Contract {
+//	    // Contract logic and state variables go here
+//	    function alive() external pure returns (bool) {
+//	        return true;
+//	    }
+//	}
 func TestDeployContract(t *testing.T) {
 	const dummyContractAbi = "[{\"inputs\":[],\"name\":\"Assert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"OOG\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"PureRevert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Revert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Valid\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
 	const dummyContractBin = "0x60806040523480156100115760006000fd5b50610017565b61016e806100266000396000f3fe60806040523480156100115760006000fd5b506004361061005c5760003560e01c806350f6fe3414610062578063aa8b1d301461006c578063b9b046f914610076578063d8b9839114610080578063e09fface1461008a5761005c565b60006000fd5b61006a610094565b005b6100746100ad565b005b61007e6100b5565b005b6100886100c2565b005b610092610135565b005b6000600090505b5b808060010191505061009b565b505b565b60006000fd5b565b600015156100bf57fe5b5b565b6040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252600d8152602001807f72657665727420726561736f6e0000000000000000000000000000000000000081526020015060200191505060405180910390fd5b565b5b56fea2646970667358221220345bbcbb1a5ecf22b53a78eaebf95f8ee0eceff6d10d4b9643495084d2ec934a64736f6c63430006040033"
+	const factoryContractAbi = "[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newContract\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"creator\",\"type\":\"address\"}],\"name\":\"ContractDeployed\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"deployNestedContract\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"deployNestedContract2\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"deployedContract\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]"
+	const factoryContractBin = "0x608060405234801561001057600080fd5b5061033d806100206000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80632ea7d78b146100465780635532a84514610050578063ae242cdf1461005a575b600080fd5b61004e610078565b005b610058610142565b005b6100626101a4565b60405161006f9190610215565b60405180910390f35b6000604051610086906101c8565b604051809103906000f0801580156100a2573d6000803e3d6000fd5b5090503373ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff167f33c981baba081f8fd2c52ac6ad1ea95b6814b4376640f55689051f658472968860405160405180910390a3806000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555050565b3073ffffffffffffffffffffffffffffffffffffffff16632ea7d78b6040518163ffffffff1660e01b8152600401600060405180830381600087803b15801561018a57600080fd5b505af115801561019e573d6000803e3d6000fd5b50505050565b60008054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b60d78061023183390190565b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b60006101ff826101d4565b9050919050565b61020f816101f4565b82525050565b600060208201905061022a6000830184610206565b9291505056fe608060405234801561001057600080fd5b5060b88061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063753899e914602d575b600080fd5b60336047565b604051603e91906069565b60405180910390f35b60006001905090565b60008115159050919050565b6063816050565b82525050565b6000602082019050607c6000830184605c565b9291505056fea2646970667358221220aa7774fbe77b64cf0fc6b79f9ac78d855c8c9356964910b05cc7674e38f4a17064736f6c63430008120033a2646970667358221220a9e0d9f11e865d738ecf0beb10f1323de578ac89dc9ca1a2d732a96baf335b0c64736f6c63430008120033"
+	const nestedContractAbi = "[{\"inputs\": [],\"name\": \"alive\",\"outputs\": [{\"internalType\": \"bool\",\"name\": \"\",\"type\": \"bool\"}],\"stateMutability\": \"pure\",\"type\": \"function\"}]"
 
 	contractAddr := AdminProxyAddr
 
@@ -123,7 +164,6 @@ func TestDeployContract(t *testing.T) {
 	// Add kyc state to kycAddr
 	_, err = kycAddrSession.ApplyKycState(kycAddr, false, big.NewInt(1))
 	assert.NoError(t, err)
-
 	sim.Commit(true)
 
 	// Deploy contract with kycAddr, we assume it will pass
@@ -131,6 +171,66 @@ func TestDeployContract(t *testing.T) {
 	_, _, _, err = bind.DeployContract(kycAddrOpts, parsed, common.FromHex(dummyContractBin), sim)
 	sim.Commit(true)
 	assert.NoError(t, err)
+
+	// Deploy factory contract with nested contract, we assume it will pass
+	parsedABI, _ := abi.JSON(strings.NewReader(factoryContractAbi))
+	factoryAddr, _, boundContract, err := bind.DeployContract(kycAddrOpts, parsedABI, common.FromHex(factoryContractBin), sim)
+	sim.Commit(true)
+	assert.NoError(t, err)
+
+	_, err = boundContract.Transact(&bind.TransactOpts{From: kycAddr, Signer: kycAddrOpts.Signer}, "deployNestedContract")
+	assert.NoError(t, err)
+	sim.Commit(true)
+
+	ctx := context.Background()
+	// Get the method ID of the 'nested' function
+	methodID := parsedABI.Methods["deployedContract"].ID
+	res, err := sim.AcceptedCallContract(ctx, interfaces.CallMsg{
+		From: kycAddr,
+		To:   &factoryAddr,
+		Data: methodID,
+	})
+	assert.NoError(t, err)
+	assert.True(t, len(res) > 0, "result of contract call was empty")
+
+	nestedContract := common.BytesToAddress(res)
+
+	parsedNestedContractABI, _ := abi.JSON(strings.NewReader(nestedContractAbi))
+	methodID = parsedNestedContractABI.Methods["alive"].ID
+
+	alive, err := sim.AcceptedCallContract(ctx, interfaces.CallMsg{
+		From: kycAddr,
+		To:   &nestedContract,
+		Data: methodID,
+	})
+	assert.NoError(t, err)
+	assert.True(t, len(alive) > 0)
+
+	// Deploy the SC via external call
+	_, err = boundContract.Transact(&bind.TransactOpts{From: kycAddr, Signer: kycAddrOpts.Signer}, "deployNestedContract2")
+	assert.NoError(t, err)
+	sim.Commit(true)
+
+	// Get the method ID of the 'nested' function
+	methodID = parsedABI.Methods["deployedContract"].ID
+	res, err = sim.AcceptedCallContract(ctx, interfaces.CallMsg{
+		From: kycAddr,
+		To:   &factoryAddr,
+		Data: methodID,
+	})
+	assert.NoError(t, err)
+	assert.True(t, len(res) > 0, "result of contract call was empty")
+
+	nestedContract = common.BytesToAddress(res)
+	methodID = parsedNestedContractABI.Methods["alive"].ID
+
+	alive, err = sim.AcceptedCallContract(ctx, interfaces.CallMsg{
+		From: kycAddr,
+		To:   &nestedContract,
+		Data: methodID,
+	})
+	assert.NoError(t, err)
+	assert.True(t, len(alive) > 0)
 
 	// Remove kyc state to kycAddr
 	_, err = kycAddrSession.ApplyKycState(kycAddr, true, big.NewInt(1))
@@ -603,19 +703,28 @@ func newETHChain(t *testing.T) *ETHChain {
 	// configure the chain
 	config := ethconfig.NewDefaultConfig()
 	chainConfig := &params.ChainConfig{
-		ChainID:                     chainID,
-		HomesteadBlock:              big.NewInt(0),
-		DAOForkBlock:                big.NewInt(0),
-		DAOForkSupport:              true,
-		EIP150Block:                 big.NewInt(0),
-		EIP150Hash:                  common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:                 big.NewInt(0),
-		EIP158Block:                 big.NewInt(0),
-		ByzantiumBlock:              big.NewInt(0),
-		ConstantinopleBlock:         big.NewInt(0),
-		PetersburgBlock:             big.NewInt(0),
-		IstanbulBlock:               big.NewInt(0),
-		SunrisePhase0BlockTimestamp: big.NewInt(0),
+		ChainID:                         chainID,
+		HomesteadBlock:                  big.NewInt(0),
+		DAOForkBlock:                    big.NewInt(0),
+		DAOForkSupport:                  true,
+		EIP150Block:                     big.NewInt(0),
+		EIP150Hash:                      common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:                     big.NewInt(0),
+		EIP158Block:                     big.NewInt(0),
+		ByzantiumBlock:                  big.NewInt(0),
+		ConstantinopleBlock:             big.NewInt(0),
+		PetersburgBlock:                 big.NewInt(0),
+		IstanbulBlock:                   big.NewInt(0),
+		SunrisePhase0BlockTimestamp:     big.NewInt(0),
+		ApricotPhase1BlockTimestamp:     big.NewInt(0),
+		ApricotPhase2BlockTimestamp:     big.NewInt(0),
+		ApricotPhase3BlockTimestamp:     big.NewInt(0),
+		ApricotPhase4BlockTimestamp:     big.NewInt(0),
+		ApricotPhase5BlockTimestamp:     big.NewInt(0),
+		ApricotPhasePre6BlockTimestamp:  big.NewInt(0),
+		ApricotPhase6BlockTimestamp:     big.NewInt(0),
+		ApricotPhasePost6BlockTimestamp: big.NewInt(0),
+		BanffBlockTimestamp:             big.NewInt(0),
 	}
 
 	config.Genesis = &core.Genesis{
@@ -643,11 +752,14 @@ func newETHChain(t *testing.T) *ETHChain {
 func makeGenesisAllocation() core.GenesisAlloc {
 	alloc := make(core.GenesisAlloc)
 
-	alloc[adminAddr] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
-	alloc[kycAddr] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
-	alloc[gasFeeAddr] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
-	alloc[blacklistAddr] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
-	alloc[dummyAddr] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
+	eth100 := big.NewInt(100)
+	eth100.Mul(eth100, big.NewInt(params.Ether))
+
+	alloc[adminAddr] = core.GenesisAccount{Balance: eth100}
+	alloc[kycAddr] = core.GenesisAccount{Balance: eth100}
+	alloc[gasFeeAddr] = core.GenesisAccount{Balance: eth100}
+	alloc[blacklistAddr] = core.GenesisAccount{Balance: eth100}
+	alloc[dummyAddr] = core.GenesisAccount{Balance: eth100}
 
 	return alloc
 }
