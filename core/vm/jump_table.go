@@ -66,6 +66,7 @@ var (
 	apricotPhase2InstructionSet    = newApricotPhase2InstructionSet()
 	apricotPhase3InstructionSet    = newApricotPhase3InstructionSet()
 	dUpgradeInstructionSet         = newDUpgradeInstructionSet()
+	cancunInstructionSet           = newCancunInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -87,6 +88,12 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newCancunInstructionSet() JumpTable {
+	instructionSet := newDUpgradeInstructionSet()
+	enable4844(&instructionSet) // BLOBHASH opcode
+	return validate(instructionSet)
 }
 
 func newDUpgradeInstructionSet() JumpTable {

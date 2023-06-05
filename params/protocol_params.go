@@ -163,12 +163,13 @@ const (
 	Bls12381MapG1Gas          uint64 = 5500   // Gas price for BLS12-381 mapping field element to G1 operation
 	Bls12381MapG2Gas          uint64 = 110000 // Gas price for BLS12-381 mapping field element to G2 operation
 
-	BlobTxHashVersion                = 0x01    // Version byte of the commitment hash
-	BlobTxMaxDataGasPerBlock         = 1 << 19 // Maximum consumable data gas for data blobs per block
-	BlobTxTargetDataGasPerBlock      = 1 << 18 // Target consumable data gas for data blobs per block (for 1559-like pricing)
-	BlobTxDataGasPerBlob             = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
-	BlobTxMinDataGasprice            = 1       // Minimum gas price for data blobs
-	BlobTxDataGaspriceUpdateFraction = 2225652 // Controls the maximum rate of change for data gas price
+	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash
+	BlobTxMaxDataGasPerBlock           = 1 << 19 // Maximum consumable data gas for data blobs per block
+	BlobTxTargetDataGasPerBlock        = 1 << 18 // Target consumable data gas for data blobs per block (for 1559-like pricing)
+	BlobTxDataGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
+	BlobTxMinDataGasprice              = 1       // Minimum gas price for data blobs
+	BlobTxDataGaspriceUpdateFraction   = 2225652 // Controls the maximum rate of change for data gas price
+	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
 
 	// Avalanche Stateful Precompile Params
 	// Gas price for native asset balance lookup. Based on the cost of an SLOAD operation since native
