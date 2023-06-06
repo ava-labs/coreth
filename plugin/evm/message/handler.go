@@ -35,16 +35,26 @@ func (NoopMempoolGossipHandler) HandleEthTxs(nodeID ids.NodeID, msg EthTxsGossip
 	return nil
 }
 
+type TxGossipHandler interface {
+	HandleMempoolEthTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request *MempoolEthTxsRequest) ([]byte, error)
+	HandleMempoolAtomicTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request *MempoolAtomicTxsRequest) ([]byte, error)
+}
+
+type StateSyncHandler interface {
+	HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
+	HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
+	HandleBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request BlockRequest) ([]byte, error)
+	HandleCodeRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error)
+}
+
 // RequestHandler interface handles incoming requests from peers
 // Must have methods in format of handleType(context.Context, ids.ShortID, uint32, request Type) error
 // so that the Request object of relevant Type can invoke its respective handle method
 // on this struct.
 // Also see GossipHandler for implementation style.
 type RequestHandler interface {
-	HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
-	HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
-	HandleBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request BlockRequest) ([]byte, error)
-	HandleCodeRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error)
+	TxGossipHandler
+	StateSyncHandler
 }
 
 // ResponseHandler handles response for a sent request
@@ -71,6 +81,14 @@ func (NoopRequestHandler) HandleBlockRequest(ctx context.Context, nodeID ids.Nod
 }
 
 func (NoopRequestHandler) HandleCodeRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error) {
+	return nil, nil
+}
+
+func (NoopRequestHandler) HandleMempoolEthTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request *MempoolEthTxsRequest) ([]byte, error) {
+	return nil, nil
+}
+
+func (NoopRequestHandler) HandleMempoolAtomicTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request *MempoolAtomicTxsRequest) ([]byte, error) {
 	return nil, nil
 }
 

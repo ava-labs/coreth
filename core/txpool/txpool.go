@@ -41,6 +41,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/mempool"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
@@ -113,6 +114,8 @@ var (
 )
 
 var (
+	_ mempool.Mempool[*MempoolTx] = (*TxPool)(nil)
+
 	evictionInterval      = time.Minute      // Time interval to check for evictable transactions
 	statsReportInterval   = 8 * time.Second  // Time interval to report transaction pool stats
 	baseFeeUpdateInterval = 10 * time.Second // Time interval at which to schedule a base fee update for the tx pool after Apricot Phase 3 is enabled
@@ -268,6 +271,7 @@ type TxPool struct {
 	reorgFeed   event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
+	bloomFilter *mempool.BloomFilter
 	mu          sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
@@ -316,9 +320,13 @@ type txpoolResetRequest struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain) (*TxPool, error) {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
+	bloomFilter, err := mempool.NewBloomFilter()
+	if err != nil {
+		return nil, err
+	}
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
@@ -326,6 +334,7 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 		chainconfig:         chainconfig,
 		chain:               chain,
 		signer:              types.LatestSigner(chainconfig),
+		bloomFilter: bloomFilter,
 		pending:             make(map[common.Address]*list),
 		queue:               make(map[common.Address]*list),
 		beats:               make(map[common.Address]time.Time),
@@ -371,7 +380,7 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 
 	pool.startPeriodicFeeUpdate()
 
-	return pool
+	return pool, nil
 }
 
 // loop is the transaction pool's main event loop, waiting for and reacting to
@@ -865,6 +874,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		pool.priced.Put(tx, isLocal)
 		pool.journalTx(from, tx)
 		pool.queueTxEvent(tx)
+		pool.bloomFilter.Add(hash[:])
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 
 		// Successful promotion, bump the heartbeat
@@ -920,6 +930,9 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		queuedDiscardMeter.Mark(1)
 		return false, ErrReplaceUnderpriced
 	}
+
+	pool.bloomFilter.Add(hash[:])
+
 	// Discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
@@ -976,6 +989,9 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 		pendingDiscardMeter.Mark(1)
 		return false
 	}
+
+	pool.bloomFilter.Add(hash[:])
+
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
@@ -1036,6 +1052,14 @@ func (pool *TxPool) addRemoteSync(tx *types.Transaction) error {
 func (pool *TxPool) AddRemote(tx *types.Transaction) error {
 	errs := pool.AddRemotes([]*types.Transaction{tx})
 	return errs[0]
+}
+
+func (pool *TxPool) AddTx(tx *MempoolTx) error {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	_, _ = pool.addTxsLocked([]*types.Transaction{tx.Tx}, false)
+	return nil
 }
 
 // addTxs attempts to queue a batch of transactions if they are valid.
@@ -1202,6 +1226,29 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 		}
 	}
 	return 0
+}
+
+func (pool *TxPool) GetPendingTxs() []*MempoolTx {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	pendingTxs := make([]*MempoolTx, 0)
+
+	for _, txs := range pool.pending {
+		for _, tx := range txs.Flatten() {
+			pendingTx := &MempoolTx{
+				Tx: tx,
+			}
+			pendingTxs = append(pendingTxs, pendingTx)
+
+		}
+	}
+
+	return pendingTxs
+}
+
+func (pool *TxPool) GetPendingTxsBloomFilter() *mempool.BloomFilter {
+	return pool.bloomFilter
 }
 
 // requestReset requests a pool reset to the new head block.
@@ -2055,4 +2102,25 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+var _ mempool.Tx = (*MempoolTx)(nil)
+
+type MempoolTx struct {
+	Tx *types.Transaction
+}
+
+func (tx *MempoolTx) Hash() []byte {
+	return tx.Hash()
+}
+
+func (tx *MempoolTx) Marshal() ([]byte, error) {
+	return tx.Tx.MarshalBinary()
+}
+
+func (tx *MempoolTx) Unmarshal(b []byte) error {
+	tx.Tx = &types.Transaction{}
+	err := tx.Tx.UnmarshalBinary(b)
+
+	return err
 }

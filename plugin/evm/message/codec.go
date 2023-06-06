@@ -29,6 +29,9 @@ func init() {
 		// Gossip types
 		c.RegisterType(AtomicTxGossip{}),
 		c.RegisterType(EthTxsGossip{}),
+		c.RegisterType(&MempoolAtomicTxsRequest{}),
+		c.RegisterType(&MempoolEthTxsRequest{}),
+		c.RegisterType(MempoolTxsResponse{}),
 
 		// Types for state sync frontier consensus
 		c.RegisterType(SyncSummary{}),

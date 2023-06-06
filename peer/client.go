@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/set"
 
 	"github.com/ava-labs/avalanchego/version"
 )
@@ -39,6 +40,8 @@ type NetworkClient interface {
 	// TrackBandwidth should be called for each valid request with the bandwidth
 	// (length of response divided by request time), and with 0 if the response is invalid.
 	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
+
+	Sample(numPeers int) (set.Set[ids.NodeID], error)
 }
 
 // client implements NetworkClient interface
@@ -106,4 +109,8 @@ func (c *client) Gossip(gossip []byte) error {
 
 func (c *client) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	c.network.TrackBandwidth(nodeID, bandwidth)
+}
+
+func (c *client) Sample(n int) (set.Set[ids.NodeID], error) {
+	return c.network.Sample(n)
 }

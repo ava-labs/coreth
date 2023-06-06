@@ -8,16 +8,17 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
 )
 
-var _ message.RequestHandler = &syncHandler{}
+var _ message.StateSyncHandler = &syncHandler{}
 
 type BlockProvider interface {
 	GetBlock(common.Hash, uint64) *types.Block
@@ -47,7 +48,7 @@ func NewSyncHandler(
 	atomicTrieDB *trie.Database,
 	networkCodec codec.Manager,
 	stats stats.HandlerStats,
-) message.RequestHandler {
+) message.StateSyncHandler {
 	return &syncHandler{
 		stateTrieLeafsRequestHandler:  NewLeafsRequestHandler(evmTrieDB, provider, networkCodec, stats),
 		atomicTrieLeafsRequestHandler: NewLeafsRequestHandler(atomicTrieDB, nil, networkCodec, stats),

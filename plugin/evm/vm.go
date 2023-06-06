@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/txgossip"
+
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -256,7 +258,9 @@ type VM struct {
 
 	builder *blockBuilder
 
-	gossiper Gossiper
+	pushGossiper     Gossiper
+	ethTxGossiper    *txgossip.PullGossiper[*core.MempoolTx]
+	atomicTxGossiper *txgossip.PullGossiper[*MempoolTx]
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -491,7 +495,10 @@ func (vm *VM) Initialize(
 	vm.codec = Codec
 
 	// TODO: read size from settings
-	vm.mempool = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	if err != nil {
+		return err
+	}
 
 	if err := vm.initializeMetrics(); err != nil {
 		return err
@@ -936,14 +943,40 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 func (vm *VM) initBlockBuilding() {
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
-	vm.gossiper = vm.createGossiper(gossipStats)
+	vm.pushGossiper = vm.createGossiper(gossipStats)
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
+
+	vm.ethTxGossiper = txgossip.NewPullGossiper[*core.MempoolTx](
+		&ethTxGossiper{
+			txPool: vm.txPool,
+		},
+		vm.client,
+		vm.networkCodec,
+		ethTxsGossipInterval,
+		txGossipSize,
+		vm.shutdownChan,
+		&vm.shutdownWg,
+	)
+	go vm.ethTxGossiper.Start()
+
+	vm.atomicTxGossiper = txgossip.NewPullGossiper[*MempoolTx](
+		&atomicTxGossiper{
+			mempool: vm.mempool,
+		},
+		vm.client,
+		vm.networkCodec,
+		ethTxsGossipInterval,
+		txGossipSize,
+		vm.shutdownChan,
+		&vm.shutdownWg,
+	)
+	go vm.atomicTxGossiper.Start()
 }
 
-// setAppRequestHandlers sets the request handlers for the VM to serve state sync
-// requests.
+// setAppRequestHandler sets the request handlers for the VM to serve
+// application requests.
 func (vm *VM) setAppRequestHandlers() {
 	// Create separate EVM TrieDB (read only) for serving leafs requests.
 	// We create a separate TrieDB here, so that it has a separate cache from the one
@@ -954,15 +987,25 @@ func (vm *VM) setAppRequestHandlers() {
 			Cache: vm.config.StateSyncServerTrieCache,
 		},
 	)
-	syncRequestHandler := handlers.NewSyncHandler(
-		vm.blockChain,
-		vm.chaindb,
-		evmTrieDB,
-		vm.atomicTrie.TrieDB(),
-		vm.networkCodec,
-		handlerstats.NewHandlerStats(metrics.Enabled),
-	)
-	vm.Network.SetRequestHandler(syncRequestHandler)
+	requestHandler := &appRequestHandler{
+		stateSyncHandler: handlers.NewSyncHandler(
+			vm.blockChain,
+			vm.chaindb,
+			evmTrieDB,
+			vm.atomicTrie.TrieDB(),
+			vm.networkCodec,
+			handlerstats.NewHandlerStats(metrics.Enabled),
+		),
+		mempoolEthTxsRequestHandler: MempoolTxsRequestHandler[*core.MempoolTx]{
+			mempool: vm.txPool,
+			codec:   vm.networkCodec,
+		},
+		mempoolAtomicTxsRequestHandler: MempoolTxsRequestHandler[*MempoolTx]{
+			mempool: vm.mempool,
+			codec:   vm.networkCodec,
+		},
+	}
+	vm.Network.SetRequestHandler(requestHandler)
 }
 
 // setCrossChainAppRequestHandler sets the request handlers for the VM to serve cross chain
@@ -1310,7 +1353,7 @@ func (vm *VM) issueTx(tx *Tx, local bool) error {
 		return err
 	}
 	// add to mempool and possibly re-gossip
-	if err := vm.mempool.AddTx(tx); err != nil {
+	if err := vm.mempool.AddTx(&MempoolTx{Tx: tx}); err != nil {
 		if !local {
 			// unlike local txs, invalid remote txs are recorded as discarded
 			// so that they won't be requested again
@@ -1761,4 +1804,36 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
+}
+
+var _ message.RequestHandler = (*appRequestHandler)(nil)
+
+type appRequestHandler struct {
+	stateSyncHandler               message.StateSyncHandler
+	mempoolEthTxsRequestHandler    MempoolTxsRequestHandler[*core.MempoolTx]
+	mempoolAtomicTxsRequestHandler MempoolTxsRequestHandler[*MempoolTx]
+}
+
+func (a *appRequestHandler) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
+	return a.stateSyncHandler.HandleStateTrieLeafsRequest(ctx, nodeID, requestID, leafsRequest)
+}
+
+func (a *appRequestHandler) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
+	return a.stateSyncHandler.HandleAtomicTrieLeafsRequest(ctx, nodeID, requestID, leafsRequest)
+}
+
+func (a *appRequestHandler) HandleBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request message.BlockRequest) ([]byte, error) {
+	return a.stateSyncHandler.HandleBlockRequest(ctx, nodeID, requestID, request)
+}
+
+func (a *appRequestHandler) HandleCodeRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, codeRequest message.CodeRequest) ([]byte, error) {
+	return a.stateSyncHandler.HandleCodeRequest(ctx, nodeID, requestID, codeRequest)
+}
+
+func (a *appRequestHandler) HandleMempoolEthTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request *message.MempoolEthTxsRequest) ([]byte, error) {
+	return a.mempoolEthTxsRequestHandler.OnMempoolTxRequest(ctx, nodeID, requestID, request)
+}
+
+func (a *appRequestHandler) HandleMempoolAtomicTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request *message.MempoolAtomicTxsRequest) ([]byte, error) {
+	return a.mempoolAtomicTxsRequestHandler.OnMempoolTxRequest(ctx, nodeID, requestID, request)
 }

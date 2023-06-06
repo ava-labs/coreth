@@ -1024,7 +1024,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 			t.Fatal("Expected issueTx to fail due to conflicting transaction")
 		}
 		// Force issue transaction directly to the mempool
-		if err := vm.mempool.ForceAddTx(tx); err != nil {
+		if err := vm.mempool.AddTx(tx); err != nil {
 			t.Fatal(err)
 		}
 		<-issuer

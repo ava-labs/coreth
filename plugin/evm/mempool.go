@@ -10,15 +10,20 @@ import (
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/ava-labs/coreth/mempool"
+	"github.com/ava-labs/coreth/metrics"
 )
 
 const (
 	discardedTxsCacheSize = 50
 )
 
-var errNoGasUsed = errors.New("no gas used")
+var (
+	errNoGasUsed                             = errors.New("no gas used")
+	_            mempool.Mempool[*MempoolTx] = (*Mempool)(nil)
+)
 
 // mempoolMetrics defines the metrics for the atomic mempool
 type mempoolMetrics struct {
@@ -71,10 +76,16 @@ type Mempool struct {
 	utxoSpenders map[ids.ID]*Tx
 
 	metrics *mempoolMetrics
+
+	bloomFilter *mempool.BloomFilter
 }
 
 // NewMempool returns a Mempool with [maxSize]
-func NewMempool(AVAXAssetID ids.ID, maxSize int) *Mempool {
+func NewMempool(AVAXAssetID ids.ID, maxSize int) (*Mempool, error) {
+	bloom, err := mempool.NewBloomFilter()
+	if err != nil {
+		return nil, err
+	}
 	return &Mempool{
 		AVAXAssetID:  AVAXAssetID,
 		issuedTxs:    make(map[ids.ID]*Tx),
@@ -85,7 +96,8 @@ func NewMempool(AVAXAssetID ids.ID, maxSize int) *Mempool {
 		maxSize:      maxSize,
 		utxoSpenders: make(map[ids.ID]*Tx),
 		metrics:      newMempoolMetrics(),
-	}
+		bloomFilter:  bloom,
+	}, nil
 }
 
 // Len returns the number of transactions in the mempool
@@ -127,11 +139,11 @@ func (m *Mempool) atomicTxGasPrice(tx *Tx) (uint64, error) {
 
 // Add attempts to add [tx] to the mempool and returns an error if
 // it could not be addeed to the mempool.
-func (m *Mempool) AddTx(tx *Tx) error {
+func (m *Mempool) AddTx(tx *MempoolTx) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	return m.addTx(tx, false)
+	return m.addTx(tx.Tx, false)
 }
 
 // forceAddTx forcibly adds a *Tx to the mempool and bypasses all verification.
@@ -265,6 +277,8 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	// reset until the engine calls BuildBlock. This case is handled in IssueCurrentTx
 	// and CancelCurrentTx.
 	m.newTxs = append(m.newTxs, tx)
+	id := tx.ID()
+	m.bloomFilter.Add(id[:])
 	m.addPending()
 	return nil
 }
@@ -295,6 +309,25 @@ func (m *Mempool) GetPendingTx(txID ids.ID) (*Tx, bool) {
 	defer m.lock.RUnlock()
 
 	return m.txHeap.Get(txID)
+}
+
+func (m *Mempool) GetPendingTxs() []*MempoolTx {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	result := make([]*MempoolTx, 0, len(m.txHeap.maxHeap.items))
+	for _, item := range m.txHeap.maxHeap.items {
+		result = append(result, &MempoolTx{Tx: item.tx})
+	}
+
+	return result
+}
+
+func (m *Mempool) GetPendingTxsBloomFilter() *mempool.BloomFilter {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	return m.bloomFilter
 }
 
 // GetTx returns the transaction [txID] if it was issued
@@ -333,7 +366,7 @@ func (m *Mempool) IssueCurrentTxs() {
 	m.metrics.currentTxs.Update(int64(len(m.currentTxs)))
 
 	// If there are more transactions to be issued, add an item
-	// to Pending.
+	// to MempoolTx.
 	if m.txHeap.Len() > 0 {
 		m.addPending()
 	}
@@ -490,4 +523,26 @@ func (m *Mempool) GetNewTxs() []*Tx {
 	m.newTxs = nil
 	m.metrics.newTxsReturned.Inc(int64(len(cpy))) // Increment the number of newTxs
 	return cpy
+}
+
+var _ mempool.Tx = (*MempoolTx)(nil)
+
+type MempoolTx struct {
+	Tx *Tx
+}
+
+func (tx *MempoolTx) Hash() []byte {
+	id := tx.Tx.ID()
+	return id[:]
+}
+
+func (tx *MempoolTx) Marshal() ([]byte, error) {
+	return Codec.Marshal(codecVersion, tx.Tx)
+}
+
+func (tx *MempoolTx) Unmarshal(bytes []byte) error {
+	tx.Tx = &Tx{}
+	_, err := Codec.Unmarshal(bytes, tx.Tx)
+
+	return err
 }

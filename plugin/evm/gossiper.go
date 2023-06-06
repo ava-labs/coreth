@@ -521,3 +521,13 @@ func (h *GossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip
 	}
 	return nil
 }
+
+// noopGossiper should be used when gossip communication is not supported
+type noopGossiper struct{}
+
+func (n *noopGossiper) GossipAtomicTxs([]*Tx) error {
+	return nil
+}
+func (n *noopGossiper) GossipEthTxs([]*types.Transaction) error {
+	return nil
+}

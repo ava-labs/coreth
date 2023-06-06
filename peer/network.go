@@ -7,9 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
+	"github.com/ava-labs/avalanchego/utils/sampler"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -76,6 +79,8 @@ type Network interface {
 	// TrackBandwidth should be called for each valid request with the bandwidth
 	// (length of response divided by request time), and with 0 if the response is invalid.
 	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
+
+	Sample(numPeers int) (set.Set[ids.NodeID], error)
 }
 
 // network is an implementation of Network that processes message requests for
@@ -563,4 +568,22 @@ func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	defer n.lock.Unlock()
 
 	n.peers.TrackBandwidth(nodeID, bandwidth)
+}
+
+func (n *network) Sample(numPeers int) (set.Set[ids.NodeID], error) {
+	peers := maps.Keys(n.peers.peers)
+	s := sampler.NewUniform()
+	// TODO err
+	s.Initialize(uint64(len(peers)))
+	indices, err := s.Sample(int(math.Min(float64(numPeers), float64(len(peers)))))
+	if err != nil {
+		return nil, err
+	}
+	result := set.Set[ids.NodeID]{}
+
+	for _, idx := range indices {
+		result.Add(peers[idx])
+	}
+
+	return result, nil
 }

@@ -160,7 +160,7 @@ func TestMempoolEthTxsAddedTxsGossipedAfterActivation(t *testing.T) {
 
 	// Gossip txs again (shouldn't gossip hashes)
 	<-signal1 // wait until reorg processed
-	assert.NoError(vm.gossiper.GossipEthTxs(ethTxs[:2]))
+	assert.NoError(vm.pushGossiper.GossipEthTxs(ethTxs[:2]))
 
 	errs = vm.txPool.AddRemotesSync(ethTxs)
 	assert.Contains(errs[0].Error(), "already known")
@@ -321,7 +321,7 @@ func TestMempoolEthTxsRegossipSingleAccount(t *testing.T) {
 
 	// Only 1 transaction will be regossiped for an address (should be lowest
 	// nonce)
-	pushNetwork := vm.gossiper.(*pushGossiper)
+	pushNetwork := vm.pushGossiper.(*pushGossiper)
 	queued := pushNetwork.queueRegossipTxs()
 	assert.Len(queued, 1, "unexpected length of queued txs")
 	assert.Equal(ethTxs[0].Hash(), queued[0].Hash())
@@ -373,7 +373,7 @@ func TestMempoolEthTxsRegossip(t *testing.T) {
 	// We expect 15 transactions (the default max number of transactions to
 	// regossip) comprised of 10 local txs and 5 remote txs (we prioritize local
 	// txs over remote).
-	pushNetwork := vm.gossiper.(*pushGossiper)
+	pushNetwork := vm.pushGossiper.(*pushGossiper)
 	queued := pushNetwork.queueRegossipTxs()
 	assert.Len(queued, 15, "unexpected length of queued txs")
 

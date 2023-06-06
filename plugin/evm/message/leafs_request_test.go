@@ -200,6 +200,11 @@ func (m *mockHandler) HandleCodeRequest(context.Context, ids.NodeID, uint32, Cod
 	return nil, nil
 }
 
+func (m *mockHandler) HandleMempoolEthTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request MempoolTxsRequest) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (m *mockHandler) reset() {
 	m.handleStateTrieCalled = false
 	m.handleAtomicTrieCalled = false
