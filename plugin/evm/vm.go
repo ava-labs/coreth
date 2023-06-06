@@ -128,7 +128,25 @@ const (
 	bytesToIDCacheSize  = 5 * units.MiB
 
 	targetAtomicTxsSize = 40 * units.KiB
+
+	// p2p app protocols
+	ethTxGossipProtocol    = 0x0
+	atomicTxGossipProtocol = 0x1
+
+	// gossip constants
+	txGossipMaxResponseSize        = 20 * units.KiB
+	txGossipBloomMaxFilledRatio    = 0.75
+	txGossipBloomMaxItems          = 8 * 1024
+	txGossipBloomFalsePositiveRate = 0.01
+	maxValidatorSetStaleness       = time.Minute
+	throttlingPeriod               = 10 * time.Second
+	throttlingLimit                = 2
 )
+
+var txGossipConfig = gossip.Config{
+	Frequency: 10 * time.Second,
+	PollSize:  10,
+}
 
 // Define the API endpoints for the VM
 const (
@@ -210,7 +228,9 @@ func init() {
 
 // VM implements the snowman.ChainVM interface
 type VM struct {
-	ctx *snow.Context
+	ctx           *snow.Context   // TODO rename to snowCtx
+	backgroundCtx context.Context // TODO rename to ctx
+	cancel        context.CancelFunc
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
 	*chain.State
@@ -257,7 +277,9 @@ type VM struct {
 
 	builder *blockBuilder
 
-	gossiper Gossiper
+	gossiper         Gossiper
+	ethTxGossiper    *gossip.Gossiper[GossipEthTx, *GossipEthTx]
+	atomicTxGossiper *gossip.Gossiper[GossipAtomicTx, *GossipAtomicTx]
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -277,7 +299,10 @@ type VM struct {
 	client       peer.NetworkClient
 	networkCodec codec.Manager
 
-	router *p2p.Router
+	validators           *p2p.Validators
+	router               *p2p.Router
+	ethTxGossipClient    *p2p.Client
+	atomicTxGossipClient *p2p.Client
 
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
@@ -316,7 +341,7 @@ func (vm *VM) GetActivationTime() time.Time {
 
 // Initialize implements the snowman.ChainVM interface
 func (vm *VM) Initialize(
-	_ context.Context,
+	ctx context.Context,
 	chainCtx *snow.Context,
 	dbManager manager.Manager,
 	genesisBytes []byte,
@@ -341,6 +366,9 @@ func (vm *VM) Initialize(
 	deprecateMsg := vm.config.Deprecate()
 
 	vm.ctx = chainCtx
+	ctx, cancel := context.WithCancel(ctx)
+	vm.backgroundCtx = ctx
+	vm.cancel = cancel
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -502,13 +530,17 @@ func (vm *VM) Initialize(
 	vm.codec = Codec
 
 	// TODO: read size from settings
-	vm.mempool = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mempool: %w", err)
+	}
 
 	if err := vm.initializeMetrics(); err != nil {
 		return err
 	}
 
 	// initialize peer network
+	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.router = p2p.NewRouter(vm.ctx.Log, appSender)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
@@ -937,7 +969,9 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
 		// Initialize goroutines related to block building once we enter normal operation as there is no need to handle mempool gossip before this point.
-		vm.initBlockBuilding()
+		if err := vm.initBlockBuilding(); err != nil {
+			return fmt.Errorf("failed to initialize block building: %w", err)
+		}
 		vm.bootstrapped = true
 		return vm.fx.Bootstrapped()
 	default:
@@ -946,13 +980,64 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 }
 
 // initBlockBuilding starts goroutines to manage block building
-func (vm *VM) initBlockBuilding() {
+func (vm *VM) initBlockBuilding() error {
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
 	vm.gossiper = vm.createGossiper(gossipStats)
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
+
+	ethTxPool, err := NewGossipEthTxPool(vm.txPool)
+	if err != nil {
+		return err
+	}
+	vm.shutdownWg.Add(1)
+	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
+
+	ethTxGossipHandler := &p2p.ValidatorHandler{
+		ValidatorSet: vm.validators,
+		Handler: &p2p.ThrottlerHandler{
+			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+			Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, txGossipMaxResponseSize),
+		},
+	}
+	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
+	if err != nil {
+		return err
+	}
+	vm.ethTxGossipClient = ethTxGossipClient
+
+	atomicTxGossipHandler := &p2p.ValidatorHandler{
+		ValidatorSet: vm.validators,
+		Handler: &p2p.ThrottlerHandler{
+			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+			Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, txGossipMaxResponseSize),
+		},
+	}
+	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
+	if err != nil {
+		return err
+	}
+	vm.atomicTxGossipClient = atomicTxGossipClient
+
+	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx, *GossipEthTx](
+		txGossipConfig,
+		vm.ctx.Log,
+		ethTxPool,
+		vm.ethTxGossipClient,
+	)
+	go vm.ethTxGossiper.Gossip(vm.backgroundCtx)
+
+	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
+		txGossipConfig,
+		vm.ctx.Log,
+		vm.mempool,
+		vm.atomicTxGossipClient,
+	)
+	go vm.atomicTxGossiper.Gossip(vm.backgroundCtx)
+
+	return nil
 }
 
 // setAppRequestHandlers sets the request handlers for the VM to serve state sync
@@ -990,6 +1075,7 @@ func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
 		return nil
 	}
+	vm.cancel()
 	vm.Network.Shutdown()
 	if err := vm.StateSyncClient.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)
@@ -1337,7 +1423,7 @@ func (vm *VM) issueTx(tx *Tx, local bool) error {
 		}
 		return err
 	}
-	// NOTE: Gossiping of the issued [Tx] is handled in [AddTx]
+
 	return nil
 }
 

@@ -108,13 +108,15 @@ func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	// shortcut to simulated almost filled mempool
 	mempool.maxSize = 0
 
-	assert.ErrorIs(mempool.AddTx(tx), errTooManyAtomicTx)
+	err := mempool.AddTx(tx)
+	assert.ErrorIs(err, errTooManyAtomicTx)
 	assert.False(mempool.has(tx.ID()))
 
 	// shortcut to simulated empty mempool
 	mempool.maxSize = defaultMempoolSize
 
-	assert.NoError(mempool.AddTx(tx))
+	err = mempool.AddTx(tx)
+	assert.NoError(err)
 	assert.True(mempool.has(tx.ID()))
 }
 
@@ -193,10 +195,12 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	mempool.maxSize = 1
 
 	tx1 := createImportTx(t, vm, ids.ID{1}, params.AvalancheAtomicTxFee)
-	assert.NoError(mempool.AddTx(tx1))
+	err := mempool.AddTx(tx1)
+	assert.NoError(err)
 	assert.True(mempool.has(tx1.ID()))
 	tx2 := createImportTx(t, vm, ids.ID{2}, params.AvalancheAtomicTxFee)
-	assert.ErrorIs(mempool.AddTx(tx2), errInsufficientAtomicTxFee)
+	err = mempool.AddTx(tx2)
+	assert.ErrorIs(err, errInsufficientAtomicTxFee)
 	assert.True(mempool.has(tx1.ID()))
 	assert.False(mempool.has(tx2.ID()))
 	tx3 := createImportTx(t, vm, ids.ID{3}, 2*params.AvalancheAtomicTxFee)

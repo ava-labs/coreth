@@ -630,6 +630,19 @@ func (pool *TxPool) PendingSize() int {
 	return count
 }
 
+// IteratePending iterates over the [pool.pending] until [f] returns false.
+func (pool *TxPool) IteratePending(f func(tx *types.Transaction) bool) {
+	pending := pool.Pending(true)
+
+	for _, list := range pending {
+		for _, tx := range list {
+			if !f(tx) {
+				return
+			}
+		}
+	}
+}
+
 // Locals retrieves the accounts currently considered local by the pool.
 func (pool *TxPool) Locals() []common.Address {
 	pool.mu.Lock()
