@@ -429,6 +429,18 @@ func (vm *VM) Initialize(
 	}
 	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
 
+	// temporary script to reprocess blocks
+	lastAcceptedHash = common.HexToHash(
+		"0xd7ed63157b6e15494bce5d9805226afeacc3987b844cc6695ba24f3edc381b13")
+	_ = lastAcceptedHeight // quiet linter
+	lastAcceptedHeight = 30949376
+	// this should force waiting to regenerate the snapshot
+	vm.config.SnapshotWait = true
+	log.Warn(
+		"OVERRIDING LAST ACCEPTED TO REPROCESS BLOCKS",
+		"lastAcceptedHash", lastAcceptedHash,
+		"lastAcceptedHeight", lastAcceptedHeight)
+
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
 	vm.ethConfig.RPCGasCap = vm.config.RPCGasCap
@@ -504,6 +516,12 @@ func (vm *VM) Initialize(
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
+
+	// this amount of initialization should suffice to reprocess blocks.
+	if err := vm.script(); err != nil {
+		return err
+	}
+
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights     map[uint64]ids.ID

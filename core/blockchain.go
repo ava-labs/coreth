@@ -2072,3 +2072,11 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	bc.initSnapshot(head)
 	return nil
 }
+
+// Make some functions exported so can be used from vm_script.go
+func (bc *BlockChain) ReprocessBlock(parent *types.Block, current *types.Block) (common.Hash, error) {
+	return bc.reprocessBlock(parent, current)
+}
+func (bc *BlockChain) FlattenSnapshot(postAbortWork func() error, hash common.Hash) error {
+	return bc.flattenSnapshot(postAbortWork, hash)
+}
