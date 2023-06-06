@@ -43,6 +43,8 @@ const (
 	minGossipBatchInterval = 50 * time.Millisecond
 )
 
+var _ message.GossipHandler = (*GossipHandler)(nil)
+
 // Gossiper handles outgoing gossip of transactions
 type Gossiper interface {
 	// GossipAtomicTxs sends AppGossip message containing the given [txs]

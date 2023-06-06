@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
+	"github.com/ava-labs/avalanchego/x/sdk/p2p"
 
 	"github.com/ava-labs/coreth/peer/stats"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -87,23 +88,25 @@ type network struct {
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
 	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
 	activeCrossChainRequests   *semaphore.Weighted                // controls maximum number of active outbound cross chain requests
-	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
-	codec                      codec.Manager                      // Codec used for parsing messages
-	crossChainCodec            codec.Manager                      // Codec used for parsing cross chain messages
-	appRequestHandler          message.RequestHandler             // maps request type => handler
-	crossChainRequestHandler   message.CrossChainRequestHandler   // maps cross chain request type => handler
-	gossipHandler              message.GossipHandler              // maps gossip type => handler
-	peers                      *peerTracker                       // tracking of peers & bandwidth
-	appStats                   stats.RequestHandlerStats          // Provide request handler metrics
-	crossChainStats            stats.RequestHandlerStats          // Provide cross chain request handler metrics
+	router                     *p2p.Router
+	appSender                  common.AppSender                 // avalanchego AppSender for sending messages
+	codec                      codec.Manager                    // Codec used for parsing messages
+	crossChainCodec            codec.Manager                    // Codec used for parsing cross chain messages
+	appRequestHandler          message.RequestHandler           // maps request type => handler
+	crossChainRequestHandler   message.CrossChainRequestHandler // maps cross chain request type => handler
+	gossipHandler              message.GossipHandler            // maps gossip type => handler
+	peers                      *peerTracker                     // tracking of peers & bandwidth
+	appStats                   stats.RequestHandlerStats        // Provide request handler metrics
+	crossChainStats            stats.RequestHandlerStats        // Provide cross chain request handler metrics
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
 	closed utils.Atomic[bool]
 }
 
-func NewNetwork(appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
+func NewNetwork(router *p2p.Router, appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
 	return &network{
+		router:                     router,
 		appSender:                  appSender,
 		codec:                      codec,
 		crossChainCodec:            crossChainCodec,
@@ -333,6 +336,11 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	log.Debug("received AppRequest from node", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request))
 
+	if err := n.router.AppRequest(ctx, nodeID, requestID, deadline, request); err == nil {
+		return nil
+	}
+	// if we errored, it's possible that this is a non-sdk request
+
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
 		log.Debug("failed to unmarshal app request", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
@@ -366,7 +374,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // Error returned by this function is expected to be treated as fatal by the engine
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
-func (n *network) AppResponse(_ context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
+func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -375,6 +383,11 @@ func (n *network) AppResponse(_ context.Context, nodeID ids.NodeID, requestID ui
 	}
 
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
+
+	if err := n.router.AppResponse(ctx, nodeID, requestID, response); err == nil {
+		return nil
+	}
+	// if we errored, it's possible that this is a non-sdk response
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
@@ -482,7 +495,7 @@ func (n *network) AppGossip(_ context.Context, nodeID ids.NodeID, gossipBytes []
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
-func (n *network) Connected(_ context.Context, nodeID ids.NodeID, nodeVersion *version.Application) error {
+func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion *version.Application) error {
 	log.Debug("adding new peer", "nodeID", nodeID)
 
 	n.lock.Lock()
@@ -497,12 +510,15 @@ func (n *network) Connected(_ context.Context, nodeID ids.NodeID, nodeVersion *v
 		return nil
 	}
 
+	if err := n.router.Connected(ctx, nodeID, nodeVersion); err != nil {
+		return err
+	}
 	n.peers.Connected(nodeID, nodeVersion)
 	return nil
 }
 
 // Disconnected removes given [nodeID] from the peer list
-func (n *network) Disconnected(_ context.Context, nodeID ids.NodeID) error {
+func (n *network) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 	log.Debug("disconnecting peer", "nodeID", nodeID)
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -511,6 +527,9 @@ func (n *network) Disconnected(_ context.Context, nodeID ids.NodeID) error {
 		return nil
 	}
 
+	if err := n.router.Disconnected(ctx, nodeID); err != nil {
+		return err
+	}
 	n.peers.Disconnected(nodeID)
 	return nil
 }

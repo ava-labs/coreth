@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -127,7 +128,7 @@ func (m *Mempool) atomicTxGasPrice(tx *Tx) (uint64, error) {
 
 // Add attempts to add [tx] to the mempool and returns an error if
 // it could not be addeed to the mempool.
-func (m *Mempool) AddTx(tx *Tx) error {
+func (m *Mempool) AddTx(tx *Tx) (bool, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -135,7 +136,7 @@ func (m *Mempool) AddTx(tx *Tx) error {
 }
 
 // forceAddTx forcibly adds a *Tx to the mempool and bypasses all verification.
-func (m *Mempool) ForceAddTx(tx *Tx) error {
+func (m *Mempool) ForceAddTx(tx *Tx) (bool, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -176,31 +177,31 @@ func (m *Mempool) checkConflictTx(tx *Tx) (uint64, ids.ID, []*Tx, error) {
 
 // addTx adds [tx] to the mempool. Assumes [m.lock] is held.
 // If [force], skips conflict checks within the mempool.
-func (m *Mempool) addTx(tx *Tx, force bool) error {
+func (m *Mempool) addTx(tx *Tx, force bool) (bool, error) {
 	txID := tx.ID()
 	// If [txID] has already been issued or is in the currentTxs map
 	// there's no need to add it.
 	if _, exists := m.issuedTxs[txID]; exists {
-		return nil
+		return false, nil
 	}
 	if _, exists := m.currentTxs[txID]; exists {
-		return nil
+		return false, nil
 	}
 	if _, exists := m.txHeap.Get(txID); exists {
-		return nil
+		return false, nil
 	}
 
 	utxoSet := tx.InputUTXOs()
 	gasPrice, _ := m.atomicTxGasPrice(tx)
 	highestGasPrice, highestGasPriceConflictTxID, conflictingTxs, err := m.checkConflictTx(tx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(conflictingTxs) != 0 && !force {
 		// If [tx] does not have a higher fee than all of its conflicts,
 		// we refuse to issue it to the mempool.
 		if highestGasPrice >= gasPrice {
-			return fmt.Errorf(
+			return false, fmt.Errorf(
 				"%w: issued tx (%s) gas price %d <= conflict tx (%s) gas price %d (%d total conflicts in mempool)",
 				errConflictingAtomicTx,
 				txID,
@@ -225,7 +226,7 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 			// submitted item, discard the submitted item (we prefer items
 			// already in the mempool).
 			if minGasPrice >= gasPrice {
-				return fmt.Errorf(
+				return false, fmt.Errorf(
 					"%w currentMin=%d provided=%d",
 					errInsufficientAtomicTxFee,
 					minGasPrice,
@@ -237,7 +238,7 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 		} else {
 			// This could occur if we have used our entire size allowance on
 			// transactions that are currently processing.
-			return errTooManyAtomicTx
+			return false, errTooManyAtomicTx
 		}
 	}
 
@@ -266,7 +267,7 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	// and CancelCurrentTx.
 	m.newTxs = append(m.newTxs, tx)
 	m.addPending()
-	return nil
+	return true, nil
 }
 
 // NextTx returns a transaction to be issued from the mempool.
@@ -295,6 +296,21 @@ func (m *Mempool) GetPendingTx(txID ids.ID) (*Tx, bool) {
 	defer m.lock.RUnlock()
 
 	return m.txHeap.Get(txID)
+}
+
+func (m *Mempool) GetTxs(filter func(tx *Tx) bool) []*Tx {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	result := make([]*Tx, 0, len(m.txHeap.maxHeap.items))
+	for _, item := range m.txHeap.maxHeap.items {
+		if !filter(item.tx) {
+			continue
+		}
+		result = append(result, item.tx)
+	}
+
+	return result
 }
 
 // GetTx returns the transaction [txID] if it was issued

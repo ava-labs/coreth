@@ -10,8 +10,12 @@ import (
 	"testing"
 	"time"
 
+	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/coreth/gossip"
 
 	"github.com/stretchr/testify/assert"
 
@@ -26,6 +30,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
+	assert.NoError(vm.Connected(context.Background(), ids.GenerateTestNodeID(), nil))
 
 	// Create conflicting transactions
 	importTxs := createImportTxOptions(t, vm, sharedMemory)
@@ -56,12 +61,29 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		return nil
 	}
 
+	addedToBloomFilter := false
+	sender.SendAppRequestF = func(ctx context.Context, _ set.Set[ids.NodeID], _ uint32, bytes []byte) error {
+		bytes = bytes[1:] // first byte is an identifier
+		msg := gossip.PullTxsRequest{}
+		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
+		require.NoError(t, err)
+
+		bloom := &bloomfilter.Filter{}
+		require.NoError(t, bloom.UnmarshalBinary(msg.BloomFilter))
+		if !bloom.Contains(gossip.NewHasher(tx.ID())) {
+			return nil
+		}
+		addedToBloomFilter = true
+		return nil
+	}
+
 	// Optimistically gossip raw tx
 	assert.NoError(vm.issueTx(tx, true /*=local*/))
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	gossipedLock.Lock()
 	assert.Equal(1, gossiped)
 	gossipedLock.Unlock()
+	assert.True(addedToBloomFilter)
 
 	// Test hash on retry
 	assert.NoError(vm.gossiper.GossipAtomicTxs([]*Tx{tx}))

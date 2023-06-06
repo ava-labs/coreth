@@ -21,6 +21,7 @@ func init() {
 
 	errs := wrappers.Errs{}
 	errs.Add(
+		c.RegisterType(&TestUnsignedTx{}),
 		c.RegisterType(&UnsignedImportTx{}),
 		c.RegisterType(&UnsignedExportTx{}),
 	)

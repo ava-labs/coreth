@@ -8,6 +8,7 @@ import (
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/gossip"
 )
 
 const (
@@ -29,6 +30,8 @@ func init() {
 		// Gossip types
 		c.RegisterType(AtomicTxGossip{}),
 		c.RegisterType(EthTxsGossip{}),
+		c.RegisterType(gossip.PullTxsRequest{}),
+		c.RegisterType(gossip.PullTxsResponse{}),
 
 		// Types for state sync frontier consensus
 		c.RegisterType(SyncSummary{}),
