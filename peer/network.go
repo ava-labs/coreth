@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/ava-labs/avalanchego/network/p2p"
+
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -87,23 +89,25 @@ type network struct {
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
 	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
 	activeCrossChainRequests   *semaphore.Weighted                // controls maximum number of active outbound cross chain requests
-	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
-	codec                      codec.Manager                      // Codec used for parsing messages
-	crossChainCodec            codec.Manager                      // Codec used for parsing cross chain messages
-	appRequestHandler          message.RequestHandler             // maps request type => handler
-	crossChainRequestHandler   message.CrossChainRequestHandler   // maps cross chain request type => handler
-	gossipHandler              message.GossipHandler              // maps gossip type => handler
-	peers                      *peerTracker                       // tracking of peers & bandwidth
-	appStats                   stats.RequestHandlerStats          // Provide request handler metrics
-	crossChainStats            stats.RequestHandlerStats          // Provide cross chain request handler metrics
+	router                     *p2p.Router
+	appSender                  common.AppSender                 // avalanchego AppSender for sending messages
+	codec                      codec.Manager                    // Codec used for parsing messages
+	crossChainCodec            codec.Manager                    // Codec used for parsing cross chain messages
+	appRequestHandler          message.RequestHandler           // maps request type => handler
+	crossChainRequestHandler   message.CrossChainRequestHandler // maps cross chain request type => handler
+	gossipHandler              message.GossipHandler            // maps gossip type => handler
+	peers                      *peerTracker                     // tracking of peers & bandwidth
+	appStats                   stats.RequestHandlerStats        // Provide request handler metrics
+	crossChainStats            stats.RequestHandlerStats        // Provide cross chain request handler metrics
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
 	closed utils.Atomic[bool]
 }
 
-func NewNetwork(appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
+func NewNetwork(router *p2p.Router, appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
 	return &network{
+		router:                     router,
 		appSender:                  appSender,
 		codec:                      codec,
 		crossChainCodec:            crossChainCodec,
@@ -335,8 +339,8 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		log.Debug("failed to unmarshal app request", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
-		return nil
+		log.Debug("forwarding unknown AppRequest to sdk", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
+		return n.router.AppRequest(ctx, nodeID, requestID, deadline, request)
 	}
 
 	bufferedDeadline, err := calculateTimeUntilDeadline(deadline, n.appStats)
@@ -366,7 +370,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // Error returned by this function is expected to be treated as fatal by the engine
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
-func (n *network) AppResponse(_ context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
+func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -378,9 +382,8 @@ func (n *network) AppResponse(_ context.Context, nodeID ids.NodeID, requestID ui
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		// Should never happen since the engine should be managing outstanding requests
-		log.Error("received AppResponse to unknown request", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
-		return nil
+		log.Debug("forwarding unknown AppResponse to sdk", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
+		return n.router.AppResponse(ctx, nodeID, requestID, response)
 	}
 
 	// We must release the slot
@@ -395,7 +398,7 @@ func (n *network) AppResponse(_ context.Context, nodeID ids.NodeID, requestID ui
 // - request times out before a response is provided
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error only when the response handler returns an error
-func (n *network) AppRequestFailed(_ context.Context, nodeID ids.NodeID, requestID uint32) error {
+func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -407,9 +410,8 @@ func (n *network) AppRequestFailed(_ context.Context, nodeID ids.NodeID, request
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		// Should never happen since the engine should be managing outstanding requests
-		log.Error("received AppRequestFailed to unknown request", "nodeID", nodeID, "requestID", requestID)
-		return nil
+		log.Debug("forwarding unknown AppRequestFailed to sdk", "nodeID", nodeID, "requestID", requestID)
+		return n.router.AppRequestFailed(ctx, nodeID, requestID)
 	}
 
 	// We must release the slot
