@@ -102,7 +102,7 @@ func TestMempoolEthTxsAddedTxsGossipedAfterActivation(t *testing.T) {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	vm.txPool.SetGasPrice(common.Big1)
+	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
 	// create eth txes
@@ -190,7 +190,7 @@ func TestMempoolEthTxsAddedTxsGossipedAfterActivationChunking(t *testing.T) {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	vm.txPool.SetGasPrice(common.Big1)
+	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
 	// create eth txes
@@ -252,7 +252,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	vm.txPool.SetGasPrice(common.Big1)
+	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
 	var (
@@ -307,7 +307,7 @@ func TestMempoolEthTxsRegossipSingleAccount(t *testing.T) {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	vm.txPool.SetGasPrice(common.Big1)
+	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
 	// create eth txes
@@ -347,7 +347,7 @@ func TestMempoolEthTxsRegossip(t *testing.T) {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	vm.txPool.SetGasPrice(common.Big1)
+	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
 	// create eth txes

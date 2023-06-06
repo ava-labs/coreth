@@ -531,72 +531,72 @@ func TestVMContinuosProfiler(t *testing.T) {
 
 func TestVMUpgrades(t *testing.T) {
 	genesisTests := []struct {
-		name             string
-		genesis          string
-		expectedGasPrice *big.Int
+		name           string
+		genesis        string
+		expectedGasTip *big.Int
 	}{
 		{
-			name:             "Apricot Phase 0",
-			genesis:          genesisJSONApricotPhase0,
-			expectedGasPrice: big.NewInt(params.LaunchMinGasPrice),
+			name:           "Apricot Phase 0",
+			genesis:        genesisJSONApricotPhase0,
+			expectedGasTip: big.NewInt(params.LaunchMinGasPrice),
 		},
 		{
-			name:             "Apricot Phase 1",
-			genesis:          genesisJSONApricotPhase1,
-			expectedGasPrice: big.NewInt(params.ApricotPhase1MinGasPrice),
+			name:           "Apricot Phase 1",
+			genesis:        genesisJSONApricotPhase1,
+			expectedGasTip: big.NewInt(params.ApricotPhase1MinGasPrice),
 		},
 		{
-			name:             "Apricot Phase 2",
-			genesis:          genesisJSONApricotPhase2,
-			expectedGasPrice: big.NewInt(params.ApricotPhase1MinGasPrice),
+			name:           "Apricot Phase 2",
+			genesis:        genesisJSONApricotPhase2,
+			expectedGasTip: big.NewInt(params.ApricotPhase1MinGasPrice),
 		},
 		{
-			name:             "Apricot Phase 3",
-			genesis:          genesisJSONApricotPhase3,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Apricot Phase 3",
+			genesis:        genesisJSONApricotPhase3,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 4",
-			genesis:          genesisJSONApricotPhase4,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Apricot Phase 4",
+			genesis:        genesisJSONApricotPhase4,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 5",
-			genesis:          genesisJSONApricotPhase5,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Apricot Phase 5",
+			genesis:        genesisJSONApricotPhase5,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase Pre 6",
-			genesis:          genesisJSONApricotPhasePre6,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Apricot Phase Pre 6",
+			genesis:        genesisJSONApricotPhasePre6,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 6",
-			genesis:          genesisJSONApricotPhase6,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Apricot Phase 6",
+			genesis:        genesisJSONApricotPhase6,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase Post 6",
-			genesis:          genesisJSONApricotPhasePost6,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Apricot Phase Post 6",
+			genesis:        genesisJSONApricotPhasePost6,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Banff",
-			genesis:          genesisJSONBanff,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Banff",
+			genesis:        genesisJSONBanff,
+			expectedGasTip: big.NewInt(0),
 		},
 		{
-			name:             "Cortina",
-			genesis:          genesisJSONCortina,
-			expectedGasPrice: big.NewInt(0),
+			name:           "Cortina",
+			genesis:        genesisJSONCortina,
+			expectedGasTip: big.NewInt(0),
 		},
 	}
 	for _, test := range genesisTests {
 		t.Run(test.name, func(t *testing.T) {
 			_, vm, _, _, _ := GenesisVM(t, true, test.genesis, "", "")
 
-			if gasPrice := vm.txPool.GasPrice(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
-				t.Fatalf("Expected pool gas price to be %d but found %d", test.expectedGasPrice, gasPrice)
+			if gasTip := vm.txPool.GasTip(); gasTip.Cmp(test.expectedGasTip) != 0 {
+				t.Fatalf("Expected pool gas price to be %d but found %d", test.expectedGasTip, gasTip)
 			}
 			defer func() {
 				shutdownChan := make(chan error, 1)

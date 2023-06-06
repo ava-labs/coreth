@@ -224,7 +224,7 @@ func New(
 	eth.bloomIndexer.Start(eth.blockchain)
 
 	config.TxPool.Journal = ""
-	eth.txPool = txpool.NewTxPool(config.TxPool, eth.blockchain.Config(), eth.blockchain)
+	eth.txPool = txpool.New(config.TxPool, eth.blockchain.Config(), eth.blockchain)
 
 	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), eth.EventMux(), eth.engine, clock)
 

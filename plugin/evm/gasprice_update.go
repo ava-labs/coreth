@@ -21,7 +21,7 @@ type gasPriceUpdater struct {
 }
 
 type gasPriceSetter interface {
-	SetGasPrice(price *big.Int)
+	SetGasTip(price *big.Int)
 	SetMinFee(price *big.Int)
 }
 
@@ -39,15 +39,15 @@ func (vm *VM) handleGasPriceUpdates() {
 
 // start handles the appropriate gas price and minimum fee updates required by [gpu.chainConfig]
 func (gpu *gasPriceUpdater) start() {
-	// Sets the initial gas price to the launch minimum gas price
-	gpu.setter.SetGasPrice(big.NewInt(params.LaunchMinGasPrice))
+	// Sets the initial gas tip to the launch minimum gas price
+	gpu.setter.SetGasTip(big.NewInt(params.LaunchMinGasPrice))
 
-	// Updates to the minimum gas price as of ApricotPhase1 if it's already in effect or starts a goroutine to enable it at the correct time
-	if disabled := gpu.handleUpdate(gpu.setter.SetGasPrice, gpu.chainConfig.ApricotPhase1BlockTimestamp, big.NewInt(params.ApricotPhase1MinGasPrice)); disabled {
+	// Updates to the minimum gas tip as of ApricotPhase1 if it's already in effect or starts a goroutine to enable it at the correct time
+	if disabled := gpu.handleUpdate(gpu.setter.SetGasTip, gpu.chainConfig.ApricotPhase1BlockTimestamp, big.NewInt(params.ApricotPhase1MinGasPrice)); disabled {
 		return
 	}
-	// Updates to the minimum gas price as of ApricotPhase3 if it's already in effect or starts a goroutine to enable it at the correct time
-	if disabled := gpu.handleUpdate(gpu.setter.SetGasPrice, gpu.chainConfig.ApricotPhase3BlockTimestamp, big.NewInt(0)); disabled {
+	// Updates to the minimum gas tip as of ApricotPhase3 if it's already in effect or starts a goroutine to enable it at the correct time
+	if disabled := gpu.handleUpdate(gpu.setter.SetGasTip, gpu.chainConfig.ApricotPhase3BlockTimestamp, big.NewInt(0)); disabled {
 		return
 	}
 	if disabled := gpu.handleUpdate(gpu.setter.SetMinFee, gpu.chainConfig.ApricotPhase3BlockTimestamp, big.NewInt(params.ApricotPhase3MinBaseFee)); disabled {
