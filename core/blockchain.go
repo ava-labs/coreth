@@ -1397,12 +1397,15 @@ func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*
 
 	var logs [][]*types.Log
 	for _, receipt := range receipts {
-		for _, log := range receipt.Logs {
+		receiptLogs := make([]*types.Log, len(receipt.Logs))
+		for i, log := range receipt.Logs {
+			l := *log
 			if removed {
-				log.Removed = true
+				l.Removed = true
 			}
+			receiptLogs[i] = &l
 		}
-		logs = append(logs, receipt.Logs)
+		logs = append(logs, receiptLogs)
 	}
 	return logs
 }
