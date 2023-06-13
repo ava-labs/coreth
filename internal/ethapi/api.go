@@ -1324,7 +1324,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) (map[string]interface{}, error) {
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) map[string]interface{} {
 	fields := RPCMarshalHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
 	fields["blockExtraData"] = hexutil.Bytes(block.ExtData())
@@ -1352,7 +1352,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	}
 	fields["uncles"] = uncleHashes
 
-	return fields, nil
+	return fields
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
@@ -1368,16 +1368,13 @@ func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Head
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig())
-	if err != nil {
-		return nil, err
-	}
+	fields := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig())
 	if inclTx {
 		// Note: Coreth enforces that the difficulty of a block is always 1, such that the total difficulty of a block
 		// will be equivalent to its height.
 		fields["totalDifficulty"] = (*hexutil.Big)(b.Number())
 	}
-	return fields, err
+	return fields, nil
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
@@ -1596,7 +1593,6 @@ type BadBlockArgs struct {
 // and returns them as a JSON list of block hashes.
 func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
-		err                error
 		badBlocks, reasons = s.b.BadBlocks()
 		results            = make([]*BadBlockArgs, 0, len(badBlocks))
 	)
@@ -1610,9 +1606,7 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 		} else {
 			blockRlp = fmt.Sprintf("%#x", rlpBytes)
 		}
-		if blockJSON, err = RPCMarshalBlock(block, true, true, s.b.ChainConfig()); err != nil {
-			blockJSON = map[string]interface{}{"error": err.Error()}
-		}
+		blockJSON = RPCMarshalBlock(block, true, true, s.b.ChainConfig())
 		results = append(results, &BadBlockArgs{
 			Hash:   block.Hash(),
 			RLP:    blockRlp,

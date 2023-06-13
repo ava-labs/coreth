@@ -775,11 +775,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		resp, err := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.TestChainConfig)
-		if err != nil {
-			t.Errorf("test %d: got error %v", i, err)
-			continue
-		}
+		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.TestChainConfig)
 		out, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
@@ -817,13 +813,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			Value:    big.NewInt(111),
 			Data:     []byte{0x11, 0x11, 0x11},
 		})
-		withdrawal = &types.Withdrawal{
-			Index:     0,
-			Validator: 1,
-			Address:   common.Address{0x12, 0x34},
-			Amount:    10,
-		}
-		pending = types.NewBlockWithWithdrawals(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, []*types.Withdrawal{withdrawal}, newHasher())
+		pending = types.NewBlock(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, newHasher(), nil, true)
 	)
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
