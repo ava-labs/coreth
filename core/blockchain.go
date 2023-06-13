@@ -2080,3 +2080,7 @@ func (bc *BlockChain) ReprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) FlattenSnapshot(postAbortWork func() error, hash common.Hash) error {
 	return bc.flattenSnapshot(postAbortWork, hash)
 }
+
+func (bc *BlockChain) SetAccessRecordingPrefixes(accountPrefix, storagePrefix []byte) {
+	bc.stateCache.SetAccessRecordingPrefixes(accountPrefix, storagePrefix)
+}

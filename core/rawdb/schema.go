@@ -89,6 +89,11 @@ var (
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 
+	// Records the first access of the data from the trie so we can restore the
+	// portion of the trie accessed in reprocessing to the snapshot.
+	FirstAccessSnapshotAccountPrefix = []byte("Fa")
+	FirstAccessSnapshotStoragePrefix = []byte("Fo")
+
 	// Path-based trie node scheme.
 	trieNodeAccountPrefix = []byte("A") // trieNodeAccountPrefix + hexPath -> trie node
 	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node

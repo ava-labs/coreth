@@ -68,6 +68,8 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
+
+	SetAccessRecordingPrefixes(accountPrefix, storagePrefix []byte)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -169,6 +171,14 @@ type cachingDB struct {
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	triedb        *trie.Database
+
+	firstAccessAccountPrefix []byte
+	firstAccessStoragePrefix []byte
+}
+
+func (db *cachingDB) SetAccessRecordingPrefixes(accountPrefix, storagePrefix []byte) {
+	db.firstAccessAccountPrefix = accountPrefix
+	db.firstAccessStoragePrefix = storagePrefix
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -176,6 +186,12 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
+	}
+	if len(db.firstAccessAccountPrefix) > 0 {
+		tr := newAccessRecordingTrie(
+			tr,
+			&firstAccessRecorder{db.disk, db.firstAccessAccountPrefix})
+		return tr, nil
 	}
 	return tr, nil
 }
@@ -185,6 +201,12 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root commo
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
 	if err != nil {
 		return nil, err
+	}
+	if len(db.firstAccessStoragePrefix) > 0 {
+		tr := newAccessRecordingTrie(
+			tr,
+			&firstAccessRecorder{db.disk, append(db.firstAccessStoragePrefix, addrHash[:]...)})
+		return tr, nil
 	}
 	return tr, nil
 }

@@ -430,16 +430,14 @@ func (vm *VM) Initialize(
 	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
 
 	// temporary script to reprocess blocks
-	lastAcceptedHash = common.HexToHash(
-		"0xd7ed63157b6e15494bce5d9805226afeacc3987b844cc6695ba24f3edc381b13")
-	_ = lastAcceptedHeight // quiet linter
-	lastAcceptedHeight = 30949376
-	// this should force waiting to regenerate the snapshot
-	vm.config.SnapshotWait = true
-	log.Warn(
-		"OVERRIDING LAST ACCEPTED TO REPROCESS BLOCKS",
-		"lastAcceptedHash", lastAcceptedHash,
-		"lastAcceptedHeight", lastAcceptedHeight)
+	if vm.config.ReprocessFrom > 0 {
+		lastAcceptedHash = rawdb.ReadCanonicalHash(vm.chaindb, vm.config.ReprocessFrom)
+		lastAcceptedHeight = vm.config.ReprocessFrom
+		log.Warn(
+			"OVERRIDING LAST ACCEPTED TO REPROCESS BLOCKS",
+			"lastAcceptedHash", lastAcceptedHash,
+			"lastAcceptedHeight", lastAcceptedHeight)
+	}
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -473,6 +471,12 @@ func (vm *VM) Initialize(
 	vm.ethConfig.PopulateMissingTriesParallelism = vm.config.PopulateMissingTriesParallelism
 	vm.ethConfig.AllowMissingTries = vm.config.AllowMissingTries
 	vm.ethConfig.SnapshotDelayInit = vm.stateSyncEnabled(lastAcceptedHeight)
+
+	// delay snapshot initialization if reproccessing blocks
+	if vm.config.ReprocessFrom > 0 {
+		vm.ethConfig.SnapshotDelayInit = true
+	}
+
 	vm.ethConfig.SnapshotWait = vm.config.SnapshotWait
 	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
 	vm.ethConfig.OfflinePruning = vm.config.OfflinePruning
@@ -518,8 +522,10 @@ func (vm *VM) Initialize(
 	}
 
 	// this amount of initialization should suffice to reprocess blocks.
-	if err := vm.script(); err != nil {
-		return err
+	if vm.config.ReprocessFrom > 0 {
+		if err := vm.script(); err != nil {
+			return err
+		}
 	}
 
 	// initialize bonus blocks on mainnet

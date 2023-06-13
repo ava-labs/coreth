@@ -191,6 +191,10 @@ type Config struct {
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
 	TxLookupLimit uint64 `json:"tx-lookup-limit"`
+
+	// Reprocessing settings used for the script to reprocess blocks
+	ReprocessFrom uint64 `json:"reprocess-from"`
+	ReprocessTo   uint64 `json:"reprocess-to"`
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled

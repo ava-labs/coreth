@@ -4,20 +4,66 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 func (vm *VM) script() error {
 	log.Warn("VM SCRIPT: running")
-	if err := vm.reprocess(30961664); err != nil {
+
+	vm.blockChain.SetAccessRecordingPrefixes(
+		rawdb.FirstAccessSnapshotAccountPrefix,
+		rawdb.FirstAccessSnapshotStoragePrefix,
+	)
+	if err := vm.reprocess(vm.config.ReprocessTo); err != nil {
 		return fmt.Errorf("while running reprocessing: %w", err)
 	}
+	log.Warn("VM SCRIPT: First pass complete")
+	vm.blockChain.SetAccessRecordingPrefixes(nil, nil)
+
+	if err := rawdb.ApplyPrefix(
+		vm.chaindb,
+		rawdb.SnapshotAccountPrefix,
+		rawdb.FirstAccessSnapshotAccountPrefix,
+	); err != nil {
+		return err
+	}
+	if err := rawdb.ApplyPrefix(
+		vm.chaindb,
+		rawdb.SnapshotStoragePrefix,
+		rawdb.FirstAccessSnapshotStoragePrefix,
+	); err != nil {
+		return err
+	}
+
+	if err := rawdb.ClearPrefix(
+		vm.chaindb, rawdb.FirstAccessSnapshotAccountPrefix); err != nil {
+		return err
+	}
+	if err := rawdb.ClearPrefix(
+		vm.chaindb, rawdb.FirstAccessSnapshotStoragePrefix); err != nil {
+		return err
+	}
+	log.Warn("VM SCRIPT: Snapshot slots updated")
+
+	// Set the last accepted to the first block to reprocess and go again
+	// This also initializes the snapshots and updates the on-disk snapshot
+	// pointers.
+	firstBlock := vm.blockChain.GetBlockByNumber(vm.config.ReprocessFrom)
+	if err := vm.blockChain.ResetToStateSyncedBlock(firstBlock); err != nil {
+		return err
+	}
+	log.Warn("VM SCRIPT: Chain state reset")
+	if err := vm.reprocess(vm.config.ReprocessTo); err != nil {
+		return fmt.Errorf("while running reprocessing with snapshot: %w", err)
+	}
 	log.Warn("VM SCRIPT: complete")
-	return nil
+	return errors.New("intentionally stopping VM from initializing, snapshot is not valid")
 }
 
 func (vm *VM) reprocess(origin uint64) error {

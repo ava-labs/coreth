@@ -348,3 +348,42 @@ func ClearPrefix(db ethdb.KeyValueStore, prefix []byte) error {
 	}
 	return batch.Write()
 }
+
+const (
+	OpRead     = byte(0)
+	OpNotFound = byte(1)
+)
+
+func ApplyPrefix(
+	db ethdb.KeyValueStore,
+	prefixDst, prefixSrc []byte,
+) error {
+	countRead, countNotFound := 0, 0
+
+	it := db.NewIterator(prefixSrc, nil)
+	defer it.Release()
+
+	for it.Next() {
+		key := it.Key()[len(prefixSrc):] // remove prefixSrc
+		op := it.Value()[0]
+		val := it.Value()[1:]
+
+		switch op {
+		case OpRead:
+			if err := db.Put(append(prefixDst, key...), val); err != nil {
+				return err
+			}
+			countRead++
+		case OpNotFound:
+			if err := db.Delete(append(prefixDst, key...)); err != nil {
+				return err
+			}
+			countNotFound++
+		}
+	}
+	log.Warn("ApplyPrefix", "prefixDst", common.Bytes2Hex(prefixDst),
+		"prefixSrc", common.Bytes2Hex(prefixSrc), "countRead", countRead,
+		"countNotFound", countNotFound)
+
+	return it.Error()
+}
