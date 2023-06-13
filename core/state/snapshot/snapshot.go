@@ -35,13 +35,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/ethdb"
+	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (
@@ -134,6 +134,12 @@ type Snapshot interface {
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+
+	// AccountIterator creates an account iterator over the account trie given by the provided root hash.
+	AccountIterator(seek common.Hash) AccountIterator
+
+	// StorageIterator creates a storage iterator over the storage trie given by the provided root hash.
+	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
 }
 
 // snapshot is the internal version of the snapshot data layer that supports some
@@ -159,12 +165,14 @@ type snapshot interface {
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
 	Stale() bool
+}
 
-	// AccountIterator creates an account iterator over an arbitrary layer.
-	AccountIterator(seek common.Hash) AccountIterator
-
-	// StorageIterator creates a storage iterator over an arbitrary layer.
-	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
+// Config includes the configurations for snapshots.
+type Config struct {
+	CacheSize  int  // Megabytes permitted to use for read caches
+	NoBuild    bool // Indicator that the snapshots generation is disallowed
+	AsyncBuild bool // The snapshot generation is allowed to be constructed asynchronously
+	SkipVerify bool // Indicator that all verification should be bypassed
 }
 
 // Tree is an Ethereum state snapshot tree. It consists of one persistent base
@@ -177,9 +185,9 @@ type snapshot interface {
 // storage data to avoid expensive multi-level trie lookups; and to allow sorted,
 // cheap iteration of the account/storage tries for sync aid.
 type Tree struct {
+	config Config              // Snapshots configurations
 	diskdb ethdb.KeyValueStore // Persistent database to store the snapshot
 	triedb *trie.Database      // In-memory cache to access the trie through
-	cache  int                 // Megabytes permitted to use for read caches
 	// Collection of all known layers
 	// blockHash -> snapshot
 	blockLayers map[common.Hash]snapshot
@@ -201,24 +209,24 @@ type Tree struct {
 // If the snapshot is missing or the disk layer is broken, the snapshot will be
 // reconstructed using both the existing data and the state trie.
 // The repair happens on a background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash, root common.Hash, async bool, rebuild bool, verify bool) (*Tree, error) {
+func New(config Config, diskdb ethdb.KeyValueStore, triedb *trie.Database, blockHash, root common.Hash) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
+		config:      config,
 		diskdb:      diskdb,
 		triedb:      triedb,
-		cache:       cache,
 		blockLayers: make(map[common.Hash]snapshot),
 		stateLayers: make(map[common.Hash]map[common.Hash]snapshot),
-		verified:    !verify, // if verify is false, all verification will be bypassed
+		verified:    config.SkipVerify, // if SkipVerify is true, all verification will be bypassed
 	}
 
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
-	head, generated, err := loadSnapshot(diskdb, triedb, cache, blockHash, root)
+	head, generated, err := loadSnapshot(diskdb, triedb, config.CacheSize, blockHash, root, config.NoBuild)
 	if err != nil {
-		if rebuild {
-			log.Warn("Failed to load snapshot, regenerating", "err", err)
+		log.Warn("Failed to load snapshot, regenerating", "err", err)
+		if !config.NoBuild {
 			snap.Rebuild(blockHash, root)
-			if !async {
+			if !config.AsyncBuild {
 				if err := snap.verifyIntegrity(snap.disklayer(), true); err != nil {
 					return nil, err
 				}
@@ -239,8 +247,8 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, blockHash
 	}
 
 	// Verify any synchronously generated or loaded snapshot from disk
-	if !async || generated {
-		if err := snap.verifyIntegrity(snap.disklayer(), !async && !generated); err != nil {
+	if !config.AsyncBuild || generated {
+		if err := snap.verifyIntegrity(snap.disklayer(), !config.AsyncBuild && !generated); err != nil {
 			return nil, err
 		}
 	}
@@ -379,11 +387,13 @@ func (t *Tree) verifyIntegrity(base *diskLayer, waitBuild bool) error {
 // Note: a blockHash is used instead of a state root so that the exact state
 // transition between the two states is well defined. This is intended to
 // prevent the following edge case
-//    A
-//   /  \
-//  B    C
-//       |
-//       D
+//
+//	  A
+//	 /  \
+//	B    C
+//	     |
+//	     D
+//
 // In this scenario, it's possible For (A, B) and (A, C, D) to be two
 // different paths to the resulting state. We use block hashes and parent
 // block hashes to ensure that the exact path through which we flatten
@@ -599,6 +609,7 @@ func diffToDisk(bottom *diffLayer) (*diskLayer, bool, error) {
 	// Mark the original base as stale as we're going to create a new wrapper
 	base.lock.Lock()
 	if base.stale {
+		base.lock.Unlock()
 		return nil, false, ErrStaleParentLayer // we've committed into the same base from two children, boo
 	}
 	base.stale = true
@@ -616,20 +627,19 @@ func diffToDisk(bottom *diffLayer) (*diskLayer, bool, error) {
 
 		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 		for it.Next() {
-			if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
-				batch.Delete(key)
-				base.cache.Del(key[1:])
-				snapshotFlushStorageItemMeter.Mark(1)
+			key := it.Key()
+			batch.Delete(key)
+			base.cache.Del(key[1:])
+			snapshotFlushStorageItemMeter.Mark(1)
 
-				// Ensure we don't delete too much data blindly (contract can be
-				// huge). It's ok to flush, the root will go missing in case of a
-				// crash and we'll detect and regenerate the snapshot.
-				if batch.ValueSize() > ethdb.IdealBatchSize {
-					if err := batch.Write(); err != nil {
-						log.Crit("Failed to write storage deletions", "err", err)
-					}
-					batch.Reset()
+			// Ensure we don't delete too much data blindly (contract can be
+			// huge). It's ok to flush, the root will go missing in case of a
+			// crash and we'll detect and regenerate the snapshot.
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write storage deletions", "err", err)
 				}
+				batch.Reset()
 			}
 		}
 		it.Release()
@@ -753,7 +763,6 @@ func (t *Tree) Rebuild(blockHash, root common.Hash) {
 				if stats := layer.genStats; stats != nil {
 					wiper = stats.wiping
 				}
-
 			}
 			// Layer should be inactive now, mark it as stale
 			layer.lock.Lock()
@@ -773,7 +782,7 @@ func (t *Tree) Rebuild(blockHash, root common.Hash) {
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
-	base := generateSnapshot(t.diskdb, t.triedb, t.cache, blockHash, root, wiper)
+	base := generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, blockHash, root, wiper)
 	t.blockLayers = map[common.Hash]snapshot{
 		blockHash: base,
 	}
@@ -835,14 +844,14 @@ func (t *Tree) verify(root common.Hash, force bool) error {
 	}
 	defer acctIt.Release()
 
-	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+	got, err := generateTrieRoot(nil, "", acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{}, force)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(nil, "", storageIt, accountHash, stackTrieGenerate, nil, stat, false)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -904,12 +913,40 @@ func (t *Tree) generating() (bool, error) {
 	return layer.genMarker != nil, nil
 }
 
-// diskRoot is a external helper function to return the disk layer root.
+// DiskRoot is a external helper function to return the disk layer root.
 func (t *Tree) DiskRoot() common.Hash {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	return t.diskRoot()
+}
+
+func (t *Tree) DiskAccountIterator(seek common.Hash) AccountIterator {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	return t.disklayer().AccountIterator(seek)
+}
+
+func (t *Tree) DiskStorageIterator(account common.Hash, seek common.Hash) StorageIterator {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	it, _ := t.disklayer().StorageIterator(account, seek)
+	return it
+}
+
+// NewDiskLayer creates a diskLayer for direct access to the contents of the on-disk
+// snapshot. Does not perform any validation.
+func NewDiskLayer(diskdb ethdb.KeyValueStore) Snapshot {
+	return &diskLayer{
+		diskdb:  diskdb,
+		created: time.Now(),
+
+		// state sync uses iterators to access data, so this cache is not used.
+		// initializing it out of caution.
+		cache: utils.NewMeteredCache(32*1024, "", "", 0),
+	}
 }
 
 // NewTestTree creates a *Tree with a pre-populated diskLayer
@@ -918,7 +955,7 @@ func NewTestTree(diskdb ethdb.KeyValueStore, blockHash, root common.Hash) *Tree 
 		diskdb:    diskdb,
 		root:      root,
 		blockHash: blockHash,
-		cache:     fastcache.New(128 * 256),
+		cache:     utils.NewMeteredCache(128*256, "", "", 0),
 		created:   time.Now(),
 	}
 	return &Tree{

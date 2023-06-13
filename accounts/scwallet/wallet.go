@@ -109,8 +109,8 @@ const (
 	P1DeriveKeyFromCurrent = uint8(0x10)
 	statusP1WalletStatus   = uint8(0x00)
 	statusP1Path           = uint8(0x01)
-	signP1PrecomputedHash  = uint8(0x01)
-	signP2OnlyBlock        = uint8(0x81)
+	signP1PrecomputedHash  = uint8(0x00)
+	signP2OnlyBlock        = uint8(0x00)
 	exportP1Any            = uint8(0x00)
 	exportP2Pubkey         = uint8(0x01)
 )
@@ -177,7 +177,7 @@ func transmit(card *pcsc.Card, command *commandAPDU) (*responseAPDU, error) {
 	}
 
 	if response.Sw1 != sw1Ok {
-		return nil, fmt.Errorf("unexpected insecure response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
+		return nil, fmt.Errorf("unexpected insecure response status Cla=%#x, Ins=%#x, Sw=%#x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
 	}
 
 	return response, nil
@@ -648,7 +648,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // accounts.
 //
 // Note, self derivation will increment the last component of the specified path
-// opposed to decending into a child path to allow discovering accounts starting
+// opposed to descending into a child path to allow discovering accounts starting
 // from non zero components.
 //
 // Some hardware wallets switched derivation paths through their evolution, so
@@ -676,7 +676,7 @@ func (w *Wallet) SelfDerive(bases []accounts.DerivationPath, chain interfaces.Ch
 // or optionally with the aid of any location metadata from the embedded URL field.
 //
 // If the wallet requires additional authentication to sign the request (e.g.
-// a password to decrypt the account, or a PIN code o verify the transaction),
+// a password to decrypt the account, or a PIN code to verify the transaction),
 // an AuthNeededError instance will be returned, containing infos for the user
 // about which fields or actions are needed. The user may retry by providing
 // the needed details via SignDataWithPassphrase, or by other means (e.g. unlock
@@ -703,7 +703,7 @@ func (w *Wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 // or optionally with the aid of any location metadata from the embedded URL field.
 //
 // If the wallet requires additional authentication to sign the request (e.g.
-// a password to decrypt the account, or a PIN code o verify the transaction),
+// a password to decrypt the account, or a PIN code to verify the transaction),
 // an AuthNeededError instance will be returned, containing infos for the user
 // about which fields or actions are needed. The user may retry by providing
 // the needed details via SignTxWithPassphrase, or by other means (e.g. unlock
@@ -743,7 +743,7 @@ func (w *Wallet) signHashWithPassphrase(account accounts.Account, passphrase str
 // or optionally with the aid of any location metadata from the embedded URL field.
 //
 // If the wallet requires additional authentication to sign the request (e.g.
-// a password to decrypt the account, or a PIN code o verify the transaction),
+// a password to decrypt the account, or a PIN code to verify the transaction),
 // an AuthNeededError instance will be returned, containing infos for the user
 // about which fields or actions are needed. The user may retry by providing
 // the needed details via SignHashWithPassphrase, or by other means (e.g. unlock
@@ -889,6 +889,7 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 }
 
 // derivationPath fetches the wallet's current derivation path from the card.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) derivationPath() (accounts.DerivationPath, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
@@ -1004,6 +1005,7 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 }
 
 // keyExport contains information on an exported keypair.
+//
 //lint:ignore U1000 needs to be added to the console interface
 type keyExport struct {
 	PublicKey  []byte `asn1:"tag:0"`
@@ -1011,6 +1013,7 @@ type keyExport struct {
 }
 
 // publicKey returns the public key for the current derivation path.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) publicKey() ([]byte, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)

@@ -36,10 +36,18 @@ import (
 
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+)
+
+const basefeeWiggleMultiplier = 2
+
+var (
+	ErrNilAssetAmount            = errors.New("cannot specify nil asset amount for native asset call")
+	errNativeAssetDeployContract = errors.New("cannot specify native asset params while deploying a contract")
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -52,6 +60,12 @@ type CallOpts struct {
 	From        common.Address  // Optional the sender address, otherwise the first account is used
 	BlockNumber *big.Int        // Optional the block number on which the call should be performed
 	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+}
+
+// NativeAssetCallOpts contains params for native asset call
+type NativeAssetCallOpts struct {
+	AssetID     common.Hash // Asset ID
+	AssetAmount *big.Int    // Asset amount
 }
 
 // TransactOpts is the collection of authorization data required to create a
@@ -70,6 +84,14 @@ type TransactOpts struct {
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
 	NoSend bool // Do all transact steps but do not send the transaction
+
+	// If set, the transaction is transformed to perform the requested call through the native asset
+	// precompile. This will update the to address of the transaction to that of the native asset precompile
+	// and pack the requested [to] address, [assetID], [assetAmount], and [input] data for the transaction
+	// into the call data of the transaction. When executed within the EVM, the precompile will parse the input
+	// data and attempt to atomically transfer [assetAmount] of [assetID] to the [to] address and invoke the
+	// contract at [to] if present, passing in the original [input] data.
+	NativeAssetCall *NativeAssetCallOpts
 }
 
 // FilterOpts is the collection of options to fine tune filtering for events
@@ -181,7 +203,10 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 			return ErrNoAcceptedState
 		}
 		output, err = pb.AcceptedCallContract(ctx, msg)
-		if err == nil && len(output) == 0 {
+		if err != nil {
+			return err
+		}
+		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
 			if code, err = pb.AcceptedCodeAt(ctx, c.address); err != nil {
 				return err
@@ -240,6 +265,39 @@ func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error)
 	// or not, reject invalid transaction at the first place
 	return c.transact(opts, &c.address, nil)
 }
+
+// wrapNativeAssetCall preprocesses the arguments to transform the requested call to go through the
+// native asset call precompile if it is specified on [opts].
+func wrapNativeAssetCall(opts *TransactOpts, contract *common.Address, input []byte) (*common.Address, []byte, error) {
+	if opts.NativeAssetCall != nil {
+		// Prevent the user from sending a non-zero value through native asset call precompile as this will
+		// transfer the funds to the precompile address and essentially burn the funds.
+		if opts.Value != nil && opts.Value.Cmp(common.Big0) != 0 {
+			return nil, nil, fmt.Errorf("value must be 0 when performing native asset call, found %d", opts.Value)
+		}
+		if opts.NativeAssetCall.AssetAmount == nil {
+			return nil, nil, ErrNilAssetAmount
+		}
+		if opts.NativeAssetCall.AssetAmount.Cmp(common.Big0) < 0 {
+			return nil, nil, fmt.Errorf("asset value cannot be < 0 when performing native asset call, found %d", opts.NativeAssetCall.AssetAmount)
+		}
+		// Prevent potential panic if [contract] is nil in the case that transact is called through DeployContract.
+		if contract == nil {
+			return nil, nil, errNativeAssetDeployContract
+		}
+		// wrap input with native asset call params
+		input = vm.PackNativeAssetCallInput(
+			*contract,
+			opts.NativeAssetCall.AssetID,
+			opts.NativeAssetCall.AssetAmount,
+			input,
+		)
+		// target addr is now precompile
+		contract = &vm.NativeAssetCallAddr
+	}
+	return contract, input, nil
+}
+
 func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Address, input []byte, head *types.Header) (*types.Transaction, error) {
 	// Normalize value
 	value := opts.Value
@@ -260,7 +318,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	if gasFeeCap == nil {
 		gasFeeCap = new(big.Int).Add(
 			gasTipCap,
-			new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+			new(big.Int).Mul(head.BaseFee, big.NewInt(basefeeWiggleMultiplier)),
 		)
 	}
 	if gasFeeCap.Cmp(gasTipCap) < 0 {
@@ -375,8 +433,15 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		rawTx *types.Transaction
 		err   error
 	)
+	// Preprocess native asset call arguments if present
+	contract, input, err = wrapNativeAssetCall(opts, contract, input)
+	if err != nil {
+		return nil, err
+	}
 	if opts.GasPrice != nil {
 		rawTx, err = c.createLegacyTx(opts, contract, input)
+	} else if opts.GasFeeCap != nil && opts.GasTipCap != nil {
+		rawTx, err = c.createDynamicTx(opts, contract, input, nil)
 	} else {
 		// Only query for basefee if gasPrice not specified
 		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil); errHead != nil {

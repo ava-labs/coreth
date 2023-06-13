@@ -31,8 +31,9 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/metrics"
 )
 
 // The fields below define the low level database schema prefixing.
@@ -55,8 +56,24 @@ var (
 	// snapshotGeneratorKey tracks the snapshot generation marker across restarts.
 	snapshotGeneratorKey = []byte("SnapshotGenerator")
 
+	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
+	txIndexTailKey = []byte("TransactionIndexTail")
+
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
+
+	// offlinePruningKey tracks runs of offline pruning
+	offlinePruningKey = []byte("OfflinePruning")
+
+	// populateMissingTriesKey tracks runs of trie backfills
+	populateMissingTriesKey = []byte("PopulateMissingTries")
+
+	// pruningDisabledKey tracks whether the node has ever run in archival mode
+	// to ensure that a user does not accidentally corrupt an archival node.
+	pruningDisabledKey = []byte("PruningDisabled")
+
+	// acceptorTipKey tracks the tip of the last accepted block that has been fully processed.
+	acceptorTipKey = []byte("AcceptorTipKey")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
@@ -72,14 +89,33 @@ var (
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 
-	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
+	// Path-based trie node scheme.
+	trieNodeAccountPrefix = []byte("A") // trieNodeAccountPrefix + hexPath -> trie node
+	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node
+
+	PreimagePrefix = []byte("secure-key-")      // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
 
-	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
-	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
+	// BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
+	BloomBitsIndexPrefix = []byte("iB")
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+
+	// State sync progress keys and prefixes
+	syncRootKey            = []byte("sync_root")     // indicates the root of the main account trie currently being synced
+	syncStorageTriesPrefix = []byte("sync_storage")  // syncStorageTriesPrefix + trie root + account hash: indicates a storage trie must be fetched for the account
+	syncSegmentsPrefix     = []byte("sync_segments") // syncSegmentsPrefix + trie root + 32-byte start key: indicates the trie at root has a segment starting at the specified key
+	CodeToFetchPrefix      = []byte("CP")            // CodeToFetchPrefix + code hash -> empty value tracks the outstanding code hashes we need to fetch.
+
+	// State sync progress key lengths
+	syncStorageTriesKeyLength = len(syncStorageTriesPrefix) + 2*common.HashLength
+	syncSegmentsKeyLength     = len(syncSegmentsPrefix) + 2*common.HashLength
+	codeToFetchKeyLength      = len(CodeToFetchPrefix) + common.HashLength
+
+	// State sync metadata
+	syncPerformedPrefix    = []byte("sync_performed")
+	syncPerformedKeyLength = len(syncPerformedPrefix) + wrappers.LongLen // prefix + block number as uint64
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -159,7 +195,7 @@ func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
 
 // preimageKey = preimagePrefix + hash
 func preimageKey(hash common.Hash) []byte {
-	return append(preimagePrefix, hash.Bytes()...)
+	return append(PreimagePrefix, hash.Bytes()...)
 }
 
 // codeKey = CodePrefix + hash
@@ -179,4 +215,14 @@ func IsCodeKey(key []byte) (bool, []byte) {
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
+}
+
+// accountTrieNodeKey = trieNodeAccountPrefix + nodePath.
+func accountTrieNodeKey(path []byte) []byte {
+	return append(trieNodeAccountPrefix, path...)
+}
+
+// storageTrieNodeKey = trieNodeStoragePrefix + accountHash + nodePath.
+func storageTrieNodeKey(accountHash common.Hash, path []byte) []byte {
+	return append(append(trieNodeStoragePrefix, accountHash.Bytes()...), path...)
 }

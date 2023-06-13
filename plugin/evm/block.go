@@ -4,8 +4,9 @@
 package evm
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,16 +14,24 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 
-	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 )
 
 var (
-	bonusBlocks              = ids.Set{}
 	bonusBlockMainnetHeights = make(map[uint64]ids.ID)
+	// first height that processed a TX included on a
+	// bonus block is the canonical height for that TX.
+	canonicalBlockMainnetHeights = []uint64{
+		102928, 103035, 103038, 103114, 103193,
+		103234, 103338, 103444, 103480, 103491,
+		103513, 103533, 103535, 103538, 103541,
+		103546, 103571, 103572, 103619,
+		103287, 103624, 103591,
+	}
+
+	errMissingUTXOs = errors.New("missing UTXOs")
 )
 
 func init() {
@@ -91,7 +100,6 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		bonusBlocks.Add(blkID)
 		bonusBlockMainnetHeights[height] = blkID
 	}
 }
@@ -105,11 +113,27 @@ type Block struct {
 	atomicTxs []*Tx
 }
 
+// newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
+func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
+	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(ethBlock.Time())
+	atomicTxs, err := ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, vm.codec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Block{
+		id:        ids.ID(ethBlock.Hash()),
+		ethBlock:  ethBlock,
+		vm:        vm,
+		atomicTxs: atomicTxs,
+	}, nil
+}
+
 // ID implements the snowman.Block interface
 func (b *Block) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
-func (b *Block) Accept() error {
+func (b *Block) Accept(context.Context) error {
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
@@ -118,70 +142,52 @@ func (b *Block) Accept() error {
 
 	b.status = choices.Accepted
 	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
-	if err := vm.chain.Accept(b.ethBlock); err != nil {
+	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
 	}
 	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
-	if len(b.atomicTxs) == 0 {
-		if err := b.vm.atomicTrie.Index(b.Height(), nil); err != nil {
-			return err
-		}
-		return vm.db.Commit()
-	}
-
-	batchChainsAndInputs, err := mergeAtomicOps(b.atomicTxs)
-	if err != nil {
-		return err
-	}
 	for _, tx := range b.atomicTxs {
 		// Remove the accepted transaction from the mempool
-		vm.mempool.RemoveTx(tx.ID())
+		vm.mempool.RemoveTx(tx)
 	}
 
-	// If [b] is a bonus block, then we commit the database without applying the requests from
-	// the atmoic transactions to shared memory.
-	if bonusBlocks.Contains(b.id) {
-		log.Info("skipping atomic tx acceptance on bonus block", "block", b.id)
-		return vm.db.Commit()
-	}
-
-	if err := b.indexAtomics(vm, b.Height(), b.atomicTxs, batchChainsAndInputs); err != nil {
-		return err
-	}
-
-	batch, err := vm.db.CommitBatch()
+	// Update VM state for atomic txs in this block. This includes updating the
+	// atomic tx repo, atomic trie, and shared memory.
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
 	if err != nil {
-		return fmt.Errorf("failed to create commit batch due to: %w", err)
-	}
-	return vm.ctx.SharedMemory.Apply(batchChainsAndInputs, batch)
-}
-
-// indexAtomics writes given list of atomic transactions and atomic operations to atomic repository
-// and atomic trie respectively
-func (b *Block) indexAtomics(vm *VM, height uint64, atomicTxs []*Tx, batchChainsAndInputs map[ids.ID]*atomic.Requests) error {
-	// Update indexes the vm maintains on accepted atomic txs.
-	if err := vm.atomicTxRepository.Write(height, atomicTxs); err != nil {
+		// should never occur since [b] must be verified before calling Accept
 		return err
 	}
-
-	return b.vm.atomicTrie.Index(height, batchChainsAndInputs)
+	commitBatch, err := b.vm.db.CommitBatch()
+	if err != nil {
+		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+	}
+	return atomicState.Accept(commitBatch)
 }
 
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
-func (b *Block) Reject() error {
+func (b *Block) Reject(context.Context) error {
 	b.status = choices.Rejected
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
-		b.vm.mempool.RemoveTx(tx.ID())
+		b.vm.mempool.RemoveTx(tx)
 		if err := b.vm.issueTx(tx, false /* set local to false when re-issuing */); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
-	return b.vm.chain.Reject(b.ethBlock)
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Reject
+		return err
+	}
+	if err := atomicState.Reject(); err != nil {
+		return err
+	}
+	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
 // SetStatus implements the InternalBlock interface allowing ChainState
@@ -209,76 +215,67 @@ func (b *Block) Timestamp() time.Time {
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() (params.Rules, error) {
+func (b *Block) syntacticVerify() error {
 	if b == nil || b.ethBlock == nil {
-		return params.Rules{}, errInvalidBlock
+		return errInvalidBlock
 	}
 
 	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.AvalancheRules(header.Number, new(big.Int).SetUint64(header.Time))
-	return rules, b.vm.getBlockValidator(rules).SyntacticVerify(b)
+	rules := b.vm.chainConfig.AvalancheRules(header.Number, header.Time)
+	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
 }
 
 // Verify implements the snowman.Block interface
-func (b *Block) Verify() error {
+func (b *Block) Verify(context.Context) error {
 	return b.verify(true)
 }
 
 func (b *Block) verify(writes bool) error {
-	rules, err := b.syntacticVerify()
-	if err != nil {
+	if err := b.syntacticVerify(); err != nil {
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 
-	if err := b.verifyAtomicTxs(rules); err != nil {
+	// verify UTXOs named in import txs are present in shared memory.
+	if err := b.verifyUTXOsPresent(); err != nil {
 		return err
 	}
 
-	return b.vm.chain.BlockChain().InsertBlockManual(b.ethBlock, writes)
+	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+	if err != nil || !writes {
+		// if an error occurred inserting the block into the chain
+		// or if we are not pinning to memory, unpin the atomic trie
+		// changes from memory (if they were pinned).
+		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
+			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
+		}
+	}
+	return err
 }
 
-func (b *Block) verifyAtomicTxs(rules params.Rules) error {
-	// Ensure that the parent was verified and inserted correctly.
-	ancestorID := b.Parent()
-	ancestorHash := common.Hash(ancestorID)
-	if !b.vm.chain.BlockChain().HasBlock(ancestorHash, b.Height()-1) {
-		return errRejectedParent
+// verifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
+// are not present in shared memory.
+func (b *Block) verifyUTXOsPresent() error {
+	blockHash := common.Hash(b.ID())
+	if b.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
+		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
+		return nil
 	}
 
-	// If the tx is an atomic tx, ensure that it doesn't conflict with any of
-	// its processing ancestry.
-	inputs := &ids.Set{}
+	if !b.vm.bootstrapped {
+		return nil
+	}
+
+	// verify UTXOs named in import txs are present in shared memory.
 	for _, atomicTx := range b.atomicTxs {
-		// If the ancestor is unknown, then the parent failed verification when
-		// it was called.
-		// If the ancestor is rejected, then this block shouldn't be inserted
-		// into the canonical chain because the parent will be missing.
-		ancestorInf, err := b.vm.GetBlockInternal(ancestorID)
+		utx := atomicTx.UnsignedAtomicTx
+		chainID, requests, err := utx.AtomicOps()
 		if err != nil {
-			return errRejectedParent
+			return err
 		}
-		if blkStatus := ancestorInf.Status(); blkStatus == choices.Unknown || blkStatus == choices.Rejected {
-			return errRejectedParent
-		}
-		ancestor, ok := ancestorInf.(*Block)
-		if !ok {
-			return fmt.Errorf("expected %s, parent of %s, to be *Block but is %T", ancestor.ID(), b.ID(), ancestorInf)
-		}
-		if bonusBlocks.Contains(b.id) {
-			log.Info("skipping atomic tx verification on bonus block", "block", b.id)
-		} else {
-			utx := atomicTx.UnsignedAtomicTx
-			if err := utx.SemanticVerify(b.vm, atomicTx, ancestor, b.ethBlock.BaseFee(), rules); err != nil {
-				return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, b.Height())
-			}
-			txInputs := utx.InputUTXOs()
-			if inputs.Overlaps(txInputs) {
-				return errConflictingAtomicInputs
-			}
-			inputs.Union(txInputs)
+		if _, err := b.vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
+			return fmt.Errorf("%w: %s", errMissingUTXOs, err)
 		}
 	}
-
 	return nil
 }
 

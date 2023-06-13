@@ -19,11 +19,22 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+var TestCallbacks = dummy.ConsensusCallbacks{
+	OnExtraStateChange: func(block *types.Block, sdb *state.StateDB) (*big.Int, *big.Int, error) {
+		sdb.SetBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
+		return nil, nil, nil
+	},
+	OnFinalizeAndAssemble: func(header *types.Header, sdb *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
+		sdb.SetBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
+		return nil, nil, nil, nil
+	},
+}
+
 type ChainTest struct {
 	Name     string
 	testFunc func(
 		t *testing.T,
-		create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error),
+		create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error),
 	)
 }
 
@@ -88,21 +99,20 @@ func copyMemDB(db ethdb.Database) (ethdb.Database, error) {
 }
 
 // checkBlockChainState creates a new BlockChain instance and checks that exporting each block from
-// genesis to last acceptd from the original instance yields the same last accepted block and state
+// genesis to last accepted from the original instance yields the same last accepted block and state
 // root.
 // Additionally, create another BlockChain instance from [originalDB] to ensure that BlockChain is
 // persisted correctly through a restart.
 func checkBlockChainState(
 	t *testing.T,
 	bc *BlockChain,
-	genesis *Genesis,
+	gspec *Genesis,
 	originalDB ethdb.Database,
-	create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error),
+	create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error),
 	checkState func(sdb *state.StateDB) error,
 ) (*BlockChain, *BlockChain, *BlockChain) {
 	var (
-		chainConfig       = bc.Config()
-		lastAcceptedBlock = bc.LastAcceptedBlock()
+		lastAcceptedBlock = bc.LastConsensusAcceptedBlock()
 		newDB             = rawdb.NewMemoryDatabase()
 	)
 
@@ -114,9 +124,7 @@ func checkBlockChainState(
 		t.Fatalf("Check state failed for original blockchain due to: %s", err)
 	}
 
-	_ = genesis.MustCommit(newDB)
-
-	newBlockChain, err := create(newDB, chainConfig, common.Hash{})
+	newBlockChain, err := create(newDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatalf("Failed to create new blockchain instance: %s", err)
 	}
@@ -133,8 +141,9 @@ func checkBlockChainState(
 			t.Fatalf("Failed to accept block %s:%d due to %s", block.Hash().Hex(), block.NumberU64(), err)
 		}
 	}
+	newBlockChain.DrainAcceptorQueue()
 
-	newLastAcceptedBlock := newBlockChain.LastAcceptedBlock()
+	newLastAcceptedBlock := newBlockChain.LastConsensusAcceptedBlock()
 	if newLastAcceptedBlock.Hash() != lastAcceptedBlock.Hash() {
 		t.Fatalf("Expected new blockchain to have last accepted block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), newLastAcceptedBlock.Hash().Hex(), newLastAcceptedBlock.NumberU64())
 	}
@@ -153,15 +162,15 @@ func checkBlockChainState(
 	if err != nil {
 		t.Fatal(err)
 	}
-	restartedChain, err := create(originalDB, chainConfig, lastAcceptedBlock.Hash())
+	restartedChain, err := create(originalDB, gspec, lastAcceptedBlock.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer restartedChain.Stop()
 	if currentBlock := restartedChain.CurrentBlock(); currentBlock.Hash() != lastAcceptedBlock.Hash() {
-		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
-	if restartedLastAcceptedBlock := restartedChain.LastAcceptedBlock(); restartedLastAcceptedBlock.Hash() != lastAcceptedBlock.Hash() {
+	if restartedLastAcceptedBlock := restartedChain.LastConsensusAcceptedBlock(); restartedLastAcceptedBlock.Hash() != lastAcceptedBlock.Hash() {
 		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), restartedLastAcceptedBlock.Hash().Hex(), restartedLastAcceptedBlock.NumberU64())
 	}
 
@@ -177,15 +186,12 @@ func checkBlockChainState(
 	return bc, newBlockChain, restartedChain
 }
 
-func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -195,10 +201,7 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
-
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,9 +209,7 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 
 	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 3, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -223,6 +224,7 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {
@@ -253,15 +255,12 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -271,10 +270,8 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,9 +279,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 
 	numBlocks := 129
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain1, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -294,7 +289,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 	}
 	// Generate the forked chain to be longer than the original chain to check for a regression where
 	// a longer chain can trigger a reorg.
-	chain2, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, numBlocks+1, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks+1, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction with a different amount to ensure [chain2] is different than [chain1].
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(5000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -333,7 +328,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[len(chain1)-1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
@@ -346,6 +341,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 	if err := blockchain.Accept(chain1[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
 	if blockchain.snaps != nil {
 		// Snap layer count should be 1 fewer
@@ -377,6 +373,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 		if err := blockchain.Accept(chain1[i]); err != nil {
 			t.Fatal(err)
 		}
+		blockchain.DrainAcceptorQueue()
 
 		if blockchain.snaps != nil {
 			// Snap layer count should decrease by 1 per Accept
@@ -386,7 +383,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 		}
 	}
 
-	lastAcceptedBlock := blockchain.LastAcceptedBlock()
+	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := chain1[len(chain1)-1]
 	if lastAcceptedBlock.Hash() != expectedLastAcceptedBlock.Hash() {
 		t.Fatalf("Expected last accepted block to be %s:%d, but found %s%d", expectedLastAcceptedBlock.Hash().Hex(), expectedLastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64())
@@ -421,7 +418,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, chai
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -429,7 +426,6 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		// We use two separate databases since GenerateChain commits the state roots to its underlying
 		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -439,10 +435,8 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,9 +444,7 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 
 	numBlocks := 3
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain1, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -460,7 +452,7 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain2, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction with a different amount to create a chain of blocks different from [chain1]
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(5000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -480,7 +472,7 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[len(chain1)-1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
@@ -492,13 +484,15 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 	if err := blockchain.Accept(chain2[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
+
 	for i := 0; i < len(chain1); i++ {
 		if err := blockchain.Reject(chain1[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	lastAcceptedBlock := blockchain.LastAcceptedBlock()
+	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := chain2[0]
 	if lastAcceptedBlock.Hash() != expectedLastAcceptedBlock.Hash() {
 		t.Fatalf("Expected last accepted block to be %s:%d, but found %s%d", expectedLastAcceptedBlock.Hash().Hex(), expectedLastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64())
@@ -533,15 +527,12 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, ch
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -551,10 +542,8 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,9 +551,7 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 
 	numBlocks := 3
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -581,7 +568,7 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain[len(chain)-1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
@@ -597,10 +584,10 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	currentBlock = blockchain.CurrentBlock()
 	expectedCurrentBlock = chain[0]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
-	lastAcceptedBlock := blockchain.LastAcceptedBlock()
+	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := blockchain.Genesis()
 	if lastAcceptedBlock.Hash() != expectedLastAcceptedBlock.Hash() {
 		t.Fatalf("Expected last accepted block to be %s:%d, but found %s%d", expectedLastAcceptedBlock.Hash().Hex(), expectedLastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64())
@@ -633,7 +620,9 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
-	lastAcceptedBlock = blockchain.LastAcceptedBlock()
+	blockchain.DrainAcceptorQueue()
+
+	lastAcceptedBlock = blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock = chain[0]
 	if lastAcceptedBlock.Hash() != expectedLastAcceptedBlock.Hash() {
 		t.Fatalf("Expected last accepted block to be %s:%d, but found %s%d", expectedLastAcceptedBlock.Hash().Hex(), expectedLastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64())
@@ -668,7 +657,7 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, chainC
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkUpdatedState)
 }
 
-func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -676,9 +665,6 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -691,10 +677,8 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 			addr3: {Balance: genesisBalance},
 		},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -702,9 +686,7 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 
 	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain1, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 20, 10, func(i int, gen *BlockGen) {
+	genDB, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 20, 10, func(i int, gen *BlockGen) {
 		// Send all funds back and forth between the two accounts
 		if i%2 == 0 {
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, genesisBalance, params.TxGas, nil, nil), signer, key1)
@@ -758,6 +740,8 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 			t.Fatal(err)
 		}
 	}
+	blockchain.DrainAcceptorQueue()
+
 	// Insert the forked chain [chain2] which starts at the 10th
 	// block in [chain1] ie. a block that is still in processing.
 	if _, err := blockchain.InsertChain(chain2); err != nil {
@@ -773,6 +757,7 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 	if err := blockchain.Accept(chain1[5]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 	for _, block := range chain3 {
 		if err := blockchain.Reject(block); err != nil {
 			t.Fatal(err)
@@ -784,12 +769,15 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 			t.Fatal(err)
 		}
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// Accept the first block in [chain2] and reject the
 	// subsequent blocks in [chain1] which would then be rejected.
 	if err := blockchain.Accept(chain2[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
+
 	for _, block := range chain1[10:] {
 		if err := blockchain.Reject(block); err != nil {
 			t.Fatal(err)
@@ -835,31 +823,22 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, chain
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
-	var (
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
-		chainDB = rawdb.NewMemoryDatabase()
-	)
+func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+	chainDB := rawdb.NewMemoryDatabase()
 
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer blockchain.Stop()
 
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 3, 10, func(i int, gen *BlockGen) {})
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -873,6 +852,7 @@ func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, chainConfig *p
 			t.Fatal(err)
 		}
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// Nothing to assert about the state
 	checkState := func(sdb *state.StateDB) error {
@@ -882,7 +862,7 @@ func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, chainConfig *p
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -900,10 +880,9 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
+	genesis := gspec.ToBlock()
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,6 +906,7 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
+
 	// Insert block and then set preference back (rewind) to last accepted blck
 	if err := blockchain.InsertBlock(chain[1]); err != nil {
 		t.Fatal(err)
@@ -934,6 +914,7 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 	if err := blockchain.SetPreference(chain[0]); err != nil {
 		t.Fatal(err)
 	}
+
 	// Re-insert and accept block
 	if err := blockchain.InsertBlock(chain[1]); err != nil {
 		t.Fatal(err)
@@ -941,6 +922,7 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 	if err := blockchain.Accept(chain[1]); err != nil {
 		t.Fatal(err)
 	}
+
 	// Build on top of the re-inserted block and accept
 	if err := blockchain.InsertBlock(chain[2]); err != nil {
 		t.Fatal(err)
@@ -948,6 +930,7 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 	if err := blockchain.Accept(chain[2]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// Nothing to assert about the state
 	checkState := func(sdb *state.StateDB) error {
@@ -978,22 +961,22 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, chainConfig 
 // Insert two different chains that result in the identical state root.
 // Once we accept one of the chains, we insert and accept A3 on top of the shared
 // state root
-//   G   (genesis)
-//  / \
-// A1  B1
-// |   |
-// A2  B2 (A2 and B2 represent two different paths to the identical state trie)
-// |
-// A3
-func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+//
+//	  G   (genesis)
+//	 / \
+//	A1  B1
+//	|   |
+//	A2  B2 (A2 and B2 represent two different paths to the identical state trie)
+//	|
+//	A3
+//
+//nolint:goimports
+func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -1003,19 +986,15 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer blockchain.Stop()
 
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain1, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 3, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {
 		if i < 2 {
 			// Send half the funds from addr1 to addr2 in one transaction per each of the two blocks in [chain1]
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(500000000), params.TxGas, nil, nil), signer, key1)
@@ -1026,7 +1005,7 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain2, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 2, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 2, 10, func(i int, gen *BlockGen) {
 		// Send 1/4 of the funds from addr1 to addr2 in tx1 and 3/4 of the funds in tx2. This will produce the identical state
 		// root in the second block of [chain2] as is present in the second block of [chain1].
 		if i == 0 {
@@ -1059,13 +1038,15 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	// Accept the first block in [chain1] and reject all of [chain2]
 	if err := blockchain.Accept(chain1[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
+
 	for _, block := range chain2 {
 		if err := blockchain.Reject(block); err != nil {
 			t.Fatal(err)
@@ -1078,8 +1059,9 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err := blockchain.Accept(chain1[1]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
-	lastAcceptedBlock := blockchain.LastAcceptedBlock()
+	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := chain1[1]
 	if lastAcceptedBlock.Hash() != expectedLastAcceptedBlock.Hash() {
 		t.Fatalf("Expected last accepted block to be %s:%d, but found %s%d", expectedLastAcceptedBlock.Hash().Hex(), expectedLastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64())
@@ -1091,6 +1073,7 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err := blockchain.Accept(chain1[2]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {
@@ -1121,22 +1104,22 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 // Once we insert both of the chains, we restart, insert both the chains again,
 // and then we accept one of the chains and accept A3 on top of the shared state
 // root
-//   G   (genesis)
-//  / \
-// A1  B1
-// |   |
-// A2  B2 (A2 and B2 represent two different paths to the identical state trie)
-// |
-// A3
-func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+//
+//	  G   (genesis)
+//	 / \
+//	A1  B1
+//	|   |
+//	A2  B2 (A2 and B2 represent two different paths to the identical state trie)
+//	|
+//	A3
+//
+//nolint:goimports
+func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -1146,18 +1129,14 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	signer := types.HomesteadSigner{}
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	chain1, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 3, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {
 		if i < 2 {
 			// Send half the funds from addr1 to addr2 in one transaction per each of the two blocks in [chain1]
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(500000000), params.TxGas, nil, nil), signer, key1)
@@ -1168,7 +1147,7 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain2, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 2, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 2, 10, func(i int, gen *BlockGen) {
 		// Send 1/4 of the funds from addr1 to addr2 in tx1 and 3/4 of the funds in tx2. This will produce the identical state
 		// root in the second block of [chain2] as is present in the second block of [chain1].
 		if i == 0 {
@@ -1201,12 +1180,13 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	blockchain.Stop()
 
-	blockchain, err = create(chainDB, gspec.Config, common.Hash{})
+	chainDB = rawdb.NewMemoryDatabase()
+	blockchain, err = create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1225,13 +1205,15 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	currentBlock = blockchain.CurrentBlock()
 	expectedCurrentBlock = chain1[1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	// Accept the first block in [chain1] and reject all of [chain2]
 	if err := blockchain.Accept(chain1[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
+
 	for _, block := range chain2 {
 		if err := blockchain.Reject(block); err != nil {
 			t.Fatal(err)
@@ -1244,8 +1226,9 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err := blockchain.Accept(chain1[1]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
-	lastAcceptedBlock := blockchain.LastAcceptedBlock()
+	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := chain1[1]
 	if lastAcceptedBlock.Hash() != expectedLastAcceptedBlock.Hash() {
 		t.Fatalf("Expected last accepted block to be %s:%d, but found %s%d", expectedLastAcceptedBlock.Hash().Hex(), expectedLastAcceptedBlock.NumberU64(), lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64())
@@ -1257,6 +1240,7 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err := blockchain.Accept(chain1[2]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {
@@ -1283,15 +1267,12 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -1301,10 +1282,8 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 		Config: params.TestChainConfig,
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1312,9 +1291,7 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 
 	// This call generates a chain of 3 blocks.
 	signer := types.LatestSigner(params.TestChainConfig)
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	_, _, err = GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 3, 0, func(i int, gen *BlockGen) {
+	_, _, _, err = GenerateChainWithGenesis(gspec, blockchain.engine, 3, 0, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
@@ -1339,15 +1316,12 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 	}
 }
 
-func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		// We use two separate databases since GenerateChain commits the state roots to its underlying
-		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -1357,10 +1331,8 @@ func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database,
 		Config: params.TestChainConfig,
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1368,19 +1340,8 @@ func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database,
 
 	// This call generates a chain of 3 blocks.
 	signer := types.LatestSigner(params.TestChainConfig)
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
-	eng := dummy.NewComplexETHFaker(&dummy.ConsensusCallbacks{
-		OnExtraStateChange: func(block *types.Block, sdb *state.StateDB) (*big.Int, *big.Int, error) {
-			sdb.SetBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
-			return nil, nil, nil
-		},
-		OnFinalizeAndAssemble: func(header *types.Header, sdb *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-			sdb.SetBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
-			return nil, nil, nil, nil
-		},
-	})
-	chain, _, err := GenerateChain(params.TestChainConfig, genesis, eng, genDB, 3, 0, func(i int, gen *BlockGen) {
+	eng := dummy.NewComplexETHFaker(&TestCallbacks)
+	_, chain, _, err := GenerateChainWithGenesis(gspec, eng, 3, 0, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
@@ -1409,7 +1370,7 @@ func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database,
 	}
 }
 
-func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, chainConfig *params.ChainConfig, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1417,7 +1378,6 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, c
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		// We use two separate databases since GenerateChain commits the state roots to its underlying
 		// database.
-		genDB   = rawdb.NewMemoryDatabase()
 		chainDB = rawdb.NewMemoryDatabase()
 	)
 
@@ -1427,10 +1387,8 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, c
 		Config: params.TestChainConfig,
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.MustCommit(genDB)
-	_ = gspec.MustCommit(chainDB)
 
-	blockchain, err := create(chainDB, gspec.Config, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1438,11 +1396,9 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, c
 
 	// This call generates a chain of 3 blocks.
 	signer := types.LatestSigner(params.TestChainConfig)
-	// Generate chain of blocks using [genDB] instead of [chainDB] to avoid writing
-	// to the BlockChain's database while generating blocks.
 	tip := big.NewInt(50000 * params.GWei)
 	transfer := big.NewInt(10000)
-	chain, _, err := GenerateChain(gspec.Config, genesis, blockchain.engine, genDB, 3, 0, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 0, func(i int, gen *BlockGen) {
 		feeCap := new(big.Int).Add(gen.BaseFee(), tip)
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
@@ -1472,6 +1428,7 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, c
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
+	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {

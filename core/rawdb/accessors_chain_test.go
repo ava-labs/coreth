@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 
@@ -111,8 +111,8 @@ func TestBlockStorage(t *testing.T) {
 	block := types.NewBlockWithHeader(&types.Header{
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
@@ -159,8 +159,8 @@ func TestPartialBlockStorage(t *testing.T) {
 	block := types.NewBlockWithHeader(&types.Header{
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	// Store a header and check that it's not recognized as a block
 	WriteHeader(db, block.Header())
@@ -191,7 +191,7 @@ func TestPartialBlockStorage(t *testing.T) {
 func TestCanonicalMappingStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
-	// Create a test canonical number and assinged hash to move around
+	// Create a test canonical number and assigned hash to move around
 	hash, number := common.Hash{0: 0xff}, uint64(314)
 	if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Non existent canonical mapping returned: %v", entry)
@@ -499,10 +499,6 @@ func TestReadLogs(t *testing.T) {
 		t.Fatalf("unexpected number of logs[1] returned, have %d want %d", have, want)
 	}
 
-	// Fill in log fields so we can compare their rlp encoding
-	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, 0, body.Transactions); err != nil {
-		t.Fatal(err)
-	}
 	for i, pr := range receipts {
 		for j, pl := range pr.Logs {
 			rlpHave, err := rlp.EncodeToBytes(newFullLogRLP(logs[i][j]))
@@ -601,7 +597,7 @@ func TestDeriveLogFields(t *testing.T) {
 
 func BenchmarkDecodeRLPLogs(b *testing.B) {
 	// Encoded receipts from block 0x14ee094309fbe8f70b65f45ebcc08fb33f126942d97464aad5eb91cfd1e2d269
-	buf, err := ioutil.ReadFile("testdata/stored_receipts.bin")
+	buf, err := os.ReadFile("testdata/stored_receipts.bin")
 	if err != nil {
 		b.Fatal(err)
 	}

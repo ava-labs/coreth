@@ -1,13 +1,3 @@
-// (c) 2020-2021, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -214,7 +204,6 @@
 			gasUsed: '0x' + bigInt(ctx.gasUsed).toString(16),
 			input:   toHex(ctx.input),
 			output:  toHex(ctx.output),
-			time:    ctx.time,
 		};
 		if (this.callstack[0].calls !== undefined) {
 			result.calls = this.callstack[0].calls;
@@ -244,7 +233,6 @@
 			input:   call.input,
 			output:  call.output,
 			error:   call.error,
-			time:    call.time,
 			calls:   call.calls,
 		}
 		for (var key in sorted) {

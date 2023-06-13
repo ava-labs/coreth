@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
 
 type gasPriceUpdater struct {
@@ -27,7 +28,7 @@ type gasPriceSetter interface {
 // handleGasPriceUpdates creates and runs an instance of
 func (vm *VM) handleGasPriceUpdates() {
 	gpu := &gasPriceUpdater{
-		setter:       vm.chain.GetTxPool(),
+		setter:       vm.txPool,
 		chainConfig:  vm.chainConfig,
 		shutdownChan: vm.shutdownChan,
 		wg:           &vm.shutdownWg,
@@ -62,13 +63,13 @@ func (gpu *gasPriceUpdater) start() {
 // 2) If [timestamp] has already passed, update is called immediately
 // 3) [timestamp] is some time in the future, starts a goroutine that will call update(price) at the time
 // given by [timestamp].
-func (gpu *gasPriceUpdater) handleUpdate(update func(price *big.Int), timestamp *big.Int, price *big.Int) bool {
+func (gpu *gasPriceUpdater) handleUpdate(update func(price *big.Int), timestamp *uint64, price *big.Int) bool {
 	if timestamp == nil {
 		return true
 	}
 
 	currentTime := time.Now()
-	upgradeTime := time.Unix(timestamp.Int64(), 0)
+	upgradeTime := utils.Uint64ToTime(timestamp)
 	if currentTime.After(upgradeTime) {
 		update(price)
 	} else {

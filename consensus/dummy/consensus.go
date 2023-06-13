@@ -31,6 +31,13 @@ var (
 	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
 )
 
+type Mode uint
+
+const (
+	ModeSkipHeader   Mode = 1 // Skip over header verification
+	ModeSkipBlockFee Mode = 2 // Skip block fee verification
+)
+
 type (
 	OnFinalizeAndAssembleCallbackType = func(header *types.Header, state *state.StateDB, txs []*types.Transaction) (extraData []byte, blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
 	OnAPIsCallbackType                = func(consensus.ChainHeaderReader) []rpc.API
@@ -42,8 +49,8 @@ type (
 	}
 
 	DummyEngine struct {
-		cb       *ConsensusCallbacks
-		ethFaker bool
+		cb            *ConsensusCallbacks
+		consensusMode Mode
 	}
 )
 
@@ -55,15 +62,15 @@ func NewDummyEngine(cb *ConsensusCallbacks) *DummyEngine {
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
-		cb:       new(ConsensusCallbacks),
-		ethFaker: true,
+		cb:            new(ConsensusCallbacks),
+		consensusMode: ModeSkipBlockFee,
 	}
 }
 
 func NewComplexETHFaker(cb *ConsensusCallbacks) *DummyEngine {
 	return &DummyEngine{
-		cb:       cb,
-		ethFaker: true,
+		cb:            cb,
+		consensusMode: ModeSkipBlockFee,
 	}
 }
 
@@ -71,9 +78,14 @@ func NewFaker() *DummyEngine {
 	return NewDummyEngine(new(ConsensusCallbacks))
 }
 
-func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
-	timestamp := new(big.Int).SetUint64(header.Time)
+func NewFullFaker() *DummyEngine {
+	return &DummyEngine{
+		cb:            new(ConsensusCallbacks),
+		consensusMode: ModeSkipHeader,
+	}
+}
 
+func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
 	// Verify that the gas limit is <= 2^63-1
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
@@ -82,9 +94,13 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
-	if config.IsApricotPhase1(timestamp) {
+	if config.IsCortina(header.Time) {
+		if header.GasLimit != params.CortinaGasLimit {
+			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", params.CortinaGasLimit, header.GasLimit)
+		}
+	} else if config.IsApricotPhase1(header.Time) {
 		if header.GasLimit != params.ApricotPhase1GasLimit {
-			return fmt.Errorf("expected gas limit to be %d, but found %d", params.ApricotPhase1GasLimit, header.GasLimit)
+			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", params.ApricotPhase1GasLimit, header.GasLimit)
 		}
 	} else {
 		// Verify that the gas limit remains within allowed bounds
@@ -99,7 +115,7 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 		}
 	}
 
-	if !config.IsApricotPhase3(timestamp) {
+	if !config.IsApricotPhase3(header.Time) {
 		// Verify BaseFee is not present before AP3
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
@@ -126,7 +142,7 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 	}
 
 	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
-	if !config.IsApricotPhase4(timestamp) {
+	if !config.IsApricotPhase4(header.Time) {
 		if header.BlockGasCost != nil {
 			return fmt.Errorf("invalid blockGasCost before fork: have %d, want <nil>", header.BlockGasCost)
 		}
@@ -138,7 +154,7 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 
 	// Enforce BlockGasCost constraints
 	blockGasCostStep := ApricotPhase4BlockGasCostStep
-	if config.IsApricotPhase5(timestamp) {
+	if config.IsApricotPhase5(header.Time) {
 		blockGasCostStep = ApricotPhase5BlockGasCostStep
 	}
 	expectedBlockGasCost := calcBlockGasCost(
@@ -172,20 +188,19 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 // modified from consensus.go
 func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
 	var (
-		config    = chain.Config()
-		timestamp = new(big.Int).SetUint64(header.Time)
+		config = chain.Config()
 	)
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
 	}
 	// Ensure that the header's extra-data section is of a reasonable size
-	if !config.IsApricotPhase3(timestamp) {
+	if !config.IsApricotPhase3(header.Time) {
 		if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 			return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
 		}
 	} else {
-		if len(header.Extra) != params.ApricotPhase3ExtraDataSize {
+		if uint64(len(header.Extra)) != params.ApricotPhase3ExtraDataSize {
 			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.ApricotPhase3ExtraDataSize, len(header.Extra))
 		}
 	}
@@ -205,8 +220,7 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header 
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// Verify the engine specific seal securing the block
-	return self.VerifySeal(chain, header)
+	return nil
 }
 
 func (self *DummyEngine) Author(header *types.Header) (common.Address, error) {
@@ -214,6 +228,10 @@ func (self *DummyEngine) Author(header *types.Header) (common.Address, error) {
 }
 
 func (self *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
+	// If we're running a full engine faking, accept any input as valid
+	if self.consensusMode == ModeSkipHeader {
+		return nil
+	}
 	// Short circuit if the header is known, or it's parent not
 	number := header.Number.Uint64()
 	if chain.GetHeader(header.Hash(), number) != nil {
@@ -234,10 +252,6 @@ func (self *DummyEngine) VerifyUncles(chain consensus.ChainReader, block *types.
 	return nil
 }
 
-func (self *DummyEngine) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
-	return nil
-}
-
 func (self *DummyEngine) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
 	header.Difficulty = big.NewInt(1)
 	return nil
@@ -250,7 +264,7 @@ func (self *DummyEngine) verifyBlockFee(
 	receipts []*types.Receipt,
 	extraStateChangeContribution *big.Int,
 ) error {
-	if self.ethFaker {
+	if self.consensusMode == ModeSkipBlockFee {
 		return nil
 	}
 	if baseFee == nil || baseFee.Sign() <= 0 {
@@ -274,7 +288,7 @@ func (self *DummyEngine) verifyBlockFee(
 		totalBlockFee.Add(totalBlockFee, extraStateChangeContribution)
 	}
 
-	// Calculate the total excess over the base fee that was paid towards the block fee
+	// Calculate the total excess (denominated in AVAX) over the base fee that was paid towards the block fee
 	for i, receipt := range receipts {
 		// Each transaction contributes the excess over the baseFee towards the totalBlockFee
 		// This should be equivalent to the sum of the "priority fees" within EIP-1559.
@@ -282,11 +296,19 @@ func (self *DummyEngine) verifyBlockFee(
 		if err != nil {
 			return err
 		}
+		// Multiply the [txFeePremium] by the gasUsed in the transaction since this gives the total AVAX that was paid
+		// above the amount required if the transaction had simply paid the minimum base fee for the block.
+		//
+		// Ex. LegacyTx paying a gas price of 100 gwei for 1M gas in a block with a base fee of 10 gwei.
+		// Total Fee = 100 gwei * 1M gas
+		// Minimum Fee = 10 gwei * 1M gas (minimum fee that would have been accepted for this transaction)
+		// Fee Premium = 90 gwei
+		// Total Overpaid = 90 gwei * 1M gas
 		blockFeeContribution.Mul(txFeePremium, gasUsed.SetUint64(receipt.GasUsed))
 		totalBlockFee.Add(totalBlockFee, blockFeeContribution)
 	}
 	// Calculate how much gas the [totalBlockFee] would purchase at the price level
-	// set by this block.
+	// set by the base fee of this block.
 	blockGas := new(big.Int).Div(totalBlockFee, baseFee)
 
 	// Require that the amount of gas purchased by the effective tips within the block, [blockGas],
@@ -315,7 +337,7 @@ func (self *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *type
 			return err
 		}
 	}
-	if chain.Config().IsApricotPhase4(new(big.Int).SetUint64(block.Time())) {
+	if chain.Config().IsApricotPhase4(block.Time()) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
@@ -327,9 +349,11 @@ func (self *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *type
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
 		}
 		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(new(big.Int).SetUint64(block.Time())) {
+		if chain.Config().IsApricotPhase5(block.Time()) {
 			blockGasCostStep = ApricotPhase5BlockGasCostStep
 		}
+		// Calculate the expected blockGasCost for this block.
+		// Note: this is a deterministic transtion that defines an exact block fee for this block.
 		blockGasCost := calcBlockGasCost(
 			ApricotPhase4TargetBlockRate,
 			ApricotPhase4MinBlockGasCost,
@@ -338,9 +362,11 @@ func (self *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *type
 			parent.BlockGasCost,
 			parent.Time, block.Time(),
 		)
+		// Verify the BlockGasCost set in the header matches the calculated value.
 		if blockBlockGasCost := block.BlockGasCost(); blockBlockGasCost == nil || !blockBlockGasCost.IsUint64() || blockBlockGasCost.Cmp(blockGasCost) != 0 {
 			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockBlockGasCost, blockGasCost)
 		}
+		// Verify the block fee was paid.
 		if err := self.verifyBlockFee(
 			block.BaseFee(),
 			block.BlockGasCost(),
@@ -368,18 +394,16 @@ func (self *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, 
 			return nil, err
 		}
 	}
-	if self.ethFaker {
-		extDataGasUsed = new(big.Int).Set(common.Big0)
-	}
-	if chain.Config().IsApricotPhase4(new(big.Int).SetUint64(header.Time)) {
+	if chain.Config().IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
 			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
 		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(new(big.Int).SetUint64(header.Time)) {
+		if chain.Config().IsApricotPhase5(header.Time) {
 			blockGasCostStep = ApricotPhase5BlockGasCostStep
 		}
+		// Calculate the required block gas cost for this block.
 		header.BlockGasCost = calcBlockGasCost(
 			ApricotPhase4TargetBlockRate,
 			ApricotPhase4MinBlockGasCost,
@@ -388,6 +412,7 @@ func (self *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, 
 			parent.BlockGasCost,
 			parent.Time, header.Time,
 		)
+		// Verify that this block covers the block fee.
 		if err := self.verifyBlockFee(
 			header.BaseFee,
 			header.BlockGasCost,
@@ -404,7 +429,7 @@ func (self *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(
 		header, txs, uncles, receipts, new(trie.Trie), extraData,
-		chain.Config().IsApricotPhase1(new(big.Int).SetUint64(header.Time)),
+		chain.Config().IsApricotPhase1(header.Time),
 	), nil
 }
 

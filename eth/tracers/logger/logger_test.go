@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,9 +17,12 @@
 package logger
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
@@ -42,23 +45,17 @@ func (d *dummyContractRef) SetBalance(*big.Int)        {}
 func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
-type dummyStatedb struct {
-	state.StateDB
-}
-
-func (*dummyStatedb) GetRefund() uint64                                       { return 1337 }
-func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
-func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
-
 func TestStoreCapture(t *testing.T) {
 	var (
-		logger   = NewStructLogger(nil)
-		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger})
-		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
+		logger     = NewStructLogger(nil)
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		env        = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, statedb, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger})
+		contract   = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash
 	logger.CaptureStart(env, common.Address{}, contract.Address(), false, nil, 0, nil)
+	statedb.Prepare(params.TestRules, common.Address{}, common.Address{}, nil, nil, nil)
 	_, err := env.Interpreter().Run(contract, []byte{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -70,5 +67,36 @@ func TestStoreCapture(t *testing.T) {
 	exp := common.BigToHash(big.NewInt(1))
 	if logger.storage[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
+	}
+}
+
+// Tests that blank fields don't appear in logs when JSON marshalled, to reduce
+// logs bloat and confusion. See https://github.com/ethereum/go-ethereum/issues/24487
+func TestStructLogMarshalingOmitEmpty(t *testing.T) {
+	tests := []struct {
+		name string
+		log  *StructLog
+		want string
+	}{
+		{"empty err and no fields", &StructLog{},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+		{"with err", &StructLog{Err: fmt.Errorf("this failed")},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP","error":"this failed"}`},
+		{"with mem", &StructLog{Memory: make([]byte, 2), MemorySize: 2},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000","memSize":2,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+		{"with 0-size mem", &StructLog{Memory: make([]byte, 0)},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blob, err := json.Marshal(tt.log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if have, want := string(blob), tt.want; have != want {
+				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
+			}
+		})
 	}
 }

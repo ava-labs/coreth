@@ -35,11 +35,7 @@ type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
-	switch op {
-	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-		return true
-	}
-	return false
+	return PUSH1 <= op && op <= PUSH32
 }
 
 // 0x0 range - arithmetic ops.
@@ -74,7 +70,10 @@ const (
 	SHL    OpCode = 0x1b
 	SHR    OpCode = 0x1c
 	SAR    OpCode = 0x1d
+)
 
+// 0x20 range - crypto.
+const (
 	KECCAK256 OpCode = 0x20
 )
 
@@ -125,6 +124,7 @@ const (
 	MSIZE    OpCode = 0x59
 	GAS      OpCode = 0x5a
 	JUMPDEST OpCode = 0x5b
+	PUSH0    OpCode = 0x5f
 )
 
 // 0x60 range - pushes.
@@ -232,6 +232,12 @@ const (
 	SELFDESTRUCT OpCode = 0xff
 )
 
+// 0xb0 range.
+const (
+	TLOAD  OpCode = 0xb3
+	TSTORE OpCode = 0xb4
+)
+
 // Since the opcodes aren't all in order we can't use a regular slice.
 var opCodeToString = map[OpCode]string{
 	// 0x0 range - arithmetic ops.
@@ -312,6 +318,7 @@ var opCodeToString = map[OpCode]string{
 	MSIZE:    "MSIZE",
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
+	PUSH0:    "PUSH0",
 
 	// 0x60 range - push.
 	PUSH1:  "PUSH1",
@@ -386,6 +393,10 @@ var opCodeToString = map[OpCode]string{
 	LOG3:   "LOG3",
 	LOG4:   "LOG4",
 
+	// 0xb0 range.
+	TLOAD:  "TLOAD",
+	TSTORE: "TSTORE",
+
 	// 0xf0 range.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
@@ -403,7 +414,7 @@ var opCodeToString = map[OpCode]string{
 func (op OpCode) String() string {
 	str := opCodeToString[op]
 	if len(str) == 0 {
-		return fmt.Sprintf("opcode 0x%x not defined", int(op))
+		return fmt.Sprintf("opcode %#x not defined", int(op))
 	}
 
 	return str
@@ -477,6 +488,9 @@ var stringToOp = map[string]OpCode{
 	"MSIZE":          MSIZE,
 	"GAS":            GAS,
 	"JUMPDEST":       JUMPDEST,
+	"PUSH0":          PUSH0,
+	"TLOAD":          TLOAD,
+	"TSTORE":         TSTORE,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,
 	"PUSH3":          PUSH3,

@@ -30,17 +30,20 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/precompile"
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
-
-	//lint:ignore SA1019 Needed for precompile
+	big2 "github.com/holiman/big"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -54,7 +57,7 @@ type PrecompiledContract interface {
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
-var PrecompiledContractsHomestead = map[common.Address]StatefulPrecompiledContract{
+var PrecompiledContractsHomestead = map[common.Address]precompile.StatefulPrecompiledContract{
 	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
 	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
 	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
@@ -63,7 +66,7 @@ var PrecompiledContractsHomestead = map[common.Address]StatefulPrecompiledContra
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
 // contracts used in the Byzantium release.
-var PrecompiledContractsByzantium = map[common.Address]StatefulPrecompiledContract{
+var PrecompiledContractsByzantium = map[common.Address]precompile.StatefulPrecompiledContract{
 	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
 	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
 	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
@@ -76,7 +79,7 @@ var PrecompiledContractsByzantium = map[common.Address]StatefulPrecompiledContra
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
-var PrecompiledContractsIstanbul = map[common.Address]StatefulPrecompiledContract{
+var PrecompiledContractsIstanbul = map[common.Address]precompile.StatefulPrecompiledContract{
 	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
 	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
 	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
@@ -90,7 +93,7 @@ var PrecompiledContractsIstanbul = map[common.Address]StatefulPrecompiledContrac
 
 // PrecompiledContractsApricotPhase2 contains the default set of pre-compiled Ethereum
 // contracts used in the Apricot Phase 2 release.
-var PrecompiledContractsApricotPhase2 = map[common.Address]StatefulPrecompiledContract{
+var PrecompiledContractsApricotPhase2 = map[common.Address]precompile.StatefulPrecompiledContract{
 	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
 	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
 	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
@@ -101,15 +104,70 @@ var PrecompiledContractsApricotPhase2 = map[common.Address]StatefulPrecompiledCo
 	common.BytesToAddress([]byte{8}): newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
 	common.BytesToAddress([]byte{9}): newWrappedPrecompiledContract(&blake2F{}),
 	genesisContractAddr:              &deprecatedContract{},
-	nativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
-	nativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
+	NativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
+	NativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
+}
+
+// PrecompiledContractsApricotPhasePre6 contains the default set of pre-compiled Ethereum
+// contracts used in the PrecompiledContractsApricotPhasePre6 release.
+var PrecompiledContractsApricotPhasePre6 = map[common.Address]precompile.StatefulPrecompiledContract{
+	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
+	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
+	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
+	common.BytesToAddress([]byte{4}): newWrappedPrecompiledContract(&dataCopy{}),
+	common.BytesToAddress([]byte{5}): newWrappedPrecompiledContract(&bigModExp{eip2565: true}),
+	common.BytesToAddress([]byte{6}): newWrappedPrecompiledContract(&bn256AddIstanbul{}),
+	common.BytesToAddress([]byte{7}): newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
+	common.BytesToAddress([]byte{8}): newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
+	common.BytesToAddress([]byte{9}): newWrappedPrecompiledContract(&blake2F{}),
+	genesisContractAddr:              &deprecatedContract{},
+	NativeAssetBalanceAddr:           &deprecatedContract{},
+	NativeAssetCallAddr:              &deprecatedContract{},
+}
+
+// PrecompiledContractsApricotPhase6 contains the default set of pre-compiled Ethereum
+// contracts used in the Apricot Phase 6 release.
+var PrecompiledContractsApricotPhase6 = map[common.Address]precompile.StatefulPrecompiledContract{
+	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
+	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
+	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
+	common.BytesToAddress([]byte{4}): newWrappedPrecompiledContract(&dataCopy{}),
+	common.BytesToAddress([]byte{5}): newWrappedPrecompiledContract(&bigModExp{eip2565: true}),
+	common.BytesToAddress([]byte{6}): newWrappedPrecompiledContract(&bn256AddIstanbul{}),
+	common.BytesToAddress([]byte{7}): newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
+	common.BytesToAddress([]byte{8}): newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
+	common.BytesToAddress([]byte{9}): newWrappedPrecompiledContract(&blake2F{}),
+	genesisContractAddr:              &deprecatedContract{},
+	NativeAssetBalanceAddr:           &nativeAssetBalance{gasCost: params.AssetBalanceApricot},
+	NativeAssetCallAddr:              &nativeAssetCall{gasCost: params.AssetCallApricot},
+}
+
+// PrecompiledContractsBanff contains the default set of pre-compiled Ethereum
+// contracts used in the Banff release.
+var PrecompiledContractsBanff = map[common.Address]precompile.StatefulPrecompiledContract{
+	common.BytesToAddress([]byte{1}): newWrappedPrecompiledContract(&ecrecover{}),
+	common.BytesToAddress([]byte{2}): newWrappedPrecompiledContract(&sha256hash{}),
+	common.BytesToAddress([]byte{3}): newWrappedPrecompiledContract(&ripemd160hash{}),
+	common.BytesToAddress([]byte{4}): newWrappedPrecompiledContract(&dataCopy{}),
+	common.BytesToAddress([]byte{5}): newWrappedPrecompiledContract(&bigModExp{eip2565: true}),
+	common.BytesToAddress([]byte{6}): newWrappedPrecompiledContract(&bn256AddIstanbul{}),
+	common.BytesToAddress([]byte{7}): newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
+	common.BytesToAddress([]byte{8}): newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
+	common.BytesToAddress([]byte{9}): newWrappedPrecompiledContract(&blake2F{}),
+	genesisContractAddr:              &deprecatedContract{},
+	NativeAssetBalanceAddr:           &deprecatedContract{},
+	NativeAssetCallAddr:              &deprecatedContract{},
 }
 
 var (
-	PrecompiledAddressesApricotPhase2 []common.Address
-	PrecompiledAddressesIstanbul      []common.Address
-	PrecompiledAddressesByzantium     []common.Address
-	PrecompiledAddressesHomestead     []common.Address
+	PrecompiledAddressesBanff            []common.Address
+	PrecompiledAddressesApricotPhase6    []common.Address
+	PrecompiledAddressesApricotPhasePre6 []common.Address
+	PrecompiledAddressesApricotPhase2    []common.Address
+	PrecompiledAddressesIstanbul         []common.Address
+	PrecompiledAddressesByzantium        []common.Address
+	PrecompiledAddressesHomestead        []common.Address
+	PrecompileAllNativeAddresses         map[common.Address]struct{}
 )
 
 func init() {
@@ -125,11 +183,58 @@ func init() {
 	for k := range PrecompiledContractsApricotPhase2 {
 		PrecompiledAddressesApricotPhase2 = append(PrecompiledAddressesApricotPhase2, k)
 	}
+	for k := range PrecompiledContractsApricotPhasePre6 {
+		PrecompiledAddressesApricotPhasePre6 = append(PrecompiledAddressesApricotPhasePre6, k)
+	}
+	for k := range PrecompiledContractsApricotPhase6 {
+		PrecompiledAddressesApricotPhase6 = append(PrecompiledAddressesApricotPhase6, k)
+	}
+	for k := range PrecompiledContractsBanff {
+		PrecompiledAddressesBanff = append(PrecompiledAddressesBanff, k)
+	}
+
+	// Set of all native precompile addresses that are in use
+	// Note: this will repeat some addresses, but this is cheap and makes the code clearer.
+	PrecompileAllNativeAddresses = make(map[common.Address]struct{})
+	addrsList := append(PrecompiledAddressesHomestead, PrecompiledAddressesByzantium...)
+	addrsList = append(addrsList, PrecompiledAddressesIstanbul...)
+	addrsList = append(addrsList, PrecompiledAddressesApricotPhase2...)
+	addrsList = append(addrsList, PrecompiledAddressesApricotPhasePre6...)
+	addrsList = append(addrsList, PrecompiledAddressesApricotPhase6...)
+	addrsList = append(addrsList, PrecompiledAddressesBanff...)
+	for _, k := range addrsList {
+		PrecompileAllNativeAddresses[k] = struct{}{}
+	}
+
+	// Ensure that this package will panic during init if there is a conflict present with the declared
+	// precompile addresses.
+	for _, k := range precompile.UsedAddresses {
+		if _, ok := PrecompileAllNativeAddresses[k]; ok {
+			panic(fmt.Errorf("precompile address collides with existing native address: %s", k))
+		}
+		if k == constants.BlackholeAddr {
+			panic(fmt.Errorf("cannot use address %s for stateful precompile - overlaps with blackhole address", k))
+		}
+
+		// check that [k] belongs to at least one ReservedRange
+		found := false
+		for _, reservedRange := range precompile.ReservedRanges {
+			if reservedRange.Contains(k) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			panic(fmt.Errorf("address %s used for stateful precompile but not specified in any reserved range", k))
+		}
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsBanff:
+		return PrecompiledAddressesBanff
 	case rules.IsApricotPhase2:
 		return PrecompiledAddressesApricotPhase2
 	case rules.IsIstanbul:
@@ -149,7 +254,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
-		return nil, 0, ErrOutOfGas
+		return nil, 0, vmerrs.ErrOutOfGas
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(input)
@@ -236,7 +341,7 @@ func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
-	return in, nil
+	return common.CopyBytes(in), nil
 }
 
 // bigModExp implements a native big integer exponential modular operation.
@@ -264,10 +369,10 @@ var (
 
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
-// def mult_complexity(x):
-//    if x <= 64: return x ** 2
-//    elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//    else: return x ** 2 // 16 + 480 * x - 199680
+//	def mult_complexity(x):
+//		if x <= 64: return x ** 2
+//		elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
@@ -378,15 +483,22 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
-		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
-		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		base = new(big2.Int).SetBytes(getData(input, 0, baseLen))
+		exp  = new(big2.Int).SetBytes(getData(input, baseLen, expLen))
+		mod  = new(big2.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		v    []byte
 	)
-	if mod.BitLen() == 0 {
+	switch {
+	case mod.BitLen() == 0:
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
+	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
+		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+		v = base.Mod(base, mod).Bytes()
+	default:
+		v = base.Exp(base, exp, mod).Bytes()
 	}
-	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
+	return common.LeftPadBytes(v, int(modLen)), nil
 }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
@@ -590,7 +702,7 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 	// Parse the input into the Blake2b call parameters
 	var (
 		rounds = binary.BigEndian.Uint32(input[0:4])
-		final  = (input[212] == blake2FFinalBlockBytes)
+		final  = input[212] == blake2FFinalBlockBytes
 
 		h [8]uint64
 		m [16]uint64
@@ -936,7 +1048,7 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 			return nil, errBLS12381G2PointSubgroup
 		}
 
-		// Update pairing engine with G1 and G2 ponits
+		// Update pairing engine with G1 and G2 points
 		e.AddPair(p1, p2)
 	}
 	// Prepare 32 byte output

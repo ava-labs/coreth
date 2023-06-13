@@ -29,15 +29,15 @@ package trie
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/ethdb/memorydb"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting
 // to retrieve the meta root.
 func TestDatabaseMetarootFetch(t *testing.T) {
-	db := NewDatabase(memorydb.New())
-	if _, err := db.Node(common.Hash{}); err == nil {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	if _, err := db.RawNode(common.Hash{}); err == nil {
 		t.Fatalf("metaroot retrieval succeeded")
 	}
 }

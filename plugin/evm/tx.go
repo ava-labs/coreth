@@ -20,8 +20,9 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/avalanchego/utils/crypto"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -94,8 +95,8 @@ type UnsignedTx interface {
 	ID() ids.ID
 	GasUsed(fixedFee bool) (uint64, error)
 	Burned(assetID ids.ID) (uint64, error)
-	UnsignedBytes() []byte
 	Bytes() []byte
+	SignedBytes() []byte
 }
 
 // UnsignedAtomicTx is an unsigned operation that can be atomically accepted
@@ -103,7 +104,7 @@ type UnsignedAtomicTx interface {
 	UnsignedTx
 
 	// InputUTXOs returns the UTXOs this tx consumes
-	InputUTXOs() ids.Set
+	InputUTXOs() set.Set[ids.ID]
 	// Verify attempts to verify that the transaction is well formed
 	Verify(ctx *snow.Context, rules params.Rules) error
 	// Attempts to verify this transaction with the provided state.
@@ -126,7 +127,7 @@ type Tx struct {
 }
 
 // Sign this transaction with the provided signers
-func (tx *Tx) Sign(c codec.Manager, signers [][]*crypto.PrivateKeySECP256K1R) error {
+func (tx *Tx) Sign(c codec.Manager, signers [][]*secp256k1.PrivateKey) error {
 	unsignedBytes, err := c.Marshal(codecVersion, &tx.UnsignedAtomicTx)
 	if err != nil {
 		return fmt.Errorf("couldn't marshal UnsignedAtomicTx: %w", err)
@@ -136,7 +137,7 @@ func (tx *Tx) Sign(c codec.Manager, signers [][]*crypto.PrivateKeySECP256K1R) er
 	hash := hashing.ComputeHash256(unsignedBytes)
 	for _, keys := range signers {
 		cred := &secp256k1fx.Credential{
-			Sigs: make([][crypto.SECP256K1RSigLen]byte, len(keys)),
+			Sigs: make([][secp256k1.SignatureLen]byte, len(keys)),
 		}
 		for i, key := range keys {
 			sig, err := key.SignHash(hash) // Sign hash
@@ -193,7 +194,7 @@ func (tx *Tx) BlockFeeContribution(fixedFee bool, avaxAssetID ids.ID, baseFee *b
 // innerSortInputsAndSigners implements sort.Interface for EVMInput
 type innerSortInputsAndSigners struct {
 	inputs  []EVMInput
-	signers [][]*crypto.PrivateKeySECP256K1R
+	signers [][]*secp256k1.PrivateKey
 }
 
 func (ins *innerSortInputsAndSigners) Less(i, j int) bool {
@@ -212,7 +213,7 @@ func (ins *innerSortInputsAndSigners) Swap(i, j int) {
 }
 
 // SortEVMInputsAndSigners sorts the list of EVMInputs based on the addresses and assetIDs
-func SortEVMInputsAndSigners(inputs []EVMInput, signers [][]*crypto.PrivateKeySECP256K1R) {
+func SortEVMInputsAndSigners(inputs []EVMInput, signers [][]*secp256k1.PrivateKey) {
 	sort.Sort(&innerSortInputsAndSigners{inputs: inputs, signers: signers})
 }
 
@@ -293,16 +294,22 @@ func mergeAtomicOps(txs []*Tx) (map[ids.ID]*atomic.Requests, error) {
 	}
 	output := make(map[ids.ID]*atomic.Requests)
 	for _, tx := range txs {
-		chainID, txRequest, err := tx.UnsignedAtomicTx.AtomicOps()
+		chainID, txRequests, err := tx.UnsignedAtomicTx.AtomicOps()
 		if err != nil {
 			return nil, err
 		}
-		if request, exists := output[chainID]; exists {
-			request.PutRequests = append(request.PutRequests, txRequest.PutRequests...)
-			request.RemoveRequests = append(request.RemoveRequests, txRequest.RemoveRequests...)
-		} else {
-			output[chainID] = txRequest
-		}
+		mergeAtomicOpsToMap(output, chainID, txRequests)
 	}
 	return output, nil
+}
+
+// mergeAtomicOps merges atomic ops for [chainID] represented by [requests]
+// to the [output] map provided.
+func mergeAtomicOpsToMap(output map[ids.ID]*atomic.Requests, chainID ids.ID, requests *atomic.Requests) {
+	if request, exists := output[chainID]; exists {
+		request.PutRequests = append(request.PutRequests, requests.PutRequests...)
+		request.RemoveRequests = append(request.RemoveRequests, requests.RemoveRequests...)
+	} else {
+		output[chainID] = requests
+	}
 }

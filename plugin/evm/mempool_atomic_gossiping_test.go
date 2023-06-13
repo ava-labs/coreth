@@ -4,12 +4,14 @@
 package evm
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils/crypto"
+	"github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -27,7 +29,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			// we use AP3 genesis here to not trip any block fees
 			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase3, "", "")
 			defer func() {
-				err := vm.Shutdown()
+				err := vm.Shutdown(context.Background())
 				assert.NoError(err)
 			}()
 			mempool := vm.mempool
@@ -65,7 +67,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// Show that BuildBlock generates a block containing [txID] and that it is
 			// still present in the mempool.
-			blk, err := vm.BuildBlock()
+			blk, err := vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
 			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(*Block)
@@ -76,10 +78,10 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.has(txID)
 			assert.True(has, "tx should stay in mempool until block is accepted")
 
-			err = blk.Verify()
+			err = blk.Verify(context.Background())
 			assert.NoError(err)
 
-			err = blk.Accept()
+			err = blk.Accept(context.Background())
 			assert.NoError(err)
 
 			has = mempool.has(txID)
@@ -93,9 +95,9 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase4, "", "")
+	_, vm, _, sharedMemory, _ := GenesisVM(t, true, "", "", "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	mempool := vm.mempool
@@ -165,12 +167,12 @@ func createImportTx(t *testing.T, vm *VM, txID ids.ID, feeAmount uint64) *Tx {
 	}
 
 	// Sort the inputs and outputs to ensure the transaction is canonical
-	avax.SortTransferableInputs(importTx.ImportedInputs)
+	utils.Sort(importTx.ImportedInputs)
 	SortEVMOutputs(importTx.Outs)
 
 	tx := &Tx{UnsignedAtomicTx: importTx}
 	// Sign with the correct key
-	if err := tx.Sign(vm.codec, [][]*crypto.PrivateKeySECP256K1R{{testKeys[0]}}); err != nil {
+	if err := tx.Sign(vm.codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -184,7 +186,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	// we use AP3 genesis here to not trip any block fees
 	_, vm, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase3, "", "")
 	defer func() {
-		err := vm.Shutdown()
+		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
 	mempool := vm.mempool

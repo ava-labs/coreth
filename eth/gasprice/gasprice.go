@@ -39,27 +39,54 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	lru "github.com/hashicorp/golang-lru"
+)
+
+const (
+	// DefaultMaxCallBlockHistory is the number of blocks that can be fetched in
+	// a single call to eth_feeHistory.
+	DefaultMaxCallBlockHistory int = 2048
+	// DefaultMaxBlockHistory is the number of blocks from the last accepted
+	// block that can be fetched in eth_feeHistory.
+	//
+	// DefaultMaxBlockHistory is chosen to be a value larger than the required
+	// fee lookback window that MetaMask uses (20k blocks).
+	DefaultMaxBlockHistory int = 25_000
+	// DefaultFeeHistoryCacheSize is chosen to be some value larger than
+	// [DefaultMaxBlockHistory] to ensure all block lookups can be cached when
+	// serving a fee history query.
+	DefaultFeeHistoryCacheSize int = 30_000
 )
 
 var (
-	DefaultMaxPrice   = big.NewInt(150 * params.GWei)
-	DefaultMinPrice   = big.NewInt(0 * params.GWei)
-	DefaultMinBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
-	DefaultMinGasUsed = big.NewInt(6_000_000) // block gas limit is 8,000,000
+	DefaultMaxPrice           = big.NewInt(150 * params.GWei)
+	DefaultMinPrice           = big.NewInt(0 * params.GWei)
+	DefaultMinBaseFee         = big.NewInt(params.ApricotPhase3InitialBaseFee)
+	DefaultMinGasUsed         = big.NewInt(6_000_000) // block gas limit is 8,000,000
+	DefaultMaxLookbackSeconds = uint64(80)
 )
 
 type Config struct {
-	Blocks           int
-	Percentile       int
-	MaxHeaderHistory int
-	MaxBlockHistory  int
-	MaxPrice         *big.Int `toml:",omitempty"`
-	MinPrice         *big.Int `toml:",omitempty"`
-	MinGasUsed       *big.Int `toml:",omitempty"`
+	// Blocks specifies the number of blocks to fetch during gas price estimation.
+	Blocks int
+	// Percentile is a value between 0 and 100 that we use during gas price estimation to choose
+	// the gas price estimate in which Percentile% of the gas estimate values in the array fall below it
+	Percentile int
+	// MaxLookbackSeconds specifies the maximum number of seconds that current timestamp
+	// can differ from block timestamp in order to be included in gas price estimation
+	MaxLookbackSeconds uint64
+	// MaxCallBlockHistory specifies the maximum number of blocks that can be
+	// fetched in a single eth_feeHistory call.
+	MaxCallBlockHistory int
+	// MaxBlockHistory specifies the furthest back behind the last accepted block that can
+	// be requested by fee history.
+	MaxBlockHistory int
+	MaxPrice        *big.Int `toml:",omitempty"`
+	MinPrice        *big.Int `toml:",omitempty"`
+	MinGasUsed      *big.Int `toml:",omitempty"`
 }
 
 // OracleBackend includes all necessary background APIs for oracle.
@@ -67,10 +94,11 @@ type OracleBackend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
-	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	ChainConfig() *params.ChainConfig
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribeChainAcceptedEvent(ch chan<- core.ChainEvent) event.Subscription
 	MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error)
+	LastAcceptedBlock() *types.Block
 }
 
 // Oracle recommends gas prices based on the content of recent
@@ -84,25 +112,25 @@ type Oracle struct {
 	// sink to 0 during a period of slow block production, such that nobody's
 	// transactions will be included until the full block fee duration has
 	// elapsed.
-	minPrice *big.Int
-	maxPrice *big.Int
-	// [minGasUsed] ensures we don't recommend users pay non-zero tips when other
-	// users are paying a tip to unnecessarily expedite block production.
-	minGasUsed *big.Int
-	cacheLock  sync.RWMutex
-	fetchLock  sync.Mutex
+	minPrice  *big.Int
+	maxPrice  *big.Int
+	cacheLock sync.RWMutex
+	fetchLock sync.Mutex
 
 	// clock to decide what set of rules to use when recommending a gas price
 	clock mockable.Clock
 
-	checkBlocks, percentile           int
-	maxHeaderHistory, maxBlockHistory int
-	historyCache                      *lru.Cache
+	checkBlocks, percentile int
+	maxLookbackSeconds      uint64
+	maxCallBlockHistory     int
+	maxBlockHistory         int
+	historyCache            *lru.Cache[uint64, *slimBlock]
+	feeInfoProvider         *feeInfoProvider
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend OracleBackend, config Config) *Oracle {
+func NewOracle(backend OracleBackend, config Config) (*Oracle, error) {
 	blocks := config.Blocks
 	if blocks < 1 {
 		blocks = 1
@@ -115,6 +143,11 @@ func NewOracle(backend OracleBackend, config Config) *Oracle {
 	} else if percent > 100 {
 		percent = 100
 		log.Warn("Sanitizing invalid gasprice oracle sample percentile", "provided", config.Percentile, "updated", percent)
+	}
+	maxLookbackSeconds := config.MaxLookbackSeconds
+	if maxLookbackSeconds <= 0 {
+		maxLookbackSeconds = DefaultMaxLookbackSeconds
+		log.Warn("Sanitizing invalid gasprice oracle max block seconds", "provided", config.MaxLookbackSeconds, "updated", maxLookbackSeconds)
 	}
 	maxPrice := config.MaxPrice
 	if maxPrice == nil || maxPrice.Int64() <= 0 {
@@ -131,18 +164,18 @@ func NewOracle(backend OracleBackend, config Config) *Oracle {
 		minGasUsed = DefaultMinGasUsed
 		log.Warn("Sanitizing invalid gasprice oracle min gas used", "provided", config.MinGasUsed, "updated", minGasUsed)
 	}
-	maxHeaderHistory := config.MaxHeaderHistory
-	if maxHeaderHistory < 1 {
-		maxHeaderHistory = 1
-		log.Warn("Sanitizing invalid gasprice oracle max header history", "provided", config.MaxHeaderHistory, "updated", maxHeaderHistory)
+	maxCallBlockHistory := config.MaxCallBlockHistory
+	if maxCallBlockHistory < 1 {
+		maxCallBlockHistory = DefaultMaxCallBlockHistory
+		log.Warn("Sanitizing invalid gasprice oracle max call block history", "provided", config.MaxCallBlockHistory, "updated", maxCallBlockHistory)
 	}
 	maxBlockHistory := config.MaxBlockHistory
 	if maxBlockHistory < 1 {
-		maxBlockHistory = 1
+		maxBlockHistory = DefaultMaxBlockHistory
 		log.Warn("Sanitizing invalid gasprice oracle max block history", "provided", config.MaxBlockHistory, "updated", maxBlockHistory)
 	}
 
-	cache, _ := lru.New(2048)
+	cache := lru.NewCache[uint64, *slimBlock](DefaultFeeHistoryCacheSize)
 	headEvent := make(chan core.ChainHeadEvent, 1)
 	backend.SubscribeChainHeadEvent(headEvent)
 	go func() {
@@ -154,23 +187,27 @@ func NewOracle(backend OracleBackend, config Config) *Oracle {
 			lastHead = ev.Block.Hash()
 		}
 	}()
-
-	return &Oracle{
-		backend:          backend,
-		lastPrice:        minPrice,
-		lastBaseFee:      DefaultMinBaseFee,
-		minPrice:         minPrice,
-		maxPrice:         maxPrice,
-		minGasUsed:       minGasUsed,
-		checkBlocks:      blocks,
-		percentile:       percent,
-		maxHeaderHistory: maxHeaderHistory,
-		maxBlockHistory:  maxBlockHistory,
-		historyCache:     cache,
+	feeInfoProvider, err := newFeeInfoProvider(backend, minGasUsed.Uint64(), config.Blocks)
+	if err != nil {
+		return nil, err
 	}
+	return &Oracle{
+		backend:             backend,
+		lastPrice:           minPrice,
+		lastBaseFee:         DefaultMinBaseFee,
+		minPrice:            minPrice,
+		maxPrice:            maxPrice,
+		checkBlocks:         blocks,
+		percentile:          percent,
+		maxLookbackSeconds:  maxLookbackSeconds,
+		maxCallBlockHistory: maxCallBlockHistory,
+		maxBlockHistory:     maxBlockHistory,
+		historyCache:        cache,
+		feeInfoProvider:     feeInfoProvider,
+	}, nil
 }
 
-// EstiamteBaseFee returns an estimate of what the base fee will be on a block
+// EstimateBaseFee returns an estimate of what the base fee will be on a block
 // produced at the current time. If ApricotPhase3 has not been activated, it may
 // return a nil value and a nil error.
 func (oracle *Oracle) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
@@ -202,27 +239,20 @@ func (oracle *Oracle) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
 // If the latest block has a nil base fee, this function will return nil as the base fee
 // of the next block.
 func (oracle *Oracle) estimateNextBaseFee(ctx context.Context) (*big.Int, error) {
-	// Fetch the most recent block by number
-	block, err := oracle.backend.BlockByNumber(ctx, rpc.LatestBlockNumber)
+	// Fetch the most recent header by number
+	header, err := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
 		return nil, err
 	}
 	// If the fetched block does not have a base fee, return nil as the base fee
-	if block.BaseFee() == nil {
+	if header.BaseFee == nil {
 		return nil, nil
 	}
 
-	// If the current time is prior to the parent timestamp, then we use the parent
-	// timestamp instead.
-	header := block.Header()
-	timestamp := oracle.clock.Unix()
-	if timestamp < header.Time {
-		timestamp = header.Time
-	}
 	// If the block does have a baseFee, calculate the next base fee
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
-	_, nextBaseFee, err := dummy.CalcBaseFee(oracle.backend.ChainConfig(), header, timestamp)
+	_, nextBaseFee, err := dummy.EstimateNextBaseFee(oracle.backend.ChainConfig(), header, oracle.clock.Unix())
 	return nextBaseFee, err
 }
 
@@ -288,38 +318,41 @@ func (oracle *Oracle) suggestDynamicFees(ctx context.Context) (*big.Int, *big.In
 		return new(big.Int).Set(lastPrice), new(big.Int).Set(lastBaseFee), nil
 	}
 	var (
-		sent, exp      int
-		number         = head.Number.Uint64()
-		result         = make(chan results, oracle.checkBlocks)
-		quit           = make(chan struct{})
-		tipResults     []*big.Int
-		baseFeeResults []*big.Int
+		latestBlockNumber     = head.Number.Uint64()
+		lowerBlockNumberLimit = uint64(0)
+		currentTime           = oracle.clock.Unix()
+		tipResults            []*big.Int
+		baseFeeResults        []*big.Int
 	)
-	for sent < oracle.checkBlocks && number > 0 {
-		go oracle.getBlockTips(ctx, number, result, quit)
-		sent++
-		exp++
-		number--
+
+	if uint64(oracle.checkBlocks) <= latestBlockNumber {
+		lowerBlockNumberLimit = latestBlockNumber - uint64(oracle.checkBlocks)
 	}
-	for exp > 0 {
-		res := <-result
-		if res.err != nil {
-			close(quit)
-			return new(big.Int).Set(lastPrice), new(big.Int).Set(lastBaseFee), res.err
+
+	// Process block headers in the range calculated for this gas price estimation.
+	for i := latestBlockNumber; i > lowerBlockNumberLimit; i-- {
+		feeInfo, err := oracle.getFeeInfo(ctx, i)
+		if err != nil {
+			return new(big.Int).Set(lastPrice), new(big.Int).Set(lastBaseFee), err
 		}
-		exp--
-		if res.tip != nil {
-			tipResults = append(tipResults, res.tip)
+
+		if feeInfo.timestamp+oracle.maxLookbackSeconds < currentTime {
+			break
+		}
+
+		if feeInfo.tip != nil {
+			tipResults = append(tipResults, feeInfo.tip)
 		} else {
 			tipResults = append(tipResults, new(big.Int).Set(common.Big0))
 		}
 
-		if res.baseFee != nil {
-			baseFeeResults = append(baseFeeResults, res.baseFee)
+		if feeInfo.baseFee != nil {
+			baseFeeResults = append(baseFeeResults, feeInfo.baseFee)
 		} else {
 			baseFeeResults = append(baseFeeResults, new(big.Int).Set(common.Big0))
 		}
 	}
+
 	price := lastPrice
 	baseFee := lastBaseFee
 	if len(tipResults) > 0 {
@@ -346,47 +379,20 @@ func (oracle *Oracle) suggestDynamicFees(ctx context.Context) (*big.Int, *big.In
 	return new(big.Int).Set(price), new(big.Int).Set(baseFee), nil
 }
 
-type results struct {
-	tip     *big.Int
-	baseFee *big.Int
-	err     error
-}
-
-// getBlockTips calculates the minimum required tip to be included in a given
-// block and sends the value to the result channel.
-func (oracle *Oracle) getBlockTips(ctx context.Context, blockNum uint64, result chan results, quit chan struct{}) {
-	header, err := oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNum))
-	if header == nil {
-		select {
-		case result <- results{nil, nil, err}:
-		case <-quit:
-		}
-		return
+// getFeeInfo calculates the minimum required tip to be included in a given
+// block and returns the value as a feeInfo struct.
+func (oracle *Oracle) getFeeInfo(ctx context.Context, number uint64) (*feeInfo, error) {
+	feeInfo, ok := oracle.feeInfoProvider.get(number)
+	if ok {
+		return feeInfo, nil
 	}
 
-	// Don't bias the estimate with blocks containing a limited number of transactions paying to
-	// expedite block production.
-	if header.GasUsed < oracle.minGasUsed.Uint64() {
-		select {
-		case result <- results{nil, header.BaseFee, nil}:
-		case <-quit:
-		}
-		return
+	// on cache miss, read from database
+	header, err := oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
+	if err != nil {
+		return nil, err
 	}
-
-	// Compute minimum required tip to be included in previous block
-	//
-	// NOTE: Using this approach, we will never recommend that the caller
-	// provides a non-zero tip unless some block is produced faster than the
-	// target rate (which could only occur if some set of callers manually override the
-	// suggested tip). In the future, we may wish to start suggesting a non-zero
-	// tip when most blocks are full otherwise callers may observe an unexpected
-	// delay in transaction inclusion.
-	minTip, err := oracle.backend.MinRequiredTip(ctx, header)
-	select {
-	case result <- results{minTip, header.BaseFee, err}:
-	case <-quit:
-	}
+	return oracle.feeInfoProvider.addHeader(ctx, header)
 }
 
 type bigIntArray []*big.Int

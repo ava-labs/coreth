@@ -4,7 +4,30 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Avalanche root directory
+go_version_minimum="1.18.1"
+
+go_version() {
+    go version | sed -nE -e 's/[^0-9.]+([0-9.]+).+/\1/p'
+}
+
+version_lt() {
+    # Return true if $1 is a lower version than than $2,
+    local ver1=$1
+    local ver2=$2
+    # Reverse sort the versions, if the 1st item != ver1 then ver1 < ver2
+    if  [[ $(echo -e -n "$ver1\n$ver2\n" | sort -rV | head -n1) != "$ver1" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+if version_lt "$(go_version)" "$go_version_minimum"; then
+    echo "Coreth requires Go >= $go_version_minimum, Go $(go_version) found." >&2
+    exit 1
+fi
+
+# Coreth root directory
 CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 
 # Load the versions
@@ -26,5 +49,5 @@ fi
 coreth_commit=${CORETH_COMMIT:-$( git rev-list -1 HEAD )}
 
 # Build Coreth, which is run as a subprocess
-echo "Building Coreth Version: $coreth_version; GitCommit: $coreth_commit"
-go build -ldflags "-X github.com/ava-labs/coreth/plugin/evm.GitCommit=$coreth_commit -X github.com/ava-labs/coreth/plugin/evm.Version=$coreth_version" -o "$binary_path" "plugin/"*.go
+echo "Building Coreth @ GitCommit: $coreth_commit"
+go build -ldflags "-X github.com/ava-labs/coreth/plugin/evm.GitCommit=$coreth_commit" -o "$binary_path" "plugin/"*.go

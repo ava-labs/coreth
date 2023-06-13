@@ -7,8 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ava-labs/coreth/metrics"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -81,7 +80,7 @@ func (g gatherer) Gather() ([]*dto.MetricFamily, error) {
 			sum := snapshot.Sum()
 			sumFloat := float64(sum)
 
-			ps := m.Percentiles(pv)
+			ps := snapshot.Percentiles(pv)
 			qs := make([]*dto.Quantile, len(pv))
 			for i := range ps {
 				v := pv[i]
@@ -122,7 +121,7 @@ func (g gatherer) Gather() ([]*dto.MetricFamily, error) {
 			sum := snapshot.Sum()
 			sumFloat := float64(sum)
 
-			ps := m.Percentiles(pv)
+			ps := snapshot.Percentiles(pv)
 			qs := make([]*dto.Quantile, len(pv))
 			for i := range ps {
 				v := pv[i]
@@ -153,7 +152,7 @@ func (g gatherer) Gather() ([]*dto.MetricFamily, error) {
 				continue
 			}
 
-			ps := m.Percentiles(pvShortPercent)
+			ps := snapshot.Percentiles(pvShortPercent)
 			qs := make([]*dto.Quantile, len(pv))
 			for i := range pvShort {
 				v := pv[i]
@@ -178,7 +177,7 @@ func (g gatherer) Gather() ([]*dto.MetricFamily, error) {
 			})
 		}
 	}
-	log.Error("called", "names", names, "mfs", mfs)
+
 	return mfs, nil
 }
 

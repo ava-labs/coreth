@@ -8,7 +8,7 @@
 //
 // Much love to the original authors for their work.
 // **********
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@
 package snapshot
 
 import (
+	crand "crypto/rand"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -34,6 +35,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -41,7 +43,7 @@ import (
 // randomHash generates a random blob of data and returns it as a hash.
 func randomHash() common.Hash {
 	var hash common.Hash
-	if n, err := rand.Read(hash[:]); n != common.HashLength || err != nil {
+	if n, err := crand.Read(hash[:]); n != common.HashLength || err != nil {
 		panic(err)
 	}
 	return hash
@@ -54,7 +56,7 @@ func randomAccount() []byte {
 		Balance:  big.NewInt(rand.Int63()),
 		Nonce:    rand.Uint64(),
 		Root:     root[:],
-		CodeHash: emptyCode[:],
+		CodeHash: types.EmptyCodeHash[:],
 	}
 	data, _ := rlp.EncodeToBytes(a)
 	return data
@@ -166,7 +168,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if err := snaps.Flatten(common.HexToHash("0x02")); err != nil {
 		t.Fatalf("Failed to flatten diff layer onto disk: %v", err)
 	}
-	// Since the base layer was modified, ensure that data retrieval on the external reference fails
+	// Since the base layer was modified, ensure that data retrieval on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %v (err: %v)", acc, err)
 	}
@@ -212,7 +214,7 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if err := snaps.Flatten(common.HexToHash("0x02")); err != nil {
 		t.Fatal(err)
 	}
-	// Since the accumulator diff layer was modified, ensure that data retrieval on the external reference fails
+	// Since the accumulator diff layer was modified, ensure that data retrievals on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %v (err: %v)", acc, err)
 	}
@@ -246,7 +248,7 @@ func TestPostFlattenBasicDataAccess(t *testing.T) {
 	snaps.Update(common.HexToHash("0xa3"), common.HexToHash("0xffa3"), common.HexToHash("0xa2"), nil, setAccount("0xa3"), nil)
 	snaps.Update(common.HexToHash("0xb3"), common.HexToHash("0xffb3"), common.HexToHash("0xb2"), nil, setAccount("0xb3"), nil)
 
-	// checkExist verifies if an account exiss in a snapshot
+	// checkExist verifies if an account exists in a snapshot
 	checkExist := func(layer Snapshot, key string) error {
 		if data, _ := layer.Account(common.HexToHash(key)); data == nil {
 			return fmt.Errorf("expected %x to exist, got nil", common.HexToHash(key))
@@ -396,17 +398,19 @@ func TestPostFlattenBasicDataAccess(t *testing.T) {
 // different blocks inserted with an identical state root.
 // In this example, (B, C) and (D, E) share the identical state root, but were
 // inserted under different blocks.
-//    A
-//   /  \
-//  B    C
-//  |    |
-//  D    E
+//
+//	  A
+//	 /  \
+//	B    C
+//	|    |
+//	D    E
 //
 // `t.Flatten(C)` should result in:
 //
-//  B    C
-//  |    |
-//  D    E
+//	B    C
+//	|    |
+//	D    E
+//
 // With the branch D, E, hanging and relying on Discard to be called to
 // garbage collect the references.
 func TestTreeFlattenDoesNotDropPendingLayers(t *testing.T) {

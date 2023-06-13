@@ -65,6 +65,7 @@ var (
 	apricotPhase1InstructionSet    = newApricotPhase1InstructionSet()
 	apricotPhase2InstructionSet    = newApricotPhase2InstructionSet()
 	apricotPhase3InstructionSet    = newApricotPhase3InstructionSet()
+	dUpgradeInstructionSet         = newDUpgradeInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -73,7 +74,7 @@ type JumpTable [256]*operation
 func validate(jt JumpTable) JumpTable {
 	for i, op := range jt {
 		if op == nil {
-			panic(fmt.Sprintf("op 0x%x is not set", i))
+			panic(fmt.Sprintf("op %#x is not set", i))
 		}
 		// The interpreter has an assumption that if the memorySize function is
 		// set, then the dynamicGas function is also set. This is a somewhat
@@ -86,6 +87,13 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newDUpgradeInstructionSet() JumpTable {
+	instructionSet := newApricotPhase3InstructionSet()
+	enable3855(&instructionSet) // PUSH0 instruction
+	enable3860(&instructionSet) // Limit and meter initcode
+	return validate(instructionSet)
 }
 
 // newApricotPhase3InstructionSet returns the frontier, homestead, byzantium,
@@ -211,7 +219,6 @@ func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
 	return validate(instructionSet)
-
 }
 
 // EIP 150 a.k.a Tangerine Whistle
@@ -1071,4 +1078,15 @@ func newFrontierInstructionSet() JumpTable {
 	}
 
 	return validate(tbl)
+}
+
+func copyJumpTable(source *JumpTable) *JumpTable {
+	dest := *source
+	for i, op := range source {
+		if op != nil {
+			opCopy := *op
+			dest[i] = &opCopy
+		}
+	}
+	return &dest
 }

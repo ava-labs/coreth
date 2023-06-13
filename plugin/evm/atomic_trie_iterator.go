@@ -7,11 +7,11 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/codec"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -23,6 +23,7 @@ const atomicTrieKeyLen = wrappers.LongLen + common.HashLength
 type atomicTrieIterator struct {
 	trieIterator *trie.Iterator // underlying trie.Iterator
 	codec        codec.Manager
+	key          []byte
 	atomicOps    *atomic.Requests // atomic operation entries at this iteration
 	blockchainID ids.ID           // blockchain ID
 	blockNumber  uint64           // block number at this iteration
@@ -44,14 +45,8 @@ func (a *atomicTrieIterator) Error() error {
 // It is the responsibility of the caller to check the result of Error() after an iterator reports
 // having no more elements to iterate.
 func (a *atomicTrieIterator) Next() bool {
-	hasNext := a.trieIterator.Next()
-
-	if a.trieIterator.Err != nil {
+	if !a.trieIterator.Next() {
 		a.resetFields(a.trieIterator.Err)
-		return false
-	}
-	if !hasNext {
-		a.resetFields(nil)
 		return false
 	}
 
@@ -83,6 +78,7 @@ func (a *atomicTrieIterator) Next() bool {
 	a.blockNumber = blockNumber
 	a.blockchainID = blockchainID
 	a.atomicOps = requests
+	a.key = a.trieIterator.Key // trieIterator.Key is already newly allocated so copy is not needed here
 	return true
 }
 
@@ -92,6 +88,7 @@ func (a *atomicTrieIterator) resetFields(err error) {
 	a.blockNumber = 0
 	a.blockchainID = ids.ID{}
 	a.atomicOps = nil
+	a.key = nil
 }
 
 // BlockNumber returns the current block number
@@ -105,6 +102,13 @@ func (a *atomicTrieIterator) BlockchainID() ids.ID {
 }
 
 // AtomicOps returns atomic requests for the blockchainID at the current block number
+// returned object can be freely modified
 func (a *atomicTrieIterator) AtomicOps() *atomic.Requests {
 	return a.atomicOps
+}
+
+// Key returns the current database key that the iterator is iterating
+// returned []byte can be freely modified
+func (a *atomicTrieIterator) Key() []byte {
+	return a.key
 }

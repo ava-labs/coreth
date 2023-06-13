@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
@@ -84,8 +85,8 @@ type NumberHash struct {
 	Hash   common.Hash
 }
 
-// ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
-// both canonical and reorged forks included.
+// ReadAllHashesInRange retrieves all the hashes assigned to blocks at a certain
+// heights, both canonical and reorged forks included.
 // This method considers both limits to be _inclusive_.
 func ReadAllHashesInRange(db ethdb.Iteratee, first, last uint64) []*NumberHash {
 	var (
@@ -378,7 +379,7 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 }
 
 // ReadReceipts retrieves all the transaction receipts belonging to a block, including
-// its correspoinding metadata fields. If it is unable to populate these metadata
+// its corresponding metadata fields. If it is unable to populate these metadata
 // fields then nil is returned.
 //
 // The current implementation populates these metadata fields by reading the receipts'
@@ -390,16 +391,19 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 	if receipts == nil {
 		return nil
 	}
-	header := ReadHeader(db, hash, number)
-	if header == nil {
-		return nil
-	}
 	body := ReadBody(db, hash, number)
 	if body == nil {
 		log.Error("Missing body but have receipt", "hash", hash, "number", number)
 		return nil
 	}
-	if err := receipts.DeriveFields(config, hash, number, header.Time, body.Transactions); err != nil {
+	header := ReadHeader(db, hash, number)
+	var baseFee *big.Int
+	if header == nil {
+		baseFee = big.NewInt(0)
+	} else {
+		baseFee = header.BaseFee
+	}
+	if err := receipts.DeriveFields(config, hash, number, header.Time, baseFee, body.Transactions); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
 		return nil
 	}
@@ -432,10 +436,11 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // storedReceiptRLP is the storage encoding of a receipt.
 // Re-definition in core/types/receipt.go.
+// TODO: Re-use the existing definition.
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
-	Logs              []*types.LogForStorage
+	Logs              []*types.Log
 }
 
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
@@ -451,10 +456,7 @@ func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&stored); err != nil {
 		return err
 	}
-	r.Logs = make([]*types.Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*types.Log)(log)
-	}
+	r.Logs = stored.Logs
 	return nil
 }
 
@@ -479,9 +481,9 @@ func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, t
 	return nil
 }
 
-// ReadLogs retrieves the logs for all transactions in a block. The log fields
-// are populated with metadata. In case the receipts or the block body
-// are not found, a nil is returned.
+// ReadLogs retrieves the logs for all transactions in a block. In case
+// receipts is not found, a nil is returned.
+// Note: ReadLogs does not derive unstored log fields.
 func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -494,15 +496,6 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 		return nil
 	}
 
-	body := ReadBody(db, hash, number)
-	if body == nil {
-		log.Error("Missing body but have receipt", "hash", hash, "number", number)
-		return nil
-	}
-	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
-		return nil
-	}
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
@@ -587,4 +580,23 @@ func ReadHeadBlock(db ethdb.Reader) *types.Block {
 		return nil
 	}
 	return ReadBlock(db, headBlockHash, *headBlockNumber)
+}
+
+// ReadTxIndexTail retrieves the number of oldest indexed block
+// whose transaction indices has been indexed.
+func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(txIndexTailKey)
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteTxIndexTail stores the number of oldest indexed block
+// into database.
+func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store the transaction index tail", "err", err)
+	}
 }

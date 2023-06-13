@@ -1,13 +1,3 @@
-// (c) 2020-2021, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -24,8 +14,46 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:generate go-bindata -nometadata -o assets.go -pkg tracers -ignore tracers.go -ignore assets.go ./...
-//go:generate gofmt -s -w assets.go
-
 // Package tracers contains the actual JavaScript tracer assets.
 package tracers
+
+import (
+	"embed"
+	"io/fs"
+	"strings"
+	"unicode"
+)
+
+//go:embed *.js
+var files embed.FS
+
+// Load reads the built-in JS tracer files embedded in the binary and
+// returns a mapping of tracer name to source.
+func Load() (map[string]string, error) {
+	var assetTracers = make(map[string]string)
+	err := fs.WalkDir(files, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		b, err := fs.ReadFile(files, path)
+		if err != nil {
+			return err
+		}
+		name := camel(strings.TrimSuffix(path, ".js"))
+		assetTracers[name] = string(b)
+		return nil
+	})
+	return assetTracers, err
+}
+
+// camel converts a snake cased input string into a camel cased output.
+func camel(str string) string {
+	pieces := strings.Split(str, "_")
+	for i := 1; i < len(pieces); i++ {
+		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
+	}
+	return strings.Join(pieces, "")
+}

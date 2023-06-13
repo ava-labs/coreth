@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/eth/gasprice"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ethereum/go-ethereum/common"
@@ -37,13 +38,14 @@ import (
 
 // DefaultFullGPOConfig contains default gasprice oracle settings for full node.
 var DefaultFullGPOConfig = gasprice.Config{
-	Blocks:           40,
-	Percentile:       60,
-	MaxHeaderHistory: 1024,
-	MaxBlockHistory:  1024,
-	MinPrice:         gasprice.DefaultMinPrice,
-	MaxPrice:         gasprice.DefaultMaxPrice,
-	MinGasUsed:       gasprice.DefaultMinGasUsed,
+	Blocks:              40,
+	Percentile:          60,
+	MaxLookbackSeconds:  gasprice.DefaultMaxLookbackSeconds,
+	MaxCallBlockHistory: gasprice.DefaultMaxCallBlockHistory,
+	MaxBlockHistory:     gasprice.DefaultMaxBlockHistory,
+	MinPrice:            gasprice.DefaultMinPrice,
+	MaxPrice:            gasprice.DefaultMaxPrice,
+	MinGasUsed:          gasprice.DefaultMinGasUsed,
 }
 
 // DefaultConfig contains default settings for use on the Avalanche main net.
@@ -51,26 +53,22 @@ var DefaultConfig = NewDefaultConfig()
 
 func NewDefaultConfig() Config {
 	return Config{
-		NetworkId:               1,
-		LightPeers:              100,
-		UltraLightFraction:      75,
-		DatabaseCache:           512,
-		TrieCleanCache:          75,
-		TrieCleanCacheJournal:   "triecache",
-		TrieCleanCacheRejournal: 60 * time.Minute,
-		TrieDirtyCache:          256,
-		TrieTimeout:             60 * time.Minute,
-		SnapshotCache:           128,
-		Miner:                   miner.Config{},
-		TxPool:                  core.DefaultTxPoolConfig,
-		RPCGasCap:               25000000,
-		RPCEVMTimeout:           5 * time.Second,
-		GPO:                     DefaultFullGPOConfig,
-		RPCTxFeeCap:             1, // 1 AVAX
+		NetworkId:             1,
+		TrieCleanCache:        512,
+		TrieDirtyCache:        256,
+		TrieDirtyCommitTarget: 20,
+		SnapshotCache:         256,
+		AcceptedCacheSize:     32,
+		Miner:                 miner.Config{},
+		TxPool:                txpool.DefaultConfig,
+		RPCGasCap:             25000000,
+		RPCEVMTimeout:         5 * time.Second,
+		GPO:                   DefaultFullGPOConfig,
+		RPCTxFeeCap:           1, // 1 AVAX
 	}
 }
 
-//go:generate gencodec -type Config -formats toml -out gen_config.go
+//go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
 // Config contains configuration options for of the ETH and LES protocols.
 type Config struct {
@@ -81,57 +79,44 @@ type Config struct {
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 
-	// This can be set to list of enrtree:// URLs which will be queried for
-	// for nodes to connect to.
-	DiscoveryURLs []string
-
-	Pruning        bool // Whether to disable pruning and flush everything to disk
-	SnapshotAsync  bool // Whether to generate the initial snapshot in async mode
-	SnapshotVerify bool // Whether to verify generated snapshots
-
-	// Whitelist of required block number -> hash values to accept
-	Whitelist map[uint64]common.Hash `toml:"-"`
-
-	// Light client options
-	LightServ    int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
-	LightIngress int  `toml:",omitempty"` // Incoming bandwidth limit for light servers
-	LightEgress  int  `toml:",omitempty"` // Outgoing bandwidth limit for light servers
-	LightPeers   int  `toml:",omitempty"` // Maximum number of LES client peers
-	LightNoPrune bool `toml:",omitempty"` // Whether to disable light chain pruning
-
-	// Ultra Light client options
-	UltraLightServers      []string `toml:",omitempty"` // List of trusted ultra light servers
-	UltraLightFraction     int      `toml:",omitempty"` // Percentage of trusted servers to accept an announcement
-	UltraLightOnlyAnnounce bool     `toml:",omitempty"` // Whether to only announce headers, or also serve them
+	Pruning                         bool    // Whether to disable pruning and flush everything to disk
+	AcceptorQueueLimit              int     // Maximum blocks to queue before blocking during acceptance
+	CommitInterval                  uint64  // If pruning is enabled, specified the interval at which to commit an entire trie to disk.
+	PopulateMissingTries            *uint64 // Height at which to start re-populating missing tries on startup.
+	PopulateMissingTriesParallelism int     // Number of concurrent readers to use when re-populating missing tries on startup.
+	AllowMissingTries               bool    // Whether to allow an archival node to run with pruning enabled and corrupt a complete index.
+	SnapshotDelayInit               bool    // Whether snapshot tree should be initialized on startup or delayed until explicit call
+	SnapshotWait                    bool    // Whether to wait for the initial snapshot generation
+	SnapshotVerify                  bool    // Whether to verify generated snapshots
+	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
-	DatabaseHandles    int  `toml:"-"`
-	DatabaseCache      int
-	// DatabaseFreezer    string
 
-	TrieCleanCache          int
-	TrieCleanCacheJournal   string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
-	TrieCleanCacheRejournal time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
-	TrieDirtyCache          int
-	TrieTimeout             time.Duration
-	SnapshotCache           int
-	Preimages               bool
+	// TrieDB and snapshot options
+	TrieCleanCache        int
+	TrieCleanJournal      string
+	TrieCleanRejournal    time.Duration
+	TrieDirtyCache        int
+	TrieDirtyCommitTarget int
+	SnapshotCache         int
+	Preimages             bool
+
+	// AcceptedCacheSize is the depth of accepted headers cache and accepted
+	// logs cache at the accepted tip.
+	AcceptedCacheSize int
 
 	// Mining options
 	Miner miner.Config
 
 	// Transaction pool options
-	TxPool core.TxPoolConfig
+	TxPool txpool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
 
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
-
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
 
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64 `toml:",omitempty"`
@@ -140,7 +125,7 @@ type Config struct {
 	RPCEVMTimeout time.Duration
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
+	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64 `toml:",omitempty"`
 
 	// AllowUnfinalizedQueries allow unfinalized queries
@@ -150,4 +135,25 @@ type Config struct {
 	// Unprotected transactions are transactions that are signed without EIP-155
 	// replay protection.
 	AllowUnprotectedTxs bool
+	// AllowUnprotectedTxHashes provides a list of transaction hashes, which will be allowed
+	// to be issued without replay protection over the API even if AllowUnprotectedTxs is false.
+	AllowUnprotectedTxHashes []common.Hash
+
+	// OfflinePruning enables offline pruning on startup of the node. If a node is started
+	// with this configuration option, it must finish pruning before resuming normal operation.
+	OfflinePruning                bool
+	OfflinePruningBloomFilterSize uint64
+	OfflinePruningDataDirectory   string
+
+	// SkipUpgradeCheck disables checking that upgrades must take place before the last
+	// accepted block. Skipping this check is useful when a node operator does not update
+	// their node before the network upgrade and their node accepts blocks that have
+	// identical state with the pre-upgrade ruleset.
+	SkipUpgradeCheck bool
+
+	// TxLookupLimit is the maximum number of blocks from head whose tx indices
+	// are reserved:
+	//  * 0:   means no limit
+	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
+	TxLookupLimit uint64
 }

@@ -32,12 +32,13 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/misc"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -55,8 +56,9 @@ type BlockGen struct {
 	receipts []*types.Receipt
 	uncles   []*types.Header
 
-	config *params.ChainConfig
-	engine consensus.Engine
+	config           *params.ChainConfig
+	engine           consensus.Engine
+	onBlockGenerated func(*types.Block)
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -89,6 +91,26 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
+// addTx adds a transaction to the generated block. If no coinbase has
+// been set, the block's coinbase is set to the zero address.
+//
+// There are a few options can be passed as well in order to run some
+// customized rules.
+// - bc:       enables the ability to query historical block hashes for BLOCKHASH
+// - vmConfig: extends the flexibility for customizing evm rules, e.g. enable extra EIPs
+func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transaction) {
+	if b.gasPool == nil {
+		b.SetCoinbase(common.Address{})
+	}
+	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	if err != nil {
+		panic(err)
+	}
+	b.txs = append(b.txs, tx)
+	b.receipts = append(b.receipts, receipt)
+}
+
 // AddTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
@@ -98,7 +120,7 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 // added. Notably, contract code relying on the BLOCKHASH instruction
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	b.AddTxWithChain(nil, tx)
+	b.addTx(nil, vm.Config{}, tx)
 }
 
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
@@ -110,16 +132,14 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
-	if b.gasPool == nil {
-		b.SetCoinbase(common.Address{})
-	}
-	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
-	if err != nil {
-		panic(err)
-	}
-	b.txs = append(b.txs, tx)
-	b.receipts = append(b.receipts, receipt)
+	b.addTx(bc, vm.Config{}, tx)
+}
+
+// AddTxWithVMConfig adds a transaction to the generated block. If no coinbase has
+// been set, the block's coinbase is set to the zero address.
+// The evm interpreter can be customized with the provided vm config.
+func (b *BlockGen) AddTxWithVMConfig(tx *types.Transaction, config vm.Config) {
+	b.addTx(nil, config, tx)
 }
 
 // GetBalance returns the balance of the given address at the generated block.
@@ -139,6 +159,11 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *big.Int {
 	return new(big.Int).Set(b.header.Number)
+}
+
+// Timestamp returns the timestamp of the block being generated.
+func (b *BlockGen) Timestamp() uint64 {
+	return b.header.Time
 }
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
@@ -194,6 +219,11 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
 }
 
+// SetOnBlockGenerated sets a callback function to be invoked after each block is generated
+func (b *BlockGen) SetOnBlockGenerated(onBlockGenerated func(*types.Block)) {
+	b.onBlockGenerated = onBlockGenerated
+}
+
 // GenerateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
@@ -216,18 +246,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, config, parent, gap, statedb, b.engine)
 
-		// Mutate the state and block according to any hard-fork specs
-		if daoBlock := config.DAOForkBlock; daoBlock != nil {
-			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
-				if config.DAOForkSupport {
-					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-				}
-			}
-		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
-			misc.ApplyDAOHardFork(statedb)
-		}
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
@@ -240,12 +258,15 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			}
 
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number), false)
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
-			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+			if b.onBlockGenerated != nil {
+				b.onBlockGenerated(block)
 			}
 			return block, b.receipts, nil
 		}
@@ -267,6 +288,19 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts, nil
 }
 
+// GenerateChainWithGenesis is a wrapper of GenerateChain which will initialize
+// genesis block to database first according to the provided genesis specification
+// then generate chain on top.
+func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gap uint64, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts, error) {
+	db := rawdb.NewMemoryDatabase()
+	_, err := genesis.Commit(db, trie.NewDatabase(db))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	blocks, receipts, err := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gap, gen)
+	return db, blocks, receipts, err
+}
+
 func makeHeader(chain consensus.ChainReader, config *params.ChainConfig, parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	var time uint64
 	if parent.Time() == 0 {
@@ -275,9 +309,10 @@ func makeHeader(chain consensus.ChainReader, config *params.ChainConfig, parent 
 		time = parent.Time() + gap
 	}
 
-	timestamp := new(big.Int).SetUint64(time)
 	var gasLimit uint64
-	if config.IsApricotPhase1(timestamp) {
+	if config.IsCortina(time) {
+		gasLimit = params.CortinaGasLimit
+	} else if config.IsApricotPhase1(time) {
 		gasLimit = params.ApricotPhase1GasLimit
 	} else {
 		gasLimit = CalcGasLimit(parent.GasUsed(), parent.GasLimit(), parent.GasLimit(), parent.GasLimit())
@@ -297,7 +332,7 @@ func makeHeader(chain consensus.ChainReader, config *params.ChainConfig, parent 
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
 		Time:     time,
 	}
-	if chain.Config().IsApricotPhase3(timestamp) {
+	if chain.Config().IsApricotPhase3(time) {
 		var err error
 		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(chain.Config(), parent.Header(), time)
 		if err != nil {

@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"context"
 	"math/big"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/params"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
@@ -59,19 +61,13 @@ type atomicTxVerifyTest struct {
 
 // executeTxVerifyTest tests
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
+	require := require.New(t)
 	atomicTx := test.generate(t)
 	err := atomicTx.Verify(test.ctx, test.rules)
 	if len(test.expectedErr) == 0 {
-		if err != nil {
-			t.Fatalf("Atomic tx failed unexpectedly due to: %s", err)
-		}
+		require.NoError(err)
 	} else {
-		if err == nil {
-			t.Fatalf("Expected atomic tx test to fail due to: %s, but passed verification", test.expectedErr)
-		}
-		if !strings.Contains(err.Error(), test.expectedErr) {
-			t.Fatalf("Expected Verify to fail due to %s, but failed with: %s", test.expectedErr, err)
-		}
+		require.ErrorContains(err, test.expectedErr, "expected tx verify to fail with specified error")
 	}
 }
 
@@ -128,7 +124,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := vm.chain.BlockState(lastAcceptedBlock.ethBlock)
+	sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,22 +141,29 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		return
 	}
 
+	if test.bootstrapping {
+		// If this test simulates processing txs during bootstrapping (where some verification is skipped),
+		// initialize the block building goroutines normally initialized in SetState(snow.NormalOps).
+		// This ensures that the VM can build a block correctly during the test.
+		vm.initBlockBuilding()
+	}
+
 	if err := vm.issueTx(tx, true /*=local*/); err != nil {
 		t.Fatal(err)
 	}
 	<-issuer
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
-	blk, err := vm.BuildBlock()
+	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := blk.Verify(); err != nil {
+	if err := blk.Verify(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := blk.Accept(); len(test.acceptErr) == 0 && err != nil {
+	if err := blk.Accept(context.Background()); len(test.acceptErr) == 0 && err != nil {
 		t.Fatalf("Accept failed unexpectedly due to: %s", err)
 	} else if len(test.acceptErr) != 0 {
 		if err == nil {

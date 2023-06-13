@@ -27,6 +27,7 @@
 package types
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -121,7 +122,9 @@ func TestEIP155SigningVitalik(t *testing.T) {
 		if from != addr {
 			t.Errorf("%d: expected %x got %x", i, addr, from)
 		}
-
+		if !tx.Protected() {
+			t.Errorf("%d: expected to be protected", i)
+		}
 	}
 }
 
@@ -137,8 +140,8 @@ func TestChainId(t *testing.T) {
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(2)), tx)
-	if err != ErrInvalidChainId {
-		t.Error("expected error:", ErrInvalidChainId)
+	if !errors.Is(err, ErrInvalidChainId) {
+		t.Error("expected error:", ErrInvalidChainId, err)
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(1)), tx)

@@ -28,6 +28,8 @@ package bind_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -36,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -85,34 +88,49 @@ func (mt *mockTransactor) SendTransaction(ctx context.Context, tx *types.Transac
 }
 
 type mockCaller struct {
-	codeAtBlockNumber          *big.Int
-	callContractBlockNumber    *big.Int
-	acceptedCodeAtCalled       bool
-	acceptedCallContractCalled bool
+	codeAtBlockNumber       *big.Int
+	callContractBlockNumber *big.Int
+	callContractBytes       []byte
+	callContractErr         error
+	codeAtBytes             []byte
+	codeAtErr               error
 }
 
 func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
 	mc.codeAtBlockNumber = blockNumber
-	return []byte{1, 2, 3}, nil
+	return mc.codeAtBytes, mc.codeAtErr
 }
 
 func (mc *mockCaller) CallContract(ctx context.Context, call interfaces.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
-	return nil, nil
+	return mc.callContractBytes, mc.callContractErr
 }
 
-func (mc *mockCaller) AcceptedCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+type mockAcceptedCaller struct {
+	*mockCaller
+	acceptedCodeAtBytes        []byte
+	acceptedCodeAtErr          error
+	acceptedCodeAtCalled       bool
+	acceptedCallContractCalled bool
+	acceptedCallContractBytes  []byte
+	acceptedCallContractErr    error
+}
+
+func (mc *mockAcceptedCaller) AcceptedCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
 	mc.acceptedCodeAtCalled = true
-	return nil, nil
+	return mc.acceptedCodeAtBytes, mc.acceptedCodeAtErr
 }
 
-func (mc *mockCaller) AcceptedCallContract(ctx context.Context, call interfaces.CallMsg) ([]byte, error) {
+func (mc *mockAcceptedCaller) AcceptedCallContract(ctx context.Context, call interfaces.CallMsg) ([]byte, error) {
 	mc.acceptedCallContractCalled = true
-	return nil, nil
+	return mc.acceptedCallContractBytes, mc.acceptedCallContractErr
 }
 func TestPassingBlockNumber(t *testing.T) {
-
-	mc := &mockCaller{}
+	mc := &mockAcceptedCaller{
+		mockCaller: &mockCaller{
+			codeAtBytes: []byte{1, 2, 3},
+		},
+	}
 
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
 		Methods: map[string]abi.Method{
@@ -277,6 +295,80 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
+func TestTransactNativeAssetCallNilAssetAmount(t *testing.T) {
+	assert := assert.New(t)
+	mt := &mockTransactor{}
+	bc := bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
+	opts := &bind.TransactOpts{
+		Signer: mockSign,
+	}
+	// fails if asset amount is nil
+	opts.NativeAssetCall = &bind.NativeAssetCallOpts{
+		AssetID:     common.Hash{},
+		AssetAmount: nil,
+	}
+	_, err := bc.Transact(opts, "")
+	assert.ErrorIs(err, bind.ErrNilAssetAmount)
+}
+
+func TestTransactNativeAssetCallNonZeroValue(t *testing.T) {
+	assert := assert.New(t)
+	mt := &mockTransactor{}
+	bc := bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
+	opts := &bind.TransactOpts{
+		Signer: mockSign,
+	}
+	opts.NativeAssetCall = &bind.NativeAssetCallOpts{
+		AssetID:     common.Hash{},
+		AssetAmount: big.NewInt(11),
+	}
+	// fails if value > 0
+	opts.Value = big.NewInt(11)
+	_, err := bc.Transact(opts, "")
+	assert.Equal(err.Error(), fmt.Sprintf("value must be 0 when performing native asset call, found %v", opts.Value))
+	// fails if value < 0
+	opts.Value = big.NewInt(-11)
+	_, err = bc.Transact(opts, "")
+	assert.Equal(err.Error(), fmt.Sprintf("value must be 0 when performing native asset call, found %v", opts.Value))
+}
+
+func TestTransactNativeAssetCall(t *testing.T) {
+	assert := assert.New(t)
+	json := `[{"type":"function","name":"method","inputs":[{"type":"uint256" },{"type":"string"}]}]`
+	parsed, err := abi.JSON(strings.NewReader(json))
+	assert.Nil(err)
+	mt := &mockTransactor{}
+	contractAddr := common.Address{11}
+	bc := bind.NewBoundContract(contractAddr, parsed, nil, mt, nil)
+	opts := &bind.TransactOpts{
+		Signer: mockSign,
+	}
+	// normal call tx
+	methodName := "method"
+	arg1 := big.NewInt(22)
+	arg2 := "33"
+	normalCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
+	assert.Nil(err)
+	// native asset call tx
+	assetID := common.Hash{44}
+	assetAmount := big.NewInt(55)
+	opts.NativeAssetCall = &bind.NativeAssetCallOpts{
+		AssetID:     assetID,
+		AssetAmount: assetAmount,
+	}
+	nativeCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
+	assert.Nil(err)
+	// verify transformations
+	assert.Equal(vm.NativeAssetCallAddr, *nativeCallTx.To())
+	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := vm.UnpackNativeAssetCallInput(nativeCallTx.Data())
+	assert.Nil(err)
+	assert.NotEmpty(unpackedData)
+	assert.Equal(unpackedData, normalCallTx.Data())
+	assert.Equal(unpackedAddr, contractAddr)
+	assert.Equal(unpackedAssetID, assetID)
+	assert.Equal(unpackedAssetAmount, assetAmount)
+}
+
 func TestTransactGasFee(t *testing.T) {
 	assert := assert.New(t)
 
@@ -350,4 +442,141 @@ func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 		Index:       7,
 		Removed:     false,
 	}
+}
+
+func TestCall(t *testing.T) {
+	var method, methodWithArg = "something", "somethingArrrrg"
+	tests := []struct {
+		name, method string
+		opts         *bind.CallOpts
+		mc           bind.ContractCaller
+		results      *[]interface{}
+		wantErr      bool
+		wantErrExact error
+	}{{
+		name: "ok not accepted",
+		mc: &mockCaller{
+			codeAtBytes: []byte{0},
+		},
+		method: method,
+	}, {
+		name: "ok accepted",
+		mc: &mockAcceptedCaller{
+			acceptedCodeAtBytes: []byte{0},
+		},
+		opts: &bind.CallOpts{
+			Accepted: true,
+		},
+		method: method,
+	}, {
+		name:    "pack error, no method",
+		mc:      new(mockCaller),
+		method:  "else",
+		wantErr: true,
+	}, {
+		name: "interface error, accepted but not a AcceptedContractCaller",
+		mc:   new(mockCaller),
+		opts: &bind.CallOpts{
+			Accepted: true,
+		},
+		method:       method,
+		wantErrExact: bind.ErrNoAcceptedState,
+	}, {
+		name: "accepted call canceled",
+		mc: &mockAcceptedCaller{
+			acceptedCallContractErr: context.DeadlineExceeded,
+		},
+		opts: &bind.CallOpts{
+			Accepted: true,
+		},
+		method:       method,
+		wantErrExact: context.DeadlineExceeded,
+	}, {
+		name: "accepted code at error",
+		mc: &mockAcceptedCaller{
+			acceptedCodeAtErr: errors.New(""),
+		},
+		opts: &bind.CallOpts{
+			Accepted: true,
+		},
+		method:  method,
+		wantErr: true,
+	}, {
+		name: "no accepted code at",
+		mc:   new(mockAcceptedCaller),
+		opts: &bind.CallOpts{
+			Accepted: true,
+		},
+		method:       method,
+		wantErrExact: bind.ErrNoCode,
+	}, {
+		name: "call contract error",
+		mc: &mockCaller{
+			callContractErr: context.DeadlineExceeded,
+		},
+		method:       method,
+		wantErrExact: context.DeadlineExceeded,
+	}, {
+		name: "code at error",
+		mc: &mockCaller{
+			codeAtErr: errors.New(""),
+		},
+		method:  method,
+		wantErr: true,
+	}, {
+		name:         "no code at",
+		mc:           new(mockCaller),
+		method:       method,
+		wantErrExact: bind.ErrNoCode,
+	}, {
+		name: "unpack error missing arg",
+		mc: &mockCaller{
+			codeAtBytes: []byte{0},
+		},
+		method:  methodWithArg,
+		wantErr: true,
+	}, {
+		name: "interface unpack error",
+		mc: &mockCaller{
+			codeAtBytes: []byte{0},
+		},
+		method:  method,
+		results: &[]interface{}{0},
+		wantErr: true,
+	}}
+	for _, test := range tests {
+		bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
+			Methods: map[string]abi.Method{
+				method: {
+					Name:    method,
+					Outputs: abi.Arguments{},
+				},
+				methodWithArg: {
+					Name:    methodWithArg,
+					Outputs: abi.Arguments{abi.Argument{}},
+				},
+			},
+		}, test.mc, nil, nil)
+		err := bc.Call(test.opts, test.results, test.method)
+		if test.wantErr || test.wantErrExact != nil {
+			if err == nil {
+				t.Fatalf("%q expected error", test.name)
+			}
+			if test.wantErrExact != nil && !errors.Is(err, test.wantErrExact) {
+				t.Fatalf("%q expected error %q but got %q", test.name, test.wantErrExact, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q unexpected error: %v", test.name, err)
+		}
+	}
+}
+
+// TestCrashers contains some strings which previously caused the abi codec to crash.
+func TestCrashers(t *testing.T) {
+	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"_1"}]}]}]`))
+	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"&"}]}]}]`))
+	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"----"}]}]}]`))
+	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"foo.Bar"}]}]}]`))
 }
