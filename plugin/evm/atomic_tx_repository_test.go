@@ -6,7 +6,6 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
-	"sort"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -14,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -98,17 +98,14 @@ func writeTxs(t testing.TB, repo AtomicTxRepository, fromHeight uint64, toHeight
 // verifyTxs asserts [repo] can find all txs in [txMap] by height and txID
 func verifyTxs(t testing.TB, repo AtomicTxRepository, txMap map[uint64][]*Tx) {
 	// We should be able to fetch indexed txs by height:
-	getComparator := func(txs []*Tx) func(int, int) bool {
-		return func(i, j int) bool {
-			return txs[i].ID().Hex() < txs[j].ID().Hex()
-		}
-	}
 	for height, expectedTxs := range txMap {
 		txs, err := repo.GetByHeight(height)
 		assert.NoErrorf(t, err, "unexpected error on GetByHeight at height=%d", height)
 		assert.Lenf(t, txs, len(expectedTxs), "wrong len of txs at height=%d", height)
 		// txs should be stored in order of txID
-		sort.Slice(expectedTxs, getComparator(expectedTxs))
+		slices.SortFunc(expectedTxs, func(i, j *Tx) bool {
+			return i.Less(j)
+		})
 
 		txIDs := set.Set[ids.ID]{}
 		for i := 0; i < len(txs); i++ {

@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
@@ -141,6 +142,10 @@ type Tx struct {
 	Creds []verify.Verifiable `serialize:"true" json:"credentials"`
 }
 
+func (tx *Tx) Less(other *Tx) bool {
+	return tx.ID().Hex() < other.ID().Hex()
+}
+
 // Sign this transaction with the provided signers
 func (tx *Tx) Sign(c codec.Manager, signers [][]*secp256k1.PrivateKey) error {
 	unsignedBytes, err := c.Marshal(codecVersion, &tx.UnsignedAtomicTx)
@@ -261,7 +266,9 @@ func mergeAtomicOps(txs []*Tx) (map[ids.ID]*atomic.Requests, error) {
 		// with txs initialized from the txID index.
 		copyTxs := make([]*Tx, len(txs))
 		copy(copyTxs, txs)
-		sort.Slice(copyTxs, func(i, j int) bool { return copyTxs[i].ID().Hex() < copyTxs[j].ID().Hex() })
+		slices.SortFunc(copyTxs, func(i, j *Tx) bool {
+			return i.Less(j)
+		})
 		txs = copyTxs
 	}
 	output := make(map[ids.ID]*atomic.Requests)
