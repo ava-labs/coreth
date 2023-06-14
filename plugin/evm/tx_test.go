@@ -9,12 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/coreth/params"
+
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
