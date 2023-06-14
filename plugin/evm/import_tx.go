@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
+	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -110,11 +111,13 @@ func (utx *UnsignedImportTx) Verify(
 	}
 
 	if rules.IsApricotPhase2 {
-		if !IsSortedAndUniqueEVMOutputs(utx.Outs) {
+		if !utils.IsSortedAndUniqueSortable(utx.Outs) {
 			return errOutputsNotSortedUnique
 		}
 	} else if rules.IsApricotPhase1 {
-		if !IsSortedEVMOutputs(utx.Outs) {
+		if !slices.IsSortedFunc(utx.Outs, func(i, j EVMOutput) bool {
+			return i.Less(j)
+		}) {
 			return errOutputsNotSorted
 		}
 	}
@@ -408,7 +411,7 @@ func (vm *VM) newImportTxWithUTXOs(
 		return nil, errNoEVMOutputs
 	}
 
-	SortEVMOutputs(outs)
+	utils.Sort(outs)
 
 	// Create the transaction
 	utx := &UnsignedImportTx{

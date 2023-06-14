@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -55,12 +54,28 @@ type EVMOutput struct {
 	AssetID ids.ID         `serialize:"true" json:"assetID"`
 }
 
+func (o EVMOutput) Less(other EVMOutput) bool {
+	addrComp := bytes.Compare(o.Address.Bytes(), other.Address.Bytes())
+	if addrComp != 0 {
+		return addrComp < 0
+	}
+	return bytes.Compare(o.AssetID[:], other.AssetID[:]) < 0
+}
+
 // EVMInput defines an input created from the EVM state to fund export transactions
 type EVMInput struct {
 	Address common.Address `serialize:"true" json:"address"`
 	Amount  uint64         `serialize:"true" json:"amount"`
 	AssetID ids.ID         `serialize:"true" json:"assetID"`
 	Nonce   uint64         `serialize:"true" json:"nonce"`
+}
+
+func (i EVMInput) Less(other EVMInput) bool {
+	addrComp := bytes.Compare(i.Address.Bytes(), other.Address.Bytes())
+	if addrComp != 0 {
+		return addrComp < 0
+	}
+	return bytes.Compare(i.AssetID[:], other.AssetID[:]) < 0
 }
 
 // Verify ...
@@ -215,49 +230,6 @@ func (ins *innerSortInputsAndSigners) Swap(i, j int) {
 // SortEVMInputsAndSigners sorts the list of EVMInputs based on the addresses and assetIDs
 func SortEVMInputsAndSigners(inputs []EVMInput, signers [][]*secp256k1.PrivateKey) {
 	sort.Sort(&innerSortInputsAndSigners{inputs: inputs, signers: signers})
-}
-
-// IsSortedAndUniqueEVMInputs returns true if the EVM Inputs are sorted and unique
-// based on the account addresses
-func IsSortedAndUniqueEVMInputs(inputs []EVMInput) bool {
-	return utils.IsSortedAndUnique(&innerSortInputsAndSigners{inputs: inputs})
-}
-
-// innerSortEVMOutputs implements sort.Interface for EVMOutput
-type innerSortEVMOutputs struct {
-	outputs []EVMOutput
-}
-
-func (outs *innerSortEVMOutputs) Less(i, j int) bool {
-	addrComp := bytes.Compare(outs.outputs[i].Address.Bytes(), outs.outputs[j].Address.Bytes())
-	if addrComp != 0 {
-		return addrComp < 0
-	}
-	return bytes.Compare(outs.outputs[i].AssetID[:], outs.outputs[j].AssetID[:]) < 0
-}
-
-func (outs *innerSortEVMOutputs) Len() int { return len(outs.outputs) }
-
-func (outs *innerSortEVMOutputs) Swap(i, j int) {
-	outs.outputs[j], outs.outputs[i] = outs.outputs[i], outs.outputs[j]
-}
-
-// SortEVMOutputs sorts the list of EVMOutputs based on the addresses and assetIDs
-// of the outputs
-func SortEVMOutputs(outputs []EVMOutput) {
-	sort.Sort(&innerSortEVMOutputs{outputs: outputs})
-}
-
-// IsSortedEVMOutputs returns true if the EVMOutputs are sorted
-// based on the account addresses and assetIDs
-func IsSortedEVMOutputs(outputs []EVMOutput) bool {
-	return sort.IsSorted(&innerSortEVMOutputs{outputs: outputs})
-}
-
-// IsSortedAndUniqueEVMOutputs returns true if the EVMOutputs are sorted
-// and unique based on the account addresses and assetIDs
-func IsSortedAndUniqueEVMOutputs(outputs []EVMOutput) bool {
-	return utils.IsSortedAndUnique(&innerSortEVMOutputs{outputs: outputs})
 }
 
 // calculates the amount of AVAX that must be burned by an atomic transaction
