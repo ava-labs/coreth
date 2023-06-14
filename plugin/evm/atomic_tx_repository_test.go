@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"testing"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/utils/set"

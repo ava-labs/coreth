@@ -10,8 +10,9 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/slices"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
