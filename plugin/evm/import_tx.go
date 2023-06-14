@@ -9,9 +9,10 @@ import (
 	"fmt"
 	"math/big"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
-	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
