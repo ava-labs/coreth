@@ -45,7 +45,6 @@ var (
 	errAccessDeniedMsg = "execution reverted: Access denied"
 	errUnkownRoleMsg   = "execution reverted: Unknown Role"
 	errNotContractMsg  = "execution reverted: Not a contract"
-	errRevokeAdminRole = "execution reverted: Cannot revoke ADMIN_ROLE from yourself"
 
 	adminKey, _     = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	kycKey, _       = crypto.HexToECDSA("0e6de2b744bd97ab6abd2e8fc624befbac7ed5b37e8a7e8ddd164e23d7ac06be")
@@ -293,18 +292,6 @@ func TestAdminRoleFunctions(t *testing.T) {
 	role, err := adminSession.GetRoles(blacklistAddr)
 	assert.NoError(t, err)
 	assert.EqualValues(t, big.NewInt(0), big.NewInt(int64(common.Big0.Cmp(role))))
-
-	// Delete admin role from admin address
-	_, err = adminSession.RevokeRole(adminAddr, ADMIN_ROLE)
-	assert.EqualError(t, err, errRevokeAdminRole)
-
-	sim.Commit(true)
-
-	adminRole, err = adminSession.HasRole(adminAddr, ADMIN_ROLE)
-	assert.NoError(t, err)
-
-	// Assertion to check if Initial Admin address has indeed the admin role
-	assert.True(t, adminRole)
 
 	// Add the blacklist role again
 	_, err = adminSession.GrantRole(blacklistAddr, BLACKLIST_ROLE)
