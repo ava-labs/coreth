@@ -183,30 +183,21 @@ func (db *cachingDB) SetAccessRecordingPrefixes(accountPrefix, storagePrefix []b
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	tr, err := trie.NewStateTrieWithRecorder(
+		trie.StateTrieID(root), db.triedb, db.disk, db.firstAccessAccountPrefix)
 	if err != nil {
 		return nil, err
-	}
-	if len(db.firstAccessAccountPrefix) > 0 {
-		tr := newAccessRecordingTrie(
-			tr,
-			&firstAccessRecorder{db.disk, db.firstAccessAccountPrefix})
-		return tr, nil
 	}
 	return tr, nil
 }
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
+	tr, err := trie.NewStateTrieWithRecorder(
+		trie.StorageTrieID(stateRoot, addrHash, root),
+		db.triedb, db.disk, db.firstAccessStoragePrefix)
 	if err != nil {
 		return nil, err
-	}
-	if len(db.firstAccessStoragePrefix) > 0 {
-		tr := newAccessRecordingTrie(
-			tr,
-			&firstAccessRecorder{db.disk, append(db.firstAccessStoragePrefix, addrHash[:]...)})
-		return tr, nil
 	}
 	return tr, nil
 }

@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -63,6 +64,9 @@ type Trie struct {
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
 	tracer *tracer
+
+	// accessRecorder is the tool to record trie accesses.
+	accessRecorder accessRecorder
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -107,6 +111,20 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 	return trie, nil
 }
 
+func NewWithAccessRecorder(id *ID, db NodeReader, diskdb ethdb.Database, prefix []byte) (*Trie, error) {
+	tr, err := New(id, db)
+	if err != nil {
+		return nil, err
+	}
+	if len(prefix) > 0 {
+		tr.accessRecorder = &firstAccessRecorder{
+			db:     diskdb,
+			prefix: prefix,
+		}
+	}
+	return tr, nil
+}
+
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db *Database) *Trie {
 	tr, _ := New(TrieID(common.Hash{}), db)
@@ -136,6 +154,19 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
 	if err == nil && didResolve {
 		t.root = newroot
+	}
+	if t.accessRecorder != nil {
+		if err == nil {
+			if err := t.accessRecorder.recordRead(key, value); err != nil {
+				return nil, err
+			}
+		} else {
+			if _, ok := err.(*MissingNodeError); ok {
+				if err := t.accessRecorder.recordNotFound(key); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	return value, err
 }

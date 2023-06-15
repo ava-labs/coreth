@@ -28,6 +28,7 @@ package trie
 
 import (
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -76,6 +77,17 @@ func NewStateTrie(id *ID, db *Database) (*StateTrie, error) {
 		panic("trie.NewStateTrie called without a database")
 	}
 	trie, err := New(id, db)
+	if err != nil {
+		return nil, err
+	}
+	return &StateTrie{trie: *trie, preimages: db.preimages}, nil
+}
+
+func NewStateTrieWithRecorder(id *ID, db *Database, diskdb ethdb.Database, prefix []byte) (*StateTrie, error) {
+	if db == nil {
+		panic("trie.NewStateTrie called without a database")
+	}
+	trie, err := NewWithAccessRecorder(id, db, diskdb, prefix)
 	if err != nil {
 		return nil, err
 	}
