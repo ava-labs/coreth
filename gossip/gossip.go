@@ -107,7 +107,6 @@ func (p *PullGossiper[T]) Start() {
 						log.Debug("failed to add transaction to the mempool", "error", err, "nodeID", nodeID, "hash", tx.Hash())
 						continue
 					}
-					return
 				}
 			}
 		case <-p.shutdown:
