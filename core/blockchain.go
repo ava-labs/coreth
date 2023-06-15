@@ -1521,7 +1521,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
-	if len(oldChain) < 1024 {
+	if len(oldChain) > 1024 {
 		log.Warn("NOT processing old chain logs for large reorg", "number", len(oldChain))
 	} else {
 		for i := len(oldChain) - 1; i >= 0; i-- {
