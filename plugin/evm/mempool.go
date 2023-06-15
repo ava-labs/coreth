@@ -12,7 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ava-labs/coreth/mempool"
+	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/metrics"
 )
 
@@ -21,8 +21,8 @@ const (
 )
 
 var (
-	errNoGasUsed                             = errors.New("no gas used")
-	_            mempool.Mempool[*MempoolTx] = (*Mempool)(nil)
+	errNoGasUsed                            = errors.New("no gas used")
+	_            gossip.Mempool[*MempoolTx] = (*Mempool)(nil)
 )
 
 // mempoolMetrics defines the metrics for the atomic mempool
@@ -77,12 +77,12 @@ type Mempool struct {
 
 	metrics *mempoolMetrics
 
-	bloomFilter *mempool.BloomFilter
+	bloomFilter *gossip.BloomFilter
 }
 
 // NewMempool returns a Mempool with [maxSize]
 func NewMempool(AVAXAssetID ids.ID, maxSize int) (*Mempool, error) {
-	bloom, err := mempool.NewBloomFilter()
+	bloom, err := gossip.NewBloomFilter()
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func (m *Mempool) GetPendingTxs() []*MempoolTx {
 	return result
 }
 
-func (m *Mempool) GetPendingTxsBloomFilter() *mempool.BloomFilter {
+func (m *Mempool) GetPendingTxsBloomFilter() *gossip.BloomFilter {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
@@ -525,7 +525,7 @@ func (m *Mempool) GetNewTxs() []*Tx {
 	return cpy
 }
 
-var _ mempool.Tx = (*MempoolTx)(nil)
+var _ gossip.Tx = (*MempoolTx)(nil)
 
 type MempoolTx struct {
 	Tx *Tx

@@ -259,7 +259,7 @@ type VM struct {
 	builder *blockBuilder
 
 	pushGossiper     Gossiper
-	ethTxGossiper    *txgossip.PullGossiper[*core.MempoolTx]
+	ethTxGossiper    *txgossip.PullGossiper[*txpool.MempoolTx]
 	atomicTxGossiper *txgossip.PullGossiper[*MempoolTx]
 
 	baseCodec codec.Registry
@@ -948,7 +948,7 @@ func (vm *VM) initBlockBuilding() {
 	vm.builder.awaitSubmittedTxs()
 	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
 
-	vm.ethTxGossiper = txgossip.NewPullGossiper[*core.MempoolTx](
+	vm.ethTxGossiper = txgossip.NewPullGossiper[*txpool.MempoolTx](
 		&ethTxGossiper{
 			txPool: vm.txPool,
 		},
@@ -996,7 +996,7 @@ func (vm *VM) setAppRequestHandlers() {
 			vm.networkCodec,
 			handlerstats.NewHandlerStats(metrics.Enabled),
 		),
-		mempoolEthTxsRequestHandler: MempoolTxsRequestHandler[*core.MempoolTx]{
+		mempoolEthTxsRequestHandler: MempoolTxsRequestHandler[*txpool.MempoolTx]{
 			mempool: vm.txPool,
 			codec:   vm.networkCodec,
 		},
@@ -1810,7 +1810,7 @@ var _ message.RequestHandler = (*appRequestHandler)(nil)
 
 type appRequestHandler struct {
 	stateSyncHandler               message.StateSyncHandler
-	mempoolEthTxsRequestHandler    MempoolTxsRequestHandler[*core.MempoolTx]
+	mempoolEthTxsRequestHandler    MempoolTxsRequestHandler[*txpool.MempoolTx]
 	mempoolAtomicTxsRequestHandler MempoolTxsRequestHandler[*MempoolTx]
 }
 

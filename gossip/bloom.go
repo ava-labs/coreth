@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2023, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package mempool
+package gossip
 
 import (
 	"encoding/binary"
@@ -10,18 +10,6 @@ import (
 
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
-
-type Tx interface {
-	Hash() []byte
-	Marshal() ([]byte, error)
-	Unmarshal(b []byte) error
-}
-
-type Mempool[T Tx] interface {
-	AddTx(tx T) error
-	GetPendingTxs() []T
-	GetPendingTxsBloomFilter() *BloomFilter
-}
 
 func NewBloomFilterFromBytes(bytes []byte) (*BloomFilter, error) {
 	b, err := NewBloomFilter()
@@ -67,7 +55,7 @@ func (b *BloomFilter) Add(hash []byte) {
 	b.resetIfNeeded()
 
 	binary.BigEndian.Uint64(hash)
-	b.bloomFilter.Add(BloomHasher{Hash: hash})
+	b.bloomFilter.Add(bloomHasher{Hash: hash})
 }
 
 // assumes [b.lock] is held
@@ -82,7 +70,7 @@ func (b *BloomFilter) Contains(hash []byte) bool {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	return b.bloomFilter.Contains(BloomHasher{Hash: hash})
+	return b.bloomFilter.Contains(bloomHasher{Hash: hash})
 }
 
 func (b *BloomFilter) MarshalBinary() ([]byte, error) {
@@ -99,13 +87,13 @@ func (b *BloomFilter) UnmarshalBinary(bytes []byte) error {
 	return b.bloomFilter.UnmarshalBinary(bytes)
 }
 
-var _ hash.Hash64 = (*BloomHasher)(nil)
+var _ hash.Hash64 = (*bloomHasher)(nil)
 
-type BloomHasher struct {
+type bloomHasher struct {
 	hash.Hash64
 	Hash []byte
 }
 
-func (b BloomHasher) Sum64() uint64 {
+func (b bloomHasher) Sum64() uint64 {
 	return binary.BigEndian.Uint64(b.Hash)
 }

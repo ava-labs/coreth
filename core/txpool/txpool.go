@@ -37,19 +37,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/mempool"
-	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/gossip"
+	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/vmerrs"
 )
 
 const (
@@ -114,7 +115,7 @@ var (
 )
 
 var (
-	_ mempool.Mempool[*MempoolTx] = (*TxPool)(nil)
+	_ gossip.Mempool[*MempoolTx] = (*TxPool)(nil)
 
 	evictionInterval      = time.Minute      // Time interval to check for evictable transactions
 	statsReportInterval   = 8 * time.Second  // Time interval to report transaction pool stats
@@ -271,7 +272,7 @@ type TxPool struct {
 	reorgFeed   event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
-	bloomFilter *mempool.BloomFilter
+	bloomFilter *gossip.BloomFilter
 	mu          sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
@@ -323,7 +324,7 @@ type txpoolResetRequest struct {
 func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain) (*TxPool, error) {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
-	bloomFilter, err := mempool.NewBloomFilter()
+	bloomFilter, err := gossip.NewBloomFilter()
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +335,7 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 		chainconfig:         chainconfig,
 		chain:               chain,
 		signer:              types.LatestSigner(chainconfig),
-		bloomFilter: bloomFilter,
+		bloomFilter:         bloomFilter,
 		pending:             make(map[common.Address]*list),
 		queue:               make(map[common.Address]*list),
 		beats:               make(map[common.Address]time.Time),
@@ -1247,7 +1248,7 @@ func (pool *TxPool) GetPendingTxs() []*MempoolTx {
 	return pendingTxs
 }
 
-func (pool *TxPool) GetPendingTxsBloomFilter() *mempool.BloomFilter {
+func (pool *TxPool) GetPendingTxsBloomFilter() *gossip.BloomFilter {
 	return pool.bloomFilter
 }
 
@@ -2104,7 +2105,7 @@ func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }
 
-var _ mempool.Tx = (*MempoolTx)(nil)
+var _ gossip.Tx = (*MempoolTx)(nil)
 
 type MempoolTx struct {
 	Tx *types.Transaction

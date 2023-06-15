@@ -8,17 +8,16 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 
-	"github.com/ava-labs/coreth/mempool"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
-type MempoolTxsRequestHandler[T mempool.Tx] struct {
-	mempool mempool.Mempool[T]
+type MempoolTxsRequestHandler[T gossip.Tx] struct {
+	mempool gossip.PendingTxs[T]
 	codec   codec.Manager
 }
 
 func (m *MempoolTxsRequestHandler[T]) OnMempoolTxRequest(_ context.Context, _ ids.NodeID, _ uint32, request message.MempoolTxsRequest) ([]byte, error) {
-	peerFilter, err := mempool.NewBloomFilterFromBytes(request.GetBloomFilter())
+	peerFilter, err := gossip.NewBloomFilterFromBytes(request.GetBloomFilter())
 	if err != nil {
 		return nil, err
 	}

@@ -41,6 +41,9 @@ const (
 	// [minGossipBatchInterval] is the minimum amount of time that must pass
 	// before our last gossip to peers.
 	minGossipBatchInterval = 50 * time.Millisecond
+
+	// How many peers to gossip transactions to at once
+	txGossipSize = 10
 )
 
 // Gossiper handles outgoing gossip of transactions

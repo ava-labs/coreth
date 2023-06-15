@@ -10,18 +10,18 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ava-labs/coreth/mempool"
+	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
-type Gossiper[Tx mempool.Tx] interface {
-	Mempool() mempool.Mempool[Tx]
+type Gossiper[Tx gossip.Tx] interface {
+	Mempool() gossip.Mempool[Tx]
 	GossipRequest() message.MempoolTxsRequest
 	Tx() Tx
 }
 
-func NewPullGossiper[Tx mempool.Tx](
+func NewPullGossiper[Tx gossip.Tx](
 	gossiper Gossiper[Tx],
 	networkClient peer.NetworkClient,
 	codec codec.Manager,
@@ -41,7 +41,7 @@ func NewPullGossiper[Tx mempool.Tx](
 	}
 }
 
-type PullGossiper[Tx mempool.Tx] struct {
+type PullGossiper[Tx gossip.Tx] struct {
 	gossiper        Gossiper[Tx]
 	client          peer.NetworkClient
 	codec           codec.Manager
