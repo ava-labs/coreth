@@ -1416,14 +1416,20 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
-		log.Info("reorg loop", "oldBlock", oldBlock.NumberU64(), "newBlock", newBlock.NumberU64())
-
 		// Old chain is longer, gather all transactions and logs as deleted ones
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
+			log.Info(
+				"reorg loop (old chain longer)",
+				"oldBlock", oldBlock.NumberU64(),
+				"newBlock", newBlock.NumberU64())
 			oldChain = append(oldChain, oldBlock)
 		}
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
+		log.Info(
+			"reorg loop (new chain longer)",
+			"oldBlock", oldBlock.NumberU64(),
+			"newBlock", newBlock.NumberU64())
 		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1) {
 			newChain = append(newChain, newBlock)
 		}
