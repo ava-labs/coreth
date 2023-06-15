@@ -393,7 +393,7 @@ func (n *pushGossiper) gossipEthTxs(force bool) (int, error) {
 }
 
 // GossipEthTxs enqueues the provided [txs] for gossiping. At some point, the
-// [gossiper] will attempt to gossip the provided txs to other nodes
+// [pushGossiper] will attempt to gossip the provided txs to other nodes
 // (usually right away if not under load).
 //
 // NOTE: We never return a non-nil error from this function but retain the
@@ -522,15 +522,5 @@ func (h *GossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip
 		}
 		h.stats.IncEthTxsGossipReceivedNew()
 	}
-	return nil
-}
-
-// noopGossiper should be used when gossip communication is not supported
-type noopGossiper struct{}
-
-func (n *noopGossiper) GossipAtomicTxs([]*Tx) error {
-	return nil
-}
-func (n *noopGossiper) GossipEthTxs([]*types.Transaction) error {
 	return nil
 }

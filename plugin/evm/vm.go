@@ -976,7 +976,7 @@ func (vm *VM) initBlockBuilding() {
 	go vm.atomicTxGossiper.Start()
 }
 
-// setAppRequestHandler sets the request handlers for the VM to serve
+// setAppRequestHandlers sets the request handlers for the VM to serve
 // application requests.
 func (vm *VM) setAppRequestHandlers() {
 	// Create separate EVM TrieDB (read only) for serving leafs requests.
