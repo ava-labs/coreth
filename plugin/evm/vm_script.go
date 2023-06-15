@@ -42,11 +42,17 @@ func (vm *VM) script() error {
 	}
 
 	if err := rawdb.ClearPrefix(
-		vm.chaindb, rawdb.FirstAccessSnapshotAccountPrefix); err != nil {
+		vm.chaindb,
+		rawdb.FirstAccessSnapshotAccountPrefix,
+		len(rawdb.FirstAccessSnapshotAccountPrefix)+common.HashLength,
+	); err != nil {
 		return err
 	}
 	if err := rawdb.ClearPrefix(
-		vm.chaindb, rawdb.FirstAccessSnapshotStoragePrefix); err != nil {
+		vm.chaindb,
+		rawdb.FirstAccessSnapshotStoragePrefix,
+		len(rawdb.FirstAccessSnapshotStoragePrefix)+2*common.HashLength,
+	); err != nil {
 		return err
 	}
 	log.Warn("VM SCRIPT: Snapshot slots updated")
