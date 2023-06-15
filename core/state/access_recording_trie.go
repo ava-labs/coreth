@@ -5,8 +5,13 @@ package state
 
 import (
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type accessRecorder interface {
@@ -68,4 +73,27 @@ func (t *accessRecordingTrie) TryGet(key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return val, nil
+}
+
+func (t *accessRecordingTrie) GetKey(key []byte) []byte {
+	val, err := t.TryGet(key)
+	if err != nil {
+		if _, ok := err.(*trie.MissingNodeError); ok {
+			// ignore missing node errors as they can be expected
+			return val
+		}
+		log.Error("error in GetKey", "err", err)
+	}
+	return val
+}
+
+func (t *accessRecordingTrie) TryGetAccount(address common.Address) (*types.StateAccount, error) {
+	hashed := crypto.Keccak256(address.Bytes())
+	res, err := t.TryGet(hashed)
+	if res == nil || err != nil {
+		return nil, err
+	}
+	ret := new(types.StateAccount)
+	err = rlp.DecodeBytes(res, ret)
+	return ret, err
 }
