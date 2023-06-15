@@ -1521,22 +1521,26 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
-	for i := len(oldChain) - 1; i >= 0; i-- {
-		log.Info("processing old chain logs", "number", oldChain[i].Number(), "hash", oldChain[i].Hash())
-		// Also send event for blocks removed from the canon chain.
-		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
+	if len(oldChain) < 1024 {
+		log.Warn("NOT processing old chain logs for large reorg", "number", len(oldChain))
+	} else {
+		for i := len(oldChain) - 1; i >= 0; i-- {
+			log.Info("processing old chain logs", "number", oldChain[i].Number(), "hash", oldChain[i].Hash())
+			// Also send event for blocks removed from the canon chain.
+			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 
-		// Collect deleted logs for notification
-		if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
-			deletedLogs = append(deletedLogs, logs...)
+			// Collect deleted logs for notification
+			if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs...)
+			}
+			if len(deletedLogs) > 512 {
+				bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+				deletedLogs = nil
+			}
 		}
-		if len(deletedLogs) > 512 {
+		if len(deletedLogs) > 0 {
 			bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
-			deletedLogs = nil
 		}
-	}
-	if len(deletedLogs) > 0 {
-		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
 	}
 
 	// New logs:
