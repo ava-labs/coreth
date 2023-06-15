@@ -1090,9 +1090,11 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
 		if err := bc.reorg(current, block); err != nil {
+			log.Error("error during reorg", "err", err)
 			return err
 		}
 	}
+	log.Info("Writing known block", "number", block.Number(), "hash", block.Hash())
 	bc.writeHeadBlock(block)
 	return nil
 }
@@ -1520,6 +1522,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
 	for i := len(oldChain) - 1; i >= 0; i-- {
+		log.Info("processing old chain logs", "number", oldChain[i].Number(), "hash", oldChain[i].Hash())
 		// Also send event for blocks removed from the canon chain.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 
@@ -1539,6 +1542,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
+		log.Info("processing new chain logs", "number", oldChain[i].Number(), "hash", oldChain[i].Hash())
 		if logs := bc.collectLogs(newChain[i], false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
