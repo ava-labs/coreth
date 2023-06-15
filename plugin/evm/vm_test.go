@@ -12,10 +12,11 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -4027,8 +4028,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 func TestGetAtomicRepositoryRepairHeights(t *testing.T) {
 	mainnetHeights := getAtomicRepositoryRepairHeights(bonusBlockMainnetHeights, canonicalBlockMainnetHeights)
 	assert.Len(t, mainnetHeights, 76)
-	sorted := sort.SliceIsSorted(mainnetHeights, func(i, j int) bool { return mainnetHeights[i] < mainnetHeights[j] })
-	assert.True(t, sorted)
+	assert.True(t, slices.IsSorted(mainnetHeights))
 }
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
