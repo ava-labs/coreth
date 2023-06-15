@@ -9,7 +9,6 @@ import (
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -88,8 +87,9 @@ func (t *accessRecordingTrie) GetKey(key []byte) []byte {
 }
 
 func (t *accessRecordingTrie) TryGetAccount(address common.Address) (*types.StateAccount, error) {
-	hashed := crypto.Keccak256(address.Bytes())
-	res, err := t.TryGet(hashed)
+	// Note we do not hash the address here, as calling t.Trie.TryGet() will
+	// already hash the address.
+	res, err := t.TryGet(address.Bytes())
 	if res == nil || err != nil {
 		return nil, err
 	}
