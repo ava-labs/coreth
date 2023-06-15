@@ -177,7 +177,9 @@ type mockHandler struct {
 	handleStateTrieCalled,
 	handleAtomicTrieCalled,
 	handleBlockRequestCalled,
-	handleCodeRequestCalled bool
+	handleCodeRequestCalled,
+	handleMempoolEthTxsRequestCalled,
+	handleMempoolAtomicTxsRequestCalled bool
 }
 
 func (m *mockHandler) HandleStateTrieLeafsRequest(context.Context, ids.NodeID, uint32, LeafsRequest) ([]byte, error) {
@@ -200,9 +202,14 @@ func (m *mockHandler) HandleCodeRequest(context.Context, ids.NodeID, uint32, Cod
 	return nil, nil
 }
 
-func (m *mockHandler) HandleMempoolEthTxsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request MempoolTxsRequest) ([]byte, error) {
-	// TODO implement me
-	panic("implement me")
+func (m *mockHandler) HandleMempoolEthTxsRequest(context.Context, ids.NodeID, uint32, *MempoolEthTxsRequest) ([]byte, error) {
+	m.handleMempoolEthTxsRequestCalled = true
+	return nil, nil
+}
+
+func (m *mockHandler) HandleMempoolAtomicTxsRequest(context.Context, ids.NodeID, uint32, *MempoolAtomicTxsRequest) ([]byte, error) {
+	m.handleMempoolAtomicTxsRequestCalled = true
+	return nil, nil
 }
 
 func (m *mockHandler) reset() {

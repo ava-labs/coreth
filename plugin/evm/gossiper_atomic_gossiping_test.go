@@ -183,7 +183,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	tx, conflictingTx := importTxs[0], importTxs[1]
 	txID := tx.ID()
 
-	mempool.AddTx(tx)
+	mempool.AddTx(&MempoolTx{Tx: tx})
 	mempool.NextTx()
 	mempool.DiscardCurrentTx(txID)
 

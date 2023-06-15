@@ -3259,7 +3259,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 		t.Fatal("Should have failed to issue due to an invalid export tx")
 	}
 
-	if err := vm.mempool.AddTx(exportTx2); err == nil {
+	if err := vm.mempool.AddTx(&MempoolTx{Tx: exportTx2}); err == nil {
 		t.Fatal("Should have failed to add because conflicting")
 	}
 
@@ -3322,7 +3322,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 		t.Fatal("Should have failed to issue invalid transaction")
 	}
 	// Force issue the transaction directly to the mempool
-	if err := vm.mempool.AddTx(tx); err != nil {
+	if err := vm.mempool.AddTx(&MempoolTx{Tx: tx}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3822,8 +3822,8 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 
 	// Add the two conflicting transactions directly to the mempool, so that two consecutive transactions
 	// will fail verification when build block is called.
-	vm.mempool.AddTx(importTxs[1])
-	vm.mempool.AddTx(importTxs[2])
+	vm.mempool.AddTx(&MempoolTx{Tx: importTxs[1]})
+	vm.mempool.AddTx(&MempoolTx{Tx: importTxs[2]})
 
 	if _, err := vm.BuildBlock(context.Background()); err == nil {
 		t.Fatal("Expected build block to fail due to empty block")
