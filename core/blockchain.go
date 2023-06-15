@@ -1494,7 +1494,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if hash == (common.Hash{}) {
 			break
 		}
-		rawdb.DeleteCanonicalHash(indexesBatch, i)
+		// NOTE:
+		// This is a temporary hack for the reprocessing script
+		// do not use in production.
+		// rawdb.DeleteCanonicalHash(indexesBatch, i)
 	}
 	if err := indexesBatch.Write(); err != nil {
 		log.Crit("Failed to delete useless indexes", "err", err)
