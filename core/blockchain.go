@@ -986,7 +986,7 @@ func (bc *BlockChain) setPreference(block *types.Block) error {
 		return nil
 	}
 
-	log.Debug("Setting preference", "number", block.Number(), "hash", block.Hash())
+	log.Info("Setting preference", "number", block.Number(), "hash", block.Hash())
 
 	// writeKnownBlock updates the head block and will handle any reorg side
 	// effects automatically.
@@ -1416,6 +1416,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
+		log.Info("reorg loop", "oldBlock", oldBlock.NumberU64(), "newBlock", newBlock.NumberU64())
+
 		// Old chain is longer, gather all transactions and logs as deleted ones
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
@@ -1454,6 +1456,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return fmt.Errorf("invalid new chain")
 		}
 	}
+	log.Info("reorg found common ancestor")
 
 	// If the commonBlock is less than the last accepted height, we return an error
 	// because performing a reorg would mean removing an accepted block from the
@@ -1473,7 +1476,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
 	} else {
-		log.Debug("Preference change (rewind to ancestor) occurred", "oldnum", oldHead.Number(), "oldhash", oldHead.Hash(), "newnum", newHead.Number(), "newhash", newHead.Hash())
+		log.Info("Preference change (rewind to ancestor) occurred", "oldnum", oldHead.Number(), "oldhash", oldHead.Hash(), "newnum", newHead.Number(), "newhash", newHead.Hash())
 	}
 	// Insert the new chain(except the head block(reverse order)),
 	// taking care of the proper incremental order.
@@ -1491,6 +1494,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// but not yet overwritten by the re-org.
 	for i := newHead.NumberU64() + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
+		log.Info("reorg processing heights above last", "height", i, "hash", hash)
 		if hash == (common.Hash{}) {
 			break
 		}
