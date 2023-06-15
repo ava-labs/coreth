@@ -1420,19 +1420,21 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
-			log.Info(
-				"reorg loop (old chain longer)",
-				"oldBlock", oldBlock.NumberU64(),
-				"newBlock", newBlock.NumberU64())
+			if number := oldBlock.NumberU64(); number%100 == 0 {
+				log.Info(
+					"reorg loop (old chain longer)",
+					"oldBlock", number, "newBlock", newBlock.NumberU64())
+			}
 			oldChain = append(oldChain, oldBlock)
 		}
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
-		log.Info(
-			"reorg loop (new chain longer)",
-			"oldBlock", oldBlock.NumberU64(),
-			"newBlock", newBlock.NumberU64())
 		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1) {
+			if number := newBlock.NumberU64(); number%100 == 0 {
+				log.Info(
+					"reorg loop (new chain longer)",
+					"oldBlock", oldBlock.NumberU64(), "newBlock", number)
+			}
 			newChain = append(newChain, newBlock)
 		}
 	}
@@ -1502,7 +1504,11 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// but not yet overwritten by the re-org.
 	for i := newHead.NumberU64() + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
-		log.Info("reorg processing heights above last", "height", i, "hash", hash)
+		if i%100 == 0 {
+			log.Info(
+				"reorg processing heights above last",
+				"height", i, "hash", hash)
+		}
 		if hash == (common.Hash{}) {
 			break
 		}
@@ -1546,7 +1552,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
-		log.Info("processing new chain logs", "number", oldChain[i].Number(), "hash", oldChain[i].Hash())
+		log.Info("processing new chain logs", "number", newChain[i].Number(), "hash", newChain[i].Hash())
 		if logs := bc.collectLogs(newChain[i], false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
