@@ -52,7 +52,6 @@ type PullGossiper[T Tx] struct {
 
 // TODO propagate fatal events instead of just logging them
 func (p *PullGossiper[T]) Start() {
-	p.shutdownWg.Add(1)
 	gossipTicker := time.NewTicker(p.gossipFrequency)
 
 	defer func() {

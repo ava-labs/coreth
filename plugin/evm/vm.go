@@ -958,6 +958,7 @@ func (vm *VM) initBlockBuilding() {
 		vm.shutdownChan,
 		&vm.shutdownWg,
 	)
+	vm.shutdownWg.Add(1)
 	go vm.ethTxGossiper.Start()
 
 	vm.atomicTxGossiper = gossip.NewPullGossiper[*MempoolTx](
@@ -971,6 +972,7 @@ func (vm *VM) initBlockBuilding() {
 		vm.shutdownChan,
 		&vm.shutdownWg,
 	)
+	vm.shutdownWg.Add(1)
 	go vm.atomicTxGossiper.Start()
 }
 
