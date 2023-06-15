@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2023, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package txgossip
+package gossip
 
 import (
 	"sync"
@@ -10,27 +10,26 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
-type Gossiper[Tx gossip.Tx] interface {
-	Mempool() gossip.Mempool[Tx]
+type Gossiper[T Tx] interface {
+	Mempool() Mempool[T]
 	GossipRequest() message.MempoolTxsRequest
-	Tx() Tx
+	Tx() T
 }
 
-func NewPullGossiper[Tx gossip.Tx](
-	gossiper Gossiper[Tx],
+func NewPullGossiper[T Tx](
+	gossiper Gossiper[T],
 	networkClient peer.NetworkClient,
 	codec codec.Manager,
 	gossipFrequency time.Duration,
 	gossipSize int,
 	shutdown chan struct{},
 	shutdownWg *sync.WaitGroup,
-) *PullGossiper[Tx] {
-	return &PullGossiper[Tx]{
+) *PullGossiper[T] {
+	return &PullGossiper[T]{
 		gossiper:        gossiper,
 		client:          networkClient,
 		codec:           codec,
@@ -41,8 +40,8 @@ func NewPullGossiper[Tx gossip.Tx](
 	}
 }
 
-type PullGossiper[Tx gossip.Tx] struct {
-	gossiper        Gossiper[Tx]
+type PullGossiper[T Tx] struct {
+	gossiper        Gossiper[T]
 	client          peer.NetworkClient
 	codec           codec.Manager
 	gossipFrequency time.Duration
@@ -52,7 +51,7 @@ type PullGossiper[Tx gossip.Tx] struct {
 }
 
 // TODO propagate fatal events instead of just logging them
-func (p *PullGossiper[Tx]) Start() {
+func (p *PullGossiper[T]) Start() {
 	p.shutdownWg.Add(1)
 	gossipTicker := time.NewTicker(p.gossipFrequency)
 

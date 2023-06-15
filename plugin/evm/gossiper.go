@@ -393,7 +393,7 @@ func (n *pushGossiper) gossipEthTxs(force bool) (int, error) {
 }
 
 // GossipEthTxs enqueues the provided [txs] for gossiping. At some point, the
-// [pushGossiper] will attempt to gossip the provided txs to other nodes
+// [gossiper] will attempt to gossip the provided txs to other nodes
 // (usually right away if not under load).
 //
 // NOTE: We never return a non-nil error from this function but retain the

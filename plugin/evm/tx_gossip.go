@@ -7,10 +7,9 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/txgossip"
 )
 
-var _ txgossip.Gossiper[*MempoolTx] = (*atomicTxGossiper)(nil)
+var _ gossip.Gossiper[*MempoolTx] = (*atomicTxGossiper)(nil)
 
 type atomicTxGossiper struct {
 	mempool *Mempool
@@ -28,7 +27,7 @@ func (a atomicTxGossiper) Tx() *MempoolTx {
 	return &MempoolTx{}
 }
 
-var _ txgossip.Gossiper[*txpool.MempoolTx] = (*ethTxGossiper)(nil)
+var _ gossip.Gossiper[*txpool.MempoolTx] = (*ethTxGossiper)(nil)
 
 type ethTxGossiper struct {
 	txPool *txpool.TxPool

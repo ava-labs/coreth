@@ -16,8 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/plugin/evm/txgossip"
-
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -30,6 +28,7 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/ethdb"
+	"github.com/ava-labs/coreth/gossip"
 	corethPrometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
@@ -258,9 +257,9 @@ type VM struct {
 
 	builder *blockBuilder
 
-	pushGossiper     Gossiper
-	ethTxGossiper    *txgossip.PullGossiper[*txpool.MempoolTx]
-	atomicTxGossiper *txgossip.PullGossiper[*MempoolTx]
+	gossiper         Gossiper
+	ethTxGossiper    *gossip.PullGossiper[*txpool.MempoolTx]
+	atomicTxGossiper *gossip.PullGossiper[*MempoolTx]
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -943,12 +942,12 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 func (vm *VM) initBlockBuilding() {
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
-	vm.pushGossiper = vm.createGossiper(gossipStats)
+	vm.gossiper = vm.createGossiper(gossipStats)
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
 
-	vm.ethTxGossiper = txgossip.NewPullGossiper[*txpool.MempoolTx](
+	vm.ethTxGossiper = gossip.NewPullGossiper[*txpool.MempoolTx](
 		&ethTxGossiper{
 			txPool: vm.txPool,
 		},
@@ -961,7 +960,7 @@ func (vm *VM) initBlockBuilding() {
 	)
 	go vm.ethTxGossiper.Start()
 
-	vm.atomicTxGossiper = txgossip.NewPullGossiper[*MempoolTx](
+	vm.atomicTxGossiper = gossip.NewPullGossiper[*MempoolTx](
 		&atomicTxGossiper{
 			mempool: vm.mempool,
 		},

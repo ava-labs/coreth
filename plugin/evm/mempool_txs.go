@@ -8,11 +8,12 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 
+	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 type MempoolTxsRequestHandler[T gossip.Tx] struct {
-	mempool gossip.PendingTxs[T]
+	mempool gossip.Mempool[T]
 	codec   codec.Manager
 }
 
