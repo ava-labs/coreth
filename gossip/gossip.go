@@ -68,22 +68,22 @@ func (p *PullGossiper[T]) Start() {
 				return
 			}
 
-			bloom := p.gossiper.Mempool().GetPendingTxsBloomFilter()
-			bloomBytes, err := bloom.MarshalBinary()
-			if err != nil {
-				log.Error("failed to marshal bloom filter", "error", err)
-				continue
-			}
-
-			request := p.gossiper.GossipRequest()
-			request.SetBloomFilter(bloomBytes)
-			requestBytes, err := message.RequestToBytes(p.codec, request)
-			if err != nil {
-				log.Error("failed to marshal gossip request", "error", err)
-				continue
-			}
-
 			for nodeID := range peers {
+				bloom := p.gossiper.Mempool().GetPendingTxsBloomFilter()
+				bloomBytes, err := bloom.MarshalBinary()
+				if err != nil {
+					log.Error("failed to marshal bloom filter", "error", err)
+					continue
+				}
+
+				request := p.gossiper.GossipRequest()
+				request.SetBloomFilter(bloomBytes)
+				requestBytes, err := message.RequestToBytes(p.codec, request)
+				if err != nil {
+					log.Error("failed to marshal gossip request", "error", err)
+					continue
+				}
+
 				responseBytes, err := p.client.SendAppRequest(nodeID, requestBytes)
 				if err != nil {
 					log.Debug("failed to send gossip request to peer", "error", err, "nodeID", nodeID)
