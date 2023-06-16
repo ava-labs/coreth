@@ -193,7 +193,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
-	prefix := append(rawdb.SnapshotStoragePrefix, addrHash.Bytes()...)
+	prefix := append(db.firstAccessStoragePrefix, addrHash.Bytes()...)
 	tr, err := trie.NewStateTrieWithRecorder(
 		trie.StorageTrieID(stateRoot, addrHash, root),
 		db.triedb, db.disk, prefix)
