@@ -71,6 +71,8 @@ func (vm *VM) script() error {
 		return fmt.Errorf("while running reprocessing with snapshot: %w", err)
 	}
 	log.Warn("VM SCRIPT: complete")
+	// This sleep prevents the restarting of the node from wasting resources.
+	time.Sleep(10 * 25 * time.Hour)
 	return errors.New("intentionally stopping VM from initializing, snapshot is not valid")
 }
 
