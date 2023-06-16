@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/eth/gasprice"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ethereum/go-ethereum/common"
@@ -60,7 +60,7 @@ func NewDefaultConfig() Config {
 		SnapshotCache:         256,
 		AcceptedCacheSize:     32,
 		Miner:                 miner.Config{},
-		TxPool:                txpool.DefaultConfig,
+		TxPool:                legacypool.DefaultConfig,
 		RPCGasCap:             25000000,
 		RPCEVMTimeout:         5 * time.Second,
 		GPO:                   DefaultFullGPOConfig,
@@ -110,7 +110,7 @@ type Config struct {
 	Miner miner.Config
 
 	// Transaction pool options
-	TxPool txpool.Config
+	TxPool legacypool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config

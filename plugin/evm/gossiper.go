@@ -107,7 +107,7 @@ func (vm *VM) createGossiper(stats GossipStats) Gossiper {
 // We assume that [txs] contains an array of nonce-ordered transactions for a given
 // account. This array of transactions can have gaps and start at a nonce lower
 // than the current state of an account.
-func (n *pushGossiper) queueExecutableTxs(state *state.StateDB, baseFee *big.Int, txs map[common.Address]types.Transactions, maxTxs int) types.Transactions {
+func (n *pushGossiper) queueExecutableTxs(state *state.StateDB, baseFee *big.Int, txs map[common.Address][]*types.Transaction, maxTxs int) types.Transactions {
 	// Setup heap for transactions
 	heads := make(types.TxByPriceAndTime, 0, len(txs))
 	for addr, accountTxs := range txs {
@@ -177,8 +177,7 @@ func (n *pushGossiper) queueRegossipTxs() types.Transactions {
 	pending := n.txPool.Pending(true)
 
 	// Split the pending transactions into locals and remotes
-	localTxs := make(map[common.Address]types.Transactions)
-	remoteTxs := pending
+	localTxs, remoteTxs := make(map[common.Address][]*types.Transaction), pending
 	for _, account := range n.txPool.Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
 			delete(remoteTxs, account)
@@ -344,7 +343,7 @@ func (n *pushGossiper) gossipEthTxs(force bool) (int, error) {
 	selectedTxs := make([]*types.Transaction, 0)
 	for _, tx := range txs {
 		txHash := tx.Hash()
-		txStatus := n.txPool.Status([]common.Hash{txHash})[0]
+		txStatus := n.txPool.Status(txHash)
 		if txStatus != txpool.TxStatusPending {
 			continue
 		}

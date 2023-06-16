@@ -30,6 +30,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -42,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/pruner"
 	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth/ethconfig"
@@ -75,7 +77,8 @@ type Ethereum struct {
 	config *Config
 
 	// Handlers
-	txPool     *txpool.TxPool
+	txPool *txpool.TxPool
+
 	blockchain *core.BlockChain
 
 	// DB interfaces
@@ -224,7 +227,12 @@ func New(
 	eth.bloomIndexer.Start(eth.blockchain)
 
 	config.TxPool.Journal = ""
-	eth.txPool = txpool.New(config.TxPool, eth.blockchain.Config(), eth.blockchain)
+	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
+
+	eth.txPool, err = txpool.New(new(big.Int).SetUint64(config.TxPool.PriceLimit), eth.blockchain, []txpool.SubPool{legacyPool})
+	if err != nil {
+		return nil, err
+	}
 
 	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), eth.EventMux(), eth.engine, clock)
 
@@ -350,7 +358,7 @@ func (s *Ethereum) Start() {
 func (s *Ethereum) Stop() error {
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
-	s.txPool.Stop()
+	s.txPool.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
 
