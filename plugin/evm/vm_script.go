@@ -30,6 +30,7 @@ func (vm *VM) script() error {
 		vm.chaindb,
 		rawdb.SnapshotAccountPrefix,
 		rawdb.FirstAccessSnapshotAccountPrefix,
+		len(rawdb.FirstAccessSnapshotAccountPrefix)+common.HashLength,
 	); err != nil {
 		return err
 	}
@@ -37,6 +38,7 @@ func (vm *VM) script() error {
 		vm.chaindb,
 		rawdb.SnapshotStoragePrefix,
 		rawdb.FirstAccessSnapshotStoragePrefix,
+		len(rawdb.FirstAccessSnapshotStoragePrefix)+2*common.HashLength,
 	); err != nil {
 		return err
 	}

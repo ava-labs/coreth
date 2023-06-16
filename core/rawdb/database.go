@@ -362,10 +362,11 @@ const (
 func ApplyPrefix(
 	db ethdb.KeyValueStore,
 	prefixDst, prefixSrc []byte,
+	keyLen int,
 ) error {
 	countRead, countNotFound := 0, 0
 
-	it := db.NewIterator(prefixSrc, nil)
+	it := NewKeyLengthIterator(db.NewIterator(prefixSrc, nil), keyLen)
 	defer it.Release()
 
 	for it.Next() {
