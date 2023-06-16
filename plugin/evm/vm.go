@@ -437,6 +437,9 @@ func (vm *VM) Initialize(
 			"OVERRIDING LAST ACCEPTED TO REPROCESS BLOCKS",
 			"lastAcceptedHash", lastAcceptedHash,
 			"lastAcceptedHeight", lastAcceptedHeight)
+
+		block := rawdb.ReadBlock(vm.chaindb, lastAcceptedHash, lastAcceptedHeight)
+		core.WriteHeadBlock(vm.chaindb, block)
 	}
 
 	// Set minimum price for mining and default gas price oracle value to the min

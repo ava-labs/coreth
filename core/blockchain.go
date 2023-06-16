@@ -2111,3 +2111,16 @@ func (bc *BlockChain) FlattenSnapshot(postAbortWork func() error, hash common.Ha
 func (bc *BlockChain) SetAccessRecordingPrefixes(accountPrefix, storagePrefix []byte) {
 	bc.stateCache.SetAccessRecordingPrefixes(accountPrefix, storagePrefix)
 }
+
+func WriteHeadBlock(db ethdb.Database, block *types.Block) {
+	batch := db.NewBatch()
+	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+
+	// Flush the whole batch into the disk, exit the node if failed
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to update chain indexes and markers", "err", err)
+	}
+}
