@@ -1239,10 +1239,14 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != nil && pool.chainconfig.IsApricotPhase3(reset.newHead.Time) {
-			_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, reset.newHead, uint64(time.Now().Unix()))
-			if err == nil {
-				pool.priced.SetBaseFee(baseFeeEstimate)
+		if reset.newHead != nil {
+			if pool.chainconfig.IsApricotPhase3(reset.newHead.Time) {
+				_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, reset.newHead, uint64(time.Now().Unix()))
+				if err == nil {
+					pool.priced.SetBaseFee(baseFeeEstimate)
+				}
+			} else {
+				pool.priced.Reheap()
 			}
 		}
 		// Update all accounts to the latest known pending nonce
