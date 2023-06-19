@@ -100,12 +100,12 @@ func NewNodeSet(owner common.Hash) *NodeSet {
 // ForEachWithOrder iterates the nodes with the order from bottom to top,
 // right to left, nodes with the longest path will be iterated first.
 func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
-	var paths sort.StringSlice
+	var paths []string
 	for path := range set.Nodes {
 		paths = append(paths, path)
 	}
 	// Bottom-up, longest path first
-	sort.Sort(sort.Reverse(paths))
+	sort.Sort(sort.Reverse(sort.StringSlice(paths)))
 	for _, path := range paths {
 		callback(path, set.Nodes[path].Unwrap())
 	}
