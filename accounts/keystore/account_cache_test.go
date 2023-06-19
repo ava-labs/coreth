@@ -33,7 +33,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"testing"
 	"time"
 
@@ -41,6 +40,7 @@ import (
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -213,7 +213,7 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	// Check that the account list is sorted by filename.
 	wantAccounts := make([]accounts.Account, len(accs))
 	copy(wantAccounts, accs)
-	sort.Sort(accountsByURL(wantAccounts))
+	slices.SortFunc(wantAccounts, byURL)
 	list := cache.accounts()
 	if !reflect.DeepEqual(list, wantAccounts) {
 		t.Fatalf("got accounts: %s\nwant %s", spew.Sdump(accs), spew.Sdump(wantAccounts))
