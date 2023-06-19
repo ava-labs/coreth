@@ -342,14 +342,14 @@ func (rb *responseBuilder) generateRangeProof(start []byte, keys [][]byte) (*mem
 		start = bytes.Repeat([]byte{0x00}, rb.keyLength)
 	}
 
-	if err := rb.t.Prove(start, 0, proof); err != nil {
+	if err := rb.t.Prove(start, proof); err != nil {
 		_ = proof.Close() // closing memdb does not error
 		return nil, err
 	}
 	if len(keys) > 0 {
 		// If there is a non-zero number of keys, set [end] for the range proof to the last key.
 		end := keys[len(keys)-1]
-		if err := rb.t.Prove(end, 0, proof); err != nil {
+		if err := rb.t.Prove(end, proof); err != nil {
 			_ = proof.Close() // closing memdb does not error
 			return nil, err
 		}
