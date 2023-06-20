@@ -266,7 +266,11 @@ func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (AtomicTrieIterat
 		return nil, err
 	}
 
-	iter := trie.NewIterator(t.NodeIterator(cursor))
+	nodeIt, err := t.NodeIterator(cursor)
+	if err != nil {
+		return nil, err
+	}
+	iter := trie.NewIterator(nodeIt)
 	return NewAtomicTrieIterator(iter, a.codec), iter.Err
 }
 

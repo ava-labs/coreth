@@ -53,7 +53,8 @@ func newStateTest() *stateTest {
 
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(types.EmptyRootHash, NewDatabaseWithConfig(db, &trie.Config{Preimages: true}), nil)
+	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
+	sdb, _ := New(types.EmptyRootHash, tdb, nil)
 	s := &stateTest{db: db, state: sdb}
 
 	// generate a few entries
@@ -69,7 +70,8 @@ func TestIterativeDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	s.state.Commit(false, false)
+	root, _ := s.state.Commit(false, false)
+	s.state, _ = New(root, tdb, nil)
 
 	b := &bytes.Buffer{}
 	s.state.IterativeDump(nil, json.NewEncoder(b))

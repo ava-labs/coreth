@@ -102,7 +102,9 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.N
 	// TODO: We should know the state root that accounts correspond to,
 	// as this information will be necessary to access storage tries when
 	// the trie is path based.
-	stateRoot := common.Hash{}
+	// Since providing a state root that is in the database is mandatory, we
+	// always provide the root of the requested trie even if it is an account.
+	stateRoot := leafsRequest.Root
 	t, err := trie.New(trie.StorageTrieID(stateRoot, leafsRequest.Account, leafsRequest.Root), lrh.trieDB)
 	if err != nil {
 		log.Debug("error opening trie when processing request, dropping request", "nodeID", nodeID, "requestID", requestID, "root", leafsRequest.Root, "err", err)
@@ -432,7 +434,11 @@ func (rb *responseBuilder) fillFromTrie(ctx context.Context, end []byte) (bool, 
 	defer func() { rb.trieReadTime += time.Since(startTime) }()
 
 	// create iterator to iterate the trie
-	it := trie.NewIterator(rb.t.NodeIterator(rb.nextKey()))
+	nodeIt, err := rb.t.NodeIterator(rb.nextKey())
+	if err != nil {
+		return false, err
+	}
+	it := trie.NewIterator(nodeIt)
 	more := false
 	for it.Next() {
 		// if we're at the end, break this loop

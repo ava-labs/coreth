@@ -29,6 +29,7 @@ package state
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -531,7 +532,8 @@ func TestCopyOfCopy(t *testing.T) {
 //
 // See https://github.com/ethereum/go-ethereum/issues/20106.
 func TestCopyCommitCopy(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	tdb := NewDatabase(rawdb.NewMemoryDatabase())
+	state, _ := New(types.EmptyRootHash, tdb, nil)
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -568,20 +570,6 @@ func TestCopyCommitCopy(t *testing.T) {
 	if val := copyOne.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("first copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
-
-	copyOne.Commit(false, false)
-	if balance := copyOne.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
-		t.Fatalf("first copy post-commit balance mismatch: have %v, want %v", balance, 42)
-	}
-	if code := copyOne.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
-		t.Fatalf("first copy post-commit code mismatch: have %x, want %x", code, []byte("hello"))
-	}
-	if val := copyOne.GetState(addr, skey); val != sval {
-		t.Fatalf("first copy post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
-	}
-	if val := copyOne.GetCommittedState(addr, skey); val != sval {
-		t.Fatalf("first copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
-	}
 	// Copy the copy and check the balance once more
 	copyTwo := copyOne.Copy()
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
@@ -593,8 +581,23 @@ func TestCopyCommitCopy(t *testing.T) {
 	if val := copyTwo.GetState(addr, skey); val != sval {
 		t.Fatalf("second copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
-	if val := copyTwo.GetCommittedState(addr, skey); val != sval {
-		t.Fatalf("second copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
+	if val := copyTwo.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("second copy committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	// Commit state, ensure states can be loaded from disk
+	root, _ := state.Commit(false, false)
+	state, _ = New(root, tdb, nil)
+	if balance := state.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
+		t.Fatalf("state post-commit balance mismatch: have %v, want %v", balance, 42)
+	}
+	if code := state.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
+		t.Fatalf("state post-commit code mismatch: have %x, want %x", code, []byte("hello"))
+	}
+	if val := state.GetState(addr, skey); val != sval {
+		t.Fatalf("state post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := state.GetCommittedState(addr, skey); val != sval {
+		t.Fatalf("state post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 }
 
@@ -654,19 +657,6 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if val := copyTwo.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("second copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
-	copyTwo.Commit(false, false)
-	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
-		t.Fatalf("second copy post-commit balance mismatch: have %v, want %v", balance, 42)
-	}
-	if code := copyTwo.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
-		t.Fatalf("second copy post-commit code mismatch: have %x, want %x", code, []byte("hello"))
-	}
-	if val := copyTwo.GetState(addr, skey); val != sval {
-		t.Fatalf("second copy post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
-	}
-	if val := copyTwo.GetCommittedState(addr, skey); val != sval {
-		t.Fatalf("second copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
-	}
 	// Copy the copy-copy and check the balance once more
 	copyThree := copyTwo.Copy()
 	if balance := copyThree.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
@@ -678,8 +668,53 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if val := copyThree.GetState(addr, skey); val != sval {
 		t.Fatalf("third copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
-	if val := copyThree.GetCommittedState(addr, skey); val != sval {
+	if val := copyThree.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("third copy committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+}
+
+// TestCommitCopy tests the copy from a committed state is not functional.
+func TestCommitCopy(t *testing.T) {
+	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+
+	// Create an account and check if the retrieved balance is correct
+	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
+	skey := common.HexToHash("aaa")
+	sval := common.HexToHash("bbb")
+
+	state.SetBalance(addr, big.NewInt(42)) // Change the account trie
+	state.SetCode(addr, []byte("hello"))   // Change an external metadata
+	state.SetState(addr, skey, sval)       // Change the storage trie
+
+	if balance := state.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
+		t.Fatalf("initial balance mismatch: have %v, want %v", balance, 42)
+	}
+	if code := state.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
+		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
+	}
+	if val := state.GetState(addr, skey); val != sval {
+		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := state.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
+	}
+	// Copy the committed state database, the copied one is not functional.
+	state.Commit(true, false)
+	copied := state.Copy()
+	if balance := copied.GetBalance(addr); balance.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("unexpected balance: have %v", balance)
+	}
+	if code := copied.GetCode(addr); code != nil {
+		t.Fatalf("unexpected code: have %x", code)
+	}
+	if val := copied.GetState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("unexpected storage slot: have %x", val)
+	}
+	if val := copied.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("unexpected storage slot: have %x", val)
+	}
+	if !errors.Is(copied.Error(), trie.ErrCommitted) {
+		t.Fatalf("unexpected state error, %v", copied.Error())
 	}
 }
 
@@ -969,9 +1004,8 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	sdb := NewDatabase(db)
 
 	// Create empty snapshot.Tree and StateDB
-	root := common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	// Use the root as both the stateRoot and blockHash for this test.
-	snapTree := snapshot.NewTestTree(db, root, root)
+	root := types.EmptyRootHash
+	snapTree := snapshot.NewTestTree(db, common.Hash{}, root)
 
 	addr := common.Address{1}
 	assetID1 := common.Hash{1}
@@ -979,6 +1013,8 @@ func TestMultiCoinSnapshot(t *testing.T) {
 
 	var stateDB *StateDB
 	assertBalances := func(regular, multicoin1, multicoin2 int64) {
+		t.Helper()
+
 		balance := stateDB.GetBalance(addr)
 		if balance.Cmp(big.NewInt(regular)) != 0 {
 			t.Fatal("incorrect non-multicoin balance")
@@ -1002,30 +1038,31 @@ func TestMultiCoinSnapshot(t *testing.T) {
 
 	// Commit and get the new root
 	root, _ = stateDB.Commit(false, false)
+	stateDB, _ = New(root, sdb, snapTree)
 	assertBalances(10, 0, 0)
 
 	// Create a new state from the latest root, add a multicoin balance, and
 	// commit it to the tree.
-	stateDB, _ = New(root, sdb, snapTree)
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(10))
 	root, _ = stateDB.Commit(false, false)
+	stateDB, _ = New(root, sdb, snapTree)
 	assertBalances(10, 10, 0)
 
 	// Add more layers than the cap and ensure the balances and layers are correct
 	for i := 0; i < 256; i++ {
-		stateDB, _ = New(root, sdb, snapTree)
 		stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
 		stateDB.AddBalanceMultiCoin(addr, assetID2, big.NewInt(2))
 		root, _ = stateDB.Commit(false, false)
+		stateDB, _ = New(root, sdb, snapTree)
 	}
 	assertBalances(10, 266, 512)
 
 	// Do one more add, including the regular balance which is now in the
 	// collapsed snapshot
-	stateDB, _ = New(root, sdb, snapTree)
 	stateDB.AddBalance(addr, big.NewInt(1))
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
-	_, _ = stateDB.Commit(false, false)
+	root, _ = stateDB.Commit(false, false)
+	stateDB, _ = New(root, sdb, snapTree)
 	assertBalances(11, 267, 512)
 }
 

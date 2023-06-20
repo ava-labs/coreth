@@ -181,6 +181,11 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 				return err
 			}
 		}
+		// open the atomic trie again, since committed tries cannot be updated
+		tr, err = a.atomicTrie.OpenTrie(root)
+		if err != nil {
+			return err
+		}
 
 		heightsIndexed++
 		if time.Since(lastUpdate) > progressLogFrequency {

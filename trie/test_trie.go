@@ -80,8 +80,17 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLea
 		t.Fatalf("error creating trieB, root=%s, err=%v", root, err)
 	}
 
-	itA := NewIterator(trieA.NodeIterator(nil))
-	itB := NewIterator(trieB.NodeIterator(nil))
+	nodeItA, err := trieA.NodeIterator(nil)
+	if err != nil {
+		t.Fatalf("error creating node iterator for trieA, root=%s, err=%v", root, err)
+	}
+	itA := NewIterator(nodeItA)
+
+	nodeItB, err := trieB.NodeIterator(nil)
+	if err != nil {
+		t.Fatalf("error creating node iterator for trieB, root=%s, err=%v", root, err)
+	}
+	itB := NewIterator(nodeItB)
 	count := 0
 	for itA.Next() && itB.Next() {
 		count++
@@ -110,7 +119,10 @@ func CorruptTrie(t *testing.T, trieDB *Database, root common.Hash, n int) {
 		t.Fatal(err)
 	}
 
-	nodeIt := tr.NodeIterator(nil)
+	nodeIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	count := 0
 	for nodeIt.Next(true) {
 		count++

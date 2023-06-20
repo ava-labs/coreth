@@ -287,7 +287,15 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
 		accMarker = dl.genMarker[:common.HashLength]
 	}
-	accIt := trie.NewIterator(accTrie.NodeIterator(accMarker))
+	accNodeIt, err := accTrie.NodeIterator(accMarker)
+	if err != nil {
+		log.Error("Generator failed to iterate account trie", "root", dl.root, "err", err)
+		abort := <-dl.genAbort
+		dl.genStats = stats
+		close(abort)
+		return
+	}
+	accIt := trie.NewIterator(accNodeIt)
 	batch := dl.diskdb.NewBatch()
 
 	// Iterate from the previous marker and continue generating the state snapshot
@@ -340,7 +348,15 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
 				storeMarker = dl.genMarker[common.HashLength:]
 			}
-			storeIt := trie.NewIterator(storeTrie.NodeIterator(storeMarker))
+			storeNodeIt, err := storeTrie.NodeIterator(storeMarker)
+			if err != nil {
+				log.Error("Generator failed to iterate storage trie", "accroot", dl.root, "acchash", accountHash, "stroot", acc.Root, "err", err)
+				abort := <-dl.genAbort
+				dl.genStats = stats
+				close(abort)
+				return
+			}
+			storeIt := trie.NewIterator(storeNodeIt)
 			for storeIt.Next() {
 				rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(storeIt.Key), storeIt.Value)
 				stats.storage += common.StorageSize(1 + 2*common.HashLength + len(storeIt.Value))
