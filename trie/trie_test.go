@@ -99,7 +99,7 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 	trie := NewEmpty(triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
-	root, nodes := trie.Commit(false)
+	root, nodes, _ := trie.Commit(false)
 	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
 	if !memonly {
@@ -188,7 +188,7 @@ func TestInsert(t *testing.T) {
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
-	root, _ = trie.Commit(false)
+	root, _, _ = trie.Commit(false)
 	if root != exp {
 		t.Errorf("case 2: exp %x got %x", exp, root)
 	}
@@ -213,7 +213,7 @@ func TestGet(t *testing.T) {
 		if i == 1 {
 			return
 		}
-		root, nodes := trie.Commit(false)
+		root, nodes, _ := trie.Commit(false)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		trie, _ = New(TrieID(root), db)
 	}
@@ -285,7 +285,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	root, nodes := trie.Commit(false)
+	root, nodes, _ := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
 	// create a new trie on top of the database and check that lookups work.
@@ -298,7 +298,7 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
-	hash, nodes := trie2.Commit(false)
+	hash, nodes, _ := trie2.Commit(false)
 	if hash != root {
 		t.Errorf("root failure. expected %x got %x", root, hash)
 	}
@@ -511,7 +511,7 @@ func runRandTest(rt randTest) bool {
 		case opHash:
 			tr.Hash()
 		case opCommit:
-			root, nodes := tr.Commit(true)
+			root, nodes, _ := tr.Commit(true)
 			if nodes != nil {
 				triedb.Update(root, origin, trienode.NewWithNodeSet(nodes))
 			}
@@ -751,7 +751,7 @@ func TestCommitAfterHash(t *testing.T) {
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
-	root, _ = trie.Commit(false)
+	root, _, _ = trie.Commit(false)
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -853,7 +853,7 @@ func TestCommitSequence(t *testing.T) {
 			trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
 		// Flush trie -> database
-		root, nodes := trie.Commit(false)
+		root, nodes, _ := trie.Commit(false)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
@@ -894,7 +894,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			trie.MustUpdate(key, val)
 		}
 		// Flush trie -> database
-		root, nodes := trie.Commit(false)
+		root, nodes, _ := trie.Commit(false)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
@@ -933,7 +933,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			stTrie.Update(key, val)
 		}
 		// Flush trie -> database
-		root, nodes := trie.Commit(false)
+		root, nodes, _ := trie.Commit(false)
 		// Flush memdb -> disk (sponge)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		db.Commit(root, false)
@@ -981,7 +981,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	trie.Update(key, []byte{0x1})
 	stTrie.Update(key, []byte{0x1})
 	// Flush trie -> database
-	root, nodes := trie.Commit(false)
+	root, nodes, _ := trie.Commit(false)
 	// Flush memdb -> disk (sponge)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	db.Commit(root, false)
@@ -1154,7 +1154,7 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	h := trie.Hash()
-	root, nodes := trie.Commit(false)
+	root, nodes, _ := trie.Commit(false)
 	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	b.StartTimer()
 	triedb.Dereference(h)

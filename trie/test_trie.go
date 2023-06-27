@@ -33,8 +33,9 @@ func GenerateTrie(t *testing.T, trieDB *Database, numKeys int, keySize int) (com
 	keys, values := FillTrie(t, numKeys, keySize, testTrie)
 
 	// Commit the root to [trieDB]
-	root, nodes := testTrie.Commit(false)
-	err := trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	root, nodes, err := testTrie.Commit(false)
+	assert.NoError(t, err)
+	err = trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	assert.NoError(t, err)
 	err = trieDB.Commit(root, false)
 	assert.NoError(t, err)
@@ -184,7 +185,10 @@ func FillAccounts(
 		accounts[key] = &acc
 	}
 
-	newRoot, nodes := tr.Commit(false)
+	newRoot, nodes, err := tr.Commit(false)
+	if err != nil {
+		t.Fatalf("error committing trie: %v", err)
+	}
 	if err := trieDB.Update(newRoot, root, trienode.NewWithNodeSet(nodes)); err != nil {
 		t.Fatalf("error updating trieDB: %v", err)
 	}

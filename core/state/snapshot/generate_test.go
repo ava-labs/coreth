@@ -202,7 +202,7 @@ func (t *testHelper) makeStorageTrie(owner common.Hash, keys []string, vals []st
 	if !commit {
 		return stTrie.Hash().Bytes()
 	}
-	root, nodes := stTrie.Commit(false)
+	root, nodes, _ := stTrie.Commit(false)
 	if nodes != nil {
 		t.nodes.Merge(nodes)
 	}
@@ -210,7 +210,7 @@ func (t *testHelper) makeStorageTrie(owner common.Hash, keys []string, vals []st
 }
 
 func (t *testHelper) Commit() common.Hash {
-	root, nodes := t.accTrie.Commit(true)
+	root, nodes, _ := t.accTrie.Commit(true)
 	if nodes != nil {
 		t.nodes.Merge(nodes)
 	}
