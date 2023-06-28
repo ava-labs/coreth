@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -53,16 +54,16 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 
 	// ContractCode retrieves a particular contract's code.
-	ContractCode(addrHash, codeHash common.Hash) ([]byte, error)
+	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
 
 	// ContractCodeSize retrieves a particular contracts code's size.
-	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
+	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
 
 	// DiskDB returns the underlying key-value disk database.
 	DiskDB() ethdb.KeyValueStore
@@ -187,8 +188,8 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error) {
+	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +207,7 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 }
 
 // ContractCode retrieves a particular contract's code.
-func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
+func (db *cachingDB) ContractCode(address common.Address, codeHash common.Hash) ([]byte, error) {
 	code, _ := db.codeCache.Get(codeHash)
 	if len(code) > 0 {
 		return code, nil
@@ -221,11 +222,11 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 }
 
 // ContractCodeSize retrieves a particular contracts code's size.
-func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
+func (db *cachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
 		return cached, nil
 	}
-	code, err := db.ContractCode(addrHash, codeHash)
+	code, err := db.ContractCode(addr, codeHash)
 	return len(code), err
 }
 

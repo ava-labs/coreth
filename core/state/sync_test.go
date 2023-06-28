@@ -22,6 +22,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -38,7 +39,7 @@ type testAccount struct {
 func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := rawdb.NewMemoryDatabase()
-	sdb := NewDatabase(db)
+	sdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
 	state, _ := New(types.EmptyRootHash, sdb, nil)
 
 	// Fill it with some arbitrary data
