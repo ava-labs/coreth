@@ -535,6 +535,8 @@ type ChainConfig struct {
 	DUpgradeBlockTimestamp *uint64 `json:"dUpgradeBlockTimestamp,omitempty"`
 	// Cancun activates the Cancun upgrade from Ethereum. (nil = no fork, 0 = already activated)
 	CancunTime *uint64 `json:"cancunTime,omitempty"`
+	// Verkle activates the Verkle upgrade from Ethereum. (nil = no fork, 0 = already activated)
+	VerkleTime *uint64 `json:"verkleTime,omitempty"`
 }
 
 // AvalancheContext provides Avalanche specific context directly into the EVM.
@@ -709,6 +711,11 @@ func (c *ChainConfig) IsCancun(time uint64) bool {
 	return utils.IsTimestampForked(c.CancunTime, time)
 }
 
+// IsVerkle returns whether num is either equal to the Verkle fork time or greater.
+func (c *ChainConfig) IsVerkle(time uint64) bool {
+	return utils.IsTimestampForked(c.VerkleTime, time)
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
@@ -798,6 +805,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "cortinaBlockTimestamp", timestamp: c.CortinaBlockTimestamp},
 		{name: "dUpgradeBlockTimestamp", timestamp: c.DUpgradeBlockTimestamp},
 		{name: "cancunTime", timestamp: c.CancunTime},
+		{name: "verkleTime", timestamp: c.CancunTime},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -900,6 +908,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, height *big.Int, time
 	}
 	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, time) {
 		return newTimestampCompatError("Cancun fork block timestamp", c.DUpgradeBlockTimestamp, newcfg.DUpgradeBlockTimestamp)
+	}
+	if isForkTimestampIncompatible(c.VerkleTime, newcfg.VerkleTime, time) {
+		return newTimestampCompatError("Verkle fork timestamp", c.VerkleTime, newcfg.VerkleTime)
 	}
 
 	return nil
@@ -1016,6 +1027,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsCancun                                                bool
+	IsVerkle                                                bool
 
 	// Rules for Avalanche releases
 	IsApricotPhase1, IsApricotPhase2, IsApricotPhase3, IsApricotPhase4, IsApricotPhase5 bool
@@ -1048,6 +1060,7 @@ func (c *ChainConfig) rules(num *big.Int, timestamp uint64) Rules {
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
 		IsCancun:         c.IsCancun(timestamp),
+		IsVerkle:         c.IsVerkle(timestamp),
 	}
 }
 
