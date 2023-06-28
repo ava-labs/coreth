@@ -219,6 +219,18 @@ func TestEVMOutputLess(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "first address greater; assetIDs equal",
+			a: EVMOutput{
+				Address: common.BytesToAddress([]byte{0x02}),
+				AssetID: ids.ID{},
+			},
+			b: EVMOutput{
+				Address: common.BytesToAddress([]byte{0x01}),
+				AssetID: ids.ID{},
+			},
+			expected: false,
+		},
+		{
 			name: "addresses equal; first assetID less",
 			a: EVMOutput{
 				Address: common.BytesToAddress([]byte{0x01}),
@@ -229,18 +241,6 @@ func TestEVMOutputLess(t *testing.T) {
 				AssetID: ids.ID{1},
 			},
 			expected: true,
-		},
-		{
-			name: "addresses equal; first assetID greater",
-			a: EVMOutput{
-				Address: common.BytesToAddress([]byte{0x01}),
-				AssetID: ids.ID{1},
-			},
-			b: EVMOutput{
-				Address: common.BytesToAddress([]byte{0x01}),
-				AssetID: ids.ID{0},
-			},
-			expected: false,
 		},
 		{
 			name:     "equal",
@@ -286,6 +286,18 @@ func TestEVMInputLess(t *testing.T) {
 			b: EVMInput{
 				Address: common.BytesToAddress([]byte{0x01}),
 				AssetID: ids.ID{1},
+			},
+			expected: false,
+		},
+		{
+			name: "first address greater; assetIDs equal",
+			a: EVMInput{
+				Address: common.BytesToAddress([]byte{0x02}),
+				AssetID: ids.ID{},
+			},
+			b: EVMInput{
+				Address: common.BytesToAddress([]byte{0x01}),
+				AssetID: ids.ID{},
 			},
 			expected: false,
 		},
