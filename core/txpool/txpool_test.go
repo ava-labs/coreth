@@ -123,7 +123,7 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 }
 
 func (bc *testBlockChain) SenderCacher() *core.TxSenderCacher {
-	return core.NewTxSenderCacher(1)
+	return &core.TxSenderCacher{}
 }
 
 func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
