@@ -21,19 +21,24 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/trienode"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+const (
+	cacheStatsUpdateFrequency = 1000 // update trie cache stats once per 1000 ops
+)
+
 // Config defines all necessary options for database.
 type Config struct {
-	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
-	Journal   string // Journal of clean cache to survive node restarts
-	Preimages bool   // Flag whether the preimage of trie key is recorded
+	Cache       int    // Memory allowance (MB) to use for caching trie nodes in memory
+	Journal     string // Journal of clean cache to survive node restarts
+	Preimages   bool   // Flag whether the preimage of trie key is recorded
+	StatsPrefix string // Prefix for cache stats (disabled if empty)
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -54,6 +59,7 @@ type backend interface {
 	// in the given set in order to update state from the specified parent to
 	// the specified root.
 	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
+	UpdateAndReferenceRoot(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
 
 	// Commit writes all relevant trie nodes belonging to the specified state
 	// to disk. Report specifies whether logs will be displayed in info level.
@@ -86,11 +92,7 @@ type Database struct {
 func prepare(diskdb ethdb.Database, config *Config) *Database {
 	var cleans cache
 	if config != nil && config.Cache > 0 {
-		if config.Journal == "" {
-			cleans = fastcache.New(config.Cache * 1024 * 1024)
-		} else {
-			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
-		}
+		cleans = utils.NewMeteredCache(config.Cache*1024*1024, config.Journal, config.StatsPrefix, cacheStatsUpdateFrequency)
 	}
 	var preimages *preimageStore
 	if config != nil && config.Preimages {
@@ -134,6 +136,13 @@ func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode
 		db.preimages.commit(false)
 	}
 	return db.backend.Update(root, parent, nodes)
+}
+
+func (db *Database) UpdateAndReferenceRoot(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
+	if db.preimages != nil {
+		db.preimages.commit(false)
+	}
+	return db.backend.UpdateAndReferenceRoot(root, parent, nodes)
 }
 
 // Commit iterates over all the children of a particular node, writes them out

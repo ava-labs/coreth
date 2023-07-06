@@ -49,6 +49,8 @@ type sigCache struct {
 // MakeSigner returns a Signer based on the given chain config and block number or time.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
 	switch {
+	case config.IsCancun(blockTime):
+		return NewCancunSigner(config.ChainID)
 	case config.IsApricotPhase3(blockTime):
 		return NewLondonSigner(config.ChainID)
 	case config.IsApricotPhase2(blockTime):
@@ -71,6 +73,9 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
+		if config.CancunTime != nil {
+			return NewCancunSigner(config.ChainID)
+		}
 		if config.ApricotPhase3BlockTimestamp != nil {
 			return NewLondonSigner(config.ChainID)
 		}

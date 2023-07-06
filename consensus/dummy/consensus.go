@@ -428,7 +428,7 @@ func (self *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, 
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(
-		header, txs, uncles, receipts, new(trie.Trie), extraData,
+		header, txs, uncles, receipts, trie.NewStackTrie(nil), extraData,
 		chain.Config().IsApricotPhase1(header.Time),
 	), nil
 }

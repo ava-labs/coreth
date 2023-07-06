@@ -201,13 +201,13 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		backend = &testBackend{
 			db: rawdb.NewMemoryDatabase(),
 		}
-		// XXX: what to do with these options?
+		// XXX: Is this mapping of options correct
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit: 256,
-			TrieDirtyLimit: 256,
-			// TrieTimeLimit:     5 * time.Minute,
-			SnapshotLimit: 0,
-			// TrieDirtyDisabled: true, // Archive mode
+			TrieCleanLimit:     256,
+			TrieDirtyLimit:     256,
+			TrieCleanRejournal: 5 * time.Minute,
+			SnapshotLimit:      0,
+			Pruning:            false, // Archive mode
 		}
 	)
 	// Generate blocks for testing
