@@ -401,7 +401,6 @@ func (ec *client) SubscribeNewAcceptedTransactions(ctx context.Context, ch chan<
 		return nil, err
 	}
 	return sub, nil
-
 }
 
 // SubscribeNewAcceptedTransactions subscribes to notifications about the accepted transaction hashes on the given channel.

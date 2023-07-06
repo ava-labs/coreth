@@ -206,7 +206,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 		firstMissing = blocks
 	)
 
-	for blockNumber := oldestBlock; blockNumber < oldestBlock+uint64(blocks); blockNumber++ {
+	for blockNumber := oldestBlock; blockNumber < oldestBlock+blocks; blockNumber++ {
 		// Check if the context has errored
 		if err := ctx.Err(); err != nil {
 			return common.Big0, nil, nil, nil, err
