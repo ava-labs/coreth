@@ -1107,7 +1107,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
 	if queued != 2 {
-		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
@@ -1472,7 +1472,7 @@ func TestRepricing(t *testing.T) {
 	if err := pool.addRemote(pricedTransaction(0, 100000, big.NewInt(2), keys[1])); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
-	if err := pool.addRemote(pricedTransaction(2, 100000, big.NewInt(2), keys[2])); err != nil {
+	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(2), keys[2])); err != nil {
 		t.Fatalf("failed to add queued transaction: %v", err)
 	}
 	if err := validateEvents(events, 5); err != nil {
@@ -1599,7 +1599,7 @@ func TestRepricingDynamicFee(t *testing.T) {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
 	tx = dynamicFeeTx(2, 100000, big.NewInt(2), big.NewInt(2), keys[2])
-	if err := pool.addRemote(tx); err != nil {
+	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add queued transaction: %v", err)
 	}
 	if err := validateEvents(events, 5); err != nil {
