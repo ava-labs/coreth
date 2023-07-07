@@ -467,7 +467,7 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blockchain.Stop()
+	defer blockchain.Stop()
 
 	for _, block := range chain {
 		if !blockchain.HasState(block.Root()) {
