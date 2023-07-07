@@ -170,11 +170,6 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
-	/*blobtxs := w.eth.BlobPool().Pending(
-		uint256.MustFromBig(env.header.BaseFee),
-		uint256.MustFromBig(misc.CalcBlobFee(*env.header.ExcessDataGas)),
-	)
-	log.Trace("Side-effect log, much wow", "blobs", len(blobtxs))*/
 
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address][]*types.Transaction), pending
