@@ -40,22 +40,22 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-type stateTest struct {
+type stateEnv struct {
 	db    ethdb.Database
 	state *StateDB
 }
 
-func newStateTest() *stateTest {
+func newStateEnv() *stateEnv {
 	db := rawdb.NewMemoryDatabase()
 	sdb, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
-	return &stateTest{db: db, state: sdb}
+	return &stateEnv{db: db, state: sdb}
 }
 
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
 	sdb, _ := New(types.EmptyRootHash, tdb, nil)
-	s := &stateTest{db: db, state: sdb}
+	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))

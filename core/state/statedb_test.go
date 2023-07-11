@@ -495,7 +495,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 }
 
 func TestTouchDelete(t *testing.T) {
-	s := newStateTest()
+	s := newStateEnv()
 	s.state.GetOrNewStateObject(common.Address{})
 	root, _ := s.state.Commit(false, false)
 	s.state, _ = NewWithSnapshot(root, s.state.db, s.state.snap)
@@ -974,7 +974,7 @@ func TestStateDBAccessList(t *testing.T) {
 }
 
 func TestMultiCoinOperations(t *testing.T) {
-	s := newStateTest()
+	s := newStateEnv()
 	addr := common.Address{1}
 	assetID := common.Hash{2}
 

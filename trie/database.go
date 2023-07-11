@@ -24,6 +24,7 @@ import (
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/trienode"
+	"github.com/ava-labs/coreth/trie/triestate"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,6 +40,9 @@ type Config struct {
 	Journal     string // Journal of clean cache to survive node restarts
 	Preimages   bool   // Flag whether the preimage of trie key is recorded
 	StatsPrefix string // Prefix for cache stats (disabled if empty)
+
+	// Testing hooks
+	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -131,14 +135,20 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
-func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+	if db.config != nil && db.config.OnCommit != nil {
+		db.config.OnCommit(states)
+	}
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
 	return db.backend.Update(root, parent, nodes)
 }
 
-func (db *Database) UpdateAndReferenceRoot(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
+func (db *Database) UpdateAndReferenceRoot(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+	if db.config != nil && db.config.OnCommit != nil {
+		db.config.OnCommit(states)
+	}
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
