@@ -116,8 +116,15 @@ func (utx *UnsignedImportTx) Verify(
 			return errOutputsNotSortedUnique
 		}
 	} else if rules.IsApricotPhase1 {
-		if !slices.IsSortedFunc(utx.Outs, func(i, j EVMOutput) bool {
-			return i.Less(j)
+		if !slices.IsSortedFunc(utx.Outs, func(i, j EVMOutput) int {
+			switch {
+			case i.Less(j):
+				return -1
+			case j.Less(i):
+				return 1
+			default:
+				return 0
+			}
 		}) {
 			return errOutputsNotSorted
 		}

@@ -31,7 +31,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
-	"hash"
 	"math/big"
 	"reflect"
 	"testing"
@@ -47,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/ethdb"
+	"github.com/ava-labs/coreth/internal/blocktest"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum"
@@ -55,7 +55,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
 )
 
@@ -671,7 +670,7 @@ func newAccounts(n int) (accounts []Account) {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		accounts = append(accounts, Account{key: key, addr: addr})
 	}
-	slices.SortFunc(accounts, func(a, b Account) bool { return a.addr.Less(b.addr) })
+	slices.SortFunc(accounts, func(a, b Account) int { return a.addr.Cmp(b.addr) })
 	return accounts
 }
 
@@ -683,31 +682,6 @@ func newRPCBalance(balance *big.Int) **hexutil.Big {
 func hex2Bytes(str string) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(common.Hex2Bytes(str))
 	return &rpcBytes
-}
-
-// testHasher is the helper tool for transaction/receipt list hashing.
-// The original hasher is trie, in order to get rid of import cycle,
-// use the testing hasher instead.
-type testHasher struct {
-	hasher hash.Hash
-}
-
-func newHasher() *testHasher {
-	return &testHasher{hasher: sha3.NewLegacyKeccak256()}
-}
-
-func (h *testHasher) Reset() {
-	h.hasher.Reset()
-}
-
-func (h *testHasher) Update(key, val []byte) error {
-	h.hasher.Write(key)
-	h.hasher.Write(val)
-	return nil
-}
-
-func (h *testHasher) Hash() common.Hash {
-	return common.BytesToHash(h.hasher.Sum(nil))
 }
 
 func TestRPCMarshalBlock(t *testing.T) {
@@ -740,7 +714,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 		}
 		txs = append(txs, tx)
 	}
-	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, nil, newHasher(), nil, false)
+	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, nil, blocktest.NewHasher(), nil, false)
 
 	var testSuite = []struct {
 		inclTx bool
@@ -806,7 +780,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			Value:    big.NewInt(111),
 			Data:     []byte{0x11, 0x11, 0x11},
 		})
-		pending = types.NewBlock(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, newHasher(), nil, true)
+		pending = types.NewBlock(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, blocktest.NewHasher(), nil, true)
 	)
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
