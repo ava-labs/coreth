@@ -66,10 +66,12 @@ type Genesis struct {
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
-	Number     uint64      `json:"number"`
-	GasUsed    uint64      `json:"gasUsed"`
-	ParentHash common.Hash `json:"parentHash"`
-	BaseFee    *big.Int    `json:"baseFeePerGas"`
+	Number        uint64      `json:"number"`
+	GasUsed       uint64      `json:"gasUsed"`
+	ParentHash    common.Hash `json:"parentHash"`
+	BaseFee       *big.Int    `json:"baseFeePerGas"`
+	ExcessDataGas *uint64     `json:"excessDataGas"` // EIP-4844
+	DataGasUsed   *uint64     `json:"dataGasUsed"`   // EIP-4844
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -101,15 +103,17 @@ type GenesisAccount struct {
 
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce      math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
-	ExtraData  hexutil.Bytes
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
-	Number     math.HexOrDecimal64
-	Difficulty *math.HexOrDecimal256
-	BaseFee    *math.HexOrDecimal256
-	Alloc      map[common.UnprefixedAddress]GenesisAccount
+	Nonce         math.HexOrDecimal64
+	Timestamp     math.HexOrDecimal64
+	ExtraData     hexutil.Bytes
+	GasLimit      math.HexOrDecimal64
+	GasUsed       math.HexOrDecimal64
+	Number        math.HexOrDecimal64
+	Difficulty    *math.HexOrDecimal256
+	Alloc         map[common.UnprefixedAddress]GenesisAccount
+	BaseFee       *math.HexOrDecimal256
+	ExcessDataGas *math.HexOrDecimal64
+	DataGasUsed   *math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -290,11 +294,23 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *trie.Database) *types.Block
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	if g.Config != nil && g.Config.IsApricotPhase3(0) {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
+	if conf := g.Config; conf != nil {
+		if conf.IsApricotPhase3(0) {
+			if g.BaseFee != nil {
+				head.BaseFee = g.BaseFee
+			} else {
+				head.BaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
+			}
+		}
+		if conf.IsCancun(g.Timestamp) {
+			head.ExcessDataGas = g.ExcessDataGas
+			head.DataGasUsed = g.DataGasUsed
+			if head.ExcessDataGas == nil {
+				head.ExcessDataGas = new(uint64)
+			}
+			if head.DataGasUsed == nil {
+				head.DataGasUsed = new(uint64)
+			}
 		}
 	}
 	statedb.Commit(false, false)
