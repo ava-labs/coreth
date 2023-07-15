@@ -110,9 +110,9 @@ type (
 		prevAccountOrigin      []byte
 		prevStorageOrigin      map[common.Hash][]byte
 	}
-	suicideChange struct {
+	selfDestructChange struct {
 		account     *common.Address
-		prev        bool // whether account had already suicided
+		prev        bool // whether account had already self-destructed
 		prevbalance *big.Int
 	}
 
@@ -197,15 +197,15 @@ func (ch resetObjectChange) dirtied() *common.Address {
 	return ch.account
 }
 
-func (ch suicideChange) revert(s *StateDB) {
+func (ch selfDestructChange) revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
-		obj.suicided = ch.prev
+		obj.selfDestructed = ch.prev
 		obj.setBalance(ch.prevbalance)
 	}
 }
 
-func (ch suicideChange) dirtied() *common.Address {
+func (ch selfDestructChange) dirtied() *common.Address {
 	return ch.account
 }
 
