@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile"
 	"github.com/ava-labs/coreth/vmerrs"
@@ -58,10 +59,6 @@ func IsProhibited(addr common.Address) bool {
 	}
 	return false
 }
-
-// emptyCodeHash is used by create to ensure deployment is disallowed to already
-// deployed contract addresses (relevant after the account abstraction).
-var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 type (
 	// CanTransferFunc is the signature of a transfer guard function
@@ -600,7 +597,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
-	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
+	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
 		return nil, common.Address{}, 0, vmerrs.ErrContractAddressCollision
 	}
 	// Create a new account on the state
