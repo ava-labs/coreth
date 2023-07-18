@@ -107,12 +107,12 @@ func (utx *UnsignedImportTx) Verify(
 			return errImportNonAVAXInputBanff
 		}
 	}
-	if !utils.IsSortedAndUnique(utx.ImportedInputs) {
+	if !utils.IsSortedAndUniqueSortable(utx.ImportedInputs) {
 		return errInputsNotSortedUnique
 	}
 
 	if rules.IsApricotPhase2 {
-		if !utils.IsSortedAndUnique(utx.Outs) {
+		if !utils.IsSortedAndUniqueSortable(utx.Outs) {
 			return errOutputsNotSortedUnique
 		}
 	} else if rules.IsApricotPhase1 {
