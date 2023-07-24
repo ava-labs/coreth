@@ -343,7 +343,7 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code(s.db)
+		return stateObject.Code()
 	}
 	return nil
 }
@@ -351,7 +351,7 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 func (s *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CodeSize(s.db)
+		return stateObject.CodeSize()
 	}
 	return 0
 }
@@ -369,7 +369,7 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		NormalizeStateKey(&hash)
-		return stateObject.GetState(s.db, hash)
+		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
 }
@@ -407,7 +407,7 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetCommittedState(s.db, hash)
+		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
 }
@@ -417,7 +417,7 @@ func (s *StateDB) GetCommittedStateAP1(addr common.Address, hash common.Hash) co
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		NormalizeStateKey(&hash)
-		return stateObject.GetCommittedState(s.db, hash)
+		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
 }
@@ -436,10 +436,10 @@ func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
 		return nil, nil
 	}
 	cpy := stateObject.deepCopy(s)
-	if _, err := cpy.updateTrie(s.db); err != nil {
+	if _, err := cpy.updateTrie(); err != nil {
 		return nil, err
 	}
-	return cpy.getTrie(s.db)
+	return cpy.getTrie()
 }
 
 func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
@@ -518,7 +518,7 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		NormalizeStateKey(&key)
-		stateObject.SetState(s.db, key, value)
+		stateObject.SetState(key, value)
 	}
 }
 
@@ -539,7 +539,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	}
 	stateObject := s.GetOrNewStateObject(addr)
 	for k, v := range storage {
-		stateObject.SetState(s.db, k, v)
+		stateObject.SetState(k, v)
 	}
 }
 
@@ -795,7 +795,7 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	if so == nil {
 		return nil
 	}
-	tr, err := so.getTrie(s.db)
+	tr, err := so.getTrie()
 	if err != nil {
 		return err
 	}
@@ -1038,7 +1038,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateRoot(s.db)
+			obj.updateRoot()
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -1225,18 +1225,21 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.H
 // trie, storage tries) will no longer be functional. A new state instance
 // must be created with new root and updated database for accessing post-
 // commit states.
-func (s *StateDB) Commit(deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
-	return s.commit(deleteEmptyObjects, nil, common.Hash{}, common.Hash{}, referenceRoot)
+//
+// The associated block number of the state transition is also provided
+// for more chain context.
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
+	return s.commit(block, deleteEmptyObjects, nil, common.Hash{}, common.Hash{}, referenceRoot)
 }
 
 // CommitWithSnap writes the state to the underlying in-memory trie database and
 // generates a snapshot layer for the newly committed state.
-func (s *StateDB) CommitWithSnap(deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
-	return s.commit(deleteEmptyObjects, snaps, blockHash, parentHash, referenceRoot)
+func (s *StateDB) CommitWithSnap(block uint64, deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
+	return s.commit(block, deleteEmptyObjects, snaps, blockHash, parentHash, referenceRoot)
 }
 
 // Commit writes the state to the underlying in-memory trie database.
-func (s *StateDB) commit(deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
+func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1271,7 +1274,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, snaps *snapshot.Tree, blockHas
 			obj.dirtyCode = false
 		}
 		// Write any storage changes in the state object to its storage trie
-		set, err := obj.commit(s.db)
+		set, err := obj.commit()
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -1351,11 +1354,11 @@ func (s *StateDB) commit(deleteEmptyObjects bool, snaps *snapshot.Tree, blockHas
 			Incomplete: incomplete,
 		}
 		if referenceRoot {
-			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, nodes, set); err != nil {
+			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, block, nodes, set); err != nil {
 				return common.Hash{}, err
 			}
 		} else {
-			if err := s.db.TrieDB().Update(root, origin, nodes, set); err != nil {
+			if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
 				return common.Hash{}, err
 			}
 		}
