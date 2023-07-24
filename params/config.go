@@ -1015,6 +1015,7 @@ type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
+	IsCancun                                                bool
 
 	// Rules for Avalanche releases
 	IsApricotPhase1, IsApricotPhase2, IsApricotPhase3, IsApricotPhase4, IsApricotPhase5 bool
@@ -1031,7 +1032,7 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) rules(num *big.Int) Rules {
+func (c *ChainConfig) rules(num *big.Int, timestamp uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -1046,13 +1047,14 @@ func (c *ChainConfig) rules(num *big.Int) Rules {
 		IsConstantinople: c.IsConstantinople(num),
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
+		IsCancun:         c.IsCancun(timestamp),
 	}
 }
 
 // AvalancheRules returns the Avalanche modified rules to support Avalanche
 // network upgrades
 func (c *ChainConfig) AvalancheRules(blockNum *big.Int, timestamp uint64) Rules {
-	rules := c.rules(blockNum)
+	rules := c.rules(blockNum, timestamp)
 
 	rules.IsApricotPhase1 = c.IsApricotPhase1(timestamp)
 	rules.IsApricotPhase2 = c.IsApricotPhase2(timestamp)

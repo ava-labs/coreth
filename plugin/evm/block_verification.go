@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -246,6 +247,14 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		case !ethHeader.BlockGasCost.IsUint64():
 			return fmt.Errorf("too large blockGasCost: %d", ethHeader.BlockGasCost)
 		}
+	}
+
+	// Verify the existence / non-existence of excessDataGas
+	if rules.IsCancun && ethHeader.ExcessDataGas == nil {
+		return errors.New("missing excessDataGas")
+	}
+	if !rules.IsCancun && ethHeader.ExcessDataGas != nil {
+		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", ethHeader.ExcessDataGas)
 	}
 
 	return nil
