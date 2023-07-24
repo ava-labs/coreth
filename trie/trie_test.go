@@ -88,7 +88,7 @@ func TestMissingRoot(t *testing.T) {
 func TestMissingNode(t *testing.T) {
 	testMissingNode(t, false, rawdb.HashScheme)
 	//testMissingNode(t, false, rawdb.PathScheme)
-	//testMissingNode(t, true, rawdb.HashScheme)
+	testMissingNode(t, true, rawdb.HashScheme)
 	//testMissingNode(t, true, rawdb.PathScheme)
 }
 

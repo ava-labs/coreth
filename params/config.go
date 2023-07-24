@@ -797,7 +797,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "banffBlockTimestamp", timestamp: c.BanffBlockTimestamp},
 		{name: "cortinaBlockTimestamp", timestamp: c.CortinaBlockTimestamp},
 		{name: "dUpgradeBlockTimestamp", timestamp: c.DUpgradeBlockTimestamp},
-		{name: "cancunTime", timestamp: c.DUpgradeBlockTimestamp},
+		{name: "cancunTime", timestamp: c.CancunTime},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
