@@ -32,6 +32,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/params"
@@ -397,13 +398,21 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, time uint64,
 		return nil
 	}
 	header := ReadHeader(db, hash, number)
+
 	var baseFee *big.Int
 	if header == nil {
 		baseFee = big.NewInt(0)
 	} else {
 		baseFee = header.BaseFee
 	}
-	if err := receipts.DeriveFields(config, hash, number, time, baseFee, body.Transactions); err != nil {
+
+	// Compute effective data gas price.
+	var dataGasPrice *big.Int
+	if header != nil && header.ExcessDataGas != nil {
+		dataGasPrice = eip4844.CalcBlobFee(*header.ExcessDataGas)
+	}
+
+	if err := receipts.DeriveFields(config, hash, number, time, baseFee, dataGasPrice, body.Transactions); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
 		return nil
 	}

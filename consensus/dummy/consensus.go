@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/misc"
+	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
@@ -233,7 +233,7 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header 
 		return fmt.Errorf("invalid dataGasUsed: have %d, expected nil", *header.DataGasUsed)
 	}
 	if cancun {
-		if err := misc.VerifyEIP4844Header(parent, header); err != nil {
+		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
 			return err
 		}
 	}

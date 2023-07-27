@@ -32,7 +32,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/misc"
+	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
@@ -401,7 +401,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 			pExcess = *parent.ExcessDataGas()
 			pUsed = *parent.DataGasUsed()
 		}
-		excess := misc.CalcExcessDataGas(pExcess, pUsed)
+		excess := eip4844.CalcExcessDataGas(pExcess, pUsed)
 		used := uint64(nBlobs * params.BlobTxDataGasPerBlob)
 		header.ExcessDataGas = &excess
 		header.DataGasUsed = &used
