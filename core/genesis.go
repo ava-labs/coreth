@@ -70,8 +70,8 @@ type Genesis struct {
 	GasUsed       uint64      `json:"gasUsed"`
 	ParentHash    common.Hash `json:"parentHash"`
 	BaseFee       *big.Int    `json:"baseFeePerGas"`
-	ExcessDataGas *uint64     `json:"excessDataGas"` // EIP-4844
-	DataGasUsed   *uint64     `json:"dataGasUsed"`   // EIP-4844
+	ExcessBlobGas *uint64     `json:"excessBlobGas"` // EIP-4844
+	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -112,8 +112,8 @@ type genesisSpecMarshaling struct {
 	Difficulty    *math.HexOrDecimal256
 	Alloc         map[common.UnprefixedAddress]GenesisAccount
 	BaseFee       *math.HexOrDecimal256
-	ExcessDataGas *math.HexOrDecimal64
-	DataGasUsed   *math.HexOrDecimal64
+	ExcessBlobGas *math.HexOrDecimal64
+	BlobGasUsed   *math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -303,13 +303,13 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *trie.Database) *types.Block
 			}
 		}
 		if conf.IsCancun(g.Timestamp) {
-			head.ExcessDataGas = g.ExcessDataGas
-			head.DataGasUsed = g.DataGasUsed
-			if head.ExcessDataGas == nil {
-				head.ExcessDataGas = new(uint64)
+			head.ExcessBlobGas = g.ExcessBlobGas
+			head.BlobGasUsed = g.BlobGasUsed
+			if head.ExcessBlobGas == nil {
+				head.ExcessBlobGas = new(uint64)
 			}
-			if head.DataGasUsed == nil {
-				head.DataGasUsed = new(uint64)
+			if head.BlobGasUsed == nil {
+				head.BlobGasUsed = new(uint64)
 			}
 		}
 	}

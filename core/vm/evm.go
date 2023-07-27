@@ -127,7 +127,7 @@ type BlockContext struct {
 	Time          uint64         // Provides information for TIME
 	Difficulty    *big.Int       // Provides information for DIFFICULTY
 	BaseFee       *big.Int       // Provides information for BASEFEE
-	ExcessDataGas *uint64        // ExcessDataGas field in the header, needed to compute the data
+	ExcessBlobGas *uint64        // ExcessBlobGas field in the header, needed to compute the data
 }
 
 func (b *BlockContext) Number() *big.Int {

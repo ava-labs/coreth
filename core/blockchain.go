@@ -1396,17 +1396,15 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 // collectUnflattenedLogs collects the logs that were generated or removed during
 // the processing of a block.
 func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*types.Log {
-	var dataGasPrice *big.Int
-	excessDataGas := b.ExcessDataGas()
-	if excessDataGas != nil {
-		dataGasPrice = eip4844.CalcBlobFee(*excessDataGas)
+	var blobGasPrice *big.Int
+	excessBlobGas := b.ExcessBlobGas()
+	if excessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(*excessBlobGas)
 	}
-
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
-	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), dataGasPrice, b.Transactions()); err != nil {
+	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), blobGasPrice, b.Transactions()); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
 	}
-
 	// Note: gross but this needs to be initialized here because returning nil will be treated specially as an incorrect
 	// error case downstream.
 	logs := make([][]*types.Log, len(receipts))

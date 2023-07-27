@@ -249,12 +249,15 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	// Verify the existence / non-existence of excessDataGas
-	if rules.IsCancun && ethHeader.ExcessDataGas == nil {
-		return errors.New("missing excessDataGas")
+	// Verify the existence / non-existence of excessBlobGas
+	if rules.IsCancun && ethHeader.ExcessBlobGas == nil {
+		return errors.New("missing excessBlobGas")
 	}
-	if !rules.IsCancun && ethHeader.ExcessDataGas != nil {
-		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", ethHeader.ExcessDataGas)
+	if !rules.IsCancun && ethHeader.ExcessBlobGas != nil {
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", ethHeader.ExcessBlobGas)
+	}
+	if !rules.IsCancun && ethHeader.BlobGasUsed != nil {
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *ethHeader.BlobGasUsed)
 	}
 
 	return nil
