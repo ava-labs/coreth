@@ -11,10 +11,11 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/x/sdk/p2p"
 )
 
-func NewHandler[T any, U TxConstraint[T]](mempool Mempool[U], codec codec.Manager, codecVersion uint16) p2p.Handler {
+// var _ p2p.Handler = &Handler[any, *any]{}
+
+func NewHandler[T any, U TxConstraint[T]](mempool Mempool[U], codec codec.Manager, codecVersion uint16) *Handler[T, U] {
 	return &Handler[T, U]{
 		mempool:      mempool,
 		codec:        codec,
@@ -32,7 +33,7 @@ func (h Handler[T, U]) AppGossip(context.Context, ids.NodeID, []byte) error {
 	return nil
 }
 
-func (h Handler[T, U]) AppRequest(_ context.Context, nodeID ids.NodeID, _ uint32, _ time.Time, requestBytes []byte) ([]byte, error) {
+func (h Handler[T, U]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ time.Time, requestBytes []byte) ([]byte, error) {
 	request := PullTxsRequest{}
 	if _, err := h.codec.Unmarshal(requestBytes, &request); err != nil {
 		return nil, err

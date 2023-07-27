@@ -262,10 +262,10 @@ type VM struct {
 
 	builder *blockBuilder
 
-	gossiper           Gossiper
-	ethTxGossiper      *gossip.Gossiper[GossipEthTx, *GossipEthTx]
-	atomicTxGossiper   *gossip.Gossiper[GossipAtomicTx, *GossipAtomicTx]
-	gossipAtomicTxPool gossip.Mempool[*GossipAtomicTx]
+	gossiper         Gossiper
+	ethTxGossiper    *gossip.Gossiper[GossipEthTx, *GossipEthTx]
+	atomicTxGossiper *gossip.Gossiper[GossipAtomicTx, *GossipAtomicTx]
+	atomicMempool    gossip.Mempool[*GossipAtomicTx]
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -969,23 +969,21 @@ func (vm *VM) initBlockBuilding() error {
 	if err != nil {
 		return err
 	}
+	vm.atomicMempool = atomicMempool
 
 	vm.Network.SetGossipHandler(NewGossipHandler(
 		vm,
 		gossipStats,
 	))
 
-	// TODO needed?
-	gossipEthTxPool := gossip.Mempool[*GossipEthTx](ethTxPool)
-	ethTxGossipHandler := gossip.NewHandler[GossipEthTx, *GossipEthTx](gossipEthTxPool, vm.codec, message.Version)
+	ethTxGossipHandler := gossip.NewHandler[GossipEthTx, *GossipEthTx](ethTxPool, vm.codec, message.Version)
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler, vm.appSender)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	vm.gossipAtomicTxPool = gossip.Mempool[*GossipAtomicTx](atomicMempool)
-	atomicTxGossipHandler := gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](vm.gossipAtomicTxPool, vm.codec, message.Version)
+	atomicTxGossipHandler := gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](atomicMempool, vm.codec, message.Version)
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(0x1, atomicTxGossipHandler, vm.appSender)
 	if err != nil {
 		return err
@@ -993,7 +991,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.atomicTxGossipClient = atomicTxGossipClient
 
 	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx, *GossipEthTx](
-		gossipEthTxPool,
+		ethTxPool,
 		vm.ethTxGossipClient,
 		vm.networkCodec,
 		message.Version,
@@ -1004,7 +1002,7 @@ func (vm *VM) initBlockBuilding() error {
 	go vm.ethTxGossiper.Pull(vm.shutdownChan, &vm.shutdownWg)
 
 	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
-		vm.gossipAtomicTxPool,
+		atomicMempool,
 		vm.atomicTxGossipClient,
 		vm.networkCodec,
 		message.Version,
@@ -1385,7 +1383,7 @@ func (vm *VM) issueTx(tx *Tx, local bool) error {
 		return err
 	}
 
-	if _, err := vm.gossipAtomicTxPool.AddTx(&GossipAtomicTx{tx}, local); err != nil {
+	if _, err := vm.atomicMempool.AddTx(&GossipAtomicTx{tx}, local); err != nil {
 		return err
 	}
 
