@@ -260,6 +260,14 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+	if h.ExcessDataGas != nil {
+		cpy.ExcessDataGas = new(uint64)
+		*cpy.ExcessDataGas = *h.ExcessDataGas
+	}
+	if h.DataGasUsed != nil {
+		cpy.DataGasUsed = new(uint64)
+		*cpy.DataGasUsed = *h.DataGasUsed
+	}
 	return &cpy
 }
 
