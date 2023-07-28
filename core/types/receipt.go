@@ -90,6 +90,8 @@ type receiptMarshaling struct {
 	CumulativeGasUsed hexutil.Uint64
 	GasUsed           hexutil.Uint64
 	EffectiveGasPrice *hexutil.Big
+	BlobGasUsed       hexutil.Uint64
+	BlobGasPrice      *hexutil.Big
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
 }
