@@ -47,10 +47,10 @@ type GossipAtomicMempool struct {
 	lock    sync.RWMutex
 }
 
-func (g *GossipAtomicMempool) AddTx(tx *GossipAtomicTx, local bool) (bool, error) {
+func (g *GossipAtomicMempool) AddTx(tx *GossipAtomicTx) (bool, error) {
 	ok, err := g.mempool.AddTx(tx.Tx)
 	if err != nil {
-		if !local {
+		if !tx.Local {
 			// unlike local txs, invalid remote txs are recorded as discarded
 			// so that they won't be requested again
 			txID := tx.ID()
@@ -101,7 +101,8 @@ func (g *GossipAtomicMempool) GetBloomFilter() ([]byte, error) {
 }
 
 type GossipAtomicTx struct {
-	Tx *Tx
+	Tx    *Tx
+	Local bool
 }
 
 func (tx *GossipAtomicTx) ID() ids.ID {
@@ -163,7 +164,7 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 
 // AddTx enqueues the transaction to the mempool. Subscribe should be called
 // to receive an event if tx is actually added to the mempool or not.
-func (g *GossipEthTxPool) AddTx(tx *GossipEthTx, _ bool) (bool, error) {
+func (g *GossipEthTxPool) AddTx(tx *GossipEthTx) (bool, error) {
 	err := g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]
 	if err != nil {
 		return false, err

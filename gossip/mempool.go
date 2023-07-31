@@ -20,7 +20,7 @@ type Tx interface {
 // Mempool holds pending transactions
 type Mempool[T Tx] interface {
 	// AddTx adds a transaction to the mempool
-	AddTx(tx T, local bool) (bool, error)
+	AddTx(tx T) (bool, error)
 	// GetTxs returns transactions that match the provided filter function
 	GetTxs(filter func(tx T) bool) []T
 	// GetBloomFilter returns a bloom filter representing the transactions in

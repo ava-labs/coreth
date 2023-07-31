@@ -41,7 +41,7 @@ type testMempool struct {
 	lock    sync.Mutex
 }
 
-func (t *testMempool) AddTx(tx *testTx, _ bool) (bool, error) {
+func (t *testMempool) AddTx(tx *testTx) (bool, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 

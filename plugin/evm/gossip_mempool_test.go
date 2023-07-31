@@ -73,7 +73,7 @@ func TestAtomicMempoolAddTx(t *testing.T) {
 			require.NoError(err)
 
 			for _, add := range tt.add {
-				ok, err := mempool.AddTx(add, false)
+				ok, err := mempool.AddTx(add)
 				require.True(ok)
 				require.NoError(err)
 			}

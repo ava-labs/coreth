@@ -94,7 +94,7 @@ func (g *Gossiper[T, U]) Pull(
 						continue
 					}
 
-					ok, err := g.mempool.AddTx(tx, true)
+					ok, err := g.mempool.AddTx(tx)
 					if err != nil {
 						log.Debug("failed to add transaction to the mempool", "error", err, "nodeID", nodeID, "id", tx.ID())
 						continue

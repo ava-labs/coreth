@@ -1383,7 +1383,8 @@ func (vm *VM) issueTx(tx *Tx, local bool) error {
 		return err
 	}
 
-	if _, err := vm.atomicMempool.AddTx(&GossipAtomicTx{tx}, local); err != nil {
+	gossipTx := &GossipAtomicTx{Tx: tx, Local: local}
+	if _, err := vm.atomicMempool.AddTx(gossipTx); err != nil {
 		return err
 	}
 
