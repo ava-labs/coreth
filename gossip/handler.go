@@ -15,16 +15,16 @@ import (
 
 // var _ p2p.Handler = &Handler[any, *any]{}
 
-func NewHandler[T any, U TxConstraint[T]](mempool Mempool[U], codec codec.Manager, codecVersion uint16) *Handler[T, U] {
+func NewHandler[T any, U GossipableAny[T]](set Set[U], codec codec.Manager, codecVersion uint16) *Handler[T, U] {
 	return &Handler[T, U]{
-		mempool:      mempool,
+		set:          set,
 		codec:        codec,
 		codecVersion: codecVersion,
 	}
 }
 
-type Handler[T any, U TxConstraint[T]] struct {
-	mempool      Mempool[U]
+type Handler[T any, U GossipableAny[T]] struct {
+	set          Set[U]
 	codec        codec.Manager
 	codecVersion uint16
 }
@@ -34,7 +34,7 @@ func (h Handler[T, U]) AppGossip(context.Context, ids.NodeID, []byte) error {
 }
 
 func (h Handler[T, U]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ time.Time, requestBytes []byte) ([]byte, error) {
-	request := PullTxsRequest{}
+	request := PullGossipRequest{}
 	if _, err := h.codec.Unmarshal(requestBytes, &request); err != nil {
 		return nil, err
 	}
@@ -43,20 +43,21 @@ func (h Handler[T, U]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ t
 		return nil, err
 	}
 
-	unknownTxs := h.mempool.GetTxs(func(tx U) bool {
-		return !peerFilter.Contains(NewHasher(tx.ID()))
+	// filter out what the requesting peer already knows about
+	unknown := h.set.Get(func(gossipable U) bool {
+		return !peerFilter.Contains(NewHasher(gossipable.GetID()))
 	})
-	txs := make([][]byte, 0, len(unknownTxs))
-	for _, tx := range unknownTxs {
-		bytes, err := tx.Marshal()
+	gossipBytes := make([][]byte, 0, len(unknown))
+	for _, gossipable := range unknown {
+		bytes, err := gossipable.Marshal()
 		if err != nil {
 			return nil, err
 		}
-		txs = append(txs, bytes)
+		gossipBytes = append(gossipBytes, bytes)
 	}
 
-	response := PullTxsResponse{
-		Txs: txs,
+	response := PullGossipResponse{
+		GossipBytes: gossipBytes,
 	}
 	responseBytes, err := h.codec.Marshal(h.codecVersion, response)
 	if err != nil {

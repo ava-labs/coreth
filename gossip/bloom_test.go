@@ -49,13 +49,13 @@ func TestBloomFilterRefresh(t *testing.T) {
 
 			for _, item := range tt.add {
 				ResetBloomFilterIfNeeded(&b, tt.refreshRatio)
-				b.Add(hasher{ID: item})
+				b.Add(NewHasher(item))
 			}
 
 			require.Equal(uint64(len(tt.expected)), b.N())
 
 			for _, expected := range tt.expected {
-				require.True(b.Contains(hasher{ID: expected}))
+				require.True(b.Contains(NewHasher(expected)))
 			}
 		})
 	}

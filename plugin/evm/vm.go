@@ -265,7 +265,7 @@ type VM struct {
 	gossiper         Gossiper
 	ethTxGossiper    *gossip.Gossiper[GossipEthTx, *GossipEthTx]
 	atomicTxGossiper *gossip.Gossiper[GossipAtomicTx, *GossipAtomicTx]
-	atomicMempool    gossip.Mempool[*GossipAtomicTx]
+	atomicMempool    gossip.Set[*GossipAtomicTx]
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -957,6 +957,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.gossiper = vm.createGossiper(gossipStats)
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
+	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
 
 	ethTxPool, err := NewGossipEthTxPool(vm.txPool)
 	if err != nil {
@@ -970,11 +971,6 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 	vm.atomicMempool = atomicMempool
-
-	vm.Network.SetGossipHandler(NewGossipHandler(
-		vm,
-		gossipStats,
-	))
 
 	ethTxGossipHandler := gossip.NewHandler[GossipEthTx, *GossipEthTx](ethTxPool, vm.codec, message.Version)
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler, vm.appSender)
@@ -1384,7 +1380,7 @@ func (vm *VM) issueTx(tx *Tx, local bool) error {
 	}
 
 	gossipTx := &GossipAtomicTx{Tx: tx, Local: local}
-	if _, err := vm.atomicMempool.AddTx(gossipTx); err != nil {
+	if _, err := vm.atomicMempool.Add(gossipTx); err != nil {
 		return err
 	}
 
@@ -1824,8 +1820,4 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
-}
-
-func (vm *VM) IssueTx(tx *Tx, b bool) error {
-	return vm.issueTx(tx, b)
 }

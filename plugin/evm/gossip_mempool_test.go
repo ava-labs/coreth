@@ -73,12 +73,12 @@ func TestAtomicMempoolAddTx(t *testing.T) {
 			require.NoError(err)
 
 			for _, add := range tt.add {
-				ok, err := mempool.AddTx(add)
+				ok, err := mempool.Add(add)
 				require.True(ok)
 				require.NoError(err)
 			}
 
-			txs := mempool.GetTxs(tt.filter)
+			txs := mempool.Get(tt.filter)
 			require.Len(txs, len(tt.expected))
 
 			for _, expected := range tt.expected {
@@ -183,7 +183,7 @@ func TestAtomicMempoolAddTx(t *testing.T) {
 // 				<-pending
 // 			}
 //
-// 			txs := mempool.GetTxs(tt.filter)
+// 			txs := mempool.Get(tt.filter)
 // 			require.Len(txs, len(tt.expected))
 //
 // 			for _, expected := range tt.expected {

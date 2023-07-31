@@ -3,10 +3,10 @@
 
 package gossip
 
-type PullTxsRequest struct {
+type PullGossipRequest struct {
 	BloomFilter []byte `serialize:"true"`
 }
 
-type PullTxsResponse struct {
-	Txs [][]byte `serialize:"true"`
+type PullGossipResponse struct {
+	GossipBytes [][]byte `serialize:"true"`
 }

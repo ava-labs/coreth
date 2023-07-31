@@ -3,27 +3,24 @@
 
 package gossip
 
-import (
-	"github.com/ava-labs/avalanchego/ids"
-)
+import "github.com/ava-labs/avalanchego/ids"
 
-// Tx is a transaction that can be gossiped across the network.
-type Tx interface {
-	// ID returns the unique id of this transaction
-	ID() ids.ID
-	// Marshal returns the byte representation of this transaction
+// Gossipable is an item that can be gossiped across the network
+type Gossipable interface {
+	// GetID represents the unique id of this item
+	GetID() ids.ID
+	// Marshal returns the byte representation of this item
 	Marshal() ([]byte, error)
 	// Unmarshal deserializes the provided bytes in-place
 	Unmarshal(b []byte) error
 }
 
-// Mempool holds pending transactions
-type Mempool[T Tx] interface {
-	// AddTx adds a transaction to the mempool
-	AddTx(tx T) (bool, error)
-	// GetTxs returns transactions that match the provided filter function
-	GetTxs(filter func(tx T) bool) []T
-	// GetBloomFilter returns a bloom filter representing the transactions in
-	// the mempool
+// Set holds a set of known Gossipable items
+type Set[T Gossipable] interface {
+	// Add adds a Gossipable to the set
+	Add(gossipable T) (bool, error)
+	// Get returns elements that match the provided filter function
+	Get(filter func(gossipable T) bool) []T
+	// GetBloomFilter returns a bloom filter representing the items in Set.
 	GetBloomFilter() ([]byte, error)
 }

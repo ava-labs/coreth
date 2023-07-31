@@ -15,13 +15,13 @@ import (
 	"github.com/ava-labs/avalanchego/x/sdk/p2p"
 )
 
-type TxConstraint[T any] interface {
+type GossipableAny[T any] interface {
 	*T
-	Tx
+	Gossipable
 }
 
-func NewGossiper[T any, U TxConstraint[T]](
-	mempool Mempool[U],
+func NewGossiper[T any, U GossipableAny[T]](
+	set Set[U],
 	client *p2p.Client,
 	codec codec.Manager,
 	codecVersion uint16,
@@ -29,7 +29,7 @@ func NewGossiper[T any, U TxConstraint[T]](
 	frequency time.Duration,
 ) *Gossiper[T, U] {
 	return &Gossiper[T, U]{
-		mempool:      mempool,
+		set:          set,
 		client:       client,
 		codec:        codec,
 		codecVersion: codecVersion,
@@ -38,8 +38,8 @@ func NewGossiper[T any, U TxConstraint[T]](
 	}
 }
 
-type Gossiper[T any, U TxConstraint[T]] struct {
-	mempool      Mempool[U]
+type Gossiper[T any, U GossipableAny[T]] struct {
+	set          Set[U]
 	client       *p2p.Client
 	codec        codec.Manager
 	codecVersion uint16
@@ -60,13 +60,13 @@ func (g *Gossiper[T, U]) Pull(
 	for {
 		select {
 		case <-gossipTicker.C:
-			bloom, err := g.mempool.GetBloomFilter()
+			bloom, err := g.set.GetBloomFilter()
 			if err != nil {
 				log.Warn("failed to marshal bloom filter", "error", err)
 				continue
 			}
 
-			request := PullTxsRequest{
+			request := PullGossipRequest{
 				BloomFilter: bloom,
 			}
 			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
@@ -77,30 +77,30 @@ func (g *Gossiper[T, U]) Pull(
 
 			onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
 				if err != nil {
-					log.Warn("failed to pull txs", "nodeID", nodeID, "error", err)
+					log.Warn("failed gossip request", "nodeID", nodeID, "error", err)
 					return
 				}
 
-				response := PullTxsResponse{}
+				response := PullGossipResponse{}
 				if _, err := g.codec.Unmarshal(responseBytes, &response); err != nil {
-					log.Warn("failed to unmarshal txs", "error", err)
+					log.Warn("failed to unmarshal gossip", "error", err)
 					return
 				}
 
-				for _, txBytes := range response.Txs {
-					tx := U(new(T))
-					if err := tx.Unmarshal(txBytes); err != nil {
+				for _, gossipBytes := range response.GossipBytes {
+					gossipable := U(new(T))
+					if err := gossipable.Unmarshal(gossipBytes); err != nil {
 						log.Debug("failed to unmarshal transaction", "error", err, "nodeID", nodeID)
 						continue
 					}
 
-					ok, err := g.mempool.AddTx(tx)
+					ok, err := g.set.Add(gossipable)
 					if err != nil {
-						log.Debug("failed to add transaction to the mempool", "error", err, "nodeID", nodeID, "id", tx.ID())
+						log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetID())
 						continue
 					}
 					if !ok {
-						log.Debug("failed to add transaction to the mempool", "error", err, "nodeID", nodeID, "id", tx.ID())
+						log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetID())
 						continue
 					}
 				}
@@ -108,12 +108,12 @@ func (g *Gossiper[T, U]) Pull(
 
 			for i := 0; i < g.gossipSize; i++ {
 				if err := g.client.AppRequestAny(context.TODO(), msgBytes, onResponse); err != nil {
-					log.Warn("failed to gossip txs", "error", err)
+					log.Warn("failed to gossip", "error", err)
 					continue
 				}
 			}
 		case <-shutdownChan:
-			log.Debug("shutting down tx gossip")
+			log.Debug("shutting down gossip")
 			return
 		}
 	}

@@ -41,16 +41,16 @@ func ResetBloomFilterIfNeeded(
 }
 
 func NewHasher(id ids.ID) hash.Hash64 {
-	return hasher{ID: id}
+	return hasher{id: id}
 }
 
 type hasher struct {
 	hash.Hash64
-	ID ids.ID
+	id ids.ID
 }
 
 func (h hasher) Sum64() uint64 {
-	return binary.BigEndian.Uint64(h.ID[:])
+	return binary.BigEndian.Uint64(h.id[:])
 }
 
 func (h hasher) Size() int {

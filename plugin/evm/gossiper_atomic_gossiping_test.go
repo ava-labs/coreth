@@ -15,6 +15,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
+
 	"github.com/ava-labs/coreth/gossip"
 
 	"github.com/stretchr/testify/assert"
@@ -64,7 +65,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 	addedToBloomFilter := false
 	sender.SendAppRequestF = func(ctx context.Context, _ set.Set[ids.NodeID], _ uint32, bytes []byte) error {
 		bytes = bytes[1:] // first byte is an identifier
-		msg := gossip.PullTxsRequest{}
+		msg := gossip.PullGossipRequest{}
 		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
 		require.NoError(t, err)
 

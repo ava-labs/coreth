@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/coreth/gossip"
@@ -14,19 +15,17 @@ import (
 
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 
-	"github.com/ava-labs/avalanchego/ids"
-
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 )
 
 var (
-	_ gossip.Mempool[*GossipAtomicTx] = (*GossipAtomicMempool)(nil)
-	_ gossip.Tx                       = (*GossipAtomicTx)(nil)
+	_ gossip.Set[*GossipAtomicTx] = (*GossipAtomicMempool)(nil)
+	_ gossip.Gossipable           = (*GossipAtomicTx)(nil)
 
-	_ gossip.Mempool[*GossipEthTx] = (*GossipEthTxPool)(nil)
-	_ gossip.Tx                    = (*GossipEthTx)(nil)
+	_ gossip.Set[*GossipEthTx] = (*GossipEthTxPool)(nil)
+	_ gossip.Gossipable        = (*GossipEthTx)(nil)
 )
 
 func NewGossipAtomicMempool(Mempool *Mempool) (*GossipAtomicMempool, error) {
@@ -47,14 +46,14 @@ type GossipAtomicMempool struct {
 	lock    sync.RWMutex
 }
 
-func (g *GossipAtomicMempool) AddTx(tx *GossipAtomicTx) (bool, error) {
+func (g *GossipAtomicMempool) Add(tx *GossipAtomicTx) (bool, error) {
 	ok, err := g.mempool.AddTx(tx.Tx)
 	if err != nil {
 		if !tx.Local {
 			// unlike local txs, invalid remote txs are recorded as discarded
 			// so that they won't be requested again
-			txID := tx.ID()
-			g.mempool.discardedTxs.Put(tx.ID(), tx.Tx)
+			txID := tx.Tx.ID()
+			g.mempool.discardedTxs.Put(txID, tx.Tx)
 			log.Debug("failed to issue remote tx to mempool",
 				"txID", txID,
 				"err", err,
@@ -70,13 +69,13 @@ func (g *GossipAtomicMempool) AddTx(tx *GossipAtomicTx) (bool, error) {
 	g.lock.Lock()
 	defer g.lock.Unlock()
 
-	g.bloom.Add(gossip.NewHasher(tx.ID()))
+	g.bloom.Add(gossip.NewHasher(tx.GetID()))
 	gossip.ResetBloomFilterIfNeeded(&g.bloom, gossip.DefaultBloomMaxFilledRatio)
 
 	return true, nil
 }
 
-func (g *GossipAtomicMempool) GetTxs(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
+func (g *GossipAtomicMempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
 	f := func(tx *Tx) bool {
 		return filter(&GossipAtomicTx{
 			Tx: tx,
@@ -105,7 +104,7 @@ type GossipAtomicTx struct {
 	Local bool
 }
 
-func (tx *GossipAtomicTx) ID() ids.ID {
+func (tx *GossipAtomicTx) GetID() ids.ID {
 	return tx.Tx.ID()
 }
 
@@ -164,7 +163,7 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 
 // AddTx enqueues the transaction to the mempool. Subscribe should be called
 // to receive an event if tx is actually added to the mempool or not.
-func (g *GossipEthTxPool) AddTx(tx *GossipEthTx) (bool, error) {
+func (g *GossipEthTxPool) Add(tx *GossipEthTx) (bool, error) {
 	err := g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]
 	if err != nil {
 		return false, err
@@ -173,7 +172,7 @@ func (g *GossipEthTxPool) AddTx(tx *GossipEthTx) (bool, error) {
 	return true, nil
 }
 
-func (g *GossipEthTxPool) GetTxs(filter func(tx *GossipEthTx) bool) []*GossipEthTx {
+func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx {
 	pending, _ := g.mempool.Content()
 	result := make([]*GossipEthTx, 0)
 
@@ -202,7 +201,7 @@ type GossipEthTx struct {
 	Tx *types.Transaction
 }
 
-func (tx *GossipEthTx) ID() ids.ID {
+func (tx *GossipEthTx) GetID() ids.ID {
 	return ids.ID(tx.Tx.Hash())
 }
 

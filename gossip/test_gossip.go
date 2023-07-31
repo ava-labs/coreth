@@ -12,15 +12,15 @@ import (
 )
 
 var (
-	_ Tx               = (*testTx)(nil)
-	_ Mempool[*testTx] = (*testMempool)(nil)
+	_ Gossipable   = (*testTx)(nil)
+	_ Set[*testTx] = (*testMempool)(nil)
 )
 
 type testTx struct {
 	id ids.ID
 }
 
-func (t *testTx) ID() ids.ID {
+func (t *testTx) GetID() ids.ID {
 	return t.id
 }
 
@@ -41,7 +41,7 @@ type testMempool struct {
 	lock    sync.Mutex
 }
 
-func (t *testMempool) AddTx(tx *testTx) (bool, error) {
+func (t *testMempool) Add(tx *testTx) (bool, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -49,7 +49,7 @@ func (t *testMempool) AddTx(tx *testTx) (bool, error) {
 	return true, nil
 }
 
-func (t *testMempool) GetTxs(filter func(tx *testTx) bool) []*testTx {
+func (t *testMempool) Get(filter func(tx *testTx) bool) []*testTx {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -74,7 +74,7 @@ func (t *testMempool) GetBloomFilter() ([]byte, error) {
 	}
 
 	for _, tx := range t.mempool {
-		bloom.Add(hasher{ID: tx.ID()})
+		bloom.Add(NewHasher(tx.GetID()))
 	}
 
 	return bloom.MarshalBinary()
