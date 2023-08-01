@@ -71,26 +71,26 @@ func (g *Gossiper[T, U]) Pull(
 			}
 			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
 			if err != nil {
-				log.Warn("failed to marshal gossip message", "error", err)
+				log.Warn("failed to marshal gossip request", "error", err)
 				continue
 			}
 
 			onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
 				if err != nil {
-					log.Warn("failed gossip request", "nodeID", nodeID, "error", err)
+					log.Debug("failed gossip request", "nodeID", nodeID, "error", err)
 					return
 				}
 
 				response := PullGossipResponse{}
 				if _, err := g.codec.Unmarshal(responseBytes, &response); err != nil {
-					log.Warn("failed to unmarshal gossip", "error", err)
+					log.Debug("failed to unmarshal gossip response", "error", err)
 					return
 				}
 
 				for _, gossipBytes := range response.GossipBytes {
 					gossipable := U(new(T))
 					if err := gossipable.Unmarshal(gossipBytes); err != nil {
-						log.Debug("failed to unmarshal transaction", "error", err, "nodeID", nodeID)
+						log.Debug("failed to unmarshal gossip", "error", err, "nodeID", nodeID)
 						continue
 					}
 
