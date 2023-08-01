@@ -27,7 +27,7 @@ type Handler[T Gossipable] struct {
 	codecVersion uint16
 }
 
-func (h Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
+func (Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
 	return nil
 }
 
