@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 )
 
+// GossipableAny exists to help create non-nil pointers to a concrete Gossipable
 type GossipableAny[T any] interface {
 	*T
 	Gossipable
