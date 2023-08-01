@@ -13,27 +13,25 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 )
 
-// var _ p2p.Handler = &Handler[any, *any]{}
-
-func NewHandler[T any, U GossipableAny[T]](set Set[U], codec codec.Manager, codecVersion uint16) *Handler[T, U] {
-	return &Handler[T, U]{
+func NewHandler[T Gossipable](set Set[T], codec codec.Manager, codecVersion uint16) *Handler[T] {
+	return &Handler[T]{
 		set:          set,
 		codec:        codec,
 		codecVersion: codecVersion,
 	}
 }
 
-type Handler[T any, U GossipableAny[T]] struct {
-	set          Set[U]
+type Handler[T Gossipable] struct {
+	set          Set[T]
 	codec        codec.Manager
 	codecVersion uint16
 }
 
-func (h Handler[T, U]) AppGossip(context.Context, ids.NodeID, []byte) error {
+func (h Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
 	return nil
 }
 
-func (h Handler[T, U]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ time.Time, requestBytes []byte) ([]byte, error) {
+func (h Handler[T]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ time.Time, requestBytes []byte) ([]byte, error) {
 	request := PullGossipRequest{}
 	if _, err := h.codec.Unmarshal(requestBytes, &request); err != nil {
 		return nil, err
@@ -44,7 +42,7 @@ func (h Handler[T, U]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ t
 	}
 
 	// filter out what the requesting peer already knows about
-	unknown := h.set.Get(func(gossipable U) bool {
+	unknown := h.set.Get(func(gossipable T) bool {
 		return !peerFilter.Contains(NewHasher(gossipable.GetID()))
 	})
 	gossipBytes := make([][]byte, 0, len(unknown))
@@ -67,6 +65,6 @@ func (h Handler[T, U]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ t
 	return responseBytes, nil
 }
 
-func (Handler[T, U]) CrossChainAppRequest(context.Context, ids.ID, uint32, time.Time, []byte) ([]byte, error) {
+func (Handler[T]) CrossChainAppRequest(context.Context, ids.ID, uint32, time.Time, []byte) ([]byte, error) {
 	return nil, nil
 }

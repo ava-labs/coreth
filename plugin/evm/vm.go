@@ -970,14 +970,14 @@ func (vm *VM) initBlockBuilding() error {
 	}
 	vm.atomicMempool = atomicMempool
 
-	ethTxGossipHandler := gossip.NewHandler[GossipEthTx, *GossipEthTx](ethTxPool, vm.codec, message.Version)
+	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, vm.codec, message.Version)
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](atomicMempool, vm.codec, message.Version)
+	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](atomicMempool, vm.codec, message.Version)
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(0x1, atomicTxGossipHandler)
 	if err != nil {
 		return err
