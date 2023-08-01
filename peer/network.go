@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/x/p2p"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/ava-labs/avalanchego/network/p2p"
 
 	"github.com/ethereum/go-ethereum/log"
 
@@ -336,14 +337,13 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	log.Debug("received AppRequest from node", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request))
 
-	if err := n.router.AppRequest(ctx, nodeID, requestID, deadline, request); err == nil {
-		return nil
-	}
-	// if we errored, it's possible that this is a non-sdk request
-
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		log.Debug("failed to unmarshal app request", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
+		// this might be an sdk request
+		if err := n.router.AppRequest(ctx, nodeID, requestID, deadline, request); err == nil {
+			log.Debug("failed to unmarshal app request", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
+		}
+
 		return nil
 	}
 
@@ -384,13 +384,13 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
 
-	if err := n.router.AppResponse(ctx, nodeID, requestID, response); err == nil {
-		return nil
-	}
-	// if we errored, it's possible that this is a non-sdk response
-
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
+		// this might be an sdk response
+		if err := n.router.AppResponse(ctx, nodeID, requestID, response); err == nil {
+			return nil
+		}
+
 		// Should never happen since the engine should be managing outstanding requests
 		log.Error("received AppResponse to unknown request", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return nil

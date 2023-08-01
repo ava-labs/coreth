@@ -17,7 +17,7 @@ import (
 	"time"
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
-	"github.com/ava-labs/avalanchego/x/p2p"
+	"github.com/ava-labs/avalanchego/network/p2p"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	corethConstants "github.com/ava-labs/coreth/constants"
@@ -265,7 +265,6 @@ type VM struct {
 	gossiper         Gossiper
 	ethTxGossiper    *gossip.Gossiper[GossipEthTx, *GossipEthTx]
 	atomicTxGossiper *gossip.Gossiper[GossipAtomicTx, *GossipAtomicTx]
-	atomicMempool    gossip.Set[*GossipAtomicTx]
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -504,14 +503,17 @@ func (vm *VM) Initialize(
 	vm.codec = Codec
 
 	// TODO: read size from settings
-	vm.mempool = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mempool: %w", err)
+	}
 
 	if err := vm.initializeMetrics(); err != nil {
 		return err
 	}
 
 	// initialize peer network
-	vm.router = p2p.NewRouter(appSender)
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -964,12 +966,6 @@ func (vm *VM) initBlockBuilding() error {
 	vm.shutdownWg.Add(1)
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
-	atomicMempool, err := NewGossipAtomicMempool(vm.mempool)
-	if err != nil {
-		return err
-	}
-	vm.atomicMempool = atomicMempool
-
 	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, vm.codec, message.Version)
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler)
 	if err != nil {
@@ -977,7 +973,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](atomicMempool, vm.codec, message.Version)
+	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, vm.codec, message.Version)
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(0x1, atomicTxGossipHandler)
 	if err != nil {
 		return err
@@ -996,7 +992,7 @@ func (vm *VM) initBlockBuilding() error {
 	go vm.ethTxGossiper.Pull(vm.shutdownChan, &vm.shutdownWg)
 
 	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
-		atomicMempool,
+		vm.mempool,
 		vm.atomicTxGossipClient,
 		vm.networkCodec,
 		message.Version,
@@ -1377,8 +1373,19 @@ func (vm *VM) issueTx(tx *Tx, local bool) error {
 		return err
 	}
 
-	gossipTx := &GossipAtomicTx{Tx: tx, Local: local}
-	if _, err := vm.atomicMempool.Add(gossipTx); err != nil {
+	// add to mempool and possibly re-gossip
+	if err := vm.mempool.AddTx(tx); err != nil {
+		if !local {
+			// unlike local txs, invalid remote txs are recorded as discarded
+			// so that they won't be requested again
+			txID := tx.ID()
+			vm.mempool.discardedTxs.Put(tx.ID(), tx)
+			log.Debug("failed to issue remote tx to mempool",
+				"txID", txID,
+				"err", err,
+			)
+			return nil
+		}
 		return err
 	}
 

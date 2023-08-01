@@ -21,87 +21,12 @@ import (
 )
 
 var (
-	_ gossip.Set[*GossipAtomicTx] = (*GossipAtomicMempool)(nil)
-	_ gossip.Gossipable           = (*GossipAtomicTx)(nil)
-
 	_ gossip.Set[*GossipEthTx] = (*GossipEthTxPool)(nil)
 	_ gossip.Gossipable        = (*GossipEthTx)(nil)
 )
 
-func NewGossipAtomicMempool(Mempool *Mempool) (*GossipAtomicMempool, error) {
-	bloom, err := bloomfilter.New(gossip.DefaultBloomM, gossip.DefaultBloomK)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
-	}
-
-	return &GossipAtomicMempool{
-		mempool: Mempool,
-		bloom:   bloom,
-	}, nil
-}
-
-type GossipAtomicMempool struct {
-	mempool *Mempool
-	bloom   *bloomfilter.Filter
-	lock    sync.RWMutex
-}
-
-func (g *GossipAtomicMempool) Add(tx *GossipAtomicTx) (bool, error) {
-	ok, err := g.mempool.AddTx(tx.Tx)
-	if err != nil {
-		if !tx.Local {
-			// unlike local txs, invalid remote txs are recorded as discarded
-			// so that they won't be requested again
-			txID := tx.Tx.ID()
-			g.mempool.discardedTxs.Put(txID, tx.Tx)
-			log.Debug("failed to issue remote tx to mempool",
-				"txID", txID,
-				"err", err,
-			)
-		}
-		return false, err
-	}
-
-	if !ok {
-		return false, nil
-	}
-
-	g.lock.Lock()
-	defer g.lock.Unlock()
-
-	g.bloom.Add(gossip.NewHasher(tx.GetID()))
-	g.bloom, _ = gossip.ResetBloomFilterIfNeeded(g.bloom, gossip.DefaultBloomMaxFilledRatio)
-
-	return true, nil
-}
-
-func (g *GossipAtomicMempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
-	f := func(tx *Tx) bool {
-		return filter(&GossipAtomicTx{
-			Tx: tx,
-		})
-	}
-	txs := g.mempool.GetTxs(f)
-	gossipTxs := make([]*GossipAtomicTx, 0, len(txs))
-	for _, tx := range txs {
-		gossipTxs = append(gossipTxs, &GossipAtomicTx{
-			Tx: tx,
-		})
-	}
-
-	return gossipTxs
-}
-
-func (g *GossipAtomicMempool) GetBloomFilter() ([]byte, error) {
-	g.lock.RLock()
-	defer g.lock.RUnlock()
-
-	return g.bloom.MarshalBinary()
-}
-
 type GossipAtomicTx struct {
-	Tx    *Tx
-	Local bool
+	Tx *Tx
 }
 
 func (tx *GossipAtomicTx) GetID() ids.ID {
@@ -163,13 +88,12 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 
 // Add enqueues the transaction to the mempool. Subscribe should be called
 // to receive an event if tx is actually added to the mempool or not.
-func (g *GossipEthTxPool) Add(tx *GossipEthTx) (bool, error) {
-	err := g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]
-	if err != nil {
-		return false, err
+func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
+	if err := g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]; err != nil {
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx {

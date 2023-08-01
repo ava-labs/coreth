@@ -38,12 +38,12 @@ type testMempool struct {
 	lock    sync.Mutex
 }
 
-func (t *testMempool) Add(tx *testTx) (bool, error) {
+func (t *testMempool) Add(tx *testTx) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	t.mempool = append(t.mempool, tx)
-	return true, nil
+	return nil
 }
 
 func (t *testMempool) Get(filter func(tx *testTx) bool) []*testTx {

@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/avalanchego/x/p2p"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -55,7 +56,7 @@ var (
 
 func TestNetworkDoesNotConnectToItself(t *testing.T) {
 	selfNodeID := ids.GenerateTestNodeID()
-	n := NewNetwork(p2p.NewRouter(nil), nil, nil, nil, selfNodeID, 1, 1)
+	n := NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), nil, nil, nil, selfNodeID, 1, 1)
 	assert.NoError(t, n.Connected(context.Background(), selfNodeID, defaultPeerVersion))
 	assert.EqualValues(t, 0, n.Size())
 }
@@ -91,7 +92,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	crossChainCodecManager := buildCodec(t, ExampleCrossChainRequest{}, ExampleCrossChainResponse{})
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 16, 16)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 16, 16)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
 	client := NewNetworkClient(net)
 	nodeID := ids.GenerateTestNodeID()
@@ -166,7 +167,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	crossChainCodecManager := buildCodec(t, ExampleCrossChainRequest{}, ExampleCrossChainResponse{})
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 16, 16)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 16, 16)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
 	client := NewNetworkClient(net)
 
@@ -246,7 +247,7 @@ func TestAppRequestOnShutdown(t *testing.T) {
 
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	crossChainCodecManager := buildCodec(t, ExampleCrossChainRequest{}, ExampleCrossChainResponse{})
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	client := NewNetworkClient(net)
 	nodeID := ids.GenerateTestNodeID()
 	require.NoError(t, net.Connected(context.Background(), nodeID, defaultPeerVersion))
@@ -295,7 +296,7 @@ func TestRequestMinVersion(t *testing.T) {
 	}
 
 	// passing nil as codec works because the net.AppRequest is never called
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 16)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 16)
 	client := NewNetworkClient(net)
 	requestMessage := TestMessage{Message: "this is a request"}
 	requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
@@ -358,7 +359,7 @@ func TestOnRequestHonoursDeadline(t *testing.T) {
 		processingDuration: 500 * time.Millisecond,
 	}
 
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	net.SetRequestHandler(requestHandler)
 	nodeID := ids.GenerateTestNodeID()
 
@@ -398,7 +399,7 @@ func TestGossip(t *testing.T) {
 	}
 
 	gossipHandler := &testGossipHandler{}
-	clientNetwork = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	clientNetwork = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	clientNetwork.SetGossipHandler(gossipHandler)
 
 	assert.NoError(t, clientNetwork.Connected(context.Background(), nodeID, defaultPeerVersion))
@@ -425,7 +426,7 @@ func TestHandleInvalidMessages(t *testing.T) {
 	requestID := uint32(1)
 	sender := testAppSender{}
 
-	clientNetwork := NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	clientNetwork := NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	clientNetwork.SetGossipHandler(message.NoopMempoolGossipHandler{})
 	clientNetwork.SetRequestHandler(&testRequestHandler{})
 
@@ -475,7 +476,7 @@ func TestNetworkPropagatesRequestHandlerError(t *testing.T) {
 	requestID := uint32(1)
 	sender := testAppSender{}
 
-	clientNetwork := NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	clientNetwork := NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	clientNetwork.SetGossipHandler(message.NoopMempoolGossipHandler{})
 	clientNetwork.SetRequestHandler(&testRequestHandler{err: errors.New("fail")}) // Return an error from the request handler
 
@@ -515,7 +516,7 @@ func TestCrossChainAppRequest(t *testing.T) {
 		},
 	}
 
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	net.SetCrossChainRequestHandler(&testCrossChainHandler{codec: crossChainCodecManager})
 	client := NewNetworkClient(net)
 
@@ -570,7 +571,7 @@ func TestCrossChainRequestRequestsRoutingAndResponse(t *testing.T) {
 
 	codecManager := buildCodec(t, TestMessage{})
 	crossChainCodecManager := buildCodec(t, ExampleCrossChainRequest{}, ExampleCrossChainResponse{})
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	net.SetCrossChainRequestHandler(&testCrossChainHandler{codec: crossChainCodecManager})
 	client := NewNetworkClient(net)
 
@@ -630,7 +631,7 @@ func TestCrossChainRequestOnShutdown(t *testing.T) {
 	}
 	codecManager := buildCodec(t, TestMessage{})
 	crossChainCodecManager := buildCodec(t, ExampleCrossChainRequest{}, ExampleCrossChainResponse{})
-	net = NewNetwork(p2p.NewRouter(nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
+	net = NewNetwork(p2p.NewRouter(logging.NoLog{}, nil), sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	client := NewNetworkClient(net)
 
 	exampleCrossChainRequest := ExampleCrossChainRequest{

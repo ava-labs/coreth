@@ -7,11 +7,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ethereum/go-ethereum/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 )
+
+var _ p2p.Handler = (*Handler[Gossipable])(nil)
 
 func NewHandler[T Gossipable](set Set[T], codec codec.Manager, codecVersion uint16) *Handler[T] {
 	return &Handler[T]{
@@ -27,18 +31,16 @@ type Handler[T Gossipable] struct {
 	codecVersion uint16
 }
 
-func (Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
-	return nil
-}
-
-func (h Handler[T]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ time.Time, requestBytes []byte) ([]byte, error) {
+func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time, requestBytes []byte) ([]byte, error) {
 	request := PullGossipRequest{}
 	if _, err := h.codec.Unmarshal(requestBytes, &request); err != nil {
-		return nil, err
+		log.Info("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
+		return nil, nil
 	}
 	peerFilter := &bloomfilter.Filter{}
 	if err := peerFilter.UnmarshalBinary(request.BloomFilter); err != nil {
-		return nil, err
+		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
+		return nil, nil
 	}
 
 	// filter out what the requesting peer already knows about
@@ -65,6 +67,10 @@ func (h Handler[T]) AppRequest(_ context.Context, _ ids.NodeID, _ uint32, _ time
 	return responseBytes, nil
 }
 
-func (Handler[T]) CrossChainAppRequest(context.Context, ids.ID, uint32, time.Time, []byte) ([]byte, error) {
+func (h Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
+	return nil
+}
+
+func (h Handler[T]) CrossChainAppRequest(context.Context, ids.ID, time.Time, []byte) ([]byte, error) {
 	return nil, nil
 }

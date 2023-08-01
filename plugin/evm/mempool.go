@@ -9,9 +9,11 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/metrics"
 )
 
@@ -70,12 +72,19 @@ type Mempool struct {
 	txHeap *txHeap
 	// utxoSpenders maps utxoIDs to the transaction consuming them in the mempool
 	utxoSpenders map[ids.ID]*Tx
+	// bloom is a bloom filter containing the txs in the mempool
+	bloom *bloomfilter.Filter
 
 	metrics *mempoolMetrics
 }
 
 // NewMempool returns a Mempool with [maxSize]
-func NewMempool(AVAXAssetID ids.ID, maxSize int) *Mempool {
+func NewMempool(AVAXAssetID ids.ID, maxSize int) (*Mempool, error) {
+	bloom, err := bloomfilter.New(gossip.DefaultBloomM, gossip.DefaultBloomK)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
+	}
+
 	return &Mempool{
 		AVAXAssetID:  AVAXAssetID,
 		issuedTxs:    make(map[ids.ID]*Tx),
@@ -85,8 +94,9 @@ func NewMempool(AVAXAssetID ids.ID, maxSize int) *Mempool {
 		txHeap:       newTxHeap(maxSize),
 		maxSize:      maxSize,
 		utxoSpenders: make(map[ids.ID]*Tx),
+		bloom:        bloom,
 		metrics:      newMempoolMetrics(),
-	}
+	}, nil
 }
 
 // Len returns the number of transactions in the mempool
@@ -126,9 +136,13 @@ func (m *Mempool) atomicTxGasPrice(tx *Tx) (uint64, error) {
 	return burned / gasUsed, nil
 }
 
+func (m *Mempool) Add(tx *GossipAtomicTx) error {
+	return m.AddTx(tx.Tx)
+}
+
 // Add attempts to add [tx] to the mempool and returns an error if
 // it could not be addeed to the mempool.
-func (m *Mempool) AddTx(tx *Tx) (bool, error) {
+func (m *Mempool) AddTx(tx *Tx) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -136,7 +150,7 @@ func (m *Mempool) AddTx(tx *Tx) (bool, error) {
 }
 
 // forceAddTx forcibly adds a *Tx to the mempool and bypasses all verification.
-func (m *Mempool) ForceAddTx(tx *Tx) (bool, error) {
+func (m *Mempool) ForceAddTx(tx *Tx) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -177,31 +191,31 @@ func (m *Mempool) checkConflictTx(tx *Tx) (uint64, ids.ID, []*Tx, error) {
 
 // addTx adds [tx] to the mempool. Assumes [m.lock] is held.
 // If [force], skips conflict checks within the mempool.
-func (m *Mempool) addTx(tx *Tx, force bool) (bool, error) {
+func (m *Mempool) addTx(tx *Tx, force bool) error {
 	txID := tx.ID()
 	// If [txID] has already been issued or is in the currentTxs map
 	// there's no need to add it.
 	if _, exists := m.issuedTxs[txID]; exists {
-		return false, nil
+		return nil
 	}
 	if _, exists := m.currentTxs[txID]; exists {
-		return false, nil
+		return nil
 	}
 	if _, exists := m.txHeap.Get(txID); exists {
-		return false, nil
+		return nil
 	}
 
 	utxoSet := tx.InputUTXOs()
 	gasPrice, _ := m.atomicTxGasPrice(tx)
 	highestGasPrice, highestGasPriceConflictTxID, conflictingTxs, err := m.checkConflictTx(tx)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if len(conflictingTxs) != 0 && !force {
 		// If [tx] does not have a higher fee than all of its conflicts,
 		// we refuse to issue it to the mempool.
 		if highestGasPrice >= gasPrice {
-			return false, fmt.Errorf(
+			return fmt.Errorf(
 				"%w: issued tx (%s) gas price %d <= conflict tx (%s) gas price %d (%d total conflicts in mempool)",
 				errConflictingAtomicTx,
 				txID,
@@ -226,7 +240,7 @@ func (m *Mempool) addTx(tx *Tx, force bool) (bool, error) {
 			// submitted item, discard the submitted item (we prefer items
 			// already in the mempool).
 			if minGasPrice >= gasPrice {
-				return false, fmt.Errorf(
+				return fmt.Errorf(
 					"%w currentMin=%d provided=%d",
 					errInsufficientAtomicTxFee,
 					minGasPrice,
@@ -238,7 +252,7 @@ func (m *Mempool) addTx(tx *Tx, force bool) (bool, error) {
 		} else {
 			// This could occur if we have used our entire size allowance on
 			// transactions that are currently processing.
-			return false, errTooManyAtomicTx
+			return errTooManyAtomicTx
 		}
 	}
 
@@ -267,7 +281,35 @@ func (m *Mempool) addTx(tx *Tx, force bool) (bool, error) {
 	// and CancelCurrentTx.
 	m.newTxs = append(m.newTxs, tx)
 	m.addPending()
-	return true, nil
+
+	m.bloom.Add(gossip.NewHasher(tx.ID()))
+	m.bloom, _ = gossip.ResetBloomFilterIfNeeded(m.bloom, gossip.DefaultBloomMaxFilledRatio)
+
+	return nil
+}
+
+func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
+	f := func(tx *Tx) bool {
+		return filter(&GossipAtomicTx{
+			Tx: tx,
+		})
+	}
+	txs := m.GetTxs(f)
+	gossipTxs := make([]*GossipAtomicTx, 0, len(txs))
+	for _, tx := range txs {
+		gossipTxs = append(gossipTxs, &GossipAtomicTx{
+			Tx: tx,
+		})
+	}
+
+	return gossipTxs
+}
+
+func (m *Mempool) GetBloomFilter() ([]byte, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	return m.bloom.MarshalBinary()
 }
 
 // NextTx returns a transaction to be issued from the mempool.

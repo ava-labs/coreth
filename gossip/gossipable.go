@@ -18,7 +18,7 @@ type Gossipable interface {
 // Set holds a set of known Gossipable items
 type Set[T Gossipable] interface {
 	// Add adds a Gossipable to the set
-	Add(gossipable T) (bool, error)
+	Add(gossipable T) error
 	// Get returns elements that match the provided filter function
 	Get(filter func(gossipable T) bool) []T
 	// GetBloomFilter returns a bloom filter representing the items in Set.

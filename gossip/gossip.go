@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/x/p2p"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p"
 )
 
 // GossipableAny exists to help create non-nil pointers to a concrete Gossipable
@@ -76,39 +76,8 @@ func (g *Gossiper[T, U]) Pull(
 				continue
 			}
 
-			onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
-				if err != nil {
-					log.Debug("failed gossip request", "nodeID", nodeID, "error", err)
-					return
-				}
-
-				response := PullGossipResponse{}
-				if _, err := g.codec.Unmarshal(responseBytes, &response); err != nil {
-					log.Debug("failed to unmarshal gossip response", "error", err)
-					return
-				}
-
-				for _, gossipBytes := range response.GossipBytes {
-					gossipable := U(new(T))
-					if err := gossipable.Unmarshal(gossipBytes); err != nil {
-						log.Debug("failed to unmarshal gossip", "error", err, "nodeID", nodeID)
-						continue
-					}
-
-					ok, err := g.set.Add(gossipable)
-					if err != nil {
-						log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetID())
-						continue
-					}
-					if !ok {
-						log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetID())
-						continue
-					}
-				}
-			}
-
 			for i := 0; i < g.gossipSize; i++ {
-				if err := g.client.AppRequestAny(context.TODO(), msgBytes, onResponse); err != nil {
+				if err := g.client.AppRequestAny(context.TODO(), msgBytes, g.handleResponse); err != nil {
 					log.Warn("failed to gossip", "error", err)
 					continue
 				}
@@ -116,6 +85,32 @@ func (g *Gossiper[T, U]) Pull(
 		case <-shutdownChan:
 			log.Debug("shutting down gossip")
 			return
+		}
+	}
+}
+
+func (g *Gossiper[T, U]) handleResponse(nodeID ids.NodeID, responseBytes []byte, err error) {
+	if err != nil {
+		log.Debug("failed gossip request", "nodeID", nodeID, "error", err)
+		return
+	}
+
+	response := PullGossipResponse{}
+	if _, err := g.codec.Unmarshal(responseBytes, &response); err != nil {
+		log.Debug("failed to unmarshal gossip response", "error", err)
+		return
+	}
+
+	for _, gossipBytes := range response.GossipBytes {
+		gossipable := U(new(T))
+		if err := gossipable.Unmarshal(gossipBytes); err != nil {
+			log.Debug("failed to unmarshal gossip", "error", err, "nodeID", nodeID)
+			continue
+		}
+
+		if err := g.set.Add(gossipable); err != nil {
+			log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetID())
+			continue
 		}
 	}
 }
