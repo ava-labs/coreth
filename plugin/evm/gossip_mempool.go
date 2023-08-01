@@ -70,7 +70,7 @@ func (g *GossipAtomicMempool) Add(tx *GossipAtomicTx) (bool, error) {
 	defer g.lock.Unlock()
 
 	g.bloom.Add(gossip.NewHasher(tx.GetID()))
-	gossip.ResetBloomFilterIfNeeded(&g.bloom, gossip.DefaultBloomMaxFilledRatio)
+	g.bloom, _ = gossip.ResetBloomFilterIfNeeded(g.bloom, gossip.DefaultBloomMaxFilledRatio)
 
 	return true, nil
 }
@@ -154,7 +154,7 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 			g.lock.Lock()
 			for _, tx := range tx.Txs {
 				g.bloom.Add(gossip.NewHasher(ids.ID(tx.Hash())))
-				gossip.ResetBloomFilterIfNeeded(&g.bloom, gossip.DefaultBloomMaxFilledRatio)
+				g.bloom, _ = gossip.ResetBloomFilterIfNeeded(g.bloom, gossip.DefaultBloomMaxFilledRatio)
 			}
 			g.lock.Unlock()
 		}

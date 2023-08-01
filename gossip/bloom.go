@@ -25,19 +25,17 @@ var _ hash.Hash64 = (*hasher)(nil)
 // ResetBloomFilterIfNeeded resets a bloom filter if it breaches a ratio of
 // filled elements. Returns true if the bloom filter was reset.
 func ResetBloomFilterIfNeeded(
-	bloomFilter **bloomfilter.Filter,
+	bloomFilter *bloomfilter.Filter,
 	maxFilledRatio float64,
-) bool {
-	if (*bloomFilter).PreciseFilledRatio() < maxFilledRatio {
-		return false
+) (*bloomfilter.Filter, bool) {
+	if bloomFilter.PreciseFilledRatio() < maxFilledRatio {
+		return bloomFilter, false
 	}
 
 	// it's not possible for this to error assuming that the original
 	// bloom filter's parameters were valid
 	fresh, _ := bloomfilter.New((*bloomFilter).M(), (*bloomFilter).K())
-	*bloomFilter = fresh
-
-	return true
+	return fresh, true
 }
 
 func NewHasher(id ids.ID) hash.Hash64 {

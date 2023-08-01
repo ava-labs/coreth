@@ -48,7 +48,7 @@ func TestBloomFilterRefresh(t *testing.T) {
 			require.NoError(err)
 
 			for _, item := range tt.add {
-				ResetBloomFilterIfNeeded(&b, tt.refreshRatio)
+				b, _ = ResetBloomFilterIfNeeded(b, tt.refreshRatio)
 				b.Add(NewHasher(item))
 			}
 
