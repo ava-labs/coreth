@@ -23,6 +23,7 @@ import (
 
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
+	"github.com/ava-labs/coreth/trie/triedb/pathdb"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/trie/triestate"
 	"github.com/ava-labs/coreth/utils"
@@ -36,10 +37,11 @@ const (
 
 // Config defines all necessary options for database.
 type Config struct {
-	Cache       int    // Memory allowance (MB) to use for caching trie nodes in memory
-	Journal     string // Journal of clean cache to survive node restarts
-	Preimages   bool   // Flag whether the preimage of trie key is recorded
-	StatsPrefix string // Prefix for cache stats (disabled if empty)
+	Cache       int            // Memory allowance (MB) to use for caching trie nodes in memory
+	Journal     string         // Journal of clean cache to survive node restarts
+	Preimages   bool           // Flag whether the preimage of trie key is recorded
+	PathDB      *pathdb.Config // Configs for experimental path-based scheme, not used yet.
+	StatsPrefix string         // Prefix for cache stats (disabled if empty)
 
 	// Testing hooks
 	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
@@ -62,8 +64,11 @@ type backend interface {
 	// Update performs a state transition by committing dirty nodes contained
 	// in the given set in order to update state from the specified parent to
 	// the specified root.
-	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
-	UpdateAndReferenceRoot(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
+	//
+	// The passed in maps(nodes, states) will be retained to avoid copying
+	// everything. Therefore, these maps must not be changed afterwards.
+	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error
+	UpdateAndReferenceRoot(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error
 
 	// Commit writes all relevant trie nodes belonging to the specified state
 	// to disk. Report specifies whether logs will be displayed in info level.
@@ -128,13 +133,22 @@ func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
-	return db.backend.(*hashdb.Database).Reader(blockRoot)
+	switch b := db.backend.(type) {
+	case *hashdb.Database:
+		return b.Reader(blockRoot)
+	case *pathdb.Database:
+		return b.Reader(blockRoot)
+	}
+	return nil, errors.New("unknown backend")
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
+//
+// The passed in maps(nodes, states) will be retained to avoid copying everything.
+// Therefore, these maps must not be changed afterwards.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	if db.config != nil && db.config.OnCommit != nil {
 		db.config.OnCommit(states)
@@ -142,7 +156,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
-	return db.backend.Update(root, parent, nodes)
+	return db.backend.Update(root, parent, block, nodes, states)
 }
 
 func (db *Database) UpdateAndReferenceRoot(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
@@ -152,7 +166,7 @@ func (db *Database) UpdateAndReferenceRoot(root common.Hash, parent common.Hash,
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
-	return db.backend.UpdateAndReferenceRoot(root, parent, nodes)
+	return db.backend.UpdateAndReferenceRoot(root, parent, block, nodes, states)
 }
 
 // Commit iterates over all the children of a particular node, writes them out

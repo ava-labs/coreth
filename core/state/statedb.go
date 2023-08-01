@@ -1124,8 +1124,8 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 		if it.Hash() == (common.Hash{}) {
 			continue
 		}
-		nodeSize += common.StorageSize(len(it.Path()) + len(it.NodeBlob()))
-		set.AddNode(it.Path(), trienode.NewWithPrev(common.Hash{}, nil, it.NodeBlob()))
+		nodeSize += common.StorageSize(len(it.Path()))
+		set.AddNode(it.Path(), trienode.NewDeleted())
 	}
 	if err := it.Error(); err != nil {
 		return false, nil, nil, err
@@ -1348,17 +1348,12 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 	}
 	if root != origin {
 		start := time.Now()
-		set := &triestate.Set{
-			Accounts:   s.accountsOrigin,
-			Storages:   s.storagesOrigin,
-			Incomplete: incomplete,
-		}
 		if referenceRoot {
-			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, block, nodes, set); err != nil {
+			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, block, nodes, triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)); err != nil {
 				return common.Hash{}, err
 			}
 		} else {
-			if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
+			if err := s.db.TrieDB().Update(root, origin, block, nodes, triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)); err != nil {
 				return common.Hash{}, err
 			}
 		}
