@@ -122,9 +122,9 @@ const (
 	codecVersion         = uint16(0)
 	secpFactoryCacheSize = 1024
 
-	decidedCacheSize    = 100
-	missingCacheSize    = 50
-	unverifiedCacheSize = 50
+	decidedCacheSize    = 10 * units.MiB
+	missingCacheSize    = 5 * units.MiB
+	unverifiedCacheSize = 5 * units.MiB
 
 	targetAtomicTxsSize = 40 * units.KiB
 )
