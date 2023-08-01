@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/avalanchego/x/p2p"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/x/sdk/p2p"
 )
 
 type GossipableAny[T any] interface {

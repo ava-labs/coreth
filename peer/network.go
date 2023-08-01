@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/avalanchego/x/p2p"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -21,7 +22,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
-	"github.com/ava-labs/avalanchego/x/sdk/p2p"
 
 	"github.com/ava-labs/coreth/peer/stats"
 	"github.com/ava-labs/coreth/plugin/evm/message"

@@ -17,7 +17,7 @@ import (
 	"time"
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
-	"github.com/ava-labs/avalanchego/x/sdk/p2p"
+	"github.com/ava-labs/avalanchego/x/p2p"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	corethConstants "github.com/ava-labs/coreth/constants"
@@ -283,7 +283,6 @@ type VM struct {
 
 	peer.Network
 	client       peer.NetworkClient
-	appSender    commonEng.AppSender
 	networkCodec codec.Manager
 
 	router               *p2p.Router
@@ -512,11 +511,10 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.router = p2p.NewRouter()
+	vm.router = p2p.NewRouter(appSender)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
-	vm.appSender = appSender
 
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
@@ -973,14 +971,14 @@ func (vm *VM) initBlockBuilding() error {
 	vm.atomicMempool = atomicMempool
 
 	ethTxGossipHandler := gossip.NewHandler[GossipEthTx, *GossipEthTx](ethTxPool, vm.codec, message.Version)
-	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler, vm.appSender)
+	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
 	atomicTxGossipHandler := gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](atomicMempool, vm.codec, message.Version)
-	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(0x1, atomicTxGossipHandler, vm.appSender)
+	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(0x1, atomicTxGossipHandler)
 	if err != nil {
 		return err
 	}
