@@ -60,14 +60,14 @@ func (g *Gossiper[T, U]) Pull(
 	for {
 		select {
 		case <-gossipTicker.C:
-			bloom, err := g.set.GetBloomFilter()
+			bloomBytes, err := g.set.GetBloomFilter()
 			if err != nil {
 				log.Warn("failed to marshal bloom filter", "error", err)
 				continue
 			}
 
 			request := PullGossipRequest{
-				BloomFilter: bloom,
+				BloomFilter: bloomBytes,
 			}
 			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
 			if err != nil {
