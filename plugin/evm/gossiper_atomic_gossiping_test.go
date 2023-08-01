@@ -64,6 +64,9 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 
 	addedToBloomFilter := false
 	sender.SendAppRequestF = func(ctx context.Context, _ set.Set[ids.NodeID], _ uint32, bytes []byte) error {
+		gossipedLock.Lock()
+		defer gossipedLock.Unlock()
+
 		bytes = bytes[1:] // first byte is an identifier
 		msg := gossip.PullGossipRequest{}
 		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
