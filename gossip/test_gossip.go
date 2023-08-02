@@ -29,10 +29,7 @@ func (t *testTx) Marshal() ([]byte, error) {
 }
 
 func (t *testTx) Unmarshal(b []byte) error {
-	for i := 0; i < 32 || i < len(b); i++ {
-		t.id[i] = b[i]
-	}
-
+	copy(t.id[:], b)
 	return nil
 }
 
