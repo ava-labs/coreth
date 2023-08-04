@@ -22,7 +22,7 @@ func TestPullGossiperShutdown(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	go puller.Pull(done, wg)
+	go puller.Gossip(done, wg)
 
 	close(done)
 	wg.Wait()

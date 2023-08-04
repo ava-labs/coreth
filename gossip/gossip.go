@@ -48,10 +48,7 @@ type Gossiper[T any, U GossipableAny[T]] struct {
 	frequency    time.Duration
 }
 
-func (g *Gossiper[T, U]) Pull(
-	shutdownChan chan struct{},
-	shutdownWg *sync.WaitGroup,
-) {
+func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.WaitGroup) {
 	gossipTicker := time.NewTicker(g.frequency)
 	defer func() {
 		gossipTicker.Stop()

@@ -989,7 +989,7 @@ func (vm *VM) initBlockBuilding() error {
 		pullTxsFrequency,
 	)
 	vm.shutdownWg.Add(1)
-	go vm.ethTxGossiper.Pull(vm.shutdownChan, &vm.shutdownWg)
+	go vm.ethTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)
 
 	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		vm.mempool,
@@ -1000,7 +1000,7 @@ func (vm *VM) initBlockBuilding() error {
 		pullTxsFrequency,
 	)
 	vm.shutdownWg.Add(1)
-	go vm.atomicTxGossiper.Pull(vm.shutdownChan, &vm.shutdownWg)
+	go vm.atomicTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)
 
 	return nil
 }
