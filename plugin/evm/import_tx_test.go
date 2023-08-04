@@ -116,7 +116,7 @@ func TestImportTxVerify(t *testing.T) {
 
 	// Sort the inputs and outputs to ensure the transaction is canonical
 	utils.Sort(importTx.ImportedInputs)
-	SortEVMOutputs(importTx.Outs)
+	utils.Sort(importTx.Outs)
 
 	tests := map[string]atomicTxVerifyTest{
 		"nil tx": {
@@ -449,7 +449,7 @@ func TestNewImportTx(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			actualFee, err = calculateDynamicFee(actualCost, initialBaseFee)
+			actualFee, err = CalculateDynamicFee(actualCost, initialBaseFee)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -853,7 +853,7 @@ func TestImportTxGasCost(t *testing.T) {
 				t.Fatalf("Expected gasUsed to be %d, but found %d", test.ExpectedGasUsed, gasUsed)
 			}
 
-			fee, err := calculateDynamicFee(gasUsed, test.BaseFee)
+			fee, err := CalculateDynamicFee(gasUsed, test.BaseFee)
 			if err != nil {
 				t.Fatal(err)
 			}

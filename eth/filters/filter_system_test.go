@@ -28,6 +28,7 @@ package filters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -44,6 +45,7 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/interfaces"
+	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
@@ -52,14 +54,24 @@ import (
 )
 
 type testBackend struct {
-	db              ethdb.Database
-	sections        uint64
-	txFeed          event.Feed
-	acceptedTxFeed  event.Feed
-	logsFeed        event.Feed
-	rmLogsFeed      event.Feed
-	pendingLogsFeed event.Feed
-	chainFeed       event.Feed
+	db                ethdb.Database
+	sections          uint64
+	txFeed            event.Feed
+	acceptedTxFeed    event.Feed
+	logsFeed          event.Feed
+	rmLogsFeed        event.Feed
+	pendingLogsFeed   event.Feed
+	chainFeed         event.Feed
+	chainAcceptedFeed event.Feed
+}
+
+func (b *testBackend) ChainConfig() *params.ChainConfig {
+	return params.TestChainConfig
+}
+
+func (b *testBackend) CurrentHeader() *types.Header {
+	hdr, _ := b.HeaderByNumber(context.TODO(), rpc.LatestBlockNumber)
+	return hdr
 }
 
 func (b *testBackend) ChainDb() ethdb.Database {
@@ -83,14 +95,15 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		hash common.Hash
 		num  uint64
 	)
-	if blockNr == rpc.LatestBlockNumber {
+	switch blockNr {
+	case rpc.LatestBlockNumber, rpc.AcceptedBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
 		number := rawdb.ReadHeaderNumber(b.db, hash)
 		if number == nil {
 			return nil, nil
 		}
 		num = *number
-	} else {
+	default:
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
@@ -105,9 +118,18 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 	return rawdb.ReadHeader(b.db, hash, *number), nil
 }
 
+func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := rawdb.ReadBody(b.db, hash, uint64(number)); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
+}
+
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
+		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
+			return rawdb.ReadReceipts(b.db, hash, *number, header.Time, params.TestChainConfig), nil
+		}
 	}
 	return nil, nil
 }
@@ -146,7 +168,7 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 }
 
 func (b *testBackend) SubscribeChainAcceptedEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.chainFeed.Subscribe(ch)
+	return b.chainAcceptedFeed.Subscribe(ch)
 }
 
 func (b *testBackend) BloomStatus() (uint64, uint64) {
@@ -266,7 +288,7 @@ func TestPendingTxFilter(t *testing.T) {
 		hashes []common.Hash
 	)
 
-	fid0 := api.NewPendingTransactionFilter()
+	fid0 := api.NewPendingTransactionFilter(nil)
 
 	time.Sleep(1 * time.Second)
 	backend.txFeed.Send(core.NewTxsEvent{Txs: transactions})
@@ -298,6 +320,63 @@ func TestPendingTxFilter(t *testing.T) {
 	for i := range hashes {
 		if hashes[i] != transactions[i].Hash() {
 			t.Errorf("hashes[%d] invalid, want %x, got %x", i, transactions[i].Hash(), hashes[i])
+		}
+	}
+}
+
+// TestPendingTxFilterFullTx tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.
+func TestPendingTxFilterFullTx(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(t, db, Config{})
+		api          = NewFilterAPI(sys)
+
+		transactions = []*types.Transaction{
+			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(1, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(2, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(3, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(4, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+		}
+
+		txs []*ethapi.RPCTransaction
+	)
+
+	fullTx := true
+	fid0 := api.NewPendingTransactionFilter(&fullTx)
+
+	time.Sleep(1 * time.Second)
+	backend.txFeed.Send(core.NewTxsEvent{Txs: transactions})
+
+	timeout := time.Now().Add(1 * time.Second)
+	for {
+		results, err := api.GetFilterChanges(fid0)
+		if err != nil {
+			t.Fatalf("Unable to retrieve logs: %v", err)
+		}
+
+		tx := results.([]*ethapi.RPCTransaction)
+		txs = append(txs, tx...)
+		if len(txs) >= len(transactions) {
+			break
+		}
+		// check timeout
+		if time.Now().After(timeout) {
+			break
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if len(txs) != len(transactions) {
+		t.Errorf("invalid number of transactions, want %d transactions(s), got %d", len(transactions), len(txs))
+		return
+	}
+	for i := range txs {
+		if txs[i].Hash != transactions[i].Hash() {
+			t.Errorf("hashes[%d] invalid, want %x, got %x", i, transactions[i].Hash(), txs[i].Hash)
 		}
 	}
 }
@@ -724,7 +803,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	// timeout either in 100ms or 200ms
 	fids := make([]rpc.ID, 20)
 	for i := 0; i < len(fids); i++ {
-		fid := api.NewPendingTransactionFilter()
+		fid := api.NewPendingTransactionFilter(nil)
 		fids[i] = fid
 		// Wait for at least one tx to arrive in filter
 		for {

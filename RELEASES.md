@@ -1,5 +1,35 @@
 # Release Notes
 
+## [v0.12.5](https://github.com/ava-labs/coreth/releases/tag/v0.12.5)
+
+- Migrate geth changes from v1.11.4 through v1.12.0
+- Bump AvalancheGo dependency to v1.10.6-rc.4 to use sized LRU for Chain State Cache
+
+## [v0.12.4](https://github.com/ava-labs/coreth/releases/tag/v0.12.4)
+
+- Fix API handler crash for `lookupState` in `prestate` tracer
+- Fix API handler crash for LOG edge cases in the `callTracer`
+- Fix regression in `eth_getLogs` serving request for blocks containing no Ethereum transactions
+- Export `CalculateDynamicFee`
+
+## [v0.12.3](https://github.com/ava-labs/coreth/releases/tag/v0.12.3)
+
+- Migrate go-ethereum changes through v1.11.4
+- Downgrade API error log from `Warn` to `Info`
+
+## [v0.12.2](https://github.com/ava-labs/coreth/releases/tag/v0.12.2)
+
+- Increase default trie dirty cache size from 256MB to 512MB
+
+## [v0.12.1](https://github.com/ava-labs/coreth/releases/tag/v0.12.1)
+
+- Bump AvalancheGo dependency to v1.10.1
+- Improve block building logic
+- Use shorter ctx while reading snapshot to serve state sync requests
+- Remove proposer activation time from gossiper
+- Fail outstanding requests on shutdown
+- Make state sync request sizes configurable
+
 ## [v0.12.0](https://github.com/ava-labs/coreth/releases/tag/v0.12.0)
 
 - Increase C-Chain block gas limit to 15M in Cortina

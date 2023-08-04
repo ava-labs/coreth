@@ -75,8 +75,7 @@ func TestSimulatedBackend(t *testing.T) {
 	code := `6060604052600a8060106000396000f360606040526008565b00`
 	var gas uint64 = 3000000
 	tx := types.NewContractCreation(0, big.NewInt(0), gas, gasPrice, common.FromHex(code))
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	tx, _ = types.SignTx(tx, signer, key)
+	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, key)
 
 	err = sim.SendTransaction(context.Background(), tx)
 	if err != nil {
@@ -136,14 +135,6 @@ func TestNewSimulatedBackend(t *testing.T) {
 	expectedBal := new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
-
-	if sim.config != params.TestChainConfig {
-		t.Errorf("expected sim config to equal params.AllEthashProtocolChanges, got %v", sim.config)
-	}
-
-	if sim.blockchain.Config() != params.TestChainConfig {
-		t.Errorf("expected sim blockchain config to equal params.AllEthashProtocolChanges, got %v", sim.config)
-	}
 
 	stateDB, _ := sim.blockchain.State()
 	bal := stateDB.GetBalance(testAddr)
@@ -1210,7 +1201,7 @@ func TestFork(t *testing.T) {
 		sim.Commit(false)
 	}
 	// 3.
-	if sim.blockchain.CurrentBlock().NumberU64() != uint64(n) {
+	if sim.blockchain.CurrentBlock().Number.Uint64() != uint64(n) {
 		t.Error("wrong chain length")
 	}
 	// 4.
@@ -1220,7 +1211,7 @@ func TestFork(t *testing.T) {
 		sim.Commit(false)
 	}
 	// 6.
-	if sim.blockchain.CurrentBlock().NumberU64() != uint64(n+1) {
+	if sim.blockchain.CurrentBlock().Number.Uint64() != uint64(n+1) {
 		t.Error("wrong chain length")
 	}
 }
@@ -1368,7 +1359,7 @@ func TestCommitReturnValue(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
-	startBlockHeight := sim.blockchain.CurrentBlock().NumberU64()
+	startBlockHeight := sim.blockchain.CurrentBlock().Number.Uint64()
 
 	// Test if Commit returns the correct block hash
 	h1 := sim.Commit(true)
@@ -1399,5 +1390,25 @@ func TestCommitReturnValue(t *testing.T) {
 	}
 	if sim.blockchain.GetHeader(h2fork, startBlockHeight+2) == nil {
 		t.Error("Could not retrieve the just created block (side-chain)")
+	}
+}
+
+// TestAdjustTimeAfterFork ensures that after a fork, AdjustTime uses the pending fork
+// block's parent rather than the canonical head's parent.
+func TestAdjustTimeAfterFork(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+
+	sim.Commit(false) // h1
+	h1 := sim.blockchain.CurrentHeader().Hash()
+	sim.Commit(false) // h2
+	sim.Fork(context.Background(), h1)
+	sim.AdjustTime(1 * time.Second)
+	sim.Commit(false)
+
+	head := sim.blockchain.CurrentHeader()
+	if head.Number == common.Big2 && head.ParentHash != h1 {
+		t.Errorf("failed to build block on fork")
 	}
 }

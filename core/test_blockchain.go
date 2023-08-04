@@ -128,6 +128,7 @@ func checkBlockChainState(
 	if err != nil {
 		t.Fatalf("Failed to create new blockchain instance: %s", err)
 	}
+	defer newBlockChain.Stop()
 
 	for i := uint64(1); i <= lastAcceptedBlock.NumberU64(); i++ {
 		block := bc.GetBlockByNumber(i)
@@ -168,7 +169,7 @@ func checkBlockChainState(
 	}
 	defer restartedChain.Stop()
 	if currentBlock := restartedChain.CurrentBlock(); currentBlock.Hash() != lastAcceptedBlock.Hash() {
-		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 	if restartedLastAcceptedBlock := restartedChain.LastConsensusAcceptedBlock(); restartedLastAcceptedBlock.Hash() != lastAcceptedBlock.Hash() {
 		t.Fatalf("Expected restarted chain to have current block %s:%d, but found %s:%d", lastAcceptedBlock.Hash().Hex(), lastAcceptedBlock.NumberU64(), restartedLastAcceptedBlock.Hash().Hex(), restartedLastAcceptedBlock.NumberU64())
@@ -201,7 +202,6 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-
 	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
@@ -329,7 +329,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[len(chain1)-1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
@@ -473,7 +473,7 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, gs
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[len(chain1)-1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
@@ -569,7 +569,7 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, gspec 
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain[len(chain)-1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	if err := blockchain.ValidateCanonicalChain(); err != nil {
@@ -585,7 +585,7 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, gspec 
 	currentBlock = blockchain.CurrentBlock()
 	expectedCurrentBlock = chain[0]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
@@ -881,7 +881,7 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, gspec *Genes
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	genesis := gspec.ToBlock(nil)
+	genesis := gspec.ToBlock()
 
 	blockchain, err := create(chainDB, gspec, common.Hash{})
 	if err != nil {
@@ -1039,7 +1039,7 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	// Accept the first block in [chain1] and reject all of [chain2]
@@ -1181,7 +1181,7 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	currentBlock := blockchain.CurrentBlock()
 	expectedCurrentBlock := chain1[1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	blockchain.Stop()
@@ -1206,7 +1206,7 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	currentBlock = blockchain.CurrentBlock()
 	expectedCurrentBlock = chain1[1]
 	if currentBlock.Hash() != expectedCurrentBlock.Hash() {
-		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.NumberU64())
+		t.Fatalf("Expected current block to be %s:%d, but found %s%d", expectedCurrentBlock.Hash().Hex(), expectedCurrentBlock.NumberU64(), currentBlock.Hash().Hex(), currentBlock.Number.Uint64())
 	}
 
 	// Accept the first block in [chain1] and reject all of [chain2]

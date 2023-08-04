@@ -29,10 +29,10 @@ package runtime
 import (
 	"math"
 	"math/big"
-	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -47,7 +47,7 @@ type Config struct {
 	Origin      common.Address
 	Coinbase    common.Address
 	BlockNumber *big.Int
-	Time        *big.Int
+	Time        uint64
 	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
@@ -68,7 +68,6 @@ func setDefaults(cfg *Config) {
 			DAOForkBlock:                new(big.Int),
 			DAOForkSupport:              false,
 			EIP150Block:                 new(big.Int),
-			EIP150Hash:                  common.Hash{},
 			EIP155Block:                 new(big.Int),
 			EIP158Block:                 new(big.Int),
 			ByzantiumBlock:              new(big.Int),
@@ -76,18 +75,15 @@ func setDefaults(cfg *Config) {
 			PetersburgBlock:             new(big.Int),
 			IstanbulBlock:               new(big.Int),
 			MuirGlacierBlock:            new(big.Int),
-			ApricotPhase1BlockTimestamp: new(big.Int),
-			ApricotPhase2BlockTimestamp: new(big.Int),
-			ApricotPhase3BlockTimestamp: new(big.Int),
-			ApricotPhase4BlockTimestamp: new(big.Int),
+			ApricotPhase1BlockTimestamp: new(uint64),
+			ApricotPhase2BlockTimestamp: new(uint64),
+			ApricotPhase3BlockTimestamp: new(uint64),
+			ApricotPhase4BlockTimestamp: new(uint64),
 		}
 	}
 
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
-	}
-	if cfg.Time == nil {
-		cfg.Time = big.NewInt(time.Now().Unix())
 	}
 	if cfg.GasLimit == 0 {
 		cfg.GasLimit = math.MaxUint64
@@ -123,16 +119,19 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
+		rules   = cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time)
 	)
-	if rules := cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
-		cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
-	}
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - reset transient storage(eip 1153)
+	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
+
 	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(address, code)
@@ -144,7 +143,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.GasLimit,
 		cfg.Value,
 	)
-
 	return ret, cfg.State, err
 }
 
@@ -156,15 +154,18 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	}
 	var (
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
+		rules  = cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time)
 	)
-	if rules := cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
-		cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
-	}
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - reset transient storage(eip 1153)
+	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
+
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
@@ -183,14 +184,17 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
-	vmenv := NewEnv(cfg)
+	var (
+		vmenv   = NewEnv(cfg)
+		sender  = cfg.State.GetOrNewStateObject(cfg.Origin)
+		statedb = cfg.State
+		rules   = cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time)
+	)
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - reset transient storage(eip 1153)
+	statedb.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
 
-	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
-	statedb := cfg.State
-
-	if rules := cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time); rules.IsApricotPhase2 {
-		statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
-	}
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
 		sender,

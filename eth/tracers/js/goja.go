@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/dop251/goja"
 
@@ -52,7 +51,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	tracers.RegisterLookup(true, newJsTracer)
+	type ctorFn = func(*tracers.Context, json.RawMessage) (tracers.Tracer, error)
+	lookup := func(code string) ctorFn {
+		return func(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+			return newJsTracer(code, ctx, cfg)
+		}
+	}
+	for name, code := range assetTracers {
+		tracers.DefaultDirectory.Register(name, lookup(code), true)
+	}
+	tracers.DefaultDirectory.RegisterJSEval(newJsTracer)
 }
 
 // bigIntProgram is compiled once and the exported function mostly invoked to convert
@@ -91,7 +99,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		b := obj.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
 		return b, nil
 	}
-	return nil, fmt.Errorf("invalid buffer type")
+	return nil, errors.New("invalid buffer type")
 }
 
 // jsTracer is an implementation of the Tracer interface which evaluates
@@ -129,16 +137,14 @@ type jsTracer struct {
 	frameResultValue goja.Value
 }
 
-// newJsTracer instantiates a new JS tracer instance. code is either
-// the name of a built-in JS tracer or a Javascript snippet which
-// evaluates to an expression returning an object with certain methods.
+// newJsTracer instantiates a new JS tracer instance. code is a
+// Javascript snippet which evaluates to an expression returning
+// an object with certain methods:
+//
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
 func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-	if c, ok := assetTracers[code]; ok {
-		code = c
-	}
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
@@ -220,9 +226,11 @@ func (t *jsTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-// CaptureTxStart implements the Tracer interface and is invoked at the end of
+// CaptureTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
-func (t *jsTracer) CaptureTxEnd(restGas uint64) {}
+func (t *jsTracer) CaptureTxEnd(restGas uint64) {
+	t.ctx["gasUsed"] = t.vm.ToValue(t.gasLimit - restGas)
+}
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
@@ -237,7 +245,7 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	t.ctx["from"] = t.vm.ToValue(from.Bytes())
 	t.ctx["to"] = t.vm.ToValue(to.Bytes())
 	t.ctx["input"] = t.vm.ToValue(input)
-	t.ctx["gas"] = t.vm.ToValue(gas)
+	t.ctx["gas"] = t.vm.ToValue(t.gasLimit)
 	t.ctx["gasPrice"] = t.vm.ToValue(env.TxContext.GasPrice)
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
@@ -249,7 +257,6 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig().AvalancheRules(env.Context.BlockNumber, env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
-	t.ctx["intrinsicGas"] = t.vm.ToValue(t.gasLimit - gas)
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
@@ -290,10 +297,8 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, duration time.Duration, err error) {
+func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.ctx["output"] = t.vm.ToValue(output)
-	t.ctx["time"] = t.vm.ToValue(duration.String())
-	t.ctx["gasUsed"] = t.vm.ToValue(gasUsed)
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
 	}
@@ -572,10 +577,11 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 	if end < begin || begin < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
-	if mo.memory.Len() < int(end) {
-		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), begin, end-begin)
+	slice, err := tracers.GetMemoryCopyPadded(mo.memory, begin, end-begin)
+	if err != nil {
+		return nil, err
 	}
-	return mo.memory.GetCopy(begin, end-begin), nil
+	return slice, nil
 }
 
 func (mo *memoryObj) GetUint(addr int64) goja.Value {

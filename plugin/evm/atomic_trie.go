@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -73,7 +74,7 @@ type AtomicTrie interface {
 	// InsertTrie updates the trieDB with the provided node set and adds a reference
 	// to root in the trieDB. Once InsertTrie is called, it is expected either
 	// AcceptTrie or RejectTrie be called for the same root.
-	InsertTrie(nodes *trie.NodeSet, root common.Hash) error
+	InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 
 	// AcceptTrie marks root as the last accepted atomic trie root, and
 	// commits the trie to persistent storage if height is divisible by
@@ -198,12 +199,12 @@ func nearestCommitHeight(blockNumber uint64, commitInterval uint64) uint64 {
 }
 
 func (a *atomicTrie) OpenTrie(root common.Hash) (*trie.Trie, error) {
-	return trie.New(common.Hash{}, root, a.trieDB)
+	return trie.New(trie.TrieID(root), a.trieDB)
 }
 
 // commit calls commit on the underlying trieDB and updates metadata pointers.
 func (a *atomicTrie) commit(height uint64, root common.Hash) error {
-	if err := a.trieDB.Commit(root, false, nil); err != nil {
+	if err := a.trieDB.Commit(root, false); err != nil {
 		return err
 	}
 	log.Info("committed atomic trie", "root", root.String(), "height", height)
@@ -223,7 +224,7 @@ func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[id
 		keyPacker := wrappers.Packer{Bytes: make([]byte, atomicKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
-		if err := trie.TryUpdate(keyPacker.Bytes, valueBytes); err != nil {
+		if err := trie.Update(keyPacker.Bytes, valueBytes); err != nil {
 			return err
 		}
 	}
@@ -260,7 +261,7 @@ func (a *atomicTrie) updateLastCommitted(root common.Hash, height uint64) error 
 // Iterator returns a types.AtomicTrieIterator that iterates the trie from the given
 // atomic trie root, starting at the specified [cursor].
 func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (AtomicTrieIterator, error) {
-	t, err := trie.New(common.Hash{}, root, a.trieDB)
+	t, err := trie.New(trie.TrieID(root), a.trieDB)
 	if err != nil {
 		return nil, err
 	}
@@ -307,9 +308,9 @@ func (a *atomicTrie) LastAcceptedRoot() common.Hash {
 	return a.lastAcceptedRoot
 }
 
-func (a *atomicTrie) InsertTrie(nodes *trie.NodeSet, root common.Hash) error {
+func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error {
 	if nodes != nil {
-		if err := a.trieDB.Update(trie.NewWithNodeSet(nodes)); err != nil {
+		if err := a.trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
 	}

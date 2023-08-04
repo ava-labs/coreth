@@ -28,8 +28,10 @@ package rawdb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ava-labs/coreth/ethdb"
@@ -71,7 +73,93 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	if err != nil {
 		return nil, err
 	}
+	log.Info("Using LevelDB as the backing database")
 	return NewDatabase(db), nil
+}
+
+const (
+	dbPebble  = "pebble"
+	dbLeveldb = "leveldb"
+)
+
+// hasPreexistingDb checks the given data directory whether a database is already
+// instantiated at that location, and if so, returns the type of database (or the
+// empty string).
+func hasPreexistingDb(path string) string {
+	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
+		return "" // No pre-existing db
+	}
+	if matches, err := filepath.Glob(filepath.Join(path, "OPTIONS*")); len(matches) > 0 || err != nil {
+		if err != nil {
+			panic(err) // only possible if the pattern is malformed
+		}
+		return dbPebble
+	}
+	return dbLeveldb
+}
+
+// OpenOptions contains the options to apply when opening a database.
+// OBS: If AncientsDirectory is empty, it indicates that no freezer is to be used.
+type OpenOptions struct {
+	Type      string // "leveldb" | "pebble"
+	Directory string // the datadir
+	Namespace string // the namespace for database relevant metrics
+	Cache     int    // the capacity(in megabytes) of the data caching
+	Handles   int    // number of files to be open simultaneously
+	ReadOnly  bool
+}
+
+// openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
+//
+//	                      type == null          type != null
+//	                   +----------------------------------------
+//	db is non-existent |  pebble default  |  specified type
+//	db is existent     |  from db         |  specified type (if compatible)
+func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
+	// Reject any unsupported database type
+	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
+		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
+	}
+	// Retrieve any pre-existing database's type and use that or the requested one
+	// as long as there's no conflict between the two types
+	existingDb := hasPreexistingDb(o.Directory)
+	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
+		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
+	}
+	if o.Type == dbPebble || existingDb == dbPebble {
+		if PebbleEnabled {
+			log.Info("Using pebble as the backing database")
+			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+		} else {
+			return nil, errors.New("db.engine 'pebble' not supported on this platform")
+		}
+	}
+	if o.Type == dbLeveldb || existingDb == dbLeveldb {
+		log.Info("Using leveldb as the backing database")
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	}
+	// No pre-existing database, no user-requested one either. Default to Pebble
+	// on supported platforms and LevelDB on anything else.
+	if PebbleEnabled {
+		log.Info("Defaulting to pebble as the backing database")
+		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	} else {
+		log.Info("Defaulting to leveldb as the backing database")
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	}
+}
+
+// Open opens both a disk-based key-value database such as leveldb or pebble, but also
+// integrates it with a freezer database -- if the AncientDir option has been
+// set on the provided OpenOptions.
+// The passed o.AncientDir indicates the path of root ancient directory where
+// the chain freezer can be opened.
+func Open(o OpenOptions) (ethdb.Database, error) {
+	kvdb, err := openKeyValueDatabase(o)
+	if err != nil {
+		return nil, err
+	}
+	return kvdb, nil
 }
 
 type counter uint64
@@ -175,7 +263,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			accountSnaps.Add(size)
 		case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
 			storageSnaps.Add(size)
-		case bytes.HasPrefix(key, preimagePrefix) && len(key) == (len(preimagePrefix)+common.HashLength):
+		case bytes.HasPrefix(key, PreimagePrefix) && len(key) == (len(PreimagePrefix)+common.HashLength):
 			preimages.Add(size)
 		case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
 			metadata.Add(size)
@@ -183,16 +271,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bloomBits.Add(size)
 		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
 			bloomBits.Add(size)
-		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
-			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, []byte("cht-")) ||
-			bytes.HasPrefix(key, []byte("chtIndexV2-")) ||
-			bytes.HasPrefix(key, []byte("chtRootV2-")): // Canonical hash trie
-			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, []byte("blt-")) ||
-			bytes.HasPrefix(key, []byte("bltIndex-")) ||
-			bytes.HasPrefix(key, []byte("bltRoot-")): // Bloomtrie sub
-			bloomTrieNodes.Add(size)
 		case bytes.HasPrefix(key, syncStorageTriesPrefix) && len(key) == syncStorageTriesKeyLength:
 			syncProgress.Add(size)
 		case bytes.HasPrefix(key, syncSegmentsPrefix) && len(key) == syncSegmentsKeyLength:
@@ -256,18 +334,22 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
 	}
-
 	return nil
 }
 
-// ClearPrefix removes all keys in db that begin with prefix
-func ClearPrefix(db ethdb.KeyValueStore, prefix []byte) error {
+// ClearPrefix removes all keys in db that begin with prefix and match an
+// expected key length. [keyLen] should include the length of the prefix.
+func ClearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
 	it := db.NewIterator(prefix, nil)
 	defer it.Release()
 
 	batch := db.NewBatch()
 	for it.Next() {
 		key := common.CopyBytes(it.Key())
+		if len(key) != keyLen {
+			// avoid deleting keys that do not match the expected length
+			continue
+		}
 		if err := batch.Delete(key); err != nil {
 			return err
 		}

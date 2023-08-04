@@ -70,7 +70,9 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabase(datadir, 0, 0, "", false)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -143,8 +145,8 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	if head := chain.CurrentHeader(); head.Number.Uint64() != basic.expHeadBlock {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, basic.expHeadBlock)
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != basic.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadBlock)
+	if head := chain.CurrentBlock(); head.Number.Uint64() != basic.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, basic.expHeadBlock)
 	}
 
 	// Check the disk layer, ensure they are matched
@@ -249,9 +251,12 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// Pull the plug on the database, simulating a hard crash
 	db := chain.db
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	newdb, err := rawdb.NewLevelDBDatabase(snaptest.datadir, 0, 0, "", false)
+	newdb, err := rawdb.Open(rawdb.OpenOptions{
+		Directory: snaptest.datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
@@ -364,15 +369,19 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		Pruning:        true,
 		CommitInterval: 4096,
 	}
-	_, err = NewBlockChain(snaptest.db, config, snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
+	tmp, err := NewBlockChain(snaptest.db, config, snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	// Simulate the blockchain crash.
+	tmp.stopWithoutSaving()
+
 	newchain, err = NewBlockChain(snaptest.db, DefaultCacheConfig, snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+	defer newchain.Stop()
 	snaptest.verify(t, newchain, blocks)
 }
 

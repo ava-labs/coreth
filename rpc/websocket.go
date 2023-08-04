@@ -37,7 +37,7 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/gorilla/websocket"
 )
@@ -48,7 +48,7 @@ const (
 	wsPingInterval     = 30 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsMessageSizeLimit = 15 * 1024 * 1024
+	wsMessageSizeLimit = 32 * 1024 * 1024
 )
 
 var wsBufferPool = new(sync.Pool)
@@ -83,7 +83,7 @@ func (s *Server) WebsocketHandlerWithDuration(allowedOrigins []string, apiMaxDur
 // websocket upgrade process. When a '*' is specified as an allowed origins all
 // connections are accepted.
 func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
-	origins := mapset.NewSet()
+	origins := mapset.NewSet[string]()
 	allowAllOrigins := false
 
 	for _, origin := range allowedOrigins {
@@ -136,10 +136,10 @@ func (e wsHandshakeError) Error() string {
 	return s
 }
 
-func originIsAllowed(allowedOrigins mapset.Set, browserOrigin string) bool {
+func originIsAllowed(allowedOrigins mapset.Set[string], browserOrigin string) bool {
 	it := allowedOrigins.Iterator()
 	for origin := range it.C {
-		if ruleAllowsOrigin(origin.(string), browserOrigin) {
+		if ruleAllowsOrigin(origin, browserOrigin) {
 			return true
 		}
 	}
@@ -238,6 +238,7 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 			ReadBufferSize:  wsReadBuffer,
 			WriteBufferSize: wsWriteBuffer,
 			WriteBufferPool: wsBufferPool,
+			Proxy:           http.ProxyFromEnvironment,
 		}
 	}
 
@@ -301,8 +302,12 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header) Serve
 		conn.SetReadDeadline(time.Time{})
 		return nil
 	})
+
+	encode := func(v interface{}, isErrorResponse bool) error {
+		return conn.WriteJSON(v)
+	}
 	wc := &websocketCodec{
-		jsonCodec: NewFuncCodec(conn, conn.WriteJSON, conn.ReadJSON).(*jsonCodec),
+		jsonCodec: NewFuncCodec(conn, encode, conn.ReadJSON).(*jsonCodec),
 		conn:      conn,
 		pingReset: make(chan struct{}, 1),
 		info: PeerInfo{
@@ -329,12 +334,12 @@ func (wc *websocketCodec) peerInfo() PeerInfo {
 	return wc.info
 }
 
-func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}) error {
-	return wc.writeJSONSkipDeadline(ctx, v, false)
+func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}, isError bool) error {
+	return wc.writeJSONSkipDeadline(ctx, v, isError, false)
 }
 
-func (wc *websocketCodec) writeJSONSkipDeadline(ctx context.Context, v interface{}, skip bool) error {
-	err := wc.jsonCodec.writeJSONSkipDeadline(ctx, v, skip)
+func (wc *websocketCodec) writeJSONSkipDeadline(ctx context.Context, v interface{}, isError bool, skip bool) error {
+	err := wc.jsonCodec.writeJSONSkipDeadline(ctx, v, isError, skip)
 	if err == nil {
 		// Notify pingLoop to delay the next idle ping.
 		select {

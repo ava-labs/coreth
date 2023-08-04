@@ -508,7 +508,9 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabase(datadir, 0, 0, "", false)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -535,19 +537,20 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
+	defer chain.Stop()
 	lastAcceptedHash := chain.GetBlockByNumber(0).Hash()
 
 	// If sidechain blocks are needed, make a light chain and import it
 	var sideblocks types.Blocks
 	if tt.sidechainBlocks > 0 {
-		sideblocks, _, _ = GenerateChain(gspec.Config, gspec.ToBlock(nil), engine, rawdb.NewMemoryDatabase(), tt.sidechainBlocks, 10, func(i int, b *BlockGen) {
+		sideblocks, _, _ = GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.sidechainBlocks, 10, func(i int, b *BlockGen) {
 			b.SetCoinbase(common.Address{0x01})
 		})
 		if _, err := chain.InsertChain(sideblocks); err != nil {
 			t.Fatalf("Failed to import side chain: %v", err)
 		}
 	}
-	canonblocks, _, _ := GenerateChain(gspec.Config, gspec.ToBlock(nil), engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, 10, func(i int, b *BlockGen) {
+	canonblocks, _, _ := GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, 10, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
 	})
@@ -571,9 +574,12 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	db, err = rawdb.NewLevelDBDatabase(datadir, 0, 0, "", false)
+	db, err = rawdb.Open(rawdb.OpenOptions{
+		Directory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
@@ -594,7 +600,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := newChain.CurrentHeader(); head.Number.Uint64() != tt.expHeadBlock {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}
-	if head := newChain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
+	if head := newChain.CurrentBlock(); head.Number.Uint64() != tt.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}
 }

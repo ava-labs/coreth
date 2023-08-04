@@ -32,6 +32,7 @@ import (
 	"sort"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
 
 // Forks table defines supported forks and their chain config.
@@ -98,6 +99,19 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 	},
+	"MuirGlacier": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+	},
 	"FrontierToHomesteadAt5": {
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(5),
@@ -161,7 +175,7 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock:         big.NewInt(0),
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 	},
 	"ApricotPhase2": {
 		ChainID:                     big.NewInt(1),
@@ -174,8 +188,8 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
 		MuirGlacierBlock:            big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 	},
 	"ApricotPhase3": {
 		ChainID:                     big.NewInt(1),
@@ -188,9 +202,9 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
 		MuirGlacierBlock:            big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
-		ApricotPhase3BlockTimestamp: big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp: utils.NewUint64(0),
 	},
 	"ApricotPhase4": {
 		ChainID:                     big.NewInt(1),
@@ -203,10 +217,10 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
 		MuirGlacierBlock:            big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
-		ApricotPhase3BlockTimestamp: big.NewInt(0),
-		ApricotPhase4BlockTimestamp: big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase4BlockTimestamp: utils.NewUint64(0),
 	},
 	"ApricotPhase5": {
 		ChainID:                     big.NewInt(1),
@@ -218,11 +232,11 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock:         big.NewInt(0),
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
-		ApricotPhase3BlockTimestamp: big.NewInt(0),
-		ApricotPhase4BlockTimestamp: big.NewInt(0),
-		ApricotPhase5BlockTimestamp: big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase4BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase5BlockTimestamp: utils.NewUint64(0),
 	},
 	"Banff": {
 		ChainID:                     big.NewInt(1),
@@ -234,12 +248,12 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock:         big.NewInt(0),
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
-		ApricotPhase3BlockTimestamp: big.NewInt(0),
-		ApricotPhase4BlockTimestamp: big.NewInt(0),
-		ApricotPhase5BlockTimestamp: big.NewInt(0),
-		BanffBlockTimestamp:         big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase4BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase5BlockTimestamp: utils.NewUint64(0),
+		BanffBlockTimestamp:         utils.NewUint64(0),
 	},
 	"Cortina": {
 		ChainID:                     big.NewInt(1),
@@ -251,13 +265,13 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock:         big.NewInt(0),
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
-		ApricotPhase3BlockTimestamp: big.NewInt(0),
-		ApricotPhase4BlockTimestamp: big.NewInt(0),
-		ApricotPhase5BlockTimestamp: big.NewInt(0),
-		BanffBlockTimestamp:         big.NewInt(0),
-		CortinaBlockTimestamp:       big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase4BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase5BlockTimestamp: utils.NewUint64(0),
+		BanffBlockTimestamp:         utils.NewUint64(0),
+		CortinaBlockTimestamp:       utils.NewUint64(0),
 	},
 	"DUpgrade": {
 		ChainID:                     big.NewInt(1),
@@ -269,18 +283,18 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock:         big.NewInt(0),
 		PetersburgBlock:             big.NewInt(0),
 		IstanbulBlock:               big.NewInt(0),
-		ApricotPhase1BlockTimestamp: big.NewInt(0),
-		ApricotPhase2BlockTimestamp: big.NewInt(0),
-		ApricotPhase3BlockTimestamp: big.NewInt(0),
-		ApricotPhase4BlockTimestamp: big.NewInt(0),
-		ApricotPhase5BlockTimestamp: big.NewInt(0),
-		BanffBlockTimestamp:         big.NewInt(0),
-		CortinaBlockTimestamp:       big.NewInt(0),
-		DUpgradeBlockTimestamp:      big.NewInt(0),
+		ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase4BlockTimestamp: utils.NewUint64(0),
+		ApricotPhase5BlockTimestamp: utils.NewUint64(0),
+		BanffBlockTimestamp:         utils.NewUint64(0),
+		CortinaBlockTimestamp:       utils.NewUint64(0),
+		DUpgradeBlockTimestamp:      utils.NewUint64(0),
 	},
 }
 
-// Returns the set of defined fork names
+// AvailableForks returns the set of defined fork names
 func AvailableForks() []string {
 	var availableForks []string
 	for k := range Forks {

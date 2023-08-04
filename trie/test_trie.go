@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/trie/trienode"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -32,11 +33,10 @@ func GenerateTrie(t *testing.T, trieDB *Database, numKeys int, keySize int) (com
 	keys, values := FillTrie(t, numKeys, keySize, testTrie)
 
 	// Commit the root to [trieDB]
-	root, nodes, err := testTrie.Commit(false)
+	root, nodes := testTrie.Commit(false)
+	err := trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	assert.NoError(t, err)
-	err = trieDB.Update(NewWithNodeSet(nodes))
-	assert.NoError(t, err)
-	err = trieDB.Commit(root, false, nil)
+	err = trieDB.Commit(root, false)
 	assert.NoError(t, err)
 
 	return root, keys, values
@@ -60,9 +60,7 @@ func FillTrie(t *testing.T, numKeys int, keySize int, testTrie *Trie) ([][]byte,
 		_, err = rand.Read(value)
 		assert.NoError(t, err)
 
-		if err = testTrie.TryUpdate(key, value); err != nil {
-			t.Fatal("error updating trie", err)
-		}
+		testTrie.MustUpdate(key, value)
 
 		keys = append(keys, key)
 		values = append(values, value)
@@ -73,11 +71,11 @@ func FillTrie(t *testing.T, numKeys int, keySize int, testTrie *Trie) ([][]byte,
 // AssertTrieConsistency ensures given trieDB [a] and [b] both have the same
 // non-empty trie at [root]. (all key/value pairs must be equal)
 func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLeaf func(key, val []byte) error) {
-	trieA, err := New(common.Hash{}, root, a)
+	trieA, err := New(TrieID(root), a)
 	if err != nil {
 		t.Fatalf("error creating trieA, root=%s, err=%v", root, err)
 	}
-	trieB, err := New(common.Hash{}, root, b)
+	trieB, err := New(TrieID(root), b)
 	if err != nil {
 		t.Fatalf("error creating trieB, root=%s, err=%v", root, err)
 	}
@@ -107,7 +105,7 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *Database, onLea
 func CorruptTrie(t *testing.T, trieDB *Database, root common.Hash, n int) {
 	batch := trieDB.diskdb.NewBatch()
 	// next delete some trie nodes
-	tr, err := New(common.Hash{}, root, trieDB)
+	tr, err := New(TrieID(root), trieDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +143,7 @@ func FillAccounts(
 		accounts    = make(map[*keystore.Key]*types.StateAccount, numAccounts)
 	)
 
-	tr, err := NewStateTrie(common.Hash{}, root, trieDB)
+	tr, err := NewStateTrie(TrieID(root), trieDB)
 	if err != nil {
 		t.Fatalf("error opening trie: %v", err)
 	}
@@ -170,20 +168,15 @@ func FillAccounts(
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = tr.TryUpdate(key.Address[:], accBytes); err != nil {
-			t.Fatalf("error updating trie with account, address=%s, err=%v", key.Address, err)
-		}
+		tr.MustUpdate(key.Address[:], accBytes)
 		accounts[key] = &acc
 	}
 
-	newRoot, nodes, err := tr.Commit(false)
-	if err != nil {
-		t.Fatalf("error committing trie: %v", err)
-	}
-	if err := trieDB.Update(NewWithNodeSet(nodes)); err != nil {
+	newRoot, nodes := tr.Commit(false)
+	if err := trieDB.Update(newRoot, root, trienode.NewWithNodeSet(nodes)); err != nil {
 		t.Fatalf("error updating trieDB: %v", err)
 	}
-	if err := trieDB.Commit(newRoot, false, nil); err != nil {
+	if err := trieDB.Commit(newRoot, false); err != nil {
 		t.Fatalf("error committing trieDB: %v", err)
 	}
 	return newRoot, accounts

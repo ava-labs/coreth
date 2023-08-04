@@ -12,10 +12,11 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -23,10 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
+	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -736,6 +739,23 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	} else if lastAcceptedID != blk.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+	vm.blockChain.DrainAcceptorQueue()
+	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
+		Timeout: 5 * time.Minute,
+	}))
+	blockHash := common.Hash(blk.ID())
+	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
+		BlockHash: &blockHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 0 {
+		t.Fatalf("Expected log length to be 0, but found %d", len(logs))
+	}
+	if logs == nil {
+		t.Fatal("Expected logs to be non-nil")
 	}
 
 	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
@@ -2563,7 +2583,7 @@ func TestUncleBlock(t *testing.T) {
 		blkDEthBlock.Transactions(),
 		uncles,
 		nil,
-		new(trie.Trie),
+		trie.NewStackTrie(nil),
 		blkDEthBlock.ExtData(),
 		false,
 	)
@@ -4026,8 +4046,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 func TestGetAtomicRepositoryRepairHeights(t *testing.T) {
 	mainnetHeights := getAtomicRepositoryRepairHeights(bonusBlockMainnetHeights, canonicalBlockMainnetHeights)
 	assert.Len(t, mainnetHeights, 76)
-	sorted := sort.SliceIsSorted(mainnetHeights, func(i, j int) bool { return mainnetHeights[i] < mainnetHeights[j] })
-	assert.True(t, sorted)
+	assert.True(t, slices.IsSorted(mainnetHeights))
 }
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
@@ -4059,7 +4078,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}
 	require.NoError(t, json.Unmarshal([]byte(genesisJSONApricotPhase1), genesisWithUpgrade))
-	genesisWithUpgrade.Config.ApricotPhase2BlockTimestamp = big.NewInt(blk.Timestamp().Unix())
+	genesisWithUpgrade.Config.ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 
