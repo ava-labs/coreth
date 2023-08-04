@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -72,9 +71,10 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
 		require.NoError(t, err)
 
-		bloom := &bloomfilter.Filter{}
-		require.NoError(t, bloom.UnmarshalBinary(msg.BloomFilter))
-		if !bloom.Contains(gossip.NewHasher(tx.ID())) {
+		bloom := &gossip.BloomFilter{}
+		_, err = vm.networkCodec.Unmarshal(msg.Filter, bloom)
+		require.NoError(t, err)
+		if !bloom.Has(tx) {
 			return nil
 		}
 		addedToBloomFilter = true

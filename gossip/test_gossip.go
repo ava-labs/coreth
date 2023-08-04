@@ -7,8 +7,6 @@ import (
 	"sync"
 
 	bloomfilter "github.com/holiman/bloomfilter/v2"
-
-	"github.com/ava-labs/avalanchego/ids"
 )
 
 var (
@@ -17,20 +15,11 @@ var (
 )
 
 type testTx struct {
-	id ids.ID
+	hash Hash
 }
 
-func (t *testTx) GetID() ids.ID {
-	return t.id
-}
-
-func (t *testTx) Marshal() ([]byte, error) {
-	return t.id[:], nil
-}
-
-func (t *testTx) Unmarshal(b []byte) error {
-	copy(t.id[:], b)
-	return nil
+func (t *testTx) GetHash() Hash {
+	return t.hash
 }
 
 type testMempool struct {
@@ -61,18 +50,14 @@ func (t *testMempool) Get(filter func(tx *testTx) bool) []*testTx {
 	return result
 }
 
-func (t *testMempool) GetBloomFilter() ([]byte, error) {
+func (t *testMempool) GetFilter() Filter {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	bloom, err := bloomfilter.New(DefaultBloomM, DefaultBloomK)
-	if err != nil {
-		return nil, err
-	}
-
+	bloom, _ := bloomfilter.New(DefaultBloomM, DefaultBloomK)
 	for _, tx := range t.mempool {
-		bloom.Add(NewHasher(tx.GetID()))
+		bloom.Add(NewHasher(tx.GetHash()))
 	}
 
-	return bloom.MarshalBinary()
+	return &BloomFilter{Bloom: bloom}
 }

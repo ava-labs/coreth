@@ -61,14 +61,15 @@ func (g *Gossiper[T, U]) Pull(
 	for {
 		select {
 		case <-gossipTicker.C:
-			bloomBytes, err := g.set.GetBloomFilter()
+			filter := g.set.GetFilter()
+			filterBytes, err := g.codec.Marshal(g.codecVersion, filter)
 			if err != nil {
 				log.Warn("failed to marshal bloom filter", "error", err)
 				continue
 			}
 
 			request := PullGossipRequest{
-				BloomFilter: bloomBytes,
+				Filter: filterBytes,
 			}
 			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
 			if err != nil {
@@ -103,13 +104,13 @@ func (g *Gossiper[T, U]) handleResponse(nodeID ids.NodeID, responseBytes []byte,
 
 	for _, gossipBytes := range response.GossipBytes {
 		gossipable := U(new(T))
-		if err := gossipable.Unmarshal(gossipBytes); err != nil {
+		if _, err := g.codec.Unmarshal(gossipBytes, gossipable); err != nil {
 			log.Debug("failed to unmarshal gossip", "error", err, "nodeID", nodeID)
 			continue
 		}
 
 		if err := g.set.Add(gossipable); err != nil {
-			log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetID())
+			log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetHash())
 			continue
 		}
 	}

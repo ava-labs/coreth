@@ -4,7 +4,7 @@
 package gossip
 
 type PullGossipRequest struct {
-	BloomFilter []byte `serialize:"true"`
+	Filter []byte `serialize:"true"`
 }
 
 type PullGossipResponse struct {

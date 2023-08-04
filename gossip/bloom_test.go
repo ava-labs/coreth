@@ -6,7 +6,6 @@ package gossip
 import (
 	"testing"
 
-	"github.com/ava-labs/avalanchego/ids"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -15,27 +14,27 @@ func TestBloomFilterRefresh(t *testing.T) {
 	tests := []struct {
 		name         string
 		refreshRatio float64
-		add          []ids.ID
-		expected     []ids.ID
+		add          []Hash
+		expected     []Hash
 	}{
 		{
 			name:         "no refresh",
 			refreshRatio: 1,
-			add: []ids.ID{
+			add: []Hash{
 				{0},
 			},
-			expected: []ids.ID{
+			expected: []Hash{
 				{0},
 			},
 		},
 		{
 			name:         "refresh",
 			refreshRatio: 0.1,
-			add: []ids.ID{
+			add: []Hash{
 				{0},
 				{1},
 			},
-			expected: []ids.ID{
+			expected: []Hash{
 				{1},
 			},
 		},
@@ -45,10 +44,13 @@ func TestBloomFilterRefresh(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
 			b, err := bloomfilter.New(10, 1)
+			bloom := BloomFilter{
+				Bloom: b,
+			}
 			require.NoError(err)
 
 			for _, item := range tt.add {
-				b, _ = ResetBloomFilterIfNeeded(b, tt.refreshRatio)
+				_ = ResetBloomFilterIfNeeded(&bloom, tt.refreshRatio)
 				b.Add(NewHasher(item))
 			}
 

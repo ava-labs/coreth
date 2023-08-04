@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
-
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/metrics"
 )
@@ -73,14 +72,14 @@ type Mempool struct {
 	// utxoSpenders maps utxoIDs to the transaction consuming them in the mempool
 	utxoSpenders map[ids.ID]*Tx
 	// bloom is a bloom filter containing the txs in the mempool
-	bloom *bloomfilter.Filter
+	bloom *gossip.BloomFilter
 
 	metrics *mempoolMetrics
 }
 
 // NewMempool returns a Mempool with [maxSize]
 func NewMempool(AVAXAssetID ids.ID, maxSize int) (*Mempool, error) {
-	bloom, err := bloomfilter.New(gossip.DefaultBloomM, gossip.DefaultBloomK)
+	bloom, err := gossip.NewDefaultBloomFilter()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
@@ -282,8 +281,8 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	m.newTxs = append(m.newTxs, tx)
 	m.addPending()
 
-	m.bloom.Add(gossip.NewHasher(tx.ID()))
-	m.bloom, _ = gossip.ResetBloomFilterIfNeeded(m.bloom, gossip.DefaultBloomMaxFilledRatio)
+	m.bloom.Add(&GossipAtomicTx{Tx: tx})
+	_ = gossip.ResetBloomFilterIfNeeded(m.bloom, gossip.DefaultBloomMaxFilledRatio)
 
 	return nil
 }
@@ -305,11 +304,11 @@ func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
 	return gossipTxs
 }
 
-func (m *Mempool) GetBloomFilter() ([]byte, error) {
+func (m *Mempool) GetFilter() gossip.Filter {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	return m.bloom.MarshalBinary()
+	return m.bloom
 }
 
 // NextTx returns a transaction to be issued from the mempool.

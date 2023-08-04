@@ -7,17 +7,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/log"
-
-	"github.com/ava-labs/coreth/gossip"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/gossip"
 )
 
 var (
@@ -26,26 +21,16 @@ var (
 )
 
 type GossipAtomicTx struct {
-	Tx *Tx
+	Tx *Tx `serialize:"true"`
 }
 
-func (tx *GossipAtomicTx) GetID() ids.ID {
-	return tx.Tx.ID()
-}
-
-func (tx *GossipAtomicTx) Marshal() ([]byte, error) {
-	return Codec.Marshal(message.Version, tx.Tx)
-}
-
-func (tx *GossipAtomicTx) Unmarshal(bytes []byte) error {
-	tx.Tx = &Tx{}
-	_, err := Codec.Unmarshal(bytes, tx.Tx)
-
-	return err
+func (tx *GossipAtomicTx) GetHash() gossip.Hash {
+	id := tx.Tx.ID()
+	return gossip.HashFromBytes(id[:])
 }
 
 func NewGossipEthTxPool(mempool *txpool.TxPool) (*GossipEthTxPool, error) {
-	bloom, err := bloomfilter.New(gossip.DefaultBloomM, gossip.DefaultBloomK)
+	bloom, err := gossip.NewDefaultBloomFilter()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
@@ -62,7 +47,7 @@ type GossipEthTxPool struct {
 	mempool    *txpool.TxPool
 	pendingTxs chan core.NewTxsEvent
 
-	bloom *bloomfilter.Filter
+	bloom *gossip.BloomFilter
 	lock  sync.RWMutex
 }
 
@@ -78,8 +63,8 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 		case tx := <-g.pendingTxs:
 			g.lock.Lock()
 			for _, tx := range tx.Txs {
-				g.bloom.Add(gossip.NewHasher(ids.ID(tx.Hash())))
-				g.bloom, _ = gossip.ResetBloomFilterIfNeeded(g.bloom, gossip.DefaultBloomMaxFilledRatio)
+				g.bloom.Add(&GossipEthTx{Tx: tx})
+				_ = gossip.ResetBloomFilterIfNeeded(g.bloom, gossip.DefaultBloomMaxFilledRatio)
 			}
 			g.lock.Unlock()
 		}
@@ -114,28 +99,18 @@ func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx 
 	return result
 }
 
-func (g *GossipEthTxPool) GetBloomFilter() ([]byte, error) {
+func (g *GossipEthTxPool) GetFilter() gossip.Filter {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
-	return g.bloom.MarshalBinary()
+	return g.bloom
 }
 
 type GossipEthTx struct {
-	Tx *types.Transaction
+	Tx *types.Transaction `serialize:"true"`
 }
 
-func (tx *GossipEthTx) GetID() ids.ID {
-	return ids.ID(tx.Tx.Hash())
-}
-
-func (tx *GossipEthTx) Marshal() ([]byte, error) {
-	return tx.Tx.MarshalBinary()
-}
-
-func (tx *GossipEthTx) Unmarshal(bytes []byte) error {
-	tx.Tx = &types.Transaction{}
-	err := tx.Tx.UnmarshalBinary(bytes)
-
-	return err
+func (tx *GossipEthTx) GetHash() gossip.Hash {
+	hash := tx.Tx.Hash()
+	return gossip.HashFromBytes(hash[:])
 }

@@ -7,12 +7,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/ava-labs/avalanchego/network/p2p"
-	"github.com/ethereum/go-ethereum/log"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
-
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var _ p2p.Handler = (*Handler[Gossipable])(nil)
@@ -37,19 +35,20 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 		log.Info("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
-	peerFilter := &bloomfilter.Filter{}
-	if err := peerFilter.UnmarshalBinary(request.BloomFilter); err != nil {
+	var peerFilter Filter
+	if _, err := h.codec.Unmarshal(request.Filter, &peerFilter); err != nil {
 		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
 
 	// filter out what the requesting peer already knows about
 	unknown := h.set.Get(func(gossipable T) bool {
-		return !peerFilter.Contains(NewHasher(gossipable.GetID()))
+		return !peerFilter.Has(gossipable)
 	})
+
 	gossipBytes := make([][]byte, 0, len(unknown))
 	for _, gossipable := range unknown {
-		bytes, err := gossipable.Marshal()
+		bytes, err := h.codec.Marshal(h.codecVersion, gossipable)
 		if err != nil {
 			return nil, err
 		}
