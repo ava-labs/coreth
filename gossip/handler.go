@@ -35,6 +35,7 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 		log.Info("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
+
 	var peerFilter Filter
 	if _, err := h.codec.Unmarshal(request.Filter, &peerFilter); err != nil {
 		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
@@ -58,6 +59,7 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 	response := PullGossipResponse{
 		GossipBytes: gossipBytes,
 	}
+
 	responseBytes, err := h.codec.Marshal(h.codecVersion, response)
 	if err != nil {
 		return nil, err
