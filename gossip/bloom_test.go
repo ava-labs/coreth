@@ -44,20 +44,20 @@ func TestBloomFilterRefresh(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
 			b, err := bloomfilter.New(10, 1)
+			require.NoError(err)
 			bloom := BloomFilter{
 				Bloom: b,
 			}
-			require.NoError(err)
 
 			for _, item := range tt.add {
 				_ = ResetBloomFilterIfNeeded(&bloom, tt.refreshRatio)
-				b.Add(NewHasher(item))
+				bloom.Bloom.Add(NewHasher(item))
 			}
 
-			require.Equal(uint64(len(tt.expected)), b.N())
+			require.Equal(uint64(len(tt.expected)), bloom.Bloom.N())
 
 			for _, expected := range tt.expected {
-				require.True(b.Contains(NewHasher(expected)))
+				require.True(bloom.Bloom.Contains(NewHasher(expected)))
 			}
 		})
 	}
