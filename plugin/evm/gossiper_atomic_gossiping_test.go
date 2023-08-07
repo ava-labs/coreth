@@ -10,15 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
 
 	"github.com/ava-labs/coreth/gossip"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
@@ -74,7 +72,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		bloom := &gossip.BloomFilter{}
 		_, err = vm.networkCodec.Unmarshal(msg.Filter, bloom)
 		require.NoError(t, err)
-		if !bloom.Has(tx) {
+		if !bloom.Has(&GossipAtomicTx{tx}) {
 			return nil
 		}
 		addedToBloomFilter = true

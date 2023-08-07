@@ -8,8 +8,6 @@ import (
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-
-	"github.com/ava-labs/coreth/gossip"
 )
 
 const (
@@ -42,11 +40,6 @@ func init() {
 		c.RegisterType(LeafsResponse{}),
 		c.RegisterType(CodeRequest{}),
 		c.RegisterType(CodeResponse{}),
-
-		// p2p sdk gossip types
-		c.RegisterType(gossip.PullGossipRequest{}),
-		c.RegisterType(gossip.PullGossipResponse{}),
-
 		Codec.RegisterCodec(Version, c),
 	)
 

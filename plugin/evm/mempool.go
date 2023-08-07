@@ -288,17 +288,16 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 }
 
 func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
-	f := func(tx *Tx) bool {
-		return filter(&GossipAtomicTx{
-			Tx: tx,
-		})
-	}
-	txs := m.GetTxs(f)
-	gossipTxs := make([]*GossipAtomicTx, 0, len(txs))
-	for _, tx := range txs {
-		gossipTxs = append(gossipTxs, &GossipAtomicTx{
-			Tx: tx,
-		})
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	gossipTxs := make([]*GossipAtomicTx, 0, len(m.txHeap.maxHeap.items))
+	for _, item := range m.txHeap.maxHeap.items {
+		gossipTx := &GossipAtomicTx{Tx: item.tx}
+		if !filter(gossipTx) {
+			continue
+		}
+		gossipTxs = append(gossipTxs, gossipTx)
 	}
 
 	return gossipTxs
@@ -337,21 +336,6 @@ func (m *Mempool) GetPendingTx(txID ids.ID) (*Tx, bool) {
 	defer m.lock.RUnlock()
 
 	return m.txHeap.Get(txID)
-}
-
-func (m *Mempool) GetTxs(filter func(tx *Tx) bool) []*Tx {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	result := make([]*Tx, 0, len(m.txHeap.maxHeap.items))
-	for _, item := range m.txHeap.maxHeap.items {
-		if !filter(item.tx) {
-			continue
-		}
-		result = append(result, item.tx)
-	}
-
-	return result
 }
 
 // GetTx returns the transaction [txID] if it was issued
