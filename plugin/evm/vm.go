@@ -131,6 +131,9 @@ const (
 
 	targetAtomicTxsSize = 40 * units.KiB
 
+	ethTxGossipProtocol    = 0x0
+	atomicTxGossipProtocol = 0x1
+
 	// threshold on how full a tx gossip bloom filter can get before it's reset
 	txGossipBloomMaxFilledRatio = 0.75
 	// maximum anticipated amount of entries in the tx gossip bloom filter
@@ -977,14 +980,14 @@ func (vm *VM) initBlockBuilding() error {
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
 	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, vm.codec, message.Version)
-	ethTxGossipClient, err := vm.router.RegisterAppProtocol(0x0, ethTxGossipHandler)
+	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
 	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, vm.codec, message.Version)
-	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(0x1, atomicTxGossipHandler)
+	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler)
 	if err != nil {
 		return err
 	}

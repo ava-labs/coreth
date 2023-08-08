@@ -25,29 +25,23 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
-func TestTxGossip(t *testing.T) {
+func TestEthTxGossip(t *testing.T) {
 	require := require.New(t)
 
 	// set up prefunded address
-	importAmount := uint64(1000000000)
+	importAmount := uint64(1_000_000_000)
 	issuer, vm, _, _, sender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(context.Background()))
 	}()
 
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.issueTx(importTx, true))
 
 	<-issuer
 
@@ -64,7 +58,7 @@ func TestTxGossip(t *testing.T) {
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler
-	client, err := router.RegisterAppProtocol(0x0, nil)
+	client, err := router.RegisterAppProtocol(ethTxGossipProtocol, nil)
 	require.NoError(err)
 
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
@@ -130,6 +124,93 @@ func TestTxGossip(t *testing.T) {
 		gotTx := &GossipEthTx{}
 		require.NoError(gotTx.Unmarshal(response.GossipBytes[0]))
 		require.Equal(signedTx.Hash(), gotTx.Tx.Hash())
+
+		wg.Done()
+	}
+	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
+	wg.Wait()
+}
+
+func TestAtomicTxGossip(t *testing.T) {
+	require := require.New(t)
+
+	// set up prefunded address
+	importAmount := uint64(1_000_000_000)
+	issuer, vm, _, _, sender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+
+	defer func() {
+		require.NoError(vm.Shutdown(context.Background()))
+	}()
+
+	// sender for the peer requesting gossip from [vm]
+	ctrl := gomock.NewController(t)
+	peerSender := common.NewMockSender(ctrl)
+	router := p2p.NewRouter(logging.NoLog{}, peerSender)
+
+	// we're only making client requests, so we don't need a server handler
+	client, err := router.RegisterAppProtocol(atomicTxGossipProtocol, nil)
+	require.NoError(err)
+
+	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
+	require.NoError(err)
+	emptyBloomFilterBytes, err := emptyBloomFilter.Marshal()
+	require.NoError(err)
+	request := gossip.PullGossipRequest{
+		FilterBytes: emptyBloomFilterBytes,
+	}
+	requestBytes, err := vm.networkCodec.Marshal(message.Version, request)
+	require.NoError(err)
+
+	wg := &sync.WaitGroup{}
+	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, appRequestBytes []byte) {
+		go func() {
+			require.NoError(vm.AppRequest(ctx, ids.EmptyNodeID, requestID, time.Time{}, appRequestBytes))
+		}()
+	}).AnyTimes()
+
+	sender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, appResponseBytes []byte) error {
+		go func() {
+			require.NoError(router.AppResponse(ctx, nodeID, requestID, appResponseBytes))
+		}()
+		return nil
+	}
+
+	// Ask the VM for any new transactions. We should get nothing at first.
+	wg.Add(1)
+	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
+		require.NoError(err)
+
+		response := gossip.PullGossipResponse{}
+		_, err = vm.networkCodec.Unmarshal(responseBytes, &response)
+		require.NoError(err)
+		require.Empty(response.GossipBytes)
+		wg.Done()
+	}
+	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
+	wg.Wait()
+
+	// issue a new tx to the vm
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	require.NoError(err)
+
+	require.NoError(vm.issueTx(importTx, true /*=local*/))
+	<-issuer
+
+	// Ask the VM for new transactions. We should get the newly issued tx.
+	wg.Add(1)
+	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
+		require.NoError(err)
+
+		response := gossip.PullGossipResponse{}
+		_, err = vm.networkCodec.Unmarshal(responseBytes, &response)
+		require.NoError(err)
+		require.Len(response.GossipBytes, 1)
+
+		gotTx := &GossipAtomicTx{}
+		require.NoError(gotTx.Unmarshal(response.GossipBytes[0]))
+		require.Equal(importTx.InputUTXOs(), gotTx.Tx.InputUTXOs())
 
 		wg.Done()
 	}
