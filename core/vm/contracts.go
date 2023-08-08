@@ -163,19 +163,19 @@ var PrecompiledContractsBanff = map[common.Address]precompile.StatefulPrecompile
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
 // contracts used in the Cancun release.
 var PrecompiledContractsCancun = map[common.Address]precompile.StatefulPrecompiledContract{
-	common.BytesToAddress([]byte{1}):  newWrappedPrecompiledContract(&ecrecover{}),
-	common.BytesToAddress([]byte{2}):  newWrappedPrecompiledContract(&sha256hash{}),
-	common.BytesToAddress([]byte{3}):  newWrappedPrecompiledContract(&ripemd160hash{}),
-	common.BytesToAddress([]byte{4}):  newWrappedPrecompiledContract(&dataCopy{}),
-	common.BytesToAddress([]byte{5}):  newWrappedPrecompiledContract(&bigModExp{eip2565: true}),
-	common.BytesToAddress([]byte{6}):  newWrappedPrecompiledContract(&bn256AddIstanbul{}),
-	common.BytesToAddress([]byte{7}):  newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
-	common.BytesToAddress([]byte{8}):  newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
-	common.BytesToAddress([]byte{9}):  newWrappedPrecompiledContract(&blake2F{}),
-	common.BytesToAddress([]byte{20}): newWrappedPrecompiledContract(&kzgPointEvaluation{}),
-	genesisContractAddr:               &deprecatedContract{},
-	NativeAssetBalanceAddr:            &deprecatedContract{},
-	NativeAssetCallAddr:               &deprecatedContract{},
+	common.BytesToAddress([]byte{1}):    newWrappedPrecompiledContract(&ecrecover{}),
+	common.BytesToAddress([]byte{2}):    newWrappedPrecompiledContract(&sha256hash{}),
+	common.BytesToAddress([]byte{3}):    newWrappedPrecompiledContract(&ripemd160hash{}),
+	common.BytesToAddress([]byte{4}):    newWrappedPrecompiledContract(&dataCopy{}),
+	common.BytesToAddress([]byte{5}):    newWrappedPrecompiledContract(&bigModExp{eip2565: true}),
+	common.BytesToAddress([]byte{6}):    newWrappedPrecompiledContract(&bn256AddIstanbul{}),
+	common.BytesToAddress([]byte{7}):    newWrappedPrecompiledContract(&bn256ScalarMulIstanbul{}),
+	common.BytesToAddress([]byte{8}):    newWrappedPrecompiledContract(&bn256PairingIstanbul{}),
+	common.BytesToAddress([]byte{9}):    newWrappedPrecompiledContract(&blake2F{}),
+	common.BytesToAddress([]byte{0x0a}): newWrappedPrecompiledContract(&kzgPointEvaluation{}),
+	genesisContractAddr:                 &deprecatedContract{},
+	NativeAssetBalanceAddr:              &deprecatedContract{},
+	NativeAssetCallAddr:                 &deprecatedContract{},
 }
 
 var (
