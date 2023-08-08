@@ -7,6 +7,8 @@ package gossip
 type Gossipable interface {
 	// GetHash represents the unique hash of this item
 	GetHash() Hash
+	Marshal() ([]byte, error)
+	Unmarshal(bytes []byte) error
 }
 
 // Set holds a set of known Gossipable items
@@ -16,5 +18,5 @@ type Set[T Gossipable] interface {
 	// Get returns elements that match the provided filter function
 	Get(filter func(gossipable T) bool) []T
 	// GetFilter returns a filter containing the elements in Set
-	GetFilter() Filter
+	GetBloomFilter() *BloomFilter
 }

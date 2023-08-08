@@ -10,44 +10,40 @@ import (
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
-const (
-	DefaultBloomM = 8 * 1024 // 8 KiB
-	DefaultBloomK = 4
-	// DefaultBloomMaxFilledRatio is the max ratio of filled slots in the bloom
-	// filter before we reset it to avoid too many collisions.
-	DefaultBloomMaxFilledRatio = 0.75
-)
+var _ hash.Hash64 = (*hasher)(nil)
 
-var (
-	_ Filter      = (*BloomFilter)(nil)
-	_ hash.Hash64 = (*hasher)(nil)
-)
-
-func NewDefaultBloomFilter() (*BloomFilter, error) {
-	return NewBloomFilter(DefaultBloomM, DefaultBloomK)
-}
-
-func NewBloomFilter(m, k uint64) (*BloomFilter, error) {
-	bloom, err := bloomfilter.New(m, k)
+func NewBloomFilter(m uint64, p float64) (*BloomFilter, error) {
+	bloom, err := bloomfilter.NewOptimal(m, p)
 	if err != nil {
 		return nil, err
 	}
 
 	return &BloomFilter{
-		Bloom: bloom,
+		bloom: bloom,
 	}, nil
 }
 
 type BloomFilter struct {
-	Bloom *bloomfilter.Filter `serialize:"true"`
+	bloom *bloomfilter.Filter
 }
 
 func (b *BloomFilter) Add(gossipable Gossipable) {
-	b.Bloom.Add(NewHasher(gossipable.GetHash()))
+	b.bloom.Add(NewHasher(gossipable))
 }
 
 func (b *BloomFilter) Has(gossipable Gossipable) bool {
-	return b.Bloom.Contains(NewHasher(gossipable.GetHash()))
+	return b.bloom.Contains(NewHasher(gossipable))
+}
+
+func (b *BloomFilter) Marshal() ([]byte, error) {
+	return b.bloom.MarshalBinary()
+}
+
+func (b *BloomFilter) Unmarshal(data []byte) error {
+	bloom := &bloomfilter.Filter{}
+	err := bloom.UnmarshalBinary(data)
+	b.bloom = bloom
+	return err
 }
 
 // ResetBloomFilterIfNeeded resets a bloom filter if it breaches a ratio of
@@ -56,19 +52,19 @@ func ResetBloomFilterIfNeeded(
 	bloomFilter *BloomFilter,
 	maxFilledRatio float64,
 ) bool {
-	if bloomFilter.Bloom.PreciseFilledRatio() < maxFilledRatio {
+	if bloomFilter.bloom.PreciseFilledRatio() < maxFilledRatio {
 		return false
 	}
 
 	// it's not possible for this to error assuming that the original
 	// bloom filter's parameters were valid
-	fresh, _ := bloomfilter.New(bloomFilter.Bloom.M(), bloomFilter.Bloom.K())
-	bloomFilter.Bloom = fresh
+	fresh, _ := bloomfilter.New(bloomFilter.bloom.M(), bloomFilter.bloom.K())
+	bloomFilter.bloom = fresh
 	return true
 }
 
-func NewHasher(hash Hash) hash.Hash64 {
-	return hasher{hash: hash}
+func NewHasher(gossipable Gossipable) hash.Hash64 {
+	return hasher{hash: gossipable.GetHash()}
 }
 
 type hasher struct {

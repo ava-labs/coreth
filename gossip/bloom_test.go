@@ -14,28 +14,28 @@ func TestBloomFilterRefresh(t *testing.T) {
 	tests := []struct {
 		name         string
 		refreshRatio float64
-		add          []Hash
-		expected     []Hash
+		add          []*testTx
+		expected     []*testTx
 	}{
 		{
 			name:         "no refresh",
 			refreshRatio: 1,
-			add: []Hash{
-				{0},
+			add: []*testTx{
+				{hash: Hash{0}},
 			},
-			expected: []Hash{
-				{0},
+			expected: []*testTx{
+				{hash: Hash{0}},
 			},
 		},
 		{
 			name:         "refresh",
 			refreshRatio: 0.1,
-			add: []Hash{
-				{0},
-				{1},
+			add: []*testTx{
+				{hash: Hash{0}},
+				{hash: Hash{1}},
 			},
-			expected: []Hash{
-				{1},
+			expected: []*testTx{
+				{hash: Hash{1}},
 			},
 		},
 	}
@@ -46,18 +46,18 @@ func TestBloomFilterRefresh(t *testing.T) {
 			b, err := bloomfilter.New(10, 1)
 			require.NoError(err)
 			bloom := BloomFilter{
-				Bloom: b,
+				bloom: b,
 			}
 
 			for _, item := range tt.add {
 				_ = ResetBloomFilterIfNeeded(&bloom, tt.refreshRatio)
-				bloom.Bloom.Add(NewHasher(item))
+				bloom.Add(item)
 			}
 
-			require.Equal(uint64(len(tt.expected)), bloom.Bloom.N())
+			require.Equal(uint64(len(tt.expected)), bloom.bloom.N())
 
 			for _, expected := range tt.expected {
-				require.True(bloom.Bloom.Contains(NewHasher(expected)))
+				require.True(bloom.Has(expected))
 			}
 		})
 	}

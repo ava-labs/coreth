@@ -13,11 +13,13 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/gossip"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 var (
-	_ gossip.Set[*GossipEthTx] = (*GossipEthTxPool)(nil)
 	_ gossip.Gossipable        = (*GossipEthTx)(nil)
+	_ gossip.Gossipable        = (*GossipAtomicTx)(nil)
+	_ gossip.Set[*GossipEthTx] = (*GossipEthTxPool)(nil)
 )
 
 type GossipAtomicTx struct {
@@ -29,8 +31,17 @@ func (tx *GossipAtomicTx) GetHash() gossip.Hash {
 	return gossip.HashFromBytes(id[:])
 }
 
+func (tx *GossipAtomicTx) Marshal() ([]byte, error) {
+	return Codec.Marshal(message.Version, tx)
+}
+
+func (tx *GossipAtomicTx) Unmarshal(bytes []byte) error {
+	_, err := Codec.Unmarshal(bytes, tx)
+	return err
+}
+
 func NewGossipEthTxPool(mempool *txpool.TxPool) (*GossipEthTxPool, error) {
-	bloom, err := gossip.NewDefaultBloomFilter()
+	bloom, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomMaxFilledRatio)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
@@ -60,11 +71,14 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 		case <-shutdownChan:
 			log.Debug("shutting down subscription")
 			return
-		case tx := <-g.pendingTxs:
+		case pendingTxs := <-g.pendingTxs:
 			g.lock.Lock()
-			for _, tx := range tx.Txs {
-				g.bloom.Add(&GossipEthTx{Tx: tx})
-				_ = gossip.ResetBloomFilterIfNeeded(g.bloom, gossip.DefaultBloomMaxFilledRatio)
+			for _, pendingTx := range pendingTxs.Txs {
+				tx := &GossipEthTx{Tx: pendingTx}
+				g.bloom.Add(tx)
+				if gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipBloomMaxFilledRatio) {
+					log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
+				}
 			}
 			g.lock.Unlock()
 		}
@@ -99,7 +113,7 @@ func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx 
 	return result
 }
 
-func (g *GossipEthTxPool) GetFilter() gossip.Filter {
+func (g *GossipEthTxPool) GetBloomFilter() *gossip.BloomFilter {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
@@ -113,4 +127,13 @@ type GossipEthTx struct {
 func (tx *GossipEthTx) GetHash() gossip.Hash {
 	hash := tx.Tx.Hash()
 	return gossip.HashFromBytes(hash[:])
+}
+
+func (tx *GossipEthTx) Marshal() ([]byte, error) {
+	return tx.Tx.MarshalBinary()
+}
+
+func (tx *GossipEthTx) Unmarshal(bytes []byte) error {
+	tx.Tx = &types.Transaction{}
+	return tx.Tx.UnmarshalBinary(bytes)
 }

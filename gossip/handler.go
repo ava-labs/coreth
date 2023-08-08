@@ -32,24 +32,24 @@ type Handler[T Gossipable] struct {
 func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time, requestBytes []byte) ([]byte, error) {
 	request := PullGossipRequest{}
 	if _, err := h.codec.Unmarshal(requestBytes, &request); err != nil {
-		log.Info("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
+		log.Debug("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
 
-	var peerFilter Filter
-	if _, err := h.codec.Unmarshal(request.Filter, &peerFilter); err != nil {
+	filter := &BloomFilter{}
+	if err := filter.Unmarshal(request.FilterBytes); err != nil {
 		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
 
 	// filter out what the requesting peer already knows about
 	unknown := h.set.Get(func(gossipable T) bool {
-		return !peerFilter.Has(gossipable)
+		return !filter.Has(gossipable)
 	})
 
 	gossipBytes := make([][]byte, 0, len(unknown))
 	for _, gossipable := range unknown {
-		bytes, err := h.codec.Marshal(h.codecVersion, gossipable)
+		bytes, err := gossipable.Marshal()
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +59,6 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 	response := PullGossipResponse{
 		GossipBytes: gossipBytes,
 	}
-
 	responseBytes, err := h.codec.Marshal(h.codecVersion, response)
 	if err != nil {
 		return nil, err

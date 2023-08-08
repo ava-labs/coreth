@@ -131,10 +131,18 @@ const (
 
 	targetAtomicTxsSize = 40 * units.KiB
 
-	// How frequently we should attempt to poll other nodes for new transactions
-	pullTxsFrequency  = 500 * time.Millisecond
-	pullTxsGossipSize = 10
+	// threshold on how full a tx gossip bloom filter can get before it's reset
+	txGossipBloomMaxFilledRatio = 0.75
+	// maximum anticipated amount of entries in the tx gossip bloom filter
+	txGossipBloomMaxItems = 1_000
+	// maximum false positive rate for lookups
+	txGossipBloomFalsePositiveRate = 0.001
 )
+
+var txGossipConfig = gossip.Config{
+	Frequency: 500 * time.Millisecond,
+	PollSize:  10,
+}
 
 // Define the API endpoints for the VM
 const (
@@ -983,23 +991,21 @@ func (vm *VM) initBlockBuilding() error {
 	vm.atomicTxGossipClient = atomicTxGossipClient
 
 	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx, *GossipEthTx](
+		txGossipConfig,
 		ethTxPool,
 		vm.ethTxGossipClient,
 		vm.networkCodec,
 		message.Version,
-		pullTxsGossipSize,
-		pullTxsFrequency,
 	)
 	vm.shutdownWg.Add(1)
 	go vm.ethTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)
 
 	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
+		txGossipConfig,
 		vm.mempool,
 		vm.atomicTxGossipClient,
 		vm.networkCodec,
 		message.Version,
-		pullTxsGossipSize,
-		pullTxsFrequency,
 	)
 	vm.shutdownWg.Add(1)
 	go vm.atomicTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)

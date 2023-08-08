@@ -21,35 +21,37 @@ type GossipableAny[T any] interface {
 	Gossipable
 }
 
+type Config struct {
+	Frequency time.Duration
+	PollSize  int
+}
+
 func NewGossiper[T any, U GossipableAny[T]](
+	config Config,
 	set Set[U],
 	client *p2p.Client,
 	codec codec.Manager,
 	codecVersion uint16,
-	gossipSize int,
-	frequency time.Duration,
 ) *Gossiper[T, U] {
 	return &Gossiper[T, U]{
+		config:       config,
 		set:          set,
 		client:       client,
 		codec:        codec,
 		codecVersion: codecVersion,
-		gossipSize:   gossipSize,
-		frequency:    frequency,
 	}
 }
 
 type Gossiper[T any, U GossipableAny[T]] struct {
+	config       Config
 	set          Set[U]
 	client       *p2p.Client
 	codec        codec.Manager
 	codecVersion uint16
-	gossipSize   int
-	frequency    time.Duration
 }
 
 func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.WaitGroup) {
-	gossipTicker := time.NewTicker(g.frequency)
+	gossipTicker := time.NewTicker(g.config.Frequency)
 	defer func() {
 		gossipTicker.Stop()
 		shutdownWg.Done()
@@ -58,15 +60,13 @@ func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.Wai
 	for {
 		select {
 		case <-gossipTicker.C:
-			filter := g.set.GetFilter()
-			filterBytes, err := g.codec.Marshal(g.codecVersion, filter)
+			filterBytes, err := g.set.GetBloomFilter().Marshal()
 			if err != nil {
 				log.Warn("failed to marshal bloom filter", "error", err)
-				continue
 			}
 
 			request := PullGossipRequest{
-				Filter: filterBytes,
+				FilterBytes: filterBytes,
 			}
 			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
 			if err != nil {
@@ -74,7 +74,7 @@ func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.Wai
 				continue
 			}
 
-			for i := 0; i < g.gossipSize; i++ {
+			for i := 0; i < g.config.PollSize; i++ {
 				if err := g.client.AppRequestAny(context.TODO(), msgBytes, g.handleResponse); err != nil {
 					log.Warn("failed to gossip", "error", err)
 					continue
@@ -101,7 +101,7 @@ func (g *Gossiper[T, U]) handleResponse(nodeID ids.NodeID, responseBytes []byte,
 
 	for _, gossipBytes := range response.GossipBytes {
 		gossipable := U(new(T))
-		if _, err := g.codec.Unmarshal(gossipBytes, gossipable); err != nil {
+		if err := gossipable.Unmarshal(gossipBytes); err != nil {
 			log.Debug("failed to unmarshal gossip", "error", err, "nodeID", nodeID)
 			continue
 		}

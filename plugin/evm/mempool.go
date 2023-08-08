@@ -79,7 +79,7 @@ type Mempool struct {
 
 // NewMempool returns a Mempool with [maxSize]
 func NewMempool(AVAXAssetID ids.ID, maxSize int) (*Mempool, error) {
-	bloom, err := gossip.NewDefaultBloomFilter()
+	bloom, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomMaxFilledRatio)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
@@ -282,7 +282,9 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	m.addPending()
 
 	m.bloom.Add(&GossipAtomicTx{Tx: tx})
-	_ = gossip.ResetBloomFilterIfNeeded(m.bloom, gossip.DefaultBloomMaxFilledRatio)
+	if gossip.ResetBloomFilterIfNeeded(m.bloom, txGossipBloomMaxFilledRatio) {
+		log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
+	}
 
 	return nil
 }
@@ -303,7 +305,7 @@ func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
 	return gossipTxs
 }
 
-func (m *Mempool) GetFilter() gossip.Filter {
+func (m *Mempool) GetBloomFilter() *gossip.BloomFilter {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 

@@ -4,7 +4,8 @@
 package gossip
 
 type PullGossipRequest struct {
-	Filter []byte `serialize:"true"`
+	FilterBytes []byte `serialize:"true"`
+	SaltBytes   []byte `serialize:"true"`
 }
 
 type PullGossipResponse struct {

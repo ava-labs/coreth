@@ -9,15 +9,9 @@ import (
 	"time"
 )
 
-func TestPullGossiperShutdown(t *testing.T) {
-	puller := NewGossiper[testTx, *testTx](
-		nil,
-		nil,
-		nil,
-		0,
-		0,
-		time.Hour,
-	)
+func TestGossiperShutdown(t *testing.T) {
+	config := Config{Frequency: time.Second}
+	puller := NewGossiper[testTx, *testTx](config, nil, nil, nil, 0)
 	done := make(chan struct{})
 	wg := &sync.WaitGroup{}
 

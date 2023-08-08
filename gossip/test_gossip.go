@@ -5,8 +5,6 @@ package gossip
 
 import (
 	"sync"
-
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (
@@ -20,6 +18,16 @@ type testTx struct {
 
 func (t *testTx) GetHash() Hash {
 	return t.hash
+}
+
+func (t *testTx) Marshal() ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (t *testTx) Unmarshal(bytes []byte) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 type testMempool struct {
@@ -50,14 +58,14 @@ func (t *testMempool) Get(filter func(tx *testTx) bool) []*testTx {
 	return result
 }
 
-func (t *testMempool) GetFilter() Filter {
+func (t *testMempool) GetBloomFilter() *BloomFilter {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	bloom, _ := bloomfilter.New(DefaultBloomM, DefaultBloomK)
+	bloom, _ := NewBloomFilter(1000, 0.01)
 	for _, tx := range t.mempool {
-		bloom.Add(NewHasher(tx.GetHash()))
+		bloom.Add(tx)
 	}
 
-	return &BloomFilter{Bloom: bloom}
+	return bloom
 }

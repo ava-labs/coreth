@@ -69,10 +69,9 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
 		require.NoError(t, err)
 
-		bloom := &gossip.BloomFilter{}
-		_, err = vm.networkCodec.Unmarshal(msg.Filter, bloom)
-		require.NoError(t, err)
-		if !bloom.Has(&GossipAtomicTx{tx}) {
+		filter := &gossip.BloomFilter{}
+		require.NoError(t, filter.Unmarshal(msg.FilterBytes))
+		if !filter.Has(&GossipAtomicTx{Tx: tx}) {
 			return nil
 		}
 		addedToBloomFilter = true
