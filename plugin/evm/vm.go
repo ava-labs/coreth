@@ -979,35 +979,35 @@ func (vm *VM) initBlockBuilding() error {
 	vm.shutdownWg.Add(1)
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
-	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, vm.codec, message.Version)
+	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, message.SdkCodec, message.Version)
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, vm.codec, message.Version)
+	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SdkCodec, message.Version)
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler)
 	if err != nil {
 		return err
 	}
 	vm.atomicTxGossipClient = atomicTxGossipClient
 
-	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx](
+	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx, *GossipEthTx](
 		txGossipConfig,
 		ethTxPool,
 		vm.ethTxGossipClient,
-		vm.networkCodec,
+		message.SdkCodec,
 		message.Version,
 	)
 	vm.shutdownWg.Add(1)
 	go vm.ethTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)
 
-	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx](
+	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		txGossipConfig,
 		vm.mempool,
 		vm.atomicTxGossipClient,
-		vm.networkCodec,
+		message.SdkCodec,
 		message.Version,
 	)
 	vm.shutdownWg.Add(1)

@@ -44,10 +44,6 @@ func init() {
 		c.RegisterType(CodeRequest{}),
 		c.RegisterType(CodeResponse{}),
 
-		// p2p sdk gossip types
-		c.RegisterType(gossip.PullGossipRequest{}),
-		c.RegisterType(gossip.PullGossipResponse{}),
-
 		Codec.RegisterCodec(Version, c),
 	)
 
@@ -72,4 +68,17 @@ func init() {
 	}
 
 	SdkCodec = codec.NewManager(maxMessageSize)
+	sdkc := linearcodec.NewDefault()
+
+	errs = wrappers.Errs{}
+	errs.Add(
+		// p2p sdk gossip types
+		c.RegisterType(gossip.PullGossipRequest{}),
+		c.RegisterType(gossip.PullGossipResponse{}),
+		SdkCodec.RegisterCodec(Version, sdkc),
+	)
+
+	if errs.Errored() {
+		panic(errs.Err)
+	}
 }

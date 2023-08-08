@@ -85,6 +85,9 @@ func TestGossiperGossip(t *testing.T) {
 	requestClient, err := requestRouter.RegisterAppProtocol(0x0, nil)
 	require.NoError(err)
 
+	// We shouldn't have gotten any gossip before the test started
+	require.Len(requestSet.set, 0)
+
 	config := Config{
 		Frequency: time.Second,
 		PollSize:  1,
@@ -92,14 +95,12 @@ func TestGossiperGossip(t *testing.T) {
 	gossiper := NewGossiper[testTx, *testTx](config, requestSet, requestClient, cc, 0)
 	done := make(chan struct{})
 	wg := &sync.WaitGroup{}
-
-	require.Len(requestSet.set, 0)
+	wg.Add(1)
 	go gossiper.Gossip(done, wg)
 	<-gossiped
 
 	require.Len(requestSet.set, 1)
-	gotTx, _ := requestSet.set.Pop()
-	require.Equal(tx, gotTx)
+	require.Contains(requestSet.set, tx)
 
 	close(done)
 	wg.Wait()
