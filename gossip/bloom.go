@@ -6,8 +6,10 @@ package gossip
 import (
 	"encoding/binary"
 	"hash"
+	"time"
 
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"golang.org/x/exp/rand"
 )
 
 var _ hash.Hash64 = (*hasher)(nil)
@@ -18,32 +20,32 @@ func NewBloomFilter(m uint64, p float64) (*BloomFilter, error) {
 		return nil, err
 	}
 
-	return &BloomFilter{
-		bloom: bloom,
-	}, nil
+	bloomFilter := &BloomFilter{
+		Bloom: bloom,
+		Salt:  randomSalt(),
+	}
+	return bloomFilter, nil
 }
 
 type BloomFilter struct {
-	bloom *bloomfilter.Filter
+	Bloom *bloomfilter.Filter
+	Salt  []byte
 }
 
 func (b *BloomFilter) Add(gossipable Gossipable) {
-	b.bloom.Add(NewHasher(gossipable))
+	salted := hasher{
+		hash: gossipable.GetHash(),
+		salt: b.Salt,
+	}
+	b.Bloom.Add(salted)
 }
 
 func (b *BloomFilter) Has(gossipable Gossipable) bool {
-	return b.bloom.Contains(NewHasher(gossipable))
-}
-
-func (b *BloomFilter) Marshal() ([]byte, error) {
-	return b.bloom.MarshalBinary()
-}
-
-func (b *BloomFilter) Unmarshal(data []byte) error {
-	bloom := &bloomfilter.Filter{}
-	err := bloom.UnmarshalBinary(data)
-	b.bloom = bloom
-	return err
+	salted := hasher{
+		hash: gossipable.GetHash(),
+		salt: b.Salt,
+	}
+	return b.Bloom.Contains(salted)
 }
 
 // ResetBloomFilterIfNeeded resets a bloom filter if it breaches a ratio of
@@ -52,30 +54,39 @@ func ResetBloomFilterIfNeeded(
 	bloomFilter *BloomFilter,
 	maxFilledRatio float64,
 ) bool {
-	if bloomFilter.bloom.PreciseFilledRatio() < maxFilledRatio {
+	if bloomFilter.Bloom.PreciseFilledRatio() < maxFilledRatio {
 		return false
 	}
 
 	// it's not possible for this to error assuming that the original
 	// bloom filter's parameters were valid
-	fresh, _ := bloomfilter.New(bloomFilter.bloom.M(), bloomFilter.bloom.K())
-	bloomFilter.bloom = fresh
+	fresh, _ := bloomfilter.New(bloomFilter.Bloom.M(), bloomFilter.Bloom.K())
+	bloomFilter.Bloom = fresh
+	bloomFilter.Salt = randomSalt()
 	return true
 }
 
-func NewHasher(gossipable Gossipable) hash.Hash64 {
-	return hasher{hash: gossipable.GetHash()}
+func randomSalt() []byte {
+	salt := make([]byte, 0, HashLength)
+	r := rand.New(rand.NewSource(uint64(time.Now().Nanosecond())))
+	_, _ = r.Read(salt)
+	return salt
 }
 
 type hasher struct {
 	hash.Hash64
 	hash Hash
+	salt []byte
 }
 
 func (h hasher) Sum64() uint64 {
+	for i, salt := range h.salt {
+		h.hash[i] ^= salt
+	}
+
 	return binary.BigEndian.Uint64(h.hash[:])
 }
 
 func (h hasher) Size() int {
-	return 8
+	return HashLength
 }

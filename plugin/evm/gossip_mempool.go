@@ -113,7 +113,7 @@ func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx 
 	return result
 }
 
-func (g *GossipEthTxPool) GetBloomFilter() *gossip.BloomFilter {
+func (g *GossipEthTxPool) GetFilter() *gossip.BloomFilter {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 

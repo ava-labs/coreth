@@ -17,6 +17,6 @@ type Set[T Gossipable] interface {
 	Add(gossipable T) error
 	// Get returns elements that match the provided filter function
 	Get(filter func(gossipable T) bool) []T
-	// GetFilter returns a filter containing the elements in Set
-	GetBloomFilter() *BloomFilter
+	// GetFilter returns a bloom filter containing the elements in Set
+	GetFilter() *BloomFilter
 }

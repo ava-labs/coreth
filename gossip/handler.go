@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ethereum/go-ethereum/log"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var _ p2p.Handler = (*Handler[Gossipable])(nil)
@@ -36,8 +37,11 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 		return nil, nil
 	}
 
-	filter := &BloomFilter{}
-	if err := filter.Unmarshal(request.FilterBytes); err != nil {
+	filter := &BloomFilter{
+		Bloom: &bloomfilter.Filter{},
+		Salt:  request.SaltBytes,
+	}
+	if err := filter.Bloom.UnmarshalBinary(request.FilterBytes); err != nil {
 		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}

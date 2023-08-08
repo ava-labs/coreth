@@ -60,13 +60,15 @@ func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.Wai
 	for {
 		select {
 		case <-gossipTicker.C:
-			filterBytes, err := g.set.GetBloomFilter().Marshal()
+			filter := g.set.GetFilter()
+			bloomBytes, err := filter.Bloom.MarshalBinary()
 			if err != nil {
 				log.Warn("failed to marshal bloom filter", "error", err)
 			}
 
 			request := PullGossipRequest{
-				FilterBytes: filterBytes,
+				FilterBytes: bloomBytes,
+				SaltBytes:   filter.Salt,
 			}
 			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
 			if err != nil {

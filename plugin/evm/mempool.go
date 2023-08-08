@@ -305,7 +305,7 @@ func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
 	return gossipTxs
 }
 
-func (m *Mempool) GetBloomFilter() *gossip.BloomFilter {
+func (m *Mempool) GetFilter() *gossip.BloomFilter {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 

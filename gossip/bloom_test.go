@@ -46,7 +46,7 @@ func TestBloomFilterRefresh(t *testing.T) {
 			b, err := bloomfilter.New(10, 1)
 			require.NoError(err)
 			bloom := BloomFilter{
-				bloom: b,
+				Bloom: b,
 			}
 
 			for _, item := range tt.add {
@@ -54,7 +54,7 @@ func TestBloomFilterRefresh(t *testing.T) {
 				bloom.Add(item)
 			}
 
-			require.Equal(uint64(len(tt.expected)), bloom.bloom.N())
+			require.Equal(uint64(len(tt.expected)), bloom.Bloom.N())
 
 			for _, expected := range tt.expected {
 				require.True(bloom.Has(expected))

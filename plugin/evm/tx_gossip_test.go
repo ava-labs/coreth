@@ -63,7 +63,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
 	require.NoError(err)
-	emptyBloomFilterBytes, err := emptyBloomFilter.Marshal()
+	emptyBloomFilterBytes, err := emptyBloomFilter.Bloom.MarshalBinary()
 	require.NoError(err)
 	request := gossip.PullGossipRequest{
 		FilterBytes: emptyBloomFilterBytes,
@@ -107,7 +107,7 @@ func TestEthTxGossip(t *testing.T) {
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), key)
 	require.NoError(err)
 
-	errs := vm.txPool.AddRemotes([]*types.Transaction{signedTx})
+	errs := vm.txPool.AddLocals([]*types.Transaction{signedTx})
 	require.Len(errs, 1)
 	require.Nil(errs[0])
 
@@ -155,10 +155,11 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
 	require.NoError(err)
-	emptyBloomFilterBytes, err := emptyBloomFilter.Marshal()
+	bloomBytes, err := emptyBloomFilter.Bloom.MarshalBinary()
 	require.NoError(err)
 	request := gossip.PullGossipRequest{
-		FilterBytes: emptyBloomFilterBytes,
+		FilterBytes: bloomBytes,
+		SaltBytes:   emptyBloomFilter.Salt,
 	}
 	requestBytes, err := vm.networkCodec.Marshal(message.Version, request)
 	require.NoError(err)

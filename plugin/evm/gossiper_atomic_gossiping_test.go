@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -69,8 +70,11 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
 		require.NoError(t, err)
 
-		filter := &gossip.BloomFilter{}
-		require.NoError(t, filter.Unmarshal(msg.FilterBytes))
+		filter := &gossip.BloomFilter{
+			Bloom: &bloomfilter.Filter{},
+			Salt:  msg.SaltBytes,
+		}
+		require.NoError(t, filter.Bloom.UnmarshalBinary(msg.FilterBytes))
 		if !filter.Has(&GossipAtomicTx{Tx: tx}) {
 			return nil
 		}
