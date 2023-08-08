@@ -3,7 +3,14 @@
 
 package gossip
 
-var _ Gossipable = (*testTx)(nil)
+import (
+	"github.com/ava-labs/avalanchego/utils/set"
+)
+
+var (
+	_ Gossipable   = (*testTx)(nil)
+	_ Set[*testTx] = (*testSet)(nil)
+)
 
 type testTx struct {
 	hash Hash
@@ -14,11 +21,37 @@ func (t *testTx) GetHash() Hash {
 }
 
 func (t *testTx) Marshal() ([]byte, error) {
-	// TODO implement me
-	panic("implement me")
+	return t.hash[:], nil
 }
 
 func (t *testTx) Unmarshal(bytes []byte) error {
-	// TODO implement me
-	panic("implement me")
+	t.hash = Hash{}
+	copy(t.hash[:], bytes[:])
+	return nil
+}
+
+type testSet struct {
+	set   set.Set[*testTx]
+	bloom *BloomFilter
+}
+
+func (t testSet) Add(gossipable *testTx) error {
+	t.set.Add(gossipable)
+	return nil
+}
+
+func (t testSet) Get(filter func(gossipable *testTx) bool) []*testTx {
+	result := make([]*testTx, 0)
+	for tx := range t.set {
+		if !filter(tx) {
+			continue
+		}
+		result = append(result, tx)
+	}
+
+	return result
+}
+
+func (t testSet) GetFilter() *BloomFilter {
+	return t.bloom
 }

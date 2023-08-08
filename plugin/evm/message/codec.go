@@ -20,6 +20,7 @@ const (
 var (
 	Codec           codec.Manager
 	CrossChainCodec codec.Manager
+	SdkCodec        codec.Manager
 )
 
 func init() {
@@ -69,4 +70,6 @@ func init() {
 	if errs.Errored() {
 		panic(errs.Err)
 	}
+
+	SdkCodec = codec.NewManager(maxMessageSize)
 }
