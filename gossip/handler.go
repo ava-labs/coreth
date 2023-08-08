@@ -63,12 +63,8 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 	response := PullGossipResponse{
 		GossipBytes: gossipBytes,
 	}
-	responseBytes, err := h.codec.Marshal(h.codecVersion, response)
-	if err != nil {
-		return nil, err
-	}
 
-	return responseBytes, nil
+	return h.codec.Marshal(h.codecVersion, response)
 }
 
 func (h Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
