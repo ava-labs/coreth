@@ -37,6 +37,7 @@ type testSet struct {
 
 func (t testSet) Add(gossipable *testTx) error {
 	t.set.Add(gossipable)
+	t.bloom.Add(gossipable)
 	return nil
 }
 
