@@ -121,7 +121,7 @@ func (g *GossipEthTxPool) GetFilter() *gossip.BloomFilter {
 }
 
 type GossipEthTx struct {
-	Tx *types.Transaction `serialize:"true"`
+	Tx *types.Transaction
 }
 
 func (tx *GossipEthTx) GetHash() gossip.Hash {

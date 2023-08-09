@@ -64,6 +64,7 @@ func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.Wai
 			bloomBytes, err := filter.Bloom.MarshalBinary()
 			if err != nil {
 				log.Warn("failed to marshal bloom filter", "error", err)
+				continue
 			}
 
 			request := PullGossipRequest{
