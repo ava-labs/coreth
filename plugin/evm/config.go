@@ -77,9 +77,11 @@ type Duration struct {
 // Config ...
 type Config struct {
 	// Coreth APIs
-	SnowmanAPIEnabled bool   `json:"snowman-api-enabled"`
-	AdminAPIEnabled   bool   `json:"admin-api-enabled"`
-	AdminAPIDir       string `json:"admin-api-dir"`
+	SnowmanAPIEnabled     bool   `json:"snowman-api-enabled"`
+	AdminAPIEnabled       bool   `json:"admin-api-enabled"`
+	AdminAPIDir           string `json:"admin-api-dir"`
+	CorethAdminAPIEnabled bool   `json:"coreth-admin-api-enabled"` // Deprecated: use AdminAPIEnabled instead
+	CorethAdminAPIDir     string `json:"coreth-admin-api-dir"`     // Deprecated: use AdminAPIDir instead
 
 	// EnabledEthAPIs is a list of Ethereum services that should be enabled
 	// If none is specified, then we use the default list [defaultEnabledAPIs]
@@ -144,9 +146,12 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	RemoteGossipOnlyEnabled bool     `json:"remote-gossip-only-enabled"`
-	RegossipFrequency       Duration `json:"regossip-frequency"`
-	RegossipMaxTxs          int      `json:"regossip-max-txs"`
+	RemoteGossipOnlyEnabled   bool     `json:"remote-gossip-only-enabled"`
+	RegossipFrequency         Duration `json:"regossip-frequency"`
+	RegossipMaxTxs            int      `json:"regossip-max-txs"`
+	RemoteTxGossipOnlyEnabled bool     `json:"remote-tx-gossip-only-enabled"` // Deprecated: use RemoteGossipOnlyEnabled instead
+	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"`         // Deprecated: use RegossipFrequency instead
+	TxRegossipMaxSize         int      `json:"tx-regossip-max-size"`          // Deprecated: use RegossipMaxTxs instead
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -284,4 +289,31 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (c *Config) Deprecate() string {
+	msg := ""
+	// Deprecate the old config options and set the new ones.
+	if c.CorethAdminAPIEnabled {
+		msg += "coreth-admin-api-enabled is deprecated, use admin-api-enabled instead. "
+		c.AdminAPIEnabled = c.CorethAdminAPIEnabled
+	}
+	if c.CorethAdminAPIDir != "" {
+		msg += "coreth-admin-api-dir is deprecated, use admin-api-dir instead. "
+		c.AdminAPIDir = c.CorethAdminAPIDir
+	}
+	if c.RemoteTxGossipOnlyEnabled {
+		msg += "remote-tx-gossip-only-enabled is deprecated, use tx-gossip-enabled instead. "
+		c.RemoteGossipOnlyEnabled = c.RemoteTxGossipOnlyEnabled
+	}
+	if c.TxRegossipFrequency != (Duration{}) {
+		msg += "tx-regossip-frequency is deprecated, use regossip-frequency instead. "
+		c.RegossipFrequency = c.TxRegossipFrequency
+	}
+	if c.TxRegossipMaxSize != 0 {
+		msg += "tx-regossip-max-size is deprecated, use regossip-max-txs instead. "
+		c.RegossipMaxTxs = c.TxRegossipMaxSize
+	}
+
+	return msg
 }
