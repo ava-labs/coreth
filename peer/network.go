@@ -339,7 +339,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		// this might be an sdk request
+		// this might be a sdk request
 		if err := n.router.AppRequest(ctx, nodeID, requestID, deadline, request); err == nil {
 			log.Debug("failed to unmarshal app request", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
 		}
@@ -386,7 +386,7 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		// this might be an sdk response
+		// this might be a sdk response
 		if err := n.router.AppResponse(ctx, nodeID, requestID, response); err == nil {
 			return nil
 		}
