@@ -144,9 +144,9 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	RemoteTxGossipOnlyEnabled bool     `json:"remote-tx-gossip-only-enabled"`
-	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"`
-	TxRegossipMaxSize         int      `json:"tx-regossip-max-size"`
+	RemoteGossipOnlyEnabled bool     `json:"remote-gossip-only-enabled"`
+	RegossipFrequency       Duration `json:"regossip-frequency"`
+	RegossipMaxTxs          int      `json:"regossip-max-txs"`
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -230,8 +230,8 @@ func (c *Config) SetDefaults() {
 	c.SnapshotCache = defaultSnapshotCache
 	c.AcceptorQueueLimit = defaultAcceptorQueueLimit
 	c.SnapshotWait = defaultSnapshotWait
-	c.TxRegossipFrequency.Duration = defaultTxRegossipFrequency
-	c.TxRegossipMaxSize = defaultTxRegossipMaxSize
+	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
+	c.RegossipMaxTxs = defaultTxRegossipMaxSize
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
 	c.LogLevel = defaultLogLevel
 	c.PopulateMissingTriesParallelism = defaultPopulateMissingTriesParallelism
