@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/snow"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ import (
 func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
+	_, vm, _, sharedMemory, sender := GenesisVM(t, false, "", "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -65,7 +66,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		gossipedLock.Lock()
 		defer gossipedLock.Unlock()
 
-		bytes = bytes[1:] // first byte is an identifier
+		bytes = bytes[1:] // first byte is an sdk identifier
 		msg := gossip.PullGossipRequest{}
 		_, err := vm.networkCodec.Unmarshal(bytes, &msg)
 		require.NoError(t, err)
@@ -81,6 +82,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 		addedToBloomFilter = true
 		return nil
 	}
+	assert.NoError(vm.SetState(context.Background(), snow.NormalOp))
 
 	// Optimistically gossip raw tx
 	assert.NoError(vm.issueTx(tx, true /*=local*/))
