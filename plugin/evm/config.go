@@ -77,9 +77,9 @@ type Duration struct {
 // Config ...
 type Config struct {
 	// Coreth APIs
-	SnowmanAPIEnabled     bool   `json:"snowman-api-enabled"`
-	CorethAdminAPIEnabled bool   `json:"coreth-admin-api-enabled"`
-	CorethAdminAPIDir     string `json:"coreth-admin-api-dir"`
+	SnowmanAPIEnabled bool   `json:"snowman-api-enabled"`
+	AdminAPIEnabled   bool   `json:"admin-api-enabled"`
+	AdminAPIDir       string `json:"admin-api-dir"`
 
 	// EnabledEthAPIs is a list of Ethereum services that should be enabled
 	// If none is specified, then we use the default list [defaultEnabledAPIs]
