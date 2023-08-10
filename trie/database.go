@@ -26,25 +26,25 @@ import (
 	"github.com/ava-labs/coreth/trie/triedb/pathdb"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/trie/triestate"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	cacheStatsUpdateFrequency = 1000 // update trie cache stats once per 1000 ops
-)
-
 // Config defines all necessary options for database.
 type Config struct {
-	Cache       int            // Memory allowance (MB) to use for caching trie nodes in memory
-	Journal     string         // Journal of clean cache to survive node restarts
-	Preimages   bool           // Flag whether the preimage of trie key is recorded
-	PathDB      *pathdb.Config // Configs for experimental path-based scheme, not used yet.
-	StatsPrefix string         // Prefix for cache stats (disabled if empty)
+	Preimages bool           // Flag whether the preimage of node key is recorded
+	HashDB    *hashdb.Config // Configs for hash-based scheme
+	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 
 	// Testing hooks
 	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
+}
+
+// HashDefaults represents a config for using hash-based scheme with
+// default settings.
+var HashDefaults = &Config{
+	Preimages: false,
+	HashDB:    hashdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -76,13 +76,9 @@ type backend interface {
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
-}
 
-type cache interface {
-	HasGet([]byte, []byte) ([]byte, bool)
-	Del([]byte)
-	Set([]byte, []byte)
-	SaveToFileConcurrent(dir string, threads int) error
+	// SaveCache saves clean state cache to given directory path using specified CPU cores.
+	SaveCache(dir string, threads int) error
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
@@ -91,7 +87,6 @@ type cache interface {
 type Database struct {
 	config    *Config        // Configuration for trie database
 	diskdb    ethdb.Database // Persistent database to store the snapshot
-	cleans    cache          // Megabytes permitted using for read caches
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
 }
@@ -99,10 +94,6 @@ type Database struct {
 // prepare initializes the database with provided configs, but the
 // database backend is still left as nil.
 func prepare(diskdb ethdb.Database, config *Config) *Database {
-	var cleans cache
-	if config != nil && config.Cache > 0 {
-		cleans = utils.NewMeteredCache(config.Cache*1024*1024, config.Journal, config.StatsPrefix, cacheStatsUpdateFrequency)
-	}
 	var preimages *preimageStore
 	if config != nil && config.Preimages {
 		preimages = newPreimageStore(diskdb)
@@ -110,23 +101,34 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 	return &Database{
 		config:    config,
 		diskdb:    diskdb,
-		cleans:    cleans,
 		preimages: preimages,
 	}
 }
 
-// NewDatabase initializes the trie database with default settings, namely
+// NewDatabase initializes the trie database with default settings, note
 // the legacy hash-based scheme is used by default.
-func NewDatabase(diskdb ethdb.Database) *Database {
-	return NewDatabaseWithConfig(diskdb, nil)
-}
-
-// NewDatabaseWithConfig initializes the trie database with provided configs.
-// The path-based scheme is not activated yet, always initialized with legacy
-// hash-based scheme by default.
-func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
-	db := prepare(diskdb, config)
-	db.backend = hashdb.New(diskdb, db.cleans, mptResolver{})
+func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
+	// Sanitize the config and use the default one if it's not specified.
+	if config == nil {
+		config = HashDefaults
+	}
+	var preimages *preimageStore
+	if config.Preimages {
+		preimages = newPreimageStore(diskdb)
+	}
+	db := &Database{
+		config:    config,
+		diskdb:    diskdb,
+		preimages: preimages,
+	}
+	if config.HashDB != nil && config.PathDB != nil {
+		log.Crit("Both 'hash' and 'path' mode are configured")
+	}
+	if config.PathDB != nil {
+		db.backend = pathdb.New(diskdb, config.PathDB)
+	} else {
+		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
+	}
 	return db
 }
 
@@ -219,28 +221,10 @@ func (db *Database) WritePreimages() {
 	}
 }
 
-// saveCache saves clean state cache to given directory path
-// using specified CPU cores.
-func (db *Database) saveCache(dir string, threads int) error {
-	if db.cleans == nil {
-		return nil
-	}
-	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
-
-	start := time.Now()
-	err := db.cleans.SaveToFileConcurrent(dir, threads)
-	if err != nil {
-		log.Error("Failed to persist clean trie cache", "error", err)
-		return err
-	}
-	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
-}
-
 // SaveCache atomically saves fast cache data to the given dir using all
 // available CPU cores.
 func (db *Database) SaveCache(dir string) error {
-	return db.saveCache(dir, runtime.GOMAXPROCS(0))
+	return db.backend.SaveCache(dir, runtime.GOMAXPROCS(0))
 }
 
 // SaveCachePeriodically atomically saves fast cache data to the given dir with
@@ -252,7 +236,7 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 	for {
 		select {
 		case <-ticker.C:
-			db.saveCache(dir, 1)
+			db.backend.SaveCache(dir, 1)
 		case <-stopCh:
 			return
 		}
@@ -309,4 +293,61 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		return nil, errors.New("not supported")
 	}
 	return hdb.Node(hash)
+}
+
+// Recover rollbacks the database to a specified historical point. The state is
+// supported as the rollback destination only if it's canonical state and the
+// corresponding trie histories are existent. It's only supported by path-based
+// database and will return an error for others.
+func (db *Database) Recover(target common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Recover(target, &trieLoader{db: db})
+}
+
+// Recoverable returns the indicator if the specified state is enabled to be
+// recovered. It's only supported by path-based database and will return an
+// error for others.
+func (db *Database) Recoverable(root common.Hash) (bool, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false, errors.New("not supported")
+	}
+	return pdb.Recoverable(root), nil
+}
+
+// Reset wipes all available journal from the persistent database and discard
+// all caches and diff layers. Using the given root to create a new disk layer.
+// It's only supported by path-based database and will return an error for others.
+func (db *Database) Reset(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Reset(root)
+}
+
+// Journal commits an entire diff hierarchy to disk into a single journal entry.
+// This is meant to be used during shutdown to persist the snapshot without
+// flattening everything down (bad for reorgs). It's only supported by path-based
+// database and will return an error for others.
+func (db *Database) Journal(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Journal(root)
+}
+
+// SetBufferSize sets the node buffer size to the provided value(in bytes).
+// It's only supported by path-based database and will return an error for
+// others.
+func (db *Database) SetBufferSize(size int) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.SetBufferSize(size)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,8 @@ func TestBlockRequestHandler(t *testing.T) {
 		Config: params.TestChainConfig,
 	}
 	memdb := memorydb.New()
-	genesis := gspec.MustCommit(memdb)
+	triedb := trie.NewDatabase(memdb, nil)
+	genesis := gspec.MustCommit(memdb, triedb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {
@@ -147,7 +149,8 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 		Config: params.TestChainConfig,
 	}
 	memdb := memorydb.New()
-	genesis := gspec.MustCommit(memdb)
+	triedb := trie.NewDatabase(memdb, nil)
+	genesis := gspec.MustCommit(memdb, triedb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {

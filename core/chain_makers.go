@@ -242,7 +242,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
-	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts, error) {
+	genblock := func(i int, parent *types.Block, triedb *trie.Database, statedb *state.StateDB) (*types.Block, types.Receipts, error) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, config, parent, gap, statedb, b.engine)
 
@@ -262,7 +262,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
-			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
+			if err := triedb.Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
 			if b.onBlockGenerated != nil {
@@ -272,12 +272,16 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		return nil, nil, nil
 	}
+	// Forcibly use hash-based state scheme for retaining all nodes in disk.
+	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	defer triedb.Close()
+
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, triedb), nil)
 		if err != nil {
 			return nil, nil, err
 		}
-		block, receipt, err := genblock(i, parent, statedb)
+		block, receipt, err := genblock(i, parent, triedb, statedb)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -293,7 +297,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 // then generate chain on top.
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gap uint64, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts, error) {
 	db := rawdb.NewMemoryDatabase()
-	_, err := genesis.Commit(db, trie.NewDatabase(db))
+	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	defer triedb.Close()
+	_, err := genesis.Commit(db, triedb)
 	if err != nil {
 		return nil, nil, nil, err
 	}

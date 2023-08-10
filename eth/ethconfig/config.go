@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/eth/gasprice"
 	"github.com/ava-labs/coreth/miner"
@@ -54,6 +55,7 @@ var DefaultConfig = NewDefaultConfig()
 func NewDefaultConfig() Config {
 	return Config{
 		NetworkId:             1,
+		StateScheme:           rawdb.HashScheme,
 		TrieCleanCache:        512,
 		TrieDirtyCache:        256,
 		TrieDirtyCommitTarget: 20,
@@ -155,5 +157,9 @@ type Config struct {
 	// are reserved:
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
-	TxLookupLimit uint64
+	// Deprecated, use 'TransactionHistory' instead.
+	TxLookupLimit      uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
+	StateScheme        string `toml:",omitempty"` // State scheme used to store ethereum state and merkle trie nodes on top
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -146,10 +147,12 @@ func newAtomicTrie(
 		}
 	}
 
-	trieDB := trie.NewDatabaseWithConfig(
+	trieDB := trie.NewDatabase(
 		Database{atomicTrieDB},
 		&trie.Config{
-			Cache: 64, // Allocate 64MB of memory for clean cache
+			HashDB: &hashdb.Config{
+				CleanCacheSize: 64, // Allocate 64MB of memory for clean cache
+			},
 		},
 	)
 

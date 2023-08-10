@@ -142,7 +142,8 @@ func TestGetBlocks(t *testing.T) {
 		Config: params.TestChainConfig,
 	}
 	memdb := memorydb.New()
-	genesis := gspec.MustCommit(memdb)
+	triedb := trie.NewDatabase(memdb, nil)
+	genesis := gspec.MustCommit(memdb, triedb)
 	engine := dummy.NewETHFaker()
 	numBlocks := 110
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, numBlocks, 0, func(i int, b *core.BlockGen) {})
@@ -409,7 +410,7 @@ func TestGetLeafs(t *testing.T) {
 
 	const leafsLimit = 1024
 
-	trieDB := trie.NewDatabase(memorydb.New())
+	trieDB := trie.NewDatabase(memorydb.New(), nil)
 	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, leafsLimit, common.HashLength)
 
@@ -792,7 +793,7 @@ func TestGetLeafs(t *testing.T) {
 func TestGetLeafsRetries(t *testing.T) {
 	rand.Seed(1)
 
-	trieDB := trie.NewDatabase(memorydb.New())
+	trieDB := trie.NewDatabase(memorydb.New(), nil)
 	root, _, _ := trie.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 
 	handler := handlers.NewLeafsRequestHandler(trieDB, nil, message.Codec, handlerstats.NewNoopHandlerStats())

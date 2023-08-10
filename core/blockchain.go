@@ -51,6 +51,8 @@ import (
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/trie/triedb/hashdb"
+	"github.com/ava-labs/coreth/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/event"
@@ -146,7 +148,7 @@ const (
 )
 
 // CacheConfig contains the configuration values for the trie database
-// that's resident in a blockchain.
+// and state snapshot these are resident in a blockchain.
 type CacheConfig struct {
 	TrieCleanLimit                  int           // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieCleanJournal                string        // Disk journal for saving clean cache entries.
@@ -163,11 +165,41 @@ type CacheConfig struct {
 	SnapshotLimit                   int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	SnapshotVerify                  bool          // Verify generated snapshots
 	Preimages                       bool          // Whether to store preimage of trie key to the disk
-	AcceptedCacheSize               int           // Depth of accepted headers cache and accepted logs cache at the accepted tip
-	TxLookupLimit                   uint64        // Number of recent blocks for which to maintain transaction lookup indices
+	StateHistory                    uint64        // Number of blocks from head whose state histories are reserved.
+	StateScheme                     string        // Scheme used to store ethereum states and merkle tree nodes on top
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+
+	AcceptedCacheSize int    // Depth of accepted headers cache and accepted logs cache at the accepted tip
+	TxLookupLimit     uint64 // Number of recent blocks for which to maintain transaction lookup indices
+}
+
+// triedbConfig derives the configures for trie database.
+func (c *CacheConfig) triedbConfig() *trie.Config {
+	config := &trie.Config{Preimages: c.Preimages}
+	if c.StateScheme == rawdb.HashScheme {
+		config.HashDB = &hashdb.Config{
+			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
+			Journal:        c.TrieCleanJournal,
+		}
+	}
+	if c.StateScheme == rawdb.PathScheme {
+		config.PathDB = &pathdb.Config{
+			StateHistory:   c.StateHistory,
+			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
+			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
+		}
+	}
+	return config
+}
+
+func (c *CacheConfig) triedbConfigWithCacheStats(prefix string) *trie.Config {
+	config := c.triedbConfig()
+	if c.StateScheme == rawdb.HashScheme {
+		config.HashDB.StatsPrefix = prefix
+	}
+	return config
 }
 
 var DefaultCacheConfig = &CacheConfig{
@@ -179,6 +211,15 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:    64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:         256,
 	AcceptedCacheSize:     32,
+	StateScheme:           rawdb.HashScheme,
+}
+
+// DefaultCacheConfigWithScheme returns a deep copied default cache config with
+// a provided trie node scheme.
+func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
+	config := *DefaultCacheConfig
+	config.StateScheme = scheme
+	return &config
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -294,12 +335,11 @@ func NewBlockChain(
 		return nil, errCacheConfigNotSpecified
 	}
 	// Open trie database with provided config
-	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
-		Cache:       cacheConfig.TrieCleanLimit,
-		Journal:     cacheConfig.TrieCleanJournal,
-		Preimages:   cacheConfig.Preimages,
-		StatsPrefix: trieCleanCacheStatsNamespace,
-	})
+	triedb := trie.NewDatabase(
+		db,
+		cacheConfig.triedbConfigWithCacheStats(trieCleanCacheStatsNamespace),
+	)
+
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
@@ -455,6 +495,7 @@ func (bc *BlockChain) dispatchTxUnindexer() {
 		return
 	}
 	defer sub.Unsubscribe()
+	log.Info("Initialized transaction indexer", "limit", txLookupLimit)
 
 	for {
 		select {
@@ -953,15 +994,26 @@ func (bc *BlockChain) stopWithoutSaving() {
 func (bc *BlockChain) Stop() {
 	bc.stopWithoutSaving()
 
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		// Ensure that the in-memory trie nodes are journaled to disk properly.
+		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
+			log.Info("Failed to journal in-memory trie nodes", "err", err)
+		}
+	} else {
+		// Note: go-ethereum writes state of HEAD, HEAD-1, and HEAD-127 to disk
+		// here. Instead, we write the state of HEAD to disk in the stateManager
+		// shutdown.
+	}
+
 	log.Info("Shutting down state manager")
 	start := time.Now()
 	if err := bc.stateManager.Shutdown(); err != nil {
 		log.Error("Failed to Shutdown state manager", "err", err)
 	}
 	log.Info("State manager shut down", "t", time.Since(start))
-	// Flush the collected preimages to disk
-	if err := bc.stateCache.TrieDB().Close(); err != nil {
-		log.Error("Failed to close trie db", "err", err)
+	// Close the trie database, release all the held resources as the last step.
+	if err := bc.triedb.Close(); err != nil {
+		log.Error("Failed to close trie database", "err", err)
 	}
 
 	log.Info("Blockchain stopped")

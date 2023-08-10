@@ -39,9 +39,14 @@ import (
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/trie/triestate"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+const (
+	cacheStatsUpdateFrequency = 1000 // update trie cache stats once per 1000 ops
 )
 
 var (
@@ -81,10 +86,29 @@ type ChildResolver interface {
 	ForEach(node []byte, onChild func(common.Hash))
 }
 
+// Config contains the settings for database.
+type Config struct {
+	CleanCacheSize int // Maximum memory allowance (in bytes) for caching clean nodes
+
+	Journal     string // Journal of clean cache to survive node restarts
+	StatsPrefix string // Prefix for cache stats (disabled if empty)
+}
+
+// Defaults is the default setting for database if it's not specified.
+// Notably, clean cache is disabled explicitly,
+var Defaults = &Config{
+	// Explicitly set clean cache size to 0 to avoid creating fastcache,
+	// otherwise database must be closed when it's no longer needed to
+	// prevent memory leak.
+	CleanCacheSize: 0,
+}
+
 type cache interface {
 	HasGet([]byte, []byte) ([]byte, bool)
 	Del([]byte)
 	Set([]byte, []byte)
+	Reset()
+	SaveToFileConcurrent(dir string, threads int) error
 }
 
 // Database is an intermediate write layer between the trie data structures and
@@ -142,7 +166,15 @@ func (n *cachedNode) forChildren(resolver ChildResolver, onChild func(hash commo
 }
 
 // New initializes the hash-based node database.
-func New(diskdb ethdb.Database, cleans cache, resolver ChildResolver) *Database {
+func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Database {
+	if config == nil {
+		config = Defaults
+	}
+	var cleans cache
+	if config.CleanCacheSize > 0 {
+		cleans = utils.NewMeteredCache(config.CleanCacheSize, config.Journal, config.StatsPrefix, cacheStatsUpdateFrequency)
+	}
+
 	return &Database{
 		diskdb:   diskdb,
 		resolver: resolver,
@@ -697,7 +729,13 @@ func (db *Database) Size() common.StorageSize {
 }
 
 // Close closes the trie database and releases all held resources.
-func (db *Database) Close() error { return nil }
+func (db *Database) Close() error {
+	if db.cleans != nil {
+		db.cleans.Reset()
+		db.cleans = nil
+	}
+	return nil
+}
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {

@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -1099,10 +1100,12 @@ func (vm *VM) setAppRequestHandlers() {
 	// Create separate EVM TrieDB (read only) for serving leafs requests.
 	// We create a separate TrieDB here, so that it has a separate cache from the one
 	// used by the node when processing blocks.
-	evmTrieDB := trie.NewDatabaseWithConfig(
+	evmTrieDB := trie.NewDatabase(
 		vm.chaindb,
 		&trie.Config{
-			Cache: vm.config.StateSyncServerTrieCache,
+			HashDB: &hashdb.Config{
+				CleanCacheSize: vm.config.StateSyncServerTrieCache,
+			},
 		},
 	)
 	syncRequestHandler := handlers.NewSyncHandler(

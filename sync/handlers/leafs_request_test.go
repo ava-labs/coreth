@@ -28,7 +28,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	rand.Seed(1)
 	mockHandlerStats := &stats.MockHandlerStats{}
 	memdb := memorydb.New()
-	trieDB := trie.NewDatabase(memdb)
+	trieDB := trie.NewDatabase(memdb, nil)
 
 	corruptedTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 100, common.HashLength)
 	// Corrupt [corruptedTrieRoot]

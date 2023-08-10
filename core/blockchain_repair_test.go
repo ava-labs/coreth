@@ -501,15 +501,23 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 }
 
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
+	for _, scheme := range []string{ /*rawdb.HashScheme,*/ rawdb.PathScheme} {
+		testRepairWithScheme(t, tt, snapshots, scheme)
+	}
+}
+
+func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string) {
 	// It's hard to follow the test case, visualize the input
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
 	datadir := t.TempDir()
+	//ancient := path.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory: datadir,
+		//AncientsDirectory: ancient,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
@@ -527,6 +535,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			SnapshotLimit:  0, // Disable snapshot by default
+			StateScheme:    scheme,
 		}
 	)
 	defer engine.Close()
@@ -573,12 +582,14 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 
 	// Pull the plug on the database, simulating a hard crash
+	chain.triedb.Close()
 	db.Close()
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
 		Directory: datadir,
+		//AncientsDirectory: ancient,
 	})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)

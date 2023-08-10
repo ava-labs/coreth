@@ -148,8 +148,11 @@ func New(
 	// Since RecoverPruning will only continue a pruning run that already began, we do not need to ensure that
 	// reprocessState has already been called and completed successfully. To ensure this, we must maintain
 	// that Prune is only run after reprocessState has finished successfully.
-	if err := pruner.RecoverPruning(config.OfflinePruningDataDirectory, chainDb, config.TrieCleanJournal); err != nil {
-		log.Error("Failed to recover state", "error", err)
+	// Try to recover offline state pruning only in hash-based.
+	if config.StateScheme == rawdb.HashScheme {
+		if err := pruner.RecoverPruning(config.OfflinePruningDataDirectory, chainDb, config.TrieCleanJournal); err != nil {
+			log.Error("Failed to recover state", "error", err)
+		}
 	}
 
 	eth := &Ethereum{
@@ -166,7 +169,6 @@ func New(
 		settings:          settings,
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
-
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	dbVer := "<nil>"
 	if bcVersion != nil {
@@ -205,6 +207,8 @@ func New(
 			SnapshotVerify:                  config.SnapshotVerify,
 			SnapshotNoBuild:                 config.SkipSnapshotRebuild,
 			Preimages:                       config.Preimages,
+			StateHistory:                    config.StateHistory,
+			StateScheme:                     config.StateScheme,
 			AcceptedCacheSize:               config.AcceptedCacheSize,
 			TxLookupLimit:                   config.TxLookupLimit,
 		}

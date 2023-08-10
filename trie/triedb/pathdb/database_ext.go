@@ -12,3 +12,8 @@ import (
 func (db *Database) UpdateAndReferenceRoot(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	return db.Update(root, parentRoot, block, nodes, states)
 }
+
+func (db *Database) SaveCache(dir string, threads int) error {
+	// TODO: should we implement this?
+	return nil
+}

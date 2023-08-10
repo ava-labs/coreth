@@ -128,6 +128,12 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	if l == nil {
 		return fmt.Errorf("triedb layer [%#x] missing", root)
 	}
+	if _, ok := l.(*diskLayer); ok {
+		// Note: this behavior has been modified from go-ethereum which returns
+		// the error below. We return nil to avoid the error and retain the
+		// no-op behavior of committing a trie that is already written to disk.
+		return nil
+	}
 	diff, ok := l.(*diffLayer)
 	if !ok {
 		return fmt.Errorf("triedb layer [%#x] is disk layer", root)
