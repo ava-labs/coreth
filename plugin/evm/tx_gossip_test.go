@@ -19,6 +19,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/gossip"
 	"github.com/ava-labs/coreth/params"
@@ -30,13 +31,15 @@ func TestEthTxGossip(t *testing.T) {
 
 	// set up prefunded address
 	importAmount := uint64(1_000_000_000)
-	issuer, vm, _, _, sender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	issuer, vm, _, _, sender := GenesisVMWithUTXOs(t, true, genesisJSONLatest, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
 	}()
+
+	importAccepted := make(chan core.NewTxPoolHeadEvent)
+	vm.txPool.SubscribeNewHeadEvent(importAccepted)
 
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(err)
@@ -51,6 +54,7 @@ func TestEthTxGossip(t *testing.T) {
 	require.NoError(blk.Verify(context.Background()))
 	require.NoError(vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(blk.Accept(context.Background()))
+	<-importAccepted
 
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
