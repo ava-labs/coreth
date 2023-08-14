@@ -109,10 +109,8 @@ func TestGossiperGossip(t *testing.T) {
 			responseSender.EXPECT().
 				SendAppResponse(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Do(func(ctx context.Context, nodeID ids.NodeID, requestID uint32, appResponseBytes []byte) {
-					go func() {
-						require.NoError(requestRouter.AppResponse(ctx, nodeID, requestID, appResponseBytes))
-						close(gossiped)
-					}()
+					require.NoError(requestRouter.AppResponse(ctx, nodeID, requestID, appResponseBytes))
+					close(gossiped)
 				}).AnyTimes()
 
 			bloom, err := NewBloomFilter(1000, 0.01)
