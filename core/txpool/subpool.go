@@ -32,19 +32,8 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 )
-
-// Transaction is a helper struct to group together a canonical transaction with
-// satellite data items that are needed by the pool but are not part of the chain.
-type Transaction struct {
-	Tx *types.Transaction // Canonical transaction
-
-	BlobTxBlobs   []kzg4844.Blob       // Blobs needed by the blob pool
-	BlobTxCommits []kzg4844.Commitment // Commitments needed by the blob pool
-	BlobTxProofs  []kzg4844.Proof      // Proofs needed by the blob pool
-}
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
 // blob pool). Since independent of how many specialized pools we have, they do
@@ -88,12 +77,12 @@ type SubPool interface {
 	HasLocal(hash common.Hash) bool
 
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
-	Get(hash common.Hash) *Transaction
+	Get(hash common.Hash) *types.Transaction
 
 	// Add enqueues a batch of transactions into the pool if they are valid. Due
 	// to the large transaction churn, add may postpone fully integrating the tx
 	// to a later point to batch multiple ones together.
-	Add(txs []*Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, local bool, sync bool) []error
 
 	// Pending retrieves all currently processable transactions, grouped by origin
 	// account and sorted by nonce.

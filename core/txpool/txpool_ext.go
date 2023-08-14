@@ -63,21 +63,13 @@ func (pool *TxPool) SubscribeNewReorgEvent(ch chan<- core.NewTxPoolReorgEvent) e
 // TODO: consider removing these wrappers
 
 func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
-	return pool.Add(WrapTxs(txs), true, true)
+	return pool.Add(txs, true, true)
 }
 
 func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
-	return pool.Add(WrapTxs(txs), false, false)
+	return pool.Add(txs, false, false)
 }
 
 func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error {
-	return pool.Add(WrapTxs(txs), false, true)
-}
-
-func WrapTxs(txs []*types.Transaction) []*Transaction {
-	wrapped := make([]*Transaction, len(txs))
-	for i, tx := range txs {
-		wrapped[i] = &Transaction{Tx: tx}
-	}
-	return wrapped
+	return pool.Add(txs, false, true)
 }
