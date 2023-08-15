@@ -33,11 +33,15 @@ func (t *testTx) Unmarshal(bytes []byte) error {
 type testSet struct {
 	set   set.Set[*testTx]
 	bloom *BloomFilter
+	onAdd func(tx *testTx)
 }
 
 func (t testSet) Add(gossipable *testTx) error {
 	t.set.Add(gossipable)
 	t.bloom.Add(gossipable)
+	if t.onAdd != nil {
+		t.onAdd(gossipable)
+	}
 	return nil
 }
 

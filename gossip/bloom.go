@@ -8,6 +8,7 @@ import (
 	"hash"
 	"time"
 
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"golang.org/x/exp/rand"
 )
@@ -29,7 +30,8 @@ func NewBloomFilter(m uint64, p float64) (*BloomFilter, error) {
 
 type BloomFilter struct {
 	Bloom *bloomfilter.Filter
-	Salt  []byte
+	// Salt is provided to eventually unblock collisions in Bloom
+	Salt []byte
 }
 
 func (b *BloomFilter) Add(gossipable Gossipable) {
@@ -80,8 +82,8 @@ type hasher struct {
 }
 
 func (h hasher) Sum64() uint64 {
-	for i, salt := range h.salt {
-		h.hash[i] ^= salt
+	for i := 0; i < safemath.Min(len(h.hash), len(h.salt)); i++ {
+		h.hash[i] ^= h.salt[i]
 	}
 
 	return binary.BigEndian.Uint64(h.hash[:])

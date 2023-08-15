@@ -12,7 +12,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
-	"github.com/ava-labs/avalanchego/snow/engine/common"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -58,7 +59,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
-	peerSender := common.NewMockSender(ctrl)
+	peerSender := commonEng.NewMockSender(ctrl)
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler
@@ -71,7 +72,9 @@ func TestEthTxGossip(t *testing.T) {
 	require.NoError(err)
 	request := gossip.PullGossipRequest{
 		FilterBytes: emptyBloomFilterBytes,
+		SaltBytes:   utils.RandomBytes(10),
 	}
+
 	requestBytes, err := vm.networkCodec.Marshal(message.Version, request)
 	require.NoError(err)
 
@@ -150,7 +153,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
-	peerSender := common.NewMockSender(ctrl)
+	peerSender := commonEng.NewMockSender(ctrl)
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler

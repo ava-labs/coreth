@@ -20,7 +20,7 @@ const (
 var (
 	Codec           codec.Manager
 	CrossChainCodec codec.Manager
-	SdkCodec        codec.Manager
+	SDKCodec        codec.Manager
 )
 
 func init() {
@@ -67,15 +67,15 @@ func init() {
 		panic(errs.Err)
 	}
 
-	SdkCodec = codec.NewManager(maxMessageSize)
+	SDKCodec = codec.NewManager(maxMessageSize)
 	sdkc := linearcodec.NewDefault()
 
 	errs = wrappers.Errs{}
 	errs.Add(
 		// p2p sdk gossip types
-		c.RegisterType(gossip.PullGossipRequest{}),
-		c.RegisterType(gossip.PullGossipResponse{}),
-		SdkCodec.RegisterCodec(Version, sdkc),
+		sdkc.RegisterType(gossip.PullGossipRequest{}),
+		sdkc.RegisterType(gossip.PullGossipResponse{}),
+		SDKCodec.RegisterCodec(Version, sdkc),
 	)
 
 	if errs.Errored() {

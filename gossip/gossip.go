@@ -60,34 +60,38 @@ func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.Wai
 	for {
 		select {
 		case <-gossipTicker.C:
-			filter := g.set.GetFilter()
-			bloomBytes, err := filter.Bloom.MarshalBinary()
-			if err != nil {
-				log.Warn("failed to marshal bloom filter", "error", err)
-				continue
-			}
-
-			request := PullGossipRequest{
-				FilterBytes: bloomBytes,
-				SaltBytes:   filter.Salt,
-			}
-			msgBytes, err := g.codec.Marshal(g.codecVersion, request)
-			if err != nil {
-				log.Warn("failed to marshal gossip request", "error", err)
-				continue
-			}
-
-			for i := 0; i < g.config.PollSize; i++ {
-				if err := g.client.AppRequestAny(context.TODO(), msgBytes, g.handleResponse); err != nil {
-					log.Warn("failed to gossip", "error", err)
-					continue
-				}
+			if err := g.gossip(); err != nil {
+				log.Warn("failed to gossip", "error", err)
 			}
 		case <-shutdownChan:
 			log.Debug("shutting down gossip")
 			return
 		}
 	}
+}
+func (g *Gossiper[T, U]) gossip() error {
+	filter := g.set.GetFilter()
+	bloomBytes, err := filter.Bloom.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	request := PullGossipRequest{
+		FilterBytes: bloomBytes,
+		SaltBytes:   filter.Salt,
+	}
+	msgBytes, err := g.codec.Marshal(g.codecVersion, request)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < g.config.PollSize; i++ {
+		if err := g.client.AppRequestAny(context.TODO(), msgBytes, g.handleResponse); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (g *Gossiper[T, U]) handleResponse(nodeID ids.NodeID, responseBytes []byte, err error) {

@@ -131,10 +131,12 @@ func TestGossiperGossip(t *testing.T) {
 				PollSize:  1,
 			}
 			gossiper := NewGossiper[testTx, *testTx](config, requestSet, requestClient, cc, 0)
-			done := make(chan struct{})
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go gossiper.Gossip(done, wg)
+			received := set.Set[*testTx]{}
+			requestSet.onAdd = func(tx *testTx) {
+				received.Add(tx)
+			}
+
+			require.NoError(gossiper.gossip())
 			<-gossiped
 
 			require.Len(requestSet.set, len(tt.expected))
@@ -142,8 +144,11 @@ func TestGossiperGossip(t *testing.T) {
 				require.Contains(requestSet.set, expected)
 			}
 
-			close(done)
-			wg.Wait()
+			// we should not receive anything that we already had before we
+			// requested the gossip
+			for _, tx := range tt.requester {
+				require.NotContains(received, tx)
+			}
 		})
 	}
 }

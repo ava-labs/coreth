@@ -78,6 +78,13 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 				g.bloom.Add(tx)
 				if gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipBloomMaxFilledRatio) {
 					log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
+
+					pending, _ := g.mempool.Content()
+					for _, pendingTxs := range pending {
+						for _, pendingTx := range pendingTxs {
+							g.bloom.Add(&GossipEthTx{Tx: pendingTx})
+						}
+					}
 				}
 			}
 			g.lock.Unlock()

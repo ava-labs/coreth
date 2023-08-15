@@ -137,7 +137,7 @@ const (
 	// threshold on how full a tx gossip bloom filter can get before it's reset
 	txGossipBloomMaxFilledRatio = 0.75
 	// maximum anticipated amount of entries in the tx gossip bloom filter
-	txGossipBloomMaxItems = 1_000
+	txGossipBloomMaxItems = 4096
 	// maximum false positive rate for lookups
 	txGossipBloomFalsePositiveRate = 0.001
 )
@@ -979,14 +979,14 @@ func (vm *VM) initBlockBuilding() error {
 	vm.shutdownWg.Add(1)
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
-	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, message.SdkCodec, message.Version)
+	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version)
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SdkCodec, message.Version)
+	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version)
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler)
 	if err != nil {
 		return err
@@ -997,7 +997,7 @@ func (vm *VM) initBlockBuilding() error {
 		txGossipConfig,
 		ethTxPool,
 		vm.ethTxGossipClient,
-		message.SdkCodec,
+		message.SDKCodec,
 		message.Version,
 	)
 	vm.shutdownWg.Add(1)
@@ -1007,7 +1007,7 @@ func (vm *VM) initBlockBuilding() error {
 		txGossipConfig,
 		vm.mempool,
 		vm.atomicTxGossipClient,
-		message.SdkCodec,
+		message.SDKCodec,
 		message.Version,
 	)
 	vm.shutdownWg.Add(1)

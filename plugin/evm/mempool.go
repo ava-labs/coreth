@@ -284,6 +284,10 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	m.bloom.Add(&GossipAtomicTx{Tx: tx})
 	if gossip.ResetBloomFilterIfNeeded(m.bloom, txGossipBloomMaxFilledRatio) {
 		log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
+
+		for _, pendingTx := range m.txHeap.minHeap.items {
+			m.bloom.Add(&GossipAtomicTx{Tx: pendingTx.tx})
+		}
 	}
 
 	return nil
