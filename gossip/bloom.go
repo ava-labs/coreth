@@ -67,7 +67,7 @@ func ResetBloomFilterIfNeeded(
 }
 
 func randomSalt() []byte {
-	salt := make([]byte, 0, HashLength)
+	salt := make([]byte, HashLength)
 	r := rand.New(rand.NewSource(uint64(time.Now().Nanosecond())))
 	_, _ = r.Read(salt)
 	return salt
