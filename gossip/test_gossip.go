@@ -42,6 +42,7 @@ func (t testSet) Add(gossipable *testTx) error {
 	if t.onAdd != nil {
 		t.onAdd(gossipable)
 	}
+
 	return nil
 }
 
