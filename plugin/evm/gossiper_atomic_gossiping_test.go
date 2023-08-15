@@ -86,7 +86,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 
 	// Optimistically gossip raw tx
 	assert.NoError(vm.issueTx(tx, true /*=local*/))
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * txGossipConfig.Frequency)
 	gossipedLock.Lock()
 	assert.Equal(1, gossiped)
 	gossipedLock.Unlock()
