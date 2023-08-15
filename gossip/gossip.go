@@ -69,6 +69,7 @@ func (g *Gossiper[T, U]) Gossip(shutdownChan chan struct{}, shutdownWg *sync.Wai
 		}
 	}
 }
+
 func (g *Gossiper[T, U]) gossip() error {
 	filter := g.set.GetFilter()
 	bloomBytes, err := filter.Bloom.MarshalBinary()
