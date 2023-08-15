@@ -143,7 +143,7 @@ const (
 )
 
 var txGossipConfig = gossip.Config{
-	Frequency: 10 * time.Second,
+	Frequency: time.Second,
 	PollSize:  10,
 }
 
