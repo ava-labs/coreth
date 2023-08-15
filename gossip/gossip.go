@@ -113,6 +113,7 @@ func (g *Gossiper[T, U]) handleResponse(nodeID ids.NodeID, responseBytes []byte,
 			continue
 		}
 
+		log.Debug("received gossip", "nodeID", nodeID, "hash", gossipable.GetHash())
 		if err := g.set.Add(gossipable); err != nil {
 			log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetHash())
 			continue
