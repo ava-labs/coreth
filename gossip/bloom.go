@@ -30,7 +30,9 @@ func NewBloomFilter(m uint64, p float64) (*BloomFilter, error) {
 
 type BloomFilter struct {
 	Bloom *bloomfilter.Filter
-	// Salt is provided to eventually unblock collisions in Bloom
+	// Salt is provided to eventually unblock collisions in Bloom. It's possible
+	// that conflicting Gossipable items collide in the bloom filter, so a salt
+	// is generated to eventually resolve collisions.
 	Salt []byte
 }
 
