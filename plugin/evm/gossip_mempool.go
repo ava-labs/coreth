@@ -79,7 +79,7 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 				if gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipBloomMaxFilledRatio) {
 					log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
 
-					pending, _ := g.mempool.Content()
+					pending := g.mempool.Pending(false)
 					for _, pendingTxs := range pending {
 						for _, pendingTx := range pendingTxs {
 							g.bloom.Add(&GossipEthTx{Tx: pendingTx})
@@ -103,7 +103,7 @@ func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 }
 
 func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx {
-	pending, _ := g.mempool.Content()
+	pending := g.mempool.Pending(false)
 	result := make([]*GossipEthTx, 0)
 
 	for _, txs := range pending {
