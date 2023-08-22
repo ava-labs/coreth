@@ -296,6 +296,7 @@ type VM struct {
 	client       peer.NetworkClient
 	networkCodec codec.Manager
 
+	validators           *p2p.Validators
 	router               *p2p.Router
 	ethTxGossipClient    *p2p.Client
 	atomicTxGossipClient *p2p.Client
@@ -525,6 +526,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
+	vm.validators = p2p.NewValidators(vm.ctx.SubnetID, vm.ctx.ValidatorState)
 	vm.router = p2p.NewRouter(vm.ctx.Log, appSender)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
@@ -979,15 +981,21 @@ func (vm *VM) initBlockBuilding() error {
 	vm.shutdownWg.Add(1)
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
-	ethTxGossipHandler := gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version)
-	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler)
+	ethTxGossipHandler := validatorHandler{
+		validators: vm.validators,
+		handler:    gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version),
+	}
+	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
 	if err != nil {
 		return err
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version)
-	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler)
+	atomicTxGossipHandler := validatorHandler{
+		validators: vm.validators,
+		handler:    gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version),
+	}
+	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
 	if err != nil {
 		return err
 	}
