@@ -513,9 +513,6 @@ func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion 
 		return nil
 	}
 
-	if err := n.router.Connected(ctx, nodeID, nodeVersion); err != nil {
-		return err
-	}
 	n.peers.Connected(nodeID, nodeVersion)
 	return nil
 }
@@ -530,9 +527,6 @@ func (n *network) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 		return nil
 	}
 
-	if err := n.router.Disconnected(ctx, nodeID); err != nil {
-		return err
-	}
 	n.peers.Disconnected(nodeID)
 	return nil
 }
