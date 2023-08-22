@@ -32,6 +32,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
@@ -89,6 +90,11 @@ func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 // ethash tests, please use OffsetTime, which implicitly recalculates the diff.
 func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
+}
+
+// SetBlobGas sets the data gas used by the blob in the generated block.
+func (b *BlockGen) SetBlobGas(blobGasUsed uint64) {
+	b.header.BlobGasUsed = &blobGasUsed
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -344,6 +350,19 @@ func makeHeader(chain consensus.ChainReader, config *params.ChainConfig, parent 
 		if err != nil {
 			panic(err)
 		}
+	}
+	if chain.Config().IsCancun(header.Time) {
+		var (
+			parentExcessBlobGas uint64
+			parentBlobGasUsed   uint64
+		)
+		if parent.ExcessBlobGas() != nil {
+			parentExcessBlobGas = *parent.ExcessBlobGas()
+			parentBlobGasUsed = *parent.BlobGasUsed()
+		}
+		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
+		header.ExcessBlobGas = &excessBlobGas
+		header.BlobGasUsed = new(uint64)
 	}
 	return header
 }
