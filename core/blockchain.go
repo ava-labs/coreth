@@ -1928,7 +1928,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
-	nodes, imgs := triedb.Size()
+	_, nodes, imgs := triedb.Size()
 	log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	if previousRoot != (common.Hash{}) {
 		return triedb.Commit(previousRoot, true)
@@ -2029,7 +2029,7 @@ func (bc *BlockChain) populateMissingTries() error {
 		return fmt.Errorf("failed to write offline pruning success marker: %w", err)
 	}
 
-	nodes, imgs := triedb.Size()
+	_, nodes, imgs := triedb.Size()
 	log.Info("All missing tries populated", "startHeight", startHeight, "lastAcceptedHeight", lastAccepted, "missing", missing, "elapsed", time.Since(startTime), "nodes", nodes, "preimages", imgs)
 	return nil
 }

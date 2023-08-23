@@ -67,7 +67,7 @@ type TrieWriter interface {
 type TrieDB interface {
 	Dereference(root common.Hash) error
 	Commit(root common.Hash, report bool) error
-	Size() (common.StorageSize, common.StorageSize)
+	Size() (common.StorageSize, common.StorageSize, common.StorageSize)
 	Cap(limit common.StorageSize) error
 }
 
@@ -126,8 +126,8 @@ type cappedMemoryTrieWriter struct {
 func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
 	// The use of [Cap] in [InsertTrie] prevents exceeding the configured memory
 	// limit (and OOM) in case there is a large backlog of processing (unaccepted) blocks.
-	nodes, imgs := cm.TrieDB.Size()
-	if nodes <= cm.memoryCap && imgs <= cm.imageCap {
+	diffs, nodes, imgs := cm.TrieDB.Size()
+	if diffs+nodes <= cm.memoryCap && imgs <= cm.imageCap {
 		return nil
 	}
 	if err := cm.TrieDB.Cap(cm.memoryCap - ethdb.IdealBatchSize); err != nil {
@@ -174,8 +174,8 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 		return nil
 	}
 	targetMemory := cm.targetCommitSize + cm.flushStepSize*common.StorageSize(distanceFromCommit)
-	nodes, _ := cm.TrieDB.Size()
-	if nodes <= targetMemory {
+	diffs, nodes, _ := cm.TrieDB.Size()
+	if diffs+nodes <= targetMemory {
 		return nil
 	}
 	targetCap := targetMemory - ethdb.IdealBatchSize
