@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
@@ -66,8 +67,10 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
-	size     uint64
+	sidecars []*types.BlobTxSidecar
+	blobs    int
 
+	size  uint64
 	start time.Time // Time that block building began
 }
 
@@ -153,6 +156,16 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 			return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 		}
 	}
+	if w.chainConfig.IsCancun(header.Time) {
+		var excessBlobGas uint64
+		if w.chainConfig.IsCancun(parent.Time) {
+			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
+		} else {
+			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0
+			excessBlobGas = eip4844.CalcExcessBlobGas(0, 0)
+		}
+		header.ExcessBlobGas = &excessBlobGas
+	}
 	if w.coinbase == (common.Address{}) {
 		return nil, errors.New("cannot mine without etherbase")
 	}
@@ -168,10 +181,9 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 	// Configure any stateful precompiles that should go into effect during this block.
 	w.chainConfig.CheckConfigurePrecompiles(&parent.Time, types.NewBlockWithHeader(header), env.state)
 
-	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
 
-	// Split the pending transactions into locals and remotes
+	// Split the pending transactions into locals and remotes.
 	localTxs, remoteTxs := make(map[common.Address][]*types.Transaction), pending
 	for _, account := range w.eth.TxPool().Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
@@ -179,6 +191,8 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 			localTxs[account] = txs
 		}
 	}
+
+	// Fill the block with all available pending transactions.
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, header.BaseFee)
 		w.commitTransactions(env, txs, w.coinbase)
@@ -213,15 +227,28 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, coin
 		gp   = env.gasPool.Gas()
 	)
 
+	// Checking against blob gas limit: It's kind of ugly to perform this check here, but there
+	// isn't really a better place right now. The blob gas limit is checked at block validation time
+	// and not during execution. This means core.ApplyTransaction will not return an error if the
+	// tx has too many blobs. So we have to explicitly check it here.
+	if (env.blobs+len(tx.BlobHashes()))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+		return nil, errors.New("max data blobs reached")
+	}
+
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
 		return nil, err
 	}
-	env.txs = append(env.txs, tx)
+	env.txs = append(env.txs, tx.WithoutBlobTxSidecar())
 	env.receipts = append(env.receipts, receipt)
 	env.size += tx.Size()
+
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		env.sidecars = append(env.sidecars, sc)
+		env.blobs += len(sc.Blobs)
+	}
 
 	return receipt.Logs, nil
 }
@@ -290,6 +317,7 @@ func (w *worker) commit(env *environment) (*types.Block, error) {
 		return nil, err
 	}
 
+	// TODO(XXX): handle sidecars
 	return w.handleResult(env, block, time.Now(), receipts)
 }
 
