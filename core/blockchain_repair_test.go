@@ -517,6 +517,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory: datadir,
+		Ephemeral: true,
 		//AncientsDirectory: ancient,
 	})
 	if err != nil {
@@ -589,6 +590,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
 		Directory: datadir,
+		Ephemeral: true,
 		//AncientsDirectory: ancient,
 	})
 	if err != nil {

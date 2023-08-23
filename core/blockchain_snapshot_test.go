@@ -75,6 +75,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory: datadir,
+		Ephemeral: true,
 		//AncientsDirectory: ancient,
 	})
 	if err != nil {
@@ -258,6 +259,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// Start a new blockchain back up and see where the repair leads us
 	newdb, err := rawdb.Open(rawdb.OpenOptions{
 		Directory: snaptest.datadir,
+		Ephemeral: true,
 		//AncientsDirectory: snaptest.ancient,
 	})
 	if err != nil {
