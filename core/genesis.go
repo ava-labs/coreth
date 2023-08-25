@@ -277,7 +277,9 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *trie.Database) *types.Block
 	g.Config.CheckConfigurePrecompiles(nil, types.NewBlockWithHeader(head), statedb)
 
 	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance)
+		if account.Balance != nil {
+			statedb.AddBalance(addr, account.Balance)
+		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
