@@ -147,7 +147,7 @@ func newAtomicTrie(
 	}
 
 	trieDB := trie.NewDatabaseWithConfig(
-		Database{atomicTrieDB},
+		NewDatabase(atomicTrieDB),
 		&trie.Config{
 			Cache: 64, // Allocate 64MB of memory for clean cache
 		},

@@ -10,7 +10,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
@@ -30,7 +29,7 @@ type codeSyncerTest struct {
 
 func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	// Set up serverDB
-	serverDB := memorydb.New()
+	serverDB := rawdb.NewMemoryDatabase()
 
 	codeHashes := make([]common.Hash, 0, len(test.codeByteSlices))
 	for _, codeBytes := range test.codeByteSlices {
@@ -44,7 +43,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	mockClient := statesyncclient.NewMockClient(message.Codec, nil, codeRequestHandler, nil)
 	mockClient.GetCodeIntercept = test.getCodeIntercept
 
-	clientDB := memorydb.New()
+	clientDB := rawdb.NewMemoryDatabase()
 
 	codeSyncer := newCodeSyncer(CodeSyncerConfig{
 		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,

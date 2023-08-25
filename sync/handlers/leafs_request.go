@@ -14,10 +14,10 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb"
-	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/sync/syncutils"
@@ -332,8 +332,8 @@ func (rb *responseBuilder) fillFromSnapshot(ctx context.Context) (bool, error) {
 }
 
 // generateRangeProof returns a range proof for the range specified by [start] and [keys] using [t].
-func (rb *responseBuilder) generateRangeProof(start []byte, keys [][]byte) (*memorydb.Database, error) {
-	proof := memorydb.New()
+func (rb *responseBuilder) generateRangeProof(start []byte, keys [][]byte) (ethdb.Database, error) {
+	proof := rawdb.NewMemoryDatabase()
 	startTime := time.Now()
 	defer func() { rb.proofTime += time.Since(startTime) }()
 
@@ -359,7 +359,7 @@ func (rb *responseBuilder) generateRangeProof(start []byte, keys [][]byte) (*mem
 
 // verifyRangeProof verifies the provided range proof with [keys/vals], starting at [start].
 // Returns a boolean indicating if there are more leaves to the right of the last key in the trie and a nil error if the range proof is successfully verified.
-func (rb *responseBuilder) verifyRangeProof(keys, vals [][]byte, start []byte, proof *memorydb.Database) (bool, error) {
+func (rb *responseBuilder) verifyRangeProof(keys, vals [][]byte, start []byte, proof ethdb.Database) (bool, error) {
 	startTime := time.Now()
 	defer func() { rb.proofTime += time.Since(startTime) }()
 
@@ -375,7 +375,7 @@ func (rb *responseBuilder) verifyRangeProof(keys, vals [][]byte, start []byte, p
 }
 
 // iterateVals returns the values contained in [db]
-func iterateVals(db *memorydb.Database) ([][]byte, error) {
+func iterateVals(db ethdb.Database) ([][]byte, error) {
 	if db == nil {
 		return nil, nil
 	}
@@ -383,7 +383,7 @@ func iterateVals(db *memorydb.Database) ([][]byte, error) {
 	it := db.NewIterator(nil, nil)
 	defer it.Release()
 
-	vals := make([][]byte, 0, db.Len())
+	vals := make([][]byte, 0)
 	for it.Next() {
 		vals = append(vals, it.Value())
 	}
@@ -396,7 +396,7 @@ func iterateVals(db *memorydb.Database) ([][]byte, error) {
 // existing response. If [hasGap] is false, the range proof begins at a key which
 // guarantees the range can be appended to the response.
 // Additionally returns a boolean indicating if there are more leaves in the trie.
-func (rb *responseBuilder) isRangeValid(keys, vals [][]byte, hasGap bool) (*memorydb.Database, bool, bool, error) {
+func (rb *responseBuilder) isRangeValid(keys, vals [][]byte, hasGap bool) (ethdb.Database, bool, bool, error) {
 	var startKey []byte
 	if hasGap {
 		startKey = keys[0]

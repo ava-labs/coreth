@@ -71,7 +71,8 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	datadir := t.TempDir()
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
-		Directory: datadir,
+		Directory:         datadir,
+		AncientsDirectory: datadir,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)

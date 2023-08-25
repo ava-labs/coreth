@@ -374,7 +374,7 @@ func (vm *VM) Initialize(
 	baseDB := dbManager.Current().Database
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = Database{prefixdb.NewNested(ethDBPrefix, baseDB)}
+	vm.chaindb = NewDatabase(prefixdb.NewNested(ethDBPrefix, baseDB))
 	vm.db = versiondb.New(baseDB)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)

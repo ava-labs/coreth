@@ -12,7 +12,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ethereum/go-ethereum/common"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestCodeRequestHandler(t *testing.T) {
-	database := memorydb.New()
+	database := rawdb.NewMemoryDatabase()
 
 	codeBytes := []byte("some code goes here")
 	codeHash := crypto.Keccak256Hash(codeBytes)

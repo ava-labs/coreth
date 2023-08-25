@@ -5,13 +5,20 @@ package evm
 
 import (
 	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/ethdb"
 )
 
-var _ ethdb.Database = &Database{}
+var _ ethdb.KeyValueStore = &Database{}
 
-// Database implements ethdb.Database
+// Database wraps a database.Database to implement ethdb.KeyValueStore
 type Database struct{ database.Database }
+
+// NewDatabase returns a new ethdb.Database on top of a given key-value data
+// store without a freezer.
+func NewDatabase(db database.Database) ethdb.Database {
+	return rawdb.NewDatabase(&Database{db})
+}
 
 // Stat implements ethdb.Database
 func (db Database) Stat(string) (string, error) { return "", database.ErrNotFound }
