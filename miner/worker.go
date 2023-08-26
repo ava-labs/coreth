@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -156,6 +157,7 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 			return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 		}
 	}
+	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Time) {
 		var excessBlobGas uint64
 		if w.chainConfig.IsCancun(parent.Time) {
@@ -164,7 +166,10 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0
 			excessBlobGas = eip4844.CalcExcessBlobGas(0, 0)
 		}
+		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
+		// TODO(XXX) fix this, consider adding genParams
+		// header.ParentBeaconRoot = genParams.beaconRoot
 	}
 	if w.coinbase == (common.Address{}) {
 		return nil, errors.New("cannot mine without etherbase")
@@ -177,6 +182,11 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 	env, err := w.createCurrentEnvironment(parent, header, tstart)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new current environment: %w", err)
+	}
+	if header.ParentBeaconRoot != nil {
+		context := core.NewEVMBlockContext(header, w.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
+		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}
 	// Configure any stateful precompiles that should go into effect during this block.
 	w.chainConfig.CheckConfigurePrecompiles(&parent.Time, types.NewBlockWithHeader(header), env.state)
@@ -222,35 +232,55 @@ func (w *worker) createCurrentEnvironment(parent *types.Header, header *types.He
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
-	var (
-		snap = env.state.Snapshot()
-		gp   = env.gasPool.Gas()
-	)
+	if tx.Type() == types.BlobTxType {
+		return w.commitBlobTransaction(env, tx, coinbase)
+	}
+
+	receipt, err := w.applyTransaction(env, tx, coinbase)
+	if err != nil {
+		return nil, err
+	}
+	env.txs = append(env.txs, tx)
+	env.receipts = append(env.receipts, receipt)
+	return receipt.Logs, nil
+}
+
+func (w *worker) commitBlobTransaction(env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+	sc := tx.BlobTxSidecar()
+	if sc == nil {
+		panic("blob transaction without blobs in miner")
+	}
 
 	// Checking against blob gas limit: It's kind of ugly to perform this check here, but there
 	// isn't really a better place right now. The blob gas limit is checked at block validation time
 	// and not during execution. This means core.ApplyTransaction will not return an error if the
 	// tx has too many blobs. So we have to explicitly check it here.
-	if (env.blobs+len(tx.BlobHashes()))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+	if (env.blobs+len(sc.Blobs))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
 		return nil, errors.New("max data blobs reached")
 	}
 
+	receipt, err := w.applyTransaction(env, tx, coinbase)
+	if err != nil {
+		return nil, err
+	}
+	env.sidecars = append(env.sidecars, sc)
+	env.blobs += len(sc.Blobs)
+	*env.header.BlobGasUsed += receipt.BlobGasUsed
+	return receipt.Logs, nil
+}
+
+// applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
+func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinbase common.Address) (*types.Receipt, error) {
+	var (
+		snap = env.state.Snapshot()
+		gp   = env.gasPool.Gas()
+	)
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
-		return nil, err
 	}
-	env.txs = append(env.txs, tx.WithoutBlobTxSidecar())
-	env.receipts = append(env.receipts, receipt)
-	env.size += tx.Size()
-
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		env.sidecars = append(env.sidecars, sc)
-		env.blobs += len(sc.Blobs)
-	}
-
-	return receipt.Logs, nil
+	return receipt, err
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, coinbase common.Address) {

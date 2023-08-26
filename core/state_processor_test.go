@@ -407,7 +407,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.BlobGasUsed = &used
 
 		beaconRoot := common.HexToHash("0xbeac00")
-		header.BeaconRoot = &beaconRoot
+		header.ParentBeaconRoot = &beaconRoot
 	}
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil), nil, true)

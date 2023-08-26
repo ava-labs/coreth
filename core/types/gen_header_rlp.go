@@ -46,7 +46,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	_tmp3 := obj.BlockGasCost != nil
 	_tmp4 := obj.BlobGasUsed != nil
 	_tmp5 := obj.ExcessBlobGas != nil
-	_tmp6 := obj.BeaconRoot != nil
+	_tmp6 := obj.ParentBeaconRoot != nil
 	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
@@ -92,10 +92,10 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	if _tmp6 {
-		if obj.BeaconRoot == nil {
+		if obj.ParentBeaconRoot == nil {
 			w.Write([]byte{0x80})
 		} else {
-			w.WriteBytes(obj.BeaconRoot[:])
+			w.WriteBytes(obj.ParentBeaconRoot[:])
 		}
 	}
 	w.ListEnd(_tmp0)
