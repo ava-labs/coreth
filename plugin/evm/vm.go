@@ -131,15 +131,17 @@ const (
 
 	targetAtomicTxsSize = 40 * units.KiB
 
+	// p2p app protocols
 	ethTxGossipProtocol    = 0x0
 	atomicTxGossipProtocol = 0x1
 
-	// threshold on how full a tx gossip bloom filter can get before it's reset
-	txGossipBloomMaxFilledRatio = 0.75
-	// maximum anticipated amount of entries in the tx gossip bloom filter
-	txGossipBloomMaxItems = 4096
-	// maximum false positive rate for lookups
+	// gossip constants
+	txGossipBloomMaxFilledRatio    = 0.75
+	txGossipBloomMaxItems          = 4096
 	txGossipBloomFalsePositiveRate = 0.001
+	maxValidatorSetStaleness       = time.Minute
+	throttlingPeriod               = time.Second
+	throttlingLimit                = 1
 )
 
 var txGossipConfig = gossip.Config{
@@ -526,7 +528,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.validators = p2p.NewValidators(vm.ctx.SubnetID, vm.ctx.ValidatorState)
+	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.router = p2p.NewRouter(vm.ctx.Log, appSender)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
@@ -981,9 +983,9 @@ func (vm *VM) initBlockBuilding() error {
 	vm.shutdownWg.Add(1)
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
-	ethTxGossipHandler := validatorHandler{
-		validators: vm.validators,
-		handler:    gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version),
+	ethTxGossipHandler := &p2p.ThrottledHandler{
+		Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+		Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version),
 	}
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
 	if err != nil {
@@ -991,9 +993,9 @@ func (vm *VM) initBlockBuilding() error {
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := validatorHandler{
-		validators: vm.validators,
-		handler:    gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version),
+	atomicTxGossipHandler := &p2p.ThrottledHandler{
+		Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+		Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version),
 	}
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
 	if err != nil {
