@@ -7,11 +7,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
-	"github.com/ethereum/go-ethereum/log"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var _ p2p.Handler = (*Handler[Gossipable])(nil)
