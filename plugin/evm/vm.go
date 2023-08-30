@@ -228,7 +228,9 @@ func init() {
 
 // VM implements the snowman.ChainVM interface
 type VM struct {
-	ctx *snow.Context
+	ctx           *snow.Context   // TODO rename to snowCtx
+	backgroundCtx context.Context // TODO rename to ctx
+	cancel        context.CancelFunc
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
 	*chain.State
@@ -339,7 +341,7 @@ func (vm *VM) GetActivationTime() time.Time {
 
 // Initialize implements the snowman.ChainVM interface
 func (vm *VM) Initialize(
-	_ context.Context,
+	ctx context.Context,
 	chainCtx *snow.Context,
 	dbManager manager.Manager,
 	genesisBytes []byte,
@@ -364,6 +366,9 @@ func (vm *VM) Initialize(
 	deprecateMsg := vm.config.Deprecate()
 
 	vm.ctx = chainCtx
+	ctx, cancel := context.WithCancel(ctx)
+	vm.backgroundCtx = ctx
+	vm.cancel = cancel
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -992,7 +997,7 @@ func (vm *VM) initBlockBuilding() error {
 
 	ethTxGossipHandler := &p2p.ThrottlerHandler{
 		Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-		Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version),
+		Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool),
 	}
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
 	if err != nil {
@@ -1002,7 +1007,7 @@ func (vm *VM) initBlockBuilding() error {
 
 	atomicTxGossipHandler := &p2p.ThrottlerHandler{
 		Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-		Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version),
+		Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool),
 	}
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
 	if err != nil {
@@ -1014,21 +1019,15 @@ func (vm *VM) initBlockBuilding() error {
 		txGossipConfig,
 		ethTxPool,
 		vm.ethTxGossipClient,
-		message.SDKCodec,
-		message.Version,
 	)
-	vm.shutdownWg.Add(1)
-	go vm.ethTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)
+	go vm.ethTxGossiper.Gossip(vm.backgroundCtx)
 
 	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		txGossipConfig,
 		vm.mempool,
 		vm.atomicTxGossipClient,
-		message.SDKCodec,
-		message.Version,
 	)
-	vm.shutdownWg.Add(1)
-	go vm.atomicTxGossiper.Gossip(vm.shutdownChan, &vm.shutdownWg)
+	go vm.atomicTxGossiper.Gossip(vm.backgroundCtx)
 
 	return nil
 }
@@ -1068,6 +1067,7 @@ func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
 		return nil
 	}
+	vm.cancel()
 	vm.Network.Shutdown()
 	if err := vm.StateSyncClient.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)

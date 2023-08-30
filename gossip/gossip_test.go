@@ -9,28 +9,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/codec"
-	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
 func TestGossiperShutdown(t *testing.T) {
 	config := Config{Frequency: time.Second}
-	gossiper := NewGossiper[testTx](config, nil, nil, nil, 0)
-	done := make(chan struct{})
+	gossiper := NewGossiper[testTx](config, nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+
 	wg := &sync.WaitGroup{}
-
 	wg.Add(1)
-	go gossiper.Gossip(done, wg)
 
-	close(done)
+	go func() {
+		gossiper.Gossip(ctx)
+		wg.Done()
+	}()
+
+	cancel()
 	wg.Wait()
 }
 
@@ -73,12 +74,6 @@ func TestGossiperGossip(t *testing.T) {
 			require := require.New(t)
 			ctrl := gomock.NewController(t)
 
-			cc := codec.NewManager(units.MiB)
-			lc := linearcodec.NewDefault()
-			require.NoError(lc.RegisterType(PullGossipRequest{}))
-			require.NoError(lc.RegisterType(PullGossipResponse{}))
-			require.NoError(cc.RegisterCodec(0, lc))
-
 			responseSender := common.NewMockSender(ctrl)
 			responseRouter := p2p.NewRouter(logging.NoLog{}, responseSender)
 			responseBloom, err := NewBloomFilter(1000, 0.01)
@@ -93,7 +88,7 @@ func TestGossiperGossip(t *testing.T) {
 			peers := &p2p.Peers{}
 			require.NoError(peers.Connected(context.Background(), ids.EmptyNodeID, nil))
 
-			handler := NewHandler[*testTx](responseSet, cc, 0)
+			handler := NewHandler[*testTx](responseSet)
 			_, err = responseRouter.RegisterAppProtocol(0x0, handler, peers)
 			require.NoError(err)
 
@@ -132,13 +127,13 @@ func TestGossiperGossip(t *testing.T) {
 				Frequency: 500 * time.Millisecond,
 				PollSize:  1,
 			}
-			gossiper := NewGossiper[testTx, *testTx](config, requestSet, requestClient, cc, 0)
+			gossiper := NewGossiper[testTx, *testTx](config, requestSet, requestClient)
 			received := set.Set[*testTx]{}
 			requestSet.onAdd = func(tx *testTx) {
 				received.Add(tx)
 			}
 
-			require.NoError(gossiper.gossip())
+			require.NoError(gossiper.gossip(context.Background()))
 			<-gossiped
 
 			require.Len(requestSet.set, len(tt.expected))

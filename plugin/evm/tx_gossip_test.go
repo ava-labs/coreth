@@ -19,12 +19,13 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/gossip"
+	"github.com/ava-labs/coreth/gossip/proto/pb"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 func TestEthTxGossip(t *testing.T) {
@@ -70,12 +71,12 @@ func TestEthTxGossip(t *testing.T) {
 	require.NoError(err)
 	emptyBloomFilterBytes, err := emptyBloomFilter.Bloom.MarshalBinary()
 	require.NoError(err)
-	request := gossip.PullGossipRequest{
-		FilterBytes: emptyBloomFilterBytes,
-		SaltBytes:   utils.RandomBytes(10),
+	request := &pb.PullGossipRequest{
+		Filter: emptyBloomFilterBytes,
+		Salt:   utils.RandomBytes(10),
 	}
 
-	requestBytes, err := vm.networkCodec.Marshal(message.Version, request)
+	requestBytes, err := proto.Marshal(request)
 	require.NoError(err)
 
 	wg := &sync.WaitGroup{}
@@ -98,10 +99,9 @@ func TestEthTxGossip(t *testing.T) {
 	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := gossip.PullGossipResponse{}
-		_, err = vm.networkCodec.Unmarshal(responseBytes, &response)
-		require.NoError(err)
-		require.Empty(response.GossipBytes)
+		response := &pb.PullGossipResponse{}
+		require.NoError(proto.Unmarshal(responseBytes, response))
+		require.Empty(response.Gossip)
 		wg.Done()
 	}
 	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
@@ -123,13 +123,12 @@ func TestEthTxGossip(t *testing.T) {
 	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := gossip.PullGossipResponse{}
-		_, err = vm.networkCodec.Unmarshal(responseBytes, &response)
-		require.NoError(err)
-		require.Len(response.GossipBytes, 1)
+		response := &pb.PullGossipResponse{}
+		require.NoError(proto.Unmarshal(responseBytes, response))
+		require.Len(response.Gossip, 1)
 
 		gotTx := &GossipEthTx{}
-		require.NoError(gotTx.Unmarshal(response.GossipBytes[0]))
+		require.NoError(gotTx.Unmarshal(response.Gossip[0]))
 		require.Equal(signedTx.Hash(), gotTx.Tx.Hash())
 
 		wg.Done()
@@ -164,11 +163,11 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(err)
 	bloomBytes, err := emptyBloomFilter.Bloom.MarshalBinary()
 	require.NoError(err)
-	request := gossip.PullGossipRequest{
-		FilterBytes: bloomBytes,
-		SaltBytes:   emptyBloomFilter.Salt,
+	request := &pb.PullGossipRequest{
+		Filter: bloomBytes,
+		Salt:   emptyBloomFilter.Salt,
 	}
-	requestBytes, err := vm.networkCodec.Marshal(message.Version, request)
+	requestBytes, err := proto.Marshal(request)
 	require.NoError(err)
 
 	wg := &sync.WaitGroup{}
@@ -190,10 +189,9 @@ func TestAtomicTxGossip(t *testing.T) {
 	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := gossip.PullGossipResponse{}
-		_, err = vm.networkCodec.Unmarshal(responseBytes, &response)
-		require.NoError(err)
-		require.Empty(response.GossipBytes)
+		response := &pb.PullGossipResponse{}
+		require.NoError(proto.Unmarshal(responseBytes, response))
+		require.Empty(response.Gossip)
 		wg.Done()
 	}
 	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
@@ -211,13 +209,12 @@ func TestAtomicTxGossip(t *testing.T) {
 	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := gossip.PullGossipResponse{}
-		_, err = vm.networkCodec.Unmarshal(responseBytes, &response)
-		require.NoError(err)
-		require.Len(response.GossipBytes, 1)
+		response := &pb.PullGossipResponse{}
+		require.NoError(proto.Unmarshal(responseBytes, response))
+		require.Len(response.Gossip, 1)
 
 		gotTx := &GossipAtomicTx{}
-		require.NoError(gotTx.Unmarshal(response.GossipBytes[0]))
+		require.NoError(gotTx.Unmarshal(response.Gossip[0]))
 		require.Equal(importTx.InputUTXOs(), gotTx.Tx.InputUTXOs())
 
 		wg.Done()

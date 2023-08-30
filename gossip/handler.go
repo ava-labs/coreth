@@ -8,43 +8,41 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/golang/protobuf/proto"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
+
+	"github.com/ava-labs/coreth/gossip/proto/pb"
 )
 
 var _ p2p.Handler = (*Handler[Gossipable])(nil)
 
-func NewHandler[T Gossipable](set Set[T], codec codec.Manager, codecVersion uint16) *Handler[T] {
+func NewHandler[T Gossipable](set Set[T]) *Handler[T] {
 	return &Handler[T]{
-		Handler:      p2p.NoOpHandler{},
-		set:          set,
-		codec:        codec,
-		codecVersion: codecVersion,
+		Handler: p2p.NoOpHandler{},
+		set:     set,
 	}
 }
 
 type Handler[T Gossipable] struct {
 	p2p.Handler
-	set          Set[T]
-	codec        codec.Manager
-	codecVersion uint16
+	set Set[T]
 }
 
 func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time, requestBytes []byte) ([]byte, error) {
-	request := PullGossipRequest{}
-	if _, err := h.codec.Unmarshal(requestBytes, &request); err != nil {
+	request := &pb.PullGossipRequest{}
+	if err := proto.Unmarshal(requestBytes, request); err != nil {
 		log.Debug("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
 
 	filter := &BloomFilter{
 		Bloom: &bloomfilter.Filter{},
-		Salt:  request.SaltBytes,
+		Salt:  request.Salt,
 	}
-	if err := filter.Bloom.UnmarshalBinary(request.FilterBytes); err != nil {
+	if err := filter.Bloom.UnmarshalBinary(request.Filter); err != nil {
 		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
 		return nil, nil
 	}
@@ -63,9 +61,9 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 		gossipBytes = append(gossipBytes, bytes)
 	}
 
-	response := PullGossipResponse{
-		GossipBytes: gossipBytes,
+	response := &pb.PullGossipResponse{
+		Gossip: gossipBytes,
 	}
 
-	return h.codec.Marshal(h.codecVersion, response)
+	return proto.Marshal(response)
 }
