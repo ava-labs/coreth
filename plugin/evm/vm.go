@@ -990,7 +990,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.shutdownWg.Add(1)
 	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
 
-	ethTxGossipHandler := &p2p.ThrottledHandler{
+	ethTxGossipHandler := &p2p.ThrottlerHandler{
 		Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
 		Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, message.SDKCodec, message.Version),
 	}
@@ -1000,7 +1000,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := &p2p.ThrottledHandler{
+	atomicTxGossipHandler := &p2p.ThrottlerHandler{
 		Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
 		Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, message.SDKCodec, message.Version),
 	}
