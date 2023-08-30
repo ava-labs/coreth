@@ -17,8 +17,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestGossiperShutdown(t *testing.T) {
@@ -90,13 +90,15 @@ func TestGossiperGossip(t *testing.T) {
 			for _, item := range tt.responder {
 				require.NoError(responseSet.Add(item))
 			}
+			peers := &p2p.Peers{}
+			require.NoError(peers.Connected(context.Background(), ids.EmptyNodeID, nil))
+
 			handler := NewHandler[*testTx](responseSet, cc, 0)
-			_, err = responseRouter.RegisterAppProtocol(0x0, handler)
+			_, err = responseRouter.RegisterAppProtocol(0x0, handler, peers)
 			require.NoError(err)
 
 			requestSender := common.NewMockSender(ctrl)
 			requestRouter := p2p.NewRouter(logging.NoLog{}, requestSender)
-			require.NoError(requestRouter.Connected(context.Background(), ids.EmptyNodeID, nil))
 
 			gossiped := make(chan struct{})
 			requestSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -123,7 +125,7 @@ func TestGossiperGossip(t *testing.T) {
 				require.NoError(requestSet.Add(item))
 			}
 
-			requestClient, err := requestRouter.RegisterAppProtocol(0x0, nil)
+			requestClient, err := requestRouter.RegisterAppProtocol(0x0, nil, peers)
 			require.NoError(err)
 
 			config := Config{

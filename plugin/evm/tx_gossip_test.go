@@ -17,8 +17,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -63,7 +63,7 @@ func TestEthTxGossip(t *testing.T) {
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler
-	client, err := router.RegisterAppProtocol(ethTxGossipProtocol, nil)
+	client, err := router.RegisterAppProtocol(ethTxGossipProtocol, nil, nil)
 	require.NoError(err)
 
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
@@ -157,7 +157,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler
-	client, err := router.RegisterAppProtocol(atomicTxGossipProtocol, nil)
+	client, err := router.RegisterAppProtocol(atomicTxGossipProtocol, nil, nil)
 	require.NoError(err)
 
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
