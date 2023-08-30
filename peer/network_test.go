@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
