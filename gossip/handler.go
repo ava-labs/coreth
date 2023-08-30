@@ -19,6 +19,7 @@ var _ p2p.Handler = (*Handler[Gossipable])(nil)
 
 func NewHandler[T Gossipable](set Set[T], codec codec.Manager, codecVersion uint16) *Handler[T] {
 	return &Handler[T]{
+		Handler:      p2p.NoOpHandler{},
 		set:          set,
 		codec:        codec,
 		codecVersion: codecVersion,
@@ -26,6 +27,7 @@ func NewHandler[T Gossipable](set Set[T], codec codec.Manager, codecVersion uint
 }
 
 type Handler[T Gossipable] struct {
+	p2p.Handler
 	set          Set[T]
 	codec        codec.Manager
 	codecVersion uint16
@@ -66,12 +68,4 @@ func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time
 	}
 
 	return h.codec.Marshal(h.codecVersion, response)
-}
-
-func (h Handler[T]) AppGossip(context.Context, ids.NodeID, []byte) error {
-	return nil
-}
-
-func (h Handler[T]) CrossChainAppRequest(context.Context, ids.ID, time.Time, []byte) ([]byte, error) {
-	return nil, nil
 }
