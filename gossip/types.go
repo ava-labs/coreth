@@ -3,7 +3,7 @@
 
 package gossip
 
-const HashLength = 8
+const HashLength = 32
 
 type Hash [HashLength]byte
 
