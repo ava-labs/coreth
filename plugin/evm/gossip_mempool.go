@@ -46,12 +46,11 @@ func NewGossipEthTxPool(mempool *txpool.TxPool) (*GossipEthTxPool, error) {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
 
-	g := &GossipEthTxPool{
+	return &GossipEthTxPool{
 		mempool:    mempool,
 		pendingTxs: make(chan core.NewTxsEvent),
 		bloom:      bloom,
-	}
-	return g, nil
+	}, nil
 }
 
 type GossipEthTxPool struct {
