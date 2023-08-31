@@ -411,7 +411,7 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 // - request times out before a response is provided
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error only when the response handler returns an error
-func (n *network) AppRequestFailed(_ context.Context, nodeID ids.NodeID, requestID uint32) error {
+func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -423,8 +423,11 @@ func (n *network) AppRequestFailed(_ context.Context, nodeID ids.NodeID, request
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		// Should never happen since the engine should be managing outstanding requests
-		log.Error("received AppRequestFailed to unknown request", "nodeID", nodeID, "requestID", requestID)
+		// this must have been a sdk request
+		log.Debug("received AppRequestFailed to unknown request", "nodeID", nodeID, "requestID", requestID)
+		if err := n.router.AppRequestFailed(ctx, nodeID, requestID); err != nil {
+			return err
+		}
 		return nil
 	}
 

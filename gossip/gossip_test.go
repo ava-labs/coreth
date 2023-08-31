@@ -37,35 +37,46 @@ func TestGossiperShutdown(t *testing.T) {
 
 func TestGossiperGossip(t *testing.T) {
 	tests := []struct {
-		name      string
-		requester []*testTx // what we have
-		responder []*testTx // what the peer we're requesting gossip from has
-		expected  []*testTx // what we should have after a gossip cycle
+		name            string
+		maxResponseSize int
+		requester       []*testTx // what we have
+		responder       []*testTx // what the peer we're requesting gossip from has
+		expected        []*testTx // what we should have after a gossip cycle
 	}{
 		{
 			name: "no gossip - no one knows anything",
 		},
 		{
-			name:      "no gossip - requester knows more than responder",
-			requester: []*testTx{{hash: Hash{0}}},
-			expected:  []*testTx{{hash: Hash{0}}},
+			name:            "no gossip - requester knows more than responder",
+			maxResponseSize: 1024,
+			requester:       []*testTx{{hash: Hash{0}}},
+			expected:        []*testTx{{hash: Hash{0}}},
 		},
 		{
-			name:      "no gossip - requester knows everything responder knows",
-			requester: []*testTx{{hash: Hash{0}}},
-			responder: []*testTx{{hash: Hash{0}}},
-			expected:  []*testTx{{hash: Hash{0}}},
+			name:            "no gossip - requester knows everything responder knows",
+			maxResponseSize: 1024,
+			requester:       []*testTx{{hash: Hash{0}}},
+			responder:       []*testTx{{hash: Hash{0}}},
+			expected:        []*testTx{{hash: Hash{0}}},
 		},
 		{
-			name:      "gossip - requester knows nothing",
-			responder: []*testTx{{hash: Hash{0}}},
-			expected:  []*testTx{{hash: Hash{0}}},
+			name:            "gossip - requester knows nothing",
+			maxResponseSize: 1024,
+			responder:       []*testTx{{hash: Hash{0}}},
+			expected:        []*testTx{{hash: Hash{0}}},
 		},
 		{
-			name:      "gossip - requester knows less than responder",
-			requester: []*testTx{{hash: Hash{0}}},
-			responder: []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
-			expected:  []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			name:            "gossip - requester knows less than responder",
+			maxResponseSize: 1024,
+			requester:       []*testTx{{hash: Hash{0}}},
+			responder:       []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			expected:        []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+		},
+		{
+			name:            "gossip - max response size exceeded",
+			maxResponseSize: 32,
+			responder:       []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			expected:        []*testTx{{hash: Hash{0}}},
 		},
 	}
 
@@ -88,7 +99,7 @@ func TestGossiperGossip(t *testing.T) {
 			peers := &p2p.Peers{}
 			require.NoError(peers.Connected(context.Background(), ids.EmptyNodeID, nil))
 
-			handler := NewHandler[*testTx](responseSet)
+			handler := NewHandler[*testTx](responseSet, tt.maxResponseSize)
 			_, err = responseRouter.RegisterAppProtocol(0x0, handler, peers)
 			require.NoError(err)
 

@@ -5,9 +5,9 @@ package gossip
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/golang/protobuf/proto"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 
@@ -17,47 +17,63 @@ import (
 	"github.com/ava-labs/coreth/gossip/proto/pb"
 )
 
-var _ p2p.Handler = (*Handler[Gossipable])(nil)
+var (
+	_ p2p.Handler = (*Handler[Gossipable])(nil)
 
-func NewHandler[T Gossipable](set Set[T]) *Handler[T] {
+	ErrInvalidHash = errors.New("invalid hash")
+)
+
+func NewHandler[T Gossipable](set Set[T], maxResponseSize int) *Handler[T] {
 	return &Handler[T]{
-		Handler: p2p.NoOpHandler{},
-		set:     set,
+		Handler:         p2p.NoOpHandler{},
+		set:             set,
+		maxResponseSize: maxResponseSize,
 	}
 }
 
 type Handler[T Gossipable] struct {
 	p2p.Handler
-	set Set[T]
+	set             Set[T]
+	maxResponseSize int
 }
 
-func (h Handler[T]) AppRequest(_ context.Context, nodeID ids.NodeID, _ time.Time, requestBytes []byte) ([]byte, error) {
+func (h Handler[T]) AppRequest(_ context.Context, _ ids.NodeID, _ time.Time, requestBytes []byte) ([]byte, error) {
 	request := &pb.PullGossipRequest{}
 	if err := proto.Unmarshal(requestBytes, request); err != nil {
-		log.Debug("failed to unmarshal gossip request", "nodeID", nodeID, "err", err)
-		return nil, nil
+		return nil, err
 	}
 
+	if len(request.Salt) != hashLength {
+		return nil, ErrInvalidHash
+	}
 	filter := &BloomFilter{
 		Bloom: &bloomfilter.Filter{},
-		Salt:  request.Salt,
+		Salt:  Hash{},
 	}
 	if err := filter.Bloom.UnmarshalBinary(request.Filter); err != nil {
-		log.Debug("failed to unmarshal bloom filter", "nodeID", nodeID, "err", err)
-		return nil, nil
+		return nil, err
 	}
+
+	copy(filter.Salt[:], request.Salt)
 
 	// filter out what the requesting peer already knows about
 	unknown := h.set.Get(func(gossipable T) bool {
 		return !filter.Has(gossipable)
 	})
 
+	responseSize := 0
 	gossipBytes := make([][]byte, 0, len(unknown))
 	for _, gossipable := range unknown {
 		bytes, err := gossipable.Marshal()
 		if err != nil {
 			return nil, err
 		}
+
+		responseSize += len(bytes)
+		if responseSize > h.maxResponseSize {
+			break
+		}
+
 		gossipBytes = append(gossipBytes, bytes)
 	}
 

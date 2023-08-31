@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -45,9 +46,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(err)
-
 	require.NoError(vm.issueTx(importTx, true))
-
 	<-issuer
 
 	blk, err := vm.BuildBlock(context.Background())
@@ -73,7 +72,7 @@ func TestEthTxGossip(t *testing.T) {
 	require.NoError(err)
 	request := &pb.PullGossipRequest{
 		Filter: emptyBloomFilterBytes,
-		Salt:   utils.RandomBytes(10),
+		Salt:   utils.RandomBytes(32),
 	}
 
 	requestBytes, err := proto.Marshal(request)
@@ -81,9 +80,10 @@ func TestEthTxGossip(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 
+	requestingNodeID := ids.GenerateTestNodeID()
 	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, appRequestBytes []byte) {
 		go func() {
-			require.NoError(vm.AppRequest(ctx, ids.EmptyNodeID, requestID, time.Time{}, appRequestBytes))
+			require.NoError(vm.AppRequest(ctx, requestingNodeID, requestID, time.Time{}, appRequestBytes))
 		}()
 	}).AnyTimes()
 
@@ -92,6 +92,16 @@ func TestEthTxGossip(t *testing.T) {
 			require.NoError(router.AppResponse(ctx, nodeID, requestID, appResponseBytes))
 		}()
 		return nil
+	}
+
+	// we only accept gossip requests from validators
+	mockValidatorSet, ok := vm.ctx.ValidatorState.(*validators.TestState)
+	require.True(ok)
+	mockValidatorSet.GetCurrentHeightF = func(context.Context) (uint64, error) {
+		return 0, nil
+	}
+	mockValidatorSet.GetValidatorSetF = func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		return map[ids.NodeID]*validators.GetValidatorOutput{requestingNodeID: nil}, nil
 	}
 
 	// Ask the VM for any new transactions. We should get nothing at first.
@@ -165,15 +175,16 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(err)
 	request := &pb.PullGossipRequest{
 		Filter: bloomBytes,
-		Salt:   emptyBloomFilter.Salt,
+		Salt:   emptyBloomFilter.Salt[:],
 	}
 	requestBytes, err := proto.Marshal(request)
 	require.NoError(err)
 
+	requestingNodeID := ids.GenerateTestNodeID()
 	wg := &sync.WaitGroup{}
 	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, appRequestBytes []byte) {
 		go func() {
-			require.NoError(vm.AppRequest(ctx, ids.EmptyNodeID, requestID, time.Time{}, appRequestBytes))
+			require.NoError(vm.AppRequest(ctx, requestingNodeID, requestID, time.Time{}, appRequestBytes))
 		}()
 	}).AnyTimes()
 
@@ -182,6 +193,16 @@ func TestAtomicTxGossip(t *testing.T) {
 			require.NoError(router.AppResponse(ctx, nodeID, requestID, appResponseBytes))
 		}()
 		return nil
+	}
+
+	// we only accept gossip requests from validators
+	mockValidatorSet, ok := vm.ctx.ValidatorState.(*validators.TestState)
+	require.True(ok)
+	mockValidatorSet.GetCurrentHeightF = func(context.Context) (uint64, error) {
+		return 0, nil
+	}
+	mockValidatorSet.GetValidatorSetF = func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		return map[ids.NodeID]*validators.GetValidatorOutput{requestingNodeID: nil}, nil
 	}
 
 	// Ask the VM for any new transactions. We should get nothing at first.

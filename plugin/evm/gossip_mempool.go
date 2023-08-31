@@ -28,7 +28,10 @@ type GossipAtomicTx struct {
 
 func (tx *GossipAtomicTx) GetHash() gossip.Hash {
 	id := tx.Tx.ID()
-	return gossip.HashFromBytes(id[:])
+	hash := gossip.Hash{}
+	copy(hash[:], id[:])
+
+	return hash
 }
 
 func (tx *GossipAtomicTx) Marshal() ([]byte, error) {
@@ -131,8 +134,11 @@ type GossipEthTx struct {
 }
 
 func (tx *GossipEthTx) GetHash() gossip.Hash {
-	hash := tx.Tx.Hash()
-	return gossip.HashFromBytes(hash[:])
+	txHash := tx.Tx.Hash()
+	hash := gossip.Hash{}
+	copy(hash[:], txHash[:])
+
+	return hash
 }
 
 func (tx *GossipEthTx) Marshal() ([]byte, error) {

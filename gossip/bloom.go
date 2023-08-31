@@ -8,15 +8,27 @@ import (
 	"hash"
 	"time"
 
-	safemath "github.com/ava-labs/avalanchego/utils/math"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"golang.org/x/exp/rand"
 )
 
+const hashLength = 32
+
 var _ hash.Hash64 = (*hasher)(nil)
 
-func NewBloomFilter(m uint64, p float64) (*BloomFilter, error) {
-	bloom, err := bloomfilter.NewOptimal(m, p)
+type Hash [hashLength]byte
+
+// NewBloomFilter returns a new instance of a bloom filter with at most
+// [maxExpectedElements] elements anticipated at any moment, and a collision
+// rate of [falsePositiveProbability].
+func NewBloomFilter(
+	maxExpectedElements uint64,
+	falsePositiveProbability float64,
+) (*BloomFilter, error) {
+	bloom, err := bloomfilter.NewOptimal(
+		maxExpectedElements,
+		falsePositiveProbability,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -33,20 +45,22 @@ type BloomFilter struct {
 	// Salt is provided to eventually unblock collisions in Bloom. It's possible
 	// that conflicting Gossipable items collide in the bloom filter, so a salt
 	// is generated to eventually resolve collisions.
-	Salt []byte
+	Salt Hash
 }
 
 func (b *BloomFilter) Add(gossipable Gossipable) {
+	h := gossipable.GetHash()
 	salted := hasher{
-		hash: gossipable.GetHash(),
+		hash: h[:],
 		salt: b.Salt,
 	}
 	b.Bloom.Add(salted)
 }
 
 func (b *BloomFilter) Has(gossipable Gossipable) bool {
+	h := gossipable.GetHash()
 	salted := hasher{
-		hash: gossipable.GetHash(),
+		hash: h[:],
 		salt: b.Salt,
 	}
 	return b.Bloom.Contains(salted)
@@ -70,27 +84,48 @@ func ResetBloomFilterIfNeeded(
 	return true
 }
 
-func randomSalt() []byte {
-	salt := make([]byte, HashLength)
+func randomSalt() Hash {
+	salt := Hash{}
 	r := rand.New(rand.NewSource(uint64(time.Now().Nanosecond())))
-	_, _ = r.Read(salt)
+	_, _ = r.Read(salt[:])
 	return salt
 }
 
+var _ hash.Hash64 = (*hasher)(nil)
+
 type hasher struct {
-	hash.Hash64
-	hash Hash
-	salt []byte
+	hash []byte
+	salt Hash
+}
+
+func (h hasher) Write(p []byte) (n int, err error) {
+	h.hash = append(h.hash, p...)
+	return len(p), nil
+}
+
+func (h hasher) Sum(b []byte) []byte {
+	h.hash = append(h.hash, b...)
+	return h.hash
+}
+
+func (h hasher) Reset() {
+	reset := Hash{}
+	h.hash = reset[:]
+}
+
+func (h hasher) BlockSize() int {
+	return hashLength
 }
 
 func (h hasher) Sum64() uint64 {
-	for i := 0; i < safemath.Min(len(h.hash), len(h.salt)); i++ {
-		h.hash[i] ^= h.salt[i]
+	salted := Hash{}
+	for i := 0; i < len(h.hash) && i < hashLength; i++ {
+		salted[i] = h.hash[i] ^ h.salt[i]
 	}
 
-	return binary.BigEndian.Uint64(h.hash[:])
+	return binary.BigEndian.Uint64(salted[:])
 }
 
 func (h hasher) Size() int {
-	return HashLength
+	return len(h.hash)
 }

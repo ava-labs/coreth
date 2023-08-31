@@ -17,6 +17,7 @@ import (
 )
 
 // GossipableAny exists to help create non-nil pointers to a concrete Gossipable
+// ref: https://stackoverflow.com/questions/69573113/how-can-i-instantiate-a-non-nil-pointer-of-type-argument-with-generic-go
 type GossipableAny[T any] interface {
 	*T
 	Gossipable
@@ -71,7 +72,7 @@ func (g *Gossiper[_, _]) gossip(ctx context.Context) error {
 
 	request := &pb.PullGossipRequest{
 		Filter: bloomBytes,
-		Salt:   filter.Salt,
+		Salt:   filter.Salt[:],
 	}
 	msgBytes, err := proto.Marshal(request)
 	if err != nil {
