@@ -37,46 +37,52 @@ func TestGossiperShutdown(t *testing.T) {
 
 func TestGossiperGossip(t *testing.T) {
 	tests := []struct {
-		name            string
-		maxResponseSize int
-		requester       []*testTx // what we have
-		responder       []*testTx // what the peer we're requesting gossip from has
-		expected        []*testTx // what we should have after a gossip cycle
+		name                   string
+		maxResponseSize        int
+		requester              []*testTx // what we have
+		responder              []*testTx // what the peer we're requesting gossip from has
+		expectedPossibleValues []*testTx // possible values we can have
+		expectedLen            int
 	}{
 		{
 			name: "no gossip - no one knows anything",
 		},
 		{
-			name:            "no gossip - requester knows more than responder",
-			maxResponseSize: 1024,
-			requester:       []*testTx{{hash: Hash{0}}},
-			expected:        []*testTx{{hash: Hash{0}}},
+			name:                   "no gossip - requester knows more than responder",
+			maxResponseSize:        1024,
+			requester:              []*testTx{{hash: Hash{0}}},
+			expectedPossibleValues: []*testTx{{hash: Hash{0}}},
+			expectedLen:            1,
 		},
 		{
-			name:            "no gossip - requester knows everything responder knows",
-			maxResponseSize: 1024,
-			requester:       []*testTx{{hash: Hash{0}}},
-			responder:       []*testTx{{hash: Hash{0}}},
-			expected:        []*testTx{{hash: Hash{0}}},
+			name:                   "no gossip - requester knows everything responder knows",
+			maxResponseSize:        1024,
+			requester:              []*testTx{{hash: Hash{0}}},
+			responder:              []*testTx{{hash: Hash{0}}},
+			expectedPossibleValues: []*testTx{{hash: Hash{0}}},
+			expectedLen:            1,
 		},
 		{
-			name:            "gossip - requester knows nothing",
-			maxResponseSize: 1024,
-			responder:       []*testTx{{hash: Hash{0}}},
-			expected:        []*testTx{{hash: Hash{0}}},
+			name:                   "gossip - requester knows nothing",
+			maxResponseSize:        1024,
+			responder:              []*testTx{{hash: Hash{0}}},
+			expectedPossibleValues: []*testTx{{hash: Hash{0}}},
+			expectedLen:            1,
 		},
 		{
-			name:            "gossip - requester knows less than responder",
-			maxResponseSize: 1024,
-			requester:       []*testTx{{hash: Hash{0}}},
-			responder:       []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
-			expected:        []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			name:                   "gossip - requester knows less than responder",
+			maxResponseSize:        1024,
+			requester:              []*testTx{{hash: Hash{0}}},
+			responder:              []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			expectedPossibleValues: []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			expectedLen:            2,
 		},
 		{
-			name:            "gossip - max response size exceeded",
-			maxResponseSize: 32,
-			responder:       []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
-			expected:        []*testTx{{hash: Hash{0}}},
+			name:                   "gossip - max response size exceeded",
+			maxResponseSize:        32,
+			responder:              []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			expectedPossibleValues: []*testTx{{hash: Hash{0}}, {hash: Hash{1}}},
+			expectedLen:            1,
 		},
 	}
 
@@ -147,10 +153,8 @@ func TestGossiperGossip(t *testing.T) {
 			require.NoError(gossiper.gossip(context.Background()))
 			<-gossiped
 
-			require.Len(requestSet.set, len(tt.expected))
-			for _, expected := range tt.expected {
-				require.Contains(requestSet.set, expected)
-			}
+			require.Len(requestSet.set, tt.expectedLen)
+			require.Subset(tt.expectedPossibleValues, requestSet.set.List())
 
 			// we should not receive anything that we already had before we
 			// requested the gossip
