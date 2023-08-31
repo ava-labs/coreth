@@ -7,8 +7,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
@@ -30,11 +31,13 @@ type Config struct {
 
 func NewGossiper[T any, U GossipableAny[T]](
 	config Config,
+	log logging.Logger,
 	set Set[U],
 	client *p2p.Client,
 ) *Gossiper[T, U] {
 	return &Gossiper[T, U]{
 		config: config,
+		log:    log,
 		set:    set,
 		client: client,
 	}
@@ -42,6 +45,7 @@ func NewGossiper[T any, U GossipableAny[T]](
 
 type Gossiper[T any, U GossipableAny[T]] struct {
 	config Config
+	log    logging.Logger
 	set    Set[U]
 	client *p2p.Client
 }
@@ -54,10 +58,10 @@ func (g *Gossiper[_, _]) Gossip(ctx context.Context) {
 		select {
 		case <-gossipTicker.C:
 			if err := g.gossip(ctx); err != nil {
-				log.Warn("failed to gossip", "error", err)
+				g.log.Warn("failed to gossip", zap.Error(err))
 			}
 		case <-ctx.Done():
-			log.Debug("shutting down gossip")
+			g.log.Debug("shutting down gossip")
 			return
 		}
 	}
@@ -88,28 +92,50 @@ func (g *Gossiper[_, _]) gossip(ctx context.Context) error {
 	return nil
 }
 
-func (g *Gossiper[T, U]) handleResponse(nodeID ids.NodeID, responseBytes []byte, err error) {
+func (g *Gossiper[T, U]) handleResponse(
+	nodeID ids.NodeID,
+	responseBytes []byte,
+	err error,
+) {
 	if err != nil {
-		log.Debug("failed gossip request", "nodeID", nodeID, "error", err)
+		g.log.Debug(
+			"failed gossip request",
+			zap.Stringer("nodeID", nodeID),
+			zap.Error(err),
+		)
 		return
 	}
 
 	response := &pb.PullGossipResponse{}
 	if err := proto.Unmarshal(responseBytes, response); err != nil {
-		log.Debug("failed to unmarshal gossip response", "error", err)
+		g.log.Debug("failed to unmarshal gossip response", zap.Error(err))
 		return
 	}
 
 	for _, bytes := range response.Gossip {
 		gossipable := U(new(T))
 		if err := gossipable.Unmarshal(bytes); err != nil {
-			log.Debug("failed to unmarshal gossip", "error", err, "nodeID", nodeID)
+			g.log.Debug(
+				"failed to unmarshal gossip",
+				zap.Stringer("nodeID", nodeID),
+				zap.Error(err),
+			)
 			continue
 		}
 
-		log.Debug("received gossip", "nodeID", nodeID, "hash", gossipable.GetHash())
+		hash := gossipable.GetHash()
+		g.log.Debug(
+			"received gossip",
+			zap.Stringer("nodeID", nodeID),
+			zap.Binary("hash", hash[:]),
+		)
 		if err := g.set.Add(gossipable); err != nil {
-			log.Debug("failed to add gossip to the known set", "error", err, "nodeID", nodeID, "id", gossipable.GetHash())
+			g.log.Debug(
+				"failed to add gossip to the known set",
+				zap.Stringer("nodeID", nodeID),
+				zap.Binary("id", hash[:]),
+				zap.Error(err),
+			)
 			continue
 		}
 	}

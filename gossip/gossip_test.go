@@ -20,7 +20,7 @@ import (
 
 func TestGossiperShutdown(t *testing.T) {
 	config := Config{Frequency: time.Second}
-	gossiper := NewGossiper[testTx](config, nil, nil)
+	gossiper := NewGossiper[testTx](config, logging.NoLog{}, nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wg := &sync.WaitGroup{}
@@ -138,7 +138,7 @@ func TestGossiperGossip(t *testing.T) {
 				Frequency: 500 * time.Millisecond,
 				PollSize:  1,
 			}
-			gossiper := NewGossiper[testTx, *testTx](config, requestSet, requestClient)
+			gossiper := NewGossiper[testTx, *testTx](config, logging.NoLog{}, requestSet, requestClient)
 			received := set.Set[*testTx]{}
 			requestSet.onAdd = func(tx *testTx) {
 				received.Add(tx)

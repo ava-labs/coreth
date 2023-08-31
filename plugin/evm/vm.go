@@ -1024,6 +1024,7 @@ func (vm *VM) initBlockBuilding() error {
 
 	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx, *GossipEthTx](
 		txGossipConfig,
+		vm.ctx.Log,
 		ethTxPool,
 		vm.ethTxGossipClient,
 	)
@@ -1031,6 +1032,7 @@ func (vm *VM) initBlockBuilding() error {
 
 	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		txGossipConfig,
+		vm.ctx.Log,
 		vm.mempool,
 		vm.atomicTxGossipClient,
 	)
