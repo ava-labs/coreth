@@ -425,10 +425,7 @@ func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, reque
 	if !exists {
 		// this must have been a sdk request
 		log.Debug("received AppRequestFailed to unknown request", "nodeID", nodeID, "requestID", requestID)
-		if err := n.router.AppRequestFailed(ctx, nodeID, requestID); err != nil {
-			return err
-		}
-		return nil
+		return n.router.AppRequestFailed(ctx, nodeID, requestID)
 	}
 
 	// We must release the slot
