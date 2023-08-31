@@ -47,9 +47,7 @@ type Gossiper[T any, U GossipableAny[T]] struct {
 
 func (g *Gossiper[_, _]) Gossip(ctx context.Context) {
 	gossipTicker := time.NewTicker(g.config.Frequency)
-	defer func() {
-		gossipTicker.Stop()
-	}()
+	defer gossipTicker.Stop()
 
 	for {
 		select {
