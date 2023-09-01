@@ -1019,12 +1019,11 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	return header
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
-	if err := overrides.Apply(state); err != nil {
-		return nil, err
-	}
-	// If the request is for the pending block, override the block timestamp, number, and estimated
-	// base fee, so that the check runs as if it were run on a newly generated block.
+// applyPendingBlockHeaderOverrides overrides the block timestamp, number, and
+// estimated base fee, if blockNrOrHash represents the pending block (so that
+// the check runs as if it were run on a newly generated block). For other
+// blocks it reuturns the header unmodified.
+func applyPendingBlockHeaderOverrides(ctx context.Context, b Backend, header *types.Header, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	if blkNumber, isNum := blockNrOrHash.Number(); isNum && blkNumber == rpc.PendingBlockNumber {
 		// Override header with a copy to ensure the original header is not modified
 		header = types.CopyHeader(header)
@@ -1041,6 +1040,13 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		header.BaseFee = estimatedBaseFee
 	}
 
+	return header, nil
+}
+
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+	if err := overrides.Apply(state); err != nil {
+		return nil, err
+	}
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -1093,6 +1099,10 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		return nil, err
+	}
+	header, err = applyPendingBlockHeaderOverrides(ctx, b, header, blockNrOrHash)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1265,6 +1275,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		return 0, err
+	}
+	header, err = applyPendingBlockHeaderOverrides(ctx, b, header, blockNrOrHash)
+	if err != nil {
 		return 0, err
 	}
 	// Execute the binary search and hone in on an executable gas limit
