@@ -141,7 +141,7 @@ const (
 	txGossipBloomFalsePositiveRate = 0.01
 	maxValidatorSetStaleness       = time.Minute
 	throttlingPeriod               = 10 * time.Second
-	throttlingLimit                = 1
+	throttlingLimit                = 2
 )
 
 var txGossipConfig = gossip.Config{
