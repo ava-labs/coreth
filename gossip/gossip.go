@@ -68,15 +68,14 @@ func (g *Gossiper[_, _]) Gossip(ctx context.Context) {
 }
 
 func (g *Gossiper[_, _]) gossip(ctx context.Context) error {
-	filter := g.set.GetFilter()
-	bloomBytes, err := filter.Bloom.MarshalBinary()
+	bloom, salt, err := g.set.GetFilter()
 	if err != nil {
 		return err
 	}
 
 	request := &pb.PullGossipRequest{
-		Filter: bloomBytes,
-		Salt:   filter.Salt[:],
+		Filter: bloom,
+		Salt:   salt,
 	}
 	msgBytes, err := proto.Marshal(request)
 	if err != nil {

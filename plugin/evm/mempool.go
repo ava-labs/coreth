@@ -309,11 +309,12 @@ func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
 	return gossipTxs
 }
 
-func (m *Mempool) GetFilter() *gossip.BloomFilter {
+func (m *Mempool) GetFilter() ([]byte, []byte, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	return m.bloom
+	bloom, err := m.bloom.Bloom.MarshalBinary()
+	return bloom, m.bloom.Salt[:], err
 }
 
 // NextTx returns a transaction to be issued from the mempool.

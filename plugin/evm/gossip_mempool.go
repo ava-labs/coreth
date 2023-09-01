@@ -105,28 +105,32 @@ func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 }
 
 func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx {
-	pending := g.mempool.Pending(false)
+	limit := 1000
+	resultSize := 0
 	result := make([]*GossipEthTx, 0)
 
-	for _, txs := range pending {
-		for _, tx := range txs {
-			gossipTx := &GossipEthTx{Tx: tx}
-			if !filter(gossipTx) {
-				continue
-			}
-
-			result = append(result, gossipTx)
+	g.mempool.IteratePending(func(tx *types.Transaction) bool {
+		resultSize += int(tx.Size())
+		if resultSize > limit {
+			return false
 		}
-	}
+
+		gossipTx := &GossipEthTx{
+			Tx: tx,
+		}
+		result = append(result, gossipTx)
+		return true
+	})
 
 	return result
 }
 
-func (g *GossipEthTxPool) GetFilter() *gossip.BloomFilter {
+func (g *GossipEthTxPool) GetFilter() ([]byte, []byte, error) {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
-	return g.bloom
+	bloom, err := g.bloom.Bloom.MarshalBinary()
+	return bloom, g.bloom.Salt[:], err
 }
 
 type GossipEthTx struct {
