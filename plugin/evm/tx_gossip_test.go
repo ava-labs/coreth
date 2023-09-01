@@ -128,6 +128,9 @@ func TestEthTxGossip(t *testing.T) {
 	require.Len(errs, 1)
 	require.Nil(errs[0])
 
+	// wait so we aren't throttled by the vm
+	time.Sleep(throttlingPeriod / throttlingLimit)
+
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
 	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
@@ -224,6 +227,9 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	require.NoError(vm.issueTx(importTx, true /*=local*/))
 	<-issuer
+
+	// wait so we aren't throttled by the vm
+	time.Sleep(throttlingPeriod / throttlingLimit)
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
