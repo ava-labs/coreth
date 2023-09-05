@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -30,11 +28,10 @@ import (
 const minRequestHandlingDuration = 100 * time.Millisecond
 
 var (
-	errAcquiringSemaphore                      = errors.New("error acquiring semaphore")
-	errExpiredRequest                          = errors.New("expired request")
-	_                     Network              = &network{}
-	_                     validators.Connector = &network{}
-	_                     common.AppHandler    = &network{}
+	errExpiredRequest                      = errors.New("expired request")
+	_                 Network              = &network{}
+	_                 validators.Connector = &network{}
+	_                 common.AppHandler    = &network{}
 )
 
 type Network interface {
@@ -85,8 +82,6 @@ type network struct {
 	self                       ids.NodeID                         // NodeID of this node
 	requestIDGen               uint32                             // requestID counter used to track outbound requests
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
-	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
-	activeCrossChainRequests   *semaphore.Weighted                // controls maximum number of active outbound cross chain requests
 	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
 	codec                      codec.Manager                      // Codec used for parsing messages
 	crossChainCodec            codec.Manager                      // Codec used for parsing cross chain messages
@@ -102,15 +97,13 @@ type network struct {
 	closed utils.Atomic[bool]
 }
 
-func NewNetwork(appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
+func NewNetwork(appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID) Network {
 	return &network{
 		appSender:                  appSender,
 		codec:                      codec,
 		crossChainCodec:            crossChainCodec,
 		self:                       self,
 		outstandingRequestHandlers: make(map[uint32]message.ResponseHandler),
-		activeAppRequests:          semaphore.NewWeighted(maxActiveAppRequests),
-		activeCrossChainRequests:   semaphore.NewWeighted(maxActiveCrossChainRequests),
 		gossipHandler:              message.NoopMempoolGossipHandler{},
 		appRequestHandler:          message.NoopRequestHandler{},
 		crossChainRequestHandler:   message.NoopCrossChainRequestHandler{},
@@ -126,18 +119,12 @@ func NewNetwork(appSender common.AppSender, codec codec.Manager, crossChainCodec
 // Returns the ID of the chosen peer, and an error if the request could not
 // be sent to a peer with the desired [minVersion].
 func (n *network) SendAppRequestAny(minVersion *version.Application, request []byte, handler message.ResponseHandler) (ids.NodeID, error) {
-	// Take a slot from total [activeAppRequests] and block until a slot becomes available.
-	if err := n.activeAppRequests.Acquire(context.Background(), 1); err != nil {
-		return ids.EmptyNodeID, errAcquiringSemaphore
-	}
-
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if nodeID, ok := n.peers.GetAnyPeer(minVersion); ok {
 		return nodeID, n.sendAppRequest(nodeID, request, handler)
 	}
 
-	n.activeAppRequests.Release(1)
 	return ids.EmptyNodeID, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, n.peers.Size())
 }
 
@@ -145,11 +132,6 @@ func (n *network) SendAppRequestAny(minVersion *version.Application, request []b
 func (n *network) SendAppRequest(nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
 	if nodeID == ids.EmptyNodeID {
 		return fmt.Errorf("cannot send request to empty nodeID, nodeID=%s, requestLen=%d", nodeID, len(request))
-	}
-
-	// Take a slot from total [activeAppRequests] and block until a slot becomes available.
-	if err := n.activeAppRequests.Acquire(context.Background(), 1); err != nil {
-		return errAcquiringSemaphore
 	}
 
 	n.lock.Lock()
@@ -161,7 +143,6 @@ func (n *network) SendAppRequest(nodeID ids.NodeID, request []byte, responseHand
 // sendAppRequest sends request message bytes to specified nodeID and adds [responseHandler] to [outstandingRequestHandlers]
 // so that it can be invoked when the network receives either a response or failure message.
 // Assumes [nodeID] is never [self] since we guarantee [self] will not be added to the [peers] map.
-// Releases active requests semaphore if there was an error in sending the request
 // Returns an error if [appSender] is unable to make the request.
 // Assumes write lock is held
 func (n *network) sendAppRequest(nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
@@ -182,9 +163,8 @@ func (n *network) sendAppRequest(nodeID ids.NodeID, request []byte, responseHand
 	nodeIDs.Add(nodeID)
 
 	// Send app request to [nodeID].
-	// On failure, release the slot from [activeAppRequests] and delete request from [outstandingRequestHandlers]
+	// On failure, delete request from [outstandingRequestHandlers]
 	if err := n.appSender.SendAppRequest(context.TODO(), nodeIDs, requestID, request); err != nil {
-		n.activeAppRequests.Release(1)
 		delete(n.outstandingRequestHandlers, requestID)
 		return err
 	}
@@ -197,11 +177,6 @@ func (n *network) sendAppRequest(nodeID ids.NodeID, request []byte, responseHand
 // so that it can be invoked when the network receives either a response or failure message.
 // Returns an error if [appSender] is unable to make the request.
 func (n *network) SendCrossChainRequest(chainID ids.ID, request []byte, handler message.ResponseHandler) error {
-	// Take a slot from total [activeCrossChainRequests] and block until a slot becomes available.
-	if err := n.activeCrossChainRequests.Acquire(context.Background(), 1); err != nil {
-		return errAcquiringSemaphore
-	}
-
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -216,9 +191,8 @@ func (n *network) SendCrossChainRequest(chainID ids.ID, request []byte, handler 
 	n.outstandingRequestHandlers[requestID] = handler
 
 	// Send cross chain request to [chainID].
-	// On failure, release the slot from [activeCrossChainRequests] and delete request from [outstandingRequestHandlers].
+	// On failure, delete request from [outstandingRequestHandlers].
 	if err := n.appSender.SendCrossChainAppRequest(context.TODO(), chainID, requestID, request); err != nil {
-		n.activeCrossChainRequests.Release(1)
 		delete(n.outstandingRequestHandlers, requestID)
 		return err
 	}
@@ -288,9 +262,6 @@ func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChai
 		return nil
 	}
 
-	// We must release the slot
-	n.activeCrossChainRequests.Release(1)
-
 	return handler.OnFailure()
 }
 
@@ -314,9 +285,6 @@ func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID i
 		log.Error("received CrossChainAppResponse to unknown request", "respondingChainID", respondingChainID, "requestID", requestID, "responseLen", len(response))
 		return nil
 	}
-
-	// We must release the slot
-	n.activeCrossChainRequests.Release(1)
 
 	return handler.OnResponse(response)
 }
@@ -383,9 +351,6 @@ func (n *network) AppResponse(_ context.Context, nodeID ids.NodeID, requestID ui
 		return nil
 	}
 
-	// We must release the slot
-	n.activeAppRequests.Release(1)
-
 	return handler.OnResponse(response)
 }
 
@@ -411,9 +376,6 @@ func (n *network) AppRequestFailed(_ context.Context, nodeID ids.NodeID, request
 		log.Error("received AppRequestFailed to unknown request", "nodeID", nodeID, "requestID", requestID)
 		return nil
 	}
-
-	// We must release the slot
-	n.activeAppRequests.Release(1)
 
 	return handler.OnFailure()
 }

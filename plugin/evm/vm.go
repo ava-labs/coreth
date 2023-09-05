@@ -507,7 +507,7 @@ func (vm *VM) Initialize(
 
 	// initialize peer network
 	vm.networkCodec = message.Codec
-	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
+	vm.Network = peer.NewNetwork(appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
