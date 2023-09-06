@@ -176,10 +176,7 @@ func (n *network) sendAppRequest(nodeID ids.NodeID, request []byte, responseHand
 	log.Debug("sending request to peer", "nodeID", nodeID, "requestLen", len(request))
 	n.peers.TrackPeer(nodeID)
 
-	// generate requestID
-	requestID := n.requestIDGen
-	n.requestIDGen++
-
+	requestID := n.nextRequestID()
 	n.outstandingRequestHandlers[requestID] = responseHandler
 
 	nodeIDs := set.NewSet[ids.NodeID](1)
@@ -213,10 +210,7 @@ func (n *network) SendCrossChainRequest(chainID ids.ID, request []byte, handler 
 		return nil
 	}
 
-	// generate requestID
-	requestID := n.requestIDGen
-	n.requestIDGen++
-
+	requestID := n.nextRequestID()
 	n.outstandingRequestHandlers[requestID] = handler
 
 	// Send cross chain request to [chainID].
@@ -565,4 +559,13 @@ func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	defer n.lock.Unlock()
 
 	n.peers.TrackBandwidth(nodeID, bandwidth)
+}
+
+// invariant: peer/network must use explicitly even request ids.
+// for this reason, [n.requestID] is initialized as zero and incremented by 2.
+func (n *network) nextRequestID() uint32 {
+	next := n.requestIDGen
+	n.requestIDGen += 2
+
+	return next
 }
