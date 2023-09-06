@@ -12,13 +12,14 @@ import (
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/constant"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/coreth/params"
 )
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
@@ -544,7 +545,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			name: "P-chain before AP5",
 			tx: func() *Tx {
 				validExportTx := *validAVAXExportTx
-				validExportTx.DestinationChain = constants.PlatformChainID
+				validExportTx.DestinationChain = constant.PlatformChainID
 				return &Tx{UnsignedAtomicTx: &validExportTx}
 			}(),
 			signers: [][]*secp256k1.PrivateKey{
@@ -558,7 +559,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			name: "P-chain after AP5",
 			tx: func() *Tx {
 				validExportTx := *validAVAXExportTx
-				validExportTx.DestinationChain = constants.PlatformChainID
+				validExportTx.DestinationChain = constant.PlatformChainID
 				return &Tx{UnsignedAtomicTx: &validExportTx}
 			}(),
 			signers: [][]*secp256k1.PrivateKey{
@@ -586,7 +587,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			name: "P-chain multi-coin before AP5",
 			tx: func() *Tx {
 				validExportTx := *validExportTx
-				validExportTx.DestinationChain = constants.PlatformChainID
+				validExportTx.DestinationChain = constant.PlatformChainID
 				return &Tx{UnsignedAtomicTx: &validExportTx}
 			}(),
 			signers: [][]*secp256k1.PrivateKey{
@@ -602,7 +603,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			name: "P-chain multi-coin after AP5",
 			tx: func() *Tx {
 				validExportTx := *validExportTx
-				validExportTx.DestinationChain = constants.PlatformChainID
+				validExportTx.DestinationChain = constant.PlatformChainID
 				return &Tx{UnsignedAtomicTx: &validExportTx}
 			}(),
 			signers: [][]*secp256k1.PrivateKey{

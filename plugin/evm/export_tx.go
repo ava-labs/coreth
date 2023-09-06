@@ -16,7 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/constant"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -108,7 +108,7 @@ func (utx *UnsignedExportTx) Verify(
 			return err
 		}
 		assetID := out.AssetID()
-		if assetID != ctx.AVAXAssetID && utx.DestinationChain == constants.PlatformChainID {
+		if assetID != ctx.AVAXAssetID && utx.DestinationChain == constant.PlatformChainID {
 			return errWrongChainID
 		}
 		if rules.IsBanff && assetID != ctx.AVAXAssetID {

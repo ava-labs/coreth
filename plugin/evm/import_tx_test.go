@@ -7,13 +7,14 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/constant"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
@@ -167,7 +168,7 @@ func TestImportTxVerify(t *testing.T) {
 		"P-chain source before AP5": {
 			generate: func(t *testing.T) UnsignedAtomicTx {
 				tx := *importTx
-				tx.SourceChain = constants.PlatformChainID
+				tx.SourceChain = constant.PlatformChainID
 				return &tx
 			},
 			ctx:         ctx,
@@ -177,7 +178,7 @@ func TestImportTxVerify(t *testing.T) {
 		"P-chain source after AP5": {
 			generate: func(t *testing.T) UnsignedAtomicTx {
 				tx := *importTx
-				tx.SourceChain = constants.PlatformChainID
+				tx.SourceChain = constant.PlatformChainID
 				return &tx
 			},
 			ctx:   ctx,
