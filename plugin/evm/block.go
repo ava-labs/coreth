@@ -16,7 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/choice"
 )
 
 var (
@@ -109,7 +109,7 @@ type Block struct {
 	id        ids.ID
 	ethBlock  *types.Block
 	vm        *VM
-	status    choices.Status
+	status    choice.Status
 	atomicTxs []*Tx
 }
 
@@ -140,7 +140,7 @@ func (b *Block) Accept(context.Context) error {
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.db.Abort()
 
-	b.status = choices.Accepted
+	b.status = choice.Accepted
 	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
@@ -171,7 +171,7 @@ func (b *Block) Accept(context.Context) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
-	b.status = choices.Rejected
+	b.status = choice.Rejected
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
 		b.vm.mempool.RemoveTx(tx)
@@ -192,10 +192,10 @@ func (b *Block) Reject(context.Context) error {
 
 // SetStatus implements the InternalBlock interface allowing ChainState
 // to set the status on an existing block
-func (b *Block) SetStatus(status choices.Status) { b.status = status }
+func (b *Block) SetStatus(status choice.Status) { b.status = status }
 
 // Status implements the snowman.Block interface
-func (b *Block) Status() choices.Status {
+func (b *Block) Status() choice.Status {
 	return b.status
 }
 

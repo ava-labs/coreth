@@ -68,7 +68,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/choice"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -677,7 +677,7 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 	if err != nil {
 		return fmt.Errorf("failed to create block wrapper for the last accepted block: %w", err)
 	}
-	block.status = choices.Accepted
+	block.status = choice.Accepted
 
 	config := &chain.Config{
 		DecidedCacheSize:    decidedCacheSize,
@@ -1220,7 +1220,7 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]*commonEng.HTTPH
 // accepted, then nil will be returned immediately.
 // If the ancestry of [ancestor] cannot be fetched, then [errRejectedParent] may be returned.
 func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestor *Block) error {
-	for ancestor.Status() != choices.Accepted {
+	for ancestor.Status() != choice.Accepted {
 		// If any of the atomic transactions in the ancestor conflict with [inputs]
 		// return an error.
 		for _, atomicTx := range ancestor.atomicTxs {
@@ -1243,7 +1243,7 @@ func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestor *Block) error {
 			return errRejectedParent
 		}
 
-		if blkStatus := nextAncestorIntf.Status(); blkStatus == choices.Unknown || blkStatus == choices.Rejected {
+		if blkStatus := nextAncestorIntf.Status(); blkStatus == choice.Unknown || blkStatus == choice.Rejected {
 			return errRejectedParent
 		}
 		nextAncestor, ok := nextAncestorIntf.(*Block)
@@ -1398,7 +1398,7 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 	if err != nil {
 		return errRejectedParent
 	}
-	if blkStatus := ancestorInf.Status(); blkStatus == choices.Unknown || blkStatus == choices.Rejected {
+	if blkStatus := ancestorInf.Status(); blkStatus == choice.Unknown || blkStatus == choice.Rejected {
 		return errRejectedParent
 	}
 	ancestor, ok := ancestorInf.(*Block)

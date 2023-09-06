@@ -19,7 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/manager"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/choice"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -377,7 +377,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 	if err != nil {
 		t.Fatal(err)
 	}
-	internalBlock.(*Block).SetStatus(choices.Accepted)
+	internalBlock.(*Block).SetStatus(choice.Accepted)
 	assert.NoError(t, serverVM.State.SetLastAcceptedBlock(internalBlock))
 
 	// patch syncableInterval for test

@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/choice"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
@@ -342,7 +342,7 @@ func (client *stateSyncerClient) finishSync() error {
 		return fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
 	}
 
-	evmBlock.SetStatus(choices.Accepted)
+	evmBlock.SetStatus(choice.Accepted)
 	block := evmBlock.ethBlock
 
 	if block.Hash() != client.syncSummary.BlockHash {
