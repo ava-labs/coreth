@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/chain/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/constants"

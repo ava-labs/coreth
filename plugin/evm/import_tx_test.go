@@ -10,7 +10,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/chain/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"

@@ -6,7 +6,7 @@ package evm
 import (
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/chain/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/common"
