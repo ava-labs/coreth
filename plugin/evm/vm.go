@@ -18,6 +18,7 @@ import (
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
 	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	corethConstants "github.com/ava-labs/coreth/constants"

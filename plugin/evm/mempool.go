@@ -274,6 +274,21 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	for utxoID := range utxoSet {
 		m.utxoSpenders[utxoID] = tx
 	}
+
+	m.bloom.Add(&GossipAtomicTx{Tx: tx})
+	reset, err := gossip.ResetBloomFilterIfNeeded(m.bloom, txGossipBloomMaxFilledRatio)
+	if err != nil {
+		return err
+	}
+
+	if reset {
+		log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
+
+		for _, pendingTx := range m.txHeap.minHeap.items {
+			m.bloom.Add(&GossipAtomicTx{Tx: pendingTx.tx})
+		}
+	}
+
 	// When adding [tx] to the mempool make sure that there is an item in Pending
 	// to signal the VM to produce a block. Note: if the VM's buildStatus has already
 	// been set to something other than [dontBuild], this will be ignored and won't be
@@ -282,32 +297,18 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	m.newTxs = append(m.newTxs, tx)
 	m.addPending()
 
-	m.bloom.Add(&GossipAtomicTx{Tx: tx})
-	if gossip.ResetBloomFilterIfNeeded(m.bloom, txGossipBloomMaxFilledRatio) {
-		log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
-
-		for _, pendingTx := range m.txHeap.minHeap.items {
-			m.bloom.Add(&GossipAtomicTx{Tx: pendingTx.tx})
-		}
-	}
-
 	return nil
 }
 
-func (m *Mempool) Get(filter func(tx *GossipAtomicTx) bool) []*GossipAtomicTx {
+func (m *Mempool) Iterate(f func(tx *GossipAtomicTx) bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	gossipTxs := make([]*GossipAtomicTx, 0, len(m.txHeap.maxHeap.items))
 	for _, item := range m.txHeap.maxHeap.items {
-		gossipTx := &GossipAtomicTx{Tx: item.tx}
-		if !filter(gossipTx) {
-			continue
+		if !f(&GossipAtomicTx{Tx: item.tx}) {
+			return
 		}
-		gossipTxs = append(gossipTxs, gossipTx)
 	}
-
-	return gossipTxs
 }
 
 func (m *Mempool) GetFilter() ([]byte, []byte, error) {

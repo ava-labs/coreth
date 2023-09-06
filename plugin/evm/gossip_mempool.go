@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
@@ -27,12 +28,8 @@ type GossipAtomicTx struct {
 	Tx *Tx `serialize:"true"`
 }
 
-func (tx *GossipAtomicTx) GetHash() gossip.Hash {
-	id := tx.Tx.ID()
-	hash := gossip.Hash{}
-	copy(hash[:], id[:])
-
-	return hash
+func (tx *GossipAtomicTx) GetID() ids.ID {
+	return tx.Tx.ID()
 }
 
 func (tx *GossipAtomicTx) Marshal() ([]byte, error) {
@@ -79,7 +76,13 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 			for _, pendingTx := range pendingTxs.Txs {
 				tx := &GossipEthTx{Tx: pendingTx}
 				g.bloom.Add(tx)
-				if gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipBloomMaxFilledRatio) {
+				reset, err := gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipBloomMaxFilledRatio)
+				if err != nil {
+					log.Error("failed to reset bloom filter", "err", err)
+					continue
+				}
+
+				if reset {
 					log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
 
 					pending := g.mempool.Pending(false)
@@ -105,25 +108,10 @@ func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 	return nil
 }
 
-func (g *GossipEthTxPool) Get(filter func(tx *GossipEthTx) bool) []*GossipEthTx {
-	limit := 1000
-	resultSize := 0
-	result := make([]*GossipEthTx, 0)
-
+func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {
 	g.mempool.IteratePending(func(tx *types.Transaction) bool {
-		resultSize += int(tx.Size())
-		if resultSize > limit {
-			return false
-		}
-
-		gossipTx := &GossipEthTx{
-			Tx: tx,
-		}
-		result = append(result, gossipTx)
-		return true
+		return f(&GossipEthTx{Tx: tx})
 	})
-
-	return result
 }
 
 func (g *GossipEthTxPool) GetFilter() ([]byte, []byte, error) {
@@ -138,12 +126,8 @@ type GossipEthTx struct {
 	Tx *types.Transaction
 }
 
-func (tx *GossipEthTx) GetHash() gossip.Hash {
-	txHash := tx.Tx.Hash()
-	hash := gossip.Hash{}
-	copy(hash[:], txHash[:])
-
-	return hash
+func (tx *GossipEthTx) GetID() ids.ID {
+	return ids.ID(tx.Tx.Hash())
 }
 
 func (tx *GossipEthTx) Marshal() ([]byte, error) {

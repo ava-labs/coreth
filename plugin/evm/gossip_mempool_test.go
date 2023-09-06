@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 )
 
-func TestAtomicMempoolAddTx(t *testing.T) {
+func TestAtomicMempoolIterate(t *testing.T) {
 	txs := []*GossipAtomicTx{
 		{
 			Tx: &Tx{
@@ -30,44 +30,43 @@ func TestAtomicMempoolAddTx(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		add      []*GossipAtomicTx
-		filter   func(tx *GossipAtomicTx) bool
-		expected []*GossipAtomicTx
+		name           string
+		add            []*GossipAtomicTx
+		f              func(tx *GossipAtomicTx) bool
+		possibleValues []*GossipAtomicTx
+		expectedLen    int
 	}{
 		{
-			name: "empty",
-		},
-		{
-			name: "filter matches nothing",
+			name: "func matches nothing",
 			add:  txs,
-			filter: func(*GossipAtomicTx) bool {
+			f: func(*GossipAtomicTx) bool {
 				return false
 			},
-			expected: nil,
+			possibleValues: nil,
 		},
 		{
-			name: "filter matches all",
+			name: "func matches all",
 			add:  txs,
-			filter: func(*GossipAtomicTx) bool {
+			f: func(*GossipAtomicTx) bool {
 				return true
 			},
-			expected: txs,
+			possibleValues: txs,
+			expectedLen:    2,
 		},
 		{
-			name: "filter matches subset",
+			name: "func matches subset",
 			add:  txs,
-			filter: func(tx *GossipAtomicTx) bool {
+			f: func(tx *GossipAtomicTx) bool {
 				return tx.Tx == txs[0].Tx
 			},
-			expected: txs[:1],
+			possibleValues: txs,
+			expectedLen:    1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
-
 			m, err := NewMempool(ids.Empty, 10)
 			require.NoError(err)
 
@@ -75,12 +74,21 @@ func TestAtomicMempoolAddTx(t *testing.T) {
 				require.NoError(m.Add(add))
 			}
 
-			txs := m.Get(tt.filter)
-			require.Len(txs, len(tt.expected))
+			matches := make([]*GossipAtomicTx, 0)
+			f := func(tx *GossipAtomicTx) bool {
+				match := tt.f(tx)
 
-			for _, expected := range tt.expected {
-				require.Contains(txs, expected)
+				if match {
+					matches = append(matches, tx)
+				}
+
+				return match
 			}
+
+			m.Iterate(f)
+
+			require.Len(matches, tt.expectedLen)
+			require.Subset(tt.possibleValues, matches)
 		})
 	}
 }

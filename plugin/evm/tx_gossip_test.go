@@ -10,20 +10,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/p2p/gossip"
-	"github.com/ava-labs/avalanchego/p2p/gossip/proto/pb"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/network/p2p/gossip"
+	"github.com/ava-labs/avalanchego/proto/pb/sdk"
+	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/stretchr/testify/require"
+
+	"go.uber.org/mock/gomock"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -60,7 +61,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
-	peerSender := commonEng.NewMockSender(ctrl)
+	peerSender := common.NewMockSender(ctrl)
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler
@@ -71,7 +72,7 @@ func TestEthTxGossip(t *testing.T) {
 	require.NoError(err)
 	emptyBloomFilterBytes, err := emptyBloomFilter.Bloom.MarshalBinary()
 	require.NoError(err)
-	request := &pb.PullGossipRequest{
+	request := &sdk.PullGossipRequest{
 		Filter: emptyBloomFilterBytes,
 		Salt:   utils.RandomBytes(32),
 	}
@@ -110,7 +111,7 @@ func TestEthTxGossip(t *testing.T) {
 	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := &pb.PullGossipResponse{}
+		response := &sdk.PullGossipResponse{}
 		require.NoError(proto.Unmarshal(responseBytes, response))
 		require.Empty(response.Gossip)
 		wg.Done()
@@ -137,7 +138,7 @@ func TestEthTxGossip(t *testing.T) {
 	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := &pb.PullGossipResponse{}
+		response := &sdk.PullGossipResponse{}
 		require.NoError(proto.Unmarshal(responseBytes, response))
 		require.Len(response.Gossip, 1)
 
@@ -166,7 +167,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
-	peerSender := commonEng.NewMockSender(ctrl)
+	peerSender := common.NewMockSender(ctrl)
 	router := p2p.NewRouter(logging.NoLog{}, peerSender)
 
 	// we're only making client requests, so we don't need a server handler
@@ -177,7 +178,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(err)
 	bloomBytes, err := emptyBloomFilter.Bloom.MarshalBinary()
 	require.NoError(err)
-	request := &pb.PullGossipRequest{
+	request := &sdk.PullGossipRequest{
 		Filter: bloomBytes,
 		Salt:   emptyBloomFilter.Salt[:],
 	}
@@ -214,7 +215,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := &pb.PullGossipResponse{}
+		response := &sdk.PullGossipResponse{}
 		require.NoError(proto.Unmarshal(responseBytes, response))
 		require.Empty(response.Gossip)
 		wg.Done()
@@ -237,7 +238,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
-		response := &pb.PullGossipResponse{}
+		response := &sdk.PullGossipResponse{}
 		require.NoError(proto.Unmarshal(responseBytes, response))
 		require.Len(response.Gossip, 1)
 
