@@ -333,7 +333,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		log.Debug("forwarding unknown AppRequest", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
+		log.Debug("forwarding unregistered AppRequest", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
 		return n.router.AppRequest(ctx, nodeID, requestID, deadline, request)
 	}
 
@@ -376,7 +376,7 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding unknown AppResponse", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
+		log.Debug("forwarding unregistered AppResponse", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return n.router.AppResponse(ctx, nodeID, requestID, response)
 	}
 
@@ -404,7 +404,7 @@ func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, reque
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding unknown AppRequestFailed", "nodeID", nodeID, "requestID", requestID)
+		log.Debug("forwarding unregistered AppRequestFailed", "nodeID", nodeID, "requestID", requestID)
 		return n.router.AppRequestFailed(ctx, nodeID, requestID)
 	}
 
