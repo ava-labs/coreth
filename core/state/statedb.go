@@ -144,6 +144,9 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	// Testing hooks
+	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
 // New creates a new state from a given trie.
@@ -1346,18 +1349,22 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 	}
 	if root != origin {
 		start := time.Now()
+		set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
 		if referenceRoot {
-			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, block, nodes, triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)); err != nil {
+			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, block, nodes, set); err != nil {
 				return common.Hash{}, err
 			}
 		} else {
-			if err := s.db.TrieDB().Update(root, origin, block, nodes, triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)); err != nil {
+			if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
 				return common.Hash{}, err
 			}
 		}
 		s.originalRoot = root
 		if metrics.EnabledExpensive {
 			s.TrieDBCommits += time.Since(start)
+		}
+		if s.onCommit != nil {
+			s.onCommit(set)
 		}
 	}
 	// Clear all internal flags at the end of commit operation.
