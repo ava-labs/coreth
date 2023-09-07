@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/codec"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
