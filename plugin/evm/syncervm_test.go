@@ -248,7 +248,7 @@ func TestVMShutdownWhileSyncing(t *testing.T) {
 			// Shutdown the VM after 50 requests to interrupt the sync
 			if reqCount == 50 {
 				// Note this verifies the VM shutdown does not time out while syncing.
-				require.NoError(t, vmSetup.syncerVM.Shutdown(context.Background()))
+				require.NoError(t, vmSetup.shutdownOnceSyncerVM.Shutdown(context.Background()))
 			} else if reqCount < 50 {
 				err := syncerVM.AppResponse(context.Background(), nodeID, requestID, response)
 				require.NoError(t, err)
@@ -345,14 +345,9 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 	syncerEngineChan, syncerVM, syncerDBManager, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
 		t, false, "", stateSyncEnabledJSON, "", alloc,
 	)
+	shutdownOnceSyncerVM := &shutdownOnceVM{VM: syncerVM}
 	t.Cleanup(func() {
-		select {
-		case <-syncerVM.shutdownChan:
-			log.Info("syncerVM already shutdown")
-		default:
-			log.Info("Shutting down syncerVM")
-			require.NoError(syncerVM.Shutdown(context.Background()))
-		}
+		require.NoError(shutdownOnceSyncerVM.Shutdown(context.Background()))
 	})
 	require.NoError(syncerVM.SetState(context.Background(), snow.StateSyncing))
 	enabled, err := syncerVM.StateSyncEnabled(context.Background())
@@ -398,11 +393,12 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest) *syncVMSetup {
 			importTx,
 			exportTx,
 		},
-		fundedAccounts:     accounts,
-		syncerVM:           syncerVM,
-		syncerDBManager:    syncerDBManager,
-		syncerEngineChan:   syncerEngineChan,
-		syncerAtomicMemory: syncerAtomicMemory,
+		fundedAccounts:       accounts,
+		syncerVM:             syncerVM,
+		syncerDBManager:      syncerDBManager,
+		syncerEngineChan:     syncerEngineChan,
+		syncerAtomicMemory:   syncerAtomicMemory,
+		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
 	}
 }
 
@@ -415,10 +411,22 @@ type syncVMSetup struct {
 	includedAtomicTxs []*Tx
 	fundedAccounts    map[*keystore.Key]*types.StateAccount
 
-	syncerVM           *VM
-	syncerDBManager    manager.Manager
-	syncerEngineChan   <-chan commonEng.Message
-	syncerAtomicMemory *atomic.Memory
+	syncerVM             *VM
+	syncerDBManager      manager.Manager
+	syncerEngineChan     <-chan commonEng.Message
+	syncerAtomicMemory   *atomic.Memory
+	shutdownOnceSyncerVM *shutdownOnceVM
+}
+
+type shutdownOnceVM struct {
+	*VM
+	shutdownOnce sync.Once
+}
+
+func (vm *shutdownOnceVM) Shutdown(ctx context.Context) error {
+	var err error
+	vm.shutdownOnce.Do(func() { err = vm.VM.Shutdown(ctx) })
+	return err
 }
 
 // syncTest contains both the actual VMs as well as the parameters with the expected output.
