@@ -375,7 +375,7 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding unregistered AppResponse", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
+		log.Debug("forwarding AppResponse to SDK router", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return n.router.AppResponse(ctx, nodeID, requestID, response)
 	}
 
@@ -403,7 +403,7 @@ func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, reque
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding unregistered AppRequestFailed", "nodeID", nodeID, "requestID", requestID)
+		log.Debug("forwarding AppRequestFailed to SDK router", "nodeID", nodeID, "requestID", requestID)
 		return n.router.AppRequestFailed(ctx, nodeID, requestID)
 	}
 
