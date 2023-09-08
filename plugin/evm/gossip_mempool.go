@@ -101,11 +101,7 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 // Add enqueues the transaction to the mempool. Subscribe should be called
 // to receive an event if tx is actually added to the mempool or not.
 func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
-	if err := g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]; err != nil {
-		return err
-	}
-
-	return nil
+	return g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]
 }
 
 func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {
