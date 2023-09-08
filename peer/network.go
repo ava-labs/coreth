@@ -279,8 +279,8 @@ func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChai
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		// Should never happen since the engine should be managing outstanding requests
-		log.Error("received CrossChainAppRequestFailed to unknown request", "respondingChainID", respondingChainID, "requestID", requestID)
+		// Can happen after the network has been closed.
+		log.Debug("received CrossChainAppRequestFailed to unknown request", "respondingChainID", respondingChainID, "requestID", requestID)
 		return nil
 	}
 
@@ -299,8 +299,8 @@ func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID i
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		// Should never happen since the engine should be managing outstanding requests
-		log.Error("received CrossChainAppResponse to unknown request", "respondingChainID", respondingChainID, "requestID", requestID, "responseLen", len(response))
+		// Can happen after the network has been closed.
+		log.Debug("received CrossChainAppResponse to unknown request", "respondingChainID", respondingChainID, "requestID", requestID, "responseLen", len(response))
 		return nil
 	}
 
