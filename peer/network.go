@@ -101,6 +101,14 @@ type network struct {
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
+	//
+	// Invariant: Even though `closed` is an atomic, `lock` is required to be
+	// held when sending requests and receiving responses to guarantee that the
+	// network isn't closed during these calls. This is because closing the
+	// network cancels all outstanding requests, which means we must guarantee
+	// never to fulfill, or cancel again, after having cancelled the request.
+	// Similarly, we must ensure we don't register a request that will never be
+	// fulfilled or cancelled.
 	closed utils.Atomic[bool]
 }
 
