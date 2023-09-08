@@ -236,10 +236,6 @@ func (n *network) SendCrossChainRequest(chainID ids.ID, request []byte, handler 
 // Send a CrossChainAppResponse to [chainID] in response to a valid message using the same
 // [requestID] before the deadline.
 func (n *network) CrossChainAppRequest(ctx context.Context, requestingChainID ids.ID, requestID uint32, deadline time.Time, request []byte) error {
-	if n.closed.Get() {
-		return nil
-	}
-
 	log.Debug("received CrossChainAppRequest from chain", "requestingChainID", requestingChainID, "requestID", requestID, "requestLen", len(request))
 
 	var req message.CrossChainRequest
@@ -277,13 +273,6 @@ func (n *network) CrossChainAppRequest(ctx context.Context, requestingChainID id
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChainID ids.ID, requestID uint32) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.closed.Get() {
-		return nil
-	}
-
 	log.Debug("received CrossChainAppRequestFailed from chain", "respondingChainID", respondingChainID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
@@ -304,12 +293,6 @@ func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChai
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID ids.ID, requestID uint32, response []byte) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.closed.Get() {
-		return nil
-	}
 
 	log.Debug("received CrossChainAppResponse from responding chain", "respondingChainID", respondingChainID, "requestID", requestID)
 
@@ -332,10 +315,6 @@ func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID i
 // sends a response back to the sender if length of response returned by the handler is >0
 // expects the deadline to not have been passed
 func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, request []byte) error {
-	if n.closed.Get() {
-		return nil
-	}
-
 	log.Debug("received AppRequest from node", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request))
 
 	var req message.Request
@@ -372,17 +351,9 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
-	n.lock.Lock()
-
-	if n.closed.Get() {
-		n.lock.Unlock()
-		return nil
-	}
-
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
-	n.lock.Unlock()
 	if !exists {
 		log.Debug("forwarding AppResponse to SDK router", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return n.router.AppResponse(ctx, nodeID, requestID, response)
@@ -401,17 +372,9 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error only when the response handler returns an error
 func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
-	n.lock.Lock()
-
-	if n.closed.Get() {
-		n.lock.Unlock()
-		return nil
-	}
-
 	log.Debug("received AppRequestFailed from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
-	n.lock.Unlock()
 	if !exists {
 		log.Debug("forwarding AppRequestFailed to SDK router", "nodeID", nodeID, "requestID", requestID)
 		return n.router.AppRequestFailed(ctx, nodeID, requestID)
@@ -449,6 +412,9 @@ func calculateTimeUntilDeadline(deadline time.Time, stats stats.RequestHandlerSt
 // This is called by either [AppResponse] or [AppRequestFailed].
 // Assumes that the write lock is held.
 func (n *network) markRequestFulfilled(requestID uint32) (message.ResponseHandler, bool) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	handler, exists := n.outstandingRequestHandlers[requestID]
 	if !exists {
 		return nil, false
@@ -472,10 +438,6 @@ func (n *network) Gossip(gossip []byte) error {
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error if request could not be parsed as message.Request or when the requestHandler returns an error
 func (n *network) AppGossip(_ context.Context, nodeID ids.NodeID, gossipBytes []byte) error {
-	if n.closed.Get() {
-		return nil
-	}
-
 	var gossipMsg message.GossipMessage
 	if _, err := n.codec.Unmarshal(gossipBytes, &gossipMsg); err != nil {
 		log.Debug("could not parse app gossip", "nodeID", nodeID, "gossipLen", len(gossipBytes), "err", err)
