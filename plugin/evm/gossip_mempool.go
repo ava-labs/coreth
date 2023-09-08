@@ -43,7 +43,7 @@ func (tx *GossipAtomicTx) Unmarshal(bytes []byte) error {
 	if err != nil {
 		return err
 	}
-	unsignedBytes, err := Codec.Marshal(codecVersion, result.UnsignedAtomicTx)
+	unsignedBytes, err := Codec.Marshal(codecVersion, &result.UnsignedAtomicTx)
 	if err != nil {
 		return err
 	}
