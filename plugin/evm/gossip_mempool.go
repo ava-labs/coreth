@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -62,13 +63,12 @@ type GossipEthTxPool struct {
 	lock  sync.RWMutex
 }
 
-func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync.WaitGroup) {
-	defer shutdownWg.Done()
+func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 	g.mempool.SubscribeNewTxsEvent(g.pendingTxs)
 
 	for {
 		select {
-		case <-shutdownChan:
+		case <-ctx.Done():
 			log.Debug("shutting down subscription")
 			return
 		case pendingTxs := <-g.pendingTxs:
@@ -85,12 +85,10 @@ func (g *GossipEthTxPool) Subscribe(shutdownChan chan struct{}, shutdownWg *sync
 				if reset {
 					log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
 
-					pending := g.mempool.Pending(false)
-					for _, pendingTxs := range pending {
-						for _, pendingTx := range pendingTxs {
-							g.bloom.Add(&GossipEthTx{Tx: pendingTx})
-						}
-					}
+					g.mempool.IteratePending(func(tx *types.Transaction) bool {
+						g.bloom.Add(&GossipEthTx{Tx: pendingTx})
+						return true
+					})
 				}
 			}
 			g.lock.Unlock()
@@ -115,7 +113,10 @@ func (g *GossipEthTxPool) GetFilter() ([]byte, []byte, error) {
 	defer g.lock.RUnlock()
 
 	bloom, err := g.bloom.Bloom.MarshalBinary()
-	return bloom, g.bloom.Salt[:], err
+	salt := make([]byte, len(g.bloom.Salt))
+	copy(salt, g.bloom.Salt[:])
+
+	return bloom, salt, err
 }
 
 type GossipEthTx struct {

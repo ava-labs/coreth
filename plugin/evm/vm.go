@@ -342,7 +342,7 @@ func (vm *VM) GetActivationTime() time.Time {
 
 // Initialize implements the snowman.ChainVM interface
 func (vm *VM) Initialize(
-	ctx context.Context,
+	_ context.Context,
 	chainCtx *snow.Context,
 	dbManager manager.Manager,
 	genesisBytes []byte,
@@ -367,7 +367,8 @@ func (vm *VM) Initialize(
 	deprecateMsg := vm.config.Deprecate()
 
 	vm.ctx = chainCtx
-	ctx, cancel := context.WithCancel(ctx)
+
+	ctx, cancel := context.WithCancel(context.TODO())
 	vm.backgroundCtx = ctx
 	vm.cancel = cancel
 
@@ -994,7 +995,10 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 	vm.shutdownWg.Add(1)
-	go ethTxPool.Subscribe(vm.shutdownChan, &vm.shutdownWg)
+	go func() {
+		ethTxPool.Subscribe(vm.backgroundCtx)
+		vm.shutdownWg.Done()
+	}()
 
 	ethTxGossipHandler := &p2p.ValidatorHandler{
 		ValidatorSet: vm.validators,

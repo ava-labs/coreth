@@ -630,12 +630,14 @@ func (pool *TxPool) PendingSize() int {
 	return count
 }
 
-// IteratePending iterates over the [pool.pending] until [f] returns false.
+// IteratePending iterates over [pool.pending] until [f] returns false.
+// The caller must not modify [tx].
 func (pool *TxPool) IteratePending(f func(tx *types.Transaction) bool) {
-	pending := pool.Pending(true)
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
-	for _, list := range pending {
-		for _, tx := range list {
+	for _, list := range pool.pending {
+		for _, tx := range list.txs.items {
 			if !f(tx) {
 				return
 			}
