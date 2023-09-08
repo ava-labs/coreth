@@ -88,16 +88,16 @@ type network struct {
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
 	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
 	activeCrossChainRequests   *semaphore.Weighted                // controls maximum number of active outbound cross chain requests
-	router                     *p2p.Router
-	appSender                  common.AppSender                 // avalanchego AppSender for sending messages
-	codec                      codec.Manager                    // Codec used for parsing messages
-	crossChainCodec            codec.Manager                    // Codec used for parsing cross chain messages
-	appRequestHandler          message.RequestHandler           // maps request type => handler
-	crossChainRequestHandler   message.CrossChainRequestHandler // maps cross chain request type => handler
-	gossipHandler              message.GossipHandler            // maps gossip type => handler
-	peers                      *peerTracker                     // tracking of peers & bandwidth
-	appStats                   stats.RequestHandlerStats        // Provide request handler metrics
-	crossChainStats            stats.RequestHandlerStats        // Provide cross chain request handler metrics
+	router                     *p2p.Router                        // handles messages being sent to the generic networking SDK
+	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
+	codec                      codec.Manager                      // Codec used for parsing messages
+	crossChainCodec            codec.Manager                      // Codec used for parsing cross chain messages
+	appRequestHandler          message.RequestHandler             // maps request type => handler
+	crossChainRequestHandler   message.CrossChainRequestHandler   // maps cross chain request type => handler
+	gossipHandler              message.GossipHandler              // maps gossip type => handler
+	peers                      *peerTracker                       // tracking of peers & bandwidth
+	appStats                   stats.RequestHandlerStats          // Provide request handler metrics
+	crossChainStats            stats.RequestHandlerStats          // Provide cross chain request handler metrics
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
