@@ -234,6 +234,10 @@ func (n *network) SendCrossChainRequest(chainID ids.ID, request []byte, handler 
 // Send a CrossChainAppResponse to [chainID] in response to a valid message using the same
 // [requestID] before the deadline.
 func (n *network) CrossChainAppRequest(ctx context.Context, requestingChainID ids.ID, requestID uint32, deadline time.Time, request []byte) error {
+	if n.closed.Get() {
+		return nil
+	}
+
 	log.Debug("received CrossChainAppRequest from chain", "requestingChainID", requestingChainID, "requestID", requestID, "requestLen", len(request))
 
 	var req message.CrossChainRequest
@@ -312,6 +316,10 @@ func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID i
 // sends a response back to the sender if length of response returned by the handler is >0
 // expects the deadline to not have been passed
 func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, request []byte) error {
+	if n.closed.Get() {
+		return nil
+	}
+
 	log.Debug("received AppRequest from node", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request))
 
 	var req message.Request
