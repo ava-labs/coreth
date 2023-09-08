@@ -293,7 +293,6 @@ func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChai
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID ids.ID, requestID uint32, response []byte) error {
-
 	log.Debug("received CrossChainAppResponse from responding chain", "respondingChainID", respondingChainID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
