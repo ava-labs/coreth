@@ -13,7 +13,6 @@ COPY . coreth
 
 # Set the workdir to AvalancheGo and update coreth dependency to local version
 WORKDIR $GOPATH/src/github.com/ava-labs/avalanchego
-RUN go clean -modcache
 # Run go mod download here to improve caching of AvalancheGo specific depednencies
 RUN go mod download
 # Replace the coreth dependency
