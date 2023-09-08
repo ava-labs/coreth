@@ -269,6 +269,9 @@ func (n *network) CrossChainAppRequest(ctx context.Context, requestingChainID id
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChainID ids.ID, requestID uint32) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	if n.closed.Get() {
 		return nil
 	}
@@ -293,6 +296,9 @@ func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChai
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID ids.ID, requestID uint32, response []byte) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	if n.closed.Get() {
 		return nil
 	}
@@ -358,13 +364,17 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
+	n.lock.Lock()
+
 	if n.closed.Get() {
+		n.lock.Unlock()
 		return nil
 	}
 
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
+	n.lock.Unlock()
 	if !exists {
 		log.Debug("forwarding AppResponse to SDK router", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return n.router.AppResponse(ctx, nodeID, requestID, response)
@@ -383,13 +393,17 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error only when the response handler returns an error
 func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
+	n.lock.Lock()
+
 	if n.closed.Get() {
+		n.lock.Unlock()
 		return nil
 	}
 
 	log.Debug("received AppRequestFailed from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
+	n.lock.Unlock()
 	if !exists {
 		log.Debug("forwarding AppRequestFailed to SDK router", "nodeID", nodeID, "requestID", requestID)
 		return n.router.AppRequestFailed(ctx, nodeID, requestID)
@@ -425,10 +439,8 @@ func calculateTimeUntilDeadline(deadline time.Time, stats stats.RequestHandlerSt
 
 // markRequestFulfilled fetches the handler for [requestID] and marks the request with [requestID] as having been fulfilled.
 // This is called by either [AppResponse] or [AppRequestFailed].
+// Assumes that the write lock is held.
 func (n *network) markRequestFulfilled(requestID uint32) (message.ResponseHandler, bool) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
 	handler, exists := n.outstandingRequestHandlers[requestID]
 	if !exists {
 		return nil, false
