@@ -88,7 +88,7 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 			for _, pendingTx := range pendingTxs.Txs {
 				tx := &GossipEthTx{Tx: pendingTx}
 				g.bloom.Add(tx)
-				reset, err := gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipBloomMaxFilledRatio)
+				reset, err := gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipMaxFalsePositiveRate)
 				if err != nil {
 					log.Error("failed to reset bloom filter", "err", err)
 					continue

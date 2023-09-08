@@ -136,9 +136,9 @@ const (
 
 	// gossip constants
 	txGossipMaxResponseSize        = 20 * units.KiB
-	txGossipBloomMaxFilledRatio    = 0.05
 	txGossipBloomMaxItems          = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
+	txGossipMaxFalsePositiveRate   = 0.05
 	maxValidatorSetStaleness       = time.Minute
 	throttlingPeriod               = 10 * time.Second
 	throttlingLimit                = 2
