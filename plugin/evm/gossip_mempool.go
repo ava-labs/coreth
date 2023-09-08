@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 var (
@@ -26,7 +25,7 @@ var (
 )
 
 type GossipAtomicTx struct {
-	Tx *Tx `serialize:"true"`
+	Tx *Tx
 }
 
 func (tx *GossipAtomicTx) GetID() ids.ID {
@@ -34,11 +33,11 @@ func (tx *GossipAtomicTx) GetID() ids.ID {
 }
 
 func (tx *GossipAtomicTx) Marshal() ([]byte, error) {
-	return Codec.Marshal(message.Version, tx)
+	return tx.Tx.SignedBytes(), nil
 }
 
 func (tx *GossipAtomicTx) Unmarshal(bytes []byte) error {
-	_, err := Codec.Unmarshal(bytes, tx)
+	_, err := Codec.Unmarshal(bytes, tx.Tx)
 	return err
 }
 
