@@ -415,7 +415,7 @@ func calculateTimeUntilDeadline(deadline time.Time, stats stats.RequestHandlerSt
 
 // markRequestFulfilled fetches the handler for [requestID] and marks the request with [requestID] as having been fulfilled.
 // This is called by either [AppResponse] or [AppRequestFailed].
-// Assumes that the write lock is held.
+// Assumes that the write lock is not held.
 func (n *network) markRequestFulfilled(requestID uint32) (message.ResponseHandler, bool) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
