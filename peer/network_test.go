@@ -665,7 +665,7 @@ func TestSDKRouting(t *testing.T) {
 	protocol := 0
 	handler := &testSDKHandler{}
 	router := p2p.NewRouter(logging.NoLog{}, sender)
-	_, err := router.RegisterAppProtocol(uint64(protocol), handler, &p2p.Peers{})
+	_, err := router.RegisterAppProtocol(uint64(protocol), handler, nil)
 	require.NoError(err)
 
 	networkCodec := codec.NewManager(0)
