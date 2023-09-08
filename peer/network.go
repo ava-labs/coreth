@@ -365,15 +365,16 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 	n.lock.Lock()
-	defer n.lock.Unlock()
 
 	if n.closed.Get() {
+		n.lock.Unlock()
 		return nil
 	}
 
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
+	n.lock.Unlock()
 	if !exists {
 		log.Debug("forwarding AppResponse to SDK router", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return n.router.AppResponse(ctx, nodeID, requestID, response)
@@ -393,15 +394,16 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 // returns error only when the response handler returns an error
 func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
 	n.lock.Lock()
-	defer n.lock.Unlock()
 
 	if n.closed.Get() {
+		n.lock.Unlock()
 		return nil
 	}
 
 	log.Debug("received AppRequestFailed from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
+	n.lock.Unlock()
 	if !exists {
 		log.Debug("forwarding AppRequestFailed to SDK router", "nodeID", nodeID, "requestID", requestID)
 		return n.router.AppRequestFailed(ctx, nodeID, requestID)
