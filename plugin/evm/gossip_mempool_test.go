@@ -6,10 +6,35 @@ package evm
 import (
 	"testing"
 
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
+	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
 )
+
+func TestGossipAtomicTxMarshal(t *testing.T) {
+	require := require.New(t)
+
+	expected := &GossipAtomicTx{
+		Tx: &Tx{
+			UnsignedAtomicTx: &UnsignedImportTx{},
+			Creds:            []verify.Verifiable{},
+		},
+	}
+
+	key0 := testKeys[0]
+	require.NoError(expected.Tx.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}}))
+
+	bytes, err := expected.Marshal()
+	require.NoError(err)
+
+	actual := &GossipAtomicTx{}
+	require.NoError(actual.Unmarshal(bytes))
+
+	require.NoError(err)
+	require.Equal(expected.GetID(), actual.GetID())
+}
 
 func TestAtomicMempoolIterate(t *testing.T) {
 	txs := []*GossipAtomicTx{

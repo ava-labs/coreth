@@ -37,8 +37,18 @@ func (tx *GossipAtomicTx) Marshal() ([]byte, error) {
 }
 
 func (tx *GossipAtomicTx) Unmarshal(bytes []byte) error {
-	_, err := Codec.Unmarshal(bytes, tx.Tx)
-	return err
+	result := &Tx{}
+
+	_, err := Codec.Unmarshal(bytes, result)
+	unsignedBytes, err := Codec.Marshal(codecVersion, result.UnsignedAtomicTx)
+	if err != nil {
+		return err
+	}
+
+	result.Initialize(unsignedBytes, bytes)
+	tx.Tx = result
+
+	return nil
 }
 
 func NewGossipEthTxPool(mempool *txpool.TxPool) (*GossipEthTxPool, error) {
