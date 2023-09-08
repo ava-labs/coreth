@@ -564,6 +564,9 @@ func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 
 // invariant: peer/network must use explicitly even request ids.
 // for this reason, [n.requestID] is initialized as zero and incremented by 2.
+// This is for backwards-compatibility while the SDK router exists with the
+// legacy coreth handlers to avoid a (very) narrow edge case where request ids
+// can overlap, resulting in a dropped timeout.
 func (n *network) nextRequestID() uint32 {
 	next := n.requestIDGen
 	n.requestIDGen += 2
