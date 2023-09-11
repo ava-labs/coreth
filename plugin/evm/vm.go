@@ -135,8 +135,8 @@ const (
 	atomicTxGossipProtocol = 0x1
 
 	// gossip constants
-	txGossipTargetResponseSize = 20 * units.KiB
-	txGossipBloomMaxItems      = 8 * 1024
+	txGossipTargetResponseSize     = 20 * units.KiB
+	txGossipBloomMaxItems          = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
 	txGossipMaxFalsePositiveRate   = 0.05
 	maxValidatorSetStaleness       = time.Minute
