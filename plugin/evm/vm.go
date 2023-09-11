@@ -135,8 +135,8 @@ const (
 	atomicTxGossipProtocol = 0x1
 
 	// gossip constants
-	txGossipMaxResponseSize        = 20 * units.KiB
-	txGossipBloomMaxItems          = 8 * 1024
+	txGossipTargetResponseSize = 20 * units.KiB
+	txGossipBloomMaxItems      = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
 	txGossipMaxFalsePositiveRate   = 0.05
 	maxValidatorSetStaleness       = time.Minute
@@ -1004,7 +1004,7 @@ func (vm *VM) initBlockBuilding() error {
 		ValidatorSet: vm.validators,
 		Handler: &p2p.ThrottlerHandler{
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, txGossipMaxResponseSize),
+			Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, txGossipTargetResponseSize),
 		},
 	}
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
@@ -1017,7 +1017,7 @@ func (vm *VM) initBlockBuilding() error {
 		ValidatorSet: vm.validators,
 		Handler: &p2p.ThrottlerHandler{
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, txGossipMaxResponseSize),
+			Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, txGossipTargetResponseSize),
 		},
 	}
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
