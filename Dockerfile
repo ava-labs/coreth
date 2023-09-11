@@ -1,5 +1,5 @@
 # ============= Compilation Stage ================
-FROM golang:1.19.12-bullseye AS builder
+FROM golang:1.20.8-bullseye AS builder
 
 ARG AVALANCHE_VERSION
 
