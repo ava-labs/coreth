@@ -138,19 +138,31 @@ const (
 	txGossipBloomMaxItems          = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
 	txGossipMaxFalsePositiveRate   = 0.05
+	txGossipTargetResponseSize     = 20 * units.KiB
 	maxValidatorSetStaleness       = time.Minute
 	throttlingPeriod               = 10 * time.Second
 	throttlingLimit                = 2
 )
 
 var (
-	txGossipConfig = gossip.Config{
+	ethTxGossipConfig = gossip.Config{
+		Namespace: "eth_tx_gossip",
 		Frequency: 10 * time.Second,
 		PollSize:  10,
 	}
+	ethTxGossipHandlerConfig = gossip.HandlerConfig{
+		Namespace:          "eth_tx_gossip",
+		TargetResponseSize: txGossipTargetResponseSize,
+	}
 
-	gossipHandlerConfig = gossip.HandlerConfig{
-		TargetResponseSize: 20 * units.KiB,
+	atomicTxGossipConfig = gossip.Config{
+		Namespace: "atomic_tx_gossip",
+		Frequency: 10 * time.Second,
+		PollSize:  10,
+	}
+	atomicTxGossipHandlerConfig = gossip.HandlerConfig{
+		Namespace:          "atomic_tx_gossip",
+		TargetResponseSize: txGossipTargetResponseSize,
 	}
 )
 
@@ -308,7 +320,7 @@ type VM struct {
 
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
-	metrics       *prometheus.Registry
+	sdkMetrics    *prometheus.Registry
 
 	bootstrapped bool
 	IsPlugin     bool
@@ -545,7 +557,7 @@ func (vm *VM) Initialize(
 
 	// initialize peer network
 	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.metrics, "p2p")
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.sdkMetrics, "sdk")
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -597,7 +609,7 @@ func (vm *VM) Initialize(
 }
 
 func (vm *VM) initializeMetrics() error {
-	vm.metrics = prometheus.NewRegistry()
+	vm.sdkMetrics = prometheus.NewRegistry()
 	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
 	// If metrics are enabled, register the default metrics regitry
 	if metrics.Enabled {
@@ -605,11 +617,11 @@ func (vm *VM) initializeMetrics() error {
 		if err := vm.multiGatherer.Register(ethMetricsPrefix, gatherer); err != nil {
 			return err
 		}
-		// Register [multiGatherer] after registerers have been registered to it
-		if err := vm.ctx.Metrics.Register(vm.multiGatherer); err != nil {
+		if err := vm.multiGatherer.Register("sdk", vm.sdkMetrics); err != nil {
 			return err
 		}
-		if err := vm.ctx.Metrics.Register(vm.metrics); err != nil {
+		// Register [multiGatherer] after registerers have been registered to it
+		if err := vm.ctx.Metrics.Register(vm.multiGatherer); err != nil {
 			return err
 		}
 	}
@@ -1011,7 +1023,7 @@ func (vm *VM) initBlockBuilding() error {
 		atomicTxGossipHandler p2p.Handler
 	)
 
-	ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, gossipHandlerConfig, vm.metrics)
+	ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1039,7 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 
-	atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, gossipHandlerConfig, vm.metrics)
+	atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
 	if err != nil {
 		return err
 	}
@@ -1046,11 +1058,11 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	ethTxGossiper, err := gossip.NewGossiper[GossipEthTx, *GossipEthTx](
-		txGossipConfig,
+		ethTxGossipConfig,
 		vm.ctx.Log,
 		ethTxPool,
 		ethTxGossipClient,
-		vm.metrics,
+		vm.sdkMetrics,
 	)
 	if err != nil {
 		return err
@@ -1059,11 +1071,11 @@ func (vm *VM) initBlockBuilding() error {
 	go ethTxGossiper.Gossip(vm.backgroundCtx)
 
 	atomicTxGossiper, err := gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
-		txGossipConfig,
+		atomicTxGossipConfig,
 		vm.ctx.Log,
 		vm.mempool,
 		atomicTxGossipClient,
-		vm.metrics,
+		vm.sdkMetrics,
 	)
 	if err != nil {
 		return err
