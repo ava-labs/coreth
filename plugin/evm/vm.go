@@ -509,7 +509,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.router = p2p.NewRouter(vm.ctx.Log, appSender)
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, prometheus.NewRegistry(), "p2p")
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
