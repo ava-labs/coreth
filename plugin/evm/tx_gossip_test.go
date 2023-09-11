@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 
 	"go.uber.org/mock/gomock"
@@ -62,7 +63,7 @@ func TestEthTxGossip(t *testing.T) {
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
 	peerSender := common.NewMockSender(ctrl)
-	router := p2p.NewRouter(logging.NoLog{}, peerSender)
+	router := p2p.NewRouter(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
 
 	// we're only making client requests, so we don't need a server handler
 	client, err := router.RegisterAppProtocol(ethTxGossipProtocol, nil, nil)
@@ -108,7 +109,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	// Ask the VM for any new transactions. We should get nothing at first.
 	wg.Add(1)
-	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -135,7 +136,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
-	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -168,7 +169,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	// sender for the peer requesting gossip from [vm]
 	ctrl := gomock.NewController(t)
 	peerSender := common.NewMockSender(ctrl)
-	router := p2p.NewRouter(logging.NoLog{}, peerSender)
+	router := p2p.NewRouter(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
 
 	// we're only making client requests, so we don't need a server handler
 	client, err := router.RegisterAppProtocol(atomicTxGossipProtocol, nil, nil)
@@ -212,7 +213,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// Ask the VM for any new transactions. We should get nothing at first.
 	wg.Add(1)
-	onResponse := func(nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -235,7 +236,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
-	onResponse = func(nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}

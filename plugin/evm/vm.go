@@ -135,7 +135,6 @@ const (
 	atomicTxGossipProtocol = 0x1
 
 	// gossip constants
-	txGossipTargetResponseSize     = 20 * units.KiB
 	txGossipBloomMaxItems          = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
 	txGossipMaxFalsePositiveRate   = 0.05
@@ -144,10 +143,16 @@ const (
 	throttlingLimit                = 2
 )
 
-var txGossipConfig = gossip.Config{
-	Frequency: 10 * time.Second,
-	PollSize:  10,
-}
+var (
+	txGossipConfig = gossip.Config{
+		Frequency: 10 * time.Second,
+		PollSize:  10,
+	}
+
+	gossipHandlerConfig = gossip.HandlerConfig{
+		TargetResponseSize: 20 * units.KiB,
+	}
+)
 
 // Define the API endpoints for the VM
 const (
@@ -278,9 +283,7 @@ type VM struct {
 
 	builder *blockBuilder
 
-	gossiper         Gossiper
-	ethTxGossiper    *gossip.Gossiper[GossipEthTx, *GossipEthTx]
-	atomicTxGossiper *gossip.Gossiper[GossipAtomicTx, *GossipAtomicTx]
+	gossiper Gossiper
 
 	baseCodec codec.Registry
 	codec     codec.Manager
@@ -300,13 +303,12 @@ type VM struct {
 	client       peer.NetworkClient
 	networkCodec codec.Manager
 
-	validators           *p2p.Validators
-	router               *p2p.Router
-	ethTxGossipClient    *p2p.Client
-	atomicTxGossipClient *p2p.Client
+	validators *p2p.Validators
+	router     *p2p.Router
 
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
+	metrics       *prometheus.Registry
 
 	bootstrapped bool
 	IsPlugin     bool
@@ -543,7 +545,7 @@ func (vm *VM) Initialize(
 
 	// initialize peer network
 	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.router = p2p.NewRouter(vm.ctx.Log, appSender)
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.metrics, "p2p")
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -595,6 +597,7 @@ func (vm *VM) Initialize(
 }
 
 func (vm *VM) initializeMetrics() error {
+	vm.metrics = prometheus.NewRegistry()
 	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
 	// If metrics are enabled, register the default metrics regitry
 	if metrics.Enabled {
@@ -604,6 +607,9 @@ func (vm *VM) initializeMetrics() error {
 		}
 		// Register [multiGatherer] after registerers have been registered to it
 		if err := vm.ctx.Metrics.Register(vm.multiGatherer); err != nil {
+			return err
+		}
+		if err := vm.ctx.Metrics.Register(vm.metrics); err != nil {
 			return err
 		}
 	}
@@ -1000,47 +1006,70 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	ethTxGossipHandler := &p2p.ValidatorHandler{
+	var (
+		ethTxGossipHandler    p2p.Handler
+		atomicTxGossipHandler p2p.Handler
+	)
+
+	ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, gossipHandlerConfig, vm.metrics)
+	if err != nil {
+		return err
+	}
+	ethTxGossipHandler = &p2p.ValidatorHandler{
 		ValidatorSet: vm.validators,
 		Handler: &p2p.ThrottlerHandler{
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   gossip.NewHandler[*GossipEthTx](ethTxPool, txGossipTargetResponseSize),
+			Handler:   ethTxGossipHandler,
 		},
 	}
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
 	if err != nil {
 		return err
 	}
-	vm.ethTxGossipClient = ethTxGossipClient
 
-	atomicTxGossipHandler := &p2p.ValidatorHandler{
+	atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, gossipHandlerConfig, vm.metrics)
+	if err != nil {
+		return err
+	}
+
+	atomicTxGossipHandler = &p2p.ValidatorHandler{
 		ValidatorSet: vm.validators,
 		Handler: &p2p.ThrottlerHandler{
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   gossip.NewHandler[*GossipAtomicTx](vm.mempool, txGossipTargetResponseSize),
+			Handler:   atomicTxGossipHandler,
 		},
 	}
+
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
 	if err != nil {
 		return err
 	}
-	vm.atomicTxGossipClient = atomicTxGossipClient
 
-	vm.ethTxGossiper = gossip.NewGossiper[GossipEthTx, *GossipEthTx](
+	ethTxGossiper, err := gossip.NewGossiper[GossipEthTx, *GossipEthTx](
 		txGossipConfig,
 		vm.ctx.Log,
 		ethTxPool,
-		vm.ethTxGossipClient,
+		ethTxGossipClient,
+		vm.metrics,
 	)
-	go vm.ethTxGossiper.Gossip(vm.backgroundCtx)
+	if err != nil {
+		return err
+	}
 
-	vm.atomicTxGossiper = gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
+	go ethTxGossiper.Gossip(vm.backgroundCtx)
+
+	atomicTxGossiper, err := gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		txGossipConfig,
 		vm.ctx.Log,
 		vm.mempool,
-		vm.atomicTxGossipClient,
+		atomicTxGossipClient,
+		vm.metrics,
 	)
-	go vm.atomicTxGossiper.Gossip(vm.backgroundCtx)
+	if err != nil {
+		return err
+	}
+
+	go atomicTxGossiper.Gossip(vm.backgroundCtx)
 
 	return nil
 }
