@@ -246,9 +246,8 @@ func init() {
 
 // VM implements the snowman.ChainVM interface
 type VM struct {
-	ctx           *snow.Context   // TODO rename to snowCtx
-	backgroundCtx context.Context // TODO rename to ctx
-	cancel        context.CancelFunc
+	ctx    *snow.Context
+	cancel context.CancelFunc
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
 	*chain.State
@@ -381,10 +380,6 @@ func (vm *VM) Initialize(
 	deprecateMsg := vm.config.Deprecate()
 
 	vm.ctx = chainCtx
-
-	ctx, cancel := context.WithCancel(context.TODO())
-	vm.backgroundCtx = ctx
-	vm.cancel = cancel
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -1001,6 +996,9 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 
 // initBlockBuilding starts goroutines to manage block building
 func (vm *VM) initBlockBuilding() error {
+	ctx, cancel := context.WithCancel(context.TODO())
+	vm.cancel = cancel
+
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
 	vm.gossiper = vm.createGossiper(gossipStats)
@@ -1014,7 +1012,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 	vm.shutdownWg.Add(1)
 	go func() {
-		ethTxPool.Subscribe(vm.backgroundCtx)
+		ethTxPool.Subscribe(ctx)
 		vm.shutdownWg.Done()
 	}()
 
@@ -1068,7 +1066,7 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 
-	go ethTxGossiper.Gossip(vm.backgroundCtx)
+	go ethTxGossiper.Gossip(ctx)
 
 	atomicTxGossiper, err := gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		atomicTxGossipConfig,
@@ -1081,7 +1079,7 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 
-	go atomicTxGossiper.Gossip(vm.backgroundCtx)
+	go atomicTxGossiper.Gossip(ctx)
 
 	return nil
 }
