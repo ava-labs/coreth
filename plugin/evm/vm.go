@@ -97,8 +97,6 @@ const (
 
 	// Prefixes for metrics gatherers
 	ethMetricsPrefix        = "eth"
-	sdkMetricsPrefix        = "sdk"
-	p2pMetricsPrefix        = "p2p"
 	chainStateMetricsPrefix = "chain_state"
 )
 
@@ -512,7 +510,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.sdkMetrics, p2pMetricsPrefix)
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -572,7 +570,7 @@ func (vm *VM) initializeMetrics() error {
 		if err := vm.multiGatherer.Register(ethMetricsPrefix, gatherer); err != nil {
 			return err
 		}
-		if err := vm.multiGatherer.Register(sdkMetricsPrefix, vm.sdkMetrics); err != nil {
+		if err := vm.multiGatherer.Register("sdk", vm.sdkMetrics); err != nil {
 			return err
 		}
 		// Register [multiGatherer] after registerers have been registered to it
