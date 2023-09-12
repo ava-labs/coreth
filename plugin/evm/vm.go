@@ -97,6 +97,8 @@ const (
 
 	// Prefixes for metrics gatherers
 	ethMetricsPrefix        = "eth"
+	sdkMetricsPrefix        = "sdk"
+	p2pMetricsPrefix        = "p2p"
 	chainStateMetricsPrefix = "chain_state"
 )
 
@@ -281,6 +283,7 @@ type VM struct {
 
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
+	sdkMetrics    *prometheus.Registry
 
 	bootstrapped bool
 	IsPlugin     bool
@@ -509,7 +512,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, prometheus.NewRegistry(), "p2p")
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.sdkMetrics, p2pMetricsPrefix)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -561,11 +564,15 @@ func (vm *VM) Initialize(
 }
 
 func (vm *VM) initializeMetrics() error {
+	vm.sdkMetrics = prometheus.NewRegistry()
 	vm.multiGatherer = avalanchegoMetrics.NewMultiGatherer()
 	// If metrics are enabled, register the default metrics regitry
 	if metrics.Enabled {
 		gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
 		if err := vm.multiGatherer.Register(ethMetricsPrefix, gatherer); err != nil {
+			return err
+		}
+		if err := vm.multiGatherer.Register(sdkMetricsPrefix, vm.sdkMetrics); err != nil {
 			return err
 		}
 		// Register [multiGatherer] after registerers have been registered to it
