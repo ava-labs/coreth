@@ -1066,7 +1066,11 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 
-	go ethTxGossiper.Gossip(ctx)
+	vm.shutdownWg.Add(1)
+	go func() {
+		ethTxGossiper.Gossip(ctx)
+		vm.shutdownWg.Done()
+	}()
 
 	atomicTxGossiper, err := gossip.NewGossiper[GossipAtomicTx, *GossipAtomicTx](
 		atomicTxGossipConfig,
@@ -1079,7 +1083,11 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 
-	go atomicTxGossiper.Gossip(ctx)
+	vm.shutdownWg.Add(1)
+	go func() {
+		atomicTxGossiper.Gossip(ctx)
+		vm.shutdownWg.Done()
+	}()
 
 	return nil
 }
