@@ -246,7 +246,8 @@ func init() {
 
 // VM implements the snowman.ChainVM interface
 type VM struct {
-	ctx    *snow.Context
+	ctx *snow.Context
+	// [cancel] may be nil until [snow.NormalOp] starts
 	cancel context.CancelFunc
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
