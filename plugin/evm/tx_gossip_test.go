@@ -132,7 +132,7 @@ func TestEthTxGossip(t *testing.T) {
 	require.Nil(errs[0])
 
 	// wait so we aren't throttled by the vm
-	time.Sleep(throttlingPeriod / throttlingLimit)
+	time.Sleep(5 * time.Second)
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
@@ -232,7 +232,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	<-issuer
 
 	// wait so we aren't throttled by the vm
-	time.Sleep(throttlingPeriod / throttlingLimit)
+	time.Sleep(5 * time.Second)
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
