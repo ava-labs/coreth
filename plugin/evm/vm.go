@@ -1119,7 +1119,9 @@ func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
 		return nil
 	}
-	vm.cancel()
+	if vm.cancel != nil {
+		vm.cancel()
+	}
 	vm.Network.Shutdown()
 	if err := vm.StateSyncClient.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)
