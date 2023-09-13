@@ -378,19 +378,25 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.St
 			// denomination before export.
 			amount := new(big.Int).Mul(
 				new(big.Int).SetUint64(from.Amount), x2cRate)
-			if state.GetBalance(from.Address).Cmp(amount) < 0 {
+			fromAddressBalance := state.GetBalance(from.Address)
+			if fromAddressBalance.Cmp(amount) < 0 {
+				log.Debug("[EVMStateTransfer] dropped atomic tx due to insufficient funds", "fromAddress", from.Address, "amount", amount, "fromAddressBalance", fromAddressBalance)
 				return errInsufficientFunds
 			}
 			state.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("crosschain", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
-			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
+			fromAddressMultiBalance := state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID))
+			if fromAddressMultiBalance.Cmp(amount) < 0 {
+				log.Debug("[EVMStateTransfer] dropped atomic tx due to insufficient funds", "fromAddress", from.Address, "amount", amount, "fromAddressMultiBalance", fromAddressMultiBalance)
 				return errInsufficientFunds
 			}
 			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
-		if state.GetNonce(from.Address) != from.Nonce {
+		fromAddressNonce := state.GetNonce(from.Address)
+		if fromAddressNonce != from.Nonce {
+			log.Debug("[EVMStateTransfer] dropped atomic tx due incorrect nonce", "fromAddress", from.Address, "nonce", from.Nonce, "fromAddressNonce", fromAddressNonce)
 			return errInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
@@ -398,5 +404,6 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.St
 	for addr, nonce := range addrs {
 		state.SetNonce(addr, nonce+1)
 	}
+	log.Debug("[EVMStateTransfer] successfully executed state transfer")
 	return nil
 }

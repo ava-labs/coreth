@@ -365,19 +365,23 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 	// access the atomic trie at the parent block
 	parentRoot, err := a.getAtomicRootAt(parentHash)
 	if err != nil {
+		log.Debug("[InsertTxs] failed to get atomic root", "err", err.Error())
 		return common.Hash{}, err
 	}
 	tr, err := a.atomicTrie.OpenTrie(parentRoot)
 	if err != nil {
+		log.Debug("[InsertTxs] failed to open trie", "err", err.Error())
 		return common.Hash{}, err
 	}
 
 	// update the atomic trie
 	atomicOps, err := mergeAtomicOps(txs)
 	if err != nil {
+		log.Debug("[InsertTxs] failed to merge atomic ops", "err", err.Error())
 		return common.Hash{}, err
 	}
 	if err := a.atomicTrie.UpdateTrie(tr, blockHeight, atomicOps); err != nil {
+		log.Debug("[InsertTxs] failed update trie", "err", err.Error())
 		return common.Hash{}, err
 	}
 
@@ -389,6 +393,7 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 	// get the new root and pin the atomic trie changes in memory.
 	root, nodes := tr.Commit(false)
 	if err := a.atomicTrie.InsertTrie(nodes, root); err != nil {
+		log.Debug("[InsertTxs] failed insert trie", "err", err.Error())
 		return common.Hash{}, err
 	}
 	// track this block so further blocks can be inserted on top
@@ -401,6 +406,8 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 		atomicOps:   atomicOps,
 		atomicRoot:  root,
 	}
+
+	log.Debug("[InsertTxs] successfully applied txs to atomic state")
 	return root, nil
 }
 
