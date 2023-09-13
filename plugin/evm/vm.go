@@ -959,7 +959,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 
 	// If there are no transactions, we can return early.
 	if len(txs) == 0 {
-		log.Debug("[onExtraStateChange] no transactions", "error", err.Error())
+		log.Debug("[onExtraStateChange] no transactions")
 		return nil, nil, nil
 	}
 
