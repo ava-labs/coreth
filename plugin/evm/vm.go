@@ -1591,7 +1591,7 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
-			log.Debug("[verifyTxs] conflcting inputs", "inputs", inputs, "txInputs", txInputs)
+			log.Debug("[verifyTxs] conflicting inputs", "inputs", inputs, "txInputs", txInputs)
 			return errConflictingAtomicInputs
 		}
 		inputs.Union(txInputs)
