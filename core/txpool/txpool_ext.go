@@ -22,6 +22,19 @@ func (pool *TxPool) PendingSize() int {
 	return count
 }
 
+// IteratePending iterates over [pool.pending] until [f] returns false.
+// The caller must not modify [tx].
+func (pool *TxPool) IteratePending(f func(tx *types.Transaction) bool) {
+	pending := pool.Pending(false)
+	for _, list := range pending {
+		for _, tx := range list {
+			if !f(tx) {
+				return
+			}
+		}
+	}
+}
+
 // SetMinFee updates the minimum fee required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (p *TxPool) SetMinFee(tip *big.Int) {
