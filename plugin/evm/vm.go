@@ -775,7 +775,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		rules := vm.chainConfig.AvalancheRules(header.Number, header.Time)
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
-			log.Debug("discarding tx from mempool on failed verification", "error", err.Error(), "txID", tx.ID())
+			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "error", err.Error())
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
 			continue
@@ -785,7 +785,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		if err != nil {
 			// Discard the transaction from the mempool and error if the transaction
 			// cannot be marshalled. This should never happen.
-			log.Debug("discarding tx due to unmarshal err", "error", err.Error(), "txID", tx.ID())
+			log.Debug("discarding tx due to unmarshal err", "txID", tx.ID(), "error", err.Error())
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
@@ -868,7 +868,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
 			// revert to a snapshot if we discard the transaction prior to this point.
-			log.Debug("discarding tx from mempool due to failed verification", "error", err.Error(), "txID", tx.ID())
+			log.Debug("discarding tx from mempool due to failed verification", "txID", tx.ID(), "error", err.Error())
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
 			continue
