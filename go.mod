@@ -1,10 +1,10 @@
 module github.com/ava-labs/coreth
 
-go 1.19
+go 1.20
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.10.10-rc.0.0.20230831010042-f24df903ecc2
+	github.com/ava-labs/avalanchego v1.10.10-rc.1.0.20230913011517-f71418f73c64
 	github.com/cespare/cp v0.1.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/davecgh/go-spew v1.1.1
@@ -38,12 +38,14 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/urfave/cli/v2 v2.24.1
 	go.uber.org/goleak v1.2.1
+	go.uber.org/mock v0.2.0
 	golang.org/x/crypto v0.9.0
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.9.0
 	golang.org/x/text v0.9.0
 	golang.org/x/time v0.3.0
+	google.golang.org/protobuf v1.30.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
@@ -127,7 +129,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.11.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/mock v0.2.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
@@ -135,7 +136,6 @@ require (
 	gonum.org/v1/gonum v0.11.0 // indirect
 	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
 	google.golang.org/grpc v1.55.0 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
