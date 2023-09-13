@@ -269,9 +269,14 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*types.Transacti
 // SubscribeNewTxsEvent registers a subscription of NewTxsEvent and starts sending
 // events to the given channel.
 func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	subs := make([]event.Subscription, len(p.subpools))
-	for i, subpool := range p.subpools {
-		subs[i] = subpool.SubscribeTransactions(ch)
+	subs := make([]event.Subscription, 0, len(p.subpools))
+	for _, subpool := range p.subpools {
+		sub := subpool.SubscribeTransactions(ch)
+		if sub != nil {
+			// Note: This avoids a race condition in shutting down the pool
+			// where the subpool is closed before we can subscribe to it.
+			subs = append(subs, sub)
+		}
 	}
 	return p.subs.Track(event.JoinSubscriptions(subs...))
 }
