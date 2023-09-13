@@ -378,22 +378,19 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.St
 			// denomination before export.
 			amount := new(big.Int).Mul(
 				new(big.Int).SetUint64(from.Amount), x2cRate)
-			fromAddressBalance := state.GetBalance(from.Address)
-			if fromAddressBalance.Cmp(amount) < 0 {
+			if state.GetBalance(from.Address).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
 			state.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("crosschain", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
-			fromAddressMultiBalance := state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID))
-			if fromAddressMultiBalance.Cmp(amount) < 0 {
+			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
 			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
-		fromAddressNonce := state.GetNonce(from.Address)
-		if fromAddressNonce != from.Nonce {
+		if state.GetNonce(from.Address) != from.Nonce {
 			return errInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce

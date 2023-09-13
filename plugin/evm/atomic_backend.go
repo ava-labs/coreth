@@ -401,7 +401,6 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 		atomicOps:   atomicOps,
 		atomicRoot:  root,
 	}
-
 	return root, nil
 }
 

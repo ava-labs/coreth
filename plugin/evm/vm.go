@@ -803,6 +803,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// this could happen due to the async logic of geth tx pool
 		return nil, nil, nil, errEmptyBlock
 	}
+
 	return nil, nil, nil, nil
 }
 
@@ -969,12 +970,10 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		if rules.IsApricotPhase5 {
 			// Ensure that [tx] does not push [block] above the atomic gas limit.
 			if batchGasUsed.Cmp(params.AtomicGasLimit) == 1 {
-				log.Debug("[onExtraStateChange] failed, block exceeds atomic gas limit")
 				return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), params.AtomicGasLimit)
 			}
 		}
 	}
-	log.Debug("[onExtraStateChange] successfully executed state change for atomic txs ")
 	return batchContribution, batchGasUsed, nil
 }
 
@@ -1152,7 +1151,6 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	block, err := vm.miner.GenerateBlock()
 	vm.builder.handleGenerateBlock()
 	if err != nil {
-		log.Debug("[buildBlock] canceling txs, failed to build block", "err", err.Error())
 		vm.mempool.CancelCurrentTxs()
 		return nil, err
 	}
@@ -1160,7 +1158,7 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	// Note: the status of block is set by ChainState
 	blk, err := vm.newBlock(block)
 	if err != nil {
-		log.Debug("[buildBlock] discarding txs, failed to make new block", "err", err.Error())
+		log.Debug("discarding txs due to error making new block", "err", err.Error())
 		vm.mempool.DiscardCurrentTxs()
 		return nil, err
 	}
@@ -1182,7 +1180,6 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	// again from the consensus engine with writes enabled.
 	if err := blk.verify(false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
-		log.Debug("[buildBlock] canceling txs, verify failed", "err", err.Error())
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
 
