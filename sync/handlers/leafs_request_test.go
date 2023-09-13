@@ -489,7 +489,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					}
 					// modify one entry of 1 in 4 segments
 					if i%(segmentLen*4) == 0 {
-						var acc snapshot.Account
+						var acc types.SlimAccount
 						if err := rlp.DecodeBytes(it.Account(), &acc); err != nil {
 							t.Fatalf("could not parse snapshot account: %v", err)
 						}
