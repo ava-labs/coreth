@@ -775,8 +775,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		rules := vm.chainConfig.AvalancheRules(header.Number, header.Time)
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
+			log.Debug("discarding tx from mempool on failed verification", "error", err.Error(), "tx", tx.ID())
 			vm.mempool.DiscardCurrentTx(tx.ID())
-			log.Debug("[preBatchOnFinalizeAndAssemble] discarding tx due verifyTx", "error", err.Error())
 			state.RevertToSnapshot(snapshot)
 			continue
 		}
@@ -785,28 +785,24 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		if err != nil {
 			// Discard the transaction from the mempool and error if the transaction
 			// cannot be marshalled. This should never happen.
+			log.Debug("discarding tx due to unmarshal err", "error", err.Error(), "tx", tx.ID())
 			vm.mempool.DiscardCurrentTx(tx.ID())
-			log.Debug("[preBatchOnFinalizeAndAssemble] discarding tx due to unmarshal err", "error", err.Error())
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
 		if rules.IsApricotPhase4 {
 			contribution, gasUsed, err = tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
 			if err != nil {
-				log.Debug("[preBatchOnFinalizeAndAssemble] failed to computed")
 				return nil, nil, nil, err
 			}
 		}
-		log.Debug("[preBatchOnFinalizeAndAssemble] successful finalize for tx", "tx", tx.ID())
 		return atomicTxBytes, contribution, gasUsed, nil
 	}
 
 	if len(txs) == 0 {
 		// this could happen due to the async logic of geth tx pool
-		log.Debug("[preBatchOnFinalizeAndAssemble] len tx 0 empty mempool empty block")
 		return nil, nil, nil, errEmptyBlock
 	}
-	log.Debug("[preBatchOnFinalizeAndAssemble] no atomic tx, > 0 regular tx")
 	return nil, nil, nil, nil
 }
 
@@ -830,7 +826,6 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		// Ensure that adding [tx] to the block will not exceed the block size soft limit.
 		txSize := len(tx.SignedBytes())
 		if size+txSize > targetAtomicTxsSize {
-			log.Debug("[postBatchOnFinalizeAndAssemble] canceling tx, adding tx exceeds block size soft limit", "tx", tx.ID(), "targetAtomicTxsSize", targetAtomicTxsSize, "currentBlockSize", size+txSize)
 			vm.mempool.CancelCurrentTx(tx.ID())
 			break
 		}
@@ -845,13 +840,11 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		// ApricotPhase5.
 		txContribution, txGasUsed, err = tx.BlockFeeContribution(true, vm.ctx.AVAXAssetID, header.BaseFee)
 		if err != nil {
-			log.Debug("[postBatchOnFinalizeAndAssemble] err computing gas contributed to block", "tx", tx.ID())
 			return nil, nil, nil, err
 		}
 		// ensure [gasUsed] + [batchGasUsed] doesnt exceed the [atomicGasLimit]
 		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); totalGasUsed.Cmp(params.AtomicGasLimit) > 0 {
 			// Send [tx] back to the mempool's tx heap.
-			log.Debug("[postBatchOnFinalizeAndAssemble] canceling tx, exceeds atomicGasLimit", "tx", tx.ID(), "totalGasUsed", totalGasUsed, "params.AtomicGasLimit", params.AtomicGasLimit)
 			vm.mempool.CancelCurrentTx(tx.ID())
 			break
 		}
@@ -863,7 +856,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			// valid, but we discard it early here based on the assumption that the proposed
 			// block will most likely be accepted.
 			// Discard the transaction from the mempool on failed verification.
-			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, overlapping input utxos", "tx", tx.ID())
+			log.Debug("discarding tx due to overlapping input utxos", "tx", tx.ID())
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			continue
 		}
@@ -874,7 +867,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
 			// revert to a snapshot if we discard the transaction prior to this point.
-			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, verifyTx failed", "tx", tx.ID(), "state", state, "baseFee", header.BaseFee)
+			log.Debug("discarding tx from mempool on failed verification", "error", err.Error(), "tx", tx.ID())
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
 			continue
@@ -895,11 +888,10 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		if err != nil {
 			// If we fail to marshal the batch of atomic transactions for any reason,
 			// discard the entire set of current transactions.
-			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, unmarshalling failed", "error", err.Error())
+			log.Debug("discarding tx due to error on marshaling atomic transactions", "error", err.Error())
 			vm.mempool.DiscardCurrentTxs()
 			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 		}
-		log.Debug("[postBatchOnFinalizeAndAssemble] successful finalize")
 		return atomicTxBytes, batchContribution, batchGasUsed, nil
 	}
 
@@ -907,13 +899,11 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 	// then the block is empty and should be considered invalid.
 	if len(txs) == 0 {
 		// this could happen due to the async logic of geth tx pool
-		log.Debug("[postBatchOnFinalizeAndAssemble] empty block empty mempool")
 		return nil, nil, nil, errEmptyBlock
 	}
 
 	// If there are no atomic transactions, but there is a non-zero number of regular transactions, then
 	// we return a nil slice with no contribution from the atomic transactions and a nil error.
-	log.Debug("[postBatchOnFinalizeAndAssemble] no atomic tx, > 0 regular tx")
 	return nil, nil, nil, nil
 }
 
@@ -934,7 +924,6 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 
 	txs, err := ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, vm.codec)
 	if err != nil {
-		log.Debug("[onExtraStateChange] failed to extract atomic txs", "error", err.Error())
 		return nil, nil, err
 	}
 
@@ -945,34 +934,29 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
 			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules); err != nil {
-				log.Debug("[onExtraStateChange] failed to verify transaction", "error", err.Error())
 				return nil, nil, err
 			}
 		}
 		// Update the atomic backend with [txs] from this block.
 		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
 		if err != nil {
-			log.Debug("[onExtraStateChange] failed to insert transactions", "error", err.Error())
 			return nil, nil, err
 		}
 	}
 
 	// If there are no transactions, we can return early.
 	if len(txs) == 0 {
-		log.Debug("[onExtraStateChange] no transactions")
 		return nil, nil, nil
 	}
 
 	for _, tx := range txs {
 		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
-			log.Debug("[onExtraStateChange] evm state transfer failed", "error", err.Error())
 			return nil, nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
 		if rules.IsApricotPhase4 {
 			contribution, gasUsed, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
 			if err != nil {
-				log.Debug("[onExtraStateChange] block fee contibution failed", "error", err.Error())
 				return nil, nil, err
 			}
 
@@ -1556,7 +1540,6 @@ func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *
 func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
-		log.Debug("[verifyTxs] parent is not in db")
 		return errRejectedParent
 	}
 
@@ -1567,16 +1550,13 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 	// into the canonical chain because the parent will be missing.
 	ancestorInf, err := vm.GetBlockInternal(context.TODO(), ancestorID)
 	if err != nil {
-		log.Debug("[verifyTxs] parent failed verification", "error", err.Error())
 		return errRejectedParent
 	}
 	if blkStatus := ancestorInf.Status(); blkStatus == choices.Unknown || blkStatus == choices.Rejected {
-		log.Debug("[verifyTxs] parent status rejected or unknown", "block status", blkStatus)
 		return errRejectedParent
 	}
 	ancestor, ok := ancestorInf.(*Block)
 	if !ok {
-		log.Debug("[verifyTxs] unexpected parent block", "ancestor type", ancestorInf, "id", ancestor.ID())
 		return fmt.Errorf("expected parent block %s, to be *Block but is %T", ancestor.ID(), ancestorInf)
 	}
 
@@ -1586,12 +1566,10 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
 		if err := utx.SemanticVerify(vm, atomicTx, ancestor, baseFee, rules); err != nil {
-			log.Debug("[verifyTxs] invalid tx due to semantic verify", "error", err.Error(), "tx", atomicTx, "baseFee", baseFee, "rules", rules)
 			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
-			log.Debug("[verifyTxs] conflicting inputs", "inputs", inputs, "txInputs", txInputs)
 			return errConflictingAtomicInputs
 		}
 		inputs.Union(txInputs)
