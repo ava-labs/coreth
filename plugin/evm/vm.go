@@ -776,7 +776,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			vm.mempool.DiscardCurrentTx(tx.ID())
-			log.Debug("[preBatchOnFinalizeAndAssemble] discarding tx due verifyTx", "error", err.Error())
+			log.Debug("[preBatchOnFinalizeAndAssemble] discarding tx due verifyTx", "err", err)
 			state.RevertToSnapshot(snapshot)
 			continue
 		}
@@ -786,7 +786,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 			// Discard the transaction from the mempool and error if the transaction
 			// cannot be marshalled. This should never happen.
 			vm.mempool.DiscardCurrentTx(tx.ID())
-			log.Debug("[preBatchOnFinalizeAndAssemble] discarding tx due to unmarshal err", "error", err.Error())
+			log.Debug("[preBatchOnFinalizeAndAssemble] discarding tx due to unmarshal err", "err", err)
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
@@ -874,7 +874,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
 			// revert to a snapshot if we discard the transaction prior to this point.
-			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, verifyTx failed", "tx", tx.ID(), "state", state, "baseFee", header.BaseFee)
+			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, verifyTx failed", "err", err, "tx", tx.ID(), "state", state, "baseFee", header.BaseFee)
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
 			continue
@@ -895,7 +895,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		if err != nil {
 			// If we fail to marshal the batch of atomic transactions for any reason,
 			// discard the entire set of current transactions.
-			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, unmarshalling failed", "error", err.Error())
+			log.Debug("[postBatchOnFinalizeAndAssemble] discarding tx, marshalling failed", "err", err)
 			vm.mempool.DiscardCurrentTxs()
 			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 		}
@@ -1168,7 +1168,7 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	block, err := vm.miner.GenerateBlock()
 	vm.builder.handleGenerateBlock()
 	if err != nil {
-		log.Debug("[buildBlock] canceling txs, failed to build block", "err", err.Error())
+		log.Debug("[buildBlock] canceling txs, failed to build block", "err", err)
 		vm.mempool.CancelCurrentTxs()
 		return nil, err
 	}
@@ -1176,7 +1176,7 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	// Note: the status of block is set by ChainState
 	blk, err := vm.newBlock(block)
 	if err != nil {
-		log.Debug("[buildBlock] discarding txs, failed to make new block", "err", err.Error())
+		log.Debug("[buildBlock] discarding txs, failed to make new block", "err", err)
 		vm.mempool.DiscardCurrentTxs()
 		return nil, err
 	}
