@@ -395,6 +395,7 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.St
 			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
 		fromAddressNonce := state.GetNonce(from.Address)
+		log.Debug("[EVMStateTransfer] getNonceInfo", "fromAddress", from.Address, "inputUtxo", from, "fromAddressNonce", fromAddressNonce, "inpututxononce", from.Nonce, "state", state)
 		if fromAddressNonce != from.Nonce {
 			log.Debug("[EVMStateTransfer] dropped atomic tx due incorrect nonce", "fromAddress", from.Address, "nonce", from.Nonce, "fromAddressNonce", fromAddressNonce)
 			return errInvalidNonce
@@ -402,6 +403,7 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.St
 		addrs[from.Address] = from.Nonce
 	}
 	for addr, nonce := range addrs {
+		log.Debug("[EVMStateTransfer] updating state nonces", "addr", addr, "nonce+1", nonce+1)
 		state.SetNonce(addr, nonce+1)
 	}
 	log.Debug("[EVMStateTransfer] successfully executed state transfer")

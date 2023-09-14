@@ -867,7 +867,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			vm.mempool.DiscardCurrentTx(tx.ID())
 			continue
 		}
-
+		log.Debug("[postBatchOnFinalizeAndAssemble] state prior to snapshots", "state", state)
 		snapshot := state.Snapshot()
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool and reset the state to [snapshot]
@@ -1527,7 +1527,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
 		}
 	}
-
+	log.Debug("[verifyTxAtTip] state", "state", preferredState, "preferredBlock(current)", preferredBlock.Number)
 	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
 }
 
