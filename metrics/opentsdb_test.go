@@ -45,7 +45,8 @@ func TestExampleOpenTSB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := w.String(), string(wantB); have != want {
+	want := strings.ReplaceAll(string(wantB), "\r\n", "\n")
+	if have := w.String(); have != want {
 		t.Errorf("\nhave:\n%v\nwant:\n%v\n", have, want)
 	}
 }
