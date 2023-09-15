@@ -33,14 +33,14 @@ type GossipMessage interface {
 	fmt.Stringer
 
 	// Handle this gossip message with the gossip handler.
-	Handle(handler GossipHandler, nodeID ids.NodeID) error
+	Handle(handler GossipHandler, nodeID ids.GenericNodeID) error
 }
 
 type AtomicTxGossip struct {
 	Tx []byte `serialize:"true"`
 }
 
-func (msg AtomicTxGossip) Handle(handler GossipHandler, nodeID ids.NodeID) error {
+func (msg AtomicTxGossip) Handle(handler GossipHandler, nodeID ids.GenericNodeID) error {
 	return handler.HandleAtomicTx(nodeID, msg)
 }
 
@@ -52,7 +52,7 @@ type EthTxsGossip struct {
 	Txs []byte `serialize:"true"`
 }
 
-func (msg EthTxsGossip) Handle(handler GossipHandler, nodeID ids.NodeID) error {
+func (msg EthTxsGossip) Handle(handler GossipHandler, nodeID ids.GenericNodeID) error {
 	return handler.HandleEthTxs(nodeID, msg)
 }
 

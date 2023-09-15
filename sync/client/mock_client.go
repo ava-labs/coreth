@@ -57,7 +57,7 @@ func NewMockClient(
 }
 
 func (ml *MockClient) GetLeafs(ctx context.Context, request message.LeafsRequest) (message.LeafsResponse, error) {
-	response, err := ml.leafsHandler.OnLeafsRequest(ctx, ids.GenerateTestNodeID(), 1, request)
+	response, err := ml.leafsHandler.OnLeafsRequest(ctx, ids.GenerateTestGenericNodeID(), 1, request)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}
@@ -84,7 +84,7 @@ func (ml *MockClient) GetCode(ctx context.Context, hashes []common.Hash) ([][]by
 		panic("no code handler for mock client")
 	}
 	request := message.CodeRequest{Hashes: hashes}
-	response, err := ml.codesHandler.OnCodeRequest(ctx, ids.GenerateTestNodeID(), 1, request)
+	response, err := ml.codesHandler.OnCodeRequest(ctx, ids.GenerateTestGenericNodeID(), 1, request)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (ml *MockClient) GetBlocks(ctx context.Context, blockHash common.Hash, heig
 		Height:  height,
 		Parents: numParents,
 	}
-	response, err := ml.blocksHandler.OnBlockRequest(ctx, ids.GenerateTestNodeID(), 1, request)
+	response, err := ml.blocksHandler.OnBlockRequest(ctx, ids.GenerateTestGenericNodeID(), 1, request)
 	if err != nil {
 		return nil, err
 	}

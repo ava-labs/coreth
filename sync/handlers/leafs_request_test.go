@@ -690,7 +690,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				snapshotProvider.Snapshot = nil // reset the snapshot to nil
 			})
 
-			response, err := leafsHandler.OnLeafsRequest(ctx, ids.GenerateTestNodeID(), 1, request)
+			response, err := leafsHandler.OnLeafsRequest(ctx, ids.GenerateTestGenericNodeID(), 1, request)
 			test.assertResponseFn(t, request, response, err)
 		})
 	}

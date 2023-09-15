@@ -91,7 +91,7 @@ func TestCodeRequestHandler(t *testing.T) {
 
 		t.Run(name, func(t *testing.T) {
 			request, expectedResponse := test.setup()
-			responseBytes, err := codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+			responseBytes, err := codeRequestHandler.OnCodeRequest(context.Background(), ids.GenerateTestGenericNodeID(), 1, request)
 			assert.NoError(t, err)
 
 			// If the expected resposne is empty, assert that the handler returns an empty response and return early.

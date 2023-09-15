@@ -25,21 +25,21 @@ type mockNetwork struct {
 	response       [][]byte
 	callback       func() // callback is called prior to processing each mock call
 	requestErr     []error
-	nodesRequested []ids.NodeID
+	nodesRequested []ids.GenericNodeID
 }
 
-func (t *mockNetwork) SendAppRequestAny(minVersion *version.Application, request []byte) ([]byte, ids.NodeID, error) {
+func (t *mockNetwork) SendAppRequestAny(minVersion *version.Application, request []byte) ([]byte, ids.GenericNodeID, error) {
 	if len(t.response) == 0 {
-		return nil, ids.EmptyNodeID, errors.New("no mocked response to return in mockNetwork")
+		return nil, ids.EmptyGenericNodeID, errors.New("no mocked response to return in mockNetwork")
 	}
 
 	t.requestedVersion = minVersion
 
 	response, err := t.processMock(request)
-	return response, ids.EmptyNodeID, err
+	return response, ids.EmptyGenericNodeID, err
 }
 
-func (t *mockNetwork) SendAppRequest(nodeID ids.NodeID, request []byte) ([]byte, error) {
+func (t *mockNetwork) SendAppRequest(nodeID ids.GenericNodeID, request []byte) ([]byte, error) {
 	if len(t.response) == 0 {
 		return nil, errors.New("no mocked response to return in mockNetwork")
 	}
@@ -96,4 +96,4 @@ func (t *mockNetwork) mockResponses(callback func(), responses ...[]byte) {
 	t.numCalls = 0
 }
 
-func (t *mockNetwork) TrackBandwidth(ids.NodeID, float64) {}
+func (t *mockNetwork) TrackBandwidth(ids.GenericNodeID, float64) {}
