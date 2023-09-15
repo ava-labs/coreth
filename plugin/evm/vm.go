@@ -1074,6 +1074,11 @@ func (vm *VM) initBlockBuilding() error {
 	if err != nil {
 		return err
 	}
+	ethTxGossiper = gossip.ValidatorGossiper{
+		Gossiper:   ethTxGossiper,
+		NodeID:     vm.ctx.NodeID,
+		Validators: vm.validators,
+	}
 
 	vm.shutdownWg.Add(1)
 	go func() {
@@ -1090,6 +1095,11 @@ func (vm *VM) initBlockBuilding() error {
 	)
 	if err != nil {
 		return err
+	}
+	atomicTxGossiper = gossip.ValidatorGossiper{
+		Gossiper:   atomicTxGossiper,
+		NodeID:     vm.ctx.NodeID,
+		Validators: vm.validators,
 	}
 
 	vm.shutdownWg.Add(1)
