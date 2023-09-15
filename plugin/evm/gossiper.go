@@ -420,7 +420,7 @@ func NewGossipHandler(vm *VM, stats GossipReceivedStats) *GossipHandler {
 	}
 }
 
-func (h *GossipHandler) HandleAtomicTx(nodeID ids.GenericNodeID, msg message.AtomicTxGossip) error {
+func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGossip) error {
 	log.Trace(
 		"AppGossip called with AtomicTxGossip",
 		"peerID", nodeID,
@@ -476,7 +476,7 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.GenericNodeID, msg message.Ato
 	return nil
 }
 
-func (h *GossipHandler) HandleEthTxs(nodeID ids.GenericNodeID, msg message.EthTxsGossip) error {
+func (h *GossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip) error {
 	log.Trace(
 		"AppGossip called with EthTxsGossip",
 		"peerID", nodeID,

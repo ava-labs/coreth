@@ -19,18 +19,18 @@ var (
 
 // GossipHandler handles incoming gossip messages
 type GossipHandler interface {
-	HandleAtomicTx(nodeID ids.GenericNodeID, msg AtomicTxGossip) error
-	HandleEthTxs(nodeID ids.GenericNodeID, msg EthTxsGossip) error
+	HandleAtomicTx(nodeID ids.NodeID, msg AtomicTxGossip) error
+	HandleEthTxs(nodeID ids.NodeID, msg EthTxsGossip) error
 }
 
 type NoopMempoolGossipHandler struct{}
 
-func (NoopMempoolGossipHandler) HandleAtomicTx(nodeID ids.GenericNodeID, msg AtomicTxGossip) error {
+func (NoopMempoolGossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg AtomicTxGossip) error {
 	log.Debug("dropping unexpected AtomicTxGossip message", "peerID", nodeID)
 	return nil
 }
 
-func (NoopMempoolGossipHandler) HandleEthTxs(nodeID ids.GenericNodeID, msg EthTxsGossip) error {
+func (NoopMempoolGossipHandler) HandleEthTxs(nodeID ids.NodeID, msg EthTxsGossip) error {
 	log.Debug("dropping unexpected EthTxsGossip message", "peerID", nodeID)
 	return nil
 }
@@ -41,10 +41,10 @@ func (NoopMempoolGossipHandler) HandleEthTxs(nodeID ids.GenericNodeID, msg EthTx
 // on this struct.
 // Also see GossipHandler for implementation style.
 type RequestHandler interface {
-	HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
-	HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
-	HandleBlockRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, request BlockRequest) ([]byte, error)
-	HandleCodeRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error)
+	HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
+	HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error)
+	HandleBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request BlockRequest) ([]byte, error)
+	HandleCodeRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error)
 }
 
 // ResponseHandler handles response for a sent request
@@ -58,19 +58,19 @@ type ResponseHandler interface {
 
 type NoopRequestHandler struct{}
 
-func (NoopRequestHandler) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
+func (NoopRequestHandler) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
 	return nil, nil
 }
 
-func (NoopRequestHandler) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
+func (NoopRequestHandler) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest LeafsRequest) ([]byte, error) {
 	return nil, nil
 }
 
-func (NoopRequestHandler) HandleBlockRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, request BlockRequest) ([]byte, error) {
+func (NoopRequestHandler) HandleBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, request BlockRequest) ([]byte, error) {
 	return nil, nil
 }
 
-func (NoopRequestHandler) HandleCodeRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error) {
+func (NoopRequestHandler) HandleCodeRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, codeRequest CodeRequest) ([]byte, error) {
 	return nil, nil
 }
 

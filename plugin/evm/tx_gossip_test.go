@@ -83,14 +83,14 @@ func TestEthTxGossip(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 
-	requestingNodeID := ids.GenerateTestGenericNodeID()
-	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.GenericNodeID], requestID uint32, appRequestBytes []byte) {
+	requestingNodeID := ids.GenerateTestNodeID()
+	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, appRequestBytes []byte) {
 		go func() {
 			require.NoError(vm.AppRequest(ctx, requestingNodeID, requestID, time.Time{}, appRequestBytes))
 		}()
 	}).AnyTimes()
 
-	sender.SendAppResponseF = func(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, appResponseBytes []byte) error {
+	sender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, appResponseBytes []byte) error {
 		go func() {
 			require.NoError(router.AppResponse(ctx, nodeID, requestID, appResponseBytes))
 		}()
@@ -103,13 +103,13 @@ func TestEthTxGossip(t *testing.T) {
 	mockValidatorSet.GetCurrentHeightF = func(context.Context) (uint64, error) {
 		return 0, nil
 	}
-	mockValidatorSet.GetValidatorSetF = func(context.Context, uint64, ids.ID) (map[ids.GenericNodeID]*validators.GetValidatorOutput, error) {
-		return map[ids.GenericNodeID]*validators.GetValidatorOutput{requestingNodeID: nil}, nil
+	mockValidatorSet.GetValidatorSetF = func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		return map[ids.NodeID]*validators.GetValidatorOutput{requestingNodeID: nil}, nil
 	}
 
 	// Ask the VM for any new transactions. We should get nothing at first.
 	wg.Add(1)
-	onResponse := func(_ context.Context, nodeID ids.GenericNodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -117,7 +117,7 @@ func TestEthTxGossip(t *testing.T) {
 		require.Empty(response.Gossip)
 		wg.Done()
 	}
-	require.NoError(client.AppRequest(context.Background(), set.Set[ids.GenericNodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
+	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
 	wg.Wait()
 
 	// Issue a tx to the VM
@@ -136,7 +136,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
-	onResponse = func(_ context.Context, nodeID ids.GenericNodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -149,7 +149,7 @@ func TestEthTxGossip(t *testing.T) {
 
 		wg.Done()
 	}
-	require.NoError(client.AppRequest(context.Background(), set.Set[ids.GenericNodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
+	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
 	wg.Wait()
 }
 
@@ -186,15 +186,15 @@ func TestAtomicTxGossip(t *testing.T) {
 	requestBytes, err := proto.Marshal(request)
 	require.NoError(err)
 
-	requestingNodeID := ids.GenerateTestGenericNodeID()
+	requestingNodeID := ids.GenerateTestNodeID()
 	wg := &sync.WaitGroup{}
-	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.GenericNodeID], requestID uint32, appRequestBytes []byte) {
+	peerSender.EXPECT().SendAppRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, appRequestBytes []byte) {
 		go func() {
 			require.NoError(vm.AppRequest(ctx, requestingNodeID, requestID, time.Time{}, appRequestBytes))
 		}()
 	}).AnyTimes()
 
-	sender.SendAppResponseF = func(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, appResponseBytes []byte) error {
+	sender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, appResponseBytes []byte) error {
 		go func() {
 			require.NoError(router.AppResponse(ctx, nodeID, requestID, appResponseBytes))
 		}()
@@ -207,13 +207,13 @@ func TestAtomicTxGossip(t *testing.T) {
 	mockValidatorSet.GetCurrentHeightF = func(context.Context) (uint64, error) {
 		return 0, nil
 	}
-	mockValidatorSet.GetValidatorSetF = func(context.Context, uint64, ids.ID) (map[ids.GenericNodeID]*validators.GetValidatorOutput, error) {
-		return map[ids.GenericNodeID]*validators.GetValidatorOutput{requestingNodeID: nil}, nil
+	mockValidatorSet.GetValidatorSetF = func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		return map[ids.NodeID]*validators.GetValidatorOutput{requestingNodeID: nil}, nil
 	}
 
 	// Ask the VM for any new transactions. We should get nothing at first.
 	wg.Add(1)
-	onResponse := func(_ context.Context, nodeID ids.GenericNodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -221,7 +221,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		require.Empty(response.Gossip)
 		wg.Done()
 	}
-	require.NoError(client.AppRequest(context.Background(), set.Set[ids.GenericNodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
+	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
 	wg.Wait()
 
 	// issue a new tx to the vm
@@ -236,7 +236,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
-	onResponse = func(_ context.Context, nodeID ids.GenericNodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -249,6 +249,6 @@ func TestAtomicTxGossip(t *testing.T) {
 
 		wg.Done()
 	}
-	require.NoError(client.AppRequest(context.Background(), set.Set[ids.GenericNodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
+	require.NoError(client.AppRequest(context.Background(), set.Set[ids.NodeID]{vm.ctx.NodeID: struct{}{}}, requestBytes, onResponse))
 	wg.Wait()
 }

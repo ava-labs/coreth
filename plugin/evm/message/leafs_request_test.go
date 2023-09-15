@@ -164,7 +164,7 @@ func TestLeafsRequestValidation(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, _ = test.request.Handle(context.Background(), ids.GenerateTestGenericNodeID(), 1, mockRequestHandler)
+			_, _ = test.request.Handle(context.Background(), ids.GenerateTestNodeID(), 1, mockRequestHandler)
 			test.assertResponse(t)
 			mockRequestHandler.reset()
 		})
@@ -180,22 +180,22 @@ type mockHandler struct {
 	handleCodeRequestCalled bool
 }
 
-func (m *mockHandler) HandleStateTrieLeafsRequest(context.Context, ids.GenericNodeID, uint32, LeafsRequest) ([]byte, error) {
+func (m *mockHandler) HandleStateTrieLeafsRequest(context.Context, ids.NodeID, uint32, LeafsRequest) ([]byte, error) {
 	m.handleStateTrieCalled = true
 	return nil, nil
 }
 
-func (m *mockHandler) HandleAtomicTrieLeafsRequest(context.Context, ids.GenericNodeID, uint32, LeafsRequest) ([]byte, error) {
+func (m *mockHandler) HandleAtomicTrieLeafsRequest(context.Context, ids.NodeID, uint32, LeafsRequest) ([]byte, error) {
 	m.handleAtomicTrieCalled = true
 	return nil, nil
 }
 
-func (m *mockHandler) HandleBlockRequest(context.Context, ids.GenericNodeID, uint32, BlockRequest) ([]byte, error) {
+func (m *mockHandler) HandleBlockRequest(context.Context, ids.NodeID, uint32, BlockRequest) ([]byte, error) {
 	m.handleBlockRequestCalled = true
 	return nil, nil
 }
 
-func (m *mockHandler) HandleCodeRequest(context.Context, ids.GenericNodeID, uint32, CodeRequest) ([]byte, error) {
+func (m *mockHandler) HandleCodeRequest(context.Context, ids.NodeID, uint32, CodeRequest) ([]byte, error) {
 	m.handleCodeRequestCalled = true
 	return nil, nil
 }

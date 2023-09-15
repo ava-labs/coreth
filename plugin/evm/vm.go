@@ -664,12 +664,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
 	// parse nodeIDs from state sync IDs in vm config
-	var stateSyncIDs []ids.GenericNodeID
+	var stateSyncIDs []ids.NodeID
 	if stateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
 		nodeIDs := strings.Split(vm.config.StateSyncIDs, ",")
-		stateSyncIDs = make([]ids.GenericNodeID, len(nodeIDs))
+		stateSyncIDs = make([]ids.NodeID, len(nodeIDs))
 		for i, nodeIDString := range nodeIDs {
-			nodeID, err := ids.GenericNodeIDFromString(nodeIDString)
+			nodeID, err := ids.NodeIDFromString(nodeIDString)
 			if err != nil {
 				return fmt.Errorf("failed to parse %s as NodeID: %w", nodeIDString, err)
 			}

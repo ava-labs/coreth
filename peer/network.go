@@ -46,10 +46,10 @@ type Network interface {
 	// node version greater than or equal to minVersion.
 	// Returns the ID of the chosen peer, and an error if the request could not
 	// be sent to a peer with the desired [minVersion].
-	SendAppRequestAny(minVersion *version.Application, message []byte, handler message.ResponseHandler) (ids.GenericNodeID, error)
+	SendAppRequestAny(minVersion *version.Application, message []byte, handler message.ResponseHandler) (ids.NodeID, error)
 
 	// SendAppRequest sends message to given nodeID, notifying handler when there's a response or timeout
-	SendAppRequest(nodeID ids.GenericNodeID, message []byte, handler message.ResponseHandler) error
+	SendAppRequest(nodeID ids.NodeID, message []byte, handler message.ResponseHandler) error
 
 	// Gossip sends given gossip message to peers
 	Gossip(gossip []byte) error
@@ -76,19 +76,19 @@ type Network interface {
 
 	// TrackBandwidth should be called for each valid request with the bandwidth
 	// (length of response divided by request time), and with 0 if the response is invalid.
-	TrackBandwidth(nodeID ids.GenericNodeID, bandwidth float64)
+	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
 }
 
 // network is an implementation of Network that processes message requests for
 // each peer in linear fashion
 type network struct {
 	lock                       sync.RWMutex                       // lock for mutating state of this Network struct
-	self                       ids.GenericNodeID                  // NodeID of this node
+	self                       ids.NodeID                         // NodeID of this node
 	requestIDGen               uint32                             // requestID counter used to track outbound requests
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
 	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
 	activeCrossChainRequests   *semaphore.Weighted                // controls maximum number of active outbound cross chain requests
-	router                     *p2p.Router                        // handles messages being sent to the generic networking SDK
+	router                     *p2p.Router                        // handles messages being sent to the  networking SDK
 	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
 	codec                      codec.Manager                      // Codec used for parsing messages
 	crossChainCodec            codec.Manager                      // Codec used for parsing cross chain messages
@@ -110,7 +110,7 @@ type network struct {
 	closed utils.Atomic[bool]
 }
 
-func NewNetwork(router *p2p.Router, appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.GenericNodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
+func NewNetwork(router *p2p.Router, appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
 	return &network{
 		router:                     router,
 		appSender:                  appSender,
@@ -134,10 +134,10 @@ func NewNetwork(router *p2p.Router, appSender common.AppSender, codec codec.Mana
 // the request will be sent to any peer regardless of their version.
 // Returns the ID of the chosen peer, and an error if the request could not
 // be sent to a peer with the desired [minVersion].
-func (n *network) SendAppRequestAny(minVersion *version.Application, request []byte, handler message.ResponseHandler) (ids.GenericNodeID, error) {
+func (n *network) SendAppRequestAny(minVersion *version.Application, request []byte, handler message.ResponseHandler) (ids.NodeID, error) {
 	// Take a slot from total [activeAppRequests] and block until a slot becomes available.
 	if err := n.activeAppRequests.Acquire(context.Background(), 1); err != nil {
-		return ids.EmptyGenericNodeID, errAcquiringSemaphore
+		return ids.EmptyNodeID, errAcquiringSemaphore
 	}
 
 	n.lock.Lock()
@@ -147,12 +147,12 @@ func (n *network) SendAppRequestAny(minVersion *version.Application, request []b
 	}
 
 	n.activeAppRequests.Release(1)
-	return ids.EmptyGenericNodeID, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, n.peers.Size())
+	return ids.EmptyNodeID, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, n.peers.Size())
 }
 
 // SendAppRequest sends request message bytes to specified nodeID, notifying the responseHandler on response or failure
-func (n *network) SendAppRequest(nodeID ids.GenericNodeID, request []byte, responseHandler message.ResponseHandler) error {
-	if nodeID == ids.EmptyGenericNodeID {
+func (n *network) SendAppRequest(nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
+	if nodeID == ids.EmptyNodeID {
 		return fmt.Errorf("cannot send request to empty nodeID, nodeID=%s, requestLen=%d", nodeID, len(request))
 	}
 
@@ -173,7 +173,7 @@ func (n *network) SendAppRequest(nodeID ids.GenericNodeID, request []byte, respo
 // Releases active requests semaphore if there was an error in sending the request
 // Returns an error if [appSender] is unable to make the request.
 // Assumes write lock is held
-func (n *network) sendAppRequest(nodeID ids.GenericNodeID, request []byte, responseHandler message.ResponseHandler) error {
+func (n *network) sendAppRequest(nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
 	if n.closed.Get() {
 		n.activeAppRequests.Release(1)
 		return nil
@@ -185,7 +185,7 @@ func (n *network) sendAppRequest(nodeID ids.GenericNodeID, request []byte, respo
 	requestID := n.nextRequestID()
 	n.outstandingRequestHandlers[requestID] = responseHandler
 
-	nodeIDs := set.NewSet[ids.GenericNodeID](1)
+	nodeIDs := set.NewSet[ids.NodeID](1)
 	nodeIDs.Add(nodeID)
 
 	// Send app request to [nodeID].
@@ -317,7 +317,7 @@ func (n *network) CrossChainAppResponse(ctx context.Context, respondingChainID i
 // returns error if the requestHandler returns an error
 // sends a response back to the sender if length of response returned by the handler is >0
 // expects the deadline to not have been passed
-func (n *network) AppRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, deadline time.Time, request []byte) error {
+func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, request []byte) error {
 	if n.closed.Get() {
 		return nil
 	}
@@ -357,7 +357,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.GenericNodeID, requ
 // Error returned by this function is expected to be treated as fatal by the engine
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
-func (n *network) AppResponse(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, response []byte) error {
+func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
@@ -378,7 +378,7 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.GenericNodeID, req
 // - request times out before a response is provided
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error only when the response handler returns an error
-func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32) error {
+func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
 	log.Debug("received AppRequestFailed from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
@@ -444,7 +444,7 @@ func (n *network) Gossip(gossip []byte) error {
 // AppGossip is called by avalanchego -> VM when there is an incoming AppGossip from a peer
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error if request could not be parsed as message.Request or when the requestHandler returns an error
-func (n *network) AppGossip(_ context.Context, nodeID ids.GenericNodeID, gossipBytes []byte) error {
+func (n *network) AppGossip(_ context.Context, nodeID ids.NodeID, gossipBytes []byte) error {
 	var gossipMsg message.GossipMessage
 	if _, err := n.codec.Unmarshal(gossipBytes, &gossipMsg); err != nil {
 		log.Debug("could not parse app gossip", "nodeID", nodeID, "gossipLen", len(gossipBytes), "err", err)
@@ -456,7 +456,7 @@ func (n *network) AppGossip(_ context.Context, nodeID ids.GenericNodeID, gossipB
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
-func (n *network) Connected(_ context.Context, nodeID ids.GenericNodeID, nodeVersion *version.Application) error {
+func (n *network) Connected(_ context.Context, nodeID ids.NodeID, nodeVersion *version.Application) error {
 	log.Debug("adding new peer", "nodeID", nodeID)
 
 	n.lock.Lock()
@@ -476,7 +476,7 @@ func (n *network) Connected(_ context.Context, nodeID ids.GenericNodeID, nodeVer
 }
 
 // Disconnected removes given [nodeID] from the peer list
-func (n *network) Disconnected(_ context.Context, nodeID ids.GenericNodeID) error {
+func (n *network) Disconnected(_ context.Context, nodeID ids.NodeID) error {
 	log.Debug("disconnecting peer", "nodeID", nodeID)
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -532,7 +532,7 @@ func (n *network) Size() uint32 {
 	return uint32(n.peers.Size())
 }
 
-func (n *network) TrackBandwidth(nodeID ids.GenericNodeID, bandwidth float64) {
+func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 

@@ -57,6 +57,8 @@ github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kd
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/ava-labs/avalanchego v1.10.10-rc.4.0.20230915153312-765a716b3af5 h1:vC6YhUmsTgGu5T43P6Inth20H4EtKebS4uNpQDenvxA=
 github.com/ava-labs/avalanchego v1.10.10-rc.4.0.20230915153312-765a716b3af5/go.mod h1:ktWtdp5jBjXgLOq/Cm3l2IcNGlrcKvFdokABy8NtP/w=
+github.com/ava-labs/avalanchego v1.10.10-rc.4.0.20230915175959-0d2c1d33acb8 h1:rkJP+tu37hOAlc7RqMElzoqlH/EH87hKS0hVg+4bbuc=
+github.com/ava-labs/avalanchego v1.10.10-rc.4.0.20230915175959-0d2c1d33acb8/go.mod h1:ktWtdp5jBjXgLOq/Cm3l2IcNGlrcKvFdokABy8NtP/w=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
 github.com/benbjohnson/clock v1.3.0 h1:ip6w0uFQkncKQ979AypyG0ER7mqUSBdKLOgAle/AT8A=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=

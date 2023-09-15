@@ -28,7 +28,7 @@ func (c CodeRequest) String() string {
 	return fmt.Sprintf("CodeRequest(Hashes=%s)", strings.Join(hashStrs, ", "))
 }
 
-func (c CodeRequest) Handle(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, handler RequestHandler) ([]byte, error) {
+func (c CodeRequest) Handle(ctx context.Context, nodeID ids.NodeID, requestID uint32, handler RequestHandler) ([]byte, error) {
 	return handler.HandleCodeRequest(ctx, nodeID, requestID, c)
 }
 

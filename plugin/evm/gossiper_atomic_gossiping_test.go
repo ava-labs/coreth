@@ -26,7 +26,7 @@ func TestMempoolAtmTxsIssueTxAndGossiping(t *testing.T) {
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
-	assert.NoError(vm.Connected(context.Background(), ids.GenerateTestGenericNodeID(), nil))
+	assert.NoError(vm.Connected(context.Background(), ids.GenerateTestNodeID(), nil))
 
 	// Create conflicting transactions
 	importTxs := createImportTxOptions(t, vm, sharedMemory)
@@ -90,7 +90,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
 
-	nodeID := ids.GenerateTestGenericNodeID()
+	nodeID := ids.GenerateTestNodeID()
 
 	var (
 		txGossiped     int
@@ -105,7 +105,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 		txGossiped++
 		return nil
 	}
-	sender.SendAppRequestF = func(context.Context, set.Set[ids.GenericNodeID], uint32, []byte) error {
+	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
@@ -177,7 +177,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 		txGossiped++
 		return nil
 	}
-	sender.SendAppRequestF = func(context.Context, set.Set[ids.GenericNodeID], uint32, []byte) error {
+	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
@@ -196,7 +196,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 
 	// Gossip the transaction to the VM and ensure that it is not added to the mempool
 	// and is not re-gossipped.
-	nodeID := ids.GenerateTestGenericNodeID()
+	nodeID := ids.GenerateTestNodeID()
 	msg := message.AtomicTxGossip{
 		Tx: tx.SignedBytes(),
 	}
@@ -214,7 +214,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// Gossip the transaction that conflicts with the originally
 	// discarded tx and ensure it is accepted into the mempool and gossipped
 	// to the network.
-	nodeID = ids.GenerateTestGenericNodeID()
+	nodeID = ids.GenerateTestNodeID()
 	msg = message.AtomicTxGossip{
 		Tx: conflictingTx.SignedBytes(),
 	}

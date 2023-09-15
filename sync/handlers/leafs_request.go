@@ -73,7 +73,7 @@ func NewLeafsRequestHandler(trieDB *trie.Database, snapshotProvider SnapshotProv
 // Expects NodeType to be one of message.AtomicTrieNode or message.StateTrieNode
 // Returns nothing if NodeType is invalid or requested trie root is not found
 // Assumes ctx is active
-func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
+func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
 	startTime := time.Now()
 	lrh.stats.IncLeafsRequest()
 

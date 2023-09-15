@@ -42,7 +42,7 @@ func NewBlockRequestHandler(blockProvider BlockProvider, codec codec.Manager, ha
 // Expects returned errors to be treated as FATAL
 // Returns empty response or subset of requested blocks if ctx expires during fetch
 // Assumes ctx is active
-func (b *BlockRequestHandler) OnBlockRequest(ctx context.Context, nodeID ids.GenericNodeID, requestID uint32, blockRequest message.BlockRequest) ([]byte, error) {
+func (b *BlockRequestHandler) OnBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, blockRequest message.BlockRequest) ([]byte, error) {
 	startTime := time.Now()
 	b.stats.IncBlockRequest()
 

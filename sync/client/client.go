@@ -78,7 +78,7 @@ type parseResponseFn func(codec codec.Manager, request message.Request, response
 type client struct {
 	networkClient    peer.NetworkClient
 	codec            codec.Manager
-	stateSyncNodes   []ids.GenericNodeID
+	stateSyncNodes   []ids.NodeID
 	stateSyncNodeIdx uint32
 	stats            stats.ClientSyncerStats
 	blockParser      EthBlockParser
@@ -88,7 +88,7 @@ type ClientConfig struct {
 	NetworkClient    peer.NetworkClient
 	Codec            codec.Manager
 	Stats            stats.ClientSyncerStats
-	StateSyncNodeIDs []ids.GenericNodeID
+	StateSyncNodeIDs []ids.NodeID
 	BlockParser      EthBlockParser
 }
 
@@ -321,7 +321,7 @@ func (c *client) get(ctx context.Context, request message.Request, parseFn parse
 
 		var (
 			response []byte
-			nodeID   ids.GenericNodeID
+			nodeID   ids.NodeID
 			start    time.Time = time.Now()
 		)
 		if len(c.stateSyncNodes) == 0 {
@@ -338,7 +338,7 @@ func (c *client) get(ctx context.Context, request message.Request, parseFn parse
 
 		if err != nil {
 			ctx := make([]interface{}, 0, 8)
-			if nodeID != ids.EmptyGenericNodeID {
+			if nodeID != ids.EmptyNodeID {
 				ctx = append(ctx, "nodeID", nodeID)
 			}
 			ctx = append(ctx, "attempt", attempt, "request", request, "err", err)
