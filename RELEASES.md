@@ -8,7 +8,7 @@
 - Fix hanging requests on shutdown that could cause ungraceful shutdown
 - Increase batch size writing snapshot diff to disk
 - Migrate geth changes from v1.11.4 through v1.12.0
-- Bump AvalancheGo dependency to v1.10.0
+- Bump AvalancheGo dependency to v1.10.10
 
 ## [v0.12.4](https://github.com/ava-labs/coreth/releases/tag/v0.12.4)
 
