@@ -194,14 +194,16 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	txID := tx.ID()
 	// If [txID] has already been issued or is in the currentTxs map
 	// there's no need to add it.
-	if _, exists := m.issuedTxs[txID]; exists {
-		return nil
-	}
-	if _, exists := m.currentTxs[txID]; exists {
-		return nil
-	}
-	if _, exists := m.txHeap.Get(txID); exists {
-		return nil
+	if !force {
+		if _, exists := m.issuedTxs[txID]; exists {
+			return nil
+		}
+		if _, exists := m.currentTxs[txID]; exists {
+			return nil
+		}
+		if _, exists := m.txHeap.Get(txID); exists {
+			return nil
+		}
 	}
 
 	utxoSet := tx.InputUTXOs()

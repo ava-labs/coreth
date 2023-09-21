@@ -810,6 +810,148 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
 
+// Detect the correct status of an atomic transaction in blocks that are not yet accepted
+func TestGetAtomicTxsInProcessingBlocks(t *testing.T) {
+	importAmount := uint64(50000000)
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+
+	defer func() {
+		if err := vm.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+
+	vm.blockChain.DrainAcceptorQueue()
+	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
+		Timeout: 5 * time.Minute,
+	}))
+	blockHash := common.Hash(blk.ID())
+	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
+		BlockHash: &blockHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 0 {
+		t.Fatalf("Expected log length to be 0, but found %d", len(logs))
+	}
+	if logs == nil {
+		t.Fatal("Expected logs to be non-nil")
+	}
+
+	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(exportTx, true /*=local*/); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk2, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println()
+
+	if err := vm.mempool.ForceAddTx(exportTx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// Scenario where another block gets built by another node and gets verified before blk2 gets accepted and picks up the same export tx
+	blk3, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk2.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk3.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk2.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if status := blk3.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	// if err := blk2.Accept(context.Background()); err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// if status := blk2.Status(); status != choices.Accepted {
+	// 	t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	// }
+
+	// if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+	// 	t.Fatal(err)
+	// } else if lastAcceptedID != blk2.ID() {
+	// 	t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+	// }
+
+	// Check that both atomic transactions were indexed as expected.
+
+	indexedExportTx, status, height, err := vm.getAtomicTx(exportTx.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Processing, status)
+	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
+	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+}
+
 func TestBuildEthTxBlock(t *testing.T) {
 	importAmount := uint64(20000000)
 	issuer, vm, dbManager, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "{\"pruning-enabled\":true}", "", map[ids.ShortID]uint64{

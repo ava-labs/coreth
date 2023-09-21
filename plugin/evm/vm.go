@@ -574,7 +574,7 @@ func (vm *VM) Initialize(
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
 		vm.db, vm.codec, lastAcceptedHeight,
 		bonusBlockHeights, canonicalBlockHeights,
-		vm.getAtomicTxFromPreApricot5BlockByHeight,
+		vm.getAtomicTxFromBlockByHeight,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
@@ -1427,7 +1427,10 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 		return tx, Accepted, height, nil
 	} else if err != database.ErrNotFound {
 		return nil, Unknown, 0, err
+	} else if tx, height, err := vm.getAtomicTxFromProcessingBlocks(txID); err == nil {
+		return tx, Processing, height, nil
 	}
+
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
 	case found && dropped:
@@ -1437,6 +1440,34 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	default:
 		return nil, Unknown, 0, nil
 	}
+}
+
+func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
+	preferredBlockHeight := vm.blockChain.CurrentBlock().Number.Uint64()
+	lastAcceptedBlockHeight := vm.blockChain.LastAcceptedBlock().Header().Number.Uint64()
+
+	processingBlockHeight := lastAcceptedBlockHeight + 1
+	for processingBlockHeight <= preferredBlockHeight {
+		// We know that we have some blocks processing that have not yet been accepted that might potentially have the atomic tx
+		txs, err := vm.getAtomicTxFromBlockByHeight(processingBlockHeight)
+		if err == errMissingAtomicTxs {
+			// Skip the current iteration of the loop since there are no atomic txs for the processing block at this height
+			continue
+		}
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for _, tx := range txs {
+			if tx.ID() == txID {
+				return tx, processingBlockHeight, nil
+			}
+		}
+
+		processingBlockHeight += 1
+	}
+
+	return nil, 0, errors.New("no processing blocks to be found at this height")
 }
 
 // ParseAddress takes in an address and produces the ID of the chain it's for
@@ -1855,12 +1886,14 @@ func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
 	return baseFee, nil
 }
 
-func (vm *VM) getAtomicTxFromPreApricot5BlockByHeight(height uint64) (*Tx, error) {
+func (vm *VM) getAtomicTxFromBlockByHeight(height uint64) ([]*Tx, error) {
 	blk := vm.blockChain.GetBlockByNumber(height)
 	if blk == nil {
 		return nil, nil
 	}
-	return ExtractAtomicTx(blk.ExtData(), vm.codec)
+	// Gets singular atomic tx or batch tx based on pre/post ApricotPhase5
+	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(blk.Time())
+	return ExtractAtomicTxs(blk.ExtData(), isApricotPhase5, vm.codec)
 }
 
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the

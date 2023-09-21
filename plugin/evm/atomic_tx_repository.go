@@ -70,7 +70,7 @@ type atomicTxRepository struct {
 func NewAtomicTxRepository(
 	db *versiondb.Database, codec codec.Manager, lastAcceptedHeight uint64,
 	bonusBlocks map[uint64]ids.ID, canonicalBlocks []uint64,
-	getAtomicTxFromBlockByHeight func(height uint64) (*Tx, error),
+	getAtomicTxFromBlockByHeight func(height uint64) ([]*Tx, error),
 ) (*atomicTxRepository, error) {
 	repo := &atomicTxRepository{
 		acceptedAtomicTxDB:         prefixdb.New(atomicTxIDDBPrefix, db),
@@ -392,7 +392,7 @@ func (a *atomicTxRepository) markBonusBlocksRepaired(repairedEntries uint64) err
 // processed on (canonical block). [sortedHeights] should include all canonical block and
 // bonus block heights in ascending order, and will only be passed as non-empty on mainnet.
 func (a *atomicTxRepository) RepairForBonusBlocks(
-	sortedHeights []uint64, getAtomicTxFromBlockByHeight func(height uint64) (*Tx, error),
+	sortedHeights []uint64, getAtomicTxFromBlockByHeight func(height uint64) ([]*Tx, error),
 ) error {
 	done, err := a.isBonusBlocksRepaired()
 	if err != nil {
@@ -404,36 +404,37 @@ func (a *atomicTxRepository) RepairForBonusBlocks(
 	repairedEntries := uint64(0)
 	seenTxs := make(map[ids.ID][]uint64)
 	for _, height := range sortedHeights {
-		// get atomic tx from block
-		tx, err := getAtomicTxFromBlockByHeight(height)
+		// get atomic txs from block
+		txs, err := getAtomicTxFromBlockByHeight(height)
 		if err != nil {
 			return err
 		}
-		if tx == nil {
-			continue
-		}
-
-		// get the tx by txID and update it, the first time we encounter
-		// a given [txID], overwrite the previous [txID] => [height]
-		// mapping. This provides a canonical mapping across nodes.
-		heights, seen := seenTxs[tx.ID()]
-		_, foundHeight, err := a.GetByTxID(tx.ID())
-		if err != nil && !errors.Is(err, database.ErrNotFound) {
-			return err
-		}
-		if !seen {
-			if err := a.Write(height, []*Tx{tx}); err != nil {
+		for _, tx := range txs {
+			if tx == nil {
+				continue
+			}
+			// get the tx by txID and update it, the first time we encounter
+			// a given [txID], overwrite the previous [txID] => [height]
+			// mapping. This provides a canonical mapping across nodes.
+			heights, seen := seenTxs[tx.ID()]
+			_, foundHeight, err := a.GetByTxID(tx.ID())
+			if err != nil && !errors.Is(err, database.ErrNotFound) {
 				return err
 			}
-		} else {
-			if err := a.WriteBonus(height, []*Tx{tx}); err != nil {
-				return err
+			if !seen {
+				if err := a.Write(height, []*Tx{tx}); err != nil {
+					return err
+				}
+			} else {
+				if err := a.WriteBonus(height, []*Tx{tx}); err != nil {
+					return err
+				}
 			}
+			if foundHeight != height && !seen {
+				repairedEntries++
+			}
+			seenTxs[tx.ID()] = append(heights, height)
 		}
-		if foundHeight != height && !seen {
-			repairedEntries++
-		}
-		seenTxs[tx.ID()] = append(heights, height)
 	}
 	if err := a.markBonusBlocksRepaired(repairedEntries); err != nil {
 		return err
