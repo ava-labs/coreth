@@ -938,7 +938,7 @@ func TestGetAtomicTxsInProcessingBlocks(t *testing.T) {
 	assert.Equal(t, exportTxFetched.ID(), exportTx.ID(), "expected ID of fetched export tx to match original txID")
 }
 
-func TestGetAtomicTxsInWithMultipleProcessingBlocks(t *testing.T) {
+func TestGetAtomicTxsWithMultipleProcessingBlocks(t *testing.T) {
 	importAmount := uint64(50000000)
 	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
