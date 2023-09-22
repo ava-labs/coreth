@@ -1433,7 +1433,6 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	} else if err != errNoAtomicTxsFound {
 		return nil, Unknown, 0, err
 	}
-
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
 	case found && dropped:

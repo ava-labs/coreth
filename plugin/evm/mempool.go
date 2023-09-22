@@ -189,7 +189,7 @@ func (m *Mempool) checkConflictTx(tx *Tx) (uint64, ids.ID, []*Tx, error) {
 }
 
 // addTx adds [tx] to the mempool. Assumes [m.lock] is held.
-// If [force], skips conflict checks within the mempool.
+// If [force], skips existance and conflict checks within the mempool.
 func (m *Mempool) addTx(tx *Tx, force bool) error {
 	txID := tx.ID()
 	// If [txID] has already been issued or is in the currentTxs map
