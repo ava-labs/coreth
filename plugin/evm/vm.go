@@ -213,6 +213,7 @@ var (
 	errConflictingAtomicTx            = errors.New("conflicting atomic tx present")
 	errTooManyAtomicTx                = errors.New("too many atomic tx")
 	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
+	errNoAtomicTxsFound               = errors.New("no atomic txs found")
 )
 
 var originalStderr *os.File
@@ -1429,6 +1430,8 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 		return nil, Unknown, 0, err
 	} else if tx, height, err := vm.getAtomicTxFromProcessingBlocks(txID); err == nil {
 		return tx, Processing, height, nil
+	} else if err != errNoAtomicTxsFound {
+		return nil, Unknown, 0, err
 	}
 
 	tx, dropped, found := vm.mempool.GetTx(txID)
@@ -1442,6 +1445,10 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	}
 }
 
+// getAtomicTxFromProcessingBlocks takes in a [txID] and searches for a matching atomic tx in processing blocks
+// Specifically we look from at blocks with lastAcceptedBlockHeight + 1  to preferredBlockHeight.
+// This function assumes that we have already searched accepted blocks for atomic txs.
+// We return an error if we cannot find a matching atomic tx in the processing blocks.
 func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
 	preferredBlockHeight := vm.blockChain.CurrentBlock().Number.Uint64()
 	lastAcceptedBlockHeight := vm.blockChain.LastAcceptedBlock().Header().Number.Uint64()
@@ -1463,11 +1470,9 @@ func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) 
 				return tx, processingBlockHeight, nil
 			}
 		}
-
 		processingBlockHeight += 1
 	}
-
-	return nil, 0, errors.New("no processing blocks to be found at this height")
+	return nil, 0, errNoAtomicTxsFound
 }
 
 // ParseAddress takes in an address and produces the ID of the chain it's for
@@ -1900,7 +1905,6 @@ func (vm *VM) getAtomicTxFromBlockByHeight(height uint64) ([]*Tx, error) {
 	if blk == nil {
 		return nil, nil
 	}
-	// Gets singular atomic tx or batch tx based on pre/post ApricotPhase5
 	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(blk.Time())
 	return ExtractAtomicTxs(blk.ExtData(), isApricotPhase5, vm.codec)
 }
