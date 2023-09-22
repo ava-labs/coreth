@@ -1071,7 +1071,7 @@ func TestGetAtomicTxsInWithMultipleProcessingBlocks(t *testing.T) {
 	importTxFetched, status, height, err := vm.getAtomicTx(importTx2.ID())
 	assert.NoError(t, err)
 	assert.Equal(t, Processing, status)
-	assert.Equal(t, uint64(3), height, "expected height of indexed export tx to be 3")
+	assert.Equal(t, uint64(3), height, "expected height of fetched import tx to be 3")
 	assert.Equal(t, importTxFetched.ID(), importTx2.ID(), "expected ID of fetched import tx to match original txID")
 }
 
