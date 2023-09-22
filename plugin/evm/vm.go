@@ -574,7 +574,7 @@ func (vm *VM) Initialize(
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
 		vm.db, vm.codec, lastAcceptedHeight,
 		bonusBlockHeights, canonicalBlockHeights,
-		vm.getAtomicTxFromBlockByHeight,
+		vm.getAtomicTxFromPreApricot5BlockByHeight,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
@@ -1884,6 +1884,15 @@ func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
 	}
 
 	return baseFee, nil
+}
+
+// TODO: Remove this function and use getAtomicTxFromBlockByHeight instead
+func (vm *VM) getAtomicTxFromPreApricot5BlockByHeight(height uint64) (*Tx, error) {
+	blk := vm.blockChain.GetBlockByNumber(height)
+	if blk == nil {
+		return nil, nil
+	}
+	return ExtractAtomicTx(blk.ExtData(), vm.codec)
 }
 
 func (vm *VM) getAtomicTxFromBlockByHeight(height uint64) ([]*Tx, error) {

@@ -321,9 +321,9 @@ func TestRepairAtomicRepositoryForBonusBlockTxs(t *testing.T) {
 	allHeights := []uint64{canonical, bonus1, bonus2}
 	if err := atomicTxRepository.RepairForBonusBlocks(
 		allHeights,
-		func(height uint64) ([]*Tx, error) {
+		func(height uint64) (*Tx, error) {
 			if height == 10 || height == 20 || height == 30 {
-				return []*Tx{tx}, nil
+				return tx, nil
 			}
 			return nil, fmt.Errorf("unexpected height %d", height)
 		},
