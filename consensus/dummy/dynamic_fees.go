@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -29,7 +28,7 @@ var (
 	ApricotPhase4MinBlockGasCost         = new(big.Int).Set(common.Big0)
 	ApricotPhase4MaxBlockGasCost         = big.NewInt(1_000_000)
 	ApricotPhase4BlockGasCostStep        = big.NewInt(50_000)
-	ApricotPhase4TargetBlockRate  uint64 = 1 // in seconds
+	ApricotPhase4TargetBlockRate  uint64 = 2 // in seconds
 	ApricotPhase5BlockGasCostStep        = big.NewInt(200_000)
 	rollupWindow                  uint64 = 10
 )
@@ -293,8 +292,6 @@ func calcBlockGasCost(
 	parentTime, currentTime uint64,
 ) *big.Int {
 	// Handle AP3/AP4 boundary by returning the minimum value as the boundary.
-	log.Debug("calcBlockGasCostStart", "targetBlockRate", targetBlockRate, "minBlockGasCost", minBlockGasCost, "maxBlockGasCost", maxBlockGasCost, "blockGasCostStep", blockGasCostStep, "parentBlockGasCost", parentBlockGasCost, "parentTime", parentTime, "currentTime", currentTime)
-
 	if parentBlockGasCost == nil {
 		return new(big.Int).Set(minBlockGasCost)
 	}
@@ -302,31 +299,22 @@ func calcBlockGasCost(
 	// Treat an invalid parent/current time combination as 0 elapsed time.
 	var timeElapsed uint64
 	if parentTime <= currentTime {
-		log.Debug("calcBlockGasCost0")
 		timeElapsed = currentTime - parentTime
 	}
 
 	var blockGasCost *big.Int
 	if timeElapsed < targetBlockRate {
-		log.Debug("calcBlockGasCost1", "blockGasCost", blockGasCost)
-
 		blockGasCostDelta := new(big.Int).Mul(blockGasCostStep, new(big.Int).SetUint64(targetBlockRate-timeElapsed))
 		blockGasCost = new(big.Int).Add(parentBlockGasCost, blockGasCostDelta)
 	} else {
-		log.Debug("calcBlockGasCost2", "blockGasCost", blockGasCost)
-
 		blockGasCostDelta := new(big.Int).Mul(blockGasCostStep, new(big.Int).SetUint64(timeElapsed-targetBlockRate))
 		blockGasCost = new(big.Int).Sub(parentBlockGasCost, blockGasCostDelta)
 	}
 
 	blockGasCost = selectBigWithinBounds(minBlockGasCost, blockGasCost, maxBlockGasCost)
-	log.Debug("calcBlockGasCost3", "blockGasCost", blockGasCost)
-
 	if !blockGasCost.IsUint64() {
 		blockGasCost = new(big.Int).SetUint64(math.MaxUint64)
 	}
-	log.Debug("calcBlockGasCostEnd", "blockGasCost", blockGasCost)
-
 	return blockGasCost
 }
 
