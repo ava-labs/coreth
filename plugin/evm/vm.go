@@ -1451,9 +1451,7 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
 	preferredBlockHeight := vm.blockChain.CurrentBlock().Number.Uint64()
 	lastAcceptedBlockHeight := vm.blockChain.LastAcceptedBlock().Header().Number.Uint64()
-
-	processingBlockHeight := lastAcceptedBlockHeight + 1
-	for processingBlockHeight <= preferredBlockHeight {
+	for processingBlockHeight := lastAcceptedBlockHeight + 1; processingBlockHeight <= preferredBlockHeight; processingBlockHeight++ {
 		// We know that we have some blocks processing that have not yet been accepted that might potentially have the atomic tx
 		txs, err := vm.getAtomicTxFromBlockByHeight(processingBlockHeight)
 		if err == errMissingAtomicTxs {
@@ -1469,7 +1467,6 @@ func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) 
 				return tx, processingBlockHeight, nil
 			}
 		}
-		processingBlockHeight += 1
 	}
 	return nil, 0, errNoAtomicTxsFound
 }
