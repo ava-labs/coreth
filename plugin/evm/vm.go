@@ -1424,15 +1424,25 @@ func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestor *Block) error {
 // getAtomicTx returns the requested transaction, status, and height.
 // If the status is Unknown, then the returned transaction will be nil.
 func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
+	// Check accepted blocks for atomic txs
 	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
 		return tx, Accepted, height, nil
 	} else if err != database.ErrNotFound {
 		return nil, Unknown, 0, err
-	} else if tx, height, err := vm.getAtomicTxFromProcessingBlocks(txID); err == nil {
+	}
+
+	// Check processing blocks for atomic txs
+	// We should do this check here because blocks can pick up these atomic txs
+	// prior to block acceptence and should have status as processing.
+	// These txs will be available in the mempool as well but could give misleading
+	// results if dropped by another processing block.
+	if tx, height, err := vm.getAtomicTxFromProcessingBlocks(txID); err == nil {
 		return tx, Processing, height, nil
 	} else if err != errNoAtomicTxsFound {
 		return nil, Unknown, 0, err
 	}
+
+	// Check mempool for atomic txs
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
 	case found && dropped:
@@ -1445,7 +1455,7 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 }
 
 // getAtomicTxFromProcessingBlocks takes in a [txID] and searches for a matching atomic tx in processing blocks
-// Specifically we look from at blocks with lastAcceptedBlockHeight + 1  to preferredBlockHeight.
+// Specifically we look from blocks with lastAcceptedBlockHeight + 1  to preferredBlockHeight.
 // This function assumes that we have already searched accepted blocks for atomic txs.
 // We return an error if we cannot find a matching atomic tx in the processing blocks.
 func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
