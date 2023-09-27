@@ -711,7 +711,7 @@ func TestSDKRouting(t *testing.T) {
 	err = network.AppResponse(context.Background(), ids.GenerateTestNodeID(), 0, foobar)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 
-	err = network.AppRequestFailed(context.Background(), nodeID, 0)
+	err = network.AppError(context.Background(), nodeID, 0, nil)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 }
 

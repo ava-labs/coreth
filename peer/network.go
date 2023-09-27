@@ -269,20 +269,20 @@ func (n *network) CrossChainAppRequest(ctx context.Context, requestingChainID id
 	}
 }
 
-// CrossChainAppRequestFailed can be called by the avalanchego -> VM in following cases:
+// CrossChainAppError can be called by the avalanchego -> VM in following cases:
 // - respondingChain doesn't exist
 // - invalid CrossChainAppResponse from respondingChain
 // - invalid CrossChainRequest was sent to respondingChain
 // - request times out before a response is provided
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
-func (n *network) CrossChainAppRequestFailed(ctx context.Context, respondingChainID ids.ID, requestID uint32) error {
-	log.Debug("received CrossChainAppRequestFailed from chain", "respondingChainID", respondingChainID, "requestID", requestID)
+func (n *network) CrossChainAppError(ctx context.Context, respondingChainID ids.ID, requestID uint32, err error) error {
+	log.Debug("received CrossChainAppError from chain", "respondingChainID", respondingChainID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
 		// Can happen after the network has been closed.
-		log.Debug("received CrossChainAppRequestFailed to unknown request", "respondingChainID", respondingChainID, "requestID", requestID)
+		log.Debug("received CrossChainAppError to unknown request", "respondingChainID", respondingChainID, "requestID", requestID)
 		return nil
 	}
 
@@ -372,19 +372,19 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 	return handler.OnResponse(response)
 }
 
-// AppRequestFailed can be called by the avalanchego -> VM in following cases:
+// AppError can be called by the avalanchego -> VM in following cases:
 // - node is benched
 // - failed to send message to [nodeID] due to a network issue
 // - request times out before a response is provided
 // error returned by this function is expected to be treated as fatal by the engine
 // returns error only when the response handler returns an error
-func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
-	log.Debug("received AppRequestFailed from peer", "nodeID", nodeID, "requestID", requestID)
+func (n *network) AppError(ctx context.Context, nodeID ids.NodeID, requestID uint32, err error) error {
+	log.Debug("received AppError from peer", "nodeID", nodeID, "requestID", requestID)
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding AppRequestFailed to SDK router", "nodeID", nodeID, "requestID", requestID)
-		return n.router.AppRequestFailed(ctx, nodeID, requestID)
+		log.Debug("forwarding AppError to SDK router", "nodeID", nodeID, "requestID", requestID)
+		return n.router.AppError(ctx, nodeID, requestID, err)
 	}
 
 	// We must release the slot
@@ -416,7 +416,7 @@ func calculateTimeUntilDeadline(deadline time.Time, stats stats.RequestHandlerSt
 }
 
 // markRequestFulfilled fetches the handler for [requestID] and marks the request with [requestID] as having been fulfilled.
-// This is called by either [AppResponse] or [AppRequestFailed].
+// This is called by either [AppResponse] or [AppError].
 // Assumes that the write lock is not held.
 func (n *network) markRequestFulfilled(requestID uint32) (message.ResponseHandler, bool) {
 	n.lock.Lock()

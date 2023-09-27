@@ -79,6 +79,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 
 	var lock sync.Mutex
 	reqCount := 0
+	errMaxAttemptsExceeded := commonEng.AppError{
+		Err: "max attempts exceeded",
+	}
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -90,7 +93,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 			reqCount++
 			// Fail all requests after number 50 to interrupt the sync
 			if reqCount > 50 {
-				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID); err != nil {
+				if err := syncerVM.AppError(context.Background(), nodeID, requestID, errMaxAttemptsExceeded); err != nil {
 					panic(err)
 				}
 				cancel := syncerVM.StateSyncClient.(*stateSyncerClient).cancel
