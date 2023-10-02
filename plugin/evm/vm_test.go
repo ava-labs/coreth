@@ -885,40 +885,11 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 
 	<-issuer
 
-	blk2, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	noAtomicTxBlock := blk2.(*chain.BlockWrapper).Block.(*Block)
-
-	// Create a block that has multiple atomic txs
-	importTx2, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	importTx3, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = vm.issueTx(importTx2, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = vm.issueTx(importTx3, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	<-issuer
-
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	multipleAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
+	noAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
 	type testGetAtomicTx struct {
 		lastAcceptedBlockHeight uint64
@@ -972,13 +943,205 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 			expectedHeight:          3,
 			expectedErr:             nil,
 		},
+	}
+
+	for _, test := range testCases {
+		tx, height, err := getAtomicTxFromProcessingBlocks(
+			test.inputTxID,
+			test.preferredBlockHeight,
+			test.lastAcceptedBlockHeight,
+			func(height uint64) bool { return test.isApricotPhase5[height] },
+			func(height uint64) *types.Block { return test.blocks[height] },
+			vm.codec)
+
+		if test.expectedErr != nil {
+			require.Equal(t, test.expectedErr, err)
+			continue
+		}
+
+		require.Equal(t, test.expectedTx.ID(), tx.ID())
+		require.Equal(t, test.expectedHeight, height)
+	}
+}
+
+func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
+	importAmount := uint64(1000000000)
+	issuer, vm, _, sharedMemory, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase5, "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+		testShortIDAddrs[1]: importAmount,
+	})
+
+	defer func() {
+		if err := vm.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Create a block that has atomic txs and accept it so we can fund our eth address
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = vm.issueTx(importTx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	atomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
+
+	if err := blk.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+	vm.blockChain.DrainAcceptorQueue()
+
+	// Create a block that has no atomic txs
+	tx := types.NewTx(&types.DynamicFeeTx{
+		Nonce:     0,
+		To:        &testEthAddrs[0],
+		Value:     common.Big0,
+		Gas:       21000,
+		GasFeeCap: big.NewInt(10000000000000),
+		GasTipCap: big.NewInt(100000),
+		Data:      nil,
+	})
+	signedTx, err := types.SignTx(tx, types.NewLondonSigner(vm.chainID), testKeys[0].ToECDSA())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	errs := vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	<-issuer
+
+	vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
+	blk, err = vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	noAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
+
+	// Create a block that has multiple atomic txs
+	kc := secp256k1fx.NewKeychain()
+	kc.Add(testKeys[0])
+	txID, err := ids.ToID(hashing.ComputeHash256(testShortIDAddrs[0][:]))
+	assert.NoError(t, err)
+
+	var importTx2 *Tx
+	for i := 0; i < 5; i++ {
+		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
+		assert.NoError(t, err)
+
+		importTx2, err = vm.newImportTxWithUTXOs(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := vm.issueTx(importTx2, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	<-issuer
+
+	blk, err = vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	multipleAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
+
+	type testGetAtomicTx struct {
+		lastAcceptedBlockHeight uint64
+		preferredBlockHeight    uint64
+		blocks                  map[uint64]*types.Block
+		isApricotPhase5         map[uint64]bool
+		inputTxID               ids.ID
+		expectedTx              *Tx
+		expectedHeight          uint64
+		expectedErr             error
+	}
+
+	testCases := map[string]testGetAtomicTx{
+		"happy path": {
+			lastAcceptedBlockHeight: 1,
+			preferredBlockHeight:    2,
+			blocks:                  map[uint64]*types.Block{2: atomicTxBlock.ethBlock},
+			isApricotPhase5:         map[uint64]bool{2: true},
+			inputTxID:               importTx.ID(),
+			expectedTx:              importTx,
+			expectedHeight:          2,
+			expectedErr:             nil,
+		},
+		"no processing blocks to check": {
+			lastAcceptedBlockHeight: 2,
+			preferredBlockHeight:    2,
+			blocks:                  map[uint64]*types.Block{2: atomicTxBlock.ethBlock},
+			isApricotPhase5:         map[uint64]bool{2: true},
+			inputTxID:               importTx.ID(),
+			expectedTx:              nil,
+			expectedHeight:          0,
+			expectedErr:             errNoAtomicTxsFound,
+		},
+		"no atomic txs in processing blocks": {
+			lastAcceptedBlockHeight: 1,
+			preferredBlockHeight:    2,
+			blocks:                  map[uint64]*types.Block{2: noAtomicTxBlock.ethBlock},
+			isApricotPhase5:         map[uint64]bool{2: true},
+			inputTxID:               importTx.ID(),
+			expectedTx:              nil,
+			expectedHeight:          0,
+			expectedErr:             errNoAtomicTxsFound,
+		},
+		"search multiple processing blocks for atomic tx": {
+			lastAcceptedBlockHeight: 1,
+			preferredBlockHeight:    3,
+			blocks:                  map[uint64]*types.Block{2: noAtomicTxBlock.ethBlock, 3: atomicTxBlock.ethBlock},
+			isApricotPhase5:         map[uint64]bool{2: true, 3: true},
+			inputTxID:               importTx.ID(),
+			expectedTx:              importTx,
+			expectedHeight:          3,
+			expectedErr:             nil,
+		},
 		"search through multiple atomic txs in a processing block": {
 			lastAcceptedBlockHeight: 1,
 			preferredBlockHeight:    2,
 			blocks:                  map[uint64]*types.Block{2: multipleAtomicTxBlock.ethBlock},
-			isApricotPhase5:         map[uint64]bool{2: false},
-			inputTxID:               importTx3.ID(),
-			expectedTx:              importTx3,
+			isApricotPhase5:         map[uint64]bool{2: true},
+			inputTxID:               importTx2.ID(),
+			expectedTx:              importTx2,
 			expectedHeight:          2,
 			expectedErr:             nil,
 		},
@@ -1000,6 +1163,7 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 
 		require.Equal(t, test.expectedTx.ID(), tx.ID())
 		require.Equal(t, test.expectedHeight, height)
+
 	}
 }
 
