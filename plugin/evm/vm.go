@@ -1433,7 +1433,7 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 
 	// Check processing blocks for atomic txs
 	// We should do this check here because blocks can pick up these atomic txs
-	// prior to block acceptence and should have status as processing.
+	// prior to block acceptance and should have status as processing.
 	// These txs will be available in the mempool as well but could give misleading
 	// results if dropped by another processing block.
 	if tx, height, err := vm.getAtomicTxFromProcessingBlocks(txID); err == nil {
@@ -1459,11 +1459,28 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 // This function assumes that we have already searched accepted blocks for atomic txs.
 // We return an error if we cannot find a matching atomic tx in the processing blocks.
 func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
-	preferredBlockHeight := vm.blockChain.CurrentBlock().Number.Uint64()
-	lastAcceptedBlockHeight := vm.blockChain.LastAcceptedBlock().Header().Number.Uint64()
+	return getAtomicTxFromProcessingBlocks(
+		txID,
+		vm.blockChain.CurrentBlock().Number.Uint64(),
+		vm.blockChain.LastAcceptedBlock().Header().Number.Uint64(),
+		vm.chainConfig.IsApricotPhase5,
+		vm.blockChain.GetBlockByNumber,
+		vm.codec,
+	)
+}
+
+func getAtomicTxFromProcessingBlocks(
+	txID ids.ID,
+	preferredBlockHeight uint64,
+	lastAcceptedBlockHeight uint64,
+	isApricotPhase5 func(uint64) bool,
+	getBlockByNumber func(uint64) *types.Block,
+	codec codec.Manager) (*Tx, uint64, error) {
 	for processingBlockHeight := lastAcceptedBlockHeight + 1; processingBlockHeight <= preferredBlockHeight; processingBlockHeight++ {
 		// We know that we have some blocks processing that have not yet been accepted that might potentially have the atomic tx
-		txs, err := vm.getAtomicTxFromBlockByHeight(processingBlockHeight)
+		blk := getBlockByNumber(processingBlockHeight)
+		apricotPhase5 := isApricotPhase5(processingBlockHeight)
+		txs, err := ExtractAtomicTxs(blk.ExtData(), apricotPhase5, codec)
 		if err == errMissingAtomicTxs {
 			// Skip the current iteration of the loop since there are no atomic txs for the processing block at this height
 			continue
@@ -1897,7 +1914,6 @@ func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
 	return baseFee, nil
 }
 
-// TODO: Remove this function and use getAtomicTxFromBlockByHeight instead
 func (vm *VM) getAtomicTxFromPreApricot5BlockByHeight(height uint64) (*Tx, error) {
 	blk := vm.blockChain.GetBlockByNumber(height)
 	if blk == nil {
