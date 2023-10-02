@@ -1163,7 +1163,6 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 
 		require.Equal(t, test.expectedTx.ID(), tx.ID())
 		require.Equal(t, test.expectedHeight, height)
-
 	}
 }
 
