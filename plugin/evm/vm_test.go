@@ -921,7 +921,6 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 	multipleAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
 	type testGetAtomicTx struct {
-		name                    string
 		lastAcceptedBlockHeight uint64
 		preferredBlockHeight    uint64
 		blocks                  map[uint64]*types.Block

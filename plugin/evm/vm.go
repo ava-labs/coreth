@@ -1922,15 +1922,6 @@ func (vm *VM) getAtomicTxFromPreApricot5BlockByHeight(height uint64) (*Tx, error
 	return ExtractAtomicTx(blk.ExtData(), vm.codec)
 }
 
-func (vm *VM) getAtomicTxFromBlockByHeight(height uint64) ([]*Tx, error) {
-	blk := vm.blockChain.GetBlockByNumber(height)
-	if blk == nil {
-		return nil, nil
-	}
-	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(blk.Time())
-	return ExtractAtomicTxs(blk.ExtData(), isApricotPhase5, vm.codec)
-}
-
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the
 // last accepted block hash and height by reading directly from [vm.chaindb] instead of relying
 // on [chain].
