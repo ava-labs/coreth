@@ -879,6 +879,9 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 		}
 	}()
 
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
 	// Create a block that has atomic txs and accept it so we can fund our eth address
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
@@ -923,7 +926,11 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 	} else if lastAcceptedID != blk.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
-	vm.blockChain.DrainAcceptorQueue()
+
+	newHead := <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk.ID()) {
+		t.Fatalf("Expected new block to match")
+	}
 
 	// Create a block that has no atomic txs
 	tx := types.NewTransaction(0, testEthAddrs[0], big.NewInt(0), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
@@ -999,6 +1006,16 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 			expectedHeight:          3,
 			expectedErr:             nil,
 		},
+		"getBlockByHeight is nil": {
+			lastAcceptedBlockHeight: 1,
+			preferredBlockHeight:    2,
+			blocks:                  map[uint64]*types.Block{2: nil},
+			isApricotPhase5:         map[uint64]bool{2: true},
+			inputTxID:               importTx.ID(),
+			expectedTx:              nil,
+			expectedHeight:          0,
+			expectedErr:             errNoBlockFound,
+		},
 	}
 
 	for _, test := range testCases {
@@ -1034,6 +1051,9 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
 	// Create a block that has atomic txs and accept it so we can fund our eth address
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
@@ -1079,7 +1099,11 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 	} else if lastAcceptedID != blk.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
-	vm.blockChain.DrainAcceptorQueue()
+
+	newHead := <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk.ID()) {
+		t.Fatalf("Expected new block to match")
+	}
 
 	// Create a block that has no atomic txs
 	tx := types.NewTx(&types.DynamicFeeTx{
