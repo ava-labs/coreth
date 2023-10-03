@@ -688,58 +688,49 @@ func TestImportMissingUTXOs(t *testing.T) {
 // Simple test to ensure we can issue an import transaction followed by an export transaction
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
+	require := require.New(t)
 	importAmount := uint64(50000000)
 	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		err := vm.Shutdown(context.Background())
+		require.NoError(err)
 	}()
 
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.issueTx(importTx, true /*=local*/)
+	require.NoError(err)
 
 	<-issuer
 
 	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk.Verify(context.Background())
+	require.NoError(err)
 
 	if status := blk.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.SetPreference(context.Background(), blk.ID())
+	require.NoError(err)
 
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk.Accept(context.Background())
+	require.NoError(err)
 
 	if status := blk.Status(); status != choices.Accepted {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
 	}
 
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(context.Background())
+	require.NoError(err)
+	require.Equal(lastAcceptedID, blk.ID(), "Expected last accepted blockID to be the accepted block")
+
 	vm.blockChain.DrainAcceptorQueue()
 	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
 		Timeout: 5 * time.Minute,
@@ -748,20 +739,12 @@ func TestIssueAtomicTxs(t *testing.T) {
 	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
 		BlockHash: &blockHash,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(logs) != 0 {
-		t.Fatalf("Expected log length to be 0, but found %d", len(logs))
-	}
-	if logs == nil {
-		t.Fatal("Expected logs to be non-nil")
-	}
+	require.NoError(err)
+	require.Empty(logs, "Expected logs to have length 0")
+	require.NotNil(logs, "Expected logs to be non-nil")
 
 	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount/2, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	if err := vm.issueTx(exportTx, true /*=local*/); err != nil {
 		t.Fatal(err)
@@ -770,103 +753,81 @@ func TestIssueAtomicTxs(t *testing.T) {
 	<-issuer
 
 	blk2, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := blk2.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk2.Verify(context.Background())
+	require.NoError(err)
 
-	if status := blk2.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-	}
+	require.Equal(blk2.Status(), choices.Processing, "Expected status to match")
 
-	if err := blk2.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk2.Accept(context.Background())
+	require.NoError(err)
 
 	if status := blk2.Status(); status != choices.Accepted {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
 	}
 
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk2.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err = vm.LastAccepted(context.Background())
+	require.NoError(err)
+	require.Equal(lastAcceptedID, blk2.ID(), "Expected last accepted blockID to be the accepted block")
+
 	vm.blockChain.DrainAcceptorQueue()
 
 	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := vm.issueTx(exportTx2, true /*=local*/); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.issueTx(exportTx2, true /*=local*/)
+	require.NoError(err)
 
 	<-issuer
 
 	blk3, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := vm.mempool.ForceAddTx(exportTx2); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.mempool.ForceAddTx(exportTx2)
+	require.NoError(err)
 
 	<-issuer
 
 	// Scenario where another block gets built by another node and picks up exportTx2 also before blk3 gets accepted
 	blk4, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := blk3.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk3.Verify(context.Background())
+	require.NoError(err)
 
-	if err := blk4.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk4.Verify(context.Background())
+	require.NoError(err)
 
-	if status := blk3.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-	}
+	require.Equal(blk3.Status(), choices.Processing, "Expected status to match")
+	require.Equal(blk4.Status(), choices.Processing, "Expected status to match")
 
-	if status := blk4.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk3.ID()); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.SetPreference(context.Background(), blk3.ID())
+	require.NoError(err)
 
 	// Check that both atomic transactions were indexed as expected.
 	indexedImportTx, status, height, err := vm.getAtomicTx(importTx.ID())
-	assert.NoError(t, err)
-	assert.Equal(t, Accepted, status)
-	assert.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
-	assert.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
+	require.NoError(err)
+	require.Equal(Accepted, status)
+	require.Equal(uint64(1), height, "expected height of indexed import tx to be 1")
+	require.Equal(indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
 
 	indexedExportTx, status, height, err := vm.getAtomicTx(exportTx.ID())
-	assert.NoError(t, err)
-	assert.Equal(t, Accepted, status)
-	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
-	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+	require.NoError(err)
+	require.Equal(Accepted, status)
+	require.Equal(uint64(2), height, "expected height of indexed export tx to be 2")
+	require.Equal(indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 
 	// getAtomicTx should check the processing blocks for any atomic txs.
 	exportTxFetched, status, height, err := vm.getAtomicTx(exportTx2.ID())
-	assert.NoError(t, err)
-	assert.Equal(t, Processing, status)
-	assert.Equal(t, uint64(3), height, "expected height of export tx to be 3")
-	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
+	require.NoError(err)
+	require.Equal(Processing, status)
+	require.Equal(uint64(3), height, "expected height of export tx to be 3")
+	require.Equal(exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
 }
 
 func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
+	require := require.New(t)
 	importAmount := uint64(1000000000)
 	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
@@ -874,9 +835,8 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		err := vm.Shutdown(context.Background())
+		require.NoError(err)
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
@@ -884,74 +844,53 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 
 	// Create a block that has atomic txs and accept it so we can fund our eth address
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	err = vm.issueTx(importTx, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	<-issuer
 
 	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+
 	atomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk.Verify(context.Background())
+	require.NoError(err)
 
-	if status := blk.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-	}
+	require.Equal(blk.Status(), choices.Processing, "Expected status to match")
 
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.SetPreference(context.Background(), blk.ID())
+	require.NoError(err)
 
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk.Accept(context.Background())
+	require.NoError(err)
 
-	if status := blk.Status(); status != choices.Accepted {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
-	}
+	require.Equal(blk.Status(), choices.Accepted, "Expected status to match")
 
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(context.Background())
+	require.NoError(err)
+	require.Equal(lastAcceptedID, blk.ID(), "Expected last accepted blockID to be the accepted block")
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(newHead.Head.Hash(), common.Hash(blk.ID()), "Expected new block to match")
 
 	// Create a block that has no atomic txs
 	tx := types.NewTransaction(0, testEthAddrs[0], big.NewInt(0), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), testKeys[0].ToECDSA())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})
 	for _, err := range errs {
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 	}
 
 	<-issuer
 
 	blk, err = vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+
 	noAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
 	type testGetAtomicTx struct {
@@ -1027,19 +966,20 @@ func TestGetAtomicTxFromProcessingBlocksPreApricot5(t *testing.T) {
 			func(height uint64) *types.Block { return test.blocks[height] },
 			vm.codec)
 
-		require.Equal(t, test.expectedErr, err)
+		require.Equal(test.expectedErr, err)
 		if test.expectedErr != nil {
-			require.Nil(t, tx)
-			require.Zero(t, height)
+			require.Nil(tx)
+			require.Zero(height)
 			continue
 		}
 
-		require.Equal(t, test.expectedTx.ID(), tx.ID())
-		require.Equal(t, test.expectedHeight, height)
+		require.Equal(test.expectedTx.ID(), tx.ID())
+		require.Equal(test.expectedHeight, height)
 	}
 }
 
 func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
+	require := require.New(t)
 	importAmount := uint64(1000000000)
 	issuer, vm, _, sharedMemory, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase5, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
@@ -1047,9 +987,9 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		err := vm.Shutdown(context.Background())
+		require.NoError(err)
+
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
@@ -1057,53 +997,37 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 
 	// Create a block that has atomic txs and accept it so we can fund our eth address
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	err = vm.issueTx(importTx, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	<-issuer
 
 	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+
 	atomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk.Verify(context.Background())
+	require.NoError(err)
 
-	if status := blk.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
-	}
+	require.Equal(blk.Status(), choices.Processing, "Expected status to match")
 
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
+	err = vm.SetPreference(context.Background(), blk.ID())
+	require.NoError(err)
 
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	err = blk.Accept(context.Background())
+	require.NoError(err)
 
-	if status := blk.Status(); status != choices.Accepted {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
-	}
+	require.Equal(blk.Status(), choices.Accepted, "Expected status to match")
 
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(context.Background())
+	require.NoError(err)
+	require.Equal(lastAcceptedID, blk.ID(), "Expected last accepted blockID to be the accepted block")
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(newHead.Head.Hash(), common.Hash(blk.ID()), "Expected new block to match")
 
 	// Create a block that has no atomic txs
 	tx := types.NewTx(&types.DynamicFeeTx{
@@ -1116,24 +1040,18 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 		Data:      nil,
 	})
 	signedTx, err := types.SignTx(tx, types.NewLondonSigner(vm.chainID), testKeys[0].ToECDSA())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})
 	for _, err := range errs {
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 	}
 
 	<-issuer
 
 	vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 	blk, err = vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	noAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
@@ -1141,28 +1059,25 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(testKeys[0])
 	txID, err := ids.ToID(hashing.ComputeHash256(testShortIDAddrs[0][:]))
-	assert.NoError(t, err)
+	require.NoError(err)
 
 	var importTx2 *Tx
 	for i := 0; i < 5; i++ {
 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
-		assert.NoError(t, err)
+		require.NoError(err)
 
 		importTx2, err = vm.newImportTxWithUTXOs(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := vm.issueTx(importTx2, true); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
+
+		err = vm.issueTx(importTx2, true)
+		require.NoError(err)
 	}
 
 	<-issuer
 
 	blk, err = vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+
 	multipleAtomicTxBlock := blk.(*chain.BlockWrapper).Block.(*Block)
 
 	type testGetAtomicTx struct {
@@ -1248,15 +1163,15 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 			func(height uint64) *types.Block { return test.blocks[height] },
 			vm.codec)
 
-		require.Equal(t, test.expectedErr, err)
+		require.Equal(test.expectedErr, err)
 		if test.expectedErr != nil {
-			require.Nil(t, tx)
-			require.Zero(t, height)
+			require.Nil(tx)
+			require.Zero(height)
 			continue
 		}
 
-		require.Equal(t, test.expectedTx.ID(), tx.ID())
-		require.Equal(t, test.expectedHeight, height)
+		require.Equal(test.expectedTx.ID(), tx.ID())
+		require.Equal(test.expectedHeight, height)
 	}
 }
 
