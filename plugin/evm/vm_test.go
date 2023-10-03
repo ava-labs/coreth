@@ -989,7 +989,6 @@ func TestGetAtomicTxFromProcessingBlocksPostApricot5(t *testing.T) {
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		require.NoError(err)
-
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
