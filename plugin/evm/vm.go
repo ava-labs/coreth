@@ -189,6 +189,7 @@ var (
 	errEmptyBlock                     = errors.New("empty block")
 	errUnsupportedFXs                 = errors.New("unsupported feature extensions")
 	errInvalidBlock                   = errors.New("invalid block")
+	errNoBlockFound                   = errors.New("no block found")
 	errInvalidAddr                    = errors.New("invalid hex address")
 	errInsufficientAtomicTxFee        = errors.New("atomic tx fee too low for atomic mempool")
 	errAssetIDMismatch                = errors.New("asset IDs in the input don't match the utxo")
@@ -1479,6 +1480,10 @@ func getAtomicTxFromProcessingBlocks(
 	for processingBlockHeight := lastAcceptedBlockHeight + 1; processingBlockHeight <= preferredBlockHeight; processingBlockHeight++ {
 		// We know that we have some blocks processing that have not yet been accepted that might potentially have the atomic tx
 		blk := getBlockByNumber(processingBlockHeight)
+		if blk == nil {
+			return nil, 0, errNoBlockFound
+		}
+
 		apricotPhase5 := isApricotPhase5(processingBlockHeight)
 		txs, err := ExtractAtomicTxs(blk.ExtData(), apricotPhase5, codec)
 		if err == errMissingAtomicTxs {
