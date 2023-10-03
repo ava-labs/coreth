@@ -1460,10 +1460,15 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 // This function assumes that we have already searched accepted blocks for atomic txs.
 // We return an error if we cannot find a matching atomic tx in the processing blocks.
 func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
+	_, lastAcceptedHeight, err := vm.readLastAccepted()
+	if err != nil {
+		return nil, 0, err
+	}
+
 	return getAtomicTxFromProcessingBlocks(
 		txID,
 		vm.blockChain.CurrentBlock().Number.Uint64(),
-		vm.blockChain.LastAcceptedBlock().Header().Number.Uint64(),
+		lastAcceptedHeight,
 		vm.chainConfig.IsApricotPhase5,
 		vm.blockChain.GetBlockByNumber,
 		vm.codec,
