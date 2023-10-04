@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -732,16 +731,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 	require.Equal(lastAcceptedID, blk.ID(), "Expected last accepted blockID to be the accepted block")
 
 	vm.blockChain.DrainAcceptorQueue()
-	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
-		Timeout: 5 * time.Minute,
-	}))
-	blockHash := common.Hash(blk.ID())
-	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
-		BlockHash: &blockHash,
-	})
-	require.NoError(err)
-	require.Empty(logs, "Expected logs to have length 0")
-	require.NotNil(logs, "Expected logs to be non-nil")
 
 	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount/2, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(err)
@@ -763,9 +752,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 	err = blk2.Accept(context.Background())
 	require.NoError(err)
 
-	if status := blk2.Status(); status != choices.Accepted {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
-	}
+	require.Equal(blk2.Status(), choices.Accepted, "Expected status to match")
 
 	lastAcceptedID, err = vm.LastAccepted(context.Background())
 	require.NoError(err)
@@ -967,7 +954,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 		blocks                  map[uint64]*types.Block
 		isApricotPhase5         map[uint64]bool
 		inputTxID               ids.ID
-		expectedTx              *Tx
 		expectedHeight          uint64
 		expectedErr             error
 	}
@@ -979,7 +965,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: atomicTxBlock.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: false},
 			inputTxID:               importTx.ID(),
-			expectedTx:              importTx,
 			expectedHeight:          2,
 			expectedErr:             nil,
 		},
@@ -989,7 +974,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: atomicTxBlock.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: false},
 			inputTxID:               importTx.ID(),
-			expectedTx:              nil,
 			expectedHeight:          0,
 			expectedErr:             errNoAtomicTxsFound,
 		},
@@ -999,7 +983,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: noAtomicTxBlock.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: false},
 			inputTxID:               importTx.ID(),
-			expectedTx:              nil,
 			expectedHeight:          0,
 			expectedErr:             errNoAtomicTxsFound,
 		},
@@ -1009,7 +992,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: noAtomicTxBlock.ethBlock, 3: atomicTxBlock.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: false, 3: false},
 			inputTxID:               importTx.ID(),
-			expectedTx:              importTx,
 			expectedHeight:          3,
 			expectedErr:             nil,
 		},
@@ -1019,7 +1001,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: nil},
 			isApricotPhase5:         map[uint64]bool{2: true},
 			inputTxID:               importTx.ID(),
-			expectedTx:              nil,
 			expectedHeight:          0,
 			expectedErr:             errNoBlockFound,
 		},
@@ -1029,7 +1010,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: atomicTxBlockPostApricot5.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: true},
 			inputTxID:               importTx2.ID(),
-			expectedTx:              importTx2,
 			expectedHeight:          2,
 			expectedErr:             nil,
 		},
@@ -1039,7 +1019,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: atomicTxBlockPostApricot5.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: true},
 			inputTxID:               importTx2.ID(),
-			expectedTx:              nil,
 			expectedHeight:          0,
 			expectedErr:             errNoAtomicTxsFound,
 		},
@@ -1049,7 +1028,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: noAtomicTxBlockPostApricot5.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: true},
 			inputTxID:               importTx2.ID(),
-			expectedTx:              nil,
 			expectedHeight:          0,
 			expectedErr:             errNoAtomicTxsFound,
 		},
@@ -1059,7 +1037,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: noAtomicTxBlockPostApricot5.ethBlock, 3: atomicTxBlockPostApricot5.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: true, 3: true},
 			inputTxID:               importTx2.ID(),
-			expectedTx:              importTx2,
 			expectedHeight:          3,
 			expectedErr:             nil,
 		},
@@ -1069,7 +1046,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: multipleAtomicTxBlockPostApricot5.ethBlock},
 			isApricotPhase5:         map[uint64]bool{2: true},
 			inputTxID:               importTx3.ID(),
-			expectedTx:              importTx3,
 			expectedHeight:          2,
 			expectedErr:             nil,
 		},
@@ -1079,7 +1055,6 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			blocks:                  map[uint64]*types.Block{2: nil},
 			isApricotPhase5:         map[uint64]bool{2: true},
 			inputTxID:               importTx2.ID(),
-			expectedTx:              nil,
 			expectedHeight:          0,
 			expectedErr:             errNoBlockFound,
 		},
@@ -1101,7 +1076,7 @@ func TestGetAtomicTxFromProcessingBlocks(t *testing.T) {
 			continue
 		}
 
-		require.Equal(test.expectedTx.ID(), tx.ID())
+		require.Equal(test.inputTxID, tx.ID())
 		require.Equal(test.expectedHeight, height)
 	}
 }

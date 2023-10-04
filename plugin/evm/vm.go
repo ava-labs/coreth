@@ -1456,9 +1456,9 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 }
 
 // getAtomicTxFromProcessingBlocks takes in a [txID] and searches for a matching atomic tx in processing blocks
-// Specifically we look from blocks with lastAcceptedBlockHeight + 1  to preferredBlockHeight.
+// Specifically we look from blocks with lastAcceptedBlockHeight + 1 to preferredBlockHeight.
 // This function assumes that we have already searched accepted blocks for atomic txs.
-// We return an error if we cannot find a matching atomic tx in the processing blocks.
+// We return errNoAtomicTxsFound if we cannot find a matching atomic tx in the processing blocks.
 func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
 	_, lastAcceptedHeight, err := vm.readLastAccepted()
 	if err != nil {
