@@ -189,7 +189,6 @@ var (
 	errEmptyBlock                     = errors.New("empty block")
 	errUnsupportedFXs                 = errors.New("unsupported feature extensions")
 	errInvalidBlock                   = errors.New("invalid block")
-	errNoBlockFound                   = errors.New("no block found")
 	errInvalidAddr                    = errors.New("invalid hex address")
 	errInsufficientAtomicTxFee        = errors.New("atomic tx fee too low for atomic mempool")
 	errAssetIDMismatch                = errors.New("asset IDs in the input don't match the utxo")
@@ -1450,59 +1449,6 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	default:
 		return nil, Unknown, 0, nil
 	}
-}
-
-// getAtomicTxFromProcessingBlocks takes in a [txID] and searches for a matching atomic tx in processing blocks
-// Specifically we look from blocks with lastAcceptedBlockHeight + 1 to preferredBlockHeight.
-// This function assumes that we have already searched accepted blocks for atomic txs.
-// We return errNoAtomicTxsFound if we cannot find a matching atomic tx in the processing blocks.
-func (vm *VM) getAtomicTxFromProcessingBlocks(txID ids.ID) (*Tx, uint64, error) {
-	_, lastAcceptedHeight, err := vm.readLastAccepted()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return getAtomicTxFromProcessingBlocks(
-		txID,
-		vm.blockChain.CurrentBlock().Number.Uint64(),
-		lastAcceptedHeight,
-		vm.chainConfig.IsApricotPhase5,
-		vm.blockChain.GetBlockByNumber,
-		vm.codec,
-	)
-}
-
-func getAtomicTxFromProcessingBlocks(
-	txID ids.ID,
-	preferredBlockHeight uint64,
-	lastAcceptedBlockHeight uint64,
-	isApricotPhase5 func(uint64) bool,
-	getBlockByNumber func(uint64) *types.Block,
-	codec codec.Manager) (*Tx, uint64, error) {
-	for processingBlockHeight := lastAcceptedBlockHeight + 1; processingBlockHeight <= preferredBlockHeight; processingBlockHeight++ {
-		// We know that we have some blocks processing that have not yet been accepted that might potentially have the atomic tx
-		blk := getBlockByNumber(processingBlockHeight)
-		if blk == nil {
-			return nil, 0, errNoBlockFound
-		}
-
-		apricotPhase5 := isApricotPhase5(processingBlockHeight)
-		txs, err := ExtractAtomicTxs(blk.ExtData(), apricotPhase5, codec)
-		if err == errMissingAtomicTxs {
-			// Skip the current iteration of the loop since there are no atomic txs for the processing block at this height
-			continue
-		}
-		if err != nil {
-			return nil, 0, err
-		}
-
-		for _, tx := range txs {
-			if tx.ID() == txID {
-				return tx, processingBlockHeight, nil
-			}
-		}
-	}
-	return nil, 0, errNoAtomicTxsFound
 }
 
 // ParseAddress takes in an address and produces the ID of the chain it's for
