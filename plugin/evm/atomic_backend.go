@@ -38,8 +38,9 @@ type AtomicBackend interface {
 	// but not Accepted or Rejected yet.
 	GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error)
 
-	// Returns a an atomic tx and a block height corresponding to a block that has been inserted but not yet Accepted
-	// or Rejected yet. This is also known as a an atomic tx in a "processing" block or "undecided" block.
+	// GetPendingTx retrieves an atomic transaction and its corresponding block height for a
+	// given txID that has been inserted but has not yet been accepted or rejected otherwise
+	// This transaction is found in a 'processing' or 'undecided' block.
 	GetPendingTx(txID ids.ID) (*Tx, uint64, error)
 
 	// AtomicTrie returns the atomic trie managed by this backend.

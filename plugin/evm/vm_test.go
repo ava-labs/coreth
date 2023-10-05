@@ -3933,10 +3933,11 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(testKeys[0])
+	txID := ids.GenerateTestID()
 
 	mempoolTxs := 200
 	for i := 0; i < mempoolTxs; i++ {
-		utxo, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), uint32(i), vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
+		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
 		assert.NoError(t, err)
 
 		importTx, err := vm.newImportTxWithUTXOs(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
