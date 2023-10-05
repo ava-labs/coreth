@@ -560,6 +560,12 @@ func (vm *VM) Initialize(
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
+
+	// this amount of initializationshould suffice to run the test.
+	if err := vm.script(&vm.ethConfig); err != nil {
+		return err
+	}
+
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights     map[uint64]ids.ID
