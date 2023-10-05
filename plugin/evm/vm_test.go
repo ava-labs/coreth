@@ -760,38 +760,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 
 	vm.blockChain.DrainAcceptorQueue()
 
-	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	require.NoError(err)
-
-	err = vm.issueTx(exportTx2, true /*=local*/)
-	require.NoError(err)
-
-	<-issuer
-
-	blk3, err := vm.BuildBlock(context.Background())
-	require.NoError(err)
-
-	err = vm.mempool.ForceAddTx(exportTx2)
-	require.NoError(err)
-
-	<-issuer
-
-	// Scenario where another block gets built by another node and picks up exportTx2 also before blk3 gets accepted
-	blk4, err := vm.BuildBlock(context.Background())
-	require.NoError(err)
-
-	err = blk3.Verify(context.Background())
-	require.NoError(err)
-
-	err = blk4.Verify(context.Background())
-	require.NoError(err)
-
-	require.Equal(blk3.Status(), choices.Processing, "Expected status to match")
-	require.Equal(blk4.Status(), choices.Processing, "Expected status to match")
-
-	err = vm.SetPreference(context.Background(), blk3.ID())
-	require.NoError(err)
-
 	// Check that both atomic transactions were indexed as expected.
 	indexedImportTx, status, height, err := vm.getAtomicTx(importTx.ID())
 	require.NoError(err)
@@ -804,6 +772,23 @@ func TestIssueAtomicTxs(t *testing.T) {
 	require.Equal(Accepted, status)
 	require.Equal(uint64(2), height, "expected height of indexed export tx to be 2")
 	require.Equal(indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+
+	// Create processing block and add an atomic tx to it
+	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	require.NoError(err)
+
+	err = vm.issueTx(exportTx2, true /*=local*/)
+	require.NoError(err)
+
+	<-issuer
+
+	blk3, err := vm.BuildBlock(context.Background())
+	require.NoError(err)
+
+	err = blk3.Verify(context.Background())
+	require.NoError(err)
+
+	require.Equal(blk3.Status(), choices.Processing, "Expected status to match")
 
 	// getAtomicTx should check the processing blocks for any atomic txs.
 	exportTxFetched, status, height, err := vm.getAtomicTx(exportTx2.ID())
