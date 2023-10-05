@@ -39,7 +39,7 @@ type AtomicBackend interface {
 	GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error)
 
 	// GetPendingTx retrieves an atomic transaction and its corresponding block height for a
-	// given txID that has been inserted but has not yet been accepted or rejected otherwise
+	// given txID that has been inserted but has not yet been accepted or rejected.
 	// This transaction is found in a 'processing' or 'undecided' block.
 	GetPendingTx(txID ids.ID) (*Tx, uint64, error)
 
