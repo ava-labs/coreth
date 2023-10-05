@@ -1285,6 +1285,16 @@ func (vm *VM) Version(context.Context) (string, error) {
 	return Version, nil
 }
 
+var errNotYetImplemented = errors.New("block backfilling not yet implemented")
+
+func (vm *VM) BackfillBlocksEnabled(ctx context.Context) (ids.ID, error) {
+	return ids.Empty, errNotYetImplemented
+}
+
+func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) error {
+	return errNotYetImplemented
+}
+
 // NewHandler returns a new Handler for a service where:
 //   - The handler's functionality is defined by [service]
 //     [service] should be a gorilla RPC service (see https://www.gorillatoolkit.org/pkg/rpc/v2)
