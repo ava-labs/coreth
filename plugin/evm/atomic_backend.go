@@ -38,6 +38,10 @@ type AtomicBackend interface {
 	// but not Accepted or Rejected yet.
 	GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error)
 
+	// Returns a an atomic tx and a block height corresponding to a block that has been inserted but not yet Accepted
+	// or Rejected yet. This is also known as a an atomic tx in a "processing" block or "undecided" block.
+	GetPendingTx(txID ids.ID) (*Tx, uint64, error)
+
 	// AtomicTrie returns the atomic trie managed by this backend.
 	AtomicTrie() AtomicTrie
 
@@ -66,13 +70,20 @@ type AtomicBackend interface {
 	IsBonus(blockHeight uint64, blockHash common.Hash) bool
 }
 
+// pendingTx represents a transaction along with its associated block height within a processing block.
+type pendingTx struct {
+	tx          *Tx
+	blockHeight uint64
+}
+
 // atomicBackend implements the AtomicBackend interface using
 // the AtomicTrie, AtomicTxRepository, and the VM's shared memory.
 type atomicBackend struct {
 	codec        codec.Manager
-	bonusBlocks  map[uint64]ids.ID   // Map of height to blockID for blocks to skip indexing
-	db           *versiondb.Database // Underlying database
-	metadataDB   database.Database   // Underlying database containing the atomic trie metadata
+	bonusBlocks  map[uint64]ids.ID    // Map of height to blockID for blocks to skip indexing
+	pendingTxs   map[ids.ID]pendingTx // Map of txID to pendingTx to track atomic txs in processing blocks
+	db           *versiondb.Database  // Underlying database
+	metadataDB   database.Database    // Underlying database containing the atomic trie metadata
 	sharedMemory atomic.SharedMemory
 
 	repo       AtomicTxRepository
@@ -102,6 +113,7 @@ func NewAtomicBackend(
 		metadataDB:       metadataDB,
 		sharedMemory:     sharedMemory,
 		bonusBlocks:      bonusBlocks,
+		pendingTxs:       make(map[ids.ID]pendingTx),
 		repo:             repo,
 		atomicTrie:       atomicTrie,
 		lastAcceptedHash: lastAcceptedHash,
@@ -333,6 +345,13 @@ func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicSta
 	return nil, fmt.Errorf("cannot access atomic state for block %s", blockHash)
 }
 
+func (a *atomicBackend) GetPendingTx(txID ids.ID) (*Tx, uint64, error) {
+	if pendingTx, found := a.pendingTxs[txID]; found {
+		return pendingTx.tx, pendingTx.blockHeight, nil
+	}
+	return nil, 0, errNoAtomicTxsFound
+}
+
 // getAtomicRootAt returns the atomic trie root for a block that is either:
 // - the last accepted block
 // - a block that has been verified but not accepted or rejected yet.
@@ -359,7 +378,7 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 // corresponding to previously verified block [parentHash].
 // If [blockHash] is provided, the modified atomic trie is pinned in memory
 // and it's the caller's responsibility to call either Accept or Reject on
-// the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
+// the AtomicState which can be retrieved from GetVerifiedAtomicState to commit the
 // changes or abort them and free memory.
 func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error) {
 	// access the atomic trie at the parent block
@@ -391,6 +410,15 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 	if err := a.atomicTrie.InsertTrie(nodes, root); err != nil {
 		return common.Hash{}, err
 	}
+
+	// Add txs to pending map as this block is considered processing
+	for _, tx := range txs {
+		a.pendingTxs[tx.ID()] = pendingTx{
+			tx:          tx,
+			blockHeight: blockHeight,
+		}
+	}
+
 	// track this block so further blocks can be inserted on top
 	// of this block
 	a.verifiedRoots[blockHash] = &atomicState{

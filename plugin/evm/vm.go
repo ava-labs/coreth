@@ -1437,12 +1437,9 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	// prior to block acceptance and should have status as processing.
 	// These txs will be available in the mempool as well but could give misleading
 	// results if dropped by another processing block.
-	if tx, height, err := vm.getAtomicTxFromProcessingBlocks(txID); err == nil {
+	if tx, height, err := vm.atomicBackend.GetPendingTx(txID); err == nil {
 		return tx, Processing, height, nil
-	} else if err != errNoAtomicTxsFound {
-		return nil, Unknown, 0, err
 	}
-
 	// Check mempool for atomic txs
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {

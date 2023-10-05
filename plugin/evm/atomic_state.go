@@ -67,6 +67,10 @@ func (a *atomicState) Accept(commitBatch database.Batch) error {
 	// the map tracking undecided blocks.
 	a.backend.lastAcceptedHash = a.blockHash
 	delete(a.backend.verifiedRoots, a.blockHash)
+	// Removes pendingTx from the pendingTx map
+	for _, tx := range a.txs {
+		delete(a.backend.pendingTxs, tx.ID())
+	}
 
 	// get changes from the atomic trie and repository in a batch
 	// to be committed atomically with [commitBatch] and shared memory.
@@ -91,6 +95,10 @@ func (a *atomicState) Accept(commitBatch database.Batch) error {
 func (a *atomicState) Reject() error {
 	// Remove the block from the map of undecided blocks.
 	delete(a.backend.verifiedRoots, a.blockHash)
+	// Removes pendingTx from the pendingTx map
+	for _, tx := range a.txs {
+		delete(a.backend.pendingTxs, tx.ID())
+	}
 	// Unpin the rejected atomic trie root from memory.
 	return a.backend.atomicTrie.RejectTrie(a.atomicRoot)
 }
