@@ -1432,10 +1432,10 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	}
 
 	// Check processing blocks for atomic txs
-	// We should do this check here because blocks can pick up these atomic txs
-	// prior to block acceptance and should have status as processing.
-	// These txs will be available in the mempool as well but could give misleading
-	// results if dropped by another processing block.
+	// We check the atomic backend here because processing blocks can
+	// contain atomic txs and their status should report as processing.
+	// This takes precedence over the tx's mempool status, where
+	// the status may be dropped (if it was included in another processing block).
 	if tx, height, err := vm.atomicBackend.GetPendingTx(txID); err == nil {
 		return tx, Processing, height, nil
 	}

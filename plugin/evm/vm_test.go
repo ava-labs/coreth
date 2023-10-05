@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
+	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -40,6 +41,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -289,6 +291,20 @@ func addUTXO(sharedMemory *atomic.Memory, ctx *snow.Context, txID ids.ID, index 
 	}
 
 	return utxo, nil
+}
+
+// verifyNoNilLogRegression tests that GetLogs does not return nil logs for a given block.
+func verifyNoNilLogRegression(require *require.Assertions, vm *VM, blk snowman.Block) {
+	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
+		Timeout: 5 * time.Minute,
+	}))
+	blockHash := common.Hash(blk.ID())
+	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
+		BlockHash: &blockHash,
+	})
+	require.NoError(err)
+	require.Empty(logs)
+	require.NotNil(logs)
 }
 
 // GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map
@@ -732,6 +748,10 @@ func TestIssueAtomicTxs(t *testing.T) {
 
 	vm.blockChain.DrainAcceptorQueue()
 
+	// a regression was introduced in v0.12.3 where collectUnflattenedLogs returns nil for a block that only contains atomic transactions
+	// This bubbles up as an err in `eth_getLogs`. We test that logs are not nil here.
+	verifyNoNilLogRegression(require, vm, blk)
+
 	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount/2, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(err)
 
@@ -748,6 +768,13 @@ func TestIssueAtomicTxs(t *testing.T) {
 	require.NoError(err)
 
 	require.Equal(blk2.Status(), choices.Processing, "Expected status to match")
+
+	// call getAtomicTx prior to blk2 being accepted as it should check the processing blocks for any atomic txs.
+	exportTxFetched, status, height, err := vm.getAtomicTx(exportTx.ID())
+	require.NoError(err)
+	require.Equal(Processing, status)
+	require.Equal(uint64(2), height, "expected height of export tx to be 2")
+	require.Equal(exportTxFetched.ID(), exportTx.ID(), "expected ID of fetched export tx to match original txID")
 
 	err = blk2.Accept(context.Background())
 	require.NoError(err)
@@ -772,30 +799,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 	require.Equal(Accepted, status)
 	require.Equal(uint64(2), height, "expected height of indexed export tx to be 2")
 	require.Equal(indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
-
-	// Create processing block and add an atomic tx to it
-	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	require.NoError(err)
-
-	err = vm.issueTx(exportTx2, true /*=local*/)
-	require.NoError(err)
-
-	<-issuer
-
-	blk3, err := vm.BuildBlock(context.Background())
-	require.NoError(err)
-
-	err = blk3.Verify(context.Background())
-	require.NoError(err)
-
-	require.Equal(blk3.Status(), choices.Processing, "Expected status to match")
-
-	// getAtomicTx should check the processing blocks for any atomic txs.
-	exportTxFetched, status, height, err := vm.getAtomicTx(exportTx2.ID())
-	require.NoError(err)
-	require.Equal(Processing, status)
-	require.Equal(uint64(3), height, "expected height of export tx to be 3")
-	require.Equal(exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
