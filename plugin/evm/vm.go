@@ -1439,6 +1439,7 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	if tx, height, err := vm.atomicBackend.GetPendingTx(txID); err == nil {
 		return tx, Processing, height, nil
 	}
+
 	// Check mempool for atomic txs
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
