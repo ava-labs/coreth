@@ -319,7 +319,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		}
 		close(fetchKeys)
 
-		numThreads := len(s.pendingStorage) / 10
+		numThreads := len(s.pendingStorage) / 5
 		wg := sync.WaitGroup{}
 		wg.Add(numThreads)
 		for i := 0; i < numThreads; i++ {
