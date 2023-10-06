@@ -834,13 +834,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = vm.mempool.ForceAddTx(exportTx2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	<-issuer
-
 	err = blk3.Verify(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -850,7 +843,14 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// blk4 also picks up the same atomic tx and should fail block building and should discard the atomic tx
+	err = vm.mempool.ForceAddTx(exportTx2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// blk4 also picks up the same atomic tx, fails block building, and should discard the atomic tx
 	blk4, err := vm.BuildBlock(context.Background())
 	if blk4 != nil {
 		t.Fatalf("blk4 should have failed verification since it holds the same tx as the preferred block")
@@ -860,6 +860,8 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
 	}
 
+	// the atomic tx should be safe in the preferred block for now
+	// and getAtomicTx should report as processing even though it got discarded in blk4
 	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
 	assert.NoError(t, err)
 	assert.Equal(t, Processing, status)
