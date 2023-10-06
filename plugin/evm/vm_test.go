@@ -41,7 +41,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -291,20 +290,6 @@ func addUTXO(sharedMemory *atomic.Memory, ctx *snow.Context, txID ids.ID, index 
 	}
 
 	return utxo, nil
-}
-
-// verifyNoNilLogRegression tests that GetLogs does not return nil logs for a given block.
-func verifyNoNilLogRegression(require *require.Assertions, vm *VM, blk snowman.Block) {
-	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
-		Timeout: 5 * time.Minute,
-	}))
-	blockHash := common.Hash(blk.ID())
-	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
-		BlockHash: &blockHash,
-	})
-	require.NoError(err)
-	require.Empty(logs)
-	require.NotNil(logs)
 }
 
 // GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map
@@ -703,57 +688,80 @@ func TestImportMissingUTXOs(t *testing.T) {
 // Simple test to ensure we can issue an import transaction followed by an export transaction
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
-	require := require.New(t)
 	importAmount := uint64(50000000)
 	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
 	defer func() {
-		err := vm.Shutdown(context.Background())
-		require.NoError(err)
+		if err := vm.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	require.NoError(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	err = vm.issueTx(importTx, true /*=local*/)
-	require.NoError(err)
+	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
+		t.Fatal(err)
+	}
 
 	<-issuer
 
 	blk, err := vm.BuildBlock(context.Background())
-	require.NoError(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	err = blk.Verify(context.Background())
-	require.NoError(err)
+	if err := blk.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 
 	if status := blk.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
 	}
 
-	err = vm.SetPreference(context.Background(), blk.ID())
-	require.NoError(err)
+	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+		t.Fatal(err)
+	}
 
-	err = blk.Accept(context.Background())
-	require.NoError(err)
+	if err := blk.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 
 	if status := blk.Status(); status != choices.Accepted {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
 	}
 
-	lastAcceptedID, err := vm.LastAccepted(context.Background())
-	require.NoError(err)
-	require.Equal(lastAcceptedID, blk.ID(), "Expected last accepted blockID to be the accepted block")
-
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
 	vm.blockChain.DrainAcceptorQueue()
-
-	// a regression was introduced in v0.12.3 where collectUnflattenedLogs returns nil for a block that only contains atomic transactions
-	// This bubbles up as an err in `eth_getLogs`. We test that logs are not nil here.
-	verifyNoNilLogRegression(require, vm, blk)
+	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
+		Timeout: 5 * time.Minute,
+	}))
+	blockHash := common.Hash(blk.ID())
+	logs, err := filterAPI.GetLogs(context.Background(), filters.FilterCriteria{
+		BlockHash: &blockHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 0 {
+		t.Fatalf("Expected log length to be 0, but found %d", len(logs))
+	}
+	if logs == nil {
+		t.Fatal("Expected logs to be non-nil")
+	}
 
 	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount/2, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	require.NoError(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := vm.issueTx(exportTx, true /*=local*/); err != nil {
 		t.Fatal(err)
@@ -762,43 +770,107 @@ func TestIssueAtomicTxs(t *testing.T) {
 	<-issuer
 
 	blk2, err := vm.BuildBlock(context.Background())
-	require.NoError(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	err = blk2.Verify(context.Background())
-	require.NoError(err)
+	if err := blk2.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 
-	require.Equal(blk2.Status(), choices.Processing, "Expected status to match")
+	if status := blk2.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
 
 	// call getAtomicTx prior to blk2 being accepted as it should check the processing blocks for any atomic txs.
 	exportTxFetched, status, height, err := vm.getAtomicTx(exportTx.ID())
-	require.NoError(err)
-	require.Equal(Processing, status)
-	require.Equal(uint64(2), height, "expected height of export tx to be 2")
-	require.Equal(exportTxFetched.ID(), exportTx.ID(), "expected ID of fetched export tx to match original txID")
+	assert.NoError(t, err)
+	assert.Equal(t, Processing, status)
+	assert.Equal(t, uint64(2), height, "expected height of export tx to be 2")
+	assert.Equal(t, exportTxFetched.ID(), exportTx.ID(), "expected ID of fetched export tx to match original txID")
 
-	err = blk2.Accept(context.Background())
-	require.NoError(err)
+	if err := blk2.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 
-	require.Equal(blk2.Status(), choices.Accepted, "Expected status to match")
+	if status := blk2.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
 
-	lastAcceptedID, err = vm.LastAccepted(context.Background())
-	require.NoError(err)
-	require.Equal(lastAcceptedID, blk2.ID(), "Expected last accepted blockID to be the accepted block")
-
-	vm.blockChain.DrainAcceptorQueue()
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk2.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+	}
 
 	// Check that both atomic transactions were indexed as expected.
 	indexedImportTx, status, height, err := vm.getAtomicTx(importTx.ID())
-	require.NoError(err)
-	require.Equal(Accepted, status)
-	require.Equal(uint64(1), height, "expected height of indexed import tx to be 1")
-	require.Equal(indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
+	assert.NoError(t, err)
+	assert.Equal(t, Accepted, status)
+	assert.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
+	assert.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
 
 	indexedExportTx, status, height, err := vm.getAtomicTx(exportTx.ID())
-	require.NoError(err)
-	require.Equal(Accepted, status)
-	require.Equal(uint64(2), height, "expected height of indexed export tx to be 2")
-	require.Equal(indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+	assert.NoError(t, err)
+	assert.Equal(t, Accepted, status)
+	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
+	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+
+	// The same atomic transaction is included in multiple processing blocks
+	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = vm.issueTx(exportTx2, true /*=local*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk3, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = vm.mempool.ForceAddTx(exportTx2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// blk4 also picks up the same atomic tx
+	blk4, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = blk3.Verify(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = blk4.Verify(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk3.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if status := blk4.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Processing, status)
+	assert.Equal(t, uint64(3), height, "expected height of export tx to be 3")
+	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
+
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
@@ -3921,7 +3993,8 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(testKeys[0])
-	txID := ids.GenerateTestID()
+	txID, err := ids.ToID(hashing.ComputeHash256(testShortIDAddrs[0][:]))
+	assert.NoError(t, err)
 
 	mempoolTxs := 200
 	for i := 0; i < mempoolTxs; i++ {
@@ -3972,7 +4045,8 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(testKeys[0])
-	txID := ids.GenerateTestID()
+	txID, err := ids.ToID(hashing.ComputeHash256(testShortIDAddrs[0][:]))
+	assert.NoError(t, err)
 
 	// Add enough UTXOs, such that the created import transaction will attempt to consume more gas than allowed
 	// in ApricotPhase5.
