@@ -851,7 +851,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 	<-issuer
 
 	// blk4 also picks up the same atomic tx, fails block building, and should discard the atomic tx
-	blk4, err := vm.BuildBlock(context.Background())
+	blk4, _ := vm.BuildBlock(context.Background())
 	if blk4 != nil {
 		t.Fatalf("blk4 should have failed verification since it holds the same tx as the preferred block")
 	}
