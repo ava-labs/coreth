@@ -860,7 +860,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
 	}
 
-	// the atomic tx should be safe in the preferred block for now
+	// the atomic tx should be safe in blk3 for now
 	// and getAtomicTx should report as processing even though it got discarded in blk4
 	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
 	assert.NoError(t, err)
