@@ -17,8 +17,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+const scriptVersion = 2
+
 func (vm *VM) script(cfg *ethconfig.Config) error {
-	log.Warn("VM SCRIPT: running")
+	log.Warn("VM SCRIPT: running", "version", scriptVersion)
 	// Let's use a consistent recent state root for this test
 	targetHeight := uint64(36077568)
 
@@ -34,7 +36,7 @@ func (vm *VM) script(cfg *ethconfig.Config) error {
 		}
 	}
 
-	log.Warn("VM SCRIPT: complete")
+	log.Warn("VM SCRIPT: complete", "version", scriptVersion)
 	return errors.New("script complete, intentionally preventing further initialization")
 }
 
@@ -62,10 +64,10 @@ func (vm *VM) measureOnce(cfg *ethconfig.Config, stateRoot common.Hash, iteratio
 			return err
 		}
 		sampleTime := time.Since(start)
-		log.Info("VM SCRIPT: sample", "sample", sampleID, "time", sampleTime)
+		log.Info("VM SCRIPT: sample", "sample", sampleID, "time", sampleTime, "version", scriptVersion)
 		totalTime += sampleTime
 	}
-	log.Info("VM SCRIPT: average", "average", totalTime/time.Duration(numSamples), "iteration", iteration)
+	log.Info("VM SCRIPT: average", "average", totalTime/time.Duration(numSamples), "iteration", iteration, "version", scriptVersion)
 	return nil
 }
 
