@@ -841,28 +841,23 @@ func TestIssueAtomicTxs(t *testing.T) {
 
 	<-issuer
 
-	// blk4 also picks up the same atomic tx
-	blk4, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	err = blk3.Verify(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = blk4.Verify(context.Background())
-	if err != nil {
+	if err := vm.SetPreference(context.Background(), blk3.ID()); err != nil {
 		t.Fatal(err)
 	}
 
-	if status := blk3.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	// blk4 also picks up the same atomic tx and should fail block building and should discard the atomic tx
+	blk4, err := vm.BuildBlock(context.Background())
+	if blk4 != nil {
+		t.Fatalf("blk4 should have failed verification since it holds the same tx as the preferred block")
 	}
 
-	if status := blk4.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	if status := blk3.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
 	}
 
 	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
@@ -870,7 +865,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, Processing, status)
 	assert.Equal(t, uint64(3), height, "expected height of export tx to be 3")
 	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
-
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
