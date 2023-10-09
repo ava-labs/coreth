@@ -86,7 +86,7 @@ type VersionReply struct {
 }
 
 // ClientVersion returns the version of the VM running
-func (service *AvaxAPI) Version(r *http.Request, args *struct{}, reply *VersionReply) error {
+func (service *AvaxAPI) Version(r *http.Request, _ *struct{}, reply *VersionReply) error {
 	reply.Version = Version
 	return nil
 }
@@ -106,6 +106,9 @@ type ExportKeyReply struct {
 
 // ExportKey returns a private key from the provided user
 func (service *AvaxAPI) ExportKey(r *http.Request, args *ExportKeyArgs, reply *ExportKeyReply) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: ExportKey called")
 
 	address, err := ParseEthAddress(args.Address)
@@ -139,6 +142,9 @@ type ImportKeyArgs struct {
 
 // ImportKey adds a private key to the provided user
 func (service *AvaxAPI) ImportKey(r *http.Request, args *ImportKeyArgs, reply *api.JSONAddress) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: ImportKey called", "username", args.Username)
 
 	if args.PrivateKey == nil {
@@ -185,6 +191,9 @@ func (service *AvaxAPI) ImportAVAX(_ *http.Request, args *ImportArgs, response *
 // Import issues a transaction to import AVAX from the X-chain. The AVAX
 // must have already been exported from the X-Chain.
 func (service *AvaxAPI) Import(_ *http.Request, args *ImportArgs, response *api.JSONTxID) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: ImportAVAX called")
 
 	chainID, err := service.vm.ctx.BCLookup.Lookup(args.SourceChain)
@@ -266,6 +275,9 @@ type ExportArgs struct {
 // Export exports an asset from the C-Chain to the X-Chain
 // It must be imported on the X-Chain to complete the transfer
 func (service *AvaxAPI) Export(_ *http.Request, args *ExportArgs, response *api.JSONTxID) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: Export called")
 
 	assetID, err := service.parseAssetID(args.AssetID)
@@ -336,6 +348,9 @@ func (service *AvaxAPI) Export(_ *http.Request, args *ExportArgs, response *api.
 
 // GetUTXOs gets all utxos for passed in addresses
 func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply *api.GetUTXOsReply) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: GetUTXOs called", "Addresses", args.Addresses)
 
 	if len(args.Addresses) == 0 {
@@ -413,8 +428,10 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 	return nil
 }
 
-// IssueTx ...
 func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response *api.JSONTxID) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: IssueTx called")
 
 	txBytes, err := formatting.Decode(args.Encoding, args.Tx)
@@ -442,6 +459,9 @@ type GetAtomicTxStatusReply struct {
 
 // GetAtomicTxStatus returns the status of the specified transaction
 func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, reply *GetAtomicTxStatusReply) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: GetAtomicTxStatus called", "txID", args.TxID)
 
 	if args.TxID == ids.Empty {
@@ -465,6 +485,9 @@ type FormattedTx struct {
 
 // GetAtomicTx returns the specified transaction
 func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply *FormattedTx) error {
+	service.vm.ctx.Lock.Lock()
+	defer service.vm.ctx.Lock.Unlock()
+
 	log.Info("EVM: GetAtomicTx called", "txID", args.TxID)
 
 	if args.TxID == ids.Empty {
