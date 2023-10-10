@@ -37,6 +37,7 @@ import (
 	"reflect"
 	"testing"
 	"testing/quick"
+	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
@@ -607,38 +608,133 @@ func TestRandom(t *testing.T) {
 	}
 }
 
-func BenchmarkGet(b *testing.B)      { benchGet(b) }
-func BenchmarkUpdateBE(b *testing.B) { benchUpdate(b, binary.BigEndian) }
-func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
-
-const benchElemCount = 20000
-
-func benchGet(b *testing.B) {
-	triedb := NewDatabase(rawdb.NewMemoryDatabase())
-	trie := NewEmpty(triedb)
-	k := make([]byte, 32)
-	for i := 0; i < benchElemCount; i++ {
-		binary.LittleEndian.PutUint64(k, uint64(i))
-		trie.MustUpdate(k, k)
-	}
-	binary.LittleEndian.PutUint64(k, benchElemCount/2)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		trie.MustGet(k)
-	}
-	b.StopTimer()
+func BenchmarkGet(b *testing.B) {
+	benchGet(b, 10_000, true)
 }
 
-func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
-	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
-	k := make([]byte, 32)
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		e.PutUint64(k, uint64(i))
-		trie.MustUpdate(k, k)
+func BenchmarkUpdateTrieSizeSequential(b *testing.B) {
+	benchUpdate(b, 100_000, 300, false)
+}
+
+func BenchmarkUpdateTrieSizeRandom(b *testing.B) {
+	benchUpdate(b, 10_000, 1, true)
+}
+
+type mockTrieReaderBackend struct {
+	readers map[common.Hash]Reader
+}
+
+func (backend *mockTrieReaderBackend) Reader(root common.Hash) Reader {
+	reader, ok := backend.readers[root]
+	if !ok {
+		return nil
 	}
-	return trie
+	return reader
+}
+
+type mockTrieReader struct {
+	delay time.Duration
+	nodes map[string][]byte
+	reads int
+}
+
+func newMockTrieReaderBackend(root common.Hash, nodeset *trienode.NodeSet, delay time.Duration) *mockTrieReaderBackend {
+	reader := &mockTrieReader{
+		delay: delay,
+		nodes: make(map[string][]byte),
+	}
+	for path, node := range nodeset.Nodes {
+		reader.nodes[path] = node.Blob
+	}
+
+	return &mockTrieReaderBackend{
+		readers: map[common.Hash]Reader{
+			root: reader,
+		},
+	}
+}
+
+func (m *mockTrieReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+	m.reads++
+	time.Sleep(m.delay) // mock IO wait and yield to another thread
+	node, ok := m.nodes[string(path)]
+	if !ok {
+		return nil, errors.New("unknown node")
+	}
+	return node, nil
+}
+
+func generateKeys(numKeys int, random bool) [][]byte {
+	keys := make([][]byte, numKeys)
+	for i := 0; i < numKeys; i++ {
+		k := make([]byte, 32)
+		if random {
+			_, err := rand.Read(k)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			binary.BigEndian.PutUint64(k, uint64(i))
+		}
+		keys[i] = k
+	}
+	return keys
+}
+
+func constructTries(numTries int, numKeys int, random bool) ([]*Trie, [][]byte) {
+	triedb := NewDatabase(rawdb.NewMemoryDatabase())
+	trie := NewEmpty(triedb)
+
+	keys := generateKeys(numKeys, random)
+	for _, key := range keys {
+		trie.MustUpdate(key, key)
+	}
+	hash, nodeset := trie.Commit(true)
+
+	readerBackend := newMockTrieReaderBackend(hash, nodeset, 100*time.Microsecond)
+
+	tries := make([]*Trie, numTries)
+	for i := 0; i < numTries; i++ {
+		trie, err := New(TrieID(hash), readerBackend)
+		if err != nil {
+			panic(err)
+		}
+		tries[i] = trie
+	}
+
+	return tries, keys
+}
+
+func benchGet(b *testing.B, trieSize int, random bool) {
+	tries, keys := constructTries(b.N, trieSize, random)
+
+	key := keys[trieSize/2]
+	b.ResetTimer()
+	for _, tr := range tries {
+		tr.MustGet(key)
+	}
+	b.StopTimer()
+
+	totalReads := tries[0].reader.reader.(*mockTrieReader).reads
+	b.ReportMetric(float64(totalReads)/float64(b.N), "trieReads/op")
+}
+
+func benchUpdate(b *testing.B, trieSize int, numUpdates int, random bool) {
+	tries, _ := constructTries(b.N, trieSize, random)
+	updateKeys := generateKeys(numUpdates, random)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for _, tr := range tries {
+		for i := 0; i < numUpdates; i++ {
+			tr.MustUpdate(updateKeys[i], updateKeys[i])
+		}
+	}
+	b.StopTimer()
+
+	totalReads := tries[0].reader.reader.(*mockTrieReader).reads
+	b.ReportMetric(float64(totalReads)/float64(b.N), "trieReads/op")
 }
 
 // Benchmarks the trie hashing. Since the trie caches the result of any operation,

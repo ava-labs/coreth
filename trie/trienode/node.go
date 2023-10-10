@@ -17,6 +17,7 @@
 package trienode
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -166,6 +167,29 @@ func (set *NodeSet) Summary() string {
 		fmt.Fprintf(out, "[leaf]: %v\n", n)
 	}
 	return out.String()
+}
+
+func (set *NodeSet) Reader() *NodeSet {
+	return set
+}
+
+// Node implements the Reader interface used by the trie.. Sneaky way to make a NodeSet
+// usable for testing without decoupling the trie implementation from the trie database
+// This didn't work because it takes a reader backend instead of Reader directly
+// Damn
+func (set *NodeSet) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+	if set.Nodes == nil {
+		return nil, errors.New("node not found in nodeset")
+	}
+
+	node, ok := set.Nodes[string(path)]
+	if !ok {
+		return nil, errors.New("node not found in nodeset")
+	}
+	if node.IsDeleted() {
+		return nil, errors.New("node marked as deleted in node set")
+	}
+	return node.Blob, nil
 }
 
 // MergedNodeSet represents a merged node set for a group of tries.
