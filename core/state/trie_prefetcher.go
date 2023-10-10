@@ -340,11 +340,15 @@ func (sf *subfetcher) loop() {
 			sf.lock.Unlock()
 
 			// Prefetch any tasks until the loop is interrupted
+			batchWork := 5
+			batchGoroutines := 5
+			batch := make([][]byte, 0, batchWork)
 			for i, task := range tasks {
 				select {
 				case <-sf.stop:
 					// If termination is requested, add any leftover back and return
 					sf.lock.Lock()
+					sf.tasks = append(sf.tasks, batch...)
 					sf.tasks = append(sf.tasks, tasks[i:]...)
 					sf.lock.Unlock()
 					return
@@ -358,14 +362,13 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						var err error
-						if len(task) == common.AddressLength {
-							_, err = sf.trie.GetAccount(common.BytesToAddress(task))
-						} else {
-							_, err = sf.trie.GetStorage(sf.addr, task)
-						}
-						if err != nil {
-							log.Error("Trie prefetcher failed fetching", "root", sf.root, "err", err)
+						batch = append(batch, task)
+						if len(batch) == batchWork || i == len(tasks)-1 {
+							err := sf.trie.BatchGet(batchGoroutines, batch)
+							if err != nil {
+								log.Error("Trie prefetcher failed fetching", "root", sf.root, "err", err)
+							}
+							batch = batch[:0]
 						}
 						sf.seen[string(task)] = struct{}{}
 					}
