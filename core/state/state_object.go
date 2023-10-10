@@ -300,41 +300,11 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	}
 	// Insert all the pending updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	// Trim no-op pendingStorage changes
 	for key, value := range s.pendingStorage {
+		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
-			delete(s.pendingStorage, key)
+			continue
 		}
-	}
-	// If there are a large number of updated keys in pendingStorage, parallelize
-	// reading the trie nodes from disk to avoid blocking while performing a potentially
-	// large number of intermediate trie node lookups.
-	// TODO: re-use goroutines so that if these are all trivial in-memory lookups (best case)
-	// then this isn't a small performance hit by adding the cost of starting the goroutines
-	// while not pulling anything useful from disk.
-	if len(s.pendingStorage) > 20 {
-		fetchKeys := make(chan []byte, len(s.pendingStorage))
-		for key := range s.pendingStorage {
-			fetchKeys <- key[:]
-		}
-		close(fetchKeys)
-
-		numThreads := 5
-		wg := sync.WaitGroup{}
-		wg.Add(numThreads)
-		for i := 0; i < numThreads; i++ {
-			copyTr := s.db.db.CopyTrie(tr)
-			go func() {
-				defer wg.Done()
-
-				for key := range fetchKeys {
-					_, _ = copyTr.GetStorage(s.address, key)
-				}
-			}()
-		}
-		wg.Wait()
-	}
-	for key, value := range s.pendingStorage {
 		s.originStorage[key] = value
 
 		var v []byte
