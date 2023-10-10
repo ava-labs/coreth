@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const scriptVersion = 3
+const scriptVersion = 4
 
 func (vm *VM) script(cfg *ethconfig.Config) error {
 	log.Warn("VM SCRIPT: running", "version", scriptVersion)
