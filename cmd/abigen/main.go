@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	"github.com/ava-labs/coreth/accounts/abi/bind"
+	"github.com/ava-labs/coreth/cmd/abigen/namefilter"
 	"github.com/ava-labs/coreth/internal/flags"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -159,10 +160,10 @@ func abigen(c *cli.Context) error {
 		types = append(types, kind)
 	} else {
 		// Generate the list of types to exclude from binding
-		var exclude *nameFilter
+		var exclude *namefilter.NameFilter
 		if c.IsSet(excFlag.Name) {
 			var err error
-			if exclude, err = newNameFilter(strings.Split(c.String(excFlag.Name), ",")...); err != nil {
+			if exclude, err = namefilter.NewNameFilter(strings.Split(c.String(excFlag.Name), ",")...); err != nil {
 				utils.Fatalf("Failed to parse excludes: %v", err)
 			}
 		}

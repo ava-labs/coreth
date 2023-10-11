@@ -7,21 +7,21 @@
 // original code from which it is derived.
 //
 // Much love to the original authors for their work.
-package main
+package namefilter
 
 import (
 	"fmt"
 	"strings"
 )
 
-type nameFilter struct {
+type NameFilter struct {
 	fulls map[string]bool // path/to/contract.sol:Type
 	files map[string]bool // path/to/contract.sol:*
 	types map[string]bool // *:Type
 }
 
-func newNameFilter(patterns ...string) (*nameFilter, error) {
-	f := &nameFilter{
+func NewNameFilter(patterns ...string) (*NameFilter, error) {
+	f := &NameFilter{
 		fulls: make(map[string]bool),
 		files: make(map[string]bool),
 		types: make(map[string]bool),
@@ -34,7 +34,7 @@ func newNameFilter(patterns ...string) (*nameFilter, error) {
 	return f, nil
 }
 
-func (f *nameFilter) add(pattern string) error {
+func (f *NameFilter) add(pattern string) error {
 	ft := strings.Split(pattern, ":")
 	if len(ft) != 2 {
 		// filenames and types must not include ':' symbol
@@ -53,7 +53,7 @@ func (f *nameFilter) add(pattern string) error {
 	return nil
 }
 
-func (f *nameFilter) Matches(name string) bool {
+func (f *NameFilter) Matches(name string) bool {
 	ft := strings.Split(name, ":")
 	if len(ft) != 2 {
 		// If contract names are always of the fully-qualified form

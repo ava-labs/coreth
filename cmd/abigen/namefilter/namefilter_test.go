@@ -7,7 +7,7 @@
 // original code from which it is derived.
 //
 // Much love to the original authors for their work.
-package main
+package namefilter
 
 import (
 	"testing"
@@ -17,12 +17,12 @@ import (
 )
 
 func TestNameFilter(t *testing.T) {
-	_, err := newNameFilter("Foo")
+	_, err := NewNameFilter("Foo")
 	require.Error(t, err)
-	_, err = newNameFilter("too/many:colons:Foo")
+	_, err = NewNameFilter("too/many:colons:Foo")
 	require.Error(t, err)
 
-	f, err := newNameFilter("a/path:A", "*:B", "c/path:*")
+	f, err := NewNameFilter("a/path:A", "*:B", "c/path:*")
 	require.NoError(t, err)
 
 	for _, tt := range []struct {
