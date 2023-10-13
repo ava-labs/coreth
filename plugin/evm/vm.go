@@ -1465,16 +1465,10 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	return chainID, addr, nil
 }
 
-// issueTx verifies [tx] as valid to be issued on top of the currently preferred block
-// and then issues [tx] into the mempool if valid.
-func (vm *VM) issueTx(tx *Tx, local bool) error {
-	return vm.mempool.AddTx(tx)
-}
-
 // verifyTxAtTip verifies that [tx] is valid to be issued on top of the currently preferred block
 func (vm *VM) verifyTxAtTip(tx *Tx) error {
-	if len(tx.SignedBytes()) > targetAtomicTxsSize {
-		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", len(tx.SignedBytes()), targetAtomicTxsSize)
+	if txByteLen := len(tx.SignedBytes()); txByteLen > targetAtomicTxsSize {
+		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", txByteLen, targetAtomicTxsSize)
 	}
 	gasUsed, err := tx.GasUsed(true)
 	if err != nil {

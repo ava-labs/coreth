@@ -225,7 +225,7 @@ func (service *AvaxAPI) Import(_ *http.Request, args *ImportArgs, response *api.
 	}
 
 	response.TxID = tx.ID()
-	return service.vm.issueTx(tx, true /*=local*/)
+	return service.vm.mempool.AddLocalTx(tx)
 }
 
 // ExportAVAXArgs are the arguments to ExportAVAX

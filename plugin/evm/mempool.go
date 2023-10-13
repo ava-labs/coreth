@@ -224,11 +224,9 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	if _, exists := m.txHeap.Get(txID); exists {
 		return nil
 	}
-	if !force {
-		if m.verify != nil {
-			if err := m.verify(tx); err != nil {
-				return err
-			}
+	if !force && m.verify != nil {
+		if err := m.verify(tx); err != nil {
+			return err
 		}
 	}
 

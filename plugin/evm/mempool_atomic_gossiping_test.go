@@ -45,13 +45,13 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			conflictingTxID := conflictingTx.ID()
 
 			// add a tx to the mempool
-			err := vm.issueTx(tx, true /*=local*/)
+			err := vm.mempool.AddLocalTx(tx)
 			assert.NoError(err)
 			has := mempool.has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
 
 			// try to add a conflicting tx
-			err = vm.issueTx(conflictingTx, true /*=local*/)
+			err = vm.mempool.AddLocalTx(conflictingTx)
 			assert.ErrorIs(err, errConflictingAtomicTx)
 			has = mempool.has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
