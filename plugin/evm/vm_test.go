@@ -4001,7 +4001,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := vm1.issueTx(importTx, true); err != nil {
+	if err := vm1.mempool.AddTx(importTx); err != nil {
 		t.Fatal(err)
 	}
 
