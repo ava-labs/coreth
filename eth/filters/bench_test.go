@@ -1,3 +1,13 @@
+// (c) 2019-2022, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -22,13 +32,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/core/bloombits"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkBloomBits512(b *testing.B) {
@@ -63,7 +73,7 @@ const benchFilterCnt = 2000
 
 func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	b.Skip("test disabled: this tests presume (and modify) an existing datadir.")
-	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
+	benchDataDir := b.TempDir() + "/coreth/chaindata"
 	b.Log("Running bloombits benchmark   section size:", sectionSize)
 
 	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
@@ -137,7 +147,8 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		var addr common.Address
 		addr[0] = byte(i)
 		addr[1] = byte(i / 256)
-		filter := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
+		filter, err := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
+		require.NoError(b, err)
 		if _, err := filter.Logs(context.Background()); err != nil {
 			b.Error("filter.Logs error:", err)
 		}
@@ -162,7 +173,7 @@ func clearBloomBits(db ethdb.Database) {
 
 func BenchmarkNoBloomBits(b *testing.B) {
 	b.Skip("test disabled: this tests presume (and modify) an existing datadir.")
-	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
+	benchDataDir := b.TempDir() + "/coreth/chaindata"
 	b.Log("Running benchmark without bloombits")
 	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
 	if err != nil {
@@ -180,7 +191,8 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	b.Log("Running filter benchmarks...")
 	start := time.Now()
-	filter := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
+	filter, err := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
+	require.NoError(b, err)
 	filter.Logs(context.Background())
 	d := time.Since(start)
 	b.Log("Finished running filter benchmarks")

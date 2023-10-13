@@ -1,3 +1,13 @@
+// (c) 2020-2021, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -111,6 +121,9 @@ func TestEIP155SigningVitalik(t *testing.T) {
 		addr := common.HexToAddress(test.addr)
 		if from != addr {
 			t.Errorf("%d: expected %x got %x", i, addr, from)
+		}
+		if !tx.Protected() {
+			t.Errorf("%d: expected to be protected", i)
 		}
 	}
 }

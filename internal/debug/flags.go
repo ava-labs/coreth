@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -25,10 +35,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ava-labs/coreth/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -309,9 +317,7 @@ func Setup(ctx *cli.Context) error {
 		port := ctx.Int(pprofPortFlag.Name)
 
 		address := fmt.Sprintf("%s:%d", listenHost, port)
-		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
-		// It cannot be imported because it will cause a cyclical dependency.
-		StartPProf(address, !ctx.IsSet("metrics.addr"))
+		StartPProf(address)
 	}
 	if len(logFile) > 0 || rotation {
 		log.Info("Logging configured", context...)
@@ -319,12 +325,7 @@ func Setup(ctx *cli.Context) error {
 	return nil
 }
 
-func StartPProf(address string, withMetrics bool) {
-	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
-	// from the registry into expvar, and execute regular expvar handler.
-	if withMetrics {
-		exp.Exp(metrics.DefaultRegistry)
-	}
+func StartPProf(address string) {
 	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {

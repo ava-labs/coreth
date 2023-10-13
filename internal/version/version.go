@@ -1,3 +1,13 @@
+// (c) 2023, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -23,10 +33,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/coreth/params"
 )
 
-const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
+const ourPath = "github.com/ava-labs/coreth" // Path to our module
 
 // These variables are set at build-time by the linker when the build is
 // done by build/ci.go.

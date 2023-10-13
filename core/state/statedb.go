@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -24,17 +34,17 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 type revision struct {
@@ -68,7 +78,6 @@ type StateDB struct {
 	// It will be updated when the Commit is called.
 	originalRoot common.Hash
 
-	snaps        *snapshot.Tree
 	snap         snapshot.Snapshot
 	snapAccounts map[common.Hash][]byte
 	snapStorage  map[common.Hash]map[common.Hash][]byte
@@ -132,6 +141,18 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+	var snap snapshot.Snapshot
+	if snaps != nil {
+		snap = snaps.Snapshot(root)
+	}
+	return NewWithSnapshot(root, db, snap)
+}
+
+// NewWithSnapshot creates a new state from a given trie with the specified [snap]
+// If [snap] doesn't have the same root as [root], then NewWithSnapshot will return
+// an error. If snap is nil, then no snapshot will be used and CommitWithSnapshot
+// cannot be called on the returned StateDB.
+func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -140,7 +161,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		db:                   db,
 		trie:                 tr,
 		originalRoot:         root,
-		snaps:                snaps,
 		stateObjects:         make(map[common.Address]*stateObject),
 		stateObjectsPending:  make(map[common.Address]struct{}),
 		stateObjectsDirty:    make(map[common.Address]struct{}),
@@ -152,11 +172,13 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
-	if sdb.snaps != nil {
-		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
-			sdb.snapAccounts = make(map[common.Hash][]byte)
-			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+	if snap != nil {
+		if snap.Root() != root {
+			return nil, fmt.Errorf("cannot create new statedb for root: %s, using snapshot with mismatched root: %s", root, snap.Root().Hex())
 		}
+		sdb.snap = snap
+		sdb.snapAccounts = make(map[common.Hash][]byte)
+		sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 	}
 	return sdb, nil
 }
@@ -250,7 +272,9 @@ func (s *StateDB) AddRefund(gas uint64) {
 func (s *StateDB) SubRefund(gas uint64) {
 	s.journal.append(refundChange{prev: s.refund})
 	if gas > s.refund {
-		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
+		log.Warn("Setting refund to 0", "currentRefund", s.refund, "gas", gas)
+		s.refund = 0
+		return
 	}
 	s.refund -= gas
 }
@@ -274,7 +298,16 @@ func (s *StateDB) GetBalance(addr common.Address) *big.Int {
 	if stateObject != nil {
 		return stateObject.Balance()
 	}
-	return common.Big0
+	return new(big.Int).Set(common.Big0)
+}
+
+// Retrieve the balance from the given address or 0 if object not found
+func (s *StateDB) GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.BalanceMultiCoin(coinID, s.db)
+	}
+	return new(big.Int).Set(common.Big0)
 }
 
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
@@ -319,6 +352,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		NormalizeStateKey(&hash)
 		return stateObject.GetState(s.db, hash)
 	}
 	return common.Hash{}
@@ -357,6 +391,16 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		return stateObject.GetCommittedState(s.db, hash)
+	}
+	return common.Hash{}
+}
+
+// GetCommittedStateAP1 retrieves a value from the given account's committed storage trie.
+func (s *StateDB) GetCommittedStateAP1(addr common.Address, hash common.Hash) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		NormalizeStateKey(&hash)
 		return stateObject.GetCommittedState(s.db, hash)
 	}
 	return common.Hash{}
@@ -417,6 +461,29 @@ func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+// AddBalance adds amount to the account associated with addr.
+func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddBalanceMultiCoin(coinID, amount, s.db)
+	}
+}
+
+// SubBalance subtracts amount from the account associated with addr.
+func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubBalanceMultiCoin(coinID, amount, s.db)
+	}
+}
+
+func (s *StateDB) SetBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetBalanceMultiCoin(coinID, amount, s.db)
+	}
+}
+
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -434,6 +501,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
+		NormalizeStateKey(&key)
 		stateObject.SetState(s.db, key, value)
 	}
 }
@@ -522,7 +590,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, obj.data.IsMultiCoin)
 	}
 }
 
@@ -571,10 +639,11 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				return nil
 			}
 			data = &types.StateAccount{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
-				CodeHash: acc.CodeHash,
-				Root:     common.BytesToHash(acc.Root),
+				Nonce:       acc.Nonce,
+				Balance:     acc.Balance,
+				CodeHash:    acc.CodeHash,
+				IsMultiCoin: acc.IsMultiCoin,
+				Root:        common.BytesToHash(acc.Root),
 			}
 			if len(data.CodeHash) == 0 {
 				data.CodeHash = types.EmptyCodeHash.Bytes()
@@ -775,12 +844,11 @@ func (s *StateDB) Copy() *StateDB {
 	if s.prefetcher != nil {
 		state.prefetcher = s.prefetcher.copy()
 	}
-	if s.snaps != nil {
+	if s.snap != nil {
 		// In order for the miner to be able to use and make additions
 		// to the snapshot tree, we need to copy that as well.
 		// Otherwise, any block mined by ourselves will cause gaps in the tree,
 		// and force the miner to operate trie-backed only
-		state.snaps = s.snaps
 		state.snap = s.snap
 
 		// deep copy needed
@@ -958,7 +1026,18 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 // Commit writes the state to the underlying in-memory trie database.
-func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+func (s *StateDB) Commit(deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
+	return s.commit(deleteEmptyObjects, nil, common.Hash{}, common.Hash{}, referenceRoot)
+}
+
+// CommitWithSnap writes the state to the underlying in-memory trie database and
+// generates a snapshot layer for the newly committed state.
+func (s *StateDB) CommitWithSnap(deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
+	return s.commit(deleteEmptyObjects, snaps, blockHash, parentHash, referenceRoot)
+}
+
+// Commit writes the state to the underlying in-memory trie database.
+func (s *StateDB) commit(deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1040,20 +1119,13 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
-	if s.snap != nil {
+	if snaps != nil {
 		start := time.Now()
-		// Only update if there's a state transition (skip empty Clique blocks)
-		if parent := s.snap.Root(); parent != root {
-			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.snapAccounts, s.snapStorage); err != nil {
-				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
-			}
-			// Keep 128 diff layers in the memory, persistent layer is 129th.
-			// - head layer is paired with HEAD state
-			// - head-1 layer is paired with HEAD-1 state
-			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
-			}
+		if s.snap == nil {
+			log.Error(fmt.Sprintf("cannot commit with snaps without a pre-existing snap layer, parentHash: %s, blockHash: %s", parentHash, blockHash))
+		}
+		if err := snaps.Update(blockHash, root, parentHash, s.convertAccountSet(s.stateObjectsDestruct), s.snapAccounts, s.snapStorage); err != nil {
+			log.Warn("Failed to update snapshot tree", "to", root, "err", err)
 		}
 		if metrics.EnabledExpensive {
 			s.SnapshotCommits += time.Since(start)
@@ -1072,8 +1144,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if root != origin {
 		start := time.Now()
-		if err := s.db.TrieDB().Update(root, origin, nodes); err != nil {
-			return common.Hash{}, err
+		if referenceRoot {
+			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, nodes); err != nil {
+				return common.Hash{}, err
+			}
+		} else {
+			if err := s.db.TrieDB().Update(root, origin, nodes); err != nil {
+				return common.Hash{}, err
+			}
 		}
 		s.originalRoot = root
 		if metrics.EnabledExpensive {
@@ -1086,18 +1164,18 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // Prepare handles the preparatory steps for executing a state transition with.
 // This method must be invoked before state transition.
 //
-// Berlin fork:
+// Berlin fork (aka ApricotPhase2):
 // - Add sender to access list (2929)
 // - Add destination to access list (2929)
 // - Add precompiles to access list (2929)
 // - Add the contents of the optional tx access list (2930)
 //
 // Potential EIPs:
-// - Reset access list (Berlin)
-// - Add coinbase to access list (EIP-3651)
+// - Reset access list (Berlin/ApricotPhase2)
+// - Add coinbase to access list (EIP-3651/DUpgrade)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsBerlin {
+	if rules.IsApricotPhase2 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
 		s.accessList = al
@@ -1116,7 +1194,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 				al.AddSlot(el.Address, key)
 			}
 		}
-		if rules.IsShanghai { // EIP-3651: warm coinbase
+		if rules.IsDUpgrade { // EIP-3651: warm coinbase
 			al.AddAddress(coinbase)
 		}
 	}

@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -24,12 +34,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -714,6 +724,9 @@ func TestCreate2Addreses(t *testing.T) {
 	}
 }
 
+// TestRandom is a test for the RANDOM opcode in geth, which we do not support. Therefore, we use this test to check that DIFFICULTY opcode continues to work
+// the same as the RANDOM opcode except using the Difficulty value in the block context.
+// Note: this should not be used as a source of randomness in coreth since the difficulty is required to be 1.
 func TestRandom(t *testing.T) {
 	type testcase struct {
 		name   string
@@ -727,12 +740,13 @@ func TestRandom(t *testing.T) {
 		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
 	} {
 		var (
-			env            = NewEVM(BlockContext{Random: &tt.random}, TxContext{}, nil, params.TestChainConfig, Config{})
+			env            = NewEVM(BlockContext{Difficulty: tt.random.Big()}, TxContext{}, nil, params.TestChainConfig, Config{}) // Note: we convert random hash to *big.Int for backwards compatibility
 			stack          = newstack()
 			pc             = uint64(0)
 			evmInterpreter = env.interpreter
 		)
-		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		// Note: we use opDifficulty instead of opRandom since we do not migrate from opDifficulty to opRandom, but expect it to work the same
+		opDifficulty(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}

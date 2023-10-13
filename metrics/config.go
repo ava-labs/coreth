@@ -1,3 +1,13 @@
+// (c) 2022, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2021 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
@@ -22,17 +32,6 @@ type Config struct {
 	EnabledExpensive bool   `toml:",omitempty"`
 	HTTP             string `toml:",omitempty"`
 	Port             int    `toml:",omitempty"`
-	EnableInfluxDB   bool   `toml:",omitempty"`
-	InfluxDBEndpoint string `toml:",omitempty"`
-	InfluxDBDatabase string `toml:",omitempty"`
-	InfluxDBUsername string `toml:",omitempty"`
-	InfluxDBPassword string `toml:",omitempty"`
-	InfluxDBTags     string `toml:",omitempty"`
-
-	EnableInfluxDBV2     bool   `toml:",omitempty"`
-	InfluxDBToken        string `toml:",omitempty"`
-	InfluxDBBucket       string `toml:",omitempty"`
-	InfluxDBOrganization string `toml:",omitempty"`
 }
 
 // DefaultConfig is the default config for metrics used in go-ethereum.
@@ -41,16 +40,4 @@ var DefaultConfig = Config{
 	EnabledExpensive: false,
 	HTTP:             "127.0.0.1",
 	Port:             6060,
-	EnableInfluxDB:   false,
-	InfluxDBEndpoint: "http://localhost:8086",
-	InfluxDBDatabase: "geth",
-	InfluxDBUsername: "test",
-	InfluxDBPassword: "test",
-	InfluxDBTags:     "host=localhost",
-
-	// influxdbv2-specific flags
-	EnableInfluxDBV2:     false,
-	InfluxDBToken:        "test",
-	InfluxDBBucket:       "geth",
-	InfluxDBOrganization: "geth",
 }

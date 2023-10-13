@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -22,9 +32,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
@@ -36,24 +46,22 @@ type sigCache struct {
 	from   common.Address
 }
 
-// MakeSigner returns a Signer based on the given chain config and block number.
+// MakeSigner returns a Signer based on the given chain config and block number or time.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
-	var signer Signer
 	switch {
-	case config.IsCancun(blockNumber, blockTime):
-		signer = NewCancunSigner(config.ChainID)
-	case config.IsLondon(blockNumber):
-		signer = NewLondonSigner(config.ChainID)
-	case config.IsBerlin(blockNumber):
-		signer = NewEIP2930Signer(config.ChainID)
+	case config.IsCancun(blockTime):
+		return NewCancunSigner(config.ChainID)
+	case config.IsApricotPhase3(blockTime):
+		return NewLondonSigner(config.ChainID)
+	case config.IsApricotPhase2(blockTime):
+		return NewEIP2930Signer(config.ChainID)
 	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
+		return NewEIP155Signer(config.ChainID)
 	case config.IsHomestead(blockNumber):
-		signer = HomesteadSigner{}
+		return HomesteadSigner{}
 	default:
-		signer = FrontierSigner{}
+		return FrontierSigner{}
 	}
-	return signer
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
@@ -68,10 +76,10 @@ func LatestSigner(config *params.ChainConfig) Signer {
 		if config.CancunTime != nil {
 			return NewCancunSigner(config.ChainID)
 		}
-		if config.LondonBlock != nil {
+		if config.ApricotPhase3BlockTimestamp != nil {
 			return NewLondonSigner(config.ChainID)
 		}
-		if config.BerlinBlock != nil {
+		if config.ApricotPhase2BlockTimestamp != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
 		if config.EIP155Block != nil {

@@ -1,3 +1,13 @@
+// (c) 2022, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -21,11 +31,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // CheckDanglingStorage iterates the snap storage data, and verifies that all
@@ -33,8 +42,9 @@ import (
 func CheckDanglingStorage(chaindb ethdb.KeyValueStore) error {
 	if err := checkDanglingDiskStorage(chaindb); err != nil {
 		log.Error("Database check error", "err", err)
+		return err
 	}
-	return checkDanglingMemStorage(chaindb)
+	return nil
 }
 
 // checkDanglingDiskStorage checks if there is any 'dangling' storage data in the
@@ -68,85 +78,4 @@ func checkDanglingDiskStorage(chaindb ethdb.KeyValueStore) error {
 	}
 	log.Info("Verified the snapshot disk storage", "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
 	return nil
-}
-
-// checkDanglingMemStorage checks if there is any 'dangling' storage in the journalled
-// snapshot difflayers.
-func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
-	start := time.Now()
-	log.Info("Checking dangling journalled storage")
-	err := iterateJournal(db, func(pRoot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
-		for accHash := range storage {
-			if _, ok := accounts[accHash]; !ok {
-				log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accHash), "root", root)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		log.Info("Failed to resolve snapshot journal", "err", err)
-		return err
-	}
-	log.Info("Verified the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
-	return nil
-}
-
-// CheckJournalAccount shows information about an account, from the disk layer and
-// up through the diff layers.
-func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
-	// Look up the disk layer first
-	baseRoot := rawdb.ReadSnapshotRoot(db)
-	fmt.Printf("Disklayer: Root: %x\n", baseRoot)
-	if data := rawdb.ReadAccountSnapshot(db, hash); data != nil {
-		account := new(Account)
-		if err := rlp.DecodeBytes(data, account); err != nil {
-			panic(err)
-		}
-		fmt.Printf("\taccount.nonce: %d\n", account.Nonce)
-		fmt.Printf("\taccount.balance: %x\n", account.Balance)
-		fmt.Printf("\taccount.root: %x\n", account.Root)
-		fmt.Printf("\taccount.codehash: %x\n", account.CodeHash)
-	}
-	// Check storage
-	{
-		it := rawdb.NewKeyLengthIterator(db.NewIterator(append(rawdb.SnapshotStoragePrefix, hash.Bytes()...), nil), 1+2*common.HashLength)
-		fmt.Printf("\tStorage:\n")
-		for it.Next() {
-			slot := it.Key()[33:]
-			fmt.Printf("\t\t%x: %x\n", slot, it.Value())
-		}
-		it.Release()
-	}
-	var depth = 0
-
-	return iterateJournal(db, func(pRoot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
-		_, a := accounts[hash]
-		_, b := destructs[hash]
-		_, c := storage[hash]
-		depth++
-		if !a && !b && !c {
-			return nil
-		}
-		fmt.Printf("Disklayer+%d: Root: %x, parent %x\n", depth, root, pRoot)
-		if data, ok := accounts[hash]; ok {
-			account := new(Account)
-			if err := rlp.DecodeBytes(data, account); err != nil {
-				panic(err)
-			}
-			fmt.Printf("\taccount.nonce: %d\n", account.Nonce)
-			fmt.Printf("\taccount.balance: %x\n", account.Balance)
-			fmt.Printf("\taccount.root: %x\n", account.Root)
-			fmt.Printf("\taccount.codehash: %x\n", account.CodeHash)
-		}
-		if _, ok := destructs[hash]; ok {
-			fmt.Printf("\t Destructed!")
-		}
-		if data, ok := storage[hash]; ok {
-			fmt.Printf("\tStorage\n")
-			for k, v := range data {
-				fmt.Printf("\t\t%x: %x\n", k, v)
-			}
-		}
-		return nil
-	})
 }

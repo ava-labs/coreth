@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -287,9 +297,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -297,7 +307,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy an interaction tester contract and call a transaction on it
@@ -309,7 +319,7 @@ var bindTests = []struct {
 				t.Fatalf("Failed to transact with interactor contract: %v", err)
 			}
 			// Commit all pending transactions in the simulator and check the contract state
-			sim.Commit()
+			sim.Commit(false)
 
 			if str, err := interactor.DeployString(nil); err != nil {
 				t.Fatalf("Failed to retrieve deploy string: %v", err)
@@ -342,9 +352,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -352,7 +362,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -360,7 +370,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy getter contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			if str, num, _, err := getter.Getter(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
@@ -388,9 +398,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -398,7 +408,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -406,7 +416,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy tupler contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			if res, err := tupler.Tuple(nil); err != nil {
 				t.Fatalf("Failed to call structure retriever: %v", err)
@@ -445,10 +455,10 @@ var bindTests = []struct {
 			"math/big"
 			"reflect"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -456,7 +466,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a slice tester contract and execute a n array call on it
@@ -464,7 +474,7 @@ var bindTests = []struct {
 			if err != nil {
 					t.Fatalf("Failed to deploy slicer contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			if out, err := slicer.EchoAddresses(nil, []common.Address{auth.From, common.Address{}}); err != nil {
 					t.Fatalf("Failed to call slice echoer: %v", err)
@@ -494,9 +504,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -504,7 +514,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a default method invoker contract and execute its default method
@@ -515,7 +525,7 @@ var bindTests = []struct {
 			if _, err := (&DefaulterRaw{defaulter}).Transfer(auth); err != nil {
 				t.Fatalf("Failed to invoke default method: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			if caller, err := defaulter.Caller(nil); err != nil {
 				t.Fatalf("Failed to call address retriever: %v", err)
@@ -560,9 +570,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -570,7 +580,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 		
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 		
 			// Deploy a structs method invoker contract and execute its default method
@@ -578,7 +588,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy defaulter contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 			opts := bind.CallOpts{}
 			if _, err := structs.F(&opts); err != nil {
 				t.Fatalf("Failed to invoke F method: %v", err)
@@ -605,10 +615,10 @@ var bindTests = []struct {
 		[]string{`6060604052609f8060106000396000f3606060405260e060020a6000350463f97a60058114601a575b005b600060605260c0604052600d60809081527f4920646f6e27742065786973740000000000000000000000000000000000000060a052602060c0908152600d60e081905281906101009060a09080838184600060046012f15050815172ffffffffffffffffffffffffffffffffffffff1916909152505060405161012081900392509050f3`},
 		[]string{`[{"constant":true,"inputs":[],"name":"String","outputs":[{"name":"","type":"string"}],"type":"function"}]`},
 		`
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/core"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
@@ -644,10 +654,10 @@ var bindTests = []struct {
 		[]string{`6080604052348015600f57600080fd5b5060888061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063d5f6622514602d575b600080fd5b6033604c565b6040805192835260208301919091528051918290030190f35b600a809156fea264697066735822beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef64736f6c6343decafe0033`},
 		[]string{`[{"inputs":[],"name":"Struct","outputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"stateMutability":"pure","type":"function"}]`},
 		`
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/core"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
@@ -692,9 +702,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -702,7 +712,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a funky gas pattern contract
@@ -710,13 +720,13 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy funky contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			// Set the field with automatic estimation and check that it succeeds
 			if _, err := limiter.SetField(auth, "automatic"); err != nil {
 				t.Fatalf("Failed to call automatically gased transaction: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			if field, _ := limiter.Field(nil); field != "automatic" {
 				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
@@ -741,10 +751,10 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -752,7 +762,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a sender tester contract and execute a structured call on it
@@ -760,7 +770,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy sender contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			if res, err := callfrom.CallFrom(nil); err != nil {
 				t.Errorf("Failed to call constant function: %v", err)
@@ -817,9 +827,9 @@ var bindTests = []struct {
 			"fmt"
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -827,7 +837,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a underscorer tester contract and execute a structured call on it
@@ -835,7 +845,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy underscorer contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			// Verify that underscored return values correctly parse into structs
 			if res, err := underscorer.UnderscoredOutput(nil); err != nil {
@@ -910,10 +920,10 @@ var bindTests = []struct {
 			"math/big"
 			"time"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -921,7 +931,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy an eventer contract
@@ -929,7 +939,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy eventer contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			// Inject a few events into the contract, gradually more in each block
 			for i := 1; i <= 3; i++ {
@@ -938,7 +948,7 @@ var bindTests = []struct {
 						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
 					}
 				}
-				sim.Commit()
+				sim.Commit(false)
 			}
 			// Test filtering for certain events and ensure they can be found
 			sit, err := eventer.FilterSimpleEvent(nil, []common.Address{common.Address{1}, common.Address{3}}, [][32]byte{{byte(1)}, {byte(2)}, {byte(3)}}, []bool{true})
@@ -974,7 +984,7 @@ var bindTests = []struct {
 			if _, err := eventer.RaiseNodataEvent(auth, big.NewInt(314), 141, 271); err != nil {
 				t.Fatalf("failed to raise nodata event: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			nit, err := eventer.FilterNodataEvent(nil, []*big.Int{big.NewInt(314)}, []int16{140, 141, 142}, []uint32{271})
 			if err != nil {
@@ -998,7 +1008,7 @@ var bindTests = []struct {
 			if _, err := eventer.RaiseDynamicEvent(auth, "Hello", []byte("World")); err != nil {
 				t.Fatalf("failed to raise dynamic event: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			dit, err := eventer.FilterDynamicEvent(nil, []string{"Hi", "Hello", "Bye"}, [][]byte{[]byte("World")})
 			if err != nil {
@@ -1025,7 +1035,7 @@ var bindTests = []struct {
 			if _, err := eventer.RaiseFixedBytesEvent(auth, fblob); err != nil {
 				t.Fatalf("failed to raise fixed bytes event: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			fit, err := eventer.FilterFixedBytesEvent(nil, [][24]byte{fblob})
 			if err != nil {
@@ -1054,7 +1064,7 @@ var bindTests = []struct {
 			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{255}, [32]byte{255}, true, big.NewInt(255)); err != nil {
 				t.Fatalf("failed to raise subscribed simple event: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			select {
 			case event := <-ch:
@@ -1070,7 +1080,7 @@ var bindTests = []struct {
 			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{254}, [32]byte{254}, true, big.NewInt(254)); err != nil {
 				t.Fatalf("failed to raise subscribed simple event: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			select {
 			case event := <-ch:
@@ -1101,9 +1111,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1111,7 +1121,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			//deploy the test contract
@@ -1121,7 +1131,7 @@ var bindTests = []struct {
 			}
 
 			// Finish deploy.
-			sim.Commit()
+			sim.Commit(false)
 
 			//Create coordinate-filled array, for testing purposes.
 			testArr := [5][4][3]uint64{}
@@ -1143,11 +1153,11 @@ var bindTests = []struct {
 				t.Fatalf("Failed to store nested array in test contract: %v", err)
 			}
 
-			sim.Commit()
+			sim.Commit(false)
 
 			retrievedArr, err := testContract.RetrieveDeepArray(&bind.CallOpts{
 				From: auth.From,
-				Pending: false,
+				Accepted: false,
 			})
 			if err != nil {
 				t.Fatalf("Failed to retrieve nested array from test contract: %v", err)
@@ -1236,9 +1246,9 @@ var bindTests = []struct {
 			"math/big"
 			"reflect"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 
@@ -1246,14 +1256,14 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			_, _, contract, err := DeployTuple(auth, sim)
 			if err != nil {
 				t.Fatalf("deploy contract failed %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			check := func(a, b interface{}, errMsg string) {
 				if !reflect.DeepEqual(a, b) {
@@ -1325,7 +1335,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("invoke contract failed, err %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			iter, err := contract.FilterTupleEvent(nil)
 			if err != nil {
@@ -1378,9 +1388,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1388,7 +1398,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			//deploy the test contract
@@ -1398,13 +1408,13 @@ var bindTests = []struct {
 			}
 
 			// Finish deploy.
-			sim.Commit()
+			sim.Commit(false)
 
 			// Check that the library contract has been deployed
 			// by calling the contract's add function.
 			res, err := testContract.Add(&bind.CallOpts{
 				From: auth.From,
-				Pending: false,
+				Accepted: false,
 			}, big.NewInt(1), big.NewInt(2))
 			if err != nil {
 				t.Fatalf("Failed to call linked contract: %v", err)
@@ -1444,16 +1454,18 @@ var bindTests = []struct {
 		"math/big"
 		"time"
 
-		"github.com/ethereum/go-ethereum/accounts/abi/bind"
-		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-		"github.com/ethereum/go-ethereum/core"
+		"github.com/ava-labs/coreth/accounts/abi/bind"
+		"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+		"github.com/ava-labs/coreth/core"
 		"github.com/ethereum/go-ethereum/crypto"
+		"github.com/ava-labs/coreth/params"
 		`,
 		`
 		// Initialize test accounts
 		key, _ := crypto.GenerateKey()
 		auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+		auth.GasFeeCap = new(big.Int).SetInt64(params.ApricotPhase4MaxBaseFee)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))}}, 10000000)
 		defer sim.Close()
 
 		// deploy the test contract
@@ -1461,8 +1473,6 @@ var bindTests = []struct {
 		if err != nil {
 			t.Fatalf("Failed to deploy contract: %v", err)
 		}
-		// Finish deploy.
-		sim.Commit()
 
 		resCh, stopCh := make(chan uint64), make(chan struct{})
 
@@ -1486,27 +1496,50 @@ var bindTests = []struct {
 				}
 			}
 		}()
+
+		time.Sleep(5 * time.Second)
+
+		// Finish deploy.
+		sim.Commit(false)
+
 		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
-		sim.Commit()
+		sim.Commit(false)
+
+		time.Sleep(5 * time.Second)
+
+		bar0Timer := time.NewTimer(60 * time.Second)
+		time.Sleep(1 * time.Second)
+
 		select {
 		case n := <-resCh:
 			if n != 3 {
 				t.Fatalf("Invalid bar0 event")
 			}
-		case <-time.NewTimer(3 * time.Second).C:
+		case <-bar0Timer.C:
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
+		bar0Timer.Stop()
+
 		contract.Foo0(auth, big.NewInt(1))
-		sim.Commit()
+		sim.Commit(false)
+
+		time.Sleep(5 * time.Second)
+
+		barTimer := time.NewTimer(60 * time.Second)
+		time.Sleep(1 * time.Second)
+
 		select {
 		case n := <-resCh:
 			if n != 1 {
 				t.Fatalf("Invalid bar event")
 			}
-		case <-time.NewTimer(3 * time.Second).C:
+		case <-barTimer.C:
 			t.Fatalf("Wait bar event timeout")
 		}
+
+		barTimer.Stop()
+
 		close(stopCh)
 		`,
 		nil,
@@ -1532,10 +1565,10 @@ var bindTests = []struct {
 		`
 		"math/big"
 
-		"github.com/ethereum/go-ethereum/accounts/abi/bind"
-		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+		"github.com/ava-labs/coreth/accounts/abi/bind"
+		"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/crypto"
-		"github.com/ethereum/go-ethereum/core"
+		"github.com/ava-labs/coreth/core"
 		`,
 		`
 		// Initialize test accounts
@@ -1543,7 +1576,7 @@ var bindTests = []struct {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
 		// Deploy registrar contract
-		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))}}, 10000000)
 		defer sim.Close()
 
 		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1595,17 +1628,17 @@ var bindTests = []struct {
 		`
 		"math/big"
 
-		"github.com/ethereum/go-ethereum/accounts/abi/bind"
-		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+		"github.com/ava-labs/coreth/accounts/abi/bind"
+		"github.com/ava-labs/coreth/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/crypto"
-		"github.com/ethereum/go-ethereum/core"
+		"github.com/ava-labs/coreth/core"
         `,
 		`
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
 		// Deploy registrar contract
-		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 		defer sim.Close()
 
 		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1613,7 +1646,7 @@ var bindTests = []struct {
 		if err != nil {
 			t.Fatal("Failed to deploy contract")
 		}
-		sim.Commit()
+		sim.Commit(false)
 		err = c1.Foo(nil, ExternalLibSharedStruct{
 			F1: big.NewInt(100),
 			F2: [32]byte{0x01, 0x02, 0x03},
@@ -1625,7 +1658,7 @@ var bindTests = []struct {
 		if err != nil {
 			t.Fatal("Failed to deploy contract")
 		}
-		sim.Commit()
+		sim.Commit(false)
 		err = c2.Bar(nil, ExternalLibSharedStruct{
 			F1: big.NewInt(100),
 			F2: [32]byte{0x01, 0x02, 0x03},
@@ -1657,9 +1690,9 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1667,7 +1700,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			defer sim.Close()
 
 			// Deploy a tester contract and execute a structured call on it
@@ -1675,7 +1708,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy PureAndView contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			// This test the existence of the free retreiver call for view and pure functions
 			if num, err := pav.PureFunc(nil); err != nil {
@@ -1718,16 +1751,16 @@ var bindTests = []struct {
 			"bytes"
 			"math/big"
 	
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
 	   `,
 		`
 			key, _ := crypto.GenerateKey()
 			addr := crypto.PubkeyToAddress(key.PublicKey)
 	
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 1000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 1000000)
 			defer sim.Close()
 	
 			opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1735,12 +1768,12 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 	
 			// Test receive function
 			opts.Value = big.NewInt(100)
 			c.Receive(opts)
-			sim.Commit()
+			sim.Commit(false)
 	
 			var gotEvent bool
 			iter, _ := c.FilterReceived(nil)
@@ -1764,7 +1797,7 @@ var bindTests = []struct {
 			opts.Value = nil
 			calldata := []byte{0x01, 0x02, 0x03}
 			c.Fallback(opts, calldata)
-			sim.Commit()
+			sim.Commit(false)
 	
 			iter2, _ := c.FilterFallback(nil)
 			defer iter2.Close()
@@ -1806,17 +1839,16 @@ var bindTests = []struct {
 		`
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
-			"github.com/ethereum/go-ethereum/eth/ethconfig"
 	   `,
 		`
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			)
 			defer sim.Close()
 
@@ -1824,13 +1856,13 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy contract %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			_, err = d.TestEvent(user)
 			if err != nil {
 				t.Fatalf("Failed to call contract %v", err)
 			}
-			sim.Commit()
+			sim.Commit(false)
 
 			it, err := d.FilterStructEvent(nil)
 			if err != nil {
@@ -1849,7 +1881,7 @@ var bindTests = []struct {
 			if count != 1 {
 				t.Fatal("Unexpected contract event number")
 			}
-			`,
+	   `,
 		nil,
 		nil,
 		nil,
@@ -1859,52 +1891,51 @@ var bindTests = []struct {
 	{
 		`NewErrors`,
 		`
-		pragma solidity >0.8.4;
-	
-		contract NewErrors {
-			error MyError(uint256);
-			error MyError1(uint256);
-			error MyError2(uint256, uint256);
-			error MyError3(uint256 a, uint256 b, uint256 c);
-			function Error() public pure {
-				revert MyError3(1,2,3);
+			pragma solidity >0.8.4;
+		
+			contract NewErrors {
+				error MyError(uint256);
+				error MyError1(uint256);
+				error MyError2(uint256, uint256);
+				error MyError3(uint256 a, uint256 b, uint256 c);
+				function Error() public pure {
+					revert MyError3(1,2,3);
+				}
 			}
-		}
-	   `,
+		   `,
 		[]string{"0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063726c638214602d575b600080fd5b60336035565b005b60405163024876cd60e61b815260016004820152600260248201526003604482015260640160405180910390fdfea264697066735822122093f786a1bc60216540cd999fbb4a6109e0fef20abcff6e9107fb2817ca968f3c64736f6c63430008070033"},
 		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"},{"inputs":[],"name":"Error","outputs":[],"stateMutability":"pure","type":"function"}]`},
 		`
-			"math/big"
-	
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
-			"github.com/ethereum/go-ethereum/crypto"
-			"github.com/ethereum/go-ethereum/eth/ethconfig"
-	   `,
+				"math/big"
+		
+				"github.com/ava-labs/coreth/accounts/abi/bind"
+				"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+				"github.com/ava-labs/coreth/core"
+				"github.com/ethereum/go-ethereum/crypto"
+		   `,
 		`
-			var (
-				key, _  = crypto.GenerateKey()
-				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
-			)
-			defer sim.Close()
-	
-			_, tx, contract, err := DeployNewErrors(user, sim)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sim.Commit()
-			_, err = bind.WaitDeployed(nil, sim, tx)
-			if err != nil {
-				t.Error(err)
-			}
-			if err := contract.Error(new(bind.CallOpts)); err == nil {
-				t.Fatalf("expected contract to throw error")
-			}
-			// TODO (MariusVanDerWijden unpack error using abigen
-			// once that is implemented
-	   `,
+				var (
+					key, _  = crypto.GenerateKey()
+					user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+					sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+				)
+				defer sim.Close()
+		
+				_, tx, contract, err := DeployNewErrors(user, sim)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sim.Commit(true)
+				_, err = bind.WaitDeployed(nil, sim, tx)
+				if err != nil {
+					t.Error(err)
+				}
+				if err := contract.Error(new(bind.CallOpts)); err == nil {
+					t.Fatalf("expected contract to throw error")
+				}
+				// TODO (MariusVanDerWijden unpack error using abigen
+				// once that is implemented
+		   `,
 		nil,
 		nil,
 		nil,
@@ -1928,17 +1959,16 @@ var bindTests = []struct {
 		imports: `
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
-			"github.com/ethereum/go-ethereum/eth/ethconfig"
 		`,
 		tester: `
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
 			)
 			defer sim.Close()
 
@@ -1946,7 +1976,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("DeployConstructorWithStructParam() got err %v; want nil err", err)
 			}
-			sim.Commit()
+			sim.Commit(true)
 			
 			if _, err = bind.WaitDeployed(nil, sim, tx); err != nil {
 				t.Logf("Deployment tx: %+v", tx)
@@ -1976,17 +2006,17 @@ var bindTests = []struct {
 		imports: `
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
-			"github.com/ethereum/go-ethereum/eth/ethconfig"
 		`,
 		tester: `
 			var (
+				gasCeil = uint64(30000000) // Note: from geth's ethconfig.Defaults.Miner.GasCeil
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, gasCeil)
 			)
 			defer sim.Close()
 
@@ -1994,7 +2024,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("DeployNameConflict() got err %v; want nil err", err)
 			}
-			sim.Commit()
+			sim.Commit(true)
 			
 			if _, err = bind.WaitDeployed(nil, sim, tx); err != nil {
 				t.Logf("Deployment tx: %+v", tx)
@@ -2016,23 +2046,23 @@ var bindTests = []struct {
 		imports: `
 			"math/big"
 
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ava-labs/coreth/accounts/abi/bind"
+			"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+			"github.com/ava-labs/coreth/core"
 			"github.com/ethereum/go-ethereum/crypto"
-			"github.com/ethereum/go-ethereum/eth/ethconfig"
 		`,
 		tester: `
 			var (
+				gasCeil = uint64(30000000) // Note: from geth's ethconfig.Defaults.Miner.GasCeil
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, gasCeil)
 			)
 			_, tx, _, err := DeployRangeKeyword(user, sim)
 			if err != nil {
 				t.Fatalf("error deploying contract: %v", err)
 			}
-			sim.Commit()
+			sim.Commit(true)
 
 			if _, err = bind.WaitDeployed(nil, sim, tx); err != nil {
 				t.Errorf("error deploying the contract: %v", err)
@@ -2064,9 +2094,19 @@ var bindTests = []struct {
 	},
 }
 
+// The binding tests have been modified to run in two separate test
+// functions to allow these tests to pass on GitHub Actions.
+func TestGolangBindingsOverload(t *testing.T) {
+	golangBindings(t, true)
+}
+
+func TestGolangBindings(t *testing.T) {
+	golangBindings(t, false)
+}
+
 // Tests that packages generated by the binder can be successfully compiled and
 // the requested tester run against it.
-func TestGolangBindings(t *testing.T) {
+func golangBindings(t *testing.T, overload bool) {
 	// Skip the test if no Go command can be found
 	gocmd := runtime.GOROOT() + "/bin/go"
 	if !common.FileExist(gocmd) {
@@ -2082,6 +2122,14 @@ func TestGolangBindings(t *testing.T) {
 	// Generate the test suite for all the contracts
 	for i, tt := range bindTests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Skip the "Overload" test if [!overload]
+			if !overload && tt.name == "Overload" {
+				return
+			}
+			// Skip all tests except for "Overload" if [overload]
+			if overload && tt.name != "Overload" {
+				return
+			}
 			var types []string
 			if tt.types != nil {
 				types = tt.types
@@ -2121,12 +2169,12 @@ func TestGolangBindings(t *testing.T) {
 		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
 	}
 	pwd, _ := os.Getwd()
-	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ethereum/go-ethereum@v0.0.0", "-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", "..")) // Repo root
+	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ava-labs/coreth@v0.0.0", "-replace", "github.com/ava-labs/coreth="+filepath.Join(pwd, "..", "..", "..")) // Repo root
 	replacer.Dir = pkg
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
-	tidier := exec.Command(gocmd, "mod", "tidy")
+	tidier := exec.Command(gocmd, "mod", "tidy", "-compat=1.19")
 	tidier.Dir = pkg
 	if out, err := tidier.CombinedOutput(); err != nil {
 		t.Fatalf("failed to tidy Go module file: %v\n%s", err, out)

@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -17,10 +27,18 @@
 package vm
 
 import (
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	BuiltinAddr = common.Address{
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	}
 )
 
 // Config are the configuration options for the Interpreter
@@ -29,6 +47,9 @@ type Config struct {
 	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int     // Additional EIPS that are to be enabled
+
+	// AllowUnfinalizedQueries allow unfinalized queries
+	AllowUnfinalizedQueries bool
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -56,14 +77,14 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	var table *JumpTable
 	switch {
-	case evm.chainRules.IsShanghai:
-		table = &shanghaiInstructionSet
-	case evm.chainRules.IsMerge:
-		table = &mergeInstructionSet
-	case evm.chainRules.IsLondon:
-		table = &londonInstructionSet
-	case evm.chainRules.IsBerlin:
-		table = &berlinInstructionSet
+	case evm.chainRules.IsDUpgrade:
+		table = &dUpgradeInstructionSet
+	case evm.chainRules.IsApricotPhase3:
+		table = &apricotPhase3InstructionSet
+	case evm.chainRules.IsApricotPhase2:
+		table = &apricotPhase2InstructionSet
+	case evm.chainRules.IsApricotPhase1:
+		table = &apricotPhase1InstructionSet
 	case evm.chainRules.IsIstanbul:
 		table = &istanbulInstructionSet
 	case evm.chainRules.IsConstantinople:
@@ -103,6 +124,18 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	// Deprecate special handling of [BuiltinAddr] as of ApricotPhase2.
+	// In ApricotPhase2, the contract deployed in the genesis is overridden by a deprecated precompiled
+	// contract which will return an error immediately if its ever called. Therefore, this function should
+	// never be called after ApricotPhase2 with [BuiltinAddr] as the contract address.
+	if !in.evm.chainRules.IsApricotPhase2 && contract.Address() == BuiltinAddr {
+		self := AccountRef(contract.Caller())
+		if _, ok := contract.caller.(*Contract); ok {
+			contract = contract.AsDelegate()
+		}
+		contract.self = self
+	}
+
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -119,6 +152,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
+	// Note: this avoids invoking the tracer in any way for simple value
+	// transfers to EOA accounts.
 	if len(contract.Code) == 0 {
 		return nil, nil
 	}
@@ -144,6 +179,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		res     []byte // result of the opcode execution function
 		debug   = in.evm.Config.Tracer != nil
 	)
+
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
@@ -184,8 +220,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		if !contract.UseGas(cost) {
-			return nil, ErrOutOfGas
+			return nil, vmerrs.ErrOutOfGas
 		}
+
 		if operation.dynamicGas != nil {
 			// All ops with a dynamic memory usage also has a dynamic gas cost.
 			var memorySize uint64
@@ -196,12 +233,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if operation.memorySize != nil {
 				memSize, overflow := operation.memorySize(stack)
 				if overflow {
-					return nil, ErrGasUintOverflow
+					return nil, vmerrs.ErrGasUintOverflow
 				}
 				// memory is expanded in words of 32 bytes. Gas
 				// is also calculated in words.
 				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
+					return nil, vmerrs.ErrGasUintOverflow
 				}
 			}
 			// Consume the gas and return an error if not enough gas is available.
@@ -210,7 +247,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost) {
-				return nil, ErrOutOfGas
+				return nil, vmerrs.ErrOutOfGas
 			}
 			// Do tracing before memory expansion
 			if debug {
@@ -224,6 +261,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
 		}
+
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
 		if err != nil {
@@ -231,7 +269,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		pc++
 	}
-
 	if err == errStopToken {
 		err = nil // clear stop token error
 	}

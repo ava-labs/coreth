@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -19,17 +29,19 @@ package bind_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/accounts/abi/bind"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -49,11 +61,11 @@ func (mt *mockTransactor) HeaderByNumber(ctx context.Context, number *big.Int) (
 	return &types.Header{BaseFee: mt.baseFee}, nil
 }
 
-func (mt *mockTransactor) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
+func (mt *mockTransactor) AcceptedCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
 	return []byte{1}, nil
 }
 
-func (mt *mockTransactor) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+func (mt *mockTransactor) AcceptedNonceAt(ctx context.Context, account common.Address) (uint64, error) {
 	return 0, nil
 }
 
@@ -67,7 +79,7 @@ func (mt *mockTransactor) SuggestGasTipCap(ctx context.Context) (*big.Int, error
 	return mt.gasTipCap, nil
 }
 
-func (mt *mockTransactor) EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error) {
+func (mt *mockTransactor) EstimateGas(ctx context.Context, call interfaces.CallMsg) (gas uint64, err error) {
 	return 0, nil
 }
 
@@ -89,33 +101,32 @@ func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, block
 	return mc.codeAtBytes, mc.codeAtErr
 }
 
-func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (mc *mockCaller) CallContract(ctx context.Context, call interfaces.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
 	return mc.callContractBytes, mc.callContractErr
 }
 
-type mockPendingCaller struct {
+type mockAcceptedCaller struct {
 	*mockCaller
-	pendingCodeAtBytes        []byte
-	pendingCodeAtErr          error
-	pendingCodeAtCalled       bool
-	pendingCallContractCalled bool
-	pendingCallContractBytes  []byte
-	pendingCallContractErr    error
+	acceptedCodeAtBytes        []byte
+	acceptedCodeAtErr          error
+	acceptedCodeAtCalled       bool
+	acceptedCallContractCalled bool
+	acceptedCallContractBytes  []byte
+	acceptedCallContractErr    error
 }
 
-func (mc *mockPendingCaller) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
-	mc.pendingCodeAtCalled = true
-	return mc.pendingCodeAtBytes, mc.pendingCodeAtErr
+func (mc *mockAcceptedCaller) AcceptedCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+	mc.acceptedCodeAtCalled = true
+	return mc.acceptedCodeAtBytes, mc.acceptedCodeAtErr
 }
 
-func (mc *mockPendingCaller) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
-	mc.pendingCallContractCalled = true
-	return mc.pendingCallContractBytes, mc.pendingCallContractErr
+func (mc *mockAcceptedCaller) AcceptedCallContract(ctx context.Context, call interfaces.CallMsg) ([]byte, error) {
+	mc.acceptedCallContractCalled = true
+	return mc.acceptedCallContractBytes, mc.acceptedCallContractErr
 }
-
 func TestPassingBlockNumber(t *testing.T) {
-	mc := &mockPendingCaller{
+	mc := &mockAcceptedCaller{
 		mockCaller: &mockCaller{
 			codeAtBytes: []byte{1, 2, 3},
 		},
@@ -152,13 +163,13 @@ func TestPassingBlockNumber(t *testing.T) {
 		t.Fatalf("CodeAt() was passed a block number when it should not have been")
 	}
 
-	bc.Call(&bind.CallOpts{BlockNumber: blockNumber, Pending: true}, nil, "something")
+	bc.Call(&bind.CallOpts{BlockNumber: blockNumber, Accepted: true}, nil, "something")
 
-	if !mc.pendingCallContractCalled {
+	if !mc.acceptedCallContractCalled {
 		t.Fatalf("CallContract() was not passed the block number")
 	}
 
-	if !mc.pendingCodeAtCalled {
+	if !mc.acceptedCodeAtCalled {
 		t.Fatalf("CodeAt() was not passed the block number")
 	}
 }
@@ -301,6 +312,80 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
+func TestTransactNativeAssetCallNilAssetAmount(t *testing.T) {
+	assert := assert.New(t)
+	mt := &mockTransactor{}
+	bc := bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
+	opts := &bind.TransactOpts{
+		Signer: mockSign,
+	}
+	// fails if asset amount is nil
+	opts.NativeAssetCall = &bind.NativeAssetCallOpts{
+		AssetID:     common.Hash{},
+		AssetAmount: nil,
+	}
+	_, err := bc.Transact(opts, "")
+	assert.ErrorIs(err, bind.ErrNilAssetAmount)
+}
+
+func TestTransactNativeAssetCallNonZeroValue(t *testing.T) {
+	assert := assert.New(t)
+	mt := &mockTransactor{}
+	bc := bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
+	opts := &bind.TransactOpts{
+		Signer: mockSign,
+	}
+	opts.NativeAssetCall = &bind.NativeAssetCallOpts{
+		AssetID:     common.Hash{},
+		AssetAmount: big.NewInt(11),
+	}
+	// fails if value > 0
+	opts.Value = big.NewInt(11)
+	_, err := bc.Transact(opts, "")
+	assert.Equal(err.Error(), fmt.Sprintf("value must be 0 when performing native asset call, found %v", opts.Value))
+	// fails if value < 0
+	opts.Value = big.NewInt(-11)
+	_, err = bc.Transact(opts, "")
+	assert.Equal(err.Error(), fmt.Sprintf("value must be 0 when performing native asset call, found %v", opts.Value))
+}
+
+func TestTransactNativeAssetCall(t *testing.T) {
+	assert := assert.New(t)
+	json := `[{"type":"function","name":"method","inputs":[{"type":"uint256" },{"type":"string"}]}]`
+	parsed, err := abi.JSON(strings.NewReader(json))
+	assert.Nil(err)
+	mt := &mockTransactor{}
+	contractAddr := common.Address{11}
+	bc := bind.NewBoundContract(contractAddr, parsed, nil, mt, nil)
+	opts := &bind.TransactOpts{
+		Signer: mockSign,
+	}
+	// normal call tx
+	methodName := "method"
+	arg1 := big.NewInt(22)
+	arg2 := "33"
+	normalCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
+	assert.Nil(err)
+	// native asset call tx
+	assetID := common.Hash{44}
+	assetAmount := big.NewInt(55)
+	opts.NativeAssetCall = &bind.NativeAssetCallOpts{
+		AssetID:     assetID,
+		AssetAmount: assetAmount,
+	}
+	nativeCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
+	assert.Nil(err)
+	// verify transformations
+	assert.Equal(vm.NativeAssetCallAddr, *nativeCallTx.To())
+	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := vm.UnpackNativeAssetCallInput(nativeCallTx.Data())
+	assert.Nil(err)
+	assert.NotEmpty(unpackedData)
+	assert.Equal(unpackedData, normalCallTx.Data())
+	assert.Equal(unpackedAddr, contractAddr)
+	assert.Equal(unpackedAssetID, assetID)
+	assert.Equal(unpackedAssetAmount, assetAmount)
+}
+
 func TestTransactGasFee(t *testing.T) {
 	assert := assert.New(t)
 
@@ -386,18 +471,18 @@ func TestCall(t *testing.T) {
 		wantErr      bool
 		wantErrExact error
 	}{{
-		name: "ok not pending",
+		name: "ok not accepted",
 		mc: &mockCaller{
 			codeAtBytes: []byte{0},
 		},
 		method: method,
 	}, {
-		name: "ok pending",
-		mc: &mockPendingCaller{
-			pendingCodeAtBytes: []byte{0},
+		name: "ok accepted",
+		mc: &mockAcceptedCaller{
+			acceptedCodeAtBytes: []byte{0},
 		},
 		opts: &bind.CallOpts{
-			Pending: true,
+			Accepted: true,
 		},
 		method: method,
 	}, {
@@ -406,38 +491,38 @@ func TestCall(t *testing.T) {
 		method:  "else",
 		wantErr: true,
 	}, {
-		name: "interface error, pending but not a PendingContractCaller",
+		name: "interface error, accepted but not a AcceptedContractCaller",
 		mc:   new(mockCaller),
 		opts: &bind.CallOpts{
-			Pending: true,
+			Accepted: true,
 		},
 		method:       method,
-		wantErrExact: bind.ErrNoPendingState,
+		wantErrExact: bind.ErrNoAcceptedState,
 	}, {
-		name: "pending call canceled",
-		mc: &mockPendingCaller{
-			pendingCallContractErr: context.DeadlineExceeded,
+		name: "accepted call canceled",
+		mc: &mockAcceptedCaller{
+			acceptedCallContractErr: context.DeadlineExceeded,
 		},
 		opts: &bind.CallOpts{
-			Pending: true,
+			Accepted: true,
 		},
 		method:       method,
 		wantErrExact: context.DeadlineExceeded,
 	}, {
-		name: "pending code at error",
-		mc: &mockPendingCaller{
-			pendingCodeAtErr: errors.New(""),
+		name: "accepted code at error",
+		mc: &mockAcceptedCaller{
+			acceptedCodeAtErr: errors.New(""),
 		},
 		opts: &bind.CallOpts{
-			Pending: true,
+			Accepted: true,
 		},
 		method:  method,
 		wantErr: true,
 	}, {
-		name: "no pending code at",
-		mc:   new(mockPendingCaller),
+		name: "no accepted code at",
+		mc:   new(mockAcceptedCaller),
 		opts: &bind.CallOpts{
-			Pending: true,
+			Accepted: true,
 		},
 		method:       method,
 		wantErrExact: bind.ErrNoCode,

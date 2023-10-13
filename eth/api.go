@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -22,22 +32,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/internal/ethapi"
+	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // EthereumAPI provides an API to access Ethereum full node-related information.
@@ -58,76 +67,6 @@ func (api *EthereumAPI) Etherbase() (common.Address, error) {
 // Coinbase is the address that mining rewards will be send to (alias for Etherbase).
 func (api *EthereumAPI) Coinbase() (common.Address, error) {
 	return api.Etherbase()
-}
-
-// Hashrate returns the POW hashrate.
-func (api *EthereumAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(api.e.Miner().Hashrate())
-}
-
-// Mining returns an indication if this node is currently mining.
-func (api *EthereumAPI) Mining() bool {
-	return api.e.IsMining()
-}
-
-// MinerAPI provides an API to control the miner.
-type MinerAPI struct {
-	e *Ethereum
-}
-
-// NewMinerAPI create a new MinerAPI instance.
-func NewMinerAPI(e *Ethereum) *MinerAPI {
-	return &MinerAPI{e}
-}
-
-// Start starts the miner with the given number of threads. If threads is nil,
-// the number of workers started is equal to the number of logical CPUs that are
-// usable by this process. If mining is already running, this method adjust the
-// number of threads allowed to use and updates the minimum price required by the
-// transaction pool.
-func (api *MinerAPI) Start() error {
-	return api.e.StartMining()
-}
-
-// Stop terminates the miner, both at the consensus engine level as well as at
-// the block creation level.
-func (api *MinerAPI) Stop() {
-	api.e.StopMining()
-}
-
-// SetExtra sets the extra data string that is included when this miner mines a block.
-func (api *MinerAPI) SetExtra(extra string) (bool, error) {
-	if err := api.e.Miner().SetExtra([]byte(extra)); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// SetGasPrice sets the minimum accepted gas price for the miner.
-func (api *MinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
-	api.e.lock.Lock()
-	api.e.gasPrice = (*big.Int)(&gasPrice)
-	api.e.lock.Unlock()
-
-	api.e.txPool.SetGasPrice((*big.Int)(&gasPrice))
-	return true
-}
-
-// SetGasLimit sets the gaslimit to target towards during mining.
-func (api *MinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
-	api.e.Miner().SetGasCeil(uint64(gasLimit))
-	return true
-}
-
-// SetEtherbase sets the etherbase of the miner.
-func (api *MinerAPI) SetEtherbase(etherbase common.Address) bool {
-	api.e.SetEtherbase(etherbase)
-	return true
-}
-
-// SetRecommitInterval updates the interval for miner sealing work recommitting.
-func (api *MinerAPI) SetRecommitInterval(interval int) {
-	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }
 
 // AdminAPI is the collection of Ethereum full node related APIs for node
@@ -256,20 +195,9 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
-	if blockNr == rpc.PendingBlockNumber {
-		// If we're dumping the pending state, we need to request
-		// both the pending block as well as the pending state from
-		// the miner and operate on those
-		_, stateDb := api.eth.miner.Pending()
-		return stateDb.RawDump(opts), nil
-	}
 	var header *types.Header
-	if blockNr == rpc.LatestBlockNumber {
-		header = api.eth.blockchain.CurrentBlock()
-	} else if blockNr == rpc.FinalizedBlockNumber {
-		header = api.eth.blockchain.CurrentFinalBlock()
-	} else if blockNr == rpc.SafeBlockNumber {
-		header = api.eth.blockchain.CurrentSafeBlock()
+	if blockNr.IsAccepted() {
+		header = api.eth.LastAcceptedBlock().Header()
 	} else {
 		block := api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 		if block == nil {
@@ -295,41 +223,11 @@ func (api *DebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.By
 	return nil, errors.New("unknown preimage")
 }
 
-// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
-type BadBlockArgs struct {
-	Hash  common.Hash            `json:"hash"`
-	Block map[string]interface{} `json:"block"`
-	RLP   string                 `json:"rlp"`
-}
-
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block hashes.
-func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
-	var (
-		err     error
-		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
-		results = make([]*BadBlockArgs, 0, len(blocks))
-	)
-	for _, block := range blocks {
-		var (
-			blockRlp  string
-			blockJSON map[string]interface{}
-		)
-		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
-			blockRlp = err.Error() // Hacky, but hey, it works
-		} else {
-			blockRlp = fmt.Sprintf("%#x", rlpBytes)
-		}
-		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig()); err != nil {
-			blockJSON = map[string]interface{}{"error": err.Error()}
-		}
-		results = append(results, &BadBlockArgs{
-			Hash:  block.Hash(),
-			RLP:   blockRlp,
-			Block: blockJSON,
-		})
-	}
-	return results, nil
+func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*ethapi.BadBlockArgs, error) {
+	internalAPI := ethapi.NewBlockChainAPI(api.eth.APIBackend)
+	return internalAPI.GetBadBlocks(ctx)
 }
 
 // AccountRangeMaxResults is the maximum number of results to be returned per call
@@ -341,33 +239,22 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	var err error
 
 	if number, ok := blockNrOrHash.Number(); ok {
-		if number == rpc.PendingBlockNumber {
-			// If we're dumping the pending state, we need to request
-			// both the pending block as well as the pending state from
-			// the miner and operate on those
-			_, stateDb = api.eth.miner.Pending()
+		var header *types.Header
+		if number.IsAccepted() {
+			header = api.eth.LastAcceptedBlock().Header()
 		} else {
-			var header *types.Header
-			if number == rpc.LatestBlockNumber {
-				header = api.eth.blockchain.CurrentBlock()
-			} else if number == rpc.FinalizedBlockNumber {
-				header = api.eth.blockchain.CurrentFinalBlock()
-			} else if number == rpc.SafeBlockNumber {
-				header = api.eth.blockchain.CurrentSafeBlock()
-			} else {
-				block := api.eth.blockchain.GetBlockByNumber(uint64(number))
-				if block == nil {
-					return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
-				}
-				header = block.Header()
-			}
-			if header == nil {
+			block := api.eth.blockchain.GetBlockByNumber(uint64(number))
+			if block == nil {
 				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.BlockChain().StateAt(header.Root)
-			if err != nil {
-				return state.IteratorDump{}, err
-			}
+			header = block.Header()
+		}
+		if header == nil {
+			return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
+		}
+		stateDb, err = api.eth.BlockChain().StateAt(header.Root)
+		if err != nil {
+			return state.IteratorDump{}, err
 		}
 	} else if hash, ok := blockNrOrHash.Hash(); ok {
 		block := api.eth.blockchain.GetBlockByHash(hash)
@@ -543,12 +430,6 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 // The (from, to) parameters are the sequence of blocks to search, which can go
 // either forwards or backwards
 func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
-	db := api.eth.ChainDb()
-	var pivot uint64
-	if p := rawdb.ReadLastPivotNumber(db); p != nil {
-		pivot = *p
-		log.Info("Found fast-sync pivot marker", "number", pivot)
-	}
 	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
 		// We don't have state for pending (-2), so treat it as latest
 		if num.Int64() < 0 {
@@ -584,9 +465,6 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			log.Info("Finding roots", "from", start, "to", end, "at", i)
 			lastLog = time.Now()
 		}
-		if i < int64(pivot) {
-			continue
-		}
 		h := api.eth.BlockChain().GetHeaderByNumber(uint64(i))
 		if h == nil {
 			return 0, fmt.Errorf("missing header %d", i)
@@ -596,15 +474,4 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		}
 	}
 	return 0, errors.New("no state found")
-}
-
-// SetTrieFlushInterval configures how often in-memory tries are persisted
-// to disk. The value is in terms of block processing time, not wall clock.
-func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
-	t, err := time.ParseDuration(interval)
-	if err != nil {
-		return err
-	}
-	api.eth.blockchain.SetTrieFlushInterval(t)
-	return nil
 }

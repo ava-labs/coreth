@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -62,7 +72,7 @@ type logMarshaling struct {
 	Index       hexutil.Uint
 }
 
-//go:generate go run ../../rlp/rlpgen -type rlpLog -out gen_log_rlp.go
+//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -type rlpLog -out gen_log_rlp.go
 
 // rlpLog is used to RLP-encode both the consensus and storage formats.
 type rlpLog struct {
@@ -85,4 +95,13 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 		l.Address, l.Topics, l.Data = dec.Address, dec.Topics, dec.Data
 	}
 	return err
+}
+
+// FlattenLogs converts a nested array of logs to a single array of logs.
+func FlattenLogs(list [][]*Log) []*Log {
+	var flat []*Log
+	for _, logs := range list {
+		flat = append(flat, logs...)
+	}
+	return flat
 }

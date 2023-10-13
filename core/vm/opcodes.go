@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -94,8 +104,6 @@ const (
 	TIMESTAMP   OpCode = 0x42
 	NUMBER      OpCode = 0x43
 	DIFFICULTY  OpCode = 0x44
-	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
-	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
@@ -210,6 +218,11 @@ const (
 	TSTORE OpCode = 0xb4
 )
 
+const (
+	BALANCEMC = 0xcd
+	CALLEX    = 0xcf
+)
+
 // 0xf0 range - closures.
 const (
 	CREATE       OpCode = 0xf0
@@ -263,6 +276,7 @@ var opCodeToString = map[OpCode]string{
 	// 0x30 range - closure state.
 	ADDRESS:        "ADDRESS",
 	BALANCE:        "BALANCE",
+	BALANCEMC:      "BALANCEMC",
 	ORIGIN:         "ORIGIN",
 	CALLER:         "CALLER",
 	CALLVALUE:      "CALLVALUE",
@@ -283,7 +297,7 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
+	DIFFICULTY:  "DIFFICULTY",
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
@@ -388,6 +402,7 @@ var opCodeToString = map[OpCode]string{
 	// 0xf0 range - closures.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
+	CALLEX:       "CALLEX",
 	RETURN:       "RETURN",
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
@@ -437,6 +452,7 @@ var stringToOp = map[string]OpCode{
 	"KECCAK256":      KECCAK256,
 	"ADDRESS":        ADDRESS,
 	"BALANCE":        BALANCE,
+	"BALANCEMC":      BALANCEMC,
 	"ORIGIN":         ORIGIN,
 	"CALLER":         CALLER,
 	"CALLVALUE":      CALLVALUE,
@@ -549,6 +565,7 @@ var stringToOp = map[string]OpCode{
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
+	"CALLEX":         CALLEX,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,

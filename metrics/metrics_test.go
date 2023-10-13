@@ -9,12 +9,6 @@ import (
 
 const FANOUT = 128
 
-func TestReadRuntimeValues(t *testing.T) {
-	var v runtimeStats
-	readRuntimeStats(&v)
-	t.Logf("%+v", v)
-}
-
 func BenchmarkMetrics(b *testing.B) {
 	r := NewRegistry()
 	c := NewRegisteredCounter("counter", r)

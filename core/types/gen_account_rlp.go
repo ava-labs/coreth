@@ -5,8 +5,11 @@
 
 package types
 
-import "github.com/ethereum/go-ethereum/rlp"
-import "io"
+import (
+	"io"
+
+	"github.com/ethereum/go-ethereum/rlp"
+)
 
 func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
@@ -22,6 +25,7 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	}
 	w.WriteBytes(obj.Root[:])
 	w.WriteBytes(obj.CodeHash)
+	w.WriteBool(obj.IsMultiCoin)
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

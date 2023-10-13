@@ -1,3 +1,13 @@
+// (c) 2019-2022, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -22,14 +32,15 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/stretchr/testify/require"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
@@ -52,13 +63,13 @@ func BenchmarkFilters(b *testing.B) {
 		addr4   = common.BytesToAddress([]byte("random addresses please"))
 
 		gspec = &core.Genesis{
-			Alloc:   core.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  params.TestChainConfig,
+			Alloc:   core.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+			BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 		}
 	)
 	defer db.Close()
-	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 100010, func(i int, gen *core.BlockGen) {
+	_, chain, receipts, err := core.GenerateChainWithGenesis(gspec, dummy.NewFaker(), 100010, 10, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
@@ -78,11 +89,11 @@ func BenchmarkFilters(b *testing.B) {
 			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		}
 	})
+	require.NoError(b, err)
 	// The test txs are not properly signed, can't simply create a chain
 	// and then import blocks. TODO(rjl493456442) try to get rid of the
 	// manual database writes.
 	gspec.MustCommit(db)
-
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
@@ -91,7 +102,8 @@ func BenchmarkFilters(b *testing.B) {
 	}
 	b.ResetTimer()
 
-	filter := sys.NewRangeFilter(0, -1, []common.Address{addr1, addr2, addr3, addr4}, nil)
+	filter, err := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil)
+	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
 		logs, _ := filter.Logs(context.Background())
@@ -116,12 +128,12 @@ func TestFilters(t *testing.T) {
 		gspec = &core.Genesis{
 			Config:  params.TestChainConfig,
 			Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
+			BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 		}
 	)
 	defer db.Close()
 
-	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
+	_, chain, receipts, err := core.GenerateChainWithGenesis(gspec, dummy.NewFaker(), 1000, 10, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, false, 0)
@@ -166,6 +178,7 @@ func TestFilters(t *testing.T) {
 			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		}
 	})
+	require.NoError(t, err)
 	// The test txs are not properly signed, can't simply create a chain
 	// and then import blocks. TODO(rjl493456442) try to get rid of the
 	// manual database writes.
@@ -177,10 +190,8 @@ func TestFilters(t *testing.T) {
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 
-	// Set block 998 as Finalized (-3)
-	rawdb.WriteFinalizedBlockHash(db, chain[998].Hash())
-
-	filter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	filter, err := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	require.NoError(t, err)
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
@@ -191,39 +202,46 @@ func TestFilters(t *testing.T) {
 		wantHashes []common.Hash
 	}{
 		{
-			sys.NewRangeFilter(900, 999, []common.Address{addr}, [][]common.Hash{{hash3}}),
+			mustNewRangeFilter(t, sys, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}}),
 			[]common.Hash{hash3},
 		}, {
-			sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash3}}),
+			mustNewRangeFilter(t, sys, 990, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash3}}),
 			[]common.Hash{hash3},
 		}, {
-			sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
+			mustNewRangeFilter(t, sys, 1, 10, nil, [][]common.Hash{{hash1, hash2}}),
 			[]common.Hash{hash1, hash2},
 		}, {
-			sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
+			mustNewRangeFilter(t, sys, 0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
 			nil,
 		}, {
-			sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil),
+			mustNewRangeFilter(t, sys, 0, int64(rpc.LatestBlockNumber), []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil),
 			nil,
 		}, {
-			sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
+			mustNewRangeFilter(t, sys, 0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
 			nil,
 		}, {
-			sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash4},
+			mustNewRangeFilter(t, sys, int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash3, hash4},
+			// Note: modified from go-ethereum since we don't have FinalizedBlock
+			mustNewRangeFilter(t, sys, int64(rpc.AcceptedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil), []common.Hash{hash3},
+			// Note: modified from go-ethereum since we don't have FinalizedBlock
+			mustNewRangeFilter(t, sys, int64(rpc.AcceptedBlockNumber), int64(rpc.AcceptedBlockNumber), nil, nil), []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil), nil,
+			// Note: modified from go-ethereum since we don't have FinalizedBlock
+			mustNewRangeFilter(t, sys, int64(rpc.LatestBlockNumber), -3, nil, nil), []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), nil,
+			// Note: modified from go-ethereum since we don't have SafeBlock
+			mustNewRangeFilter(t, sys, int64(rpc.AcceptedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), nil, nil), nil,
+			// Note: modified from go-ethereum since we don't have SafeBlock
+			mustNewRangeFilter(t, sys, int64(rpc.AcceptedBlockNumber), int64(rpc.AcceptedBlockNumber), nil, nil), []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil), nil,
-		}, {
-			sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil), nil,
+			// Note: modified from go-ethereum since we don't have SafeBlock
+			mustNewRangeFilter(t, sys, int64(rpc.LatestBlockNumber), int64(rpc.AcceptedBlockNumber), nil, nil), []common.Hash{hash4},
+		},
+		{
+			mustNewRangeFilter(t, sys, int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil), nil,
 		},
 	} {
 		logs, _ := tc.f.Logs(context.Background())
@@ -241,4 +259,11 @@ func TestFilters(t *testing.T) {
 			t.Fatalf("test %d, have %v want %v", i, haveHashes, tc.wantHashes)
 		}
 	}
+}
+
+func mustNewRangeFilter(t *testing.T, sys *FilterSystem, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+	t.Helper()
+	f, err := sys.NewRangeFilter(begin, end, addresses, topics)
+	require.NoError(t, err)
+	return f
 }

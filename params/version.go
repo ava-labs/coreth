@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -41,27 +51,10 @@ var VersionWithMeta = func() string {
 	return v
 }()
 
-// ArchiveVersion holds the textual version string used for Geth archives. e.g.
-// "1.8.11-dea1ce05" for stable releases, or "1.8.13-unstable-21c059b6" for unstable
-// releases.
-func ArchiveVersion(gitCommit string) string {
-	vsn := Version
-	if VersionMeta != "stable" {
-		vsn += "-" + VersionMeta
-	}
-	if len(gitCommit) >= 8 {
-		vsn += "-" + gitCommit[:8]
-	}
-	return vsn
-}
-
 func VersionWithCommit(gitCommit, gitDate string) string {
 	vsn := VersionWithMeta
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
-	}
-	if (VersionMeta != "stable") && (gitDate != "") {
-		vsn += "-" + gitDate
 	}
 	return vsn
 }

@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -236,13 +246,20 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 	return messages, batch, nil
 }
 
-func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorResponse bool) error {
+func (c *jsonCodec) writeJSON(ctx context.Context, val interface{}, isErrorResponse bool) error {
+	return c.writeJSONSkipDeadline(ctx, val, isErrorResponse, false)
+}
+
+func (c *jsonCodec) writeJSONSkipDeadline(ctx context.Context, v interface{}, isErrorResponse bool, skip bool) error {
 	c.encMu.Lock()
 	defer c.encMu.Unlock()
 
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(defaultWriteTimeout)
+	deadline := time.Now().Add(defaultWriteTimeout)
+	if !skip {
+		deadlineCtx, ok := ctx.Deadline()
+		if ok {
+			deadline = deadlineCtx
+		}
 	}
 	c.conn.SetWriteDeadline(deadline)
 	return c.encode(v, isErrorResponse)

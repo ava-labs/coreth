@@ -1,3 +1,13 @@
+// (c) 2019-2021, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -21,11 +31,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -33,25 +43,25 @@ import (
 func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 	var (
 		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
-		engine = ethash.NewFaker()
+		engine = dummy.NewFaker()
 
 		// A sender who makes transactions, has some funds
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(1_000_000_000_000_000_000)
+		funds   = big.NewInt(50000 * 225000000000 * 200)
 		gspec   = &Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  GenesisAlloc{address: {Balance: funds}},
 		}
 	)
 	// We need to generate as many blocks +1 as uncles
-	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, uncles+1,
+	_, blocks, _, _ := GenerateChainWithGenesis(gspec, engine, uncles+1, 10,
 		func(n int, b *BlockGen) {
 			if n == uncles {
 				// Add transactions and stuff on the last block
 				for i := 0; i < transactions; i++ {
 					tx, _ := types.SignTx(types.NewTransaction(uint64(i), aa,
-						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.HomesteadSigner{}, key)
+						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.LatestSigner(params.TestChainConfig), key)
 					b.AddTx(tx)
 				}
 				for i := 0; i < uncles; i++ {
@@ -90,16 +100,24 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	}
 	// Check that txs exist
 	if !it.Next() {
-		t.Fatal("expected two elems, got zero")
+		t.Fatal("expected four elems, got zero")
 	}
 	txdata := it.Value()
 	// Check that uncles exist
 	if !it.Next() {
-		t.Fatal("expected two elems, got one")
+		t.Fatal("expected four elems, got one")
+	}
+	// Check that version exist
+	if !it.Next() {
+		t.Fatal("expected four elems, got two")
+	}
+	// Check that extdata exist
+	if !it.Next() {
+		t.Fatal("expected four elems, got three")
 	}
 	// No more after that
 	if it.Next() {
-		t.Fatal("expected only two elems, got more")
+		t.Fatal("expected only four elems, got more")
 	}
 	txIt, err := rlp.NewListIterator(txdata)
 	if err != nil {

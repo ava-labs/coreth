@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -19,9 +29,9 @@ package vm
 import (
 	"math/big"
 
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // StateDB is an EVM database for full state querying.
@@ -31,6 +41,10 @@ type StateDB interface {
 	SubBalance(common.Address, *big.Int)
 	AddBalance(common.Address, *big.Int)
 	GetBalance(common.Address) *big.Int
+
+	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
 
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
@@ -45,6 +59,7 @@ type StateDB interface {
 	GetRefund() uint64
 
 	GetCommittedState(common.Address, common.Hash) common.Hash
+	GetCommittedStateAP1(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
 

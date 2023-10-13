@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -17,6 +27,7 @@
 package vm
 
 import (
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/holiman/uint256"
 )
 
@@ -46,7 +57,7 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 		}
 	}
 	if !callCost.IsUint64() {
-		return 0, ErrGasUintOverflow
+		return 0, vmerrs.ErrGasUintOverflow
 	}
 
 	return callCost.Uint64(), nil

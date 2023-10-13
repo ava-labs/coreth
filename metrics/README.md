@@ -81,64 +81,6 @@ addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:2003")
 go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", addr)
 ```
 
-Periodically emit every metric into InfluxDB:
-
-**NOTE:** this has been pulled out of the library due to constant fluctuations
-in the InfluxDB API. In fact, all client libraries are on their way out. see
-issues [#121](https://github.com/rcrowley/go-metrics/issues/121) and
-[#124](https://github.com/rcrowley/go-metrics/issues/124) for progress and details.
-
-```go
-import "github.com/vrischmann/go-metrics-influxdb"
-
-go influxdb.InfluxDB(metrics.DefaultRegistry,
-  10e9, 
-  "127.0.0.1:8086", 
-  "database-name", 
-  "username", 
-  "password"
-)
-```
-
-Periodically upload every metric to Librato using the [Librato client](https://github.com/mihasya/go-metrics-librato):
-
-**Note**: the client included with this repository under the `librato` package
-has been deprecated and moved to the repository linked above.
-
-```go
-import "github.com/mihasya/go-metrics-librato"
-
-go librato.Librato(metrics.DefaultRegistry,
-    10e9,                  // interval
-    "example@example.com", // account owner email address
-    "token",               // Librato API token
-    "hostname",            // source
-    []float64{0.95},       // percentiles to send
-    time.Millisecond,      // time unit
-)
-```
-
-Periodically emit every metric to StatHat:
-
-```go
-import "github.com/rcrowley/go-metrics/stathat"
-
-go stathat.Stathat(metrics.DefaultRegistry, 10e9, "example@example.com")
-```
-
-Maintain all metrics along with expvars at `/debug/metrics`:
-
-This uses the same mechanism as [the official expvar](https://golang.org/pkg/expvar/)
-but exposed under `/debug/metrics`, which shows a json representation of all your usual expvars
-as well as all your go-metrics.
-
-
-```go
-import "github.com/rcrowley/go-metrics/exp"
-
-exp.Exp(metrics.DefaultRegistry)
-```
-
 Installation
 ------------
 
@@ -157,10 +99,4 @@ Publishing Metrics
 
 Clients are available for the following destinations:
 
-* Librato - https://github.com/mihasya/go-metrics-librato
-* Graphite - https://github.com/cyberdelia/go-metrics-graphite
-* InfluxDB - https://github.com/vrischmann/go-metrics-influxdb
-* Ganglia - https://github.com/appscode/metlia
 * Prometheus - https://github.com/deathowl/go-metrics-prometheus
-* DataDog - https://github.com/syntaqx/go-metrics-datadog
-* SignalFX - https://github.com/pascallouisperez/go-metrics-signalfx

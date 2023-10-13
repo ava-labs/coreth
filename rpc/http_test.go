@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -106,7 +116,7 @@ func TestHTTPResponseWithEmptyGet(t *testing.T) {
 func TestHTTPRespBodyUnlimited(t *testing.T) {
 	const respLength = maxRequestContentLength * 3
 
-	s := NewServer()
+	s := NewServer(0)
 	defer s.Stop()
 	s.RegisterName("test", largeRespService{respLength})
 	ts := httptest.NewServer(s)

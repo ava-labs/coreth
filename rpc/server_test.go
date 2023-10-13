@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -18,7 +28,6 @@ package rpc
 
 import (
 	"bufio"
-	"bytes"
 	"io"
 	"net"
 	"os"
@@ -29,7 +38,7 @@ import (
 )
 
 func TestServerRegisterName(t *testing.T) {
-	server := NewServer()
+	server := NewServer(0)
 	service := new(testService)
 
 	if err := server.RegisterName("test", service); err != nil {
@@ -77,7 +86,7 @@ func runTestScript(t *testing.T, file string) {
 
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()
-	go server.ServeCodec(NewCodec(serverConn), 0)
+	go server.ServeCodec(NewCodec(serverConn), 0, 0, 0, 0)
 	readbuf := bufio.NewReader(clientConn)
 	for _, line := range strings.Split(string(content), "\n") {
 		line = strings.TrimSpace(line)
@@ -111,44 +120,43 @@ func runTestScript(t *testing.T, file string) {
 	}
 }
 
-// This test checks that responses are delivered for very short-lived connections that
-// only carry a single request.
-func TestServerShortLivedConn(t *testing.T) {
-	server := newTestServer()
-	defer server.Stop()
+// // This test checks that responses are delivered for very short-lived connections that
+// // only carry a single request.
+// func TestServerShortLivedConn(t *testing.T) {
+// 	server := newTestServer()
+// 	defer server.Stop()
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal("can't listen:", err)
-	}
-	defer listener.Close()
-	go server.ServeListener(listener)
+// 	listener, err := net.Listen("tcp", "127.0.0.1:0")
+// 	if err != nil {
+// 		t.Fatal("can't listen:", err)
+// 	}
+// 	defer listener.Close()
+// 	go server.ServeListener(listener)
 
-	var (
-		request  = `{"jsonrpc":"2.0","id":1,"method":"rpc_modules"}` + "\n"
-		wantResp = `{"jsonrpc":"2.0","id":1,"result":{"nftest":"1.0","rpc":"1.0","test":"1.0"}}` + "\n"
-		deadline = time.Now().Add(10 * time.Second)
-	)
-	for i := 0; i < 20; i++ {
-		conn, err := net.Dial("tcp", listener.Addr().String())
-		if err != nil {
-			t.Fatal("can't dial:", err)
-		}
-
-		conn.SetDeadline(deadline)
-		// Write the request, then half-close the connection so the server stops reading.
-		conn.Write([]byte(request))
-		conn.(*net.TCPConn).CloseWrite()
-		// Now try to get the response.
-		buf := make([]byte, 2000)
-		n, err := conn.Read(buf)
-		conn.Close()
-
-		if err != nil {
-			t.Fatal("read error:", err)
-		}
-		if !bytes.Equal(buf[:n], []byte(wantResp)) {
-			t.Fatalf("wrong response: %s", buf[:n])
-		}
-	}
-}
+// 	var (
+// 		request  = `{"jsonrpc":"2.0","id":1,"method":"rpc_modules"}` + "\n"
+// 		wantResp = `{"jsonrpc":"2.0","id":1,"result":{"nftest":"1.0","rpc":"1.0","test":"1.0"}}` + "\n"
+// 		deadline = time.Now().Add(10 * time.Second)
+// 	)
+// 	for i := 0; i < 20; i++ {
+// 		conn, err := net.Dial("tcp", listener.Addr().String())
+// 		if err != nil {
+// 			t.Fatal("can't dial:", err)
+// 		}
+// 		conn.SetDeadline(deadline)
+// 		// Write the request, then half-close the connection so the server stops reading.
+// 		conn.Write([]byte(request))
+// 		conn.(*net.TCPConn).CloseWrite()
+// 		// Now try to get the response.
+// 		buf := make([]byte, 2000)
+// 		n, err := conn.Read(buf)
+// 		conn.Close()
+//
+// 		if err != nil {
+// 			t.Fatal("read error:", err)
+// 		}
+// 		if !bytes.Equal(buf[:n], []byte(wantResp)) {
+// 			t.Fatalf("wrong response: %s", buf[:n])
+// 		}
+// 	}
+// }

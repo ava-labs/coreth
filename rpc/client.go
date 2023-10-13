@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -22,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -76,7 +85,7 @@ type BatchElem struct {
 // Client represents a connection to an RPC server.
 type Client struct {
 	idgen    func() ID // for subscriptions
-	isHTTP   bool      // connection type: http, ws or ipc
+	isHTTP   bool      // isHTTP specifies if the client uses an HTTP connection
 	services *serviceRegistry
 
 	idCounter atomic.Uint32
@@ -110,11 +119,16 @@ type clientConn struct {
 	handler *handler
 }
 
-func (c *Client) newClientConn(conn ServerCodec) *clientConn {
+func (c *Client) newClientConn(conn ServerCodec, apiMaxDuration, refillRate, maxStored time.Duration) *clientConn {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, clientContextKey{}, c)
 	ctx = context.WithValue(ctx, peerInfoContextKey{}, conn.peerInfo())
 	handler := newHandler(ctx, conn, c.idgen, c.services)
+
+	// When [apiMaxDuration] or [refillRate]/[maxStored] is 0 (as is the case for
+	// all client invocations of this function), it is ignored.
+	handler.deadlineContext = apiMaxDuration
+	handler.addLimiter(refillRate, maxStored)
 	return &clientConn{conn, handler}
 }
 
@@ -203,10 +217,10 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 			return nil, err
 		}
 		reconnect = rc
-	case "stdio":
-		reconnect = newClientTransportIO(os.Stdin, os.Stdout)
-	case "":
-		reconnect = newClientTransportIPC(rawurl)
+	//case "stdio":
+	//reconnect = newClientTransportIO(os.Stdin, os.Stdout)
+	//case "":
+	//reconnect = newClientTransportIPC(rawurl)
 	default:
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
@@ -226,16 +240,16 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	if err != nil {
 		return nil, err
 	}
-	c := initClient(conn, randomIDGenerator(), new(serviceRegistry))
+	c := initClient(conn, randomIDGenerator(), new(serviceRegistry), 0, 0, 0)
 	c.reconnectFunc = connect
 	return c, nil
 }
 
-func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
+func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry, apiMaxDuration, refillRate, maxStored time.Duration) *Client {
 	_, isHTTP := conn.(*httpConn)
 	c := &Client{
-		isHTTP:      isHTTP,
 		idgen:       idgen,
+		isHTTP:      isHTTP,
 		services:    services,
 		writeConn:   conn,
 		close:       make(chan struct{}),
@@ -248,8 +262,8 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *C
 		reqSent:     make(chan error, 1),
 		reqTimeout:  make(chan *requestOp),
 	}
-	if !isHTTP {
-		go c.dispatch(conn)
+	if !c.isHTTP {
+		go c.dispatch(conn, apiMaxDuration, refillRate, maxStored)
 	}
 	return c
 }
@@ -568,11 +582,11 @@ func (c *Client) reconnect(ctx context.Context) error {
 // dispatch is the main loop of the client.
 // It sends read messages to waiting calls to Call and BatchCall
 // and subscription notifications to registered subscriptions.
-func (c *Client) dispatch(codec ServerCodec) {
+func (c *Client) dispatch(codec ServerCodec, apiMaxDuration, refillRate, maxStored time.Duration) {
 	var (
 		lastOp      *requestOp  // tracks last send operation
 		reqInitLock = c.reqInit // nil while the send lock is held
-		conn        = c.newClientConn(codec)
+		conn        = c.newClientConn(codec, apiMaxDuration, refillRate, maxStored)
 		reading     = true
 	)
 	defer func() {
@@ -619,7 +633,7 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 			go c.read(newcodec)
 			reading = true
-			conn = c.newClientConn(newcodec)
+			conn = c.newClientConn(newcodec, apiMaxDuration, refillRate, maxStored)
 			// Re-register the in-flight request on the new handler
 			// because that's where it will be sent.
 			conn.handler.addRequestOp(lastOp)

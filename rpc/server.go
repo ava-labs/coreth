@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -21,12 +31,12 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 )
 
 const MetadataApi = "rpc"
-const EngineApi = "engine"
 
 // CodecOption specifies which type of messages a codec supports.
 //
@@ -43,8 +53,9 @@ const (
 
 // Server is an RPC server.
 type Server struct {
-	services serviceRegistry
-	idgen    func() ID
+	services        serviceRegistry
+	idgen           func() ID
+	maximumDuration time.Duration
 
 	mutex  sync.Mutex
 	codecs map[ServerCodec]struct{}
@@ -52,10 +63,15 @@ type Server struct {
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer() *Server {
+//
+// If [maximumDuration] > 0, the deadline of incoming requests is
+// [maximumDuration] in the future. Otherwise, no deadline is assigned to
+// incoming requests.
+func NewServer(maximumDuration time.Duration) *Server {
 	server := &Server{
-		idgen:  randomIDGenerator(),
-		codecs: make(map[ServerCodec]struct{}),
+		idgen:           randomIDGenerator(),
+		codecs:          make(map[ServerCodec]struct{}),
+		maximumDuration: maximumDuration,
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -78,7 +94,7 @@ func (s *Server) RegisterName(name string, receiver interface{}) error {
 // server is stopped. In either case the codec is closed.
 //
 // Note that codec options are no longer supported.
-func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
+func (s *Server) ServeCodec(codec ServerCodec, options CodecOption, apiMaxDuration, refillRate, maxStored time.Duration) {
 	defer codec.close()
 
 	if !s.trackCodec(codec) {
@@ -86,7 +102,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	}
 	defer s.untrackCodec(codec)
 
-	c := initClient(codec, s.idgen, &s.services)
+	c := initClient(codec, s.idgen, &s.services, apiMaxDuration, refillRate, maxStored)
 	<-codec.closed()
 	c.Close()
 }
@@ -119,6 +135,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	}
 
 	h := newHandler(ctx, codec, s.idgen, &s.services)
+	h.deadlineContext = s.maximumDuration
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

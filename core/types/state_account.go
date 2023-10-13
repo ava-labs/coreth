@@ -1,3 +1,13 @@
+// (c) 2019-2021, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -22,13 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-//go:generate go run ../../rlp/rlpgen -type StateAccount -out gen_account_rlp.go
+//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -type StateAccount -out gen_account_rlp.go
 
 // StateAccount is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type StateAccount struct {
-	Nonce    uint64
-	Balance  *big.Int
-	Root     common.Hash // merkle root of the storage trie
-	CodeHash []byte
+	Nonce       uint64
+	Balance     *big.Int
+	Root        common.Hash // merkle root of the storage trie
+	CodeHash    []byte
+	IsMultiCoin bool
 }

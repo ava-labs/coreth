@@ -1,3 +1,13 @@
+// (c) 2023, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -24,13 +34,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/ava-labs/coreth/tests"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/tests"
 )
 
 // prestateTrace is the result of a prestateTrace run.
@@ -64,6 +74,10 @@ func TestPrestateWithDiffModeTracer(t *testing.T) {
 	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
 }
 
+func TestPrestateWithDiffModeANTTracer(t *testing.T) {
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer_ant", t)
+}
+
 func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
@@ -92,21 +106,24 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			// Configure a blockchain with the given prestate
 			var (
-				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-				origin, _ = signer.Sender(tx)
-				txContext = vm.TxContext{
+				blockNumber = new(big.Int).SetUint64(uint64(test.Context.Number))
+				signer      = types.MakeSigner(test.Genesis.Config, blockNumber, uint64(test.Context.Time))
+				origin, _   = signer.Sender(tx)
+				txContext   = vm.TxContext{
 					Origin:   origin,
 					GasPrice: tx.GasPrice(),
 				}
 				context = vm.BlockContext{
-					CanTransfer: core.CanTransfer,
-					Transfer:    core.Transfer,
-					Coinbase:    test.Context.Miner,
-					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        uint64(test.Context.Time),
-					Difficulty:  (*big.Int)(test.Context.Difficulty),
-					GasLimit:    uint64(test.Context.GasLimit),
-					BaseFee:     test.Genesis.BaseFee,
+					CanTransfer:       core.CanTransfer,
+					CanTransferMC:     core.CanTransferMC,
+					Transfer:          core.Transfer,
+					TransferMultiCoin: core.TransferMultiCoin,
+					Coinbase:          test.Context.Miner,
+					BlockNumber:       blockNumber,
+					Time:              uint64(test.Context.Time),
+					Difficulty:        (*big.Int)(test.Context.Difficulty),
+					GasLimit:          uint64(test.Context.GasLimit),
+					BaseFee:           test.Genesis.BaseFee,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)

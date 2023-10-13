@@ -1,3 +1,13 @@
+// (c) 2019-2020, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -19,11 +29,11 @@ package core
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/trie"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -55,8 +65,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return ErrKnownBlock
 	}
 
-	// Header validity is known at this point. Here we verify that uncles, transactions
-	// and withdrawals given in the block body match the header.
+	// Header validity is known at this point. Here we verify that uncle and transactions
+	// given in the block body match the header.
 	header := block.Header()
 	if err := v.engine.VerifyUncles(v.bc, block); err != nil {
 		return err
@@ -67,20 +77,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
 	}
-	// Withdrawals are present after the Shanghai fork.
-	if header.WithdrawalsHash != nil {
-		// Withdrawals list must be present in body after Shanghai.
-		if block.Withdrawals() == nil {
-			return fmt.Errorf("missing withdrawals in block body")
-		}
-		if hash := types.DeriveSha(block.Withdrawals(), trie.NewStackTrie(nil)); hash != *header.WithdrawalsHash {
-			return fmt.Errorf("withdrawals root hash mismatch (header value %x, calculated %x)", *header.WithdrawalsHash, hash)
-		}
-	} else if block.Withdrawals() != nil {
-		// Withdrawals are not allowed prior to shanghai fork
-		return fmt.Errorf("withdrawals present in block body")
-	}
-
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor
@@ -117,26 +113,37 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 }
 
 // CalcGasLimit computes the gas limit of the next block after parent. It aims
-// to keep the baseline gas close to the provided target, and increase it towards
-// the target if the baseline gas is lower.
-func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
-	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
-	limit := parentGasLimit
-	if desiredLimit < params.MinGasLimit {
-		desiredLimit = params.MinGasLimit
+// to keep the baseline gas above the provided floor, and increase it towards the
+// ceil if the blocks are full. If the ceil is exceeded, it will always decrease
+// the gas allowance.
+func CalcGasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint64 {
+	// contrib = (parentGasUsed * 3 / 2) / 1024
+	contrib := (parentGasUsed + parentGasUsed/2) / params.GasLimitBoundDivisor
+
+	// decay = parentGasLimit / 1024 -1
+	decay := parentGasLimit/params.GasLimitBoundDivisor - 1
+
+	/*
+		strategy: gasLimit of block-to-mine is set based on parent's
+		gasUsed value.  if parentGasUsed > parentGasLimit * (2/3) then we
+		increase it, otherwise lower it (or leave it unchanged if it's right
+		at that usage) the amount increased/decreased depends on how far away
+		from parentGasLimit * (2/3) parentGasUsed is.
+	*/
+	limit := parentGasLimit - decay + contrib
+	if limit < params.MinGasLimit {
+		limit = params.MinGasLimit
 	}
 	// If we're outside our allowed gas range, we try to hone towards them
-	if limit < desiredLimit {
-		limit = parentGasLimit + delta
-		if limit > desiredLimit {
-			limit = desiredLimit
+	if limit < gasFloor {
+		limit = parentGasLimit + decay
+		if limit > gasFloor {
+			limit = gasFloor
 		}
-		return limit
-	}
-	if limit > desiredLimit {
-		limit = parentGasLimit - delta
-		if limit < desiredLimit {
-			limit = desiredLimit
+	} else if limit > gasCeil {
+		limit = parentGasLimit - decay
+		if limit < gasCeil {
+			limit = gasCeil
 		}
 	}
 	return limit

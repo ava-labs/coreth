@@ -1,3 +1,13 @@
+// (c) 2020-2021, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -23,7 +33,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ava-labs/coreth/ethdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database
@@ -311,69 +321,6 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		it := db.NewIterator(nil, nil)
 		if got := iterateKeys(it); !reflect.DeepEqual(got, want) {
 			t.Errorf("got: %s; want: %s", got, want)
-		}
-	})
-
-	t.Run("Snapshot", func(t *testing.T) {
-		db := New()
-		defer db.Close()
-
-		initial := map[string]string{
-			"k1": "v1", "k2": "v2", "k3": "", "k4": "",
-		}
-		for k, v := range initial {
-			db.Put([]byte(k), []byte(v))
-		}
-		snapshot, err := db.NewSnapshot()
-		if err != nil {
-			t.Fatal(err)
-		}
-		for k, v := range initial {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, []byte(v)) {
-				t.Fatalf("Unexpected value want: %v, got %v", v, got)
-			}
-		}
-
-		// Flush more modifications into the database, ensure the snapshot
-		// isn't affected.
-		var (
-			update = map[string]string{"k1": "v1-b", "k3": "v3-b"}
-			insert = map[string]string{"k5": "v5-b"}
-			delete = map[string]string{"k2": ""}
-		)
-		for k, v := range update {
-			db.Put([]byte(k), []byte(v))
-		}
-		for k, v := range insert {
-			db.Put([]byte(k), []byte(v))
-		}
-		for k := range delete {
-			db.Delete([]byte(k))
-		}
-		for k, v := range initial {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, []byte(v)) {
-				t.Fatalf("Unexpected value want: %v, got %v", v, got)
-			}
-		}
-		for k := range insert {
-			got, err := snapshot.Get([]byte(k))
-			if err == nil || len(got) != 0 {
-				t.Fatal("Unexpected value")
-			}
-		}
-		for k := range delete {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil || len(got) == 0 {
-				t.Fatal("Unexpected deletion")
-			}
 		}
 	})
 

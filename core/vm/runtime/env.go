@@ -1,3 +1,13 @@
+// (c) 2019-2021, Ava Labs, Inc.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -17,8 +27,8 @@
 package runtime
 
 import (
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
@@ -27,15 +37,17 @@ func NewEnv(cfg *Config) *vm.EVM {
 		GasPrice: cfg.GasPrice,
 	}
 	blockContext := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		GetHash:     cfg.GetHashFn,
-		Coinbase:    cfg.Coinbase,
-		BlockNumber: cfg.BlockNumber,
-		Time:        cfg.Time,
-		Difficulty:  cfg.Difficulty,
-		GasLimit:    cfg.GasLimit,
-		BaseFee:     cfg.BaseFee,
+		CanTransfer:       core.CanTransfer,
+		CanTransferMC:     core.CanTransferMC,
+		Transfer:          core.Transfer,
+		TransferMultiCoin: core.TransferMultiCoin,
+		GetHash:           cfg.GetHashFn,
+		Coinbase:          cfg.Coinbase,
+		BlockNumber:       cfg.BlockNumber,
+		Time:              cfg.Time,
+		Difficulty:        cfg.Difficulty,
+		GasLimit:          cfg.GasLimit,
+		BaseFee:           cfg.BaseFee,
 	}
 
 	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
