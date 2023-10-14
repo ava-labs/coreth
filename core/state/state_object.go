@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -64,10 +63,6 @@ func (s Storage) Copy() Storage {
 type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
-	// dataLock protects the [data] field to prevent a race condition
-	// in the transaction pool tests. TODO remove after re-implementing
-	// tx pool to be synchronous.
-	dataLock sync.RWMutex
 	data     types.StateAccount
 	db       *StateDB
 
@@ -89,7 +84,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes()) && !s.data.IsMultiCoin
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
 }
 
 // newObject creates a state object.
@@ -404,40 +399,8 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 	s.setBalance(amount)
 }
 
-// AddBalanceMultiCoin adds amount of coinID to s's balance.
-// It is used to add multicoin funds to the destination account of a transfer.
-func (s *stateObject) AddBalanceMultiCoin(coinID common.Hash, amount *big.Int, db Database) {
-	if amount.Sign() == 0 {
-		if s.empty() {
-			s.touch()
-		}
-
-		return
-	}
-	s.SetBalanceMultiCoin(coinID, new(big.Int).Add(s.BalanceMultiCoin(coinID, db), amount), db)
-}
-
-// SubBalanceMultiCoin removes amount of coinID from s's balance.
-// It is used to remove multicoin funds from the origin account of a transfer.
-func (s *stateObject) SubBalanceMultiCoin(coinID common.Hash, amount *big.Int, db Database) {
-	if amount.Sign() == 0 {
-		return
-	}
-	s.SetBalanceMultiCoin(coinID, new(big.Int).Sub(s.BalanceMultiCoin(coinID, db), amount), db)
-}
-
-func (s *stateObject) SetBalanceMultiCoin(coinID common.Hash, amount *big.Int, db Database) {
-	s.EnableMultiCoin()
-	NormalizeCoinID(&coinID)
-	s.SetState(db, coinID, common.BigToHash(amount))
-}
-
 func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
-}
-
-func (s *stateObject) enableMultiCoin() {
-	s.data.IsMultiCoin = true
 }
 
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
@@ -522,8 +485,6 @@ func (s *stateObject) SetNonce(nonce uint64) {
 }
 
 func (s *stateObject) setNonce(nonce uint64) {
-	s.dataLock.Lock()
-	defer s.dataLock.Unlock()
 	s.data.Nonce = nonce
 }
 
@@ -535,40 +496,6 @@ func (s *stateObject) Balance() *big.Int {
 	return s.data.Balance
 }
 
-// NormalizeCoinID ORs the 0th bit of the first byte in
-// [coinID], which ensures this bit will be 1 and all other
-// bits are left the same.
-// This partitions multicoin storage from normal state storage.
-func NormalizeCoinID(coinID *common.Hash) {
-	coinID[0] |= 0x01
-}
-
-// NormalizeStateKey ANDs the 0th bit of the first byte in
-// [key], which ensures this bit will be 0 and all other bits
-// are left the same.
-// This partitions normal state storage from multicoin storage.
-func NormalizeStateKey(key *common.Hash) {
-	key[0] &= 0xfe
-}
-
-func (s *stateObject) BalanceMultiCoin(coinID common.Hash, db Database) *big.Int {
-	NormalizeCoinID(&coinID)
-	return s.GetState(db, coinID).Big()
-}
-
-func (s *stateObject) EnableMultiCoin() bool {
-	if s.data.IsMultiCoin {
-		return false
-	}
-	s.db.journal.append(multiCoinEnable{
-		account: &s.address,
-	})
-	s.enableMultiCoin()
-	return true
-}
-
 func (s *stateObject) Nonce() uint64 {
-	s.dataLock.RLock()
-	defer s.dataLock.RUnlock()
 	return s.data.Nonce
 }

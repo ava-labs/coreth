@@ -24,8 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-const defaultPreimagesLimit = 4 * 1024 * 1024 // 4 MB
-
 // preimageStore is the store for caching preimages of node key.
 type preimageStore struct {
 	lock          sync.RWMutex
@@ -76,7 +74,7 @@ func (store *preimageStore) commit(force bool) error {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 
-	if store.preimagesSize <= defaultPreimagesLimit && !force {
+	if store.preimagesSize <= 4*1024*1024 && !force {
 		return nil
 	}
 	batch := store.disk.NewBatch()

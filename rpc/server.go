@@ -21,12 +21,12 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 )
 
 const MetadataApi = "rpc"
+const EngineApi = "engine"
 
 // CodecOption specifies which type of messages a codec supports.
 //
@@ -43,9 +43,8 @@ const (
 
 // Server is an RPC server.
 type Server struct {
-	services        serviceRegistry
-	idgen           func() ID
-	maximumDuration time.Duration
+	services serviceRegistry
+	idgen    func() ID
 
 	mutex  sync.Mutex
 	codecs map[ServerCodec]struct{}
@@ -53,15 +52,10 @@ type Server struct {
 }
 
 // NewServer creates a new server instance with no registered handlers.
-//
-// If [maximumDuration] > 0, the deadline of incoming requests is
-// [maximumDuration] in the future. Otherwise, no deadline is assigned to
-// incoming requests.
-func NewServer(maximumDuration time.Duration) *Server {
+func NewServer() *Server {
 	server := &Server{
-		idgen:           randomIDGenerator(),
-		codecs:          make(map[ServerCodec]struct{}),
-		maximumDuration: maximumDuration,
+		idgen:  randomIDGenerator(),
+		codecs: make(map[ServerCodec]struct{}),
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -84,7 +78,7 @@ func (s *Server) RegisterName(name string, receiver interface{}) error {
 // server is stopped. In either case the codec is closed.
 //
 // Note that codec options are no longer supported.
-func (s *Server) ServeCodec(codec ServerCodec, options CodecOption, apiMaxDuration, refillRate, maxStored time.Duration) {
+func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer codec.close()
 
 	if !s.trackCodec(codec) {
@@ -92,7 +86,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption, apiMaxDurati
 	}
 	defer s.untrackCodec(codec)
 
-	c := initClient(codec, s.idgen, &s.services, apiMaxDuration, refillRate, maxStored)
+	c := initClient(codec, s.idgen, &s.services)
 	<-codec.closed()
 	c.Close()
 }
@@ -125,7 +119,6 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	}
 
 	h := newHandler(ctx, codec, s.idgen, &s.services)
-	h.deadlineContext = s.maximumDuration
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

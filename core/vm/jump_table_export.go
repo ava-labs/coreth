@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -24,17 +26,18 @@ import (
 // the rules.
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
-	case rules.IsDUpgrade:
-		return newDUpgradeInstructionSet(), nil
-	case rules.IsApricotPhase3, rules.IsApricotPhase4,
-		rules.IsApricotPhase5, rules.IsApricotPhasePre6,
-		rules.IsApricotPhase6, rules.IsApricotPhasePost6,
-		rules.IsBanff, rules.IsCortina:
-		return newApricotPhase3InstructionSet(), nil
-	case rules.IsApricotPhase2:
-		return newApricotPhase2InstructionSet(), nil
-	case rules.IsApricotPhase1:
-		return newApricotPhase1InstructionSet(), nil
+	case rules.IsPrague:
+		return newShanghaiInstructionSet(), errors.New("prague-fork not defined yet")
+	case rules.IsCancun:
+		return newShanghaiInstructionSet(), errors.New("cancun-fork not defined yet")
+	case rules.IsShanghai:
+		return newShanghaiInstructionSet(), nil
+	case rules.IsMerge:
+		return newMergeInstructionSet(), nil
+	case rules.IsLondon:
+		return newLondonInstructionSet(), nil
+	case rules.IsBerlin:
+		return newBerlinInstructionSet(), nil
 	case rules.IsIstanbul:
 		return newIstanbulInstructionSet(), nil
 	case rules.IsConstantinople:

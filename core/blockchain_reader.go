@@ -17,6 +17,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -26,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -39,6 +42,24 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 // block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) CurrentBlock() *types.Header {
 	return bc.currentBlock.Load()
+}
+
+// CurrentSnapBlock retrieves the current snap-sync head block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentSnapBlock() *types.Header {
+	return bc.currentSnapBlock.Load()
+}
+
+// CurrentFinalBlock retrieves the current finalized block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentFinalBlock() *types.Header {
+	return bc.currentFinalBlock.Load()
+}
+
+// CurrentSafeBlock retrieves the current safe block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentSafeBlock() *types.Header {
+	return bc.currentSafeBlock.Load()
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
@@ -65,6 +86,12 @@ func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 	return bc.hc.GetHeaderByNumber(number)
 }
 
+// GetHeadersFrom returns a contiguous segment of headers, in rlp-form, going
+// backwards from the given number.
+func (bc *BlockChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
+	return bc.hc.GetHeadersFrom(number, count)
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
@@ -82,6 +109,26 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	}
 	// Cache the found body for next time and return
 	bc.bodyCache.Add(hash, body)
+	return body
+}
+
+// GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
+// caching it if found.
+func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
+	// Short circuit if the body's already in the cache, retrieve otherwise
+	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
+		return cached
+	}
+	number := bc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	body := rawdb.ReadBodyRLP(bc.db, hash, *number)
+	if len(body) == 0 {
+		return nil
+	}
+	// Cache the found body for next time and return
+	bc.bodyRLPCache.Add(hash, body)
 	return body
 }
 
@@ -182,9 +229,29 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
+// GetUnclesInChain retrieves all the uncles from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	uncles := []*types.Header{}
+	for i := 0; block != nil && i < length; i++ {
+		uncles = append(uncles, block.Uncles()...)
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return uncles
+}
+
 // GetCanonicalHash returns the canonical hash for a given block number
 func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
 	return bc.hc.GetCanonicalHash(number)
+}
+
+// GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
+// a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
+// number of blocks to be individually checked before we reach the canonical chain.
+//
+// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
+func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
+	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
 // GetTransactionLookup retrieves the lookup associate with the given transaction
@@ -201,6 +268,12 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLook
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
 	bc.txLookupCache.Add(hash, lookup)
 	return lookup
+}
+
+// GetTd retrieves a block's total difficulty in the canonical chain from the
+// database by hash and number, caching it if found.
+func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
+	return bc.hc.GetTd(hash, number)
 }
 
 // HasState checks if state trie is fully present in the database or not.
@@ -224,6 +297,18 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 // either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
 	return bc.stateCache.TrieDB().Node(hash)
+}
+
+// ContractCodeWithPrefix retrieves a blob of data associated with a contract
+// hash either from ephemeral in-memory cache, or from persistent storage.
+//
+// If the code doesn't exist in the in-memory cache, check the storage with
+// new code scheme.
+func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
+	type codeReader interface {
+		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
+	}
+	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.
@@ -277,6 +362,18 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
+// SetTxLookupLimit is responsible for updating the txlookup limit to the
+// original one stored in db if the new mismatches with the old one.
+func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
+	bc.txLookupLimit = limit
+}
+
+// TxLookupLimit retrieves the txlookup limit used by blockchain to prune
+// stale transaction indices.
+func (bc *BlockChain) TxLookupLimit() uint64 {
+	return bc.txLookupLimit
+}
+
 // TrieDB retrieves the low level trie database used for data storage.
 func (bc *BlockChain) TrieDB() *trie.Database {
 	return bc.triedb
@@ -311,33 +408,4 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
-}
-
-// SubscribeChainAcceptedEvent registers a subscription of ChainEvent.
-func (bc *BlockChain) SubscribeChainAcceptedEvent(ch chan<- ChainEvent) event.Subscription {
-	return bc.scope.Track(bc.chainAcceptedFeed.Subscribe(ch))
-}
-
-// SubscribeAcceptedLogsEvent registers a subscription of accepted []*types.Log.
-func (bc *BlockChain) SubscribeAcceptedLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return bc.scope.Track(bc.logsAcceptedFeed.Subscribe(ch))
-}
-
-// SubscribeAcceptedTransactionEvent registers a subscription of accepted transactions
-func (bc *BlockChain) SubscribeAcceptedTransactionEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return bc.scope.Track(bc.txAcceptedFeed.Subscribe(ch))
-}
-
-// GetLogs fetches all logs from a given block.
-func (bc *BlockChain) GetLogs(hash common.Hash, number uint64) [][]*types.Log {
-	logs, ok := bc.acceptedLogsCache.Get(hash) // this cache is thread-safe
-	if ok {
-		return logs
-	}
-	block := bc.GetBlockByHash(hash)
-	if block == nil {
-		return nil
-	}
-	logs = bc.collectUnflattenedLogs(block, false)
-	return logs
 }

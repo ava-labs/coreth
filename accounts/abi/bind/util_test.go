@@ -56,7 +56,7 @@ func TestWaitDeployed(t *testing.T) {
 	for name, test := range waitDeployedTests {
 		backend := backends.NewSimulatedBackend(
 			core.GenesisAlloc{
-				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))},
+				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 			},
 			10000000,
 		)
@@ -67,8 +67,7 @@ func TestWaitDeployed(t *testing.T) {
 		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
-		signer := types.NewLondonSigner(big.NewInt(1337))
-		tx, _ = types.SignTx(tx, signer, testKey)
+		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 		// Wait for it to get mined in the background.
 		var (
@@ -83,10 +82,8 @@ func TestWaitDeployed(t *testing.T) {
 		}()
 
 		// Send and mine the transaction.
-		if err := backend.SendTransaction(ctx, tx); err != nil {
-			t.Errorf("Failed to send transaction: %s", err)
-		}
-		backend.Commit(true)
+		backend.SendTransaction(ctx, tx)
+		backend.Commit()
 
 		select {
 		case <-mined:
@@ -105,7 +102,7 @@ func TestWaitDeployed(t *testing.T) {
 func TestWaitDeployedCornerCases(t *testing.T) {
 	backend := backends.NewSimulatedBackend(
 		core.GenesisAlloc{
-			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(1000000000000000000)},
+			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 		},
 		10000000,
 	)
@@ -121,7 +118,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	backend.SendTransaction(ctx, tx)
-	backend.Commit(true)
+	backend.Commit()
 	notContentCreation := errors.New("tx is not contract creation")
 	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContentCreation.Error() {
 		t.Errorf("error missmatch: want %q, got %q, ", notContentCreation, err)

@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -59,7 +58,7 @@ type Config struct {
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
-//go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+//go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
@@ -157,6 +156,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return
 	}
+
 	memory := scope.Memory
 	stack := scope.Stack
 	contract := scope.Contract
@@ -244,7 +244,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	returnData := common.CopyBytes(l.output)
 	// Return data when successful and revert reason when reverted, otherwise empty.
 	returnVal := fmt.Sprintf("%x", returnData)
-	if failed && l.err != vmerrs.ErrExecutionReverted {
+	if failed && l.err != vm.ErrExecutionReverted {
 		returnVal = ""
 	}
 	return json.Marshal(&ExecutionResult{

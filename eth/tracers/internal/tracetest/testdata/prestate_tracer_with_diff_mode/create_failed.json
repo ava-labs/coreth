@@ -56,9 +56,7 @@
       "arrowGlacierBlock": 13773000,
       "grayGlacierBlock": 15050000,
       "terminalTotalDifficultyPassed": true,
-      "apricotPhase1BlockTimestamp": 0,
-      "apricotPhase2BlockTimestamp": 0,
-      "apricotPhase3BlockTimestamp": 0
+      "ethash": {}
     }
   },
   "context": {
@@ -89,7 +87,7 @@
         "nonce": 1223933
       },
       "0x8f03f1a3f10c05e7cccf75c1fd10168e06659be7": {
-        "balance": "0x3807e1f151a8123ec8"
+        "balance": "0x38079c19423e44b30e"
       }
     }
   }

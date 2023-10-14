@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // ChainHeaderReader defines a small collection of methods needed to access the local
@@ -43,6 +44,9 @@ type ChainHeaderReader interface {
 
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
+
+	// GetTd retrieves the total difficulty from the database by hash and number.
+	GetTd(hash common.Hash, number uint64) *big.Int
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -63,11 +67,13 @@ type Engine interface {
 
 	// VerifyHeader checks whether a header conforms to the consensus rules of a
 	// given engine.
-	//
-	// NOTE: VerifyHeader does not validate the correctness of fields that rely
-	// on the contents of the block (as opposed to the current and/or parent
-	// header).
 	VerifyHeader(chain ChainHeaderReader, header *types.Header) error
+
+	// VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
+	// concurrently. The method returns a quit channel to abort the operations and
+	// a results channel to retrieve the async verifications (the order is that of
+	// the input slice).
+	VerifyHeaders(chain ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error)
 
 	// VerifyUncles verifies that the given block's uncles conform to the consensus
 	// rules of a given engine.
@@ -77,25 +83,47 @@ type Engine interface {
 	// rules of a particular engine. The changes are executed inline.
 	Prepare(chain ChainHeaderReader, header *types.Header) error
 
-	// Finalize runs any post-transaction state modifications (e.g. block rewards)
-	// but does not assemble the block.
+	// Finalize runs any post-transaction state modifications (e.g. block rewards
+	// or process withdrawals) but does not assemble the block.
 	//
-	// Note: The block header and state database might be updated to reflect any
-	// consensus rules that happen at finalization (e.g. block rewards).
-	Finalize(chain ChainHeaderReader, block *types.Block, parent *types.Header, state *state.StateDB, receipts []*types.Receipt) error
+	// Note: The state database might be updated to reflect any consensus rules
+	// that happen at finalization (e.g. block rewards).
+	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+		uncles []*types.Header, withdrawals []*types.Withdrawal)
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
-	// rewards) and assembles the final block.
+	// rewards or process withdrawals) and assembles the final block.
 	//
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
-	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
-		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
+	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+		uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error)
+
+	// Seal generates a new sealing request for the given input block and pushes
+	// the result into the given channel.
+	//
+	// Note, the method returns immediately and will send the result async. More
+	// than one result may also be returned depending on the consensus algorithm.
+	Seal(chain ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
+
+	// SealHash returns the hash of a block prior to it being sealed.
+	SealHash(header *types.Header) common.Hash
 
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, time uint64, parent *types.Header) *big.Int
 
+	// APIs returns the RPC APIs this consensus engine provides.
+	APIs(chain ChainHeaderReader) []rpc.API
+
 	// Close terminates any background threads maintained by the consensus engine.
 	Close() error
+}
+
+// PoW is a consensus engine based on proof-of-work.
+type PoW interface {
+	Engine
+
+	// Hashrate returns the current mining hashrate of a PoW consensus engine.
+	Hashrate() float64
 }

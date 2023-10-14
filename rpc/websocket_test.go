@@ -78,7 +78,6 @@ func TestWebsocketOriginCheck(t *testing.T) {
 }
 
 // This test checks whether calls exceeding the request size limit are rejected.
-/*
 func TestWebsocketLargeCall(t *testing.T) {
 	t.Parallel()
 
@@ -113,7 +112,6 @@ func TestWebsocketLargeCall(t *testing.T) {
 		t.Fatal("no error for too large call")
 	}
 }
-*/
 
 func TestWebsocketPeerInfo(t *testing.T) {
 	var (
@@ -201,7 +199,7 @@ func TestClientWebsocketPing(t *testing.T) {
 // This checks that the websocket transport can deal with large messages.
 func TestClientWebsocketLargeMessage(t *testing.T) {
 	var (
-		srv     = NewServer(0)
+		srv     = NewServer()
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -66,9 +67,7 @@ func TestDiskMerge(t *testing.T) {
 		conNukeCache        = common.Hash{0xe}
 		conNukeCacheSlot    = common.Hash{0xe0}
 		baseRoot            = randomHash()
-		baseBlockHash       = randomHash()
 		diffRoot            = randomHash()
-		diffBlockHash       = randomHash()
 	)
 
 	rawdb.WriteAccountSnapshot(db, accNoModNoCache, accNoModNoCache[:])
@@ -96,11 +95,18 @@ func TestDiskMerge(t *testing.T) {
 	rawdb.WriteAccountSnapshot(db, conNukeCache, conNukeCache[:])
 	rawdb.WriteStorageSnapshot(db, conNukeCache, conNukeCacheSlot, conNukeCacheSlot[:])
 
-	rawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
 	// Create a disk layer based on the above and cache in some data
-	snaps := NewTestTree(db, baseBlockHash, baseRoot)
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			baseRoot: &diskLayer{
+				diskdb: db,
+				cache:  fastcache.New(500 * 1024),
+				root:   baseRoot,
+			},
+		},
+	}
 	base := snaps.Snapshot(baseRoot)
 	base.AccountRLP(accNoModCache)
 	base.AccountRLP(accModCache)
@@ -111,7 +117,7 @@ func TestDiskMerge(t *testing.T) {
 	base.Storage(conNukeCache, conNukeCacheSlot)
 
 	// Modify or delete some accounts, flatten everything onto disk
-	if err := snaps.Update(diffBlockHash, diffRoot, baseBlockHash, map[common.Hash]struct{}{
+	if err := snaps.Update(diffRoot, baseRoot, map[common.Hash]struct{}{
 		accDelNoCache:  {},
 		accDelCache:    {},
 		conNukeNoCache: {},
@@ -127,8 +133,7 @@ func TestDiskMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to update snapshot tree: %v", err)
 	}
-	snaps.verified = true // Bypass validation of junk data
-	if err := snaps.Flatten(diffBlockHash); err != nil {
+	if err := snaps.Cap(diffRoot, 0); err != nil {
 		t.Fatalf("failed to flatten snapshot tree: %v", err)
 	}
 	// Retrieve all the data through the disk layer and validate it
@@ -240,9 +245,7 @@ func TestDiskPartialMerge(t *testing.T) {
 			conNukeCache        = randomHash()
 			conNukeCacheSlot    = randomHash()
 			baseRoot            = randomHash()
-			baseBlockHash       = randomHash()
 			diffRoot            = randomHash()
-			diffBlockHash       = randomHash()
 			genMarker           = append(randomHash().Bytes(), randomHash().Bytes()...)
 		)
 
@@ -287,14 +290,20 @@ func TestDiskPartialMerge(t *testing.T) {
 		insertAccount(conNukeCache, conNukeCache[:])
 		insertStorage(conNukeCache, conNukeCacheSlot, conNukeCacheSlot[:])
 
-		rawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 		rawdb.WriteSnapshotRoot(db, baseRoot)
 
 		// Create a disk layer based on the above using a random progress marker
 		// and cache in some data.
-		snaps := NewTestTree(db, baseBlockHash, baseRoot)
-		dl := snaps.disklayer()
-		dl.genMarker = genMarker
+		snaps := &Tree{
+			layers: map[common.Hash]snapshot{
+				baseRoot: &diskLayer{
+					diskdb: db,
+					cache:  fastcache.New(500 * 1024),
+					root:   baseRoot,
+				},
+			},
+		}
+		snaps.layers[baseRoot].(*diskLayer).genMarker = genMarker
 		base := snaps.Snapshot(baseRoot)
 
 		// assertAccount ensures that an account matches the given blob if it's
@@ -331,7 +340,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		assertStorage(conNukeCache, conNukeCacheSlot, conNukeCacheSlot[:])
 
 		// Modify or delete some accounts, flatten everything onto disk
-		if err := snaps.Update(diffBlockHash, diffRoot, baseBlockHash, map[common.Hash]struct{}{
+		if err := snaps.Update(diffRoot, baseRoot, map[common.Hash]struct{}{
 			accDelNoCache:  {},
 			accDelCache:    {},
 			conNukeNoCache: {},
@@ -347,7 +356,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("test %d: failed to update snapshot tree: %v", i, err)
 		}
-		if err := snaps.Flatten(diffBlockHash); err != nil {
+		if err := snaps.Cap(diffRoot, 0); err != nil {
 			t.Fatalf("test %d: failed to flatten snapshot tree: %v", i, err)
 		}
 		// Retrieve all the data through the disk layer and validate it
@@ -426,15 +435,12 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 		accOneSlotOne = randomHash()
 		accOneSlotTwo = randomHash()
 
-		accThree         = randomHash()
-		accThreeSlot     = randomHash()
-		baseRoot         = randomHash()
-		baseBlockHash    = randomHash()
-		diffRoot         = randomHash()
-		diffBlockHash    = randomHash()
-		diffTwoRoot      = randomHash()
-		diffTwoBlockHash = randomHash()
-		genMarker        = append(randomHash().Bytes(), randomHash().Bytes()...)
+		accThree     = randomHash()
+		accThreeSlot = randomHash()
+		baseRoot     = randomHash()
+		diffRoot     = randomHash()
+		diffTwoRoot  = randomHash()
+		genMarker    = append(randomHash().Bytes(), randomHash().Bytes()...)
 	)
 	// Testing scenario 1, the disk layer is still under the construction.
 	db := rawdb.NewMemoryDatabase()
@@ -442,20 +448,26 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	rawdb.WriteAccountSnapshot(db, accOne, accOne[:])
 	rawdb.WriteStorageSnapshot(db, accOne, accOneSlotOne, accOneSlotOne[:])
 	rawdb.WriteStorageSnapshot(db, accOne, accOneSlotTwo, accOneSlotTwo[:])
-	rawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
 	// Create a disk layer based on all above updates
-	snaps := NewTestTree(db, baseBlockHash, baseRoot)
-	dl := snaps.disklayer()
-	dl.genMarker = genMarker
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			baseRoot: &diskLayer{
+				diskdb:    db,
+				cache:     fastcache.New(500 * 1024),
+				root:      baseRoot,
+				genMarker: genMarker,
+			},
+		},
+	}
 	// Modify or delete some accounts, flatten everything onto disk
-	if err := snaps.Update(diffBlockHash, diffRoot, baseBlockHash, nil, map[common.Hash][]byte{
+	if err := snaps.Update(diffRoot, baseRoot, nil, map[common.Hash][]byte{
 		accTwo: accTwo[:],
 	}, nil); err != nil {
 		t.Fatalf("failed to update snapshot tree: %v", err)
 	}
-	if err := snaps.Flatten(diffBlockHash); err != nil {
+	if err := snaps.Cap(diffRoot, 0); err != nil {
 		t.Fatalf("failed to flatten snapshot tree: %v", err)
 	}
 	blob := rawdb.ReadSnapshotGenerator(db)
@@ -468,17 +480,16 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	}
 	// Test scenario 2, the disk layer is fully generated
 	// Modify or delete some accounts, flatten everything onto disk
-	if err := snaps.Update(diffTwoBlockHash, diffTwoRoot, diffBlockHash, nil, map[common.Hash][]byte{
+	if err := snaps.Update(diffTwoRoot, diffRoot, nil, map[common.Hash][]byte{
 		accThree: accThree.Bytes(),
 	}, map[common.Hash]map[common.Hash][]byte{
 		accThree: {accThreeSlot: accThreeSlot.Bytes()},
 	}); err != nil {
 		t.Fatalf("failed to update snapshot tree: %v", err)
 	}
-	dl = snaps.disklayer()
-	dl.genMarker = nil    // Construction finished
-	snaps.verified = true // Bypass validation of junk data
-	if err := snaps.Flatten(diffTwoBlockHash); err != nil {
+	diskLayer := snaps.layers[snaps.diskRoot()].(*diskLayer)
+	diskLayer.genMarker = nil // Construction finished
+	if err := snaps.Cap(diffTwoRoot, 0); err != nil {
 		t.Fatalf("failed to flatten snapshot tree: %v", err)
 	}
 	blob = rawdb.ReadSnapshotGenerator(db)
@@ -516,11 +527,17 @@ func TestDiskSeek(t *testing.T) {
 	db.Put(highKey, []byte{0xff, 0xff})
 
 	baseRoot := randomHash()
-	baseBlockHash := randomHash()
-	rawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
-	snaps := NewTestTree(db, baseBlockHash, baseRoot)
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			baseRoot: &diskLayer{
+				diskdb: db,
+				cache:  fastcache.New(500 * 1024),
+				root:   baseRoot,
+			},
+		},
+	}
 	// Test some different seek positions
 	type testcase struct {
 		pos    byte
@@ -534,7 +551,7 @@ func TestDiskSeek(t *testing.T) {
 		{0x00, 0x00},
 	}
 	for i, tc := range cases {
-		it, err := snaps.AccountIterator(baseRoot, common.Hash{tc.pos}, false)
+		it, err := snaps.AccountIterator(baseRoot, common.Hash{tc.pos})
 		if err != nil {
 			t.Fatalf("case %d, error: %v", i, err)
 		}

@@ -21,7 +21,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -58,7 +57,7 @@ func (result *ExecutionResult) Return() []byte {
 // Revert returns the concrete revert reason if the execution is aborted by `REVERT`
 // opcode. Note the reason can be nil if no data supplied with revert opcode.
 func (result *ExecutionResult) Revert() []byte {
-	if result.Err != vmerrs.ErrExecutionReverted {
+	if result.Err != vm.ErrExecutionReverted {
 		return nil
 	}
 	return common.CopyBytes(result.ReturnData)
@@ -232,7 +231,7 @@ func (st *StateTransition) buyGas() error {
 	balanceCheck := mgval
 	if st.msg.GasFeeCap != nil {
 		balanceCheck = new(big.Int).SetUint64(st.msg.GasLimit)
-		balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
+		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
 		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
@@ -270,14 +269,10 @@ func (st *StateTransition) preCheck() error {
 			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 				msg.From.Hex(), codeHash)
 		}
-		// Make sure the sender is not prohibited
-		if vm.IsProhibited(msg.From) {
-			return fmt.Errorf("%w: address %v", vmerrs.ErrAddrProhibited, msg.From)
-		}
 	}
 
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsApricotPhase3(st.evm.Context.Time) {
+	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		if !st.evm.Config.NoBaseFee || msg.GasFeeCap.BitLen() > 0 || msg.GasTipCap.BitLen() > 0 {
 			if l := msg.GasFeeCap.BitLen(); l > 256 {
@@ -339,12 +334,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	var (
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From)
-		rules            = st.evm.ChainConfig().AvalancheRules(st.evm.Context.BlockNumber, st.evm.Context.Time)
+		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To == nil
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsDUpgrade)
+	gas, err := IntrinsicGas(msg.Data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
@@ -359,12 +354,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// Check whether the init code size has been exceeded.
-	if rules.IsDUpgrade && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", vmerrs.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
+		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}
 
 	// Execute the preparatory steps for state transition which includes:
-	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
@@ -379,8 +374,28 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
 	}
-	st.refundGas(rules.IsApricotPhase1)
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), msg.GasPrice))
+
+	if !rules.IsLondon {
+		// Before EIP-3529: refunds were capped to gasUsed / 2
+		st.refundGas(params.RefundQuotient)
+	} else {
+		// After EIP-3529: refunds are capped to gasUsed / 5
+		st.refundGas(params.RefundQuotientEIP3529)
+	}
+	effectiveTip := msg.GasPrice
+	if rules.IsLondon {
+		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
+	}
+
+	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
+		// Skip fee payment when NoBaseFee is set and the fee fields
+		// are 0. This avoids a negative effectiveTip being applied to
+		// the coinbase when simulating calls.
+	} else {
+		fee := new(big.Int).SetUint64(st.gasUsed())
+		fee.Mul(fee, effectiveTip)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -389,16 +404,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}, nil
 }
 
-func (st *StateTransition) refundGas(apricotPhase1 bool) {
-	// Inspired by: https://gist.github.com/holiman/460f952716a74eeb9ab358bb1836d821#gistcomment-3642048
-	if !apricotPhase1 {
-		// Apply refund counter, capped to half of the used gas.
-		refund := st.gasUsed() / 2
-		if refund > st.state.GetRefund() {
-			refund = st.state.GetRefund()
-		}
-		st.gasRemaining += refund
+func (st *StateTransition) refundGas(refundQuotient uint64) {
+	// Apply refund counter, capped to a refund quotient
+	refund := st.gasUsed() / refundQuotient
+	if refund > st.state.GetRefund() {
+		refund = st.state.GetRefund()
 	}
+	st.gasRemaining += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)

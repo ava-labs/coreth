@@ -21,8 +21,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -33,25 +33,25 @@ import (
 func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 	var (
 		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
-		engine = dummy.NewFaker()
+		engine = ethash.NewFaker()
 
 		// A sender who makes transactions, has some funds
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(50000 * 225000000000 * 200)
+		funds   = big.NewInt(1_000_000_000_000_000_000)
 		gspec   = &Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  GenesisAlloc{address: {Balance: funds}},
 		}
 	)
 	// We need to generate as many blocks +1 as uncles
-	_, blocks, _, _ := GenerateChainWithGenesis(gspec, engine, uncles+1, 10,
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, uncles+1,
 		func(n int, b *BlockGen) {
 			if n == uncles {
 				// Add transactions and stuff on the last block
 				for i := 0; i < transactions; i++ {
 					tx, _ := types.SignTx(types.NewTransaction(uint64(i), aa,
-						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.LatestSigner(params.TestChainConfig), key)
+						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.HomesteadSigner{}, key)
 					b.AddTx(tx)
 				}
 				for i := 0; i < uncles; i++ {
@@ -90,24 +90,16 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	}
 	// Check that txs exist
 	if !it.Next() {
-		t.Fatal("expected four elems, got zero")
+		t.Fatal("expected two elems, got zero")
 	}
 	txdata := it.Value()
 	// Check that uncles exist
 	if !it.Next() {
-		t.Fatal("expected four elems, got one")
-	}
-	// Check that version exist
-	if !it.Next() {
-		t.Fatal("expected four elems, got two")
-	}
-	// Check that extdata exist
-	if !it.Next() {
-		t.Fatal("expected four elems, got three")
+		t.Fatal("expected two elems, got one")
 	}
 	// No more after that
 	if it.Next() {
-		t.Fatal("expected only four elems, got more")
+		t.Fatal("expected only two elems, got more")
 	}
 	txIt, err := rlp.NewListIterator(txdata)
 	if err != nil {

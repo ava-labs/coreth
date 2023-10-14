@@ -155,17 +155,16 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 			logged = time.Now()
 		}
 		// Retrieve the next block to regenerate and process it
-		parentHeader := current.Header()
 		next := current.NumberU64() + 1
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, err := eth.blockchain.Processor().Process(current, parentHeader, statedb, vm.Config{})
+		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
 		if err != nil {
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(eth.blockchain.Config().IsEIP158(current.Number()), true)
+		root, err := statedb.Commit(eth.blockchain.Config().IsEIP158(current.Number()))
 		if err != nil {
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
@@ -174,8 +173,9 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
-		// Note: In coreth, the state reference is held by passing true to [statedb.Commit].
-		// Drop the parent state to prevent accumulating too many nodes in memory.
+		// Hold the state reference and also drop the parent state
+		// to prevent accumulating too many nodes in memory.
+		database.TrieDB().Reference(root, common.Hash{})
 		if parent != (common.Hash{}) {
 			database.TrieDB().Dereference(parent)
 		}

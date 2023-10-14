@@ -30,10 +30,11 @@ import (
 
 // API describes the set of methods offered over the RPC interface
 type API struct {
-	Namespace string      // namespace under which the rpc methods of Service are exposed
-	Version   string      // deprecated - this field is no longer used, but retained for compatibility
-	Service   interface{} // receiver instance which holds the methods
-	Name      string      // Name of the API
+	Namespace     string      // namespace under which the rpc methods of Service are exposed
+	Version       string      // deprecated - this field is no longer used, but retained for compatibility
+	Service       interface{} // receiver instance which holds the methods
+	Public        bool        // deprecated - this field is no longer used, but retained for compatibility
+	Authenticated bool        // whether the api should only be available behind authentication.
 }
 
 // ServerCodec implements reading, parsing and writing RPC messages for the server side of
@@ -52,8 +53,7 @@ type ServerCodec interface {
 type jsonWriter interface {
 	// writeJSON writes a message to the connection.
 	writeJSON(ctx context.Context, msg interface{}, isError bool) error
-	// writeJSON writes a message to the connection with the option of skipping the deadline.
-	writeJSONSkipDeadline(ctx context.Context, msg interface{}, isError bool, skip bool) error
+
 	// Closed returns a channel which is closed when the connection is closed.
 	closed() <-chan interface{}
 	// RemoteAddr returns the peer address of the connection.
@@ -63,14 +63,15 @@ type jsonWriter interface {
 type BlockNumber int64
 
 const (
-	AcceptedBlockNumber = BlockNumber(-3)
-	LatestBlockNumber   = BlockNumber(-2)
-	PendingBlockNumber  = BlockNumber(-1)
-	EarliestBlockNumber = BlockNumber(0)
+	SafeBlockNumber      = BlockNumber(-4)
+	FinalizedBlockNumber = BlockNumber(-3)
+	LatestBlockNumber    = BlockNumber(-2)
+	PendingBlockNumber   = BlockNumber(-1)
+	EarliestBlockNumber  = BlockNumber(0)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
-// - "accepted", "safe", "finalized", "latest", "earliest" or "pending" as string arguments
+// - "safe", "finalized", "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
 // - an invalid block number error when the given argument isn't a known strings
@@ -91,10 +92,11 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	case "pending":
 		*bn = PendingBlockNumber
 		return nil
-	// Include "finalized" and "safe" as an option for compatibility with
-	// FinalizedBlockNumber and SafeBlockNumber from geth.
-	case "accepted", "finalized", "safe":
-		*bn = AcceptedBlockNumber
+	case "finalized":
+		*bn = FinalizedBlockNumber
+		return nil
+	case "safe":
+		*bn = SafeBlockNumber
 		return nil
 	}
 
@@ -115,7 +117,7 @@ func (bn BlockNumber) Int64() int64 {
 }
 
 // MarshalText implements encoding.TextMarshaler. It marshals:
-// - "accepted", "latest", "earliest" or "pending" as strings
+// - "safe", "finalized", "latest", "earliest" or "pending" as strings
 // - other numbers as hex
 func (bn BlockNumber) MarshalText() ([]byte, error) {
 	return []byte(bn.String()), nil
@@ -129,19 +131,16 @@ func (bn BlockNumber) String() string {
 		return "latest"
 	case PendingBlockNumber:
 		return "pending"
-	case AcceptedBlockNumber:
-		return "accepted"
+	case FinalizedBlockNumber:
+		return "finalized"
+	case SafeBlockNumber:
+		return "safe"
 	default:
 		if bn < 0 {
 			return fmt.Sprintf("<invalid %d>", bn)
 		}
 		return hexutil.Uint64(bn).String()
 	}
-}
-
-// IsAccepted returns true if this blockNumber should be treated as a request for the last accepted block
-func (bn BlockNumber) IsAccepted() bool {
-	return bn < EarliestBlockNumber && bn >= AcceptedBlockNumber
 }
 
 type BlockNumberOrHash struct {
@@ -181,10 +180,12 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		bn := PendingBlockNumber
 		bnh.BlockNumber = &bn
 		return nil
-	// Include "finalized" and "safe" as an option for compatibility with
-	// FinalizedBlockNumber and SafeBlockNumber from geth.
-	case "accepted", "finalized", "safe":
-		bn := AcceptedBlockNumber
+	case "finalized":
+		bn := FinalizedBlockNumber
+		bnh.BlockNumber = &bn
+		return nil
+	case "safe":
+		bn := SafeBlockNumber
 		bnh.BlockNumber = &bn
 		return nil
 	default:

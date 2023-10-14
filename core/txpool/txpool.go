@@ -26,11 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -54,8 +52,6 @@ const (
 	// non-trivial consequences: larger transactions are significantly harder and
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
-	//
-	// Note: the max contract size is 24KB
 	txMaxSize = 4 * txSlotSize // 128KB
 )
 
@@ -102,9 +98,8 @@ var (
 )
 
 var (
-	evictionInterval      = time.Minute      // Time interval to check for evictable transactions
-	statsReportInterval   = 8 * time.Second  // Time interval to report transaction pool stats
-	baseFeeUpdateInterval = 10 * time.Second // Time interval at which to schedule a base fee update for the tx pool after Apricot Phase 3 is enabled
+	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
+	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
 )
 
 var (
@@ -152,6 +147,7 @@ const (
 	TxStatusUnknown TxStatus = iota
 	TxStatusQueued
 	TxStatusPending
+	TxStatusIncluded
 )
 
 // blockChain provides the state of blockchain and current gas limit to do
@@ -160,7 +156,6 @@ type blockChain interface {
 	CurrentBlock() *types.Header
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
-	SenderCacher() *core.TxSenderCacher
 
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
@@ -251,10 +246,7 @@ type TxPool struct {
 	chainconfig *params.ChainConfig
 	chain       blockChain
 	gasPrice    *big.Int
-	minimumFee  *big.Int
 	txFeed      event.Feed
-	headFeed    event.Feed
-	reorgFeed   event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -262,18 +254,11 @@ type TxPool struct {
 	istanbul atomic.Bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  atomic.Bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  atomic.Bool // Fork indicator whether we are using EIP-1559 type transactions.
-	eip3860  atomic.Bool // Fork indicator whether EIP-3860 is activated. (activated in Shanghai Upgrade in Ethereum)
+	shanghai atomic.Bool // Fork indicator whether we are in the Shanghai stage.
 
-	currentHead *types.Header
-	// [currentState] is the state of the blockchain head. It is reset whenever
-	// head changes.
-	currentState *state.StateDB
-	// [currentStateLock] is required to allow concurrent access to address nonces
-	// and balances during reorgs and gossip handling.
-	currentStateLock sync.Mutex
-
-	pendingNonces *noncer       // Pending state tracking virtual nonces
-	currentMaxGas atomic.Uint64 // Current gas limit for transaction caps
+	currentState  *state.StateDB // Current state in the blockchain head
+	pendingNonces *noncer        // Pending state tracking virtual nonces
+	currentMaxGas atomic.Uint64  // Current gas limit for transaction caps
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
@@ -284,17 +269,15 @@ type TxPool struct {
 	all     *lookup                      // All transactions to allow lookups
 	priced  *pricedList                  // All transactions sorted by price
 
-	chainHeadCh         chan core.ChainHeadEvent
-	chainHeadSub        event.Subscription
-	reqResetCh          chan *txpoolResetRequest
-	reqPromoteCh        chan *accountSet
-	queueTxEventCh      chan *types.Transaction
-	reorgDoneCh         chan chan struct{}
-	reorgShutdownCh     chan struct{} // requests shutdown of scheduleReorgLoop
-	generalShutdownChan chan struct{} // closed when the transaction pool is stopped. Any goroutine can listen
-	// to this to be notified if it should shut down.
-	wg         sync.WaitGroup // tracks loop, scheduleReorgLoop
-	initDoneCh chan struct{}  // is closed once the pool is initialized (for tests)
+	chainHeadCh     chan core.ChainHeadEvent
+	chainHeadSub    event.Subscription
+	reqResetCh      chan *txpoolResetRequest
+	reqPromoteCh    chan *accountSet
+	queueTxEventCh  chan *types.Transaction
+	reorgDoneCh     chan chan struct{}
+	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
+	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
 }
@@ -311,23 +294,22 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:              config,
-		chainconfig:         chainconfig,
-		chain:               chain,
-		signer:              types.LatestSigner(chainconfig),
-		pending:             make(map[common.Address]*list),
-		queue:               make(map[common.Address]*list),
-		beats:               make(map[common.Address]time.Time),
-		all:                 newLookup(),
-		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:          make(chan *txpoolResetRequest),
-		reqPromoteCh:        make(chan *accountSet),
-		queueTxEventCh:      make(chan *types.Transaction),
-		reorgDoneCh:         make(chan chan struct{}),
-		reorgShutdownCh:     make(chan struct{}),
-		initDoneCh:          make(chan struct{}),
-		generalShutdownChan: make(chan struct{}),
-		gasPrice:            new(big.Int).SetUint64(config.PriceLimit),
+		config:          config,
+		chainconfig:     chainconfig,
+		chain:           chain,
+		signer:          types.LatestSigner(chainconfig),
+		pending:         make(map[common.Address]*list),
+		queue:           make(map[common.Address]*list),
+		beats:           make(map[common.Address]time.Time),
+		all:             newLookup(),
+		chainHeadCh:     make(chan core.ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:      make(chan *txpoolResetRequest),
+		reqPromoteCh:    make(chan *accountSet),
+		queueTxEventCh:  make(chan *types.Transaction),
+		reorgDoneCh:     make(chan chan struct{}),
+		reorgShutdownCh: make(chan struct{}),
+		initDoneCh:      make(chan struct{}),
+		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -357,8 +339,6 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 	pool.wg.Add(1)
 	go pool.loop()
-
-	pool.startPeriodicFeeUpdate()
 
 	return pool
 }
@@ -391,7 +371,6 @@ func (pool *TxPool) loop() {
 			if ev.Block != nil {
 				pool.requestReset(head, ev.Block.Header())
 				head = ev.Block.Header()
-				pool.headFeed.Send(core.NewTxPoolHeadEvent{Head: head})
 			}
 
 		// System shutdown.
@@ -448,7 +427,6 @@ func (pool *TxPool) Stop() {
 	// Unsubscribe all subscriptions registered from txpool
 	pool.scope.Close()
 
-	close(pool.generalShutdownChan)
 	// Unsubscribe subscriptions registered from blockchain
 	pool.chainHeadSub.Unsubscribe()
 	pool.wg.Wait()
@@ -463,18 +441,6 @@ func (pool *TxPool) Stop() {
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
-}
-
-// SubscribeNewHeadEvent registers a subscription of NewHeadEvent and
-// starts sending event to the given channel.
-func (pool *TxPool) SubscribeNewHeadEvent(ch chan<- core.NewTxPoolHeadEvent) event.Subscription {
-	return pool.scope.Track(pool.headFeed.Subscribe(ch))
-}
-
-// SubscribeNewReorgEvent registers a subscription of NewReorgEvent and
-// starts sending event to the given channel.
-func (pool *TxPool) SubscribeNewReorgEvent(ch chan<- core.NewTxPoolReorgEvent) event.Subscription {
-	return pool.scope.Track(pool.reorgFeed.Subscribe(ch))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
@@ -504,13 +470,6 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	}
 
 	log.Info("Transaction pool price threshold updated", "price", price)
-}
-
-func (pool *TxPool) SetMinFee(minFee *big.Int) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	pool.minimumFee = minFee
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
@@ -610,31 +569,6 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 	return pending
 }
 
-// PendingSize returns the number of pending txs in the tx pool.
-func (pool *TxPool) PendingSize() int {
-	pending := pool.Pending(true)
-	count := 0
-	for _, txs := range pending {
-		count += len(txs)
-	}
-	return count
-}
-
-// IteratePending iterates over [pool.pending] until [f] returns false.
-// The caller must not modify [tx].
-func (pool *TxPool) IteratePending(f func(tx *types.Transaction) bool) {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-
-	for _, list := range pool.pending {
-		for _, tx := range list.txs.items {
-			if !f(tx) {
-				return
-			}
-		}
-	}
-}
-
 // Locals retrieves the accounts currently considered local by the pool.
 func (pool *TxPool) Locals() []common.Address {
 	pool.mu.Lock()
@@ -659,41 +593,6 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
-// checks transaction validity against the current state.
-func (pool *TxPool) checkTxState(from common.Address, tx *types.Transaction) error {
-	pool.currentStateLock.Lock()
-	defer pool.currentStateLock.Unlock()
-
-	txNonce := tx.Nonce()
-	// Ensure the transaction adheres to nonce ordering
-	if currentNonce := pool.currentState.GetNonce(from); currentNonce > txNonce {
-		return fmt.Errorf("%w: address %s current nonce (%d) > tx nonce (%d)",
-			core.ErrNonceTooLow, from.Hex(), currentNonce, txNonce)
-	}
-
-	// cost == V + GP * GL
-	balance := pool.currentState.GetBalance(from)
-	if balance.Cmp(tx.Cost()) < 0 {
-		return fmt.Errorf("%w: address %s have (%d) want (%d)", core.ErrInsufficientFunds, from.Hex(), balance, tx.Cost())
-	}
-
-	// Verify that replacing transactions will not result in overdraft
-	list := pool.pending[from]
-	if list != nil { // Sender already has pending txs
-		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
-		if repl := list.txs.Get(tx.Nonce()); repl != nil {
-			// Deduct the cost of a transaction replaced by this
-			sum.Sub(sum, repl.Cost())
-		}
-		if balance.Cmp(sum) < 0 {
-			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
-			return ErrOverdraft
-		}
-	}
-
-	return nil
-}
-
 // validateTxBasics checks whether a transaction is valid according to the consensus
 // rules, but does not check state-dependent validation such as sufficient balance.
 // This check is meant as an early check which only needs to be performed once,
@@ -713,11 +612,11 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if tx.Size() > txMaxSize {
-		return fmt.Errorf("%w tx size %d > max size %d", ErrOversizedData, tx.Size(), txMaxSize)
+		return ErrOversizedData
 	}
 	// Check whether the init code size has been exceeded.
-	if pool.eip3860.Load() && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-		return fmt.Errorf("%w: code size %v limit %v", vmerrs.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
+	if pool.shanghai.Load() && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+		return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
@@ -725,13 +624,8 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
-	if txGas := tx.Gas(); pool.currentMaxGas.Load() < txGas {
-		return fmt.Errorf(
-			"%w: tx gas (%d) > current max gas (%d)",
-			ErrGasLimit,
-			txGas,
-			pool.currentMaxGas.Load(),
-		)
+	if pool.currentMaxGas.Load() < tx.Gas() {
+		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
 	if tx.GasFeeCap().BitLen() > 256 {
@@ -745,21 +639,20 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
+	if _, err := types.Sender(pool.signer, tx); err != nil {
 		return ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		return fmt.Errorf("%w: address %s have gas tip cap (%d) < pool gas tip cap (%d)", ErrUnderpriced, from.Hex(), tx.GasTipCap(), pool.gasPrice)
+		return ErrUnderpriced
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul.Load(), pool.eip3860.Load())
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul.Load(), pool.shanghai.Load())
 	if err != nil {
 		return err
 	}
-	if txGas := tx.Gas(); txGas < intrGas {
-		return fmt.Errorf("%w: address %v tx gas (%v) < intrinsic gas (%v)", core.ErrIntrinsicGas, from.Hex(), tx.Gas(), intrGas)
+	if tx.Gas() < intrGas {
+		return core.ErrIntrinsicGas
 	}
 	return nil
 }
@@ -769,15 +662,29 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Signature has been checked already, this cannot error.
 	from, _ := types.Sender(pool.signer, tx)
-	// Drop the transaction if the gas fee cap is below the pool's minimum fee
-	if pool.minimumFee != nil && tx.GasFeeCapIntCmp(pool.minimumFee) < 0 {
-		return fmt.Errorf("%w: address %s have gas fee cap (%d) < pool minimum fee cap (%d)", ErrUnderpriced, from.Hex(), tx.GasFeeCap(), pool.minimumFee)
+	// Ensure the transaction adheres to nonce ordering
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return core.ErrNonceTooLow
+	}
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
+	balance := pool.currentState.GetBalance(from)
+	if balance.Cmp(tx.Cost()) < 0 {
+		return core.ErrInsufficientFunds
 	}
 
-	// Ensure the transaction adheres to nonce ordering
-	// Transactor should have enough funds to cover the costs
-	if err := pool.checkTxState(from, tx); err != nil {
-		return err
+	// Verify that replacing transactions will not result in overdraft
+	list := pool.pending[from]
+	if list != nil { // Sender already has pending txs
+		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+		if repl := list.txs.Get(tx.Nonce()); repl != nil {
+			// Deduct the cost of a transaction replaced by this
+			sum.Sub(sum, repl.Cost())
+		}
+		if balance.Cmp(sum) < 0 {
+			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
+			return ErrOverdraft
+		}
 	}
 	return nil
 }
@@ -1170,19 +1077,6 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
-// Has returns an indicator whether txpool has a local transaction cached with
-// the given hash.
-func (pool *TxPool) HasLocal(hash common.Hash) bool {
-	return pool.all.GetLocal(hash) != nil
-}
-
-func (pool *TxPool) RemoveTx(hash common.Hash) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	pool.removeTx(hash, true)
-}
-
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 // Returns the number of transactions removed from the pending queue.
@@ -1377,13 +1271,10 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != nil && pool.chainconfig.IsApricotPhase3(reset.newHead.Time) {
-			_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, reset.newHead, uint64(time.Now().Unix()))
-			if err == nil {
-				pool.priced.SetBaseFee(baseFeeEstimate)
-			}
+		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
+			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+			pool.priced.SetBaseFee(pendingBaseFee)
 		}
-
 		// Update all accounts to the latest known pending nonce
 		nonces := make(map[common.Address]uint64, len(pool.pending))
 		for addr, list := range pool.pending {
@@ -1399,10 +1290,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	pool.changesSinceReorg = 0 // Reset change counter
 	pool.mu.Unlock()
-
-	if reset != nil && reset.newHead != nil {
-		pool.reorgFeed.Send(core.NewTxPoolReorgEvent{Head: reset.newHead})
-	}
 
 	// Notify subsystems for newly added transactions
 	for _, tx := range promoted {
@@ -1493,36 +1380,30 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	statedb, err := pool.chain.StateAt(newHead.Root)
 	if err != nil {
-		log.Error("Failed to reset txpool state", "err", err, "root", newHead.Root)
+		log.Error("Failed to reset txpool state", "err", err)
 		return
 	}
-	pool.currentHead = newHead
-	pool.currentStateLock.Lock()
 	pool.currentState = statedb
-	pool.currentStateLock.Unlock()
 	pool.pendingNonces = newNoncer(statedb)
 	pool.currentMaxGas.Store(newHead.GasLimit)
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
-	pool.chain.SenderCacher().Recover(pool.signer, reinject)
+	core.SenderCacher.Recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
 
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul.Store(pool.chainconfig.IsIstanbul(next))
-	pool.eip2718.Store(pool.chainconfig.IsApricotPhase2(newHead.Time))
-	pool.eip1559.Store(pool.chainconfig.IsApricotPhase3(newHead.Time))
-	pool.eip3860.Store(pool.chainconfig.IsDUpgrade(newHead.Time))
+	pool.eip2718.Store(pool.chainconfig.IsBerlin(next))
+	pool.eip1559.Store(pool.chainconfig.IsLondon(next))
+	pool.shanghai.Store(pool.chainconfig.IsShanghai(next, uint64(time.Now().Unix())))
 }
 
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
-	pool.currentStateLock.Lock()
-	defer pool.currentStateLock.Unlock()
-
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction
 
@@ -1725,9 +1606,6 @@ func (pool *TxPool) truncateQueue() {
 // is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
 // to trigger a re-heap is this function
 func (pool *TxPool) demoteUnexecutables() {
-	pool.currentStateLock.Lock()
-	defer pool.currentStateLock.Unlock()
-
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
@@ -1775,55 +1653,6 @@ func (pool *TxPool) demoteUnexecutables() {
 		if list.Empty() {
 			delete(pool.pending, addr)
 		}
-	}
-}
-
-func (pool *TxPool) startPeriodicFeeUpdate() {
-	if pool.chainconfig.ApricotPhase3BlockTimestamp == nil {
-		return
-	}
-
-	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
-	// when starting up in ApricotPhase3 before the base fee is updated.
-	if time.Now().After(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp)) {
-		pool.updateBaseFee()
-	}
-
-	pool.wg.Add(1)
-	go pool.periodicBaseFeeUpdate()
-}
-
-func (pool *TxPool) periodicBaseFeeUpdate() {
-	defer pool.wg.Done()
-
-	// Sleep until its time to start the periodic base fee update or the tx pool is shutting down
-	select {
-	case <-time.After(time.Until(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp))):
-	case <-pool.generalShutdownChan:
-		return // Return early if shutting down
-	}
-
-	// Update the base fee every [baseFeeUpdateInterval]
-	// and shutdown when [generalShutdownChan] is closed by Stop()
-	for {
-		select {
-		case <-time.After(baseFeeUpdateInterval):
-			pool.updateBaseFee()
-		case <-pool.generalShutdownChan:
-			return
-		}
-	}
-}
-
-func (pool *TxPool) updateBaseFee() {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	_, baseFeeEstimate, err := dummy.EstimateNextBaseFee(pool.chainconfig, pool.currentHead, uint64(time.Now().Unix()))
-	if err == nil {
-		pool.priced.SetBaseFee(baseFeeEstimate)
-	} else {
-		log.Error("failed to update base fee", "currentHead", pool.currentHead.Hash(), "err", err)
 	}
 }
 

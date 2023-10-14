@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -77,7 +76,7 @@ func (f *callFrame) processOutput(output []byte, err error) {
 	if f.Type == vm.CREATE || f.Type == vm.CREATE2 {
 		f.To = nil
 	}
-	if !errors.Is(err, vmerrs.ErrExecutionReverted) || len(output) == 0 {
+	if !errors.Is(err, vm.ErrExecutionReverted) || len(output) == 0 {
 		return
 	}
 	f.Output = output

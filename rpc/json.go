@@ -236,20 +236,13 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 	return messages, batch, nil
 }
 
-func (c *jsonCodec) writeJSON(ctx context.Context, val interface{}, isErrorResponse bool) error {
-	return c.writeJSONSkipDeadline(ctx, val, isErrorResponse, false)
-}
-
-func (c *jsonCodec) writeJSONSkipDeadline(ctx context.Context, v interface{}, isErrorResponse bool, skip bool) error {
+func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorResponse bool) error {
 	c.encMu.Lock()
 	defer c.encMu.Unlock()
 
-	deadline := time.Now().Add(defaultWriteTimeout)
-	if !skip {
-		deadlineCtx, ok := ctx.Deadline()
-		if ok {
-			deadline = deadlineCtx
-		}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(defaultWriteTimeout)
 	}
 	c.conn.SetWriteDeadline(deadline)
 	return c.encode(v, isErrorResponse)

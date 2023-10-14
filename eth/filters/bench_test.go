@@ -24,11 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/stretchr/testify/require"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/node"
 )
 
 func BenchmarkBloomBits512(b *testing.B) {
@@ -63,7 +63,7 @@ const benchFilterCnt = 2000
 
 func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	b.Skip("test disabled: this tests presume (and modify) an existing datadir.")
-	benchDataDir := b.TempDir() + "/coreth/chaindata"
+	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
 	b.Log("Running bloombits benchmark   section size:", sectionSize)
 
 	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
@@ -137,8 +137,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		var addr common.Address
 		addr[0] = byte(i)
 		addr[1] = byte(i / 256)
-		filter, err := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
-		require.NoError(b, err)
+		filter := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
 		if _, err := filter.Logs(context.Background()); err != nil {
 			b.Error("filter.Logs error:", err)
 		}
@@ -163,7 +162,7 @@ func clearBloomBits(db ethdb.Database) {
 
 func BenchmarkNoBloomBits(b *testing.B) {
 	b.Skip("test disabled: this tests presume (and modify) an existing datadir.")
-	benchDataDir := b.TempDir() + "/coreth/chaindata"
+	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
 	b.Log("Running benchmark without bloombits")
 	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
 	if err != nil {
@@ -181,8 +180,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	b.Log("Running filter benchmarks...")
 	start := time.Now()
-	filter, err := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
-	require.NoError(b, err)
+	filter := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
 	filter.Logs(context.Background())
 	d := time.Since(start)
 	b.Log("Finished running filter benchmarks")

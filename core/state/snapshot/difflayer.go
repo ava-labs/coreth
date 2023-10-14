@@ -102,9 +102,8 @@ type diffLayer struct {
 	parent snapshot   // Parent snapshot modified by this one, never nil
 	memory uint64     // Approximate guess as to how much memory we use
 
-	blockHash common.Hash // Block hash to which this snapshot diff belongs to
-	root      common.Hash // Root hash to which this snapshot diff belongs to
-	stale     atomic.Bool // Signals that the layer became stale (state progressed)
+	root  common.Hash // Root hash to which this snapshot diff belongs to
+	stale atomic.Bool // Signals that the layer became stale (state progressed)
 
 	// destructSet is a very special helper marker. If an account is marked as
 	// deleted, then it's recorded in this set. However it's allowed that an account
@@ -169,12 +168,11 @@ func (h storageBloomHasher) Sum64() uint64 {
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
 // level persistent database or a hierarchical diff already.
-func newDiffLayer(parent snapshot, blockHash, stateRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
 	// Create the new layer with some pre-allocated data segments
 	dl := &diffLayer{
 		parent:      parent,
-		blockHash:   blockHash,
-		root:        stateRoot,
+		root:        root,
 		destructSet: destructs,
 		accountData: accounts,
 		storageData: storage,
@@ -256,11 +254,6 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 // Root returns the root hash for which this snapshot was made.
 func (dl *diffLayer) Root() common.Hash {
 	return dl.root
-}
-
-// BlockHash returns the block hash for which this snapshot was made
-func (dl *diffLayer) BlockHash() common.Hash {
-	return dl.blockHash
 }
 
 // Parent returns the subsequent layer of a diff layer.
@@ -443,8 +436,8 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items.
-func (dl *diffLayer) Update(blockHash, blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
-	return newDiffLayer(dl, blockHash, blockRoot, destructs, accounts, storage)
+func (dl *diffLayer) Update(blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+	return newDiffLayer(dl, blockRoot, destructs, accounts, storage)
 }
 
 // flatten pushes all data from this point downwards, flattening everything into

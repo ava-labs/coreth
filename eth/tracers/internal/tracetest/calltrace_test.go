@@ -352,7 +352,7 @@ func TestInternals(t *testing.T) {
 					Balance: big.NewInt(500000000000000),
 				},
 			}, false)
-		evm := vm.NewEVM(context, txContext, statedb, params.AvalancheMainnetChainConfig, vm.Config{Tracer: tc.tracer})
+		evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
 		msg := &core.Message{
 			To:                &to,
 			From:              origin,

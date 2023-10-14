@@ -24,11 +24,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/interfaces"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -38,9 +37,6 @@ const basefeeWiggleMultiplier = 2
 var (
 	errNoEventSignature       = errors.New("no event signature")
 	errEventSignatureMismatch = errors.New("event signature mismatch")
-
-	ErrNilAssetAmount            = errors.New("cannot specify nil asset amount for native asset call")
-	errNativeAssetDeployContract = errors.New("cannot specify native asset params while deploying a contract")
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -49,16 +45,10 @@ type SignerFn func(common.Address, *types.Transaction) (*types.Transaction, erro
 
 // CallOpts is the collection of options to fine tune a contract call request.
 type CallOpts struct {
-	Accepted    bool            // Whether to operate on the accepted state or the last known one
+	Pending     bool            // Whether to operate on the pending state or the last known one
 	From        common.Address  // Optional the sender address, otherwise the first account is used
 	BlockNumber *big.Int        // Optional the block number on which the call should be performed
 	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
-}
-
-// NativeAssetCallOpts contains params for native asset call
-type NativeAssetCallOpts struct {
-	AssetID     common.Hash // Asset ID
-	AssetAmount *big.Int    // Asset amount
 }
 
 // TransactOpts is the collection of authorization data required to create a
@@ -77,14 +67,6 @@ type TransactOpts struct {
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
 	NoSend bool // Do all transact steps but do not send the transaction
-
-	// If set, the transaction is transformed to perform the requested call through the native asset
-	// precompile. This will update the to address of the transaction to that of the native asset precompile
-	// and pack the requested [to] address, [assetID], [assetAmount], and [input] data for the transaction
-	// into the call data of the transaction. When executed within the EVM, the precompile will parse the input
-	// data and attempt to atomically transfer [assetAmount] of [assetID] to the [to] address and invoke the
-	// contract at [to] if present, passing in the original [input] data.
-	NativeAssetCall *NativeAssetCallOpts
 }
 
 // FilterOpts is the collection of options to fine tune filtering for events
@@ -185,23 +167,23 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		return err
 	}
 	var (
-		msg    = interfaces.CallMsg{From: opts.From, To: &c.address, Data: input}
+		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
 	)
-	if opts.Accepted {
-		pb, ok := c.caller.(AcceptedContractCaller)
+	if opts.Pending {
+		pb, ok := c.caller.(PendingContractCaller)
 		if !ok {
-			return ErrNoAcceptedState
+			return ErrNoPendingState
 		}
-		output, err = pb.AcceptedCallContract(ctx, msg)
+		output, err = pb.PendingCallContract(ctx, msg)
 		if err != nil {
 			return err
 		}
 		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
-			if code, err = pb.AcceptedCodeAt(ctx, c.address); err != nil {
+			if code, err = pb.PendingCodeAt(ctx, c.address); err != nil {
 				return err
 			} else if len(code) == 0 {
 				return ErrNoCode
@@ -257,38 +239,6 @@ func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error)
 	// todo(rjl493456442) check the payable fallback or receive is defined
 	// or not, reject invalid transaction at the first place
 	return c.transact(opts, &c.address, nil)
-}
-
-// wrapNativeAssetCall preprocesses the arguments to transform the requested call to go through the
-// native asset call precompile if it is specified on [opts].
-func wrapNativeAssetCall(opts *TransactOpts, contract *common.Address, input []byte) (*common.Address, []byte, error) {
-	if opts.NativeAssetCall != nil {
-		// Prevent the user from sending a non-zero value through native asset call precompile as this will
-		// transfer the funds to the precompile address and essentially burn the funds.
-		if opts.Value != nil && opts.Value.Cmp(common.Big0) != 0 {
-			return nil, nil, fmt.Errorf("value must be 0 when performing native asset call, found %d", opts.Value)
-		}
-		if opts.NativeAssetCall.AssetAmount == nil {
-			return nil, nil, ErrNilAssetAmount
-		}
-		if opts.NativeAssetCall.AssetAmount.Cmp(common.Big0) < 0 {
-			return nil, nil, fmt.Errorf("asset value cannot be < 0 when performing native asset call, found %d", opts.NativeAssetCall.AssetAmount)
-		}
-		// Prevent potential panic if [contract] is nil in the case that transact is called through DeployContract.
-		if contract == nil {
-			return nil, nil, errNativeAssetDeployContract
-		}
-		// wrap input with native asset call params
-		input = vm.PackNativeAssetCallInput(
-			*contract,
-			opts.NativeAssetCall.AssetID,
-			opts.NativeAssetCall.AssetAmount,
-			input,
-		)
-		// target addr is now precompile
-		contract = &vm.NativeAssetCallAddr
-	}
-	return contract, input, nil
 }
 
 func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Address, input []byte, head *types.Header) (*types.Transaction, error) {
@@ -389,13 +339,13 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value *big.Int) (uint64, error) {
 	if contract != nil {
 		// Gas estimation cannot succeed without code for method invocations.
-		if code, err := c.transactor.AcceptedCodeAt(ensureContext(opts.Context), c.address); err != nil {
+		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
 			return 0, err
 		} else if len(code) == 0 {
 			return 0, ErrNoCode
 		}
 	}
-	msg := interfaces.CallMsg{
+	msg := ethereum.CallMsg{
 		From:      opts.From,
 		To:        contract,
 		GasPrice:  gasPrice,
@@ -409,7 +359,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 
 func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {
 	if opts.Nonce == nil {
-		return c.transactor.AcceptedNonceAt(ensureContext(opts.Context), opts.From)
+		return c.transactor.PendingNonceAt(ensureContext(opts.Context), opts.From)
 	} else {
 		return opts.Nonce.Uint64(), nil
 	}
@@ -426,11 +376,6 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		rawTx *types.Transaction
 		err   error
 	)
-	// Preprocess native asset call arguments if present
-	contract, input, err = wrapNativeAssetCall(opts, contract, input)
-	if err != nil {
-		return nil, err
-	}
 	if opts.GasPrice != nil {
 		rawTx, err = c.createLegacyTx(opts, contract, input)
 	} else if opts.GasFeeCap != nil && opts.GasTipCap != nil {
@@ -483,7 +428,7 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 	// Start the background filtering
 	logs := make(chan types.Log, 128)
 
-	config := interfaces.FilterQuery{
+	config := ethereum.FilterQuery{
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 		FromBlock: new(big.Int).SetUint64(opts.Start),
@@ -532,7 +477,7 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 	// Start the background filtering
 	logs := make(chan types.Log, 128)
 
-	config := interfaces.FilterQuery{
+	config := ethereum.FilterQuery{
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 	}

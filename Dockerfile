@@ -1,38 +1,33 @@
-# ============= Compilation Stage ================
-FROM golang:1.20.8-bullseye AS builder
+# Support setting various labels on the final image
+ARG COMMIT=""
+ARG VERSION=""
+ARG BUILDNUM=""
 
-ARG AVALANCHE_VERSION
+# Build Geth in a stock Go builder container
+FROM golang:1.20-alpine as builder
 
-RUN mkdir -p $GOPATH/src/github.com/ava-labs
-WORKDIR $GOPATH/src/github.com/ava-labs
+RUN apk add --no-cache gcc musl-dev linux-headers git
 
-RUN git clone -b $AVALANCHE_VERSION --single-branch https://github.com/ava-labs/avalanchego.git
+# Get dependencies - will also be cached if we won't change go.mod/go.sum
+COPY go.mod /go-ethereum/
+COPY go.sum /go-ethereum/
+RUN cd /go-ethereum && go mod download
 
-# Copy coreth repo into desired location
-COPY . coreth
+ADD . /go-ethereum
+RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
 
-# Set the workdir to AvalancheGo and update coreth dependency to local version
-WORKDIR $GOPATH/src/github.com/ava-labs/avalanchego
-# Run go mod download here to improve caching of AvalancheGo specific depednencies
-RUN go mod download
-# Replace the coreth dependency
-RUN go mod edit -replace github.com/ava-labs/coreth=../coreth
-RUN go mod download && go mod tidy -compat=1.20
+# Pull Geth into a second stage deploy alpine container
+FROM alpine:latest
 
-# Build the AvalancheGo binary with local version of coreth.
-RUN ./scripts/build_avalanche.sh
-# Create the plugins directory in the standard location so the build directory will be recognized
-# as valid.
-RUN mkdir build/plugins
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
-# ============= Cleanup Stage ================
-FROM debian:11-slim AS execution
+EXPOSE 8545 8546 30303 30303/udp
+ENTRYPOINT ["geth"]
 
-# Maintain compatibility with previous images
-RUN mkdir -p /avalanchego/build
-WORKDIR /avalanchego/build
+# Add some metadata labels to help programatic image consumption
+ARG COMMIT=""
+ARG VERSION=""
+ARG BUILDNUM=""
 
-# Copy the executables into the container
-COPY --from=builder /go/src/github.com/ava-labs/avalanchego/build .
-
-CMD [ "./avalanchego" ]
+LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"

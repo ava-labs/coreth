@@ -24,12 +24,8 @@ import (
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
-// NewTxPoolHeadEvent is posted when the pool receives a request to update
-// its head to [Block].
-type NewTxPoolHeadEvent struct{ Head *types.Header }
-
-// NewTxPoolReorgEvent is posted when the pool head is updated.
-type NewTxPoolReorgEvent struct{ Head *types.Header }
+// NewMinedBlockEvent is posted when a block has been imported.
+type NewMinedBlockEvent struct{ Block *types.Block }
 
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }

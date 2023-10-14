@@ -34,8 +34,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-var testBlockHash = common.HexToHash("0xdeadbeef")
-
 func hashData(input []byte) common.Hash {
 	var hasher = sha3.NewLegacyKeccak256()
 	var hash common.Hash
@@ -49,6 +47,7 @@ func hashData(input []byte) common.Hash {
 func TestGeneration(t *testing.T) {
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
+	// two of which also has the same 3-slot storage trie attached.
 	var helper = newHelper()
 	stRoot := helper.makeStorageTrie(common.Hash{}, []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, false)
 
@@ -59,22 +58,21 @@ func TestGeneration(t *testing.T) {
 	helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
-	root, snap := helper.CommitAndGenerate() // two of which also has the same 3-slot storage trie attached.
-
-	if have, want := root, common.HexToHash("0xa819054cfef894169a5b56ccc4e5e06f14829d4a57498e8b9fb13ff21491828d"); have != want {
+	root, snap := helper.CommitAndGenerate()
+	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -104,21 +102,23 @@ func TestGenerateExistentState(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
 
 func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 	t.Helper()
+
 	accIt := snap.AccountIterator(common.Hash{})
 	defer accIt.Release()
+
 	snapRoot, err := generateTrieRoot(nil, "", accIt, common.Hash{}, stackTrieGenerate,
 		func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 			storageIt, _ := snap.StorageIterator(accountHash, common.Hash{})
@@ -211,7 +211,7 @@ func (t *testHelper) Commit() common.Hash {
 
 func (t *testHelper) CommitAndGenerate() (common.Hash, *diskLayer) {
 	root := t.Commit()
-	snap := generateSnapshot(t.diskdb, t.triedb, 16, testBlockHash, root, nil)
+	snap := generateSnapshot(t.diskdb, t.triedb, 16, root)
 	return root, snap
 }
 
@@ -304,18 +304,18 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 	}
 
 	root, snap := helper.CommitAndGenerate()
-	t.Logf("Root: %#x\n", root) // Root = 0xdd912272f1befd3e1ca84007817f532b6e8a08f7b273c88b0ea0d6701ad3ad03
+	t.Logf("Root: %#x\n", root) // Root = 0x8746cce9fd9c658b2cfd639878ed6584b7a2b3e73bb40f607fcfa156002429a0
 
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -361,19 +361,19 @@ func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
 	}
 
 	root, snap := helper.CommitAndGenerate()
-	t.Logf("Root: %#x\n", root) // Root = 0xe614035f519c878aea2b5e658a3dd61916ff090354222cfad624403e89d96440
+	t.Logf("Root: %#x\n", root) // Root = 0x825891472281463511e7ebcc7f109e4f9200c20fa384754e11fd605cd98464e8
 
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -386,27 +386,27 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	// without any storage slots to keep the test smaller.
 	helper := newHelper()
 
-	helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()}) // 0x7dd654835190324640832972b7c4c6eaa0c50541e36766d054ed57721f1dc7eb
-	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()}) // 0xf73118e0254ce091588d66038744a0afae5f65a194de67cff310c683ae43329e
-	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()}) // 0x515d3de35e143cd976ad476398d910aa7bf8a02e8fd7eb9e3baacddbbcbfcb41
+	helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()}) // 0xc7a30f39aff471c95d8a837497ad0e49b65be475cc0953540f80cfcdbdcd9074
+	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
+	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()}) // 0x19ead688e907b0fab07176120dceec244a72aff2f0aa51e8b827584e378772f4
 
-	root := helper.Commit() // Root: 0xfa04f652e8bd3938971bf7d71c3c688574af334ca8bc20e64b01ba610ae93cad
+	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
 	// Delete an account trie leaf and ensure the generator chokes
 	helper.triedb.Commit(root, false)
-	helper.diskdb.Delete(common.HexToHash("0xf73118e0254ce091588d66038744a0afae5f65a194de67cff310c683ae43329e").Bytes())
+	helper.diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
 
-	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, testBlockHash, root, nil)
+	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt account trie")
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -424,24 +424,24 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 	helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})                       // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
 	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()})  // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
 	stRoot = helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()}) // 0x70da4ebd7602dd313c936b39000ed9ab7f849986a90ea934f0c3ec4cc9840441
+	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
 
 	root := helper.Commit()
 
 	// Delete a storage trie root and ensure the generator chokes
-	helper.diskdb.Delete(stRoot) // We can only corrupt the disk database, so flush the tries out
+	helper.diskdb.Delete(stRoot)
 
-	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, testBlockHash, root, nil)
+	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -458,24 +458,24 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})                       // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
 	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()})  // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
 	stRoot = helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()}) // 0x70da4ebd7602dd313c936b39000ed9ab7f849986a90ea934f0c3ec4cc9840441
+	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
 
 	root := helper.Commit()
 
 	// Delete a storage trie leaf and ensure the generator chokes
 	helper.diskdb.Delete(common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371").Bytes())
 
-	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, testBlockHash, root, nil)
+	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -524,18 +524,18 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 	if data := rawdb.ReadStorageSnapshot(helper.diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data == nil {
 		t.Fatalf("expected snap storage to exist")
 	}
-	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, testBlockHash, root, nil)
+	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 	// If we now inspect the snap db, there should exist no extraneous storage items
@@ -563,7 +563,7 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 		)
 		acc := &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
-		helper.accTrie.MustUpdate([]byte("acc-1"), val) // 0x547b07c3a71669c00eda14077d85c7fd14575b92d459572540b25b9a11914dcb
+		helper.accTrie.MustUpdate([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
 
 		// Identical in the snap
 		key := hashData([]byte("acc-1"))
@@ -586,12 +586,12 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -606,6 +606,7 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 // So in trie, we iterate 2 entries 0x03, 0x07. We create the 0x07 in the database and abort the procedure, because the trie is exhausted.
 // But in the database, we still have the stale storage slots 0x04, 0x05. They are not iterated yet, but the procedure is finished.
 func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
+	accountCheckRange = 3
 	if false {
 		enableLogging()
 	}
@@ -629,12 +630,12 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -642,6 +643,7 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 // TestGenerateWithMalformedSnapdata tests what happes if we have some junk
 // in the snapshot database, which cannot be parsed back to an account
 func TestGenerateWithMalformedSnapdata(t *testing.T) {
+	accountCheckRange = 3
 	if false {
 		enableLogging()
 	}
@@ -663,12 +665,12 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 	// If we now inspect the snap db, there should exist no extraneous storage items
@@ -679,6 +681,8 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 
 func TestGenerateFromEmptySnap(t *testing.T) {
 	//enableLogging()
+	accountCheckRange = 10
+	storageCheckRange = 20
 	helper := newHelper()
 	// Add 1K accounts to the trie
 	for i := 0; i < 400; i++ {
@@ -687,18 +691,18 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 			&Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
 	}
 	root, snap := helper.CommitAndGenerate()
-	t.Logf("Root: %#x\n", root) // Root: 0x2609234ce43f5e471202c87e017ffb4dfecdb3163cfcbaa55de04baa59cad42d
+	t.Logf("Root: %#x\n", root) // Root: 0x6f7af6d2e1a1bf2b84a3beb3f8b64388465fbc1e274ca5d5d3fc787ca78f59e4
 
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(1 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -711,6 +715,7 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 // This hits a case where the snap verification passes, but there are more elements in the trie
 // which we must also add.
 func TestGenerateWithIncompleteStorage(t *testing.T) {
+	storageCheckRange = 4
 	helper := newHelper()
 	stKeys := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
 	stVals := []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}
@@ -732,18 +737,18 @@ func TestGenerateWithIncompleteStorage(t *testing.T) {
 		helper.addSnapStorage(accKey, moddedKeys, moddedVals)
 	}
 	root, snap := helper.CommitAndGenerate()
-	t.Logf("Root: %#x\n", root) // Root: 0x90cb912ad55795de8c08a41bfadb79109d4067fb2004e7bc17c942a3e551904d
+	t.Logf("Root: %#x\n", root) // Root: 0xca73f6f05ba4ca3024ef340ef3dfca8fdabc1b677ff13f5a9571fd49c16e67ff
 
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -811,7 +816,7 @@ func populateDangling(disk ethdb.KeyValueStore) {
 func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 	var helper = newHelper()
 
-	stRoot := helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
 	helper.addAccount("acc-2", &Account{Balance: big.NewInt(1), Root: types.EmptyRootHash.Bytes(), CodeHash: types.EmptyCodeHash.Bytes()})
 
@@ -834,7 +839,7 @@ func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }
@@ -866,7 +871,7 @@ func TestGenerateBrokenSnapshotWithDanglingStorage(t *testing.T) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan struct{})
+	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
 }

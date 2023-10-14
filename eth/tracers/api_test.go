@@ -28,11 +28,12 @@ import (
 	"sort"
 	"sync/atomic"
 	"testing"
+	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -66,36 +67,28 @@ type testBackend struct {
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
 	backend := &testBackend{
 		chainConfig: gspec.Config,
-		engine:      dummy.NewETHFaker(),
+		engine:      ethash.NewFaker(),
 		chaindb:     rawdb.NewMemoryDatabase(),
 	}
 	// Generate blocks for testing
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, backend.engine, n, 10, generator)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
 	cacheConfig := &core.CacheConfig{
-		TrieCleanLimit: 256,
-		TrieDirtyLimit: 256,
-		SnapshotLimit:  128,
-		Pruning:        false, // Archive mode
+		TrieCleanLimit:    256,
+		TrieDirtyLimit:    256,
+		TrieTimeLimit:     5 * time.Minute,
+		SnapshotLimit:     0,
+		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, backend.engine, vm.Config{}, common.Hash{}, false)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
-	for _, block := range blocks {
-		if err := chain.Accept(block); err != nil {
-			t.Fatalf("block %d: failed to accept block in chain: %v", n, err)
-		}
-	}
 	backend.chain = chain
-	chain.DrainAcceptorQueue()
 	return backend
 }
 
@@ -120,8 +113,6 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
-
-func (b *testBackend) BadBlocks() ([]*types.Block, []*core.BadBlockReason) { return nil, nil }
 
 func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
@@ -201,12 +192,13 @@ func TestTraceCall(t *testing.T) {
 	// Initialize test accounts
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{
-		Config: params.TestBanffChainConfig, // TODO: go-ethereum has not enabled Shanghai yet, so we use Banff here so tests pass.
+		Config: params.TestChainConfig,
 		Alloc: core.GenesisAlloc{
 			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
-		}}
+		},
+	}
 	genBlocks := 10
 	signer := types.HomesteadSigner{}
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
@@ -347,7 +339,7 @@ func TestTraceTransaction(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, new(big.Int).Add(b.BaseFee(), big.NewInt(int64(500*params.GWei))), nil), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 		target = tx.Hash()
 	})
@@ -361,14 +353,13 @@ func TestTraceTransaction(t *testing.T) {
 	if err := json.Unmarshal(result.(json.RawMessage), &have); err != nil {
 		t.Errorf("failed to unmarshal result %v", err)
 	}
-	expected := &logger.ExecutionResult{
+	if !reflect.DeepEqual(have, &logger.ExecutionResult{
 		Gas:         params.TxGas,
 		Failed:      false,
 		ReturnValue: "",
 		StructLogs:  []logger.StructLogRes{},
-	}
-	if !reflect.DeepEqual(have, expected) {
-		t.Errorf("Transaction tracing result is different: have %v want %v", have, expected)
+	}) {
+		t.Error("Transaction tracing result is different")
 	}
 
 	// Test non-existent transaction
@@ -467,7 +458,7 @@ func TestTracingWithOverrides(t *testing.T) {
 	accounts := newAccounts(3)
 	storageAccount := common.Address{0x13, 37}
 	genesis := &core.Genesis{
-		Config: params.TestCortinaChainConfig, // TODO: go-ethereum has not enabled Shanghai yet, so we use Cortina here so tests pass.
+		Config: params.TestChainConfig,
 		Alloc: core.GenesisAlloc{
 			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -833,14 +824,13 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 
 func TestTraceChain(t *testing.T) {
 	// Initialize test accounts
-	// Note: the balances in this test have been increased compared to go-ethereum.
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc: core.GenesisAlloc{
-			accounts[0].addr: {Balance: big.NewInt(5 * params.Ether)},
-			accounts[1].addr: {Balance: big.NewInt(5 * params.Ether)},
-			accounts[2].addr: {Balance: big.NewInt(5 * params.Ether)},
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
 		},
 	}
 	genBlocks := 50

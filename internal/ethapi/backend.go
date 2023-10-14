@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -40,19 +41,20 @@ import (
 // both full and light clients) with access to necessary functions.
 type Backend interface {
 	// General Ethereum API
-	EstimateBaseFee(ctx context.Context) (*big.Int, error)
-	SuggestPrice(ctx context.Context) (*big.Int, error)
+	SyncProgress() ethereum.SyncProgress
+
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error)
 	ChainDb() ethdb.Database
 	AccountManager() *accounts.Manager
 	ExtRPCEnabled() bool
-	RPCGasCap() uint64                             // global gas cap for eth_call over rpc: DoS protection
-	RPCEVMTimeout() time.Duration                  // global timeout for eth_call over rpc: DoS protection
-	RPCTxFeeCap() float64                          // global tx fee cap for all transaction related APIs
-	UnprotectedAllowed(tx *types.Transaction) bool // allows only for EIP155 transactions.
+	RPCGasCap() uint64            // global gas cap for eth_call over rpc: DoS protection
+	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
+	RPCTxFeeCap() float64         // global tx fee cap for all transaction related APIs
+	UnprotectedAllowed() bool     // allows only for EIP155 transactions.
 
 	// Blockchain API
+	SetHead(number uint64)
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 	HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error)
@@ -63,12 +65,13 @@ type Backend interface {
 	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error)
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
+	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
+	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) (*vm.EVM, func() error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
-	BadBlocks() ([]*types.Block, []*core.BadBlockReason)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -83,7 +86,6 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
-	LastAcceptedBlock() *types.Block
 
 	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by
@@ -103,31 +105,24 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		{
 			Namespace: "eth",
 			Service:   NewEthereumAPI(apiBackend),
-			Name:      "internal-eth",
 		}, {
 			Namespace: "eth",
 			Service:   NewBlockChainAPI(apiBackend),
-			Name:      "internal-blockchain",
 		}, {
 			Namespace: "eth",
 			Service:   NewTransactionAPI(apiBackend, nonceLock),
-			Name:      "internal-transaction",
 		}, {
 			Namespace: "txpool",
 			Service:   NewTxPoolAPI(apiBackend),
-			Name:      "internal-tx-pool",
 		}, {
 			Namespace: "debug",
 			Service:   NewDebugAPI(apiBackend),
-			Name:      "internal-debug",
 		}, {
 			Namespace: "eth",
 			Service:   NewEthereumAccountAPI(apiBackend.AccountManager()),
-			Name:      "internal-account",
 		}, {
 			Namespace: "personal",
 			Service:   NewPersonalAccountAPI(apiBackend, nonceLock),
-			Name:      "internal-personal",
 		},
 	}
 }

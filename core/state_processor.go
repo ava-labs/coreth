@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -55,7 +56,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, parent *types.Header, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -65,10 +66,10 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
-
-	// Configure any stateful precompiles that should go into effect during this block.
-	p.config.CheckConfigurePrecompiles(&parent.Time, block, statedb)
-
+	// Mutate the block and state according to any hard-fork specs
+	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
+		misc.ApplyDAOHardFork(statedb)
+	}
 	var (
 		context = NewEVMBlockContext(header, p.bc, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
@@ -88,10 +89,13 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	if err := p.engine.Finalize(p.bc, block, parent, statedb, receipts); err != nil {
-		return nil, nil, 0, fmt.Errorf("engine finalization check failed: %w", err)
+	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
+	withdrawals := block.Withdrawals()
+	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Number(), block.Time()) {
+		return nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
 	}
+	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), withdrawals)
 
 	return receipts, allLogs, *usedGas, nil
 }

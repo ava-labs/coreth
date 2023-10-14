@@ -21,15 +21,15 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/rpc"
-	"github.com/ava-labs/coreth/signer/core/apitypes"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 type ExternalBackend struct {
@@ -148,7 +148,7 @@ func (api *ExternalSigner) Derive(path accounts.DerivationPath, pin bool) (accou
 	return accounts.Account{}, fmt.Errorf("operation not supported on external signers")
 }
 
-func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain interfaces.ChainStateReader) {
+func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader) {
 	log.Error("operation SelfDerive not supported on external signers")
 }
 

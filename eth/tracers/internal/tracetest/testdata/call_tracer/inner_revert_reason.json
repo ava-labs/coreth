@@ -34,9 +34,10 @@
       "muirGlacierBlock": 0,
       "berlinBlock": 0,
       "londonBlock": 0,
-      "apricotPhase1BlockTimestamp": 0,
-      "apricotPhase2BlockTimestamp": 0,
-      "apricotPhase3BlockTimestamp": 0
+      "clique": {
+        "period": 0,
+        "epoch": 30000
+      }
     }
   },
   "context": {

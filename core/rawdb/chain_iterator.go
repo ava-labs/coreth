@@ -29,6 +29,60 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// InitDatabaseFromFreezer reinitializes an empty database from a previous batch
+// of frozen ancient blocks. The method iterates over all the frozen blocks and
+// injects into the database the block hash->number mappings.
+func InitDatabaseFromFreezer(db ethdb.Database) {
+	// If we can't access the freezer or it's empty, abort
+	frozen, err := db.Ancients()
+	if err != nil || frozen == 0 {
+		return
+	}
+	var (
+		batch  = db.NewBatch()
+		start  = time.Now()
+		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
+		hash   common.Hash
+	)
+	for i := uint64(0); i < frozen; {
+		// We read 100K hashes at a time, for a total of 3.2M
+		count := uint64(100_000)
+		if i+count > frozen {
+			count = frozen - i
+		}
+		data, err := db.AncientRange(ChainFreezerHashTable, i, count, 32*count)
+		if err != nil {
+			log.Crit("Failed to init database from freezer", "err", err)
+		}
+		for j, h := range data {
+			number := i + uint64(j)
+			hash = common.BytesToHash(h)
+			WriteHeaderNumber(batch, hash, number)
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write data to db", "err", err)
+				}
+				batch.Reset()
+			}
+		}
+		i += uint64(len(data))
+		// If we've spent too much time already, notify the user of what we're doing
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Initializing database from freezer", "total", frozen, "number", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write data to db", "err", err)
+	}
+	batch.Reset()
+
+	WriteHeadHeaderHash(db, hash)
+	WriteHeadFastBlockHash(db, hash)
+	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
+}
+
 type blockTxHashes struct {
 	number uint64
 	hashes []common.Hash
@@ -38,7 +92,6 @@ type blockTxHashes struct {
 // number(s) given, and yields the hashes on a channel. If there is a signal
 // received from interrupt channel, the iteration will be aborted and result
 // channel will be closed.
-// Iterates blocks in the range [from, to)
 func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
 	// One thread sequentially reads data from db
 	type numberRlp struct {
@@ -195,18 +248,18 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	}
 }
 
-// // IndexTransactions creates txlookup indices of the specified block range. The from
-// // is included while to is excluded.
-// //
-// // This function iterates canonical chain in reverse order, it has one main advantage:
-// // We can write tx index tail flag periodically even without the whole indexing
-// // procedure is finished. So that we can resume indexing procedure next time quickly.
-// //
-// // There is a passed channel, the whole procedure will be interrupted if any
-// // signal received.
-// func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
-// 	indexTransactions(db, from, to, interrupt, nil)
-// }
+// IndexTransactions creates txlookup indices of the specified block range. The from
+// is included while to is excluded.
+//
+// This function iterates canonical chain in reverse order, it has one main advantage:
+// We can write tx index tail flag periodically even without the whole indexing
+// procedure is finished. So that we can resume indexing procedure next time quickly.
+//
+// There is a passed channel, the whole procedure will be interrupted if any
+// signal received.
+func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+	indexTransactions(db, from, to, interrupt, nil)
+}
 
 // indexTransactionsForTesting is the internal debug version with an additional hook.
 func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {

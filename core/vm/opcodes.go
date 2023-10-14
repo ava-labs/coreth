@@ -94,6 +94,8 @@ const (
 	TIMESTAMP   OpCode = 0x42
 	NUMBER      OpCode = 0x43
 	DIFFICULTY  OpCode = 0x44
+	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
+	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
@@ -208,11 +210,6 @@ const (
 	TSTORE OpCode = 0xb4
 )
 
-const (
-	BALANCEMC = 0xcd
-	CALLEX    = 0xcf
-)
-
 // 0xf0 range - closures.
 const (
 	CREATE       OpCode = 0xf0
@@ -266,7 +263,6 @@ var opCodeToString = map[OpCode]string{
 	// 0x30 range - closure state.
 	ADDRESS:        "ADDRESS",
 	BALANCE:        "BALANCE",
-	BALANCEMC:      "BALANCEMC",
 	ORIGIN:         "ORIGIN",
 	CALLER:         "CALLER",
 	CALLVALUE:      "CALLVALUE",
@@ -287,7 +283,7 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY",
+	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
@@ -392,7 +388,6 @@ var opCodeToString = map[OpCode]string{
 	// 0xf0 range - closures.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
-	CALLEX:       "CALLEX",
 	RETURN:       "RETURN",
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
@@ -442,7 +437,6 @@ var stringToOp = map[string]OpCode{
 	"KECCAK256":      KECCAK256,
 	"ADDRESS":        ADDRESS,
 	"BALANCE":        BALANCE,
-	"BALANCEMC":      BALANCEMC,
 	"ORIGIN":         ORIGIN,
 	"CALLER":         CALLER,
 	"CALLVALUE":      CALLVALUE,
@@ -555,7 +549,6 @@ var stringToOp = map[string]OpCode{
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
-	"CALLEX":         CALLEX,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,

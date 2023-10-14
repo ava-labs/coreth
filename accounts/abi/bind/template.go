@@ -91,11 +91,11 @@ import (
 	"strings"
 	"errors"
 
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/interfaces"
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -104,7 +104,7 @@ var (
 	_ = errors.New
 	_ = big.NewInt
 	_ = strings.NewReader
-	_ = interfaces.NotFound
+	_ = ethereum.NotFound
 	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
@@ -325,7 +325,7 @@ var (
 			if err != nil {
 				return *outstruct, err
 			}
-			{{range $i, $t := .Normalized.Outputs}}
+			{{range $i, $t := .Normalized.Outputs}} 
 			outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 
 			return *outstruct, err
@@ -335,7 +335,7 @@ var (
 			}
 			{{range $i, $t := .Normalized.Outputs}}
 			out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
-
+			
 			return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
 			{{end}}
 		}
@@ -378,7 +378,7 @@ var (
 		}
 	{{end}}
 
-	{{if .Fallback}}
+	{{if .Fallback}} 
 		// Fallback is a paid mutator transaction binding the contract fallback function.
 		//
 		// Solidity: {{.Fallback.Original.String}}
@@ -392,16 +392,16 @@ var (
 		func (_{{$contract.Type}} *{{$contract.Type}}Session) Fallback(calldata []byte) (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.Fallback(&_{{$contract.Type}}.TransactOpts, calldata)
 		}
-
+	
 		// Fallback is a paid mutator transaction binding the contract fallback function.
-		//
+		// 
 		// Solidity: {{.Fallback.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) Fallback(calldata []byte) (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.Fallback(&_{{$contract.Type}}.TransactOpts, calldata)
 		}
 	{{end}}
 
-	{{if .Receive}}
+	{{if .Receive}} 
 		// Receive is a paid mutator transaction binding the contract receive function.
 		//
 		// Solidity: {{.Receive.Original.String}}
@@ -415,9 +415,9 @@ var (
 		func (_{{$contract.Type}} *{{$contract.Type}}Session) Receive() (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.Receive(&_{{$contract.Type}}.TransactOpts)
 		}
-
+	
 		// Receive is a paid mutator transaction binding the contract receive function.
-		//
+		// 
 		// Solidity: {{.Receive.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) Receive() (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.Receive(&_{{$contract.Type}}.TransactOpts)
@@ -433,7 +433,7 @@ var (
 			event    string              // Event name to use for unpacking event data
 
 			logs chan types.Log        // Log channel receiving the found contract events
-			sub  interfaces.Subscription // Subscription for errors, completion and termination
+			sub  ethereum.Subscription // Subscription for errors, completion and termination
 			done bool                  // Whether the subscription completed delivering logs
 			fail error                 // Occurred error to stop iteration
 		}
@@ -566,6 +566,6 @@ var (
 			return event, nil
 		}
 
-	{{end}}
+ 	{{end}}
 {{end}}
 `

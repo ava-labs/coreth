@@ -78,9 +78,9 @@ type fastIterator struct {
 // newFastIterator creates a new hierarchical account or storage iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
-func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash, accountIterator bool, holdsTreeLock bool) (*fastIterator, error) {
-	current := tree.getSnapshot(root, holdsTreeLock)
-	if current == nil {
+func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash, accountIterator bool) (*fastIterator, error) {
+	snap := tree.Snapshot(root)
+	if snap == nil {
 		return nil, fmt.Errorf("unknown snapshot: %x", root)
 	}
 	fi := &fastIterator{
@@ -88,6 +88,7 @@ func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek com
 		root:    root,
 		account: accountIterator,
 	}
+	current := snap.(snapshot)
 	for depth := 0; current != nil; depth++ {
 		if accountIterator {
 			fi.iterators = append(fi.iterators, &weightedIterator{
@@ -337,13 +338,13 @@ func (fi *fastIterator) Debug() {
 // newFastAccountIterator creates a new hierarchical account iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
-func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash, holdsTreeLock bool) (AccountIterator, error) {
-	return newFastIterator(tree, root, common.Hash{}, seek, true, holdsTreeLock)
+func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (AccountIterator, error) {
+	return newFastIterator(tree, root, common.Hash{}, seek, true)
 }
 
 // newFastStorageIterator creates a new hierarchical storage iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
-func newFastStorageIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash, holdsTreeLock bool) (StorageIterator, error) {
-	return newFastIterator(tree, root, account, seek, false, holdsTreeLock)
+func newFastStorageIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	return newFastIterator(tree, root, account, seek, false)
 }

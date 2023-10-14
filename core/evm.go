@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	//"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -41,6 +40,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
+		random      *common.Hash
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -52,18 +52,20 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
+	if header.Difficulty.Cmp(common.Big0) == 0 {
+		random = &header.MixDigest
+	}
 	return vm.BlockContext{
-		CanTransfer:       CanTransfer,
-		CanTransferMC:     CanTransferMC,
-		Transfer:          Transfer,
-		TransferMultiCoin: TransferMultiCoin,
-		GetHash:           GetHashFn(header, chain),
-		Coinbase:          beneficiary,
-		BlockNumber:       new(big.Int).Set(header.Number),
-		Time:              header.Time,
-		Difficulty:        new(big.Int).Set(header.Difficulty),
-		BaseFee:           baseFee,
-		GasLimit:          header.GasLimit,
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     GetHashFn(header, chain),
+		Coinbase:    beneficiary,
+		BlockNumber: new(big.Int).Set(header.Number),
+		Time:        header.Time,
+		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     baseFee,
+		GasLimit:    header.GasLimit,
+		Random:      random,
 	}
 }
 
@@ -120,18 +122,8 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
-func CanTransferMC(db vm.StateDB, addr common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
-	return db.GetBalanceMultiCoin(addr, coinID).Cmp(amount) >= 0
-}
-
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-}
-
-// Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func TransferMultiCoin(db vm.StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
-	db.SubBalanceMultiCoin(sender, coinID, amount)
-	db.AddBalanceMultiCoin(recipient, coinID, amount)
 }

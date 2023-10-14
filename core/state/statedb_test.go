@@ -29,9 +29,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -104,7 +102,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 
 	// Commit and cross check the databases.
-	transRoot, err := transState.Commit(false, false)
+	transRoot, err := transState.Commit(false)
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
@@ -112,7 +110,7 @@ func TestIntermediateLeaks(t *testing.T) {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
 
-	finalRoot, err := finalState.Commit(false, false)
+	finalRoot, err := finalState.Commit(false)
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
@@ -485,8 +483,8 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 func TestTouchDelete(t *testing.T) {
 	s := newStateTest()
 	s.state.GetOrNewStateObject(common.Address{})
-	root, _ := s.state.Commit(false, false)
-	s.state, _ = NewWithSnapshot(root, s.state.db, s.state.snap)
+	root, _ := s.state.Commit(false)
+	s.state, _ = New(root, s.state.db, s.state.snaps)
 
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(big.Int))
@@ -558,7 +556,7 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("first copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 
-	copyOne.Commit(false, false)
+	copyOne.Commit(false)
 	if balance := copyOne.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("first copy post-commit balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -643,7 +641,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if val := copyTwo.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("second copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
-	copyTwo.Commit(false, false)
+	copyTwo.Commit(false)
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("second copy post-commit balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -687,8 +685,8 @@ func TestDeleteCreateRevert(t *testing.T) {
 	addr := common.BytesToAddress([]byte("so"))
 	state.SetBalance(addr, big.NewInt(1))
 
-	root, _ := state.Commit(false, false)
-	state, _ = NewWithSnapshot(root, state.db, state.snap)
+	root, _ := state.Commit(false)
+	state, _ = New(root, state.db, state.snaps)
 
 	// Simulate self-destructing in one transaction, then create-reverting in another
 	state.Suicide(addr)
@@ -699,8 +697,8 @@ func TestDeleteCreateRevert(t *testing.T) {
 	state.RevertToSnapshot(id)
 
 	// Commit the entire state and make sure we don't crash and have the correct state
-	root, _ = state.Commit(true, false)
-	state, _ = NewWithSnapshot(root, state.db, state.snap)
+	root, _ = state.Commit(true)
+	state, _ = New(root, state.db, state.snaps)
 
 	if state.getStateObject(addr) != nil {
 		t.Fatalf("self-destructed contract came alive")
@@ -723,7 +721,7 @@ func TestMissingTrieNodes(t *testing.T) {
 		a2 := common.BytesToAddress([]byte("another"))
 		state.SetBalance(a2, big.NewInt(100))
 		state.SetCode(a2, []byte{1, 2, 4})
-		root, _ = state.Commit(false, false)
+		root, _ = state.Commit(false)
 		t.Logf("root: %x", root)
 		// force-flush
 		state.Database().TrieDB().Cap(0)
@@ -747,7 +745,7 @@ func TestMissingTrieNodes(t *testing.T) {
 	}
 	// Modify the state
 	state.SetBalance(addr, big.NewInt(2))
-	root, err := state.Commit(false, false)
+	root, err := state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
 	}
@@ -927,158 +925,6 @@ func TestStateDBAccessList(t *testing.T) {
 	}
 }
 
-func TestMultiCoinOperations(t *testing.T) {
-	s := newStateTest()
-	addr := common.Address{1}
-	assetID := common.Hash{2}
-
-	s.state.GetOrNewStateObject(addr)
-	root, _ := s.state.Commit(false, false)
-	s.state, _ = NewWithSnapshot(root, s.state.db, s.state.snap)
-
-	s.state.AddBalance(addr, new(big.Int))
-
-	balance := s.state.GetBalanceMultiCoin(addr, assetID)
-	if balance.Cmp(big.NewInt(0)) != 0 {
-		t.Fatal("expected zero multicoin balance")
-	}
-
-	s.state.SetBalanceMultiCoin(addr, assetID, big.NewInt(10))
-	s.state.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
-	s.state.AddBalanceMultiCoin(addr, assetID, big.NewInt(3))
-
-	balance = s.state.GetBalanceMultiCoin(addr, assetID)
-	if balance.Cmp(big.NewInt(8)) != 0 {
-		t.Fatal("expected multicoin balance to be 8")
-	}
-}
-
-func TestMultiCoinSnapshot(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	sdb := NewDatabase(db)
-
-	// Create empty snapshot.Tree and StateDB
-	root := common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	// Use the root as both the stateRoot and blockHash for this test.
-	snapTree := snapshot.NewTestTree(db, root, root)
-
-	addr := common.Address{1}
-	assetID1 := common.Hash{1}
-	assetID2 := common.Hash{2}
-
-	var stateDB *StateDB
-	assertBalances := func(regular, multicoin1, multicoin2 int64) {
-		balance := stateDB.GetBalance(addr)
-		if balance.Cmp(big.NewInt(regular)) != 0 {
-			t.Fatal("incorrect non-multicoin balance")
-		}
-		balance = stateDB.GetBalanceMultiCoin(addr, assetID1)
-		if balance.Cmp(big.NewInt(multicoin1)) != 0 {
-			t.Fatal("incorrect multicoin1 balance")
-		}
-		balance = stateDB.GetBalanceMultiCoin(addr, assetID2)
-		if balance.Cmp(big.NewInt(multicoin2)) != 0 {
-			t.Fatal("incorrect multicoin2 balance")
-		}
-	}
-
-	// Create new state
-	stateDB, _ = New(root, sdb, snapTree)
-	assertBalances(0, 0, 0)
-
-	stateDB.AddBalance(addr, big.NewInt(10))
-	assertBalances(10, 0, 0)
-
-	// Commit and get the new root
-	root, _ = stateDB.Commit(false, false)
-	assertBalances(10, 0, 0)
-
-	// Create a new state from the latest root, add a multicoin balance, and
-	// commit it to the tree.
-	stateDB, _ = New(root, sdb, snapTree)
-	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(10))
-	root, _ = stateDB.Commit(false, false)
-	assertBalances(10, 10, 0)
-
-	// Add more layers than the cap and ensure the balances and layers are correct
-	for i := 0; i < 256; i++ {
-		stateDB, _ = New(root, sdb, snapTree)
-		stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
-		stateDB.AddBalanceMultiCoin(addr, assetID2, big.NewInt(2))
-		root, _ = stateDB.Commit(false, false)
-	}
-	assertBalances(10, 266, 512)
-
-	// Do one more add, including the regular balance which is now in the
-	// collapsed snapshot
-	stateDB, _ = New(root, sdb, snapTree)
-	stateDB.AddBalance(addr, big.NewInt(1))
-	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
-	_, _ = stateDB.Commit(false, false)
-	assertBalances(11, 267, 512)
-}
-
-func TestGenerateMultiCoinAccounts(t *testing.T) {
-	var (
-		diskdb   = rawdb.NewMemoryDatabase()
-		database = NewDatabase(diskdb)
-
-		addr     = common.BytesToAddress([]byte("addr1"))
-		addrHash = crypto.Keccak256Hash(addr[:])
-
-		assetID      = common.BytesToHash([]byte("coin1"))
-		assetBalance = big.NewInt(10)
-	)
-
-	stateDB, err := New(common.Hash{}, database, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stateDB.SetBalanceMultiCoin(addr, assetID, assetBalance)
-	root, err := stateDB.Commit(false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	triedb := database.TrieDB()
-	if err := triedb.Commit(root, true); err != nil {
-		t.Fatal(err)
-	}
-	// Build snapshot from scratch
-	snapConfig := snapshot.Config{
-		CacheSize:  16,
-		AsyncBuild: false,
-		NoBuild:    false,
-		SkipVerify: true,
-	}
-	snaps, err := snapshot.New(snapConfig, diskdb, triedb, common.Hash{}, root)
-	if err != nil {
-		t.Error("Unexpected error while rebuilding snapshot:", err)
-	}
-
-	// Get latest snapshot and make sure it has the correct account and storage
-	snap := snaps.Snapshot(root)
-	snapAccount, err := snap.Account(addrHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !snapAccount.IsMultiCoin {
-		t.Fatalf("Expected SnapAccount to return IsMultiCoin: true, found: %v", snapAccount.IsMultiCoin)
-	}
-
-	NormalizeCoinID(&assetID)
-	assetHash := crypto.Keccak256Hash(assetID.Bytes())
-	storageBytes, err := snap.Storage(addrHash, assetHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	actualAssetBalance := new(big.Int).SetBytes(storageBytes)
-	if actualAssetBalance.Cmp(assetBalance) != 0 {
-		t.Fatalf("Expected asset balance: %v, found %v", assetBalance, actualAssetBalance)
-	}
-}
-
 // Tests that account and storage tries are flushed in the correct order and that
 // no data loss occurs.
 func TestFlushOrderDataLoss(t *testing.T) {
@@ -1094,7 +940,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 			state.SetState(common.Address{a}, common.Hash{a, s}, common.Hash{a, s})
 		}
 	}
-	root, err := state.Commit(false, false)
+	root, err := state.Commit(false)
 	if err != nil {
 		t.Fatalf("failed to commit state trie: %v", err)
 	}

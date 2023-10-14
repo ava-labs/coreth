@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -148,7 +147,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().AvalancheRules(env.Context.BlockNumber, env.Context.Timestamp())
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
@@ -266,7 +265,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 
 	// Revert output contains useful information (revert reason).
 	// Otherwise discard result.
-	if input.Error != "" && input.Error != vmerrs.ErrExecutionReverted.Error() {
+	if input.Error != "" && input.Error != vm.ErrExecutionReverted.Error() {
 		frame.Result = nil
 	}
 

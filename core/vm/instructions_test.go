@@ -714,9 +714,6 @@ func TestCreate2Addreses(t *testing.T) {
 	}
 }
 
-// TestRandom is a test for the RANDOM opcode in geth, which we do not support. Therefore, we use this test to check that DIFFICULTY opcode continues to work
-// the same as the RANDOM opcode except using the Difficulty value in the block context.
-// Note: this should not be used as a source of randomness in coreth since the difficulty is required to be 1.
 func TestRandom(t *testing.T) {
 	type testcase struct {
 		name   string
@@ -730,13 +727,12 @@ func TestRandom(t *testing.T) {
 		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
 	} {
 		var (
-			env            = NewEVM(BlockContext{Difficulty: tt.random.Big()}, TxContext{}, nil, params.TestChainConfig, Config{}) // Note: we convert random hash to *big.Int for backwards compatibility
+			env            = NewEVM(BlockContext{Random: &tt.random}, TxContext{}, nil, params.TestChainConfig, Config{})
 			stack          = newstack()
 			pc             = uint64(0)
 			evmInterpreter = env.interpreter
 		)
-		// Note: we use opDifficulty instead of opRandom since we do not migrate from opDifficulty to opRandom, but expect it to work the same
-		opDifficulty(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}

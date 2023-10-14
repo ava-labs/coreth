@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -30,25 +30,24 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var ErrUnfinalizedData = errors.New("cannot query unfinalized data")
-
 // EthAPIBackend implements ethapi.Backend for full nodes
 type EthAPIBackend struct {
-	extRPCEnabled            bool
-	allowUnprotectedTxs      bool
-	allowUnprotectedTxHashes map[common.Hash]struct{} // Invariant: read-only after creation.
-	eth                      *Ethereum
-	gpo                      *gasprice.Oracle
+	extRPCEnabled       bool
+	allowUnprotectedTxs bool
+	eth                 *Ethereum
+	gpo                 *gasprice.Oracle
 }
 
 // ChainConfig returns the active chain configuration.
@@ -56,59 +55,46 @@ func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
 }
 
-func (b *EthAPIBackend) GetVMConfig() *vm.Config {
-	return b.eth.blockchain.GetVMConfig()
-}
-
 func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }
 
-func (b *EthAPIBackend) LastAcceptedBlock() *types.Block {
-	return b.eth.LastAcceptedBlock()
+func (b *EthAPIBackend) SetHead(number uint64) {
+	b.eth.handler.downloader.Cancel()
+	b.eth.blockchain.SetHead(number)
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	// Pending block is only known by the miner
+	if number == rpc.PendingBlockNumber {
+		block := b.eth.miner.PendingBlock()
+		return block.Header(), nil
 	}
-	// Treat requests for the pending, latest, or accepted block
-	// identically.
-	acceptedBlock := b.eth.LastAcceptedBlock()
-	if number.IsAccepted() {
-		return acceptedBlock.Header(), nil
+	// Otherwise resolve and return the block
+	if number == rpc.LatestBlockNumber {
+		return b.eth.blockchain.CurrentBlock(), nil
 	}
-
-	if !b.GetVMConfig().AllowUnfinalizedQueries && acceptedBlock != nil {
-		if number.Int64() > acceptedBlock.Number().Int64() {
-			return nil, ErrUnfinalizedData
+	if number == rpc.FinalizedBlockNumber {
+		if !b.eth.Merger().TDDReached() {
+			return nil, errors.New("'finalized' tag not supported on pre-merge network")
 		}
+		block := b.eth.blockchain.CurrentFinalBlock()
+		if block != nil {
+			return block, nil
+		}
+		return nil, errors.New("finalized block not found")
 	}
-
+	if number == rpc.SafeBlockNumber {
+		if !b.eth.Merger().TDDReached() {
+			return nil, errors.New("'safe' tag not supported on pre-merge network")
+		}
+		block := b.eth.blockchain.CurrentSafeBlock()
+		if block != nil {
+			return block, nil
+		}
+		return nil, errors.New("safe block not found")
+	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
-}
-
-func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	header := b.eth.blockchain.GetHeaderByHash(hash)
-	if header == nil {
-		return nil, nil
-	}
-
-	if b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
-		return nil, nil
-	}
-
-	acceptedBlock := b.eth.LastAcceptedBlock()
-	if !b.GetVMConfig().AllowUnfinalizedQueries && acceptedBlock != nil {
-		if header.Number.Cmp(acceptedBlock.Number()) > 0 {
-			return nil, ErrUnfinalizedData
-		}
-	}
-	return header, nil
 }
 
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -116,60 +102,58 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 		return b.HeaderByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header, err := b.HeaderByHash(ctx, hash)
-		if err != nil {
-			return nil, err
-		}
+		header := b.eth.blockchain.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
+		}
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+			return nil, errors.New("hash is not currently canonical")
 		}
 		return header, nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+	return b.eth.blockchain.GetHeaderByHash(hash), nil
+}
+
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	// Pending block is only known by the miner
+	if number == rpc.PendingBlockNumber {
+		block := b.eth.miner.PendingBlock()
+		return block, nil
 	}
-	// Treat requests for the pending, latest, or accepted block
-	// identically.
-	acceptedBlock := b.eth.LastAcceptedBlock()
-	if number.IsAccepted() {
-		return acceptedBlock, nil
+	// Otherwise resolve and return the block
+	if number == rpc.LatestBlockNumber {
+		header := b.eth.blockchain.CurrentBlock()
+		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
-
-	if !b.GetVMConfig().AllowUnfinalizedQueries && acceptedBlock != nil {
-		if number.Int64() > acceptedBlock.Number().Int64() {
-			return nil, ErrUnfinalizedData
+	if number == rpc.FinalizedBlockNumber {
+		if !b.eth.Merger().TDDReached() {
+			return nil, errors.New("'finalized' tag not supported on pre-merge network")
 		}
+		header := b.eth.blockchain.CurrentFinalBlock()
+		if header == nil {
+			return nil, errors.New("finalized block not found")
+		}
+		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
-
+	if number == rpc.SafeBlockNumber {
+		if !b.eth.Merger().TDDReached() {
+			return nil, errors.New("'safe' tag not supported on pre-merge network")
+		}
+		header := b.eth.blockchain.CurrentSafeBlock()
+		if header == nil {
+			return nil, errors.New("safe block not found")
+		}
+		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+	}
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	block := b.eth.blockchain.GetBlockByHash(hash)
-	if block == nil {
-		return nil, nil
-	}
-
-	number := block.Number()
-	if b.eth.blockchain.GetCanonicalHash(number.Uint64()) != hash {
-		return nil, nil
-	}
-
-	acceptedBlock := b.eth.LastAcceptedBlock()
-	if !b.GetVMConfig().AllowUnfinalizedQueries && acceptedBlock != nil {
-		if number.Cmp(acceptedBlock.Number()) > 0 {
-			return nil, ErrUnfinalizedData
-		}
-	}
-	return block, nil
+	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
 
 // GetBody returns body of a block. It does not resolve special block numbers.
@@ -187,28 +171,34 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		block, err := b.BlockByHash(ctx, hash)
-		if err != nil {
-			return nil, err
-		}
-		if block == nil {
+		header := b.eth.blockchain.GetHeaderByHash(hash)
+		if header == nil {
 			return nil, errors.New("header for hash not found")
+		}
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+			return nil, errors.New("hash is not currently canonical")
+		}
+		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
+		if block == nil {
+			return nil, errors.New("header found, but block body is missing")
 		}
 		return block, nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (b *EthAPIBackend) BadBlocks() ([]*types.Block, []*core.BadBlockReason) {
-	return b.eth.blockchain.BadBlocks()
+func (b *EthAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return b.eth.miner.PendingBlockAndReceipts()
 }
 
 func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
-	// Request the block by its number and retrieve its state
+	// Pending state is only known by the miner
+	if number == rpc.PendingBlockNumber {
+		block, state := b.eth.miner.Pending()
+		return state, block.Header(), nil
+	}
+	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, number)
 	if err != nil {
 		return nil, nil, err
@@ -224,9 +214,6 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header, err := b.HeaderByHash(ctx, hash)
 		if err != nil {
@@ -235,6 +222,9 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+			return nil, nil, errors.New("hash is not currently canonical")
+		}
 		stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 		return stateDb, header, err
 	}
@@ -242,17 +232,18 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	return rawdb.ReadLogs(b.eth.chainDb, hash, number, b.ChainConfig()), nil
+}
+
+func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
+	if header := b.eth.blockchain.GetHeaderByHash(hash); header != nil {
+		return b.eth.blockchain.GetTd(hash, header.Number.Uint64())
 	}
-	return b.eth.blockchain.GetLogs(hash, number), nil
+	return nil
 }
 
 func (b *EthAPIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) (*vm.EVM, func() error) {
@@ -281,10 +272,6 @@ func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Sub
 	return b.eth.BlockChain().SubscribeChainEvent(ch)
 }
 
-func (b *EthAPIBackend) SubscribeChainAcceptedEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainAcceptedEvent(ch)
-}
-
 func (b *EthAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeChainHeadEvent(ch)
 }
@@ -297,18 +284,7 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 	return b.eth.BlockChain().SubscribeLogsEvent(ch)
 }
 
-func (b *EthAPIBackend) SubscribeAcceptedLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.eth.BlockChain().SubscribeAcceptedLogsEvent(ch)
-}
-
-func (b *EthAPIBackend) SubscribeAcceptedTransactionEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeAcceptedTransactionEvent(ch)
-}
-
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
 	return b.eth.txPool.AddLocal(signedTx)
 }
 
@@ -326,21 +302,7 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 }
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	// Note: we only index transactions during Accept, so the below check against unfinalized queries is technically redundant, but
-	// we keep it for defense in depth.
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
-
-	// Respond as if the transaction does not exist if it is not yet in an
-	// accepted block. We explicitly choose not to error here to avoid breaking
-	// expectations with clients (expect an empty response when a transaction
-	// does not exist).
-	acceptedBlock := b.eth.LastAcceptedBlock()
-	if !b.GetVMConfig().AllowUnfinalizedQueries && acceptedBlock != nil && tx != nil {
-		if blockNumber > acceptedBlock.NumberU64() {
-			return nil, common.Hash{}, 0, 0, nil
-		}
-	}
-
 	return tx, blockHash, blockNumber, index, nil
 }
 
@@ -353,23 +315,23 @@ func (b *EthAPIBackend) Stats() (pending int, queued int) {
 }
 
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	return b.eth.txPool.Content()
+	return b.eth.TxPool().Content()
 }
 
 func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	return b.eth.txPool.ContentFrom(addr)
+	return b.eth.TxPool().ContentFrom(addr)
+}
+
+func (b *EthAPIBackend) TxPool() *txpool.TxPool {
+	return b.eth.TxPool()
 }
 
 func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.txPool.SubscribeNewTxsEvent(ch)
+	return b.eth.TxPool().SubscribeNewTxsEvent(ch)
 }
 
-func (b *EthAPIBackend) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
-	return b.gpo.EstimateBaseFee(ctx)
-}
-
-func (b *EthAPIBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx)
+func (b *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
+	return b.eth.Downloader().Progress()
 }
 
 func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
@@ -396,24 +358,8 @@ func (b *EthAPIBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
 }
 
-func (b *EthAPIBackend) UnprotectedAllowed(tx *types.Transaction) bool {
-	if b.allowUnprotectedTxs {
-		return true
-	}
-
-	// Check for special cased transaction hashes:
-	// Note: this map is read-only after creation, so it is safe to read from it on multiple threads.
-	if _, ok := b.allowUnprotectedTxHashes[tx.Hash()]; ok {
-		return true
-	}
-
-	// Check for "predictable pattern" (Nick's Signature: https://weka.medium.com/how-to-send-ether-to-11-440-people-187e332566b7)
-	v, r, s := tx.RawSignatureValues()
-	if v == nil || r == nil || s == nil {
-		return false
-	}
-
-	return tx.Nonce() == 0 && r.Cmp(s) == 0
+func (b *EthAPIBackend) UnprotectedAllowed() bool {
+	return b.allowUnprotectedTxs
 }
 
 func (b *EthAPIBackend) RPCGasCap() uint64 {
@@ -447,8 +393,12 @@ func (b *EthAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }
 
-func (b *EthAPIBackend) GetMaxBlocksPerRequest() int64 {
-	return b.eth.settings.MaxBlocksPerRequest
+func (b *EthAPIBackend) Miner() *miner.Miner {
+	return b.eth.Miner()
+}
+
+func (b *EthAPIBackend) StartMining() error {
+	return b.eth.StartMining()
 }
 
 func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, tracers.StateReleaseFunc, error) {
@@ -457,8 +407,4 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
-}
-
-func (b *EthAPIBackend) MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return dummy.MinRequiredTip(b.ChainConfig(), header)
 }

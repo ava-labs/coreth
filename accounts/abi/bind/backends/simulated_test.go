@@ -27,14 +27,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestSimulatedBackend(t *testing.T) {
@@ -54,8 +54,8 @@ func TestSimulatedBackend(t *testing.T) {
 	if isPending {
 		t.Fatal("transaction should not be pending")
 	}
-	if err != interfaces.NotFound {
-		t.Fatalf("err should be `interfaces.NotFound` but received %v", err)
+	if err != ethereum.NotFound {
+		t.Fatalf("err should be `ethereum.NotFound` but received %v", err)
 	}
 
 	// generate a transaction and confirm you can retrieve it
@@ -81,7 +81,7 @@ func TestSimulatedBackend(t *testing.T) {
 		t.Fatal("transaction should have pending status")
 	}
 
-	sim.Commit(true)
+	sim.Commit()
 	_, isPending, err = sim.TransactionByHash(context.Background(), txHash)
 	if err != nil {
 		t.Fatalf("error getting transaction with hash: %v", txHash.String())
@@ -115,16 +115,24 @@ var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
-			testAddr: {Balance: new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))},
+			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
 	)
 }
 
 func TestNewSimulatedBackend(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))
+	expectedBal := big.NewInt(10000000000000000)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
+
+	if sim.config != params.AllEthashProtocolChanges {
+		t.Errorf("expected sim config to equal params.AllEthashProtocolChanges, got %v", sim.config)
+	}
+
+	if sim.blockchain.Config() != params.AllEthashProtocolChanges {
+		t.Errorf("expected sim blockchain config to equal params.AllEthashProtocolChanges, got %v", sim.config)
+	}
 
 	stateDB, _ := sim.blockchain.State()
 	bal := stateDB.GetBalance(testAddr)
@@ -139,11 +147,11 @@ func TestAdjustTime(t *testing.T) {
 	)
 	defer sim.Close()
 
-	prevTime := sim.acceptedBlock.Time()
+	prevTime := sim.pendingBlock.Time()
 	if err := sim.AdjustTime(time.Second); err != nil {
 		t.Error(err)
 	}
-	newTime := sim.acceptedBlock.Time()
+	newTime := sim.pendingBlock.Time()
 
 	if newTime-prevTime != uint64(time.Second.Seconds()) {
 		t.Errorf("adjusted time not equal to a second. prev: %v, new: %v", prevTime, newTime)
@@ -159,8 +167,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -169,26 +176,25 @@ func TestNewAdjustTimeFail(t *testing.T) {
 	if err := sim.AdjustTime(time.Second); err == nil {
 		t.Error("Expected adjust time to error on non-empty block")
 	}
-	sim.Commit(false)
+	sim.Commit()
 
-	prevTime := sim.acceptedBlock.Time()
+	prevTime := sim.pendingBlock.Time()
 	if err := sim.AdjustTime(time.Minute); err != nil {
 		t.Error(err)
 	}
-	newTime := sim.acceptedBlock.Time()
+	newTime := sim.pendingBlock.Time()
 	if newTime-prevTime != uint64(time.Minute.Seconds()) {
 		t.Errorf("adjusted time not equal to a minute. prev: %v, new: %v", prevTime, newTime)
 	}
 	// Put a transaction after adjusting time
 	tx2 := types.NewTransaction(1, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer = types.NewLondonSigner(big.NewInt(1337))
-	signedTx2, err := types.SignTx(tx2, signer, testKey)
+	signedTx2, err := types.SignTx(tx2, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
 	sim.SendTransaction(context.Background(), signedTx2)
-	sim.Commit(false)
-	newTime = sim.acceptedBlock.Time()
+	sim.Commit()
+	newTime = sim.pendingBlock.Time()
 	if newTime-prevTime >= uint64(time.Minute.Seconds()) {
 		t.Errorf("time adjusted, but shouldn't be: prev: %v, new: %v", prevTime, newTime)
 	}
@@ -196,7 +202,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 
 func TestBalanceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))
+	expectedBal := big.NewInt(10000000000000000)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -248,7 +254,7 @@ func TestBlockByNumber(t *testing.T) {
 	}
 
 	// create one block
-	sim.Commit(false)
+	sim.Commit()
 
 	block, err = sim.BlockByNumber(bgCtx, nil)
 	if err != nil {
@@ -288,8 +294,7 @@ func TestNonceAt(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(nonce, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -299,7 +304,7 @@ func TestNonceAt(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
-	sim.Commit(false)
+	sim.Commit()
 
 	newNonce, err := sim.NonceAt(bgCtx, testAddr, big.NewInt(1))
 	if err != nil {
@@ -310,7 +315,7 @@ func TestNonceAt(t *testing.T) {
 		t.Errorf("received incorrect nonce. expected 1, got %v", nonce)
 	}
 	// create some more blocks
-	sim.Commit(false)
+	sim.Commit()
 	// Check that we can get data for an older block/state
 	newNonce, err = sim.NonceAt(bgCtx, testAddr, big.NewInt(1))
 	if err != nil {
@@ -333,8 +338,7 @@ func TestSendTransaction(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -344,7 +348,7 @@ func TestSendTransaction(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
-	sim.Commit(false)
+	sim.Commit()
 
 	block, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
 	if err != nil {
@@ -361,7 +365,7 @@ func TestTransactionByHash(t *testing.T) {
 
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{
-			testAddr: {Balance: new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))},
+			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
 	)
 	defer sim.Close()
@@ -372,8 +376,7 @@ func TestTransactionByHash(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -396,7 +399,7 @@ func TestTransactionByHash(t *testing.T) {
 		t.Errorf("did not received committed transaction. expected hash %v got hash %v", signedTx.Hash(), receivedTx.Hash())
 	}
 
-	sim.Commit(true)
+	sim.Commit()
 
 	// ensure tx is not and committed pending
 	receivedTx, pending, err = sim.TransactionByHash(bgCtx, signedTx.Hash())
@@ -434,16 +437,16 @@ func TestEstimateGas(t *testing.T) {
 
 	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
 	contractAddr, _, _, _ := bind.DeployContract(opts, parsed, common.FromHex(contractBin), sim)
-	sim.Commit(false)
+	sim.Commit()
 
 	var cases = []struct {
 		name        string
-		message     interfaces.CallMsg
+		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
 		expectData  interface{}
 	}{
-		{"plain transfer(valid)", interfaces.CallMsg{
+		{"plain transfer(valid)", ethereum.CallMsg{
 			From:     addr,
 			To:       &addr,
 			Gas:      0,
@@ -452,7 +455,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     nil,
 		}, params.TxGas, nil, nil},
 
-		{"plain transfer(invalid)", interfaces.CallMsg{
+		{"plain transfer(invalid)", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -461,7 +464,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     nil,
 		}, 0, errors.New("execution reverted"), nil},
 
-		{"Revert", interfaces.CallMsg{
+		{"Revert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -470,7 +473,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("d8b98391"),
 		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
 
-		{"PureRevert", interfaces.CallMsg{
+		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -479,7 +482,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("aa8b1d30"),
 		}, 0, errors.New("execution reverted"), nil},
 
-		{"OOG", interfaces.CallMsg{
+		{"OOG", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -488,7 +491,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("50f6fe34"),
 		}, 0, errors.New("gas required exceeds allowance (100000)"), nil},
 
-		{"Assert", interfaces.CallMsg{
+		{"Assert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -497,7 +500,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("b9b046f9"),
 		}, 0, errors.New("invalid opcode: INVALID"), nil},
 
-		{"Valid", interfaces.CallMsg{
+		{"Valid", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -540,11 +543,11 @@ func TestEstimateGasWithPrice(t *testing.T) {
 	recipient := common.HexToAddress("deadbeef")
 	var cases = []struct {
 		name        string
-		message     interfaces.CallMsg
+		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
 	}{
-		{"EstimateWithoutPrice", interfaces.CallMsg{
+		{"EstimateWithoutPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
@@ -553,16 +556,16 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:     nil,
 		}, 21000, nil},
 
-		{"EstimateWithPrice", interfaces.CallMsg{
+		{"EstimateWithPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
-			GasPrice: big.NewInt(225000000000),
+			GasPrice: big.NewInt(100000000000),
 			Value:    big.NewInt(100000000000),
 			Data:     nil,
 		}, 21000, nil},
 
-		{"EstimateWithVeryHighPrice", interfaces.CallMsg{
+		{"EstimateWithVeryHighPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
@@ -571,7 +574,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:     nil,
 		}, 21000, nil},
 
-		{"EstimateWithSuperhighPrice", interfaces.CallMsg{
+		{"EstimateWithSuperhighPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
@@ -580,7 +583,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:     nil,
 		}, 21000, errors.New("gas required exceeds allowance (10999)")}, // 10999=(2.2ether-1000wei)/(2e14)
 
-		{"EstimateEIP1559WithHighFees", interfaces.CallMsg{
+		{"EstimateEIP1559WithHighFees", ethereum.CallMsg{
 			From:      addr,
 			To:        &addr,
 			Gas:       0,
@@ -590,7 +593,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:      nil,
 		}, params.TxGas, nil},
 
-		{"EstimateEIP1559WithSuperHighFees", interfaces.CallMsg{
+		{"EstimateEIP1559WithSuperHighFees", ethereum.CallMsg{
 			From:      addr,
 			To:        &addr,
 			Gas:       0,
@@ -658,7 +661,7 @@ func TestHeaderByNumber(t *testing.T) {
 		t.Errorf("expected block header number 0, instead got %v", latestBlockHeader.Number.Uint64())
 	}
 
-	sim.Commit(false)
+	sim.Commit()
 
 	latestBlockHeader, err = sim.HeaderByNumber(bgCtx, nil)
 	if err != nil {
@@ -711,8 +714,7 @@ func TestTransactionCount(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -723,7 +725,7 @@ func TestTransactionCount(t *testing.T) {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
 
-	sim.Commit(false)
+	sim.Commit()
 
 	lastBlock, err := sim.BlockByNumber(bgCtx, nil)
 	if err != nil {
@@ -747,7 +749,7 @@ func TestTransactionInBlock(t *testing.T) {
 	defer sim.Close()
 	bgCtx := context.Background()
 
-	transaction, err := sim.TransactionInBlock(bgCtx, sim.acceptedBlock.Hash(), uint(0))
+	transaction, err := sim.TransactionInBlock(bgCtx, sim.pendingBlock.Hash(), uint(0))
 	if err == nil && err != errTransactionDoesNotExist {
 		t.Errorf("expected a transaction does not exist error to be received but received %v", err)
 	}
@@ -755,22 +757,21 @@ func TestTransactionInBlock(t *testing.T) {
 		t.Errorf("expected transaction to be nil but received %v", transaction)
 	}
 
-	// expect accepted nonce to be 0 since account has not been used
-	acceptedNonce, err := sim.AcceptedNonceAt(bgCtx, testAddr)
+	// expect pending nonce to be 0 since account has not been used
+	pendingNonce, err := sim.PendingNonceAt(bgCtx, testAddr)
 	if err != nil {
 		t.Errorf("did not get the pending nonce: %v", err)
 	}
 
-	if acceptedNonce != uint64(0) {
-		t.Errorf("expected pending nonce of 0 got %v", acceptedNonce)
+	if pendingNonce != uint64(0) {
+		t.Errorf("expected pending nonce of 0 got %v", pendingNonce)
 	}
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -781,7 +782,7 @@ func TestTransactionInBlock(t *testing.T) {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
 
-	sim.Commit(false)
+	sim.Commit()
 
 	lastBlock, err := sim.BlockByNumber(bgCtx, nil)
 	if err != nil {
@@ -806,21 +807,21 @@ func TestTransactionInBlock(t *testing.T) {
 	}
 }
 
-func TestAcceptedNonceAt(t *testing.T) {
+func TestPendingNonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
-	// expect accepted nonce to be 0 since account has not been used
-	acceptedNonce, err := sim.AcceptedNonceAt(bgCtx, testAddr)
+	// expect pending nonce to be 0 since account has not been used
+	pendingNonce, err := sim.PendingNonceAt(bgCtx, testAddr)
 	if err != nil {
-		t.Errorf("did not get the accepted nonce: %v", err)
+		t.Errorf("did not get the pending nonce: %v", err)
 	}
 
-	if acceptedNonce != uint64(0) {
-		t.Errorf("expected accepted nonce of 0 got %v", acceptedNonce)
+	if pendingNonce != uint64(0) {
+		t.Errorf("expected pending nonce of 0 got %v", pendingNonce)
 	}
 
 	// create a signed transaction to send
@@ -828,8 +829,7 @@ func TestAcceptedNonceAt(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -840,20 +840,19 @@ func TestAcceptedNonceAt(t *testing.T) {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
 
-	// expect accepted nonce to be 1 since account has submitted one transaction
-	acceptedNonce, err = sim.AcceptedNonceAt(bgCtx, testAddr)
+	// expect pending nonce to be 1 since account has submitted one transaction
+	pendingNonce, err = sim.PendingNonceAt(bgCtx, testAddr)
 	if err != nil {
-		t.Errorf("did not get the accepted nonce: %v", err)
+		t.Errorf("did not get the pending nonce: %v", err)
 	}
 
-	if acceptedNonce != uint64(1) {
-		t.Errorf("expected accepted nonce of 1 got %v", acceptedNonce)
+	if pendingNonce != uint64(1) {
+		t.Errorf("expected pending nonce of 1 got %v", pendingNonce)
 	}
 
 	// make a new transaction with a nonce of 1
 	tx = types.NewTransaction(uint64(1), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer = types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err = types.SignTx(tx, signer, testKey)
+	signedTx, err = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -862,14 +861,14 @@ func TestAcceptedNonceAt(t *testing.T) {
 		t.Errorf("could not send tx: %v", err)
 	}
 
-	// expect accepted nonce to be 2 since account now has two transactions
-	acceptedNonce, err = sim.AcceptedNonceAt(bgCtx, testAddr)
+	// expect pending nonce to be 2 since account now has two transactions
+	pendingNonce, err = sim.PendingNonceAt(bgCtx, testAddr)
 	if err != nil {
-		t.Errorf("did not get the accepted nonce: %v", err)
+		t.Errorf("did not get the pending nonce: %v", err)
 	}
 
-	if acceptedNonce != uint64(2) {
-		t.Errorf("expected accepted nonce of 2 got %v", acceptedNonce)
+	if pendingNonce != uint64(2) {
+		t.Errorf("expected pending nonce of 2 got %v", pendingNonce)
 	}
 }
 
@@ -885,8 +884,7 @@ func TestTransactionReceipt(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	signer := types.NewLondonSigner(big.NewInt(1337))
-	signedTx, err := types.SignTx(tx, signer, testKey)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
 	}
@@ -896,7 +894,7 @@ func TestTransactionReceipt(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
-	sim.Commit(true)
+	sim.Commit()
 
 	receipt, err := sim.TransactionReceipt(bgCtx, signedTx.Hash())
 	if err != nil {
@@ -919,12 +917,12 @@ func TestSuggestGasPrice(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get gas price: %v", err)
 	}
-	if gasPrice.Uint64() != sim.acceptedBlock.Header().BaseFee.Uint64() {
-		t.Errorf("gas price was not expected value of %v. actual: %v", sim.acceptedBlock.Header().BaseFee.Uint64(), gasPrice.Uint64())
+	if gasPrice.Uint64() != sim.pendingBlock.Header().BaseFee.Uint64() {
+		t.Errorf("gas price was not expected value of %v. actual: %v", sim.pendingBlock.Header().BaseFee.Uint64(), gasPrice.Uint64())
 	}
 }
 
-func TestAcceptedCodeAt(t *testing.T) {
+func TestPendingCodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -947,7 +945,7 @@ func TestAcceptedCodeAt(t *testing.T) {
 		t.Errorf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
 	}
 
-	code, err = sim.AcceptedCodeAt(bgCtx, contractAddr)
+	code, err = sim.PendingCodeAt(bgCtx, contractAddr)
 	if err != nil {
 		t.Errorf("could not get code at test addr: %v", err)
 	}
@@ -983,7 +981,7 @@ func TestCodeAt(t *testing.T) {
 		t.Errorf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
 	}
 
-	sim.Commit(false)
+	sim.Commit()
 	code, err = sim.CodeAt(bgCtx, contractAddr, nil)
 	if err != nil {
 		t.Errorf("could not get code at test addr: %v", err)
@@ -1021,8 +1019,8 @@ func TestPendingAndCallContract(t *testing.T) {
 		t.Errorf("could not pack receive function on contract: %v", err)
 	}
 
-	// make sure you can call the contract in accepted state
-	res, err := sim.AcceptedCallContract(bgCtx, interfaces.CallMsg{
+	// make sure you can call the contract in pending state
+	res, err := sim.PendingCallContract(bgCtx, ethereum.CallMsg{
 		From: testAddr,
 		To:   &addr,
 		Data: input,
@@ -1039,10 +1037,10 @@ func TestPendingAndCallContract(t *testing.T) {
 		t.Errorf("response from calling contract was expected to be 'hello world' instead received %v", string(res))
 	}
 
-	sim.Commit(false)
+	sim.Commit()
 
 	// make sure you can call the contract
-	res, err = sim.CallContract(bgCtx, interfaces.CallMsg{
+	res, err = sim.CallContract(bgCtx, ethereum.CallMsg{
 		From: testAddr,
 		To:   &addr,
 		Data: input,
@@ -1110,14 +1108,14 @@ func TestCallContractRevert(t *testing.T) {
 
 	call := make([]func([]byte) ([]byte, error), 2)
 	call[0] = func(input []byte) ([]byte, error) {
-		return sim.AcceptedCallContract(bgCtx, interfaces.CallMsg{
+		return sim.PendingCallContract(bgCtx, ethereum.CallMsg{
 			From: testAddr,
 			To:   &addr,
 			Data: input,
 		})
 	}
 	call[1] = func(input []byte) ([]byte, error) {
-		return sim.CallContract(bgCtx, interfaces.CallMsg{
+		return sim.CallContract(bgCtx, ethereum.CallMsg{
 			From: testAddr,
 			To:   &addr,
 			Data: input,
@@ -1165,7 +1163,7 @@ func TestCallContractRevert(t *testing.T) {
 		if res == nil {
 			t.Errorf("result from noRevert was nil")
 		}
-		sim.Commit(false)
+		sim.Commit()
 	}
 }
 
@@ -1188,7 +1186,7 @@ func TestFork(t *testing.T) {
 	// 2.
 	n := int(rand.Int31n(21))
 	for i := 0; i < n; i++ {
-		sim.Commit(false)
+		sim.Commit()
 	}
 	// 3.
 	if sim.blockchain.CurrentBlock().Number.Uint64() != uint64(n) {
@@ -1198,7 +1196,7 @@ func TestFork(t *testing.T) {
 	sim.Fork(context.Background(), parent.Hash())
 	// 5.
 	for i := 0; i < n+1; i++ {
-		sim.Commit(false)
+		sim.Commit()
 	}
 	// 6.
 	if sim.blockchain.CurrentBlock().Number.Uint64() != uint64(n+1) {
@@ -1215,134 +1213,131 @@ Example contract to test event emission:
 		function Call() public { emit Called(); }
 	}
 */
-// The fork tests are commented out because transactions are not indexed in coreth until they are marked
-// as accepted, which breaks the logic of these tests.
-// const callableAbi = "[{\"anonymous\":false,\"inputs\":[],\"name\":\"Called\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"Call\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
+const callableAbi = "[{\"anonymous\":false,\"inputs\":[],\"name\":\"Called\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"Call\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
 
-// const callableBin = "6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806334e2292114602d575b600080fd5b60336035565b005b7f81fab7a4a0aa961db47eefc81f143a5220e8c8495260dd65b1356f1d19d3c7b860405160405180910390a156fea2646970667358221220029436d24f3ac598ceca41d4d712e13ced6d70727f4cdc580667de66d2f51d8b64736f6c63430008010033"
+const callableBin = "6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806334e2292114602d575b600080fd5b60336035565b005b7f81fab7a4a0aa961db47eefc81f143a5220e8c8495260dd65b1356f1d19d3c7b860405160405180910390a156fea2646970667358221220029436d24f3ac598ceca41d4d712e13ced6d70727f4cdc580667de66d2f51d8b64736f6c63430008010033"
 
-// // TestForkLogsReborn check that the simulated reorgs
-// // correctly remove and reborn logs.
-// // Steps:
-// //  1. Deploy the Callable contract.
-// //  2. Set up an event subscription.
-// //  3. Save the current block which will serve as parent for the fork.
-// //  4. Send a transaction.
-// //  5. Check that the event was included.
-// //  6. Fork by using the parent block as ancestor.
-// //  7. Mine two blocks to trigger a reorg.
-// //  8. Check that the event was removed.
-// //  9. Re-send the transaction and mine a block.
-// //  10. Check that the event was reborn.
-// func TestForkLogsReborn(t *testing.T) {
-// 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-// 	sim := simTestBackend(testAddr)
-// 	defer sim.Close()
-// 	// 1.
-// 	parsed, _ := abi.JSON(strings.NewReader(callableAbi))
-// 	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
-// 	_, _, contract, err := bind.DeployContract(auth, parsed, common.FromHex(callableBin), sim)
-// 	if err != nil {
-// 		t.Errorf("deploying contract: %v", err)
-// 	}
-// 	sim.Commit(false)
-// 	// 2.
-// 	logs, sub, err := contract.WatchLogs(nil, "Called")
-// 	if err != nil {
-// 		t.Errorf("watching logs: %v", err)
-// 	}
-// 	defer sub.Unsubscribe()
-// 	// 3.
-// 	parent := sim.blockchain.CurrentBlock()
-// 	// 4.
-// 	tx, err := contract.Transact(auth, "Call")
-// 	if err != nil {
-// 		t.Errorf("transacting: %v", err)
-// 	}
-// 	sim.Commit(false)
-// 	// 5.
-// 	log := <-logs
-// 	if log.TxHash != tx.Hash() {
-// 		t.Error("wrong event tx hash")
-// 	}
-// 	if log.Removed {
-// 		t.Error("Event should be included")
-// 	}
-// 	// 6.
-// 	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
-// 		t.Errorf("forking: %v", err)
-// 	}
-// 	// 7.
-// 	sim.Commit(false)
-// 	sim.Commit(false)
-// 	// 8.
-// 	log = <-logs
-// 	if log.TxHash != tx.Hash() {
-// 		t.Error("wrong event tx hash")
-// 	}
-// 	if !log.Removed {
-// 		t.Error("Event should be removed")
-// 	}
-// 	// 9.
-// 	if err := sim.SendTransaction(context.Background(), tx); err != nil {
-// 		t.Errorf("sending transaction: %v", err)
-// 	}
-// 	sim.Commit(false)
-// 	// 10.
-// 	log = <-logs
-// 	if log.TxHash != tx.Hash() {
-// 		t.Error("wrong event tx hash")
-// 	}
-// 	if log.Removed {
-// 		t.Error("Event should be included")
-// 	}
-// }
+// TestForkLogsReborn check that the simulated reorgs
+// correctly remove and reborn logs.
+// Steps:
+//  1. Deploy the Callable contract.
+//  2. Set up an event subscription.
+//  3. Save the current block which will serve as parent for the fork.
+//  4. Send a transaction.
+//  5. Check that the event was included.
+//  6. Fork by using the parent block as ancestor.
+//  7. Mine two blocks to trigger a reorg.
+//  8. Check that the event was removed.
+//  9. Re-send the transaction and mine a block.
+//  10. Check that the event was reborn.
+func TestForkLogsReborn(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	// 1.
+	parsed, _ := abi.JSON(strings.NewReader(callableAbi))
+	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
+	_, _, contract, err := bind.DeployContract(auth, parsed, common.FromHex(callableBin), sim)
+	if err != nil {
+		t.Errorf("deploying contract: %v", err)
+	}
+	sim.Commit()
+	// 2.
+	logs, sub, err := contract.WatchLogs(nil, "Called")
+	if err != nil {
+		t.Errorf("watching logs: %v", err)
+	}
+	defer sub.Unsubscribe()
+	// 3.
+	parent := sim.blockchain.CurrentBlock()
+	// 4.
+	tx, err := contract.Transact(auth, "Call")
+	if err != nil {
+		t.Errorf("transacting: %v", err)
+	}
+	sim.Commit()
+	// 5.
+	log := <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if log.Removed {
+		t.Error("Event should be included")
+	}
+	// 6.
+	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
+		t.Errorf("forking: %v", err)
+	}
+	// 7.
+	sim.Commit()
+	sim.Commit()
+	// 8.
+	log = <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if !log.Removed {
+		t.Error("Event should be removed")
+	}
+	// 9.
+	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
+	sim.Commit()
+	// 10.
+	log = <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if log.Removed {
+		t.Error("Event should be included")
+	}
+}
 
-// // TestForkResendTx checks that re-sending a TX after a fork
-// // is possible and does not cause a "nonce mismatch" panic.
-// // Steps:
-// //  1. Save the current block which will serve as parent for the fork.
-// //  2. Send a transaction.
-// //  3. Check that the TX is included in block 1.
-// //  4. Fork by using the parent block as ancestor.
-// //  5. Mine a block, Re-send the transaction and mine another one.
-// //  6. Check that the TX is now included in block 2.
-// func TestForkResendTx(t *testing.T) {
-// 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-// 	sim := simTestBackend(testAddr)
-// 	defer sim.Close()
-// 	// 1.
-// 	parent := sim.blockchain.CurrentBlock()
-// 	// 2.
-// 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-// 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+// TestForkResendTx checks that re-sending a TX after a fork
+// is possible and does not cause a "nonce mismatch" panic.
+// Steps:
+//  1. Save the current block which will serve as parent for the fork.
+//  2. Send a transaction.
+//  3. Check that the TX is included in block 1.
+//  4. Fork by using the parent block as ancestor.
+//  5. Mine a block, Re-send the transaction and mine another one.
+//  6. Check that the TX is now included in block 2.
+func TestForkResendTx(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	// 1.
+	parent := sim.blockchain.CurrentBlock()
+	// 2.
+	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
-// 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-// 	signer := types.NewLondonSigner(big.NewInt(1337))
-// 	tx, _ := types.SignTx(_tx, signer, testKey)
-// 	sim.SendTransaction(context.Background(), tx)
-// 	sim.Commit(false)
-// 	// 3.
-// 	receipt, _ := sim.TransactionReceipt(context.Background(), tx.Hash())
-// 	if h := receipt.BlockNumber.Uint64(); h != 1 {
-// 		t.Errorf("TX included in wrong block: %d", h)
-// 	}
-// 	// 4.
-// 	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
-// 		t.Errorf("forking: %v", err)
-// 	}
-// 	// 5.
-// 	sim.Commit(false)
-// 	if err := sim.SendTransaction(context.Background(), tx); err != nil {
-// 		t.Errorf("sending transaction: %v", err)
-// 	}
-// 	sim.Commit(false)
-// 	// 6.
-// 	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
-// 	if h := receipt.BlockNumber.Uint64(); h != 2 {
-// 		t.Errorf("TX included in wrong block: %d", h)
-// 	}
-// }
+	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
+	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
+	sim.SendTransaction(context.Background(), tx)
+	sim.Commit()
+	// 3.
+	receipt, _ := sim.TransactionReceipt(context.Background(), tx.Hash())
+	if h := receipt.BlockNumber.Uint64(); h != 1 {
+		t.Errorf("TX included in wrong block: %d", h)
+	}
+	// 4.
+	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
+		t.Errorf("forking: %v", err)
+	}
+	// 5.
+	sim.Commit()
+	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
+	sim.Commit()
+	// 6.
+	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
+	if h := receipt.BlockNumber.Uint64(); h != 2 {
+		t.Errorf("TX included in wrong block: %d", h)
+	}
+}
 
 func TestCommitReturnValue(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
@@ -1352,7 +1347,7 @@ func TestCommitReturnValue(t *testing.T) {
 	startBlockHeight := sim.blockchain.CurrentBlock().Number.Uint64()
 
 	// Test if Commit returns the correct block hash
-	h1 := sim.Commit(true)
+	h1 := sim.Commit()
 	if h1 != sim.blockchain.CurrentBlock().Hash() {
 		t.Error("Commit did not return the hash of the last block.")
 	}
@@ -1363,10 +1358,10 @@ func TestCommitReturnValue(t *testing.T) {
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
 	sim.SendTransaction(context.Background(), tx)
-	h2 := sim.Commit(false)
+	h2 := sim.Commit()
 
 	// Create another block in the original chain
-	sim.Commit(false)
+	sim.Commit()
 
 	// Fork at the first bock
 	if err := sim.Fork(context.Background(), h1); err != nil {
@@ -1374,7 +1369,7 @@ func TestCommitReturnValue(t *testing.T) {
 	}
 
 	// Test if Commit returns the correct block hash after the reorg
-	h2fork := sim.Commit(false)
+	h2fork := sim.Commit()
 	if h2 == h2fork {
 		t.Error("The block in the fork and the original block are the same block!")
 	}
@@ -1390,12 +1385,12 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
-	sim.Commit(false) // h1
+	sim.Commit() // h1
 	h1 := sim.blockchain.CurrentHeader().Hash()
-	sim.Commit(false) // h2
+	sim.Commit() // h2
 	sim.Fork(context.Background(), h1)
 	sim.AdjustTime(1 * time.Second)
-	sim.Commit(false)
+	sim.Commit()
 
 	head := sim.blockchain.CurrentHeader()
 	if head.Number == common.Big2 && head.ParentHash != h1 {

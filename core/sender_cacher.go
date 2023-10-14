@@ -17,10 +17,13 @@
 package core
 
 import (
-	"sync"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )
+
+// SenderCacher is a concurrent transaction sender recoverer and cacher.
+var SenderCacher = newTxSenderCacher(runtime.NumCPU())
 
 // txSenderCacherRequest is a request for recovering transaction senders with a
 // specific signature scheme and caching it into the transactions themselves.
@@ -34,37 +37,29 @@ type txSenderCacherRequest struct {
 	inc    int
 }
 
-// TxSenderCacher is a helper structure to concurrently ecrecover transaction
+// txSenderCacher is a helper structure to concurrently ecrecover transaction
 // senders from digital signatures on background threads.
-type TxSenderCacher struct {
+type txSenderCacher struct {
 	threads int
 	tasks   chan *txSenderCacherRequest
-
-	// synchronization & cleanup
-	wg      sync.WaitGroup
-	tasksMu sync.RWMutex
 }
 
-// NewTxSenderCacher creates a new transaction sender background cacher and starts
+// newTxSenderCacher creates a new transaction sender background cacher and starts
 // as many processing goroutines as allowed by the GOMAXPROCS on construction.
-func NewTxSenderCacher(threads int) *TxSenderCacher {
-	cacher := &TxSenderCacher{
+func newTxSenderCacher(threads int) *txSenderCacher {
+	cacher := &txSenderCacher{
 		tasks:   make(chan *txSenderCacherRequest, threads),
 		threads: threads,
 	}
 	for i := 0; i < threads; i++ {
-		cacher.wg.Add(1)
-		go func() {
-			defer cacher.wg.Done()
-			cacher.cache()
-		}()
+		go cacher.cache()
 	}
 	return cacher
 }
 
 // cache is an infinite loop, caching transaction senders from various forms of
 // data structures.
-func (cacher *TxSenderCacher) cache() {
+func (cacher *txSenderCacher) cache() {
 	for task := range cacher.tasks {
 		for i := 0; i < len(task.txs); i += task.inc {
 			types.Sender(task.signer, task.txs[i])
@@ -75,21 +70,11 @@ func (cacher *TxSenderCacher) cache() {
 // Recover recovers the senders from a batch of transactions and caches them
 // back into the same data structures. There is no validation being done, nor
 // any reaction to invalid signatures. That is up to calling code later.
-func (cacher *TxSenderCacher) Recover(signer types.Signer, txs []*types.Transaction) {
-	// Hold a read lock on tasksMu to make sure we don't close
-	// the channel in the middle of this call during Shutdown
-	cacher.tasksMu.RLock()
-	defer cacher.tasksMu.RUnlock()
-
+func (cacher *txSenderCacher) Recover(signer types.Signer, txs []*types.Transaction) {
 	// If there's nothing to recover, abort
 	if len(txs) == 0 {
 		return
 	}
-	// If we're shutting down, abort
-	if cacher.tasks == nil {
-		return
-	}
-
 	// Ensure we have meaningful task sizes and schedule the recoveries
 	tasks := cacher.threads
 	if len(txs) < tasks*4 {
@@ -104,15 +89,17 @@ func (cacher *TxSenderCacher) Recover(signer types.Signer, txs []*types.Transact
 	}
 }
 
-// Shutdown stops the threads started by newTxSenderCacher
-func (cacher *TxSenderCacher) Shutdown() {
-	// Hold the lock on tasksMu to make sure we don't close
-	// the channel in the middle of Recover, which would
-	// cause it to write to a closed channel.
-	cacher.tasksMu.Lock()
-	defer cacher.tasksMu.Unlock()
-
-	close(cacher.tasks)
-	cacher.wg.Wait()
-	cacher.tasks = nil
+// RecoverFromBlocks recovers the senders from a batch of blocks and caches them
+// back into the same data structures. There is no validation being done, nor
+// any reaction to invalid signatures. That is up to calling code later.
+func (cacher *txSenderCacher) RecoverFromBlocks(signer types.Signer, blocks []*types.Block) {
+	count := 0
+	for _, block := range blocks {
+		count += len(block.Transactions())
+	}
+	txs := make([]*types.Transaction, 0, count)
+	for _, block := range blocks {
+		txs = append(txs, block.Transactions()...)
+	}
+	cacher.Recover(signer, txs)
 }
