@@ -19,7 +19,7 @@ package core
 import (
 	"errors"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var (

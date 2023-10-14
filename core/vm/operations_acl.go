@@ -19,10 +19,10 @@ package vm
 import (
 	"errors"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929

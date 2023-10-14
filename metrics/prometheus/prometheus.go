@@ -21,7 +21,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ava-labs/coreth/metrics"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -32,6 +31,7 @@ var (
 	pv             = []float64{.5, .75, .95, .99, .999, .9999}
 	pvShortPercent = []float64{50, 95, 99}
 	pvShort        = []float64{.50, .95, .99}
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 type gatherer struct {

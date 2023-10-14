@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type (
