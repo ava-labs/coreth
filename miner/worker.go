@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -23,9 +13,6 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-//
-// NOTE: this piece of code is modified by Ted Yin.
-// The modification is also licensed under the same LGPL.
 
 package miner
 
