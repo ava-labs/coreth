@@ -56,6 +56,7 @@ import (
 	// inside of cmd/geth.
 	_ "github.com/ava-labs/coreth/eth/tracers/js"
 	_ "github.com/ava-labs/coreth/eth/tracers/native"
+	_ "github.com/ava-labs/coreth/eth/tracers/sentio"
 
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	// Force-load precompiles to trigger registration
