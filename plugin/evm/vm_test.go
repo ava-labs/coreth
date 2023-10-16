@@ -946,7 +946,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, Processing, status)
 	assert.Equal(t, uint64(4), height, "expected height of export tx to be 4")
 	assert.Equal(t, exportTxFetched.ID(), exportTx3.ID(), "expected ID of fetched export tx to match original txID")
-
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
