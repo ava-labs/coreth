@@ -27,40 +27,40 @@ func NewAdminService(vm *VM, performanceDir string) *Admin {
 
 // StartCPUProfiler starts a cpu profile writing to the specified file
 func (p *Admin) StartCPUProfiler(_ *http.Request, _ *struct{}, _ *api.EmptyReply) error {
+	log.Info("Admin: StartCPUProfiler called")
+
 	p.vm.ctx.Lock.Lock()
 	defer p.vm.ctx.Lock.Unlock()
-
-	log.Info("Admin: StartCPUProfiler called")
 
 	return p.profiler.StartCPUProfiler()
 }
 
 // StopCPUProfiler stops the cpu profile
 func (p *Admin) StopCPUProfiler(r *http.Request, _ *struct{}, _ *api.EmptyReply) error {
+	log.Info("Admin: StopCPUProfiler called")
+
 	p.vm.ctx.Lock.Lock()
 	defer p.vm.ctx.Lock.Unlock()
-
-	log.Info("Admin: StopCPUProfiler called")
 
 	return p.profiler.StopCPUProfiler()
 }
 
 // MemoryProfile runs a memory profile writing to the specified file
 func (p *Admin) MemoryProfile(_ *http.Request, _ *struct{}, _ *api.EmptyReply) error {
+	log.Info("Admin: MemoryProfile called")
+
 	p.vm.ctx.Lock.Lock()
 	defer p.vm.ctx.Lock.Unlock()
-
-	log.Info("Admin: MemoryProfile called")
 
 	return p.profiler.MemoryProfile()
 }
 
 // LockProfile runs a mutex profile writing to the specified file
 func (p *Admin) LockProfile(_ *http.Request, _ *struct{}, _ *api.EmptyReply) error {
+	log.Info("Admin: LockProfile called")
+
 	p.vm.ctx.Lock.Lock()
 	defer p.vm.ctx.Lock.Unlock()
-
-	log.Info("Admin: LockProfile called")
 
 	return p.profiler.LockProfile()
 }
@@ -70,10 +70,11 @@ type SetLogLevelArgs struct {
 }
 
 func (p *Admin) SetLogLevel(_ *http.Request, args *SetLogLevelArgs, reply *api.EmptyReply) error {
+	log.Info("EVM: SetLogLevel called", "logLevel", args.Level)
+
 	p.vm.ctx.Lock.Lock()
 	defer p.vm.ctx.Lock.Unlock()
 
-	log.Info("EVM: SetLogLevel called", "logLevel", args.Level)
 	if err := p.vm.logger.SetLogLevel(args.Level); err != nil {
 		return fmt.Errorf("failed to parse log level: %w ", err)
 	}
