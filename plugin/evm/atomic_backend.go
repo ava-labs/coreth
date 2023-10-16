@@ -451,7 +451,6 @@ func (a *atomicBackend) AtomicTrie() AtomicTrie {
 // already exists then it adds another block to the tx's blockMap.
 func (a *atomicBackend) addToPendingTxs(txs []*Tx, blockHash common.Hash, blockHeight uint64) {
 	for _, tx := range txs {
-		fmt.Println(blockHash)
 		if pTx, ok := a.pendingTxs[tx.ID()]; ok {
 			// pendingTx already exists in another pending block, add another block
 			pTx.blockMap[blockHash] = blockHeight
