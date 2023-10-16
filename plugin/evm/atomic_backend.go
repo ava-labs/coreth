@@ -71,10 +71,11 @@ type AtomicBackend interface {
 	IsBonus(blockHeight uint64, blockHash common.Hash) bool
 }
 
-// pendingTx represents a transaction along with its associated block height within a processing block.
+// pendingTx represents a transaction along with all pending blocks its currently associated with
+// The same atomic transasction can be picked up by multiple processing blocks.
 type pendingTx struct {
-	tx          *Tx
-	blockHeight uint64
+	tx       *Tx
+	blockMap map[common.Hash]uint64
 }
 
 // atomicBackend implements the AtomicBackend interface using
@@ -346,9 +347,14 @@ func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicSta
 	return nil, fmt.Errorf("cannot access atomic state for block %s", blockHash)
 }
 
+// GetPendingTx returns an atomic transaction given a [txID]. If the atomic transaction
+// in multiple processing atomic blocks, it returns an arbitrary blockHeight.
+// If no atomic transactions are pending then it returns the error [errNoAtomicTxsFound]
 func (a *atomicBackend) GetPendingTx(txID ids.ID) (*Tx, uint64, error) {
 	if pendingTx, found := a.pendingTxs[txID]; found {
-		return pendingTx.tx, pendingTx.blockHeight, nil
+		for _, blockHeight := range pendingTx.blockMap {
+			return pendingTx.tx, blockHeight, nil
+		}
 	}
 	return nil, 0, errNoAtomicTxsFound
 }
@@ -413,12 +419,7 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 	}
 
 	// Add txs to pending map as this block is considered processing
-	for _, tx := range txs {
-		a.pendingTxs[tx.ID()] = pendingTx{
-			tx:          tx,
-			blockHeight: blockHeight,
-		}
-	}
+	a.addToPendingTxs(txs, blockHash, blockHeight)
 
 	// track this block so further blocks can be inserted on top
 	// of this block
@@ -443,4 +444,25 @@ func (a *atomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool 
 
 func (a *atomicBackend) AtomicTrie() AtomicTrie {
 	return a.atomicTrie
+}
+
+// addToPendingTxs adds the given [txs] to the pendingTxs map. If this is the first reference to the
+// tx then we add a new entry with one block is added to the pendingTxs map. If the given [txID]
+// already exists then it adds another block to the tx's blockMap.
+func (a *atomicBackend) addToPendingTxs(txs []*Tx, blockHash common.Hash, blockHeight uint64) {
+	for _, tx := range txs {
+		fmt.Println(blockHash)
+		if pTx, ok := a.pendingTxs[tx.ID()]; ok {
+			// pendingTx already exists in another pending block, add another block
+			pTx.blockMap[blockHash] = blockHeight
+		} else {
+			// This is the first reference to the transaction, create a new entry
+			a.pendingTxs[tx.ID()] = pendingTx{
+				tx: tx,
+				blockMap: map[common.Hash]uint64{
+					blockHash: blockHeight,
+				},
+			}
+		}
+	}
 }
