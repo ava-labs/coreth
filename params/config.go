@@ -533,7 +533,7 @@ type ChainConfig struct {
 	CortinaBlockTimestamp *uint64 `json:"cortinaBlockTimestamp,omitempty"`
 	// DUpgrade activates the Shanghai Execution Spec Upgrade from Ethereum (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md#included-eips)
 	// and Avalanche Warp Messaging. (nil = no fork, 0 = already activated)
-	// Note: EIP-4895 is excluded since withdrawal are not relevant to the Avalanche C-Chain or Subnets running the EVM.
+	// Note: EIP-4895 is excluded since withdrawals are not relevant to the Avalanche C-Chain or Subnets running the EVM.
 	DUpgradeBlockTimestamp *uint64 `json:"dUpgradeBlockTimestamp,omitempty"`
 	// Cancun activates the Cancun upgrade from Ethereum. (nil = no fork, 0 = already activated)
 	CancunTime *uint64 `json:"cancunTime,omitempty"`
