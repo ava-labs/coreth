@@ -7,11 +7,12 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/coreth/export/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/internal/ethapi"
-	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var _ CrossChainRequestHandler = &crossChainHandler{}

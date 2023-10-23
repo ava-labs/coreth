@@ -14,8 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 
 	"github.com/ethereum/go-ethereum/log"
-
-	"github.com/ava-labs/coreth/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (

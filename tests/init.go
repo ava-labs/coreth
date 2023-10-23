@@ -31,8 +31,8 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ethereum/go-ethereum/coreth/utils"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Forks table defines supported forks and their chain config.

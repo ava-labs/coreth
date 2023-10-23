@@ -12,10 +12,10 @@ import (
 
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/coreth/constants"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/ava-labs/avalanchego/snow"
 )

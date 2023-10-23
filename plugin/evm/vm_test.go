@@ -18,18 +18,26 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	accountKeystore "github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/coreth/consensus/dummy"
+	"github.com/ethereum/go-ethereum/coreth/export/ethapi"
+	"github.com/ethereum/go-ethereum/coreth/utils"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 
-	"github.com/ava-labs/coreth/eth/filters"
-	"github.com/ava-labs/coreth/internal/ethapi"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,16 +64,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
-
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/rpc"
-
-	"github.com/ava-labs/coreth/accounts/abi"
-	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
 )
 
 var (

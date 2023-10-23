@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ethereum/go-ethereum/coreth/utils"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type mockGasPriceSetter struct {
