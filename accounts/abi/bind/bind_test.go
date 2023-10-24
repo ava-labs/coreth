@@ -2174,6 +2174,11 @@ func golangBindings(t *testing.T, overload bool) {
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
+	replacer = exec.Command(gocmd, "mod", "edit", "-replace", "github.com/ethereum/go-ethereum=github.com/darioush/go-ethereum@coreth-go-ethereum-1.12.0")
+	replacer.Dir = pkg
+	if out, err := replacer.CombinedOutput(); err != nil {
+		t.Fatalf("failed to replace binding test dependency to modified go-ethereum: %v\n%s", err, out)
+	}
 	tidier := exec.Command(gocmd, "mod", "tidy", "-compat=1.19")
 	tidier.Dir = pkg
 	if out, err := tidier.CombinedOutput(); err != nil {

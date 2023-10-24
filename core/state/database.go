@@ -32,11 +32,11 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 const (
@@ -174,7 +174,7 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	tr, err := trie.NewStateTrieGeneric[types.StateAccount](trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
+	tr, err := trie.NewStateTrieGeneric[types.StateAccount](trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root commo
 // CopyTrie returns an independent copy of the given trie.
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
-	case *trie.StateTrie:
+	case *trie.StateTrieGeneric[types.StateAccount]:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))

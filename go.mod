@@ -142,3 +142,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/ethereum/go-ethereum => github.com/darioush/go-ethereum v1.10.16-0.20231024221411-f169500ee34d
+
+// replace github.com/ethereum/go-ethereum => ../go-ethereum
