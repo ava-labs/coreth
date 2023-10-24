@@ -15,11 +15,12 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
-	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/sync/syncutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,13 +30,17 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	memdb := rawdb.NewMemoryDatabase()
 	trieDB := trie.NewDatabase(memdb)
 
-	corruptedTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 100, common.HashLength)
+	corruptedTrieRoot, _, _ := syncutils.GenerateTrie(t, trieDB, 100, common.HashLength)
+	tr, err := trie.New(trie.TrieID(corruptedTrieRoot), trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Corrupt [corruptedTrieRoot]
-	trie.CorruptTrie(t, trieDB, corruptedTrieRoot, 5)
+	syncutils.CorruptTrie(t, memdb, tr, 5)
 
-	largeTrieRoot, largeTrieKeys, _ := trie.GenerateTrie(t, trieDB, 10_000, common.HashLength)
-	smallTrieRoot, _, _ := trie.GenerateTrie(t, trieDB, 500, common.HashLength)
-	accountTrieRoot, accounts := trie.FillAccounts(
+	largeTrieRoot, largeTrieKeys, _ := syncutils.GenerateTrie(t, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := syncutils.GenerateTrie(t, trieDB, 500, common.HashLength)
+	accountTrieRoot, accounts := syncutils.FillAccounts(
 		t,
 		trieDB,
 		common.Hash{},

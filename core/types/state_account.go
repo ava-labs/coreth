@@ -30,6 +30,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 )
 
 //go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -type StateAccount -out gen_account_rlp.go
@@ -42,4 +44,12 @@ type StateAccount struct {
 	Root        common.Hash // merkle root of the storage trie
 	CodeHash    []byte
 	IsMultiCoin bool
+}
+
+func init() {
+	hashdb.GetAccountRoot = func(blob []byte) (common.Hash, error) {
+		var account StateAccount
+		err := rlp.DecodeBytes(blob, &account)
+		return account.Root, err
+	}
 }

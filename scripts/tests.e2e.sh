@@ -43,6 +43,7 @@ fi
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
 go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
+go mod edit -replace github.com/ethereum/go-ethereum=github.com/darioush/go-ethereum@coreth-go-ethereum-1.12.0
 go mod tidy
 
 echo "building avalanchego"
