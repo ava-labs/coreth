@@ -21,24 +21,19 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	cacheStatsUpdateFrequency = 1000 // update trie cache stats once per 1000 ops
-)
-
 // Config defines all necessary options for database.
 type Config struct {
-	Cache       int    // Memory allowance (MB) to use for caching trie nodes in memory
-	Journal     string // Journal of clean cache to survive node restarts
-	Preimages   bool   // Flag whether the preimage of trie key is recorded
-	StatsPrefix string // Prefix for cache stats (disabled if empty)
+	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
+	Journal   string // Journal of clean cache to survive node restarts
+	Preimages bool   // Flag whether the preimage of trie key is recorded
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -92,7 +87,11 @@ type Database struct {
 func prepare(diskdb ethdb.Database, config *Config) *Database {
 	var cleans cache
 	if config != nil && config.Cache > 0 {
-		cleans = utils.NewMeteredCache(config.Cache*1024*1024, config.Journal, config.StatsPrefix, cacheStatsUpdateFrequency)
+		if config.Journal == "" {
+			cleans = fastcache.New(config.Cache * 1024 * 1024)
+		} else {
+			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
+		}
 	}
 	var preimages *preimageStore
 	if config != nil && config.Preimages {
@@ -118,6 +117,14 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 	db := prepare(diskdb, config)
 	db.backend = hashdb.New(diskdb, db.cleans, mptResolver{})
+	return db
+}
+
+func NewDatabaseWithCache(diskdb ethdb.Database, config *Config, cache cache) *Database {
+	cfg := *config // copy config to avoid changing the original one
+	cfg.Cache = 0  // disable cache initialization in prepare
+	db := NewDatabaseWithConfig(diskdb, &cfg)
+	db.cleans = cache
 	return db
 }
 

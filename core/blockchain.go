@@ -49,6 +49,7 @@ import (
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/event"
@@ -138,6 +139,7 @@ const (
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "trie/memcache/clean/fastcache"
+	cacheStatsUpdateFrequency    = 1000 // update trie cache stats once per 1000 ops
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -289,12 +291,21 @@ func NewBlockChain(
 		return nil, errCacheConfigNotSpecified
 	}
 	// Open trie database with provided config
-	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
-		Cache:       cacheConfig.TrieCleanLimit,
-		Journal:     cacheConfig.TrieCleanJournal,
-		Preimages:   cacheConfig.Preimages,
-		StatsPrefix: trieCleanCacheStatsNamespace,
-	})
+	var trieCleans *utils.MeteredCache
+	if cacheConfig.TrieCleanLimit > 0 {
+		trieCleans = utils.NewMeteredCache(
+			cacheConfig.TrieCleanLimit*1024*1024,
+			cacheConfig.TrieCleanJournal,
+			trieCleanCacheStatsNamespace,
+			cacheStatsUpdateFrequency,
+		)
+	}
+	triedb := trie.NewDatabaseWithCache(
+		db,
+		&trie.Config{Preimages: cacheConfig.Preimages},
+		trieCleans,
+	)
+
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
