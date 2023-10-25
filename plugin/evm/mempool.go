@@ -139,8 +139,8 @@ func (m *Mempool) atomicTxGasPrice(tx *Tx) (uint64, error) {
 }
 
 func (m *Mempool) Add(tx *GossipAtomicTx) error {
-	m.ctx.Lock.Lock()
-	defer m.ctx.Lock.Unlock()
+	m.ctx.Lock.RLock()
+	defer m.ctx.Lock.RUnlock()
 
 	return m.AddTx(tx.Tx)
 }
