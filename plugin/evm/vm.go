@@ -1481,6 +1481,8 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 		}
 	}
 
+	// We don’t need to revert the state here in case verifyTx errors, because
+	// [preferredState] is thrown away either way.
 	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
 }
 
