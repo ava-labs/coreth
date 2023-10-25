@@ -542,7 +542,7 @@ func (vm *VM) Initialize(
 	vm.codec = Codec
 
 	// TODO: read size from settings
-	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = NewMempool(chainCtx, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
