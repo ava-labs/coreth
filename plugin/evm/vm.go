@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -541,7 +542,7 @@ func (vm *VM) Initialize(
 	vm.codec = Codec
 
 	// TODO: read size from settings
-	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize)
+	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -1299,26 +1300,15 @@ func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) error {
 //   - The handler's functionality is defined by [service]
 //     [service] should be a gorilla RPC service (see https://www.gorillatoolkit.org/pkg/rpc/v2)
 //   - The name of the service is [name]
-//   - The LockOption is the first element of [lockOption]
-//     By default the LockOption is WriteLock
-//     [lockOption] should have either 0 or 1 elements. Elements beside the first are ignored.
-func newHandler(name string, service interface{}, lockOption ...commonEng.LockOption) (*commonEng.HTTPHandler, error) {
+func newHandler(name string, service interface{}) (http.Handler, error) {
 	server := avalancheRPC.NewServer()
 	server.RegisterCodec(avalancheJSON.NewCodec(), "application/json")
 	server.RegisterCodec(avalancheJSON.NewCodec(), "application/json;charset=UTF-8")
-	if err := server.RegisterService(service, name); err != nil {
-		return nil, err
-	}
-
-	var lock commonEng.LockOption = commonEng.WriteLock
-	if len(lockOption) != 0 {
-		lock = lockOption[0]
-	}
-	return &commonEng.HTTPHandler{LockOptions: lock, Handler: server}, nil
+	return server, server.RegisterService(service, name)
 }
 
 // CreateHandlers makes new http handlers that can handle API calls
-func (vm *VM) CreateHandlers(context.Context) (map[string]*commonEng.HTTPHandler, error) {
+func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
 	enabledAPIs := vm.config.EthAPIs()
 	if err := attachEthService(handler, vm.eth.APIs(), enabledAPIs); err != nil {
@@ -1329,7 +1319,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]*commonEng.HTTPHandler
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary alias for chain due to %w", err)
 	}
-	apis := make(map[string]*commonEng.HTTPHandler)
+	apis := make(map[string]http.Handler)
 	avaxAPI, err := newHandler("avax", &AvaxAPI{vm})
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
@@ -1354,32 +1344,26 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]*commonEng.HTTPHandler
 	}
 
 	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
-	apis[ethRPCEndpoint] = &commonEng.HTTPHandler{
-		LockOptions: commonEng.NoLock,
-		Handler:     handler,
-	}
-	apis[ethWSEndpoint] = &commonEng.HTTPHandler{
-		LockOptions: commonEng.NoLock,
-		Handler: handler.WebsocketHandlerWithDuration(
-			[]string{"*"},
-			vm.config.APIMaxDuration.Duration,
-			vm.config.WSCPURefillRate.Duration,
-			vm.config.WSCPUMaxStored.Duration,
-		),
-	}
+	apis[ethRPCEndpoint] = handler
+	apis[ethWSEndpoint] = handler.WebsocketHandlerWithDuration(
+		[]string{"*"},
+		vm.config.APIMaxDuration.Duration,
+		vm.config.WSCPURefillRate.Duration,
+		vm.config.WSCPUMaxStored.Duration,
+	)
 
 	return apis, nil
 }
 
 // CreateStaticHandlers makes new http handlers that can handle API calls
-func (vm *VM) CreateStaticHandlers(context.Context) (map[string]*commonEng.HTTPHandler, error) {
+func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(0)
 	if err := handler.RegisterName("static", &StaticService{}); err != nil {
 		return nil, err
 	}
 
-	return map[string]*commonEng.HTTPHandler{
-		"/rpc": {LockOptions: commonEng.NoLock, Handler: handler},
+	return map[string]http.Handler{
+		"/rpc": handler,
 	}, nil
 }
 
@@ -1475,44 +1459,19 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	return chainID, addr, nil
 }
 
-// issueTx verifies [tx] as valid to be issued on top of the currently preferred block
-// and then issues [tx] into the mempool if valid.
-func (vm *VM) issueTx(tx *Tx, local bool) error {
-	if err := vm.verifyTxAtTip(tx); err != nil {
-		if !local {
-			// unlike local txs, invalid remote txs are recorded as discarded
-			// so that they won't be requested again
-			txID := tx.ID()
-			vm.mempool.discardedTxs.Put(txID, tx)
-			log.Debug("failed to verify remote tx being issued to the mempool",
-				"txID", txID,
-				"err", err,
-			)
-			return nil
-		}
-		return err
-	}
-	// add to mempool and possibly re-gossip
-	if err := vm.mempool.AddTx(tx); err != nil {
-		if !local {
-			// unlike local txs, invalid remote txs are recorded as discarded
-			// so that they won't be requested again
-			txID := tx.ID()
-			vm.mempool.discardedTxs.Put(tx.ID(), tx)
-			log.Debug("failed to issue remote tx to mempool",
-				"txID", txID,
-				"err", err,
-			)
-			return nil
-		}
-		return err
-	}
-
-	return nil
-}
-
 // verifyTxAtTip verifies that [tx] is valid to be issued on top of the currently preferred block
 func (vm *VM) verifyTxAtTip(tx *Tx) error {
+	if txByteLen := len(tx.SignedBytes()); txByteLen > targetAtomicTxsSize {
+		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", txByteLen, targetAtomicTxsSize)
+	}
+	gasUsed, err := tx.GasUsed(true)
+	if err != nil {
+		return err
+	}
+	if new(big.Int).SetUint64(gasUsed).Cmp(params.AtomicGasLimit) > 0 {
+		return fmt.Errorf("tx gas usage (%d) exceeds atomic gas limit (%d)", gasUsed, params.AtomicGasLimit.Uint64())
+	}
+
 	// Note: we fetch the current block and then the state at that block instead of the current state directly
 	// since we need the header of the current block below.
 	preferredBlock := vm.blockChain.CurrentBlock()
