@@ -118,12 +118,12 @@ var (
 const (
 	// Max time from current time allowed for blocks, before they're considered future blocks
 	// and fail verification
-	maxFutureBlockTime   = 10 * time.Second
-	maxUTXOsToFetch      = 1024
-	defaultMempoolSize   = 4096
-	codecVersion         = uint16(0)
-	secpFactoryCacheSize = 1024
+	maxFutureBlockTime = 10 * time.Second
+	maxUTXOsToFetch    = 1024
+	defaultMempoolSize = 4096
+	codecVersion       = uint16(0)
 
+	secpCacheSize       = 1024
 	decidedCacheSize    = 10 * units.MiB
 	missingCacheSize    = 50
 	unverifiedCacheSize = 5 * units.MiB
@@ -305,8 +305,8 @@ type VM struct {
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
 
-	fx          secp256k1fx.Fx
-	secpFactory secp256k1.Factory
+	fx        secp256k1fx.Fx
+	secpCache secp256k1.RecoverCache
 
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
@@ -533,9 +533,9 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
-	vm.secpFactory = secp256k1.Factory{
-		Cache: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpFactoryCacheSize,
+	vm.secpCache = secp256k1.RecoverCache{
+		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
+			Size: secpCacheSize,
 		},
 	}
 
