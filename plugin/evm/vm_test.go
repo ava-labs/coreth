@@ -816,8 +816,132 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
 	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 
+}
+
+func TestIssueAtomicTxsEdgeCases(t *testing.T) {
+	importAmount := uint64(50000000)
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+
+	defer func() {
+		if err := vm.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+
 	// The same atomic transaction is included in multiple processing blocks.
 	// It gets dropped in one block and is still processing in the other.
+	// getAtomicTx should return status Processing
+	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = vm.issueTx(exportTx, true /*=local*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	blk2, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = blk2.Verify(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.SetPreference(context.Background(), blk2.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = vm.mempool.ForceAddTx(exportTx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// new blk also picks up the same atomic tx, fails block building, and should discard the atomic tx
+	_, err = vm.BuildBlock(context.Background())
+	if err == nil {
+		t.Fatalf("this block should have failed verification since it holds the same tx as the preferred block")
+	}
+
+	if status := blk2.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
+	}
+
+	// the atomic tx should be safe in blk2 for now
+	// and getAtomicTx should report as processing even though it got discarded
+	exportTxFetched, status, height, err := vm.getAtomicTx(exportTx.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Processing, status)
+	assert.Equal(t, uint64(2), height, "expected height of export tx to be 2")
+	assert.Equal(t, exportTxFetched.ID(), exportTx.ID(), "expected ID of fetched export tx to match original txID")
+
+	if err := blk2.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk2.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk2.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+	}
+
+	// The same atomic transaction is included in multiple processing blocks that were built at around the same time.
+	// It gets rejected in one block and is still processing in the other.
 	// getAtomicTx should return status Processing
 	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
@@ -836,14 +960,8 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = blk3.Verify(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk3.ID()); err != nil {
-		t.Fatal(err)
-	}
+	// blk4 should have a slightly different timestamp
+	vm.clock.Set(vm.clock.Time().Add(1 * time.Second))
 
 	err = vm.mempool.ForceAddTx(exportTx2)
 	if err != nil {
@@ -852,100 +970,38 @@ func TestIssueAtomicTxs(t *testing.T) {
 
 	<-issuer
 
-	// blk4 also picks up the same atomic tx, fails block building, and should discard the atomic tx
-	blk4, _ := vm.BuildBlock(context.Background())
-	if blk4 != nil {
-		t.Fatalf("blk4 should have failed verification since it holds the same tx as the preferred block")
+	blk4, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = blk3.Verify(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = blk4.Verify(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	if status := blk3.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
 	}
+	if status := blk4.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
+	}
 
-	// the atomic tx should be safe in blk3 for now
-	// and getAtomicTx should report as processing even though it got discarded in blk4
+	if err := blk3.Reject(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// getAtomicTx should still return status Processing, even though blk3 got rejected with exportTx2, since blk4 is still processing with exportTx2.
 	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
 	assert.NoError(t, err)
 	assert.Equal(t, Processing, status)
 	assert.Equal(t, uint64(3), height, "expected height of export tx to be 3")
 	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
-
-	if err := blk3.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if status := blk3.Status(); status != choices.Accepted {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
-	}
-
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk3.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk3.ID(), lastAcceptedID)
-	}
-
-	// The same atomic transaction is included in multiple processing blocks that were built at around the same time.
-	// It gets rejected in one block and is still processing in the other.
-	// getAtomicTx should return status Processing
-	exportTx3, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = vm.issueTx(exportTx3, true /*=local*/)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	<-issuer
-
-	blk5, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// blk6 should have a slightly different timestamp
-	vm.clock.Set(vm.clock.Time().Add(1 * time.Second))
-
-	err = vm.mempool.ForceAddTx(exportTx3)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	<-issuer
-
-	blk6, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = blk5.Verify(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = blk6.Verify(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if status := blk5.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
-	}
-	if status := blk6.Status(); status != choices.Processing {
-		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
-	}
-
-	if err := blk5.Reject(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	// getAtomicTx should still return status Processing, even though blk5 got rejected with exportTx3, since blk6 is still processing with exportTx3.
-	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx3.ID())
-	assert.NoError(t, err)
-	assert.Equal(t, Processing, status)
-	assert.Equal(t, uint64(4), height, "expected height of export tx to be 4")
-	assert.Equal(t, exportTxFetched.ID(), exportTx3.ID(), "expected ID of fetched export tx to match original txID")
 }
 
 func TestBuildEthTxBlock(t *testing.T) {

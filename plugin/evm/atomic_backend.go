@@ -465,3 +465,21 @@ func (a *atomicBackend) addToPendingTxs(txs []*Tx, blockHash common.Hash, blockH
 		}
 	}
 }
+
+// deletePendingTx deletes the pendingTx given by [txID] from the map if it is associated with one processing block.
+// If there are multiple processing blocks that hold the given pendingTx then it deletes the block given by [blockHash]
+// in the pendingTx's blockMap.
+func (a *atomicState) deletePendingTx(txID ids.ID, blockHash common.Hash) {
+	pendingTx, ok := a.backend.pendingTxs[txID]
+	if !ok {
+		return
+	}
+
+	if len(pendingTx.blockMap) == 1 {
+		// There is only one processing block that holds this atomic tx so we can delete the entry from the map
+		delete(a.backend.pendingTxs, txID)
+		return
+	}
+	// There are multiple processing blocks that hold this atomic tx so we can delete specific block from the blockMap.
+	delete(pendingTx.blockMap, blockHash)
+}
