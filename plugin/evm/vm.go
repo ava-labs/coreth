@@ -1292,8 +1292,8 @@ func (vm *VM) BackfillBlocksEnabled(ctx context.Context) (ids.ID, error) {
 	return ids.Empty, errNotYetImplemented
 }
 
-func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) error {
-	return errNotYetImplemented
+func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, error) {
+	return ids.Empty, errNotYetImplemented
 }
 
 // NewHandler returns a new Handler for a service where:
