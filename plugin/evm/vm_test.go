@@ -815,7 +815,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, Accepted, status)
 	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
 	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
-
 }
 
 func TestIssueAtomicTxsEdgeCases(t *testing.T) {
