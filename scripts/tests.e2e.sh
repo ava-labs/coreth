@@ -32,14 +32,12 @@ if [[ -d "${AVALANCHEGO_CLONE_PATH}" ]]; then
   echo "updating existing clone"
   cd "${AVALANCHEGO_CLONE_PATH}"
   git fetch
-  git checkout -B "${avalanche_version}"
 else
   echo "creating new clone"
-  git clone -b "${avalanche_version}"\
-      --single-branch https://github.com/ava-labs/avalanchego.git\
-      "${AVALANCHEGO_CLONE_PATH}"
+  git clone https://github.com/ava-labs/avalanchego.git "${AVALANCHEGO_CLONE_PATH}"
   cd "${AVALANCHEGO_CLONE_PATH}"
 fi
+git checkout -B "${avalanche_version}"
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
 go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
