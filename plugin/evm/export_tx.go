@@ -230,7 +230,7 @@ func (utx *UnsignedExportTx) SemanticVerify(
 		if len(cred.Sigs) != 1 {
 			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
 		}
-		pubKey, err := vm.secpFactory.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
+		pubKey, err := secp256k1.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
 		if err != nil {
 			return err
 		}
