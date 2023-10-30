@@ -465,7 +465,11 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 	}
 
 	h.stats.IncAtomicGossipReceivedNew()
-	if err := h.vm.issueTx(&tx, false /*=local*/); err != nil {
+
+	h.vm.ctx.Lock.RLock()
+	defer h.vm.ctx.Lock.RUnlock()
+
+	if err := h.vm.mempool.AddTx(&tx); err != nil {
 		log.Trace(
 			"AppGossip provided invalid transaction",
 			"peerID", nodeID,
