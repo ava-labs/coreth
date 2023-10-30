@@ -1285,14 +1285,12 @@ func (vm *VM) Version(context.Context) (string, error) {
 	return Version, nil
 }
 
-var errNotYetImplemented = errors.New("block backfilling not yet implemented")
-
 func (vm *VM) BackfillBlocksEnabled(ctx context.Context) (ids.ID, error) {
-	return ids.Empty, errNotYetImplemented
+	return ids.Empty, block.ErrBlockBackfillingNotEnabled
 }
 
 func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, error) {
-	return ids.Empty, errNotYetImplemented
+	return ids.Empty, block.ErrStopBlockBackfilling
 }
 
 // NewHandler returns a new Handler for a service where:
