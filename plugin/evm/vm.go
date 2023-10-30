@@ -62,7 +62,6 @@ import (
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
-	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
@@ -305,8 +304,8 @@ type VM struct {
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
 
-	fx          secp256k1fx.Fx
-	secpFactory secp256k1.Factory
+	fx secp256k1fx.Fx
+	// secpFactory secp256k1.Factory
 
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
@@ -533,11 +532,11 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
-	vm.secpFactory = secp256k1.Factory{
-		Cache: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpFactoryCacheSize,
-		},
-	}
+	// vm.secpFactory = secp256k1.Factory{
+	// 	Cache: cache.LRU[ids.ID, *secp256k1.PublicKey]{
+	// 		Size: secpFactoryCacheSize,
+	// 	},
+	// }
 
 	vm.codec = Codec
 
