@@ -834,7 +834,7 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := vm.issueTx(importTx, true /*=local*/); err != nil {
+	if err := vm.mempool.AddLocalTx(importTx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -879,7 +879,7 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = vm.issueTx(exportTx, true /*=local*/)
+	err = vm.mempool.AddLocalTx(exportTx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -947,7 +947,7 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = vm.issueTx(exportTx2, true /*=local*/)
+	err = vm.mempool.AddLocalTx(exportTx2)
 	if err != nil {
 		t.Fatal(err)
 	}
