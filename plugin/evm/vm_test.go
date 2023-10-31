@@ -1022,7 +1022,7 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
 		t.Fatal(err)
 	} else if lastAcceptedID != blk4.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk4.ID(), lastAcceptedID)
 	}
 
 	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
