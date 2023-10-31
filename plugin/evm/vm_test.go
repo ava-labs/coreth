@@ -871,9 +871,8 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
 
-	// The same atomic transaction is included in multiple processing blocks.
-	// It gets dropped in one block and is still processing in the other.
-	// getAtomicTx should return status Processing
+	// An atomic transaction already included in a processing block is dropped during
+	// block building. It should still report status processing after BuildBlock fails.
 	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
@@ -939,9 +938,15 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
 	}
 
-	// The same atomic transaction is included in multiple processing blocks that were built at around the same time.
-	// It gets rejected in one block and is still processing in the other.
-	// getAtomicTx should return status Processing
+	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Accepted, status)
+	assert.Equal(t, uint64(2), height, "expected height of export tx to be 2")
+	assert.Equal(t, exportTxFetched.ID(), exportTx.ID(), "expected ID of fetched export tx to match original txID")
+
+	// The same atomic transaction is included in multiple processing blocks. After
+	// rejecting one processing block, the atomic tx should still report status processing
+	// while there is still a processing block containing the atomic transaction.
 	exportTx2, err := vm.newExportTx(vm.ctx.AVAXAssetID, 1, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
@@ -984,6 +989,10 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := vm.SetPreference(context.Background(), blk4.ID()); err != nil {
+		t.Fatal(err)
+	}
+
 	if status := blk3.Status(); status != choices.Processing {
 		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Processing, status)
 	}
@@ -999,6 +1008,26 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
 	assert.NoError(t, err)
 	assert.Equal(t, Processing, status)
+	assert.Equal(t, uint64(3), height, "expected height of export tx to be 3")
+	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
+
+	if err := blk4.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk4.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk4.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
+	}
+
+	exportTxFetched, status, height, err = vm.getAtomicTx(exportTx2.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, Accepted, status)
 	assert.Equal(t, uint64(3), height, "expected height of export tx to be 3")
 	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
 }
