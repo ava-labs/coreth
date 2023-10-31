@@ -68,7 +68,6 @@ func (c *client) SendAppRequestAny(ctx context.Context, minVersion *version.Appl
 	}
 	response, err := waitingHandler.WaitForResult(ctx)
 	return response, nodeID, err
-}
 
 // SendAppRequest synchronously sends request to the specified nodeID
 // Returns response bytes and ErrRequestFailed if the request should be retried.

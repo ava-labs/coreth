@@ -12,12 +12,13 @@ import (
 	"testing"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 
@@ -814,6 +815,10 @@ func TestNetworkCrossChainAppRequestAfterShutdown(t *testing.T) {
 
 func TestSDKRouting(t *testing.T) {
 	require := require.New(t)
+
+	errFoo := &common.AppError{
+		Message: "foo",
+	}
 	sender := &testAppSender{
 		sendAppRequestFn: func(_ context.Context, s set.Set[ids.NodeID], u uint32, bytes []byte) error {
 			return nil
@@ -850,7 +855,7 @@ func TestSDKRouting(t *testing.T) {
 	err = network.AppResponse(context.Background(), ids.GenerateTestNodeID(), 0, foobar)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 
-	err = network.AppRequestFailed(context.Background(), nodeID, 0)
+	err = network.AppRequestFailed(context.Background(), nodeID, 0, errFoo)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 }
 

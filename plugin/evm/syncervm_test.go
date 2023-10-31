@@ -71,6 +71,10 @@ func TestStateSyncFromScratch(t *testing.T) {
 }
 
 func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
+	errFoo := &commonEng.AppError{
+		Message: "foo",
+	}
+
 	rand.Seed(1)
 	// Hack: registering metrics uses global variables, so we need to disable metrics here so that we can initialize the VM twice.
 	metrics.Enabled = false
@@ -91,7 +95,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 			reqCount++
 			// Fail all requests after number 50 to interrupt the sync
 			if reqCount > 50 {
-				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID); err != nil {
+				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID, errFoo); err != nil {
 					panic(err)
 				}
 				cancel := syncerVM.StateSyncClient.(*stateSyncerClient).cancel
