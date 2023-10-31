@@ -127,7 +127,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	copy := &triePrefetcher{
 		db:      p.db,
 		root:    p.root,
-		fetches: make(map[string]Trie), // Active prefetchers use the fetches map
+		fetches: make(map[string]Trie), // Active prefetchers use the fetchers map
 
 		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
 		deliveryRequestMissMeter: p.deliveryRequestMissMeter,
@@ -154,7 +154,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	}
 	// Otherwise we're copying an active fetcher, retrieve the current states
 	for id, fetcher := range p.fetchers {
-		// TODO: need to support handing over prefinished copy?
+		// TODO: need to support handing over WIP copy?
 		copy.fetches[id] = fetcher.peek()
 	}
 	return copy
@@ -197,7 +197,8 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		return nil
 	}
 
-	// TODO: don't bail?
+	// TODO: wait for fetcher to complete concurrent prefetching
+	// TODO: add metric for wait time
 
 	// Interrupt the prefetcher if it's by any chance still running and return
 	// a copy of any pre-loaded trie.
@@ -300,6 +301,7 @@ func (sf *subfetcher) peek() Trie {
 		if sf.trie == nil {
 			return nil
 		}
+		// TODO: find a way to merge all tries we prefetched instead of returning the first one
 		return sf.db.CopyTrie(sf.trie)
 	}
 }
