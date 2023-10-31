@@ -64,7 +64,7 @@ type triePrefetcher struct {
 	storageWasteMeter metrics.Meter
 }
 
-func newTriePrefetcher2(db Database, root common.Hash, namespace string) *triePrefetcher {
+func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,
@@ -154,6 +154,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	}
 	// Otherwise we're copying an active fetcher, retrieve the current states
 	for id, fetcher := range p.fetchers {
+		// TODO: need to support handing over prefinished copy?
 		copy.fetches[id] = fetcher.peek()
 	}
 	return copy
@@ -169,6 +170,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
+		// TODO: limit number of subFetchers
 		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
@@ -360,6 +362,8 @@ func (sf *subfetcher) loop() {
 
 				case ch := <-sf.copy:
 					// Somebody wants a copy of the current trie, grant them
+					//
+					// TODO: this should never happen during trie generation
 					ch <- sf.db.CopyTrie(sf.trie)
 
 				default:
