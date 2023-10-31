@@ -814,6 +814,10 @@ func TestNetworkCrossChainAppRequestAfterShutdown(t *testing.T) {
 
 func TestNetworkRouting(t *testing.T) {
 	require := require.New(t)
+
+	errFoo := &common.AppError{
+		Message: "foo",
+	}
 	sender := &testAppSender{
 		sendAppRequestFn: func(_ context.Context, s set.Set[ids.NodeID], u uint32, bytes []byte) error {
 			return nil
@@ -850,7 +854,7 @@ func TestNetworkRouting(t *testing.T) {
 	err = network.AppResponse(context.Background(), ids.GenerateTestNodeID(), 0, foobar)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 
-	err = network.AppRequestFailed(context.Background(), nodeID, 0)
+	err = network.AppRequestFailed(context.Background(), nodeID, 0, errFoo)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 }
 
