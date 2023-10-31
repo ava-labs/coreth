@@ -245,7 +245,7 @@ func GenesisVM(t *testing.T,
 		assert.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
 	}
 
-	return issuer, vm, dbManager, m, appSender
+	return issuer, vm, db, m, appSender
 }
 
 func addUTXO(sharedMemory *atomic.Memory, ctx *snow.Context, txID ids.ID, index uint32, assetID ids.ID, amount uint64, addr ids.ShortID) (*avax.UTXO, error) {
