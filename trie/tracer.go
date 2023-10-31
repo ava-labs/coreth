@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"sync"
+
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -38,9 +40,10 @@ import (
 // when they are resolved from the disk. The pre-value of the nodes will
 // be used to construct trie history in the future.
 //
-// Note tracer is not thread-safe, callers should be responsible for handling
-// the concurrency issues by themselves.
+// Note, tracer is thread-safe.
 type tracer struct {
+	lock sync.RWMutex
+
 	inserts    map[string]struct{}
 	deletes    map[string]struct{}
 	accessList map[string][]byte
@@ -59,6 +62,9 @@ func newTracer() *tracer {
 // blob internally. Don't change the value outside of function since
 // it's not deep-copied.
 func (t *tracer) onRead(path []byte, val []byte) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	t.accessList[string(path)] = val
 }
 
@@ -66,6 +72,9 @@ func (t *tracer) onRead(path []byte, val []byte) {
 // in the deletion set (resurrected node), then just wipe it from
 // the deletion set as it's "untouched".
 func (t *tracer) onInsert(path []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if _, present := t.deletes[string(path)]; present {
 		delete(t.deletes, string(path))
 		return
@@ -77,6 +86,9 @@ func (t *tracer) onInsert(path []byte) {
 // in the addition set, then just wipe it from the addition set
 // as it's untouched.
 func (t *tracer) onDelete(path []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if _, present := t.inserts[string(path)]; present {
 		delete(t.inserts, string(path))
 		return
@@ -86,6 +98,9 @@ func (t *tracer) onDelete(path []byte) {
 
 // reset clears the content tracked by tracer.
 func (t *tracer) reset() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	t.inserts = make(map[string]struct{})
 	t.deletes = make(map[string]struct{})
 	t.accessList = make(map[string][]byte)
@@ -93,6 +108,9 @@ func (t *tracer) reset() {
 
 // copy returns a deep copied tracer instance.
 func (t *tracer) copy() *tracer {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	var (
 		inserts    = make(map[string]struct{})
 		deletes    = make(map[string]struct{})
@@ -116,6 +134,9 @@ func (t *tracer) copy() *tracer {
 
 // markDeletions puts all tracked deletions into the provided nodeset.
 func (t *tracer) markDeletions(set *trienode.NodeSet) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	for path := range t.deletes {
 		// It's possible a few deleted nodes were embedded
 		// in their parent before, the deletions can be no
