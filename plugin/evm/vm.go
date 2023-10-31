@@ -122,7 +122,7 @@ const (
 	maxUTXOsToFetch      = 1024
 	defaultMempoolSize   = 4096
 	codecVersion         = uint16(0)
-	secpFactoryCacheSize = 1024
+	secpRecoverCacheSize = 1024
 
 	decidedCacheSize    = 10 * units.MiB
 	missingCacheSize    = 50
@@ -305,8 +305,8 @@ type VM struct {
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
 
-	fx          secp256k1fx.Fx
-	secpFactory secp256k1.Factory
+	fx               secp256k1fx.Fx
+	secpRecoverCache secp256k1.RecoverCache
 
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
@@ -533,9 +533,9 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
-	vm.secpFactory = secp256k1.Factory{
-		Cache: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpFactoryCacheSize,
+	vm.secpRecoverCache = secp256k1.RecoverCache{
+		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
+			Size: secpRecoverCacheSize,
 		},
 	}
 
