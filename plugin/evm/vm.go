@@ -352,6 +352,8 @@ func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
+func (vm *VM) SnowContext() *snow.Context { return vm.ctx }
+
 /*
  ******************************************************************************
  ********************************* Snowman API ********************************
@@ -2045,3 +2047,8 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
 }
+
+// To be used for testing fixture
+func (vm *VM) GetTxpool() *txpool.TxPool { return vm.txPool }
+
+func (vm *VM) GetAtomicMempool() *Mempool { return vm.mempool }
