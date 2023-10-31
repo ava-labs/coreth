@@ -37,7 +37,8 @@ else
   git clone https://github.com/ava-labs/avalanchego.git "${AVALANCHEGO_CLONE_PATH}"
   cd "${AVALANCHEGO_CLONE_PATH}"
 fi
-git checkout -B "${avalanche_version}"
+# Branch will be reset to $avalanche_version if it already exists
+git checkout -B "test-${avalanche_version}" "${avalanche_version}"
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
 go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
