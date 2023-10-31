@@ -64,7 +64,7 @@ type triePrefetcher struct {
 	storageWasteMeter metrics.Meter
 }
 
-func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
+func newTriePrefetcher2(db Database, root common.Hash, namespace string) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,
@@ -194,6 +194,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		p.deliveryRequestMissMeter.Mark(1)
 		return nil
 	}
+
+	// TODO: don't bail?
+
 	// Interrupt the prefetcher if it's by any chance still running and return
 	// a copy of any pre-loaded trie.
 	fetcher.abort() // safe to do multiple times
@@ -284,6 +287,10 @@ func (sf *subfetcher) peek() Trie {
 	select {
 	case sf.copy <- ch:
 		// Subfetcher still alive, return copy from it
+		//
+		// TODO: return a copy of one of the tries we are fetching in parallel
+		// assume it is ok if other tries are discarded because in-memory fetches will be
+		// very fast
 		return <-ch
 
 	case <-sf.term:
@@ -343,6 +350,8 @@ func (sf *subfetcher) loop() {
 			for i, task := range tasks {
 				select {
 				case <-sf.stop:
+					// TODO: wait for trie to finish or exit with failure (will undoubtedly be faster than passing over to iterate 1-by-1)?
+
 					// If termination is requested, add any leftover back and return
 					sf.lock.Lock()
 					sf.tasks = append(sf.tasks, tasks[i:]...)
@@ -355,6 +364,9 @@ func (sf *subfetcher) loop() {
 
 				default:
 					// No termination request yet, prefetch the next entry
+					//
+					// TODO: save trie in each goroutine that is run concurrently rather than
+					// creating a new one for each key.
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {

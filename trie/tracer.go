@@ -42,6 +42,7 @@ import (
 //
 // Note, tracer is thread-safe.
 type tracer struct {
+	// TODO: may be possible to remove if we are copying trie for each fetch.
 	lock sync.RWMutex
 
 	inserts    map[string]struct{}

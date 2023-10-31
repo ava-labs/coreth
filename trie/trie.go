@@ -69,6 +69,7 @@ func (t *Trie) newFlag() nodeFlag {
 
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
+	// TODO: don't need a concurrent tracer impl
 	return &Trie{
 		root:     t.root,
 		owner:    t.owner,
