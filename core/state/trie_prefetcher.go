@@ -167,7 +167,6 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	}
 	// Otherwise we're copying an active fetcher, retrieve the current states
 	for id, fetcher := range p.fetchers {
-		// TODO: need to support handing over WIP copy?
 		copy.fetches[id] = fetcher.peek()
 	}
 	return copy
@@ -321,9 +320,6 @@ func (sf *subfetcher) peek() Trie {
 		return <-ch
 
 	case <-sf.term:
-		// TODO: ensure all workers stopped before we trie to get trie (could always
-		// listen for exit and send term from there instead).
-
 		// Subfetcher already terminated, return a copy directly
 		if sf.trie == nil {
 			return nil
@@ -512,7 +508,7 @@ func (mt *multiTrie) PerformTasks(keys [][]byte) {
 }
 
 func (mt *multiTrie) Wait() {
-	// Return if already terminated
+	// Return if already terminated (it is ok if didn't complete)
 	select {
 	case <-mt.sf.term:
 		return
