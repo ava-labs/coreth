@@ -280,10 +280,19 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 // schedule adds a batch of trie keys to the queue to prefetch.
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// TODO: limit total live prefetching across all items in all prefetchers
-	//
+
 	// Append the tasks to the current queue
 	sf.lock.Lock()
-	sf.tasks = append(sf.tasks, keys...)
+	for _, key := range keys {
+		// Check if keys already seen
+		sk := string(key)
+		if _, ok := sf.seen[sk]; ok {
+			sf.dups++
+			continue
+		}
+		sf.seen[sk] = struct{}{}
+		sf.tasks = append(sf.tasks, key)
+	}
 	sf.lock.Unlock()
 
 	// Notify the prefetcher, it's fine if it's already terminated
@@ -299,7 +308,7 @@ func (sf *subfetcher) peek() Trie {
 	ch := make(chan Trie)
 	select {
 	case sf.copy <- ch:
-		// Subfetcher still alive, return copy from it (this is
+		// Subfetcher still alive, return copy from it
 		return <-ch
 
 	case <-sf.term:
@@ -361,7 +370,7 @@ func (sf *subfetcher) loop() {
 				select {
 				case <-sf.stop:
 					// TODO: wait for trie to finish or exit with failure (will undoubtedly be faster than passing over to iterate 1-by-1)?
-
+					//
 					// If termination is requested, add any leftover back and return
 					sf.lock.Lock()
 					sf.tasks = append(sf.tasks, tasks[i:]...)
@@ -379,20 +388,14 @@ func (sf *subfetcher) loop() {
 					//
 					// TODO: save trie in each goroutine that is run concurrently rather than
 					// creating a new one for each key.
-					if _, ok := sf.seen[string(task)]; ok {
-						// TODO: do this check when adding keys, now that we wait
-						sf.dups++
+					var err error
+					if len(task) == common.AddressLength {
+						_, err = sf.trie.GetAccount(common.BytesToAddress(task))
 					} else {
-						var err error
-						if len(task) == common.AddressLength {
-							_, err = sf.trie.GetAccount(common.BytesToAddress(task))
-						} else {
-							_, err = sf.trie.GetStorage(sf.addr, task)
-						}
-						if err != nil {
-							log.Error("Trie prefetcher failed fetching", "root", sf.root, "err", err)
-						}
-						sf.seen[string(task)] = struct{}{}
+						_, err = sf.trie.GetStorage(sf.addr, task)
+					}
+					if err != nil {
+						log.Error("Trie prefetcher failed fetching", "root", sf.root, "err", err)
 					}
 				}
 			}
