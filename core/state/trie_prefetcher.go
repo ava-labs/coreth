@@ -239,15 +239,14 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	requestLimiter *semaphore.Weighted
-
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
 	owner common.Hash    // Owner of the trie, usually account hash
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
 
-	mt *multiTrie
+	mt             *multiTrie
+	requestLimiter *semaphore.Weighted
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
@@ -344,6 +343,7 @@ func (sf *subfetcher) abort() {
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
 // out of tasks or its underlying trie is retrieved for committing.
 func (sf *subfetcher) loop() {
+	// TODO: move into multiTrie
 	for {
 		select {
 		case <-sf.wake:
