@@ -241,6 +241,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// being enqueued)
 	fetcher.wait()
 
+	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
+	fetcher.abort()
+
 	// Return a copy of one of the prefetched tries
 	trie := fetcher.peek()
 	if trie == nil {
@@ -369,6 +372,7 @@ type trieOrchestrator struct {
 
 	outstandingRequests sync.WaitGroup
 
+	tasksAllowed     bool
 	pendingTasks     [][]byte
 	pendingTasksLock sync.Mutex
 	wake             chan struct{}
@@ -407,8 +411,9 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		sf:   sf,
 		base: ct,
 
-		wake:     make(chan struct{}, 1),
-		loopTerm: make(chan struct{}),
+		tasksAllowed: true,
+		wake:         make(chan struct{}, 1),
+		loopTerm:     make(chan struct{}),
 
 		copies:   1,
 		copyChan: make(chan *lockableTrie, subfetcherMaxCopies),
@@ -433,6 +438,10 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 
 	// Add tasks to [pendingTasks]
 	to.pendingTasksLock.Lock()
+	if !to.tasksAllowed {
+		to.pendingTasksLock.Unlock()
+		return
+	}
 	to.pendingTasks = append(to.pendingTasks, tasks...)
 	to.pendingTasksLock.Unlock()
 
@@ -541,16 +550,30 @@ func (to *trieOrchestrator) processTasks() {
 	}
 }
 
-// wait should only be called once no more tasks will be enqueued
 func (to *trieOrchestrator) wait() {
+	// Prevent more tasks from being enqueued
+	to.pendingTasksLock.Lock()
+	to.tasksAllowed = false
+	to.pendingTasksLock.Unlock()
+
+	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
 }
 
 // abort stops any ongoing tasks
 func (to *trieOrchestrator) abort() {
+	// Prevent more tasks from being enqueued
+	to.pendingTasksLock.Lock()
+	to.tasksAllowed = false
+	to.pendingTasksLock.Unlock()
+
+	// Stop all ongoing tasks
 	to.stopOnce.Do(func() {
 		close(to.stop)
 	})
 	<-to.loopTerm
 	to.outstandingRequests.Wait()
+
+	// Clear copies
+	to.copyChan = nil
 }
