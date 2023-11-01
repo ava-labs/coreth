@@ -281,7 +281,7 @@ type subfetcher struct {
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
 
-	mt                  *multiTrie
+	to                  *trieOrchestrator
 	outstandingRequests sync.WaitGroup
 
 	seen map[string]struct{} // Tracks the entries already loaded
@@ -301,7 +301,7 @@ func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr 
 		addr:  addr,
 		seen:  make(map[string]struct{}),
 	}
-	sf.mt = newMultiTrie(sf)
+	sf.to = newTrieOrchestrator(sf)
 	return sf
 }
 
@@ -321,20 +321,20 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 		tasks = append(tasks, key)
 	}
 	sf.outstandingRequests.Add(len(tasks))
-	sf.mt.enqueueTasks(tasks)
+	sf.to.enqueueTasks(tasks)
 }
 
 // peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
 // is currently.
 func (sf *subfetcher) peek() Trie {
-	if sf.mt == nil {
+	if sf.to == nil {
 		return nil
 	}
-	return sf.mt.copyBase()
+	return sf.to.copyBase()
 }
 
 func (sf *subfetcher) wait() {
-	if sf.mt == nil {
+	if sf.to == nil {
 		// Unable to open trie
 		return
 	}
@@ -348,8 +348,8 @@ type copiableTrie struct {
 	l sync.Mutex
 }
 
-// multiTrie is not thread-safe.
-type multiTrie struct {
+// trieOrchestrator is not thread-safe.
+type trieOrchestrator struct {
 	sf *subfetcher
 
 	base *copiableTrie
@@ -358,7 +358,7 @@ type multiTrie struct {
 	copyChan chan *copiableTrie
 }
 
-func newMultiTrie(sf *subfetcher) *multiTrie {
+func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 	// Start by opening the trie and stop processing if it fails
 	var (
 		base Trie
@@ -380,70 +380,73 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 
 	// Create initial trie copy
 	ct := &copiableTrie{t: base}
-	mt := &multiTrie{
+	to := &trieOrchestrator{
 		sf:   sf,
 		base: ct,
 
 		copies:   1,
 		copyChan: make(chan *copiableTrie, subfetcherMaxConcurrency),
 	}
-	mt.copyChan <- ct
-	return mt
+	to.copyChan <- ct
+	return to
 }
 
-func (mt *multiTrie) copyBase() Trie {
-	mt.base.l.Lock()
-	defer mt.base.l.Unlock()
+func (to *trieOrchestrator) copyBase() Trie {
+	to.base.l.Lock()
+	defer to.base.l.Unlock()
 
-	return mt.sf.db.CopyTrie(mt.base.t)
+	return to.sf.db.CopyTrie(to.base.t)
 }
 
-func (mt *multiTrie) enqueueTasks(tasks [][]byte) {
+func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 	lt := len(tasks)
 	if lt == 0 {
 		return
 	}
 
 	// Create more copies if we have a lot of work
-	tasksPerWorker := lt / mt.copies
-	if tasksPerWorker > targetTasksPerWorker && mt.copies < subfetcherMaxConcurrency {
-		extraWork := (tasksPerWorker - targetTasksPerWorker) * mt.copies
-		newWorkers := extraWork / targetTasksPerWorker
-		for i := 0; i < newWorkers && mt.copies+1 <= subfetcherMaxConcurrency; i++ {
-			mt.copies++
-			mt.copyChan <- &copiableTrie{t: mt.copyBase()}
+	tasksPerWorker := lt / to.copies
+	if tasksPerWorker > targetTasksPerWorker && to.copies < subfetcherMaxConcurrency {
+		extraPerWorker := (tasksPerWorker - targetTasksPerWorker) * to.copies
+		newWorkers := extraPerWorker / targetTasksPerWorker
+		for i := 0; i < newWorkers && to.copies+1 <= subfetcherMaxConcurrency; i++ {
+			to.copies++
+			to.copyChan <- &copiableTrie{t: to.copyBase()}
 		}
 	}
-	workSize := lt / mt.copies
+	workSize := lt / to.copies
 
 	// Enqueue more work as soon as trie copies are available
-	current := 0
-	for current < lt {
-		var theseTasks [][]byte
-		if len(tasks[current:]) < workSize {
-			theseTasks = tasks[current:]
-		} else {
-
+	for i := 0; i < lt; i += workSize {
+		end := i + workSize
+		if end > lt {
+			end = lt
 		}
+		thisTask := tasks[i:end]
+
+		// Wait for an available copy
 		// TODO: add option to abort here (if exit early, won't return copy)
-		t := <-mt.copyChan
-		mt.sf.p.taskQueue <- func() {
+		t := <-to.copyChan
+
+		to.sf.p.taskQueue <- func() {
 			// TODO: add option to abort here
 
-			for _, task := range theseTasks {
+			for _, task := range thisTask {
 				t.l.Lock()
 				var err error
 				if len(task) == common.AddressLength {
 					_, err = t.t.GetAccount(common.BytesToAddress(task))
 				} else {
-					_, err = t.t.GetStorage(mt.sf.addr, task)
+					_, err = t.t.GetStorage(to.sf.addr, task)
 				}
 				t.l.Unlock()
 				if err != nil {
-					log.Error("Trie prefetcher failed fetching", "root", mt.sf.root, "err", err)
+					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
 				}
 			}
-			mt.copyChan <- t
+
+			// Return copy when we are done with it, so someone else can use it
+			to.copyChan <- t
 		}
 	}
 }
