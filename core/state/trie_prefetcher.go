@@ -31,16 +31,16 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/semaphore"
 )
 
 const (
-	minTasksPerWorker        = 8
+	targetTasksPerWorker     = 8
 	maxConcurrentReads       = 32
 	subfetcherMaxConcurrency = 16
+	defaultTaskLength        = 32
 )
 
 var (
@@ -183,8 +183,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		// TODO: limit number of subFetchers
-		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
+		fetcher = newSubfetcher(p.db, p.sm, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
@@ -255,17 +254,17 @@ type subfetcher struct {
 	owner common.Hash    // Owner of the trie, usually account hash
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
-	trie  Trie           // Trie being populated with nodes
+
+	trie Trie // Trie being populated with nodes
+	mt   *multiTrie
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake         chan struct{} // Wake channel if a new task is scheduled
-	stop         chan struct{} // Channel to interrupt processing
-	term         chan struct{} // Channel to signal interruption
-	finished     chan struct{} // Channel to signal prefetching is done
-	finishedOnce sync.Once
-	copy         chan chan Trie // Channel to request a copy of the current trie
+	wake chan struct{}  // Wake channel if a new task is scheduled
+	stop chan struct{}  // Channel to interrupt processing
+	term chan struct{}  // Channel to signal interruption
+	copy chan chan Trie // Channel to request a copy of the current trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -276,19 +275,18 @@ type subfetcher struct {
 // particular root hash.
 func newSubfetcher(db Database, sm *semaphore.Weighted, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
-		sm:       sm,
-		db:       db,
-		state:    state,
-		owner:    owner,
-		root:     root,
-		addr:     addr,
-		wake:     make(chan struct{}, 1),
-		stop:     make(chan struct{}),
-		term:     make(chan struct{}),
-		finished: make(chan struct{}),
-		copy:     make(chan chan Trie),
-		seen:     make(map[string]struct{}),
-		tasks:    make([][]byte, 0, 32),
+		sm:    sm,
+		db:    db,
+		state: state,
+		owner: owner,
+		root:  root,
+		addr:  addr,
+		wake:  make(chan struct{}, 1),
+		stop:  make(chan struct{}),
+		term:  make(chan struct{}),
+		copy:  make(chan chan Trie),
+		seen:  make(map[string]struct{}),
+		tasks: make([][]byte, 0, defaultTaskLength),
 	}
 	go sf.loop()
 	return sf
@@ -327,11 +325,13 @@ func (sf *subfetcher) peek() Trie {
 		return <-ch
 
 	case <-sf.term:
+		// TODO: ensure all workers stopped before we trie to get trie (could always
+		// listen for exit and send term from there instead).
+
 		// Subfetcher already terminated, return a copy directly
 		if sf.trie == nil {
 			return nil
 		}
-		// TODO: find a way to merge all tries we prefetched instead of returning the first one
 		return sf.db.CopyTrie(sf.trie)
 	}
 }
@@ -350,33 +350,14 @@ func (sf *subfetcher) abort() {
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
 // out of tasks or its underlying trie is retrieved for committing.
 func (sf *subfetcher) loop() {
-	// No matter how the loop stops, signal anyone waiting that it's terminated
-	defer close(sf.term)
-
 	// Open multiTrie or exit
+	//
+	// multiTrie will send the term signal for the subfetcher.
 	mt := newMultiTrie(sf)
 	if mt == nil {
 		return
 	}
-
-	// Start by opening the trie and stop processing if it fails
-	if sf.owner == (common.Hash{}) {
-		trie, err := sf.db.OpenTrie(sf.root)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			return
-		}
-		sf.trie = trie
-	} else {
-		trie, err := sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			return
-		}
-		sf.trie = trie
-	}
-
-	// TODO: Create sub-tries for processing tasks concurrently
+	sf.mt = mt
 
 	// Trie opened successfully, keep prefetching items
 	for {
@@ -385,43 +366,19 @@ func (sf *subfetcher) loop() {
 			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
 			sf.lock.Lock()
 			tasks := sf.tasks
-			sf.tasks = make([][]byte, 32)
+			sf.tasks = make([][]byte, defaultTaskLength)
 			sf.lock.Unlock()
 
-			// Prefetch any tasks until the loop is interrupted
-			for i, task := range tasks {
-				select {
-				case <-sf.stop:
-					// TODO: wait for trie to finish or exit with failure (will undoubtedly be faster than passing over to iterate 1-by-1)?
-					//
-					// If termination is requested, add any leftover back and return
-					sf.lock.Lock()
-					sf.tasks = append(sf.tasks, tasks[i:]...)
-					sf.lock.Unlock()
-					return
-
-				case ch := <-sf.copy:
-					// Somebody wants a copy of the current trie, grant them
-					ch <- sf.db.CopyTrie(sf.trie)
-
-				default:
-					mt.PerformTask(task)
-				}
+			// Attempt to process tasks, if there are any
+			if len(tasks) > 0 {
+				sf.mt.PerformTasks(tasks)
 			}
-
-			// TODO: wait for all processing tries to return
-
-			// Fetch finished
-			sf.finishedOnce.Do(func() {
-				close(sf.finished)
-			})
-		case ch := <-sf.copy:
-			// Somebody wants a copy of the current trie, grant them
-			ch <- sf.db.CopyTrie(sf.trie)
 
 		case <-sf.stop:
 			// Termination is requested, abort and leave remaining tasks
 			return
+
+			// TODO: stop when no more tasks
 		}
 	}
 }
@@ -467,7 +424,7 @@ func (mt *multiTrie) processTasks(t Trie, base bool) {
 				return
 			case ch := <-mt.sf.copy:
 				// Only handle copies if this trie is [base]
-				ch <- t.(*trie.StateTrie).Copy()
+				ch <- mt.sf.db.CopyTrie(t)
 			case task, ok := <-mt.tasks:
 				// Exit because there are no more tasks to do.
 				if !ok {
@@ -503,12 +460,14 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 		base, err = sf.db.OpenTrie(sf.root)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
+			close(sf.term)
 			return nil
 		}
 	} else {
 		base, err = sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
+			close(sf.term)
 			return nil
 		}
 	}
@@ -520,17 +479,51 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 	}
 	mt.wg.Add(1)
 	mt.workers++
+	go func() {
+		mt.wg.Wait()
+		close(mt.sf.term)
+	}()
 	go mt.processTasks(base, true)
 	return mt
 }
 
 func (mt *multiTrie) PerformTasks(keys [][]byte) {
-	if len(keys)/mt.workers > 4 {
+	// Determine if we need to spawn more workers
+	tasksPerWorker := len(keys) / mt.workers
+	if tasksPerWorker > targetTasksPerWorker {
+		extraWork := (tasksPerWorker - targetTasksPerWorker) * mt.workers
+		newWorkers := extraWork / targetTasksPerWorker
+		for i := 0; i < newWorkers && mt.workers+1 <= subfetcherMaxConcurrency; i++ {
+			ch := make(chan Trie)
+			mt.sf.copy <- ch
+			t := <-ch
+			mt.wg.Add(1)
+			mt.workers++
+			go mt.processTasks(t, false)
+		}
 	}
-	mt.tasks <- key
+
+	// Enqueue work
+	for i, key := range keys {
+		select {
+		case mt.tasks <- key:
+		case <-mt.sf.stop:
+			// Attempt to return any tasks we don't get to.
+			mt.sf.lock.Lock()
+			mt.sf.tasks = append(mt.sf.tasks, keys[i:]...)
+			mt.sf.lock.Unlock()
+			return
+		}
+	}
 }
 
 func (mt *multiTrie) Wait() {
+	select {
+	case <-mt.sf.term:
+		return
+	default:
+	}
+
 	mt.closeTasks.Do(func() {
 		close(mt.tasks)
 	})
