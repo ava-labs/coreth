@@ -425,6 +425,7 @@ func (mt *multiTrie) enqueueTasks(tasks [][]byte) {
 		} else {
 
 		}
+		// TODO: add option to abort here (if exit early, won't return copy)
 		t := <-mt.copyChan
 		mt.sf.p.taskQueue <- func() {
 			// TODO: add option to abort here
@@ -442,6 +443,7 @@ func (mt *multiTrie) enqueueTasks(tasks [][]byte) {
 					log.Error("Trie prefetcher failed fetching", "root", mt.sf.root, "err", err)
 				}
 			}
+			mt.copyChan <- t
 		}
 	}
 }
