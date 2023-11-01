@@ -60,8 +60,13 @@ type triePrefetcher struct {
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
 	requestLimiter *semaphore.Weighted
-	// TODO: use bg counter and a single worker group?
-	// -> copy tries to increse concurrency of each trie
+	// TODO: use bg counter (to "wait" on a trie completion still) and a single worker group?
+	// -> copy tries to increse concurrency of each trie (if a single subfetcher has a lot of work)
+
+	workersWg   sync.WaitGroup
+	taskQueue   chan func()
+	stopWorkers chan struct{} // Interrupts workers
+	workersTerm chan struct{} // Closed when all workers terminate
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -84,6 +89,10 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 
 		requestLimiter: semaphore.NewWeighted(maxConcurrentReads),
 
+		taskQueue:   make(chan func()),
+		stopWorkers: make(chan struct{}),
+		workersTerm: make(chan struct{}),
+
 		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
 		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
 		deliveryWaitMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/wait", nil),
@@ -95,12 +104,35 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
+
+	// Use workers to limit max concurrent readers
+	for i := 0; i < maxConcurrentReads; i++ {
+		p.workersWg.Add(1)
+		go func() {
+			defer p.workersWg.Done()
+
+			for {
+				select {
+				case task := <-p.taskQueue:
+					task()
+				case <-p.stopWorkers:
+					return
+				}
+			}
+		}()
+	}
+	go func() {
+		p.workersWg.Wait()
+		close(p.workersTerm)
+	}()
 	return p
 }
 
 // close iterates over all the subfetchers, aborts any that were left spinning
 // and reports the stats to the metrics subsystem.
 func (p *triePrefetcher) close() {
+	// TODO: stop workers, if they were spawned
+
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to do multiple times
 
@@ -176,7 +208,8 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.requestLimiter, p.root, owner, root, addr)
+		// TODO: use single [p] instead of each
+		fetcher = newSubfetcher(p, p.db, p.requestLimiter, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
@@ -233,6 +266,8 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
+	p *triePrefetcher
+
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
 	owner common.Hash    // Owner of the trie, usually account hash
@@ -252,8 +287,9 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(p *triePrefetcher, db Database, requestLimiter *semaphore.Weighted, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
+		p:              p,
 		requestLimiter: requestLimiter,
 		db:             db,
 		state:          state,
