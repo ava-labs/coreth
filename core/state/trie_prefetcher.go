@@ -67,11 +67,9 @@ type triePrefetcher struct {
 
 	accountLoadMeter  metrics.Meter
 	accountDupMeter   metrics.Meter
-	accountSkipMeter  metrics.Meter
 	accountWasteMeter metrics.Meter
 	storageLoadMeter  metrics.Meter
 	storageDupMeter   metrics.Meter
-	storageSkipMeter  metrics.Meter
 	storageWasteMeter metrics.Meter
 }
 
@@ -90,11 +88,9 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 
 		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
 		accountDupMeter:   metrics.GetOrRegisterMeter(prefix+"/account/dup", nil),
-		accountSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/account/skip", nil),
 		accountWasteMeter: metrics.GetOrRegisterMeter(prefix+"/account/waste", nil),
 		storageLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
 		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
-		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
 	return p
@@ -110,7 +106,6 @@ func (p *triePrefetcher) close() {
 			if fetcher.root == p.root {
 				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
 				p.accountDupMeter.Mark(int64(fetcher.dups))
-				p.accountSkipMeter.Mark(int64(len(fetcher.tasks)))
 
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
@@ -119,7 +114,6 @@ func (p *triePrefetcher) close() {
 			} else {
 				p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
 				p.storageDupMeter.Mark(int64(fetcher.dups))
-				p.storageSkipMeter.Mark(int64(len(fetcher.tasks)))
 
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
@@ -148,11 +142,9 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 
 		accountLoadMeter:  p.accountLoadMeter,
 		accountDupMeter:   p.accountDupMeter,
-		accountSkipMeter:  p.accountSkipMeter,
 		accountWasteMeter: p.accountWasteMeter,
 		storageLoadMeter:  p.storageLoadMeter,
 		storageDupMeter:   p.storageDupMeter,
-		storageSkipMeter:  p.storageSkipMeter,
 		storageWasteMeter: p.storageWasteMeter,
 	}
 	// If the prefetcher is already a copy, duplicate the data
@@ -248,10 +240,6 @@ type subfetcher struct {
 	mt             *multiTrie
 	requestLimiter *semaphore.Weighted
 
-	tasks [][]byte   // Items queued up for retrieval
-	lock  sync.Mutex // Lock protecting the task queue
-
-	wake     chan struct{} // Wake channel if a new task is scheduled
 	stop     chan struct{} // Channel to interrupt processing
 	stopOnce sync.Once
 
@@ -270,10 +258,8 @@ func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common
 		owner:          owner,
 		root:           root,
 		addr:           addr,
-		wake:           make(chan struct{}, 1),
 		stop:           make(chan struct{}),
 		seen:           make(map[string]struct{}),
-		tasks:          make([][]byte, 0, defaultTaskLength),
 	}
 	sf.mt = newMultiTrie(sf)
 	return sf
@@ -283,7 +269,7 @@ func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common
 // This should never block, so an array is used instead of a channel.
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// Append the tasks to the current queue
-	sf.lock.Lock()
+	tasks := make([][]byte, 0, len(keys))
 	for _, key := range keys {
 		// Check if keys already seen
 		sk := string(key)
@@ -292,15 +278,9 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 			continue
 		}
 		sf.seen[sk] = struct{}{}
-		sf.tasks = append(sf.tasks, key)
+		tasks = append(tasks, key)
 	}
-	sf.lock.Unlock()
-
-	// Notify the prefetcher, it's fine if it's already terminated
-	select {
-	case sf.wake <- struct{}{}:
-	default:
-	}
+	sf.mt.enqueueTasks(tasks)
 }
 
 // peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
@@ -317,7 +297,6 @@ func (sf *subfetcher) wait() {
 		return
 	}
 	sf.mt.Wait()
-	sf.abort()
 }
 
 // abort interrupts the subfetcher immediately. It is safe to call abort multiple
@@ -337,7 +316,8 @@ func (sf *subfetcher) abort() {
 
 // multiTrie is not thread-safe.
 type multiTrie struct {
-	sf   *subfetcher
+	sf *subfetcher
+
 	term chan struct{} // Channel to signal interruption
 
 	base     Trie
@@ -346,7 +326,8 @@ type multiTrie struct {
 	workers int
 	wg      sync.WaitGroup
 
-	tasks chan []byte
+	taskChunks chan [][]byte
+	tasks      chan []byte
 
 	closeTasks sync.Once
 }
@@ -373,10 +354,11 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 
 	// Start primary fetcher
 	mt := &multiTrie{
-		sf:    sf,
-		term:  make(chan struct{}),
-		base:  base,
-		tasks: make(chan []byte),
+		sf:         sf,
+		term:       make(chan struct{}),
+		base:       base,
+		taskChunks: make(chan [][]byte, 1024), // TODO: make a const, should never block?
+		tasks:      make(chan []byte),
 	}
 	mt.wg.Add(2)
 	go func() {
@@ -396,6 +378,13 @@ func (mt *multiTrie) copyBase() Trie {
 	return mt.sf.db.CopyTrie(mt.base)
 }
 
+func (mt *multiTrie) enqueueTasks(tasks [][]byte) {
+	if len(tasks) == 0 {
+		return
+	}
+	mt.taskChunks <- tasks
+}
+
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
 // out of tasks or its underlying trie is retrieved for committing.
 func (mt *multiTrie) handleTasks() {
@@ -403,21 +392,25 @@ func (mt *multiTrie) handleTasks() {
 
 	for {
 		select {
-		case <-mt.sf.wake:
-			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
-			mt.sf.lock.Lock()
-			tasks := mt.sf.tasks
-			mt.sf.tasks = make([][]byte, defaultTaskLength)
-			mt.sf.lock.Unlock()
-
-			// Attempt to process tasks, if there are any
-			if len(tasks) > 0 {
-				mt.sf.mt.PerformTasks(tasks)
-			}
-
 		case <-mt.sf.stop:
 			// Termination is requested, abort and leave remaining tasks
 			return
+		case tasks, ok := <-mt.taskChunks:
+			if !ok {
+				return
+			}
+			// We don't do this in [enqueueTasks] because it can block.
+			// Determine if we need to spawn more workers
+			mt.addWorkers(len(tasks))
+
+			// Enqueue work
+			for _, key := range tasks {
+				select {
+				case mt.tasks <- key:
+				case <-mt.sf.stop:
+					return
+				}
+			}
 		}
 	}
 }
@@ -479,24 +472,6 @@ func (mt *multiTrie) addWorkers(tasks int) {
 	}
 }
 
-func (mt *multiTrie) PerformTasks(keys [][]byte) {
-	// Determine if we need to spawn more workers
-	mt.addWorkers(len(keys))
-
-	// Enqueue work
-	for i, key := range keys {
-		select {
-		case mt.tasks <- key:
-		case <-mt.sf.stop:
-			// Attempt to return any tasks we don't get to.
-			mt.sf.lock.Lock()
-			mt.sf.tasks = append(mt.sf.tasks, keys[i:]...)
-			mt.sf.lock.Unlock()
-			return
-		}
-	}
-}
-
 func (mt *multiTrie) Wait() {
 	// Return if already terminated (it is ok if didn't complete)
 	select {
@@ -508,6 +483,7 @@ func (mt *multiTrie) Wait() {
 	// Otherwise, wait for shutdown
 	mt.closeTasks.Do(func() {
 		close(mt.tasks)
+		close(mt.taskChunks)
 	})
 	<-mt.term
 }
