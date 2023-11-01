@@ -59,7 +59,7 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
-	sm *semaphore.Weighted
+	requestLimiter *semaphore.Weighted
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -82,7 +82,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
 
-		sm: semaphore.NewWeighted(maxConcurrentReads),
+		requestLimiter: semaphore.NewWeighted(maxConcurrentReads),
 
 		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
 		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
@@ -182,7 +182,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.sm, p.root, owner, root, addr)
+		fetcher = newSubfetcher(p.db, p.requestLimiter, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
@@ -242,7 +242,7 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	sm *semaphore.Weighted
+	requestLimiter *semaphore.Weighted
 
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
@@ -268,20 +268,20 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, sm *semaphore.Weighted, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
-		sm:    sm,
-		db:    db,
-		state: state,
-		owner: owner,
-		root:  root,
-		addr:  addr,
-		wake:  make(chan struct{}, 1),
-		stop:  make(chan struct{}),
-		term:  make(chan struct{}),
-		copy:  make(chan chan Trie),
-		seen:  make(map[string]struct{}),
-		tasks: make([][]byte, 0, defaultTaskLength),
+		requestLimiter: requestLimiter,
+		db:             db,
+		state:          state,
+		owner:          owner,
+		root:           root,
+		addr:           addr,
+		wake:           make(chan struct{}, 1),
+		stop:           make(chan struct{}),
+		term:           make(chan struct{}),
+		copy:           make(chan chan Trie),
+		seen:           make(map[string]struct{}),
+		tasks:          make([][]byte, 0, defaultTaskLength),
 	}
 	go sf.loop()
 	return sf
@@ -389,8 +389,8 @@ func (mt *multiTrie) processTasks(t Trie, base bool) {
 
 	handleTask := func(task []byte) {
 		// Ensure we don't perform more than the permitted reads concurrently
-		_ = mt.sf.sm.Acquire(context.TODO(), 1)
-		defer mt.sf.sm.Release(1)
+		_ = mt.sf.requestLimiter.Acquire(context.TODO(), 1)
+		defer mt.sf.requestLimiter.Release(1)
 
 		// No termination request yet, prefetch the next entry
 		//
