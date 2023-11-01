@@ -355,6 +355,8 @@ func (sf *subfetcher) loop() {
 		sf.trie = trie
 	}
 
+	// TODO: Create sub-tries for processing tasks concurrently
+
 	// Trie opened successfully, keep prefetching items
 	for {
 		select {
