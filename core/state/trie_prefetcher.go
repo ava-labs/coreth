@@ -275,13 +275,7 @@ func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common
 		seen:           make(map[string]struct{}),
 		tasks:          make([][]byte, 0, defaultTaskLength),
 	}
-
-	// Only start loop if we are able to open a multiTrie
-	mt := newMultiTrie(sf)
-	if mt != nil {
-		sf.mt = mt
-		go sf.loop()
-	}
+	sf.mt = newMultiTrie(sf)
 	return sf
 }
 
@@ -337,32 +331,8 @@ func (sf *subfetcher) abort() {
 	sf.stopOnce.Do(func() {
 		close(sf.stop)
 	})
+	// TODO: term must include loop
 	<-sf.mt.term
-}
-
-// loop waits for new tasks to be scheduled and keeps loading them until it runs
-// out of tasks or its underlying trie is retrieved for committing.
-func (sf *subfetcher) loop() {
-	// TODO: move into multiTrie
-	for {
-		select {
-		case <-sf.wake:
-			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
-			sf.lock.Lock()
-			tasks := sf.tasks
-			sf.tasks = make([][]byte, defaultTaskLength)
-			sf.lock.Unlock()
-
-			// Attempt to process tasks, if there are any
-			if len(tasks) > 0 {
-				sf.mt.PerformTasks(tasks)
-			}
-
-		case <-sf.stop:
-			// Termination is requested, abort and leave remaining tasks
-			return
-		}
-	}
 }
 
 // multiTrie is not thread-safe.
@@ -408,13 +378,14 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 		base:  base,
 		tasks: make(chan []byte),
 	}
-	mt.wg.Add(1)
-	mt.workers++
+	mt.wg.Add(2)
 	go func() {
 		mt.wg.Wait()
 		close(mt.term)
 	}()
-	go mt.processTasks(true)
+	go mt.handleTasks()
+	mt.workers++
+	go mt.work(true)
 	return mt
 }
 
@@ -425,7 +396,33 @@ func (mt *multiTrie) copyBase() Trie {
 	return mt.sf.db.CopyTrie(mt.base)
 }
 
-func (mt *multiTrie) processTasks(base bool) {
+// loop waits for new tasks to be scheduled and keeps loading them until it runs
+// out of tasks or its underlying trie is retrieved for committing.
+func (mt *multiTrie) handleTasks() {
+	defer mt.wg.Done()
+
+	for {
+		select {
+		case <-mt.sf.wake:
+			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
+			mt.sf.lock.Lock()
+			tasks := mt.sf.tasks
+			mt.sf.tasks = make([][]byte, defaultTaskLength)
+			mt.sf.lock.Unlock()
+
+			// Attempt to process tasks, if there are any
+			if len(tasks) > 0 {
+				mt.sf.mt.PerformTasks(tasks)
+			}
+
+		case <-mt.sf.stop:
+			// Termination is requested, abort and leave remaining tasks
+			return
+		}
+	}
+}
+
+func (mt *multiTrie) work(base bool) {
 	defer mt.wg.Done()
 
 	// Create reference to Trie used for prefetching
@@ -477,7 +474,7 @@ func (mt *multiTrie) addWorkers(tasks int) {
 		for i := 0; i < newWorkers && mt.workers+1 <= subfetcherMaxConcurrency; i++ {
 			mt.wg.Add(1)
 			mt.workers++
-			go mt.processTasks(false)
+			go mt.work(false)
 		}
 	}
 }
