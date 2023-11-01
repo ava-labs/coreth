@@ -27,11 +27,20 @@
 package state
 
 import (
+	"context"
 	"sync"
 
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/sync/semaphore"
+)
+
+const (
+	minTasksPerWorker        = 8
+	maxConcurrentReads       = 32
+	subfetcherMaxConcurrency = 16
 )
 
 var (
@@ -49,6 +58,8 @@ type triePrefetcher struct {
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
+
+	sm *semaphore.Weighted
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -70,6 +81,8 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
+
+		sm: semaphore.NewWeighted(maxConcurrentReads),
 
 		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
 		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
@@ -235,6 +248,8 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
+	sm *semaphore.Weighted
+
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
 	owner common.Hash    // Owner of the trie, usually account hash
@@ -259,8 +274,9 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(db Database, sm *semaphore.Weighted, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
+		sm:       sm,
 		db:       db,
 		state:    state,
 		owner:    owner,
@@ -272,6 +288,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		finished: make(chan struct{}),
 		copy:     make(chan chan Trie),
 		seen:     make(map[string]struct{}),
+		tasks:    make([][]byte, 0, 32),
 	}
 	go sf.loop()
 	return sf
@@ -279,8 +296,6 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 
 // schedule adds a batch of trie keys to the queue to prefetch.
 func (sf *subfetcher) schedule(keys [][]byte) {
-	// TODO: limit total live prefetching across all items in all prefetchers
-
 	// Append the tasks to the current queue
 	sf.lock.Lock()
 	for _, key := range keys {
@@ -338,6 +353,12 @@ func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
 
+	// Open multiTrie or exit
+	mt := newMultiTrie(sf)
+	if mt == nil {
+		return
+	}
+
 	// Start by opening the trie and stop processing if it fails
 	if sf.owner == (common.Hash{}) {
 		trie, err := sf.db.OpenTrie(sf.root)
@@ -364,7 +385,7 @@ func (sf *subfetcher) loop() {
 			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
 			sf.lock.Lock()
 			tasks := sf.tasks
-			sf.tasks = nil
+			sf.tasks = make([][]byte, 32)
 			sf.lock.Unlock()
 
 			// Prefetch any tasks until the loop is interrupted
@@ -380,25 +401,11 @@ func (sf *subfetcher) loop() {
 					return
 
 				case ch := <-sf.copy:
-					// TODO: this should never happen during trie generation
-
 					// Somebody wants a copy of the current trie, grant them
 					ch <- sf.db.CopyTrie(sf.trie)
 
 				default:
-					// No termination request yet, prefetch the next entry
-					//
-					// TODO: save trie in each goroutine that is run concurrently rather than
-					// creating a new one for each key.
-					var err error
-					if len(task) == common.AddressLength {
-						_, err = sf.trie.GetAccount(common.BytesToAddress(task))
-					} else {
-						_, err = sf.trie.GetStorage(sf.addr, task)
-					}
-					if err != nil {
-						log.Error("Trie prefetcher failed fetching", "root", sf.root, "err", err)
-					}
+					mt.PerformTask(task)
 				}
 			}
 
@@ -420,26 +427,112 @@ func (sf *subfetcher) loop() {
 }
 
 type multiTrie struct {
-	base Trie
+	sf *subfetcher
+
+	workers int
+	wg      sync.WaitGroup
+
+	tasks chan []byte
+
+	closeTasks sync.Once
 }
 
-func newMultiTrie(base Trie, concurrency int) *multiTrie {
-	return &multiTrie{
-		base: base,
+func (mt *multiTrie) processTasks(t Trie, base bool) {
+	defer mt.wg.Done()
+
+	handleTask := func(task []byte) {
+		// Ensure we don't perform more than the permitted reads concurrently
+		_ = mt.sf.sm.Acquire(context.TODO(), 1)
+		defer mt.sf.sm.Release(1)
+
+		// No termination request yet, prefetch the next entry
+		//
+		// TODO: save trie in each goroutine that is run concurrently rather than
+		// creating a new one for each key.
+		var err error
+		if len(task) == common.AddressLength {
+			_, err = t.GetAccount(common.BytesToAddress(task))
+		} else {
+			_, err = t.GetStorage(mt.sf.addr, task)
+		}
+		if err != nil {
+			log.Error("Trie prefetcher failed fetching", "root", mt.sf.root, "err", err)
+		}
+	}
+
+	for {
+		if base {
+			select {
+			case <-mt.sf.stop:
+				return
+			case ch := <-mt.sf.copy:
+				// Only handle copies if this trie is [base]
+				ch <- t.(*trie.StateTrie).Copy()
+			case task, ok := <-mt.tasks:
+				// Exit because there are no more tasks to do.
+				if !ok {
+					// There is a cache backing all tries that contains
+					// fetched nodes (even if not populated in this trie).
+					mt.sf.trie = t
+					return
+				}
+				handleTask(task)
+			}
+		} else {
+			select {
+			case <-mt.sf.stop:
+				return
+			case task, ok := <-mt.tasks:
+				// Exit because there are no more tasks to do.
+				if !ok {
+					return
+				}
+				handleTask(task)
+			}
+		}
 	}
 }
 
-func (mt *multiTrie) Copy() Trie {
-	// Send copy request to queue
+func newMultiTrie(sf *subfetcher) *multiTrie {
+	// Start by opening the trie and stop processing if it fails
+	var (
+		base Trie
+		err  error
+	)
+	if sf.owner == (common.Hash{}) {
+		base, err = sf.db.OpenTrie(sf.root)
+		if err != nil {
+			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
+			return nil
+		}
+	} else {
+		base, err = sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
+		if err != nil {
+			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
+			return nil
+		}
+	}
 
-	// Wait for some Trie to fulfill it
-	return nil
+	// Start primary fetcher
+	mt := &multiTrie{
+		sf:    sf,
+		tasks: make(chan []byte),
+	}
+	mt.wg.Add(1)
+	mt.workers++
+	go mt.processTasks(base, true)
+	return mt
 }
 
-func (mt *multiTrie) GetAccount(addr common.Address) error {
-	return nil
+func (mt *multiTrie) PerformTasks(keys [][]byte) {
+	if len(keys)/mt.workers > 4 {
+	}
+	mt.tasks <- key
 }
 
-func (mt *multiTrie) GetStorage(addr common.Address, key []byte) error {
-	return nil
+func (mt *multiTrie) Wait() {
+	mt.closeTasks.Do(func() {
+		close(mt.tasks)
+	})
+	mt.wg.Wait()
 }
