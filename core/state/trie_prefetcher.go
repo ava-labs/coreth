@@ -209,15 +209,11 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		return nil
 	}
 
-	// Wait for the fetcher to finish (or continue if it exited unexpectedly).
-	select {
-	case <-fetcher.finished:
-		// Stop the prefetcher when it is done.
-		//
-		// [abort] is safe to call multiple times.
-		fetcher.abort()
-	case <-fetcher.term:
+	// Wait for the fetcher to finish, if it exists.
+	if fetcher.mt != nil {
+		fetcher.mt.Wait()
 	}
+	fetcher.abort()
 
 	// Return a copy of one of the prefetched tries (this is still backed
 	// by a node cache).
@@ -377,8 +373,6 @@ func (sf *subfetcher) loop() {
 		case <-sf.stop:
 			// Termination is requested, abort and leave remaining tasks
 			return
-
-			// TODO: stop when no more tasks
 		}
 	}
 }
@@ -518,12 +512,14 @@ func (mt *multiTrie) PerformTasks(keys [][]byte) {
 }
 
 func (mt *multiTrie) Wait() {
+	// Return if already terminated
 	select {
 	case <-mt.sf.term:
 		return
 	default:
 	}
 
+	// Otherwise, wait for shutdown
 	mt.closeTasks.Do(func() {
 		close(mt.tasks)
 	})
