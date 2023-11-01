@@ -60,6 +60,8 @@ type triePrefetcher struct {
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
 	requestLimiter *semaphore.Weighted
+	// TODO: use bg counter and a single worker group?
+	// -> copy tries to increse concurrency of each trie
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -436,6 +438,7 @@ func (mt *multiTrie) work(base bool) {
 			if !ok {
 				return
 			}
+
 			// Ensure we don't perform more than the permitted reads concurrently
 			_ = mt.sf.requestLimiter.Acquire(context.TODO(), 1)
 			defer mt.sf.requestLimiter.Release(1)
