@@ -250,16 +250,15 @@ type subfetcher struct {
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
 
-	trie Trie // Trie being populated with nodes
-	mt   *multiTrie
+	mt *multiTrie
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan struct{}  // Wake channel if a new task is scheduled
-	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal interruption
-	copy chan chan Trie // Channel to request a copy of the current trie
+	wake     chan struct{} // Wake channel if a new task is scheduled
+	stop     chan struct{} // Channel to interrupt processing
+	stopOnce sync.Once
+	term     chan struct{} // Channel to signal interruption
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -279,15 +278,21 @@ func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common
 		wake:           make(chan struct{}, 1),
 		stop:           make(chan struct{}),
 		term:           make(chan struct{}),
-		copy:           make(chan chan Trie),
 		seen:           make(map[string]struct{}),
 		tasks:          make([][]byte, 0, defaultTaskLength),
 	}
-	go sf.loop()
+
+	// Only start loop if we are able to open a multiTrie
+	mt := newMultiTrie(sf)
+	if mt != nil {
+		sf.mt = mt
+		go sf.loop()
+	}
 	return sf
 }
 
 // schedule adds a batch of trie keys to the queue to prefetch.
+// This should never block, so an array is used instead of a channel.
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// Append the tasks to the current queue
 	sf.lock.Lock()
@@ -313,45 +318,29 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 // peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
 // is currently.
 func (sf *subfetcher) peek() Trie {
-	ch := make(chan Trie)
-	select {
-	case sf.copy <- ch:
-		// Subfetcher still alive, return copy from it
-		return <-ch
-
-	case <-sf.term:
-		// Subfetcher already terminated, return a copy directly
-		if sf.trie == nil {
-			return nil
-		}
-		return sf.db.CopyTrie(sf.trie)
+	if sf.mt == nil {
+		return nil
 	}
+	return sf.mt.copyBase()
 }
 
 // abort interrupts the subfetcher immediately. It is safe to call abort multiple
 // times but it is not thread safe.
 func (sf *subfetcher) abort() {
-	select {
-	case <-sf.stop:
-	default:
-		close(sf.stop)
+	if sf.mt == nil {
+		// If a multiTrie was never created, we can exit right away because
+		// we never started a loop.
+		return
 	}
+	sf.stopOnce.Do(func() {
+		close(sf.stop)
+	})
 	<-sf.term
 }
 
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
 // out of tasks or its underlying trie is retrieved for committing.
 func (sf *subfetcher) loop() {
-	// Open multiTrie or exit
-	//
-	// multiTrie will send the term signal for the subfetcher.
-	mt := newMultiTrie(sf)
-	if mt == nil {
-		return
-	}
-	sf.mt = mt
-
-	// Trie opened successfully, keep prefetching items
 	for {
 		select {
 		case <-sf.wake:
@@ -373,8 +362,12 @@ func (sf *subfetcher) loop() {
 	}
 }
 
+// multiTrie is not thread-safe.
 type multiTrie struct {
 	sf *subfetcher
+
+	base     Trie
+	baseLock sync.Mutex
 
 	workers int
 	wg      sync.WaitGroup
@@ -382,62 +375,6 @@ type multiTrie struct {
 	tasks chan []byte
 
 	closeTasks sync.Once
-}
-
-func (mt *multiTrie) processTasks(t Trie, base bool) {
-	defer mt.wg.Done()
-
-	handleTask := func(task []byte) {
-		// Ensure we don't perform more than the permitted reads concurrently
-		_ = mt.sf.requestLimiter.Acquire(context.TODO(), 1)
-		defer mt.sf.requestLimiter.Release(1)
-
-		// No termination request yet, prefetch the next entry
-		//
-		// TODO: save trie in each goroutine that is run concurrently rather than
-		// creating a new one for each key.
-		var err error
-		if len(task) == common.AddressLength {
-			_, err = t.GetAccount(common.BytesToAddress(task))
-		} else {
-			_, err = t.GetStorage(mt.sf.addr, task)
-		}
-		if err != nil {
-			log.Error("Trie prefetcher failed fetching", "root", mt.sf.root, "err", err)
-		}
-	}
-
-	for {
-		if base {
-			select {
-			case <-mt.sf.stop:
-				return
-			case ch := <-mt.sf.copy:
-				// Only handle copies if this trie is [base]
-				ch <- mt.sf.db.CopyTrie(t)
-			case task, ok := <-mt.tasks:
-				// Exit because there are no more tasks to do.
-				if !ok {
-					// There is a cache backing all tries that contains
-					// fetched nodes (even if not populated in this trie).
-					mt.sf.trie = t
-					return
-				}
-				handleTask(task)
-			}
-		} else {
-			select {
-			case <-mt.sf.stop:
-				return
-			case task, ok := <-mt.tasks:
-				// Exit because there are no more tasks to do.
-				if !ok {
-					return
-				}
-				handleTask(task)
-			}
-		}
-	}
 }
 
 func newMultiTrie(sf *subfetcher) *multiTrie {
@@ -465,6 +402,7 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 	// Start primary fetcher
 	mt := &multiTrie{
 		sf:    sf,
+		base:  base,
 		tasks: make(chan []byte),
 	}
 	mt.wg.Add(1)
@@ -473,25 +411,77 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 		mt.wg.Wait()
 		close(mt.sf.term)
 	}()
-	go mt.processTasks(base, true)
+	go mt.processTasks(true)
 	return mt
 }
 
-func (mt *multiTrie) PerformTasks(keys [][]byte) {
-	// Determine if we need to spawn more workers
-	tasksPerWorker := len(keys) / mt.workers
+func (mt *multiTrie) copyBase() Trie {
+	mt.baseLock.Lock()
+	defer mt.baseLock.Unlock()
+
+	return mt.sf.db.CopyTrie(mt.base)
+}
+
+func (mt *multiTrie) processTasks(base bool) {
+	defer mt.wg.Done()
+
+	// Create reference to Trie used for prefetching
+	var t Trie
+	if base {
+		t = mt.base
+	} else {
+		t = mt.copyBase()
+	}
+
+	// Wait for prefetching requests or for tasks to be done
+	for {
+		select {
+		case <-mt.sf.stop:
+			return
+		case task, ok := <-mt.tasks:
+			// Exit because there are no more tasks to do.
+			if !ok {
+				return
+			}
+			// Ensure we don't perform more than the permitted reads concurrently
+			_ = mt.sf.requestLimiter.Acquire(context.TODO(), 1)
+			defer mt.sf.requestLimiter.Release(1)
+
+			// No termination request yet, prefetch the next entry
+			//
+			// TODO: save trie in each goroutine that is run concurrently rather than
+			// creating a new one for each key.
+			var err error
+			if len(task) == common.AddressLength {
+				_, err = t.GetAccount(common.BytesToAddress(task))
+			} else {
+				_, err = t.GetStorage(mt.sf.addr, task)
+			}
+			if err != nil {
+				log.Error("Trie prefetcher failed fetching", "root", mt.sf.root, "err", err)
+			}
+		}
+	}
+}
+
+// addWorkers determines if more workers should be spawned to process
+// [tasks].
+func (mt *multiTrie) addWorkers(tasks int) {
+	tasksPerWorker := tasks / mt.workers
 	if tasksPerWorker > targetTasksPerWorker {
 		extraWork := (tasksPerWorker - targetTasksPerWorker) * mt.workers
 		newWorkers := extraWork / targetTasksPerWorker
 		for i := 0; i < newWorkers && mt.workers+1 <= subfetcherMaxConcurrency; i++ {
-			ch := make(chan Trie)
-			mt.sf.copy <- ch
-			t := <-ch
 			mt.wg.Add(1)
 			mt.workers++
-			go mt.processTasks(t, false)
+			go mt.processTasks(false)
 		}
 	}
+}
+
+func (mt *multiTrie) PerformTasks(keys [][]byte) {
+	// Determine if we need to spawn more workers
+	mt.addWorkers(len(keys))
 
 	// Enqueue work
 	for i, key := range keys {
