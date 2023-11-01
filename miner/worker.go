@@ -168,7 +168,7 @@ func (w *worker) commitNewWork() (*types.Block, error) {
 		return nil, fmt.Errorf("failed to create new current environment: %w", err)
 	}
 
-	// Stop prefetcher after block building is complete.
+	// Ensure we always stop prefetcher after block building is complete.
 	defer func() {
 		if env.state == nil {
 			return
