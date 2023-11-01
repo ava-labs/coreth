@@ -380,9 +380,9 @@ func (sf *subfetcher) loop() {
 					return
 
 				case ch := <-sf.copy:
-					// Somebody wants a copy of the current trie, grant them
-					//
 					// TODO: this should never happen during trie generation
+
+					// Somebody wants a copy of the current trie, grant them
 					ch <- sf.db.CopyTrie(sf.trie)
 
 				default:
@@ -402,6 +402,8 @@ func (sf *subfetcher) loop() {
 				}
 			}
 
+			// TODO: wait for all processing tries to return
+
 			// Fetch finished
 			sf.finishedOnce.Do(func() {
 				close(sf.finished)
@@ -415,4 +417,29 @@ func (sf *subfetcher) loop() {
 			return
 		}
 	}
+}
+
+type multiTrie struct {
+	base Trie
+}
+
+func newMultiTrie(base Trie, concurrency int) *multiTrie {
+	return &multiTrie{
+		base: base,
+	}
+}
+
+func (mt *multiTrie) Copy() Trie {
+	// Send copy request to queue
+
+	// Wait for some Trie to fulfill it
+	return nil
+}
+
+func (mt *multiTrie) GetAccount(addr common.Address) error {
+	return nil
+}
+
+func (mt *multiTrie) GetStorage(addr common.Address, key []byte) error {
+	return nil
 }
