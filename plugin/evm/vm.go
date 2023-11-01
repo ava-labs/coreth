@@ -1285,12 +1285,12 @@ func (vm *VM) Version(context.Context) (string, error) {
 	return Version, nil
 }
 
-func (vm *VM) BackfillBlocksEnabled(ctx context.Context) (ids.ID, error) {
-	return ids.Empty, block.ErrBlockBackfillingNotEnabled
+func (vm *VM) BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error) {
+	return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
 }
 
-func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, error) {
-	return ids.Empty, block.ErrStopBlockBackfilling
+func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, uint64, error) {
+	return ids.Empty, 0, block.ErrStopBlockBackfilling
 }
 
 // NewHandler returns a new Handler for a service where:
