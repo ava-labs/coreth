@@ -57,9 +57,6 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
-	// TODO: use bg counter (to "wait" on a trie completion still) and a single worker group?
-	// -> copy tries to increse concurrency of each trie (if a single subfetcher has a lot of work)
-
 	workersWg   sync.WaitGroup
 	taskQueue   chan func()
 	stopWorkers chan struct{} // Interrupts workers
@@ -319,6 +316,11 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 		tasks = append(tasks, key)
 	}
 
+	// After counting keys, exit if they can't be prefetched
+	if sf.to == nil {
+		return
+	}
+
 	// Add tasks to queue for prefetching
 	sf.to.enqueueTasks(tasks)
 }
@@ -490,7 +492,7 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 		select {
 		case to.sf.p.taskQueue <- f:
 		case <-to.stop:
-			// Return counters
+			// Return all counters
 			for i := 0; i < lt; i++ {
 				to.outstandingRequests.Done()
 			}
@@ -509,4 +511,5 @@ func (to *trieOrchestrator) abort() {
 	to.stopOnce.Do(func() {
 		close(to.stop)
 	})
+	to.outstandingRequests.Wait()
 }
