@@ -35,10 +35,9 @@ import (
 )
 
 const (
-	targetTasksPerWorker     = 8
-	maxConcurrentReads       = 32
-	subfetcherMaxConcurrency = 16
-	defaultTaskLength        = 32
+	targetTasksPerWorker = 8
+	maxConcurrentReads   = 32
+	subfetcherMaxCopies  = 16
 )
 
 var (
@@ -277,7 +276,7 @@ type subfetcher struct {
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
 
-	to *trieOrchestrator
+	to *trieOrchestrator // Orchestrate concurrent fetching of a single trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -297,6 +296,9 @@ func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr 
 		seen:  make(map[string]struct{}),
 	}
 	sf.to = newTrieOrchestrator(sf)
+	if sf.to != nil {
+		go sf.to.processTasks()
+	}
 	return sf
 }
 
@@ -352,6 +354,8 @@ func (sf *subfetcher) abort() {
 	sf.to.abort()
 }
 
+// lockableTrie is used to ensure that a trie is not accessed concurrently
+// (could only occur when copying)
 type lockableTrie struct {
 	t Trie
 	l sync.Mutex
@@ -364,6 +368,11 @@ type trieOrchestrator struct {
 	base *lockableTrie
 
 	outstandingRequests sync.WaitGroup
+
+	pendingTasks     [][]byte
+	pendingTasksLock sync.Mutex
+	wake             chan struct{}
+	loopTerm         chan struct{}
 
 	copies   int
 	copyChan chan *lockableTrie
@@ -398,8 +407,11 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		sf:   sf,
 		base: ct,
 
+		wake:     make(chan struct{}, 1),
+		loopTerm: make(chan struct{}),
+
 		copies:   1,
-		copyChan: make(chan *lockableTrie, subfetcherMaxConcurrency),
+		copyChan: make(chan *lockableTrie, subfetcherMaxCopies),
 
 		stop: make(chan struct{}),
 	}
@@ -415,88 +427,116 @@ func (to *trieOrchestrator) copyBase() Trie {
 }
 
 func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
-	lt := len(tasks)
-	if lt == 0 {
+	if len(tasks) == 0 {
 		return
 	}
 
-	// TODO: don't block (prevents other prefetching)
+	// Add tasks to [pendingTasks]
+	to.pendingTasksLock.Lock()
+	to.pendingTasks = append(to.pendingTasks, tasks...)
+	to.pendingTasksLock.Unlock()
 
-	// Create more copies if we have a lot of work
-	tasksPerWorker := lt / to.copies
-	if tasksPerWorker > targetTasksPerWorker && to.copies < subfetcherMaxConcurrency {
-		extraPerWorker := (tasksPerWorker - targetTasksPerWorker) * to.copies
-		newWorkers := extraPerWorker / targetTasksPerWorker
-		for i := 0; i < newWorkers && to.copies+1 <= subfetcherMaxConcurrency; i++ {
-			to.copies++
-			to.copyChan <- &lockableTrie{t: to.copyBase()}
-		}
+	// Wake up processor
+	select {
+	case to.wake <- struct{}{}:
+	default:
 	}
-	workSize := lt / to.copies
+}
 
-	// Enqueue more work as soon as trie copies are available
-	for i := 0; i < lt; i += workSize {
-		end := i + workSize
-		if end > lt {
-			end = lt
-		}
-		thisTask := tasks[i:end]
+func (to *trieOrchestrator) processTasks() {
+	defer close(to.loopTerm)
 
-		// Wait for an available copy
-		var t *lockableTrie
+	for {
+		// Determine if we should process or exit
 		select {
-		case t = <-to.copyChan:
+		case <-to.wake:
 		case <-to.stop:
 			return
 		}
 
-		to.outstandingRequests.Add(lt)
-		f := func() {
-			for _, task := range thisTask {
-				// Check if we should stop
-				var stopping bool
-				select {
-				case <-to.stop:
-					// Ensure we don't forget to mark tasks we've been
-					// given as complete.
+		// Get current tasks
+		to.pendingTasksLock.Lock()
+		tasks := to.pendingTasks
+		to.pendingTasks = nil
+		to.pendingTasksLock.Unlock()
+
+		// Create more copies if we have a lot of work
+		lt := len(tasks)
+		tasksPerWorker := lt / to.copies
+		if tasksPerWorker > targetTasksPerWorker && to.copies < subfetcherMaxCopies {
+			extraPerWorker := (tasksPerWorker - targetTasksPerWorker) * to.copies
+			newWorkers := extraPerWorker / targetTasksPerWorker
+			for i := 0; i < newWorkers && to.copies+1 <= subfetcherMaxCopies; i++ {
+				to.copies++
+				to.copyChan <- &lockableTrie{t: to.copyBase()}
+			}
+		}
+		workSize := lt / to.copies
+
+		// Enqueue more work as soon as trie copies are available
+		for i := 0; i < lt; i += workSize {
+			end := i + workSize
+			if end > lt {
+				end = lt
+			}
+			thisTask := tasks[i:end]
+
+			// Wait for an available copy
+			var t *lockableTrie
+			select {
+			case t = <-to.copyChan:
+			case <-to.stop:
+				return
+			}
+
+			to.outstandingRequests.Add(lt)
+			f := func() {
+				for _, task := range thisTask {
+					// Check if we should stop
+					var stopping bool
+					select {
+					case <-to.stop:
+						// Ensure we don't forget to mark tasks we've been
+						// given as complete.
+						to.outstandingRequests.Done()
+						stopping = true
+					default:
+					}
+					if stopping {
+						continue
+					}
+
+					// Perform task
+					t.l.Lock()
+					var err error
+					if len(task) == common.AddressLength {
+						_, err = t.t.GetAccount(common.BytesToAddress(task))
+					} else {
+						_, err = t.t.GetStorage(to.sf.addr, task)
+					}
+					t.l.Unlock()
+					if err != nil {
+						log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
+					}
 					to.outstandingRequests.Done()
-					stopping = true
-				default:
-				}
-				if stopping {
-					continue
 				}
 
-				// Perform task
-				t.l.Lock()
-				var err error
-				if len(task) == common.AddressLength {
-					_, err = t.t.GetAccount(common.BytesToAddress(task))
-				} else {
-					_, err = t.t.GetStorage(to.sf.addr, task)
-				}
-				t.l.Unlock()
-				if err != nil {
-					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
-				}
-				to.outstandingRequests.Done()
+				// Return copy when we are done with it, so someone else can use it
+				//
+				// channel should be buffered and should not block
+				to.copyChan <- t
 			}
 
-			// Return copy when we are done with it, so someone else can use it
-			//
-			// channel should be buffered and should not block
-			to.copyChan <- t
-		}
-
-		// Enqueue work, unless stopped.
-		select {
-		case to.sf.p.taskQueue <- f:
-		case <-to.stop:
-			// Return all counters
-			for i := 0; i < lt; i++ {
-				to.outstandingRequests.Done()
+			// Enqueue work, unless stopped.
+			select {
+			case to.sf.p.taskQueue <- f:
+			case <-to.stop:
+				// Return all counters
+				for i := 0; i < lt; i++ {
+					to.outstandingRequests.Done()
+				}
+				return
 			}
-			return
 		}
 	}
 }
@@ -511,5 +551,6 @@ func (to *trieOrchestrator) abort() {
 	to.stopOnce.Do(func() {
 		close(to.stop)
 	})
+	<-to.loopTerm
 	to.outstandingRequests.Wait()
 }
