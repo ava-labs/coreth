@@ -197,13 +197,18 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		return nil
 	}
 
-	// TODO: wait for fetcher to complete concurrent prefetching
-	// TODO: add metric for wait time
+	// Wait for the fetcher to finish (or continue if it exited unexpectedly).
+	select {
+	case <-fetcher.finished:
+		// Stop the prefetcher when it is done.
+		//
+		// [abort] is safe to call multiple times.
+		fetcher.abort()
+	case <-fetcher.term:
+	}
 
-	// Interrupt the prefetcher if it's by any chance still running and return
-	// a copy of any pre-loaded trie.
-	fetcher.abort() // safe to do multiple times
-
+	// Return a copy of one of the prefetched tries (this is still backed
+	// by a node cache).
 	trie := fetcher.peek()
 	if trie == nil {
 		p.deliveryWaitMissMeter.Mark(1)
@@ -240,10 +245,12 @@ type subfetcher struct {
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan struct{}  // Wake channel if a new task is scheduled
-	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal interruption
-	copy chan chan Trie // Channel to request a copy of the current trie
+	wake         chan struct{} // Wake channel if a new task is scheduled
+	stop         chan struct{} // Channel to interrupt processing
+	term         chan struct{} // Channel to signal interruption
+	finished     chan struct{} // Channel to signal prefetching is done
+	finishedOnce sync.Once
+	copy         chan chan Trie // Channel to request a copy of the current trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -254,16 +261,17 @@ type subfetcher struct {
 // particular root hash.
 func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
-		db:    db,
-		state: state,
-		owner: owner,
-		root:  root,
-		addr:  addr,
-		wake:  make(chan struct{}, 1),
-		stop:  make(chan struct{}),
-		term:  make(chan struct{}),
-		copy:  make(chan chan Trie),
-		seen:  make(map[string]struct{}),
+		db:       db,
+		state:    state,
+		owner:    owner,
+		root:     root,
+		addr:     addr,
+		wake:     make(chan struct{}, 1),
+		stop:     make(chan struct{}),
+		term:     make(chan struct{}),
+		finished: make(chan struct{}),
+		copy:     make(chan chan Trie),
+		seen:     make(map[string]struct{}),
 	}
 	go sf.loop()
 	return sf
@@ -271,6 +279,8 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 
 // schedule adds a batch of trie keys to the queue to prefetch.
 func (sf *subfetcher) schedule(keys [][]byte) {
+	// TODO: limit total live prefetching across all items in all prefetchers
+	//
 	// Append the tasks to the current queue
 	sf.lock.Lock()
 	sf.tasks = append(sf.tasks, keys...)
@@ -289,11 +299,7 @@ func (sf *subfetcher) peek() Trie {
 	ch := make(chan Trie)
 	select {
 	case sf.copy <- ch:
-		// Subfetcher still alive, return copy from it
-		//
-		// TODO: return a copy of one of the tries we are fetching in parallel
-		// assume it is ok if other tries are discarded because in-memory fetches will be
-		// very fast
+		// Subfetcher still alive, return copy from it (this is
 		return <-ch
 
 	case <-sf.term:
@@ -374,6 +380,7 @@ func (sf *subfetcher) loop() {
 					// TODO: save trie in each goroutine that is run concurrently rather than
 					// creating a new one for each key.
 					if _, ok := sf.seen[string(task)]; ok {
+						// TODO: do this check when adding keys, now that we wait
 						sf.dups++
 					} else {
 						var err error
@@ -390,6 +397,10 @@ func (sf *subfetcher) loop() {
 				}
 			}
 
+			// Fetch finished
+			sf.finishedOnce.Do(func() {
+				close(sf.finished)
+			})
 		case ch := <-sf.copy:
 			// Somebody wants a copy of the current trie, grant them
 			ch <- sf.db.CopyTrie(sf.trie)
