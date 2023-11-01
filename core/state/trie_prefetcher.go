@@ -209,10 +209,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	}
 
 	// Wait for the fetcher to finish, if it exists.
-	if fetcher.mt != nil {
-		fetcher.mt.Wait()
-	}
-	fetcher.abort()
+	fetcher.wait()
 
 	// Return a copy of one of the prefetched tries (this is still backed
 	// by a node cache).
@@ -258,7 +255,6 @@ type subfetcher struct {
 	wake     chan struct{} // Wake channel if a new task is scheduled
 	stop     chan struct{} // Channel to interrupt processing
 	stopOnce sync.Once
-	term     chan struct{} // Channel to signal interruption
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -277,7 +273,6 @@ func newSubfetcher(db Database, requestLimiter *semaphore.Weighted, state common
 		addr:           addr,
 		wake:           make(chan struct{}, 1),
 		stop:           make(chan struct{}),
-		term:           make(chan struct{}),
 		seen:           make(map[string]struct{}),
 		tasks:          make([][]byte, 0, defaultTaskLength),
 	}
@@ -324,6 +319,14 @@ func (sf *subfetcher) peek() Trie {
 	return sf.mt.copyBase()
 }
 
+func (sf *subfetcher) wait() {
+	if sf.mt == nil {
+		return
+	}
+	sf.mt.Wait()
+	sf.abort()
+}
+
 // abort interrupts the subfetcher immediately. It is safe to call abort multiple
 // times but it is not thread safe.
 func (sf *subfetcher) abort() {
@@ -335,7 +338,7 @@ func (sf *subfetcher) abort() {
 	sf.stopOnce.Do(func() {
 		close(sf.stop)
 	})
-	<-sf.term
+	<-sf.mt.term
 }
 
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
@@ -364,7 +367,8 @@ func (sf *subfetcher) loop() {
 
 // multiTrie is not thread-safe.
 type multiTrie struct {
-	sf *subfetcher
+	sf   *subfetcher
+	term chan struct{} // Channel to signal interruption
 
 	base     Trie
 	baseLock sync.Mutex
@@ -387,14 +391,12 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 		base, err = sf.db.OpenTrie(sf.root)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			close(sf.term)
 			return nil
 		}
 	} else {
 		base, err = sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			close(sf.term)
 			return nil
 		}
 	}
@@ -402,6 +404,7 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 	// Start primary fetcher
 	mt := &multiTrie{
 		sf:    sf,
+		term:  make(chan struct{}),
 		base:  base,
 		tasks: make(chan []byte),
 	}
@@ -409,7 +412,7 @@ func newMultiTrie(sf *subfetcher) *multiTrie {
 	mt.workers++
 	go func() {
 		mt.wg.Wait()
-		close(mt.sf.term)
+		close(mt.term)
 	}()
 	go mt.processTasks(true)
 	return mt
@@ -500,7 +503,7 @@ func (mt *multiTrie) PerformTasks(keys [][]byte) {
 func (mt *multiTrie) Wait() {
 	// Return if already terminated (it is ok if didn't complete)
 	select {
-	case <-mt.sf.term:
+	case <-mt.term:
 		return
 	default:
 	}
@@ -509,5 +512,5 @@ func (mt *multiTrie) Wait() {
 	mt.closeTasks.Do(func() {
 		close(mt.tasks)
 	})
-	mt.wg.Wait()
+	<-mt.term
 }
