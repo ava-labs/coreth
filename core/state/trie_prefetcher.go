@@ -177,7 +177,11 @@ func (p *triePrefetcher) close() {
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
 	close(p.stopWorkers)
-	<-p.workersTerm
+	select {
+	case <-p.workersTerm:
+	case <-time.After(30 * time.Second):
+		panic("workers never returned")
+	}
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil
@@ -535,7 +539,7 @@ func (to *trieOrchestrator) processTasks() {
 			if end > lt {
 				end = lt
 			}
-			thisTask := tasks[i:end]
+			fTasks := tasks[i:end]
 
 			// Wait for an available copy
 			var t *lockableTrie
@@ -548,13 +552,13 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue work, unless stopped.
 			f := func() {
-				for i, task := range thisTask {
+				for j, ftask := range fTasks {
 					// Check if we should stop
 					select {
 					case <-to.stop:
 						// Ensure we don't forget to mark tasks we've been
 						// given as complete.
-						to.restoreOutstandingRequests(len(thisTask[i:]))
+						to.restoreOutstandingRequests(len(fTasks[j:]))
 
 						// We don't worry about returning the trie copy
 						// because we won't need it again.
@@ -565,10 +569,10 @@ func (to *trieOrchestrator) processTasks() {
 					// Perform task
 					t.l.Lock()
 					var err error
-					if len(task) == common.AddressLength {
-						_, err = t.t.GetAccount(common.BytesToAddress(task))
+					if len(ftask) == common.AddressLength {
+						_, err = t.t.GetAccount(common.BytesToAddress(ftask))
 					} else {
-						_, err = t.t.GetStorage(to.sf.addr, task)
+						_, err = t.t.GetStorage(to.sf.addr, ftask)
 					}
 					t.l.Unlock()
 					if err != nil {
@@ -580,7 +584,11 @@ func (to *trieOrchestrator) processTasks() {
 				// Return copy when we are done with it, so someone else can use it
 				//
 				// channel should be buffered and should not block
-				to.copyChan <- t
+				select {
+				case to.copyChan <- t:
+				case <-time.After(30 * time.Second):
+					panic("unable to return trie to copyChan")
+				}
 			}
 
 			// Enqueue task for processing by [taskQueue]
@@ -623,6 +631,11 @@ func (to *trieOrchestrator) abort() {
 	to.stopOnce.Do(func() {
 		close(to.stop)
 	})
-	<-to.loopTerm
+	select {
+	case <-to.loopTerm:
+	case <-time.After(30 * time.Second):
+		panic("loop never returned in abort")
+	}
+
 	to.outstandingRequests.Wait()
 }
