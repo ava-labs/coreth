@@ -593,10 +593,14 @@ func (to *trieOrchestrator) processTasks() {
 
 func (to *trieOrchestrator) stopAcceptingTasks() {
 	to.pendingTasksLock.Lock()
+	defer to.pendingTasksLock.Unlock()
+
+	if !to.tasksAllowed {
+		return
+	}
 	to.tasksAllowed = false
 	to.restoreOutstandingRequests(len(to.pendingTasks))
 	to.pendingTasks = nil
-	to.pendingTasksLock.Unlock()
 }
 
 func (to *trieOrchestrator) wait() {
