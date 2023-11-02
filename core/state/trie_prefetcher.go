@@ -470,16 +470,7 @@ func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
 }
 
 func (to *trieOrchestrator) processTasks() {
-	defer func() {
-		// Cleanup remaining tasks
-		to.pendingTasksLock.Lock()
-		to.restoreOutstandingRequests(len(to.pendingTasks))
-		to.pendingTasks = nil
-		to.pendingTasksLock.Unlock()
-
-		// Mark exited
-		close(to.loopTerm)
-	}()
+	defer close(to.loopTerm)
 
 	for {
 		// Determine if we should process or exit
@@ -527,19 +518,18 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue work, unless stopped.
 			f := func() {
-				for _, task := range thisTask {
+				for i, task := range thisTask {
 					// Check if we should stop
-					var stopping bool
 					select {
 					case <-to.stop:
 						// Ensure we don't forget to mark tasks we've been
 						// given as complete.
-						to.outstandingRequests.Done()
-						stopping = true
+						to.restoreOutstandingRequests(len(thisTask[i:]))
+
+						// We don't worry about returning the trie copy
+						// because we won't need it again.
+						return
 					default:
-					}
-					if stopping {
-						continue
 					}
 
 					// Perform task
@@ -572,11 +562,17 @@ func (to *trieOrchestrator) processTasks() {
 	}
 }
 
-func (to *trieOrchestrator) wait() {
-	// Prevent more tasks from being enqueued
+func (to *trieOrchestrator) stopAcceptingTasks() {
 	to.pendingTasksLock.Lock()
 	to.tasksAllowed = false
+	to.restoreOutstandingRequests(len(to.pendingTasks))
+	to.pendingTasks = nil
 	to.pendingTasksLock.Unlock()
+}
+
+func (to *trieOrchestrator) wait() {
+	// Prevent more tasks from being enqueued
+	to.stopAcceptingTasks()
 
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
@@ -585,9 +581,7 @@ func (to *trieOrchestrator) wait() {
 // abort stops any ongoing tasks
 func (to *trieOrchestrator) abort() {
 	// Prevent more tasks from being enqueued
-	to.pendingTasksLock.Lock()
-	to.tasksAllowed = false
-	to.pendingTasksLock.Unlock()
+	to.stopAcceptingTasks()
 
 	// Stop all ongoing tasks
 	to.stopOnce.Do(func() {
