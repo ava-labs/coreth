@@ -83,6 +83,7 @@ type triePrefetcher struct {
 	accountDupMeter   metrics.Meter
 	accountSkipMeter  metrics.Meter
 	accountWasteMeter metrics.Meter
+
 	storageLoadMeter  metrics.Meter
 	storageDupMeter   metrics.Meter
 	storageSkipMeter  metrics.Meter
@@ -110,6 +111,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		accountDupMeter:   metrics.GetOrRegisterMeter(prefix+"/account/dup", nil),
 		accountSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/account/skip", nil),
 		accountWasteMeter: metrics.GetOrRegisterMeter(prefix+"/account/waste", nil),
+
 		storageLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
 		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
 		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
