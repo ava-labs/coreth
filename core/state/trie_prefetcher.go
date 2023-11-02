@@ -28,6 +28,7 @@ package state
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
@@ -71,6 +72,8 @@ type triePrefetcher struct {
 	workersTerm chan struct{} // Closed when all workers terminate
 	workersWg   sync.WaitGroup
 
+	fetcherWaitTimer metrics.Counter
+
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
 	deliveryWaitMissMeter    metrics.Meter
@@ -93,6 +96,8 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		taskQueue:   make(chan func()),
 		stopWorkers: make(chan struct{}),
 		workersTerm: make(chan struct{}),
+
+		fetcherWaitTimer: metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
 
 		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
 		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
@@ -249,7 +254,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 
 	// Wait for the fetcher to finish, if it exists (this will prevent any future tasks from
 	// being enqueued)
+	start := time.Now()
 	fetcher.wait()
+	p.fetcherWaitTimer.Inc(time.Since(start).Milliseconds())
 
 	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
 	fetcher.abort()
