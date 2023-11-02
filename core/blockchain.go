@@ -1061,9 +1061,6 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
-
-	// TODO: remove this
-	log.Info("accepted block", block.NumberU64())
 	return nil
 }
 
