@@ -552,7 +552,7 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue work, unless stopped.
 			f := func() {
-				for j, ftask := range fTasks {
+				for j, fTask := range fTasks {
 					// Check if we should stop
 					select {
 					case <-to.stop:
@@ -569,10 +569,10 @@ func (to *trieOrchestrator) processTasks() {
 					// Perform task
 					t.l.Lock()
 					var err error
-					if len(ftask) == common.AddressLength {
-						_, err = t.t.GetAccount(common.BytesToAddress(ftask))
+					if len(fTask) == common.AddressLength {
+						_, err = t.t.GetAccount(common.BytesToAddress(fTask))
 					} else {
-						_, err = t.t.GetStorage(to.sf.addr, ftask)
+						_, err = t.t.GetStorage(to.sf.addr, fTask)
 					}
 					t.l.Unlock()
 					if err != nil {
