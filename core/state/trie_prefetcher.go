@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -68,10 +69,8 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
-	taskQueue   chan func()   // Tasks for workers to execute
-	stopWorkers chan struct{} // Interrupts workers
-	workersTerm chan struct{} // Closed when all workers terminate
-	workersWg   sync.WaitGroup
+	workers      *utils.BoundedWorkers
+	workersMeter metrics.Meter
 
 	fetcherWaitTimer metrics.Counter
 
@@ -92,14 +91,13 @@ type triePrefetcher struct {
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
-	p := &triePrefetcher{
+	return &triePrefetcher{
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
 
-		taskQueue:   make(chan func()),
-		stopWorkers: make(chan struct{}),
-		workersTerm: make(chan struct{}),
+		workers:      utils.NewBoundedWorkers(maxConcurrentReads), // Scale up as needed to [maxConcurrentReads]
+		workersMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
 
 		fetcherWaitTimer: metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
 
@@ -117,28 +115,6 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
-
-	// Use workers to limit max concurrent readers
-	for i := 0; i < maxConcurrentReads; i++ {
-		p.workersWg.Add(1)
-		go func() {
-			defer p.workersWg.Done()
-
-			for {
-				select {
-				case task := <-p.taskQueue:
-					task()
-				case <-p.stopWorkers:
-					return
-				}
-			}
-		}()
-	}
-	go func() {
-		p.workersWg.Wait()
-		close(p.workersTerm)
-	}()
-	return p
 }
 
 // close iterates over all the subfetchers, aborts any that were left spinning
@@ -178,8 +154,9 @@ func (p *triePrefetcher) close() {
 
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
-	close(p.stopWorkers)
-	<-p.workersTerm
+	//
+	// Record number of workers that were spawned during this run
+	p.workersMeter.Mark(int64(p.workers.Stop()))
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil
@@ -580,14 +557,13 @@ func (to *trieOrchestrator) processTasks() {
 
 				// Return copy when we are done with it, so someone else can use it
 				//
-				// channel should be buffered and should not block
+				// channel is buffered and will not block
 				to.copyChan <- t
 			}
 
-			// Enqueue task for processing by [taskQueue]
-			select {
-			case to.sf.p.taskQueue <- f:
-			case <-to.stop:
+			// Enqueue task for processing (may spawn new goroutine
+			// if not at [maxConcurrentReads])
+			if !to.sf.p.workers.Execute(to.stop, f) {
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
 			}
