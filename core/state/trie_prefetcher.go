@@ -173,6 +173,8 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		root:    p.root,
 		fetches: make(map[string]Trie), // Active prefetchers use the fetchers map
 
+		workersMeter: p.workersMeter,
+
 		fetcherWaitTimer: p.fetcherWaitTimer,
 
 		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
