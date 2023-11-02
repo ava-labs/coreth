@@ -149,9 +149,7 @@ func (p *triePrefetcher) close() {
 
 	// Collect stats from all fetchers
 	for _, fetcher := range p.fetchers {
-		log.Info("waiting for fetcher to abort")
 		fetcher.abort() // safe to call multiple times
-		log.Info("fetcher aborted")
 
 		if metrics.Enabled {
 			if fetcher.root == p.root {
@@ -179,9 +177,7 @@ func (p *triePrefetcher) close() {
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
 	close(p.stopWorkers)
-	log.Info("waiting for workers to stop")
 	<-p.workersTerm
-	log.Info("workers stopped")
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil
@@ -269,16 +265,12 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 
 	// Wait for the fetcher to finish, if it exists (this will prevent any future tasks from
 	// being enqueued)
-	log.Info("waiting for fetcher")
 	start := time.Now()
 	fetcher.wait()
 	p.fetcherWaitTimer.Inc(time.Since(start).Milliseconds())
-	log.Info("fetcher returned")
 
 	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
-	log.Info("waiting for fetcher abort in trie")
 	fetcher.abort()
-	log.Info("fetcher aborted in trie")
 
 	// Return a copy of one of the prefetched tries
 	trie := fetcher.peek()
@@ -588,9 +580,7 @@ func (to *trieOrchestrator) processTasks() {
 				// Return copy when we are done with it, so someone else can use it
 				//
 				// channel should be buffered and should not block
-				log.Info("returning trie copy")
 				to.copyChan <- t
-				log.Info("trie copy returned")
 			}
 
 			// Enqueue task for processing by [taskQueue]

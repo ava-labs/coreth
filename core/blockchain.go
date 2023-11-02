@@ -609,6 +609,8 @@ func (bc *BlockChain) startAcceptor() {
 // addAcceptorQueue adds a new *types.Block to the [acceptorQueue]. This will
 // block if there are [AcceptorQueueLimit] items in [acceptorQueue].
 func (bc *BlockChain) addAcceptorQueue(b *types.Block) {
+	log.Info("accepted block", b.NumberU64())
+
 	// We only acquire a read lock here because it is ok to add items to the
 	// [acceptorQueue] concurrently.
 	bc.acceptorClosingLock.RLock()
