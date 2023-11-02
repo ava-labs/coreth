@@ -35,9 +35,19 @@ import (
 )
 
 const (
-	targetTasksPerWorker = 8
-	maxConcurrentReads   = 32
-	subfetcherMaxCopies  = 16
+	// maxConcurrentReads is the number of reads from disk that [triePrefetcher]
+	// will attempt to make concurrently.
+	maxConcurrentReads = 24
+
+	// targetTasksPerCopy is the target number of tasks that should
+	// be assigned to a single trie copy batch lookup. If there are more
+	// tasks to do than [targetTasksPerCopy]/trieCopies for a single subfetcher,
+	// more trieCopies will be made to increase concurrency.
+	targetTasksPerCopy = 8
+
+	// subfetcherMaxCopies is the maximum number of trie copies that a single
+	// subfetcher will attempt to create.
+	subfetcherMaxCopies = 16
 )
 
 var (
@@ -56,10 +66,10 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
-	workersWg   sync.WaitGroup
-	taskQueue   chan func()
+	taskQueue   chan func()   // Tasks for workers to execute
 	stopWorkers chan struct{} // Interrupts workers
 	workersTerm chan struct{} // Closed when all workers terminate
+	workersWg   sync.WaitGroup
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -472,9 +482,9 @@ func (to *trieOrchestrator) processTasks() {
 		// Create more copies if we have a lot of work
 		lt := len(tasks)
 		tasksPerWorker := lt / to.copies
-		if tasksPerWorker > targetTasksPerWorker && to.copies < subfetcherMaxCopies {
-			extraPerWorker := (tasksPerWorker - targetTasksPerWorker) * to.copies
-			newWorkers := extraPerWorker / targetTasksPerWorker
+		if tasksPerWorker > targetTasksPerCopy && to.copies < subfetcherMaxCopies {
+			extraPerWorker := (tasksPerWorker - targetTasksPerCopy) * to.copies
+			newWorkers := extraPerWorker / targetTasksPerCopy
 			for i := 0; i < newWorkers && to.copies+1 <= subfetcherMaxCopies; i++ {
 				to.copies++
 				to.copyChan <- &lockableTrie{t: to.copyBase()}
