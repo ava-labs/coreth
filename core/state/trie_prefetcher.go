@@ -535,11 +535,10 @@ func (to *trieOrchestrator) processTasks() {
 				to.copyChan <- &lockableTrie{t: to.copyBase()}
 			}
 		}
-		workSize := lt / to.copies
 
 		// Enqueue more work as soon as trie copies are available
-		for i := 0; i < lt; i += workSize {
-			end := i + workSize
+		for i := 0; i < lt; i += targetTasksPerCopy {
+			end := i + targetTasksPerCopy
 			if end > lt {
 				end = lt
 			}
