@@ -27,6 +27,7 @@
 package state
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -381,6 +382,9 @@ type lockableTrie struct {
 
 // trieOrchestrator is not thread-safe.
 type trieOrchestrator struct {
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+
 	sf *subfetcher
 
 	base *lockableTrie
@@ -395,9 +399,6 @@ type trieOrchestrator struct {
 
 	copies   int
 	copyChan chan *lockableTrie
-
-	stop     chan struct{}
-	stopOnce sync.Once
 }
 
 func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
@@ -420,9 +421,15 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		}
 	}
 
+	// Create cancelable context
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Create initial trie copy
 	ct := &lockableTrie{t: base}
 	to := &trieOrchestrator{
+		ctx:       ctx,
+		ctxCancel: cancel,
+
 		sf:   sf,
 		base: ct,
 
@@ -432,8 +439,6 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 
 		copies:   1,
 		copyChan: make(chan *lockableTrie, subfetcherMaxCopies),
-
-		stop: make(chan struct{}),
 	}
 	to.copyChan <- ct
 	return to
@@ -481,7 +486,7 @@ func (to *trieOrchestrator) processTasks() {
 		// Determine if we should process or exit
 		select {
 		case <-to.wake:
-		case <-to.stop:
+		case <-to.ctx.Done():
 			return
 		}
 
@@ -519,7 +524,7 @@ func (to *trieOrchestrator) processTasks() {
 			var t *lockableTrie
 			select {
 			case t = <-to.copyChan:
-			case <-to.stop:
+			case <-to.ctx.Done():
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
 			}
@@ -529,7 +534,7 @@ func (to *trieOrchestrator) processTasks() {
 				for j, fTask := range fTasks {
 					// Check if we should stop
 					select {
-					case <-to.stop:
+					case <-to.ctx.Done():
 						// Ensure we don't forget to mark tasks we've been
 						// given as complete.
 						to.restoreOutstandingRequests(len(fTasks[j:]))
@@ -563,7 +568,7 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue task for processing (may spawn new goroutine
 			// if not at [maxConcurrentReads])
-			if !to.sf.p.workers.Execute(to.stop, f) {
+			if !to.sf.p.workers.Execute(to.ctx, f) {
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
 			}
@@ -597,9 +602,7 @@ func (to *trieOrchestrator) abort() {
 	to.stopAcceptingTasks()
 
 	// Stop all ongoing tasks
-	to.stopOnce.Do(func() {
-		close(to.stop)
-	})
+	to.ctxCancel() // safe to call multiple times
 	<-to.loopTerm
 
 	// Wait for ongoing tasks to complete

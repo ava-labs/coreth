@@ -4,6 +4,7 @@
 package utils
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 )
@@ -12,6 +13,7 @@ type BoundedWorkers struct {
 	wg          sync.WaitGroup
 	workerCount atomic.Int32
 	work        chan func()
+	workClose   sync.Once
 	workers     chan struct{}
 }
 
@@ -43,15 +45,15 @@ func (b *BoundedWorkers) startWorker(f func()) {
 }
 
 // Execute the given function on an existing goroutine waiting for more work, a new goroutine,
-// or return if there is activity on [cancel].
-func (b *BoundedWorkers) Execute(cancel chan struct{}, f func()) bool {
+// or return if the context is canceled.
+func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 	select {
 	case b.work <- f: // Feed hungry workers first.
 		return true
 	case b.workers <- struct{}{}: // Allocate a new worker to execute immediately next.
 		b.startWorker(f)
 		return true
-	case <-cancel:
+	case <-ctx.Done():
 		return false
 	}
 }
@@ -60,9 +62,11 @@ func (b *BoundedWorkers) Execute(cancel chan struct{}, f func()) bool {
 // returns the number of workers that were spawned during the run.
 //
 // Execute must not be called after calling Stop.
-// It is not safe to call Stop multiple times.
+// It is safe to call Stop multiple times.
 func (b *BoundedWorkers) Stop() int {
-	close(b.work)
+	b.workClose.Do(func() {
+		close(b.work)
+	})
 	b.wg.Wait()
 	return int(b.workerCount.Load())
 }
