@@ -16,11 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testSharedMemory() atomic.SharedMemory {
-	m := atomic.NewMemory(memdb.New())
-	return m.NewSharedMemory(testCChainID)
-}
-
 func TestIteratorCanIterate(t *testing.T) {
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())

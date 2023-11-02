@@ -277,6 +277,16 @@ func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 	return utx.SourceChain, &atomic.Requests{RemoveRequests: utxoIDs}, nil
 }
 
+// NewImportTx returns a new ImportTx
+func (vm *VM) NewImportTx(
+	chainID ids.ID, // chain to import from
+	to common.Address, // Address of recipient
+	baseFee *big.Int, // fee to use post-AP3
+	keys []*secp256k1.PrivateKey, // Keys to import the funds
+) (*Tx, error) {
+	return vm.newImportTx(chainID, to, baseFee, keys)
+}
+
 // newImportTx returns a new ImportTx
 func (vm *VM) newImportTx(
 	chainID ids.ID, // chain to import from
