@@ -22,7 +22,6 @@ var (
 )
 
 type user struct {
-	// secpFactory *secp256k1.Factory
 	// This user's database, acquired from the keystore
 	db *encdb.Database
 }
