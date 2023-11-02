@@ -177,10 +177,14 @@ func (p *triePrefetcher) close() {
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
 	close(p.stopWorkers)
-	select {
-	case <-p.workersTerm:
-	case <-time.After(30 * time.Second):
-		panic("workers never returned")
+	var done bool
+	for !done {
+		select {
+		case <-p.workersTerm:
+			done = true
+		case <-time.After(30 * time.Second):
+			log.Error("workers never returned")
+		}
 	}
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
@@ -584,10 +588,14 @@ func (to *trieOrchestrator) processTasks() {
 				// Return copy when we are done with it, so someone else can use it
 				//
 				// channel should be buffered and should not block
-				select {
-				case to.copyChan <- t:
-				case <-time.After(30 * time.Second):
-					panic("unable to return trie to copyChan")
+				var done bool
+				for !done {
+					select {
+					case to.copyChan <- t:
+						done = true
+					case <-time.After(30 * time.Second):
+						log.Error("could not enqueue copy")
+					}
 				}
 			}
 
@@ -631,11 +639,16 @@ func (to *trieOrchestrator) abort() {
 	to.stopOnce.Do(func() {
 		close(to.stop)
 	})
-	select {
-	case <-to.loopTerm:
-	case <-time.After(30 * time.Second):
-		panic("loop never returned in abort")
+	var done bool
+	for !done {
+		select {
+		case <-to.loopTerm:
+			done = true
+		case <-time.After(30 * time.Second):
+			log.Error("loop never returned")
+		}
 	}
 
+	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
 }
