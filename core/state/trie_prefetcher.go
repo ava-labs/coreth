@@ -407,13 +407,12 @@ type trieOrchestrator struct {
 	base *lockableTrie
 
 	outstandingRequests sync.WaitGroup
-
-	tasksAllowed     bool
-	skips            atomic.Int32 // Number of tasks skipped
-	pendingTasks     [][]byte
-	pendingTasksLock sync.Mutex
-	wake             chan struct{}
-	loopTerm         chan struct{}
+	tasksAllowed        bool
+	skips               atomic.Int32 // Number of tasks skipped
+	pendingTasks        [][]byte
+	pendingTasksLock    sync.Mutex
+	wake                chan struct{}
+	loopTerm            chan struct{}
 
 	copies   int
 	copyChan chan *lockableTrie
@@ -521,7 +520,11 @@ func (to *trieOrchestrator) processTasks() {
 		if tasksPerWorker > targetTasksPerCopy && to.copies < subfetcherMaxCopies {
 			extraPerWorker := (tasksPerWorker - targetTasksPerCopy) * to.copies
 			newWorkers := extraPerWorker / targetTasksPerCopy
-			for i := 0; i < newWorkers && to.copies+1 <= subfetcherMaxCopies; i++ {
+			if newWorkers+to.copies > subfetcherMaxCopies {
+				// Ensure we don't exceed max allowed copies
+				newWorkers = subfetcherMaxCopies - to.copies
+			}
+			for i := 0; i < newWorkers; i++ {
 				to.copies++
 				to.copyChan <- &lockableTrie{t: to.copyBase()}
 			}
@@ -622,7 +625,4 @@ func (to *trieOrchestrator) abort() {
 	})
 	<-to.loopTerm
 	to.outstandingRequests.Wait()
-
-	// Clear copies
-	to.copyChan = nil
 }
