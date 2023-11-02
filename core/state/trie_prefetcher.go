@@ -491,9 +491,7 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 }
 
 func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
-	for i := 0; i < count; i++ {
-		to.outstandingRequests.Done()
-	}
+	to.outstandingRequests.Add(-count)
 	to.skips.Add(int32(count))
 }
 
