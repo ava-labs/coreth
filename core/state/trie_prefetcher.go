@@ -452,6 +452,7 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 		to.pendingTasksLock.Unlock()
 		return
 	}
+	to.outstandingRequests.Add(len(tasks))
 	to.pendingTasks = append(to.pendingTasks, tasks...)
 	to.pendingTasksLock.Unlock()
 
@@ -462,8 +463,23 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 	}
 }
 
+func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
+	for i := 0; i < count; i++ {
+		to.outstandingRequests.Done()
+	}
+}
+
 func (to *trieOrchestrator) processTasks() {
-	defer close(to.loopTerm)
+	defer func() {
+		// Cleanup remaining tasks
+		to.pendingTasksLock.Lock()
+		to.restoreOutstandingRequests(len(to.pendingTasks))
+		to.pendingTasks = nil
+		to.pendingTasksLock.Unlock()
+
+		// Mark exited
+		close(to.loopTerm)
+	}()
 
 	for {
 		// Determine if we should process or exit
@@ -505,10 +521,11 @@ func (to *trieOrchestrator) processTasks() {
 			select {
 			case t = <-to.copyChan:
 			case <-to.stop:
+				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
 			}
 
-			to.outstandingRequests.Add(lt)
+			// Enqueue work, unless stopped.
 			f := func() {
 				for _, task := range thisTask {
 					// Check if we should stop
@@ -545,15 +562,10 @@ func (to *trieOrchestrator) processTasks() {
 				// channel should be buffered and should not block
 				to.copyChan <- t
 			}
-
-			// Enqueue work, unless stopped.
 			select {
 			case to.sf.p.taskQueue <- f:
 			case <-to.stop:
-				// Return all counters
-				for i := 0; i < lt; i++ {
-					to.outstandingRequests.Done()
-				}
+				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
 			}
 		}
