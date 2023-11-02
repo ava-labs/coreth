@@ -28,6 +28,7 @@ package state
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/coreth/metrics"
@@ -80,9 +81,11 @@ type triePrefetcher struct {
 
 	accountLoadMeter  metrics.Meter
 	accountDupMeter   metrics.Meter
+	accountSkipMeter  metrics.Meter
 	accountWasteMeter metrics.Meter
 	storageLoadMeter  metrics.Meter
 	storageDupMeter   metrics.Meter
+	storageSkipMeter  metrics.Meter
 	storageWasteMeter metrics.Meter
 }
 
@@ -105,9 +108,11 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 
 		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
 		accountDupMeter:   metrics.GetOrRegisterMeter(prefix+"/account/dup", nil),
+		accountSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/account/skip", nil),
 		accountWasteMeter: metrics.GetOrRegisterMeter(prefix+"/account/waste", nil),
 		storageLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
 		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
+		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
 
@@ -150,6 +155,7 @@ func (p *triePrefetcher) close() {
 			if fetcher.root == p.root {
 				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
 				p.accountDupMeter.Mark(int64(fetcher.dups))
+				p.accountSkipMeter.Mark(int64(fetcher.skips()))
 
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
@@ -158,6 +164,7 @@ func (p *triePrefetcher) close() {
 			} else {
 				p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
 				p.storageDupMeter.Mark(int64(fetcher.dups))
+				p.storageSkipMeter.Mark(int64(fetcher.skips()))
 
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
@@ -186,15 +193,19 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		root:    p.root,
 		fetches: make(map[string]Trie), // Active prefetchers use the fetchers map
 
+		fetcherWaitTimer: p.fetcherWaitTimer,
+
 		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
 		deliveryRequestMissMeter: p.deliveryRequestMissMeter,
 		deliveryWaitMissMeter:    p.deliveryWaitMissMeter,
 
 		accountLoadMeter:  p.accountLoadMeter,
 		accountDupMeter:   p.accountDupMeter,
+		accountSkipMeter:  p.accountSkipMeter,
 		accountWasteMeter: p.accountWasteMeter,
 		storageLoadMeter:  p.storageLoadMeter,
 		storageDupMeter:   p.storageDupMeter,
+		storageSkipMeter:  p.storageSkipMeter,
 		storageWasteMeter: p.storageWasteMeter,
 	}
 	// If the prefetcher is already a copy, duplicate the data
@@ -374,6 +385,14 @@ func (sf *subfetcher) abort() {
 	sf.to.abort()
 }
 
+func (sf *subfetcher) skips() int {
+	if sf.to == nil {
+		// Unable to open trie
+		return 0
+	}
+	return int(sf.to.skips.Load())
+}
+
 // lockableTrie is used to ensure that a trie is not accessed concurrently
 // (could only occur when copying)
 type lockableTrie struct {
@@ -390,6 +409,7 @@ type trieOrchestrator struct {
 	outstandingRequests sync.WaitGroup
 
 	tasksAllowed     bool
+	skips            atomic.Int32 // Number of tasks skipped
 	pendingTasks     [][]byte
 	pendingTasksLock sync.Mutex
 	wake             chan struct{}
@@ -456,6 +476,7 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 	// Add tasks to [pendingTasks]
 	to.pendingTasksLock.Lock()
 	if !to.tasksAllowed {
+		to.skips.Add(int32(len(tasks)))
 		to.pendingTasksLock.Unlock()
 		return
 	}
@@ -474,6 +495,7 @@ func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
 	for i := 0; i < count; i++ {
 		to.outstandingRequests.Done()
 	}
+	to.skips.Add(int32(count))
 }
 
 func (to *trieOrchestrator) processTasks() {
