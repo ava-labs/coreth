@@ -633,6 +633,13 @@ func (to *trieOrchestrator) abort() {
 	to.ctxCancel() // safe to call multiple times
 	<-to.loopTerm
 
+	// Capture any dangling pending tasks (processTasks
+	// may exit before enqueing all pendingTasks)
+	to.pendingTasksLock.Lock()
+	to.restoreOutstandingRequests(len(to.pendingTasks))
+	to.pendingTasks = nil
+	to.pendingTasksLock.Unlock()
+
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
 }
