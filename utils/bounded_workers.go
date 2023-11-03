@@ -14,6 +14,8 @@ type BoundedWorkers struct {
 	workerCount        atomic.Int32
 	outstandingWorkers sync.WaitGroup
 
+	outstandingWork sync.WaitGroup
+
 	work      chan func()
 	workClose sync.Once
 }
@@ -38,16 +40,21 @@ func (b *BoundedWorkers) startWorker(f func()) {
 
 		if f != nil {
 			f()
+			b.outstandingWork.Done()
 		}
 		for f := range b.work {
 			f()
+			b.outstandingWork.Done()
 		}
 	}()
 }
 
 // Execute the given function on an existing goroutine waiting for more work, a new goroutine,
 // or return if the context is canceled.
+//
+// Execute must not be called after Stop.
 func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
+	b.outstandingWork.Add(1)
 	select {
 	case b.work <- f: // Feed hungry workers first.
 		return true
@@ -55,16 +62,17 @@ func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 		b.startWorker(f)
 		return true
 	case <-ctx.Done():
+		b.outstandingWork.Done()
 		return false
 	}
 }
 
-// Stop closes the group and waits for all goroutines to exit. Stop
-// returns the number of workers that were spawned during the run.
+// Stop closes the group and waits for all enqueued work to finish and all goroutines to exit.
+// Stop returns the number of workers that were spawned during the run.
 //
-// Stop should only be called after all invocations of Execute have returned.
 // It is safe to call Stop multiple times.
 func (b *BoundedWorkers) Stop() int {
+	b.outstandingWork.Wait()
 	b.workClose.Do(func() {
 		close(b.work)
 	})
