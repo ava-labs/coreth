@@ -433,9 +433,9 @@ type trieOrchestrator struct {
 	wake                chan struct{}
 	loopTerm            chan struct{}
 
-	copies    int
-	copyChan  chan Trie
-	copySpawn chan struct{}
+	copies      int
+	copyChan    chan Trie
+	copySpawner chan struct{}
 }
 
 func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
@@ -473,13 +473,13 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		wake:         make(chan struct{}, 1),
 		loopTerm:     make(chan struct{}),
 
-		copyChan:  make(chan Trie, sf.p.maxConcurrency),
-		copySpawn: make(chan struct{}, sf.p.maxConcurrency),
+		copyChan:    make(chan Trie, sf.p.maxConcurrency),
+		copySpawner: make(chan struct{}, sf.p.maxConcurrency),
 	}
 
 	// Create initial trie copy
 	to.copies++
-	to.copySpawn <- struct{}{}
+	to.copySpawner <- struct{}{}
 	to.copyChan <- to.copyBase()
 	return to
 }
@@ -549,7 +549,7 @@ func (to *trieOrchestrator) processTasks() {
 			var t Trie
 			select {
 			case t = <-to.copyChan:
-			case to.copySpawn <- struct{}{}:
+			case to.copySpawner <- struct{}{}:
 				to.copies++
 				t = to.copyBase()
 			case <-to.ctx.Done():

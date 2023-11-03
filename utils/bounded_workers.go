@@ -10,7 +10,7 @@ import (
 )
 
 type BoundedWorkers struct {
-	workerSpawn        chan struct{}
+	workerSpawner      chan struct{}
 	workerCount        atomic.Int32
 	outstandingWorkers sync.WaitGroup
 
@@ -24,8 +24,8 @@ type BoundedWorkers struct {
 // will spawn up to [max] goroutines.
 func NewBoundedWorkers(max int) *BoundedWorkers {
 	return &BoundedWorkers{
-		work:        make(chan func()),
-		workerSpawn: make(chan struct{}, max),
+		work:          make(chan func()),
+		workerSpawner: make(chan struct{}, max),
 	}
 }
 
@@ -58,7 +58,7 @@ func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 	select {
 	case b.work <- f: // Feed hungry workers first.
 		return true
-	case b.workerSpawn <- struct{}{}: // Allocate a new worker to execute immediately next.
+	case b.workerSpawner <- struct{}{}: // Allocate a new worker to execute immediately next.
 		b.startWorker(f)
 		return true
 	case <-ctx.Done():
