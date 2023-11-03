@@ -186,13 +186,13 @@ func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*St
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string) {
+func (s *StateDB) StartPrefetcher(namespace string, parallelism int) {
 	if s.prefetcher != nil {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
 	if s.snap != nil {
-		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, parallelism)
 	}
 }
 
@@ -975,14 +975,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			obj.updateRoot(s.db)
-		}
-	}
-	// Now we're about to start to write changes to the trie. The trie is so far
-	// _untouched_. We can check with the prefetcher, if it can give us a trie
-	// which has the same root, but also has some content loaded into it.
-	if prefetcher != nil {
-		if trie := prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
-			s.trie = trie
 		}
 	}
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))

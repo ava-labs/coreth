@@ -163,6 +163,8 @@ type CacheConfig struct {
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+
+	TriePrefetcherWorkers int // Number of workers to allocate to trie prefetching
 }
 
 var DefaultCacheConfig = &CacheConfig{
@@ -174,6 +176,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:    64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:         256,
 	AcceptedCacheSize:     32,
+	TriePrefetcherWorkers: 64,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -1309,7 +1312,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
 
 	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain")
+	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherWorkers)
 	activeState = statedb
 
 	// If we have a followup block, run that against the current state to pre-cache
@@ -1684,7 +1687,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	}
 
 	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain")
+	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherWorkers)
 	defer func() {
 		statedb.StopPrefetcher()
 	}()

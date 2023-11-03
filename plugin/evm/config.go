@@ -44,6 +44,8 @@ const (
 	defaultStateSyncServerTrieCache                   = 64 // MB
 	defaultAcceptedCacheSize                          = 32 // blocks
 
+	defaultTriePrefetcherWorkers = 64 // Default number of concurrent prefetchers
+
 	// defaultStateSyncMinBlocks is the minimum number of blocks the blockchain
 	// should be ahead of local last accepted to perform state sync.
 	// This constant is chosen so normal bootstrapping is preferred when it would
@@ -103,6 +105,7 @@ type Config struct {
 	TrieDirtyCache        int      `json:"trie-dirty-cache"`         // Size of the trie dirty cache (MB)
 	TrieDirtyCommitTarget int      `json:"trie-dirty-commit-target"` // Memory limit to target in the dirty cache before performing a commit (MB)
 	SnapshotCache         int      `json:"snapshot-cache"`           // Size of the snapshot disk layer clean cache (MB)
+	TriePrefetcherWorkers int      `json:"trie-prefetcher-workers"`  // Number of concurrent trie prefetchers during block execution
 
 	// Eth Settings
 	Preimages      bool `json:"preimages-enabled"`
@@ -250,6 +253,8 @@ func (c *Config) SetDefaults() {
 	c.StateSyncRequestSize = defaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
+
+	c.TriePrefetcherWorkers = defaultTriePrefetcherWorkers
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
