@@ -168,6 +168,7 @@ type Config struct {
 
 	// Sync settings
 	StateSyncEnabled         *bool  `json:"state-sync-enabled"`     // Pointer distinguishes false (no state sync) and not set (state sync only at genesis).
+	BlockBackfillEnabled     *bool  `json:"block-backfill-enabled"` // Pointer distinguishes false (no block backfill) and not set (follow state sync config).
 	StateSyncSkipResume      bool   `json:"state-sync-skip-resume"` // Forces state sync to use the highest available summary block
 	StateSyncServerTrieCache int    `json:"state-sync-server-trie-cache"`
 	StateSyncIDs             string `json:"state-sync-ids"`

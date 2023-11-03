@@ -662,6 +662,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // disk to ensure that we do not continue syncing from an invalid snapshot.
 func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
+	blockBackfillEnabled := vm.blockBackfillEnabled(lastAcceptedHeight)
+
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
 	if stateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
@@ -688,7 +690,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 				BlockParser:      vm,
 			},
 		),
-		enabled:              stateSyncEnabled,
+		stateSyncEnabled:     stateSyncEnabled,
 		skipResume:           vm.config.StateSyncSkipResume,
 		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
 		stateSyncRequestSize: vm.config.StateSyncRequestSize,
@@ -699,6 +701,15 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		db:                   vm.db,
 		atomicBackend:        vm.atomicBackend,
 		toEngine:             vm.toEngine,
+
+		// block backfilling related part
+		blockBackfillEnabled: blockBackfillEnabled,
+		parseBlk: func(ctx context.Context, b []byte) (snowman.Block, error) {
+			return vm.parseBlock(ctx, b)
+		},
+		getBlk: func(ctx context.Context, id ids.ID) (snowman.Block, error) {
+			return vm.getBlock(ctx, id)
+		},
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1282,14 +1293,6 @@ func (vm *VM) GetBlockIDAtHeight(_ context.Context, blkHeight uint64) (ids.ID, e
 
 func (vm *VM) Version(context.Context) (string, error) {
 	return Version, nil
-}
-
-func (vm *VM) BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error) {
-	return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
-}
-
-func (vm *VM) BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, uint64, error) {
-	return ids.Empty, 0, block.ErrStopBlockBackfilling
 }
 
 // NewHandler returns a new Handler for a service where:
@@ -1901,4 +1904,13 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
+}
+
+func (vm *VM) blockBackfillEnabled(lastAcceptedHeight uint64) bool {
+	if vm.config.BlockBackfillEnabled != nil {
+		// if the config is set, use that
+		return *vm.config.BlockBackfillEnabled
+	}
+
+	return vm.stateSyncEnabled(lastAcceptedHeight)
 }

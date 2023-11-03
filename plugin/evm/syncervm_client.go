@@ -6,12 +6,14 @@ package evm
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
@@ -25,6 +27,7 @@ import (
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -37,7 +40,8 @@ var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 // stateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
 type stateSyncClientConfig struct {
-	enabled    bool
+	stateSyncEnabled bool
+
 	skipResume bool
 	// Specifies the number of blocks behind the latest state summary that the chain must be
 	// in order to prefer performing state sync over falling back to the normal bootstrapping
@@ -58,6 +62,12 @@ type stateSyncClientConfig struct {
 	client syncclient.Client
 
 	toEngine chan<- commonEng.Message
+
+	// block backfilling stuff
+	blockBackfillEnabled  bool
+	latestBackfilledBlock ids.ID
+	parseBlk              func(context.Context, []byte) (snowman.Block, error)
+	getBlk                func(context.Context, ids.ID) (snowman.Block, error)
 }
 
 type stateSyncerClient struct {
@@ -85,6 +95,9 @@ type StateSyncClient interface {
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
 	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
 
+	BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error)
+	BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, uint64, error)
+
 	// additional methods required by the evm package
 	StateSyncClearOngoingSummary() error
 	Shutdown() error
@@ -102,7 +115,7 @@ type Syncer interface {
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
 func (client *stateSyncerClient) StateSyncEnabled(context.Context) (bool, error) {
-	return client.enabled, nil
+	return client.stateSyncEnabled, nil
 }
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
@@ -315,6 +328,95 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	err = <-evmSyncer.Done()
 	log.Info("state sync: sync finished", "root", client.syncSummary.BlockRoot, "err", err)
 	return err
+}
+
+func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error) {
+	// Note: engine guarantee to call BackfillBlocksEnabled only after StateSyncDone event has been issued
+	if !client.blockBackfillEnabled {
+		return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
+	}
+
+	var (
+		summaryBlkID     = client.resumableSummary.BlockHash
+		summaryBlkHeight = client.resumableSummary.BlockNumber
+	)
+	summaryBlk := rawdb.ReadBlock(client.chaindb, summaryBlkID, summaryBlkHeight)
+	if summaryBlk != nil {
+		return ids.Empty, 0, fmt.Errorf("failed retrieving summary block %s", summaryBlkID)
+	}
+	client.latestBackfilledBlock = ids.ID(summaryBlk.Hash())
+
+	var (
+		nextBlkID     = ids.ID(summaryBlk.ParentHash())
+		nextBlkHeight = summaryBlk.NumberU64() - 1
+	)
+	log.Info(
+		"Starting block backfilling",
+		"next requested block ID", nextBlkID,
+		"next requested block height", nextBlkHeight,
+	)
+	return nextBlkID, nextBlkHeight, nil
+}
+
+func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
+	// 1. Parse blocks
+	blks := make(map[uint64]snowman.Block)
+	for i, blkBytes := range blksBytes {
+		blk, err := client.parseBlk(ctx, blkBytes)
+		if err != nil {
+			log.Warn(
+				"Failed parsing backfilled block",
+				"block index", i,
+			)
+			continue
+		}
+		blks[blk.Height()] = blk
+	}
+
+	// 2. Validate blocks continuity and store them
+	blkHeights := maps.Keys(blks)
+	sort.Slice(blkHeights, func(i, j int) bool {
+		return blkHeights[i] < blkHeights[j] // sort in ascending order by heights
+	})
+
+	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf("failed retrieving latest backfilled block, %s, %w", client.latestBackfilledBlock, err)
+	}
+	for i := len(blkHeights) - 1; i >= 0; i-- {
+		blk := blks[blkHeights[i]]
+		if topBlk.Parent() != blk.ID() {
+			log.Warn(
+				"Unexpected backfilled block. Reissuing request",
+				"expected block ID", topBlk.Parent(),
+				"received block ID", blk.ID(),
+				"Requested block ID", topBlk.Parent(),
+			)
+			break
+		}
+
+		if err := blk.Accept(ctx); err != nil {
+			log.Warn(
+				"Failed block acceptance. Reissuing request",
+				"failed block ID", blk.ID(),
+				"Requested block ID", topBlk.Parent(),
+			)
+			break
+		}
+		topBlk = blk
+	}
+	client.latestBackfilledBlock = topBlk.ID()
+
+	var (
+		nextBlkID     = topBlk.Parent()
+		nextBlkHeight = topBlk.Height() - 1
+	)
+	log.Info(
+		"Successfully backfilled blocks batch",
+		"next requested block ID", nextBlkID,
+		"next requested block height", nextBlkHeight,
+	)
+	return nextBlkID, nextBlkHeight, nil
 }
 
 func (client *stateSyncerClient) Shutdown() error {
