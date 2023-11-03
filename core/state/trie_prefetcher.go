@@ -155,7 +155,7 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
-	p.storageLargestLoadMeter.Mark(int64(largestLoad))
+	p.storageLargestLoadMeter.Mark(largestLoad)
 
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
