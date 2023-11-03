@@ -366,8 +366,12 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 			return ids.Empty, 0, fmt.Errorf("failed retrieving latest backfilled block, %s, %w", client.latestBackfilledBlock, err)
 		}
 
+		if latestBackfilledBlock.Height() == 1 {
+			return ids.Empty, 0, block.ErrStopBlockBackfilling
+		}
+
 		client.latestBackfilledBlock = ids.ID(lastBackfilledBlkID)
-		nextBlkID = ids.ID(latestBackfilledBlock.Parent())
+		nextBlkID = latestBackfilledBlock.Parent()
 		nextBlkHeight = latestBackfilledBlock.Height() - 1
 
 	default:
@@ -435,6 +439,10 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	}
 	if err := client.db.Commit(); err != nil {
 		return ids.Empty, 0, fmt.Errorf("failed to commit db: %w", err)
+	}
+
+	if topBlk.Height() == 1 {
+		return ids.Empty, 0, block.ErrStopBlockBackfilling
 	}
 
 	var (
