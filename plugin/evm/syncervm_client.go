@@ -36,7 +36,10 @@ const (
 	parentsToGet = 256
 )
 
-var stateSyncSummaryKey = []byte("stateSyncSummary")
+var (
+	stateSyncSummaryKey    = []byte("stateSyncSummary")
+	lastBackfilledBlockKey = []byte("lastBackfilledBlock")
+)
 
 // stateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
 type stateSyncClientConfig struct {
@@ -337,19 +340,40 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 	}
 
 	var (
-		summaryBlkID     = client.resumableSummary.BlockHash
-		summaryBlkHeight = client.resumableSummary.BlockNumber
+		nextBlkID     ids.ID
+		nextBlkHeight uint64
 	)
-	summaryBlk := rawdb.ReadBlock(client.chaindb, summaryBlkID, summaryBlkHeight)
-	if summaryBlk != nil {
-		return ids.Empty, 0, fmt.Errorf("failed retrieving summary block %s", summaryBlkID)
-	}
-	client.latestBackfilledBlock = ids.ID(summaryBlk.Hash())
+	switch lastBackfilledBlkID, err := client.metadataDB.Get(lastBackfilledBlockKey); err {
+	case database.ErrNotFound:
+		// backfill was never attempted. Start from state sync block
+		var (
+			summaryBlkID     = client.resumableSummary.BlockHash
+			summaryBlkHeight = client.resumableSummary.BlockNumber
+		)
+		summaryBlk := rawdb.ReadBlock(client.chaindb, summaryBlkID, summaryBlkHeight)
+		if summaryBlk != nil {
+			return ids.Empty, 0, fmt.Errorf("failed retrieving summary block %s", summaryBlkID)
+		}
 
-	var (
-		nextBlkID     = ids.ID(summaryBlk.ParentHash())
+		client.latestBackfilledBlock = ids.ID(summaryBlk.Hash())
+		nextBlkID = ids.ID(summaryBlk.ParentHash())
 		nextBlkHeight = summaryBlk.NumberU64() - 1
-	)
+
+	case nil:
+		// backfill was attempted. Resume from latest backfilled block
+		latestBackfilledBlock, err := client.getBlk(ctx, ids.ID(lastBackfilledBlkID))
+		if err != nil {
+			return ids.Empty, 0, fmt.Errorf("failed retrieving latest backfilled block, %s, %w", client.latestBackfilledBlock, err)
+		}
+
+		client.latestBackfilledBlock = ids.ID(lastBackfilledBlkID)
+		nextBlkID = ids.ID(latestBackfilledBlock.Parent())
+		nextBlkHeight = latestBackfilledBlock.Height() - 1
+
+	default:
+		return ids.Empty, 0, fmt.Errorf("failed retrieving last backfilled block ID from disk: %w", err)
+	}
+
 	log.Info(
 		"Starting block backfilling",
 		"next requested block ID", nextBlkID,
@@ -406,6 +430,12 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		topBlk = blk
 	}
 	client.latestBackfilledBlock = topBlk.ID()
+	if err := client.metadataDB.Put(lastBackfilledBlockKey, client.latestBackfilledBlock[:]); err != nil {
+		return ids.Empty, 0, fmt.Errorf("failed storing latest backfilled blockID to disk, %s, %w", client.latestBackfilledBlock, err)
+	}
+	if err := client.db.Commit(); err != nil {
+		return ids.Empty, 0, fmt.Errorf("failed to commit db: %w", err)
+	}
 
 	var (
 		nextBlkID     = topBlk.Parent()
