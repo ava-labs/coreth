@@ -39,20 +39,14 @@ import (
 )
 
 const (
-	// maxConcurrentReads is the number of reads from disk that [triePrefetcher]
-	// will attempt to make concurrently.
-	maxConcurrentReads = 24
+	// triePrefetchMetricsPrefix is the prefix under which to publish the metrics.
+	triePrefetchMetricsPrefix = "trie/prefetch/"
 
 	// targetTasksPerCopy is the target number of tasks that should
 	// be assigned to a single trie copy batch lookup. If there are more
 	// tasks to do than [targetTasksPerCopy]/trieCopies for a single subfetcher,
 	// more trieCopies will be made to increase concurrency.
 	targetTasksPerCopy = 8
-)
-
-var (
-	// triePrefetchMetricsPrefix is the prefix under which to publish the metrics.
-	triePrefetchMetricsPrefix = "trie/prefetch/"
 )
 
 // triePrefetcher is an active prefetcher, which receives accounts or storage
@@ -66,8 +60,9 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
-	workers      *utils.BoundedWorkers
-	workersMeter metrics.Meter
+	maxConcurrency int
+	workers        *utils.BoundedWorkers
+	workersMeter   metrics.Meter
 
 	fetcherWaitTimer metrics.Counter
 
@@ -88,15 +83,16 @@ type triePrefetcher struct {
 	storageWasteMeter       metrics.Meter
 }
 
-func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
+func newTriePrefetcher(db Database, root common.Hash, namespace string, maxConcurrency int) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
 
-		workers:      utils.NewBoundedWorkers(maxConcurrentReads), // Scale up as needed to [maxConcurrentReads]
-		workersMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
+		maxConcurrency: maxConcurrency,
+		workers:        utils.NewBoundedWorkers(maxConcurrency), // Scale up as needed to [maxConcurrency]
+		workersMeter:   metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
 
 		fetcherWaitTimer: metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
 
@@ -459,7 +455,7 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		loopTerm:     make(chan struct{}),
 
 		copies:   1,
-		copyChan: make(chan *lockableTrie, maxConcurrentReads),
+		copyChan: make(chan *lockableTrie, sf.p.maxConcurrency),
 	}
 	to.copyChan <- ct
 	return to
@@ -503,6 +499,7 @@ func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
 func (to *trieOrchestrator) processTasks() {
 	defer close(to.loopTerm)
 
+	maxConcurrency := to.sf.p.maxConcurrency
 	for {
 		// Determine if we should process or exit
 		select {
@@ -520,12 +517,12 @@ func (to *trieOrchestrator) processTasks() {
 		// Create more copies if we have a lot of work
 		lt := len(tasks)
 		tasksPerWorker := lt / to.copies
-		if tasksPerWorker > targetTasksPerCopy && to.copies < maxConcurrentReads {
+		if tasksPerWorker > targetTasksPerCopy && to.copies < maxConcurrency {
 			extraPerWorker := (tasksPerWorker - targetTasksPerCopy) * to.copies
 			newWorkers := extraPerWorker / targetTasksPerCopy
-			if newWorkers+to.copies > maxConcurrentReads {
+			if newWorkers+to.copies > maxConcurrency {
 				// Ensure we don't exceed max allowed copies
-				newWorkers = maxConcurrentReads - to.copies
+				newWorkers = maxConcurrency - to.copies
 			}
 			for i := 0; i < newWorkers; i++ {
 				to.copies++
@@ -588,7 +585,7 @@ func (to *trieOrchestrator) processTasks() {
 			}
 
 			// Enqueue task for processing (may spawn new goroutine
-			// if not at [maxConcurrentReads])
+			// if not at [maxConcurrency])
 			if !to.sf.p.workers.Execute(to.ctx, f) {
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return

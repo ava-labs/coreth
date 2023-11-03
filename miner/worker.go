@@ -210,7 +210,7 @@ func (w *worker) createCurrentEnvironment(parent *types.Header, header *types.He
 	if err != nil {
 		return nil, err
 	}
-	state.StartPrefetcher("miner")
+	state.StartPrefetcher("miner", w.eth.BlockChain().CacheConfig().TriePrefetcherParallelism)
 	return &environment{
 		signer:  types.MakeSigner(w.chainConfig, header.Number, header.Time),
 		state:   state,
