@@ -50,7 +50,7 @@ func (b *BoundedWorkers) startWorker(f func()) {
 // Execute the given function on an existing goroutine waiting for more work, a new goroutine,
 // or return if the context is canceled.
 //
-// If Execute is called after Stop, this function will return false.
+// If Execute is called after Stop, this function will eventually return false.
 func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 	// We use an RLock here to ensure Stop cannont be called while we are waiting for
 	// our work to be enqueued (would cause a panic).
@@ -76,7 +76,8 @@ func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 // Stop closes the group and waits for all goroutines to exit. Stop
 // returns the number of workers that were spawned during the run.
 //
-// It is safe to call Stop multiple times.
+// It is safe to call Stop multiple times and even before Execute has returned
+// for all invocations.
 func (b *BoundedWorkers) Stop() int {
 	// Once we attempt to grab this Lock, no more RLocks will be issued
 	// during Execute. This allows for a graceful halt even if there
