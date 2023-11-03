@@ -80,10 +80,11 @@ type triePrefetcher struct {
 	accountSkipMeter  metrics.Meter
 	accountWasteMeter metrics.Meter
 
-	storageLoadMeter  metrics.Meter
-	storageDupMeter   metrics.Meter
-	storageSkipMeter  metrics.Meter
-	storageWasteMeter metrics.Meter
+	storageLoadMeter        metrics.Meter
+	storageLargestLoadMeter metrics.Meter
+	storageDupMeter         metrics.Meter
+	storageSkipMeter        metrics.Meter
+	storageWasteMeter       metrics.Meter
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
@@ -107,10 +108,11 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		accountSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/account/skip", nil),
 		accountWasteMeter: metrics.GetOrRegisterMeter(prefix+"/account/waste", nil),
 
-		storageLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
-		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
-		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
-		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
+		storageLoadMeter:        metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
+		storageLargestLoadMeter: metrics.GetOrRegisterMeter(prefix+"/storage/lload", nil),
+		storageDupMeter:         metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
+		storageSkipMeter:        metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
+		storageWasteMeter:       metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
 }
 
@@ -123,6 +125,7 @@ func (p *triePrefetcher) close() {
 	}
 
 	// Collect stats from all fetchers
+	var largestLoad int64
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to call multiple times
 
@@ -137,7 +140,11 @@ func (p *triePrefetcher) close() {
 				}
 				p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
 			} else {
-				p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
+				oseen := int64(len(fetcher.seen))
+				if oseen > largestLoad {
+					largestLoad = oseen
+				}
+				p.storageLoadMeter.Mark(oseen)
 				p.storageDupMeter.Mark(int64(fetcher.dups))
 				p.storageSkipMeter.Mark(int64(fetcher.skips()))
 
@@ -148,6 +155,7 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
+	p.storageLargestLoadMeter.Mark(int64(largestLoad))
 
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
@@ -181,10 +189,12 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		accountDupMeter:   p.accountDupMeter,
 		accountSkipMeter:  p.accountSkipMeter,
 		accountWasteMeter: p.accountWasteMeter,
-		storageLoadMeter:  p.storageLoadMeter,
-		storageDupMeter:   p.storageDupMeter,
-		storageSkipMeter:  p.storageSkipMeter,
-		storageWasteMeter: p.storageWasteMeter,
+
+		storageLoadMeter:        p.storageLoadMeter,
+		storageLargestLoadMeter: p.storageLargestLoadMeter,
+		storageDupMeter:         p.storageDupMeter,
+		storageSkipMeter:        p.storageSkipMeter,
+		storageWasteMeter:       p.storageWasteMeter,
 	}
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
