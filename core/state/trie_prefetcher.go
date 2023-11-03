@@ -322,21 +322,10 @@ func (sf *subfetcher) fetchTasks(tasks [][]byte) [][]byte {
 
 			sf.fetchTask(t, task)
 
-			for {
-				select {
-				case task := <-work:
-					sf.fetchTask(t, task)
-				case <-sf.stop:
-					return
-				}
+			for task := range work {
+				sf.fetchTask(t, task)
 			}
 		})
-		// Break early if the subfetcher has been stopped
-		select {
-		case <-sf.stop:
-			break
-		default:
-		}
 	}
 	wg.Wait()
 
