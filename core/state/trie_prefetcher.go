@@ -157,7 +157,7 @@ func (p *triePrefetcher) close() {
 	// could stop while waiting)
 	//
 	// Record number of workers that were spawned during this run
-	p.workersMeter.Mark(int64(p.workers.Stop()))
+	p.workersMeter.Mark(int64(p.workers.Wait()))
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil

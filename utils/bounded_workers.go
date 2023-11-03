@@ -52,7 +52,7 @@ func (b *BoundedWorkers) startWorker(f func()) {
 // Execute the given function on an existing goroutine waiting for more work, a new goroutine,
 // or return if the context is canceled.
 //
-// Execute must not be called after Stop.
+// Execute must not be called after Wait.
 func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 	b.outstandingWork.Add(1)
 	select {
@@ -67,11 +67,11 @@ func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 	}
 }
 
-// Stop closes the group and waits for all enqueued work to finish and all goroutines to exit.
-// Stop returns the number of workers that were spawned during the run.
+// Wait returns after all enqueued work finishes and all goroutines to exit.
+// Wait returns the number of workers that were spawned during the run.
 //
-// It is safe to call Stop multiple times.
-func (b *BoundedWorkers) Stop() int {
+// It is safe to call Wait multiple times.
+func (b *BoundedWorkers) Wait() int {
 	b.outstandingWork.Wait()
 	b.workClose.Do(func() {
 		close(b.work)
