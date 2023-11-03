@@ -21,7 +21,7 @@ const (
 	defaultTrieCleanCache                             = 512
 	defaultTrieDirtyCache                             = 512
 	defaultTrieDirtyCommitTarget                      = 20
-	defaultTriePrefetcherParallelism                  = 32
+	defaultTriePrefetcherParallelism                  = 48
 	defaultSnapshotCache                              = 256
 	defaultSyncableCommitInterval                     = defaultCommitInterval * 4
 	defaultSnapshotWait                               = false

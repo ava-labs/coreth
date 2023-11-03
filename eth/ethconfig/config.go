@@ -57,7 +57,7 @@ func NewDefaultConfig() Config {
 		TrieCleanCache:            512,
 		TrieDirtyCache:            256,
 		TrieDirtyCommitTarget:     20,
-		TriePrefetcherParallelism: 32,
+		TriePrefetcherParallelism: 48,
 		SnapshotCache:             256,
 		AcceptedCacheSize:         32,
 		Miner:                     miner.Config{},
