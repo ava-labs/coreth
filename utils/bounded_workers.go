@@ -10,6 +10,9 @@ import (
 )
 
 type BoundedWorkers struct {
+	doneLock sync.RWMutex
+	done     bool
+
 	wg          sync.WaitGroup
 	workerCount atomic.Int32
 	work        chan func()
@@ -46,7 +49,19 @@ func (b *BoundedWorkers) startWorker(f func()) {
 
 // Execute the given function on an existing goroutine waiting for more work, a new goroutine,
 // or return if the context is canceled.
+//
+// If Execute is called after Stop, this function will return false.
 func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
+	// We use an RLock here to ensure Stop cannont be called while we are waiting for
+	// our work to be enqueued (would cause a panic).
+	b.doneLock.RLock()
+	defer b.doneLock.RUnlock()
+
+	// Check if we can enqueue work
+	if b.done {
+		return false
+	}
+
 	select {
 	case b.work <- f: // Feed hungry workers first.
 		return true
@@ -61,9 +76,15 @@ func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
 // Stop closes the group and waits for all goroutines to exit. Stop
 // returns the number of workers that were spawned during the run.
 //
-// Execute must not be called after calling Stop.
 // It is safe to call Stop multiple times.
 func (b *BoundedWorkers) Stop() int {
+	// Once we attempt to grab this Lock, no more RLocks will be issued
+	// during Execute. This allows for a graceful halt even if there
+	// are blocked callers of Execute.
+	b.doneLock.Lock()
+	defer b.doneLock.Unlock()
+
+	b.done = true
 	b.workClose.Do(func() {
 		close(b.work)
 	})
