@@ -43,10 +43,15 @@ const (
 	triePrefetchMetricsPrefix = "trie/prefetch/"
 
 	// targetTasksPerCopy is the target number of tasks that should
-	// be assigned to a single trie copy batch lookup. If there are more
-	// tasks to do than [targetTasksPerCopy]/trieCopies for a single subfetcher,
-	// more trieCopies will be made to increase concurrency.
-	targetTasksPerCopy = 8
+	// be assigned to a single trie copy batch lookup.
+	//
+	// Recall, a single trie lookup may in the worst case require
+	// one disk read per level of the trie. This means a single trie.Get
+	// call could take 7-10ms (7-10 levels, 1 ms per read).
+	//
+	// This should be tuned such that increased parallelism makes up
+	// for maintenance of the extra trie copies.
+	targetTasksPerCopy = 4
 )
 
 // triePrefetcher is an active prefetcher, which receives accounts or storage
@@ -62,9 +67,10 @@ type triePrefetcher struct {
 
 	maxConcurrency int
 	workers        *utils.BoundedWorkers
-	workersMeter   metrics.Meter
 
-	fetcherWaitTimer metrics.Counter
+	subfetcherWorkersMeter metrics.Meter
+	subfetcherWaitTimer    metrics.Counter
+	subfetcherCopiesMeter  metrics.Meter
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -92,9 +98,10 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, maxConcu
 
 		maxConcurrency: maxConcurrency,
 		workers:        utils.NewBoundedWorkers(maxConcurrency), // Scale up as needed to [maxConcurrency]
-		workersMeter:   metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
 
-		fetcherWaitTimer: metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
+		subfetcherWorkersMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
+		subfetcherWaitTimer:    metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
+		subfetcherCopiesMeter:  metrics.GetOrRegisterMeter(prefix+"/subfetcher/copies", nil),
 
 		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
 		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
@@ -131,6 +138,8 @@ func (p *triePrefetcher) close() {
 		fetcher.abort() // safe to call multiple times
 
 		if metrics.Enabled {
+			p.subfetcherCopiesMeter.Mark(int64(fetcher.copies()))
+
 			if fetcher.root == p.root {
 				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
 				p.accountDupMeter.Mark(int64(fetcher.dups))
@@ -168,7 +177,7 @@ func (p *triePrefetcher) close() {
 	// Record number of workers that were spawned during this run
 	workersUsed := int64(p.workers.Wait())
 	if metrics.Enabled {
-		p.workersMeter.Mark(workersUsed)
+		p.subfetcherWorkersMeter.Mark(workersUsed)
 	}
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
@@ -185,9 +194,9 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		root:    p.root,
 		fetches: make(map[string]Trie), // Active prefetchers use the fetchers map
 
-		workersMeter: p.workersMeter,
-
-		fetcherWaitTimer: p.fetcherWaitTimer,
+		subfetcherWorkersMeter: p.subfetcherWorkersMeter,
+		subfetcherWaitTimer:    p.subfetcherWaitTimer,
+		subfetcherCopiesMeter:  p.subfetcherCopiesMeter,
 
 		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
 		deliveryRequestMissMeter: p.deliveryRequestMissMeter,
@@ -264,7 +273,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// being enqueued)
 	start := time.Now()
 	fetcher.wait()
-	p.fetcherWaitTimer.Inc(time.Since(start).Milliseconds())
+	p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
 
 	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
 	fetcher.abort()
@@ -390,11 +399,12 @@ func (sf *subfetcher) skips() int {
 	return int(sf.to.skips.Load())
 }
 
-// lockableTrie is used to ensure that a trie is not accessed concurrently
-// (could only occur when copying)
-type lockableTrie struct {
-	t Trie
-	l sync.Mutex
+func (sf *subfetcher) copies() int {
+	if sf.to == nil {
+		// Unable to open trie
+		return 0
+	}
+	return sf.to.copies
 }
 
 // trieOrchestrator is not thread-safe.
@@ -404,7 +414,16 @@ type trieOrchestrator struct {
 
 	sf *subfetcher
 
-	base *lockableTrie
+	// base is an unmodified Trie we keep for
+	// creating copies for each worker goroutine.
+	//
+	// We care more about quick copies than good copies
+	// because most (if not all) of the nodes that will be populated
+	// in the copy will come from the underlying triedb cache. Ones
+	// that don't come from this cache probably had to be fetched
+	// from disk anyways.
+	base     Trie
+	baseLock sync.Mutex
 
 	outstandingRequests sync.WaitGroup
 	tasksAllowed        bool
@@ -414,8 +433,9 @@ type trieOrchestrator struct {
 	wake                chan struct{}
 	loopTerm            chan struct{}
 
-	copies   int
-	copyChan chan *lockableTrie
+	copies    int
+	copyChan  chan Trie
+	copySpawn chan struct{}
 }
 
 func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
@@ -441,31 +461,34 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 	// Create cancelable context
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Create initial trie copy
-	ct := &lockableTrie{t: base}
+	// Instantiate trieOrchestrator
 	to := &trieOrchestrator{
 		ctx:       ctx,
 		ctxCancel: cancel,
 
 		sf:   sf,
-		base: ct,
+		base: base,
 
 		tasksAllowed: true,
 		wake:         make(chan struct{}, 1),
 		loopTerm:     make(chan struct{}),
 
-		copies:   1,
-		copyChan: make(chan *lockableTrie, sf.p.maxConcurrency),
+		copyChan:  make(chan Trie, sf.p.maxConcurrency),
+		copySpawn: make(chan struct{}, sf.p.maxConcurrency),
 	}
-	to.copyChan <- ct
+
+	// Create initial trie copy
+	to.copies++
+	to.copySpawn <- struct{}{}
+	to.copyChan <- to.copyBase()
 	return to
 }
 
 func (to *trieOrchestrator) copyBase() Trie {
-	to.base.l.Lock()
-	defer to.base.l.Unlock()
+	to.baseLock.Lock()
+	defer to.baseLock.Unlock()
 
-	return to.sf.db.CopyTrie(to.base.t)
+	return to.sf.db.CopyTrie(to.base)
 }
 
 func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
@@ -499,7 +522,6 @@ func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
 func (to *trieOrchestrator) processTasks() {
 	defer close(to.loopTerm)
 
-	maxConcurrency := to.sf.p.maxConcurrency
 	for {
 		// Determine if we should process or exit
 		select {
@@ -514,23 +536,8 @@ func (to *trieOrchestrator) processTasks() {
 		to.pendingTasks = nil
 		to.pendingTasksLock.Unlock()
 
-		// Create more copies if we have a lot of work
-		lt := len(tasks)
-		tasksPerWorker := lt / to.copies
-		if tasksPerWorker > targetTasksPerCopy && to.copies < maxConcurrency {
-			extraPerWorker := (tasksPerWorker - targetTasksPerCopy) * to.copies
-			newWorkers := extraPerWorker / targetTasksPerCopy
-			if newWorkers+to.copies > maxConcurrency {
-				// Ensure we don't exceed max allowed copies
-				newWorkers = maxConcurrency - to.copies
-			}
-			for i := 0; i < newWorkers; i++ {
-				to.copies++
-				to.copyChan <- &lockableTrie{t: to.copyBase()}
-			}
-		}
-
 		// Enqueue more work as soon as trie copies are available
+		lt := len(tasks)
 		for i := 0; i < lt; i += targetTasksPerCopy {
 			end := i + targetTasksPerCopy
 			if end > lt {
@@ -538,10 +545,13 @@ func (to *trieOrchestrator) processTasks() {
 			}
 			fTasks := tasks[i:end]
 
-			// Wait for an available copy
-			var t *lockableTrie
+			// Wait for an available copy or create one
+			var t Trie
 			select {
 			case t = <-to.copyChan:
+			case to.copySpawn <- struct{}{}:
+				to.copies++
+				t = to.copyBase()
 			case <-to.ctx.Done():
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
@@ -564,14 +574,12 @@ func (to *trieOrchestrator) processTasks() {
 					}
 
 					// Perform task
-					t.l.Lock()
 					var err error
 					if len(fTask) == common.AddressLength {
-						_, err = t.t.GetAccount(common.BytesToAddress(fTask))
+						_, err = t.GetAccount(common.BytesToAddress(fTask))
 					} else {
-						_, err = t.t.GetStorage(to.sf.addr, fTask)
+						_, err = t.GetStorage(to.sf.addr, fTask)
 					}
-					t.l.Unlock()
 					if err != nil {
 						log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
 					}
