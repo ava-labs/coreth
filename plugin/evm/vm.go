@@ -352,8 +352,6 @@ func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
-func (vm *VM) SnowContext() *snow.Context { return vm.ctx }
-
 /*
  ******************************************************************************
  ********************************* Snowman API ********************************
@@ -2046,38 +2044,4 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
-}
-
-// To be used for testing fixture
-func (vm *VM) GetTxpool() *txpool.TxPool { return vm.txPool }
-
-func (vm *VM) GetAtomicMempool() *Mempool { return vm.mempool }
-
-func (vm *VM) NewImportTx(chainID ids.ID, to common.Address, baseFee *big.Int, keys []*secp256k1.PrivateKey) (*Tx, error) {
-	return vm.newImportTx(chainID, to, baseFee, keys)
-}
-
-func (vm *VM) GetXChainID() ids.ID { return vm.ctx.XChainID }
-
-func (vm *VM) GetAVAXAssetID() ids.ID { return vm.ctx.AVAXAssetID }
-
-func (vm *VM) GetBlockChain() *core.BlockChain { return vm.blockChain }
-
-func (vm *VM) NewExportTx(
-	assetID ids.ID,
-	amount uint64,
-	chainID ids.ID,
-	to ids.ShortID,
-	baseFee *big.Int,
-	keys []*secp256k1.PrivateKey,
-) (*Tx, error) {
-	return vm.newExportTx(assetID, amount, chainID, to, baseFee, keys)
-}
-
-func (vm *VM) GetAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
-	return vm.getAtomicTx(txID)
-}
-
-func (vm *VM) GetAPIBackend() *eth.EthAPIBackend {
-	return vm.eth.APIBackend
 }
