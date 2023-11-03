@@ -81,6 +81,8 @@ jobs:
       shell: bash
     - run: ./scripts/build_test.sh
       shell: bash
+    - run: ./scripts/tests.integration.sh
+      shell: bash
     - run: ./scripts/coverage.sh
       shell: bash
   test-race:
