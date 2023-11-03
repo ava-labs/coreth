@@ -48,10 +48,6 @@ const (
 	// tasks to do than [targetTasksPerCopy]/trieCopies for a single subfetcher,
 	// more trieCopies will be made to increase concurrency.
 	targetTasksPerCopy = 8
-
-	// subfetcherMaxCopies is the maximum number of trie copies that a single
-	// subfetcher will attempt to create.
-	subfetcherMaxCopies = 16
 )
 
 var (
@@ -440,7 +436,7 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		loopTerm:     make(chan struct{}),
 
 		copies:   1,
-		copyChan: make(chan *lockableTrie, subfetcherMaxCopies),
+		copyChan: make(chan *lockableTrie, maxConcurrentReads),
 	}
 	to.copyChan <- ct
 	return to
@@ -501,12 +497,12 @@ func (to *trieOrchestrator) processTasks() {
 		// Create more copies if we have a lot of work
 		lt := len(tasks)
 		tasksPerWorker := lt / to.copies
-		if tasksPerWorker > targetTasksPerCopy && to.copies < subfetcherMaxCopies {
+		if tasksPerWorker > targetTasksPerCopy && to.copies < maxConcurrentReads {
 			extraPerWorker := (tasksPerWorker - targetTasksPerCopy) * to.copies
 			newWorkers := extraPerWorker / targetTasksPerCopy
-			if newWorkers+to.copies > subfetcherMaxCopies {
+			if newWorkers+to.copies > maxConcurrentReads {
 				// Ensure we don't exceed max allowed copies
-				newWorkers = subfetcherMaxCopies - to.copies
+				newWorkers = maxConcurrentReads - to.copies
 			}
 			for i := 0; i < newWorkers; i++ {
 				to.copies++
