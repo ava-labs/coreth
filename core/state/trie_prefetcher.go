@@ -602,8 +602,10 @@ func (to *trieOrchestrator) stopAcceptingTasks() {
 		return
 	}
 	to.tasksAllowed = false
-	to.restoreOutstandingRequests(len(to.pendingTasks))
-	to.pendingTasks = nil
+
+	// We don't clear [to.pendingTasks] here because
+	// it will be faster to prefetch them eventhough we
+	// are still waiting.
 }
 
 func (to *trieOrchestrator) wait() {
