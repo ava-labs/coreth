@@ -4,7 +4,7 @@ set -euo pipefail
 
 # e.g.,
 # ./scripts/tests.integration.sh
-# ./scripts/tests.e2e.sh --ginkgo.label-filter=x                                       # All arguments are supplied to gi
+# ./scripts/tests.integration.sh --ginkgo.label-filter=x   # All arguments are supplied to ginkgo
 if ! [[ "$0" =~ scripts/tests.integration.sh ]]; then
   echo "must be run from repository root"
   exit 255
