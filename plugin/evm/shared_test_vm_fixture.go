@@ -5,21 +5,24 @@ package evm
 
 import (
 	"context"
-	"encoding/json"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/avalanchego/ids"
+	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
+
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	ginkgo "github.com/onsi/ginkgo/v2"
-	"github.com/stretchr/testify/require"
 )
 
 type vmFixture struct {
 	require *require.Assertions
-	vm      *VM
+	Issuer  chan engCommon.Message
+	VM      *VM
 }
 
 func newPrefundedGenesis(
@@ -39,29 +42,26 @@ func newPrefundedGenesis(
 	}
 }
 
-func createVMFixture(configJSON string, upgradeJSON string, prefundedEthAddrs map[common.Address]uint64, prefundedUTXOs map[ids.ShortID]uint64) *vmFixture {
-	require := require.New(ginkgo.GinkgoT())
+func CreateVMFixture(t require.TestingT, prefundedUTXOs map[ids.ShortID]uint64) *vmFixture {
+	require := require.New(t)
 
-	genesis := newPrefundedGenesis(prefundedEthAddrs)
-	genesisBytes, err := json.Marshal(genesis)
-	require.NoError(err)
-
-	_, vm, _, _, _ := GenesisVMWithUTXOs(ginkgo.GinkgoT(), true, string(genesisBytes), configJSON, upgradeJSON, prefundedUTXOs)
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", prefundedUTXOs)
 	return &vmFixture{
-		vm:      vm,
+		VM:      vm,
+		Issuer:  issuer,
 		require: require,
 	}
 }
 
 func (v *vmFixture) IssueTxs(txs []*types.Transaction) {
-	errs := v.vm.GetTxpool().AddRemotesSync(txs)
+	errs := v.VM.GetTxpool().AddRemotesSync(txs)
 	for _, err := range errs {
 		v.require.NoError(err)
 	}
 }
 
 func (v *vmFixture) IssueAtomicTxs(atomicTxs []*Tx) {
-	mempool := v.vm.GetAtomicMempool()
+	mempool := v.VM.GetAtomicMempool()
 	for _, tx := range atomicTxs {
 		v.require.NoError(mempool.AddTx(tx))
 	}
@@ -69,14 +69,14 @@ func (v *vmFixture) IssueAtomicTxs(atomicTxs []*Tx) {
 
 func (v *vmFixture) BuildAndAccept() {
 	ctx := context.Background()
-	block, err := v.vm.BuildBlock(ctx)
+	block, err := v.VM.BuildBlock(ctx)
 	v.require.NoError(err)
 
 	v.require.NoError(block.Verify(ctx))
-	v.require.NoError(v.vm.SetPreference(ctx, block.ID()))
+	v.require.NoError(v.VM.SetPreference(ctx, block.ID()))
 	v.require.NoError(block.Accept(ctx))
 }
 
 func (v *vmFixture) Teardown() {
-	v.require.NoError(v.vm.Shutdown(context.Background()))
+	v.require.NoError(v.VM.Shutdown(context.Background()))
 }
