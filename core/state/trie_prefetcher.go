@@ -155,13 +155,18 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
-	p.storageLargestLoadMeter.Mark(largestLoad)
+	if metrics.Enabled {
+		p.storageLargestLoadMeter.Mark(largestLoad)
+	}
 
 	// Stop all workers once fetchers are aborted (otherwise
 	// could stop while waiting)
 	//
 	// Record number of workers that were spawned during this run
-	p.workersMeter.Mark(int64(p.workers.Wait()))
+	workersUsed := int64(p.workers.Wait())
+	if metrics.Enabled {
+		p.workersMeter.Mark(workersUsed)
+	}
 
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil
