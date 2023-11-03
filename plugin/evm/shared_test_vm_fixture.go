@@ -21,21 +21,36 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 )
 
+// Arbitrarily large amount of AVAX (10^12) to fund keys on the C-Chain for testing
+var DefaultFundedKeyCChainAmount = new(big.Int).Exp(big.NewInt(10), big.NewInt(30), nil)
+
 type vmFixture struct {
-	require *require.Assertions
-	issuer  chan engCommon.Message
-	height  uint64
-	vm      *VM
+	require      *require.Assertions
+	assert       *assert.Assertions
+	prefundedKey *secp256k1.PrivateKey
+	vm           *VM
+	issuer       chan engCommon.Message
+	height       uint64
 }
 
-func CreateVMFixture(t require.TestingT, prefundedUTXOs map[ids.ShortID]uint64) *vmFixture {
+func CreateVMFixture(
+	t require.TestingT,
+) *vmFixture {
 	require := require.New(t)
 
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", prefundedUTXOs)
+	prefundedKey, err := secp256k1.NewPrivateKey()
+	require.NoError(err)
+
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+		prefundedKey.Address(): DefaultFundedKeyCChainAmount.Uint64(),
+	})
+
 	return &vmFixture{
-		vm:      vm,
-		issuer:  issuer,
-		require: require,
+		require:      require,
+		assert:       assert.New(t),
+		prefundedKey: prefundedKey,
+		vm:           vm,
+		issuer:       issuer,
 	}
 }
 
@@ -43,12 +58,19 @@ func (v *vmFixture) Teardown() {
 	v.require.NoError(v.vm.Shutdown(context.Background()))
 }
 
+func (v *vmFixture) AllocateFundedKey() *secp256k1.PrivateKey {
+	// This method supports allocation of funded keys for a shared
+	// test network, but for the VM instance the fixture is not
+	// intended to be shared so its assumed safe to return the same
+	// key from every call.
+	return v.prefundedKey
+}
+
 func (v *vmFixture) GetXChainID() ids.ID { return v.vm.ctx.XChainID }
 
 func (v *vmFixture) GetAVAXAssetID() ids.ID { return v.vm.ctx.AVAXAssetID }
 
 func (v *vmFixture) IssueImportTx(
-	t require.TestingT,
 	ctx context.Context,
 	chainID ids.ID,
 	to common.Address,
@@ -64,13 +86,12 @@ func (v *vmFixture) IssueImportTx(
 
 	height := v.buildAndAcceptBlockForTx(ctx, importTx)
 
-	v.checkAtomicTxIndexing(t, importTx, height)
+	v.checkAtomicTxIndexing(importTx, height)
 
 	return importTx
 }
 
 func (v *vmFixture) IssueExportTx(
-	t require.TestingT,
 	ctx context.Context,
 	assetID ids.ID,
 	amount uint64,
@@ -88,7 +109,7 @@ func (v *vmFixture) IssueExportTx(
 
 	height := v.buildAndAcceptBlockForTx(ctx, exportTx)
 
-	v.checkAtomicTxIndexing(t, exportTx, height)
+	v.checkAtomicTxIndexing(exportTx, height)
 
 	return exportTx
 }
@@ -126,11 +147,11 @@ func (v *vmFixture) buildAndAcceptBlockForTx(ctx context.Context, tx *Tx) uint64
 	return v.height
 }
 
-func (v *vmFixture) checkAtomicTxIndexing(t require.TestingT, tx *Tx, expectedHeight uint64) {
+func (v *vmFixture) checkAtomicTxIndexing(tx *Tx, expectedHeight uint64) {
 	// Check that the atomic transactions were indexed as expected.
 	indexedTx, status, height, err := v.vm.getAtomicTx(tx.ID())
 	v.require.NoError(err)
-	assert.Equal(t, Accepted, status)
-	assert.Equal(t, expectedHeight, height, "unexpected height")
-	assert.Equal(t, indexedTx.ID(), tx.ID(), "expected ID of indexed tx to match original txID")
+	v.assert.Equal(Accepted, status)
+	v.assert.Equal(expectedHeight, height, "unexpected height")
+	v.assert.Equal(indexedTx.ID(), tx.ID(), "expected ID of indexed tx to match original txID")
 }
