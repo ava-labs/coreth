@@ -80,6 +80,7 @@ type triePrefetcher struct {
 	accountSkipMeter  metrics.Meter
 	accountWasteMeter metrics.Meter
 
+	storageFetchersMeter    metrics.Meter
 	storageLoadMeter        metrics.Meter
 	storageLargestLoadMeter metrics.Meter
 	storageDupMeter         metrics.Meter
@@ -108,6 +109,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		accountSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/account/skip", nil),
 		accountWasteMeter: metrics.GetOrRegisterMeter(prefix+"/account/waste", nil),
 
+		storageFetchersMeter:    metrics.GetOrRegisterMeter(prefix+"/storage/fetchers", nil),
 		storageLoadMeter:        metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
 		storageLargestLoadMeter: metrics.GetOrRegisterMeter(prefix+"/storage/lload", nil),
 		storageDupMeter:         metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
@@ -125,7 +127,10 @@ func (p *triePrefetcher) close() {
 	}
 
 	// Collect stats from all fetchers
-	var largestLoad int64
+	var (
+		storageFetchers int64
+		largestLoad     int64
+	)
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to call multiple times
 
@@ -140,6 +145,7 @@ func (p *triePrefetcher) close() {
 				}
 				p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
 			} else {
+				storageFetchers++
 				oseen := int64(len(fetcher.seen))
 				if oseen > largestLoad {
 					largestLoad = oseen
@@ -156,6 +162,7 @@ func (p *triePrefetcher) close() {
 		}
 	}
 	if metrics.Enabled {
+		p.storageFetchersMeter.Mark(storageFetchers)
 		p.storageLargestLoadMeter.Mark(largestLoad)
 	}
 
@@ -195,6 +202,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		accountSkipMeter:  p.accountSkipMeter,
 		accountWasteMeter: p.accountWasteMeter,
 
+		storageFetchersMeter:    p.storageFetchersMeter,
 		storageLoadMeter:        p.storageLoadMeter,
 		storageLargestLoadMeter: p.storageLargestLoadMeter,
 		storageDupMeter:         p.storageDupMeter,
