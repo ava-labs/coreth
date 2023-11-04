@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
@@ -69,9 +68,8 @@ type stateSyncClientConfig struct {
 	// block backfilling stuff
 	blockBackfillEnabled  bool
 	latestBackfilledBlock ids.ID
-	parseBlk              func(context.Context, []byte) (snowman.Block, error)
-	getBlk                func(context.Context, ids.ID) (snowman.Block, error)
-	backfillBlk           func(context.Context, snowman.Block) error
+	parseBlk              func(context.Context, []byte) (*Block, error)
+	getBlk                func(context.Context, ids.ID) (*Block, error)
 }
 
 type stateSyncerClient struct {
@@ -401,7 +399,7 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 
 func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
 	// 1. Parse blocks
-	blks := make(map[uint64]snowman.Block)
+	blks := make(map[uint64]*Block)
 	for i, blkBytes := range blksBytes {
 		blk, err := client.parseBlk(ctx, blkBytes)
 		if err != nil {
@@ -441,7 +439,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 			break
 		}
 
-		if err := client.backfillBlk(ctx, blk); err != nil {
+		if err := blk.Backfill(ctx); err != nil {
 			// TODO: consider if this an internal error that should stop block backfilling
 			log.Warn(
 				"Failed block indexing. Reissuing request",

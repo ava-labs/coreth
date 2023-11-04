@@ -704,14 +704,11 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 
 		// block backfilling related part
 		blockBackfillEnabled: blockBackfillEnabled,
-		parseBlk: func(ctx context.Context, b []byte) (snowman.Block, error) {
-			return vm.parseBlock(ctx, b)
+		parseBlk: func(ctx context.Context, b []byte) (*Block, error) {
+			return vm.parseEvmBlock(ctx, b)
 		},
-		getBlk: func(ctx context.Context, id ids.ID) (snowman.Block, error) {
-			return vm.getBlock(ctx, id)
-		},
-		backfillBlk: func(ctx context.Context, blk snowman.Block) error {
-			return vm.backfillBlk(ctx, blk)
+		getBlk: func(ctx context.Context, id ids.ID) (*Block, error) {
+			return vm.getEvmBlock(ctx, id)
 		},
 	})
 
@@ -1213,8 +1210,7 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	return blk, nil
 }
 
-// parseBlock parses [b] into a block to be wrapped by ChainState.
-func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
+func (vm *VM) parseEvmBlock(_ context.Context, b []byte) (*Block, error) {
 	ethBlock := new(types.Block)
 	if err := rlp.DecodeBytes(b, ethBlock); err != nil {
 		return nil, err
@@ -1233,6 +1229,11 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	return block, nil
 }
 
+// parseBlock parses [b] into a block to be wrapped by ChainState.
+func (vm *VM) parseBlock(ctx context.Context, b []byte) (snowman.Block, error) {
+	return vm.parseEvmBlock(ctx, b)
+}
+
 func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 	block, err := vm.parseBlock(context.TODO(), b)
 	if err != nil {
@@ -1244,7 +1245,11 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 
 // getBlock attempts to retrieve block [id] from the VM to be wrapped
 // by ChainState.
-func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
+func (vm *VM) getBlock(ctx context.Context, id ids.ID) (snowman.Block, error) {
+	return vm.getEvmBlock(ctx, id)
+}
+
+func (vm *VM) getEvmBlock(_ context.Context, id ids.ID) (*Block, error) {
 	ethBlock := vm.blockChain.GetBlockByHash(common.Hash(id))
 	// If [ethBlock] is nil, return [database.ErrNotFound] here
 	// so that the miss is considered cacheable.
@@ -1913,12 +1918,4 @@ func (vm *VM) blockBackfillEnabled(lastAcceptedHeight uint64) bool {
 	}
 
 	return vm.stateSyncEnabled(lastAcceptedHeight)
-}
-
-func (vm *VM) backfillBlk(ctx context.Context, blk snowman.Block) error {
-	block, ok := blk.(*Block)
-	if !ok {
-		return fmt.Errorf("unexpected backfilled block type %T", blk)
-	}
-	return block.Backfill(ctx)
 }
