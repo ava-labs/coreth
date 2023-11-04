@@ -710,6 +710,9 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		getBlk: func(ctx context.Context, id ids.ID) (snowman.Block, error) {
 			return vm.getBlock(ctx, id)
 		},
+		indexBlk: func(ctx context.Context) error {
+			return errors.New("not yet implemented")
+		},
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

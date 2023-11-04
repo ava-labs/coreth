@@ -71,6 +71,7 @@ type stateSyncClientConfig struct {
 	latestBackfilledBlock ids.ID
 	parseBlk              func(context.Context, []byte) (snowman.Block, error)
 	getBlk                func(context.Context, ids.ID) (snowman.Block, error)
+	indexBlk              func(context.Context) error
 }
 
 type stateSyncerClient struct {
@@ -346,28 +347,36 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 	switch lastBackfilledBlkID, err := client.metadataDB.Get(lastBackfilledBlockKey); err {
 	case database.ErrNotFound:
 		// backfill was never attempted. Start from state sync block
-		var (
-			summaryBlkID     = client.resumableSummary.BlockHash
-			summaryBlkHeight = client.resumableSummary.BlockNumber
-		)
-		summaryBlk := rawdb.ReadBlock(client.chaindb, summaryBlkID, summaryBlkHeight)
-		if summaryBlk != nil {
-			return ids.Empty, 0, fmt.Errorf("failed retrieving summary block %s", summaryBlkID)
+		summaryBlkID := client.resumableSummary.BlockHash
+		summaryBlk, err := client.getBlk(ctx, ids.ID(summaryBlkID))
+		if err != nil {
+			return ids.Empty, 0, fmt.Errorf(
+				"failed retrieving summary block %s: %w, %w",
+				summaryBlkID,
+				err,
+				block.ErrInternalBlockBackfilling,
+			)
 		}
 
-		client.latestBackfilledBlock = ids.ID(summaryBlk.Hash())
-		nextBlkID = ids.ID(summaryBlk.ParentHash())
-		nextBlkHeight = summaryBlk.NumberU64() - 1
+		client.latestBackfilledBlock = summaryBlk.ID()
+		nextBlkID = summaryBlk.Parent()
+		nextBlkHeight = summaryBlk.Height() - 1
 
 	case nil:
 		// backfill was attempted. Resume from latest backfilled block
 		latestBackfilledBlock, err := client.getBlk(ctx, ids.ID(lastBackfilledBlkID))
 		if err != nil {
-			return ids.Empty, 0, fmt.Errorf("failed retrieving latest backfilled block, %s, %w", client.latestBackfilledBlock, err)
+			return ids.Empty, 0, fmt.Errorf(
+				"failed retrieving latest backfilled block %s: %w, %w",
+				lastBackfilledBlkID,
+				err,
+				block.ErrInternalBlockBackfilling,
+			)
 		}
 
 		if latestBackfilledBlock.Height() == 1 {
-			return ids.Empty, 0, block.ErrStopBlockBackfilling
+			// backfill completed, nothing else to do
+			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
 		}
 
 		client.latestBackfilledBlock = ids.ID(lastBackfilledBlkID)
@@ -375,7 +384,11 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 		nextBlkHeight = latestBackfilledBlock.Height() - 1
 
 	default:
-		return ids.Empty, 0, fmt.Errorf("failed retrieving last backfilled block ID from disk: %w", err)
+		return ids.Empty, 0, fmt.Errorf(
+			"failed retrieving last backfilled block ID from disk: %w, %w",
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
 	}
 
 	log.Info(
@@ -409,7 +422,12 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 
 	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
 	if err != nil {
-		return ids.Empty, 0, fmt.Errorf("failed retrieving latest backfilled block, %s, %w", client.latestBackfilledBlock, err)
+		return ids.Empty, 0, fmt.Errorf(
+			"failed retrieving latest backfilled block, %s: %w, %w",
+			client.latestBackfilledBlock,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
 	}
 	for i := len(blkHeights) - 1; i >= 0; i-- {
 		blk := blks[blkHeights[i]]
@@ -423,9 +441,10 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 			break
 		}
 
-		if err := blk.Accept(ctx); err != nil {
+		if err := client.indexBlk(ctx); err != nil {
+			// TODO: consider if this an internal error that should stop block backfilling
 			log.Warn(
-				"Failed block acceptance. Reissuing request",
+				"Failed block indexing. Reissuing request",
 				"failed block ID", blk.ID(),
 				"Requested block ID", topBlk.Parent(),
 			)
@@ -435,10 +454,18 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	}
 	client.latestBackfilledBlock = topBlk.ID()
 	if err := client.metadataDB.Put(lastBackfilledBlockKey, client.latestBackfilledBlock[:]); err != nil {
-		return ids.Empty, 0, fmt.Errorf("failed storing latest backfilled blockID to disk, %s, %w", client.latestBackfilledBlock, err)
+		return ids.Empty, 0, fmt.Errorf(
+			"failed storing latest backfilled blockID to disk, %s: %w, %w",
+			client.latestBackfilledBlock,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
 	}
 	if err := client.db.Commit(); err != nil {
-		return ids.Empty, 0, fmt.Errorf("failed to commit db: %w", err)
+		return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
 	}
 
 	if topBlk.Height() == 1 {
