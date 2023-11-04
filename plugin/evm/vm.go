@@ -710,8 +710,8 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		getBlk: func(ctx context.Context, id ids.ID) (snowman.Block, error) {
 			return vm.getBlock(ctx, id)
 		},
-		indexBlk: func(ctx context.Context) error {
-			return errors.New("not yet implemented")
+		backfillBlk: func(ctx context.Context, blk snowman.Block) error {
+			return vm.backfillBlk(ctx, blk)
 		},
 	})
 
@@ -1913,4 +1913,12 @@ func (vm *VM) blockBackfillEnabled(lastAcceptedHeight uint64) bool {
 	}
 
 	return vm.stateSyncEnabled(lastAcceptedHeight)
+}
+
+func (vm *VM) backfillBlk(ctx context.Context, blk snowman.Block) error {
+	block, ok := blk.(*Block)
+	if !ok {
+		return fmt.Errorf("unexpected backfilled block type %T", blk)
+	}
+	return block.Backfill(ctx)
 }

@@ -71,7 +71,7 @@ type stateSyncClientConfig struct {
 	latestBackfilledBlock ids.ID
 	parseBlk              func(context.Context, []byte) (snowman.Block, error)
 	getBlk                func(context.Context, ids.ID) (snowman.Block, error)
-	indexBlk              func(context.Context) error
+	backfillBlk           func(context.Context, snowman.Block) error
 }
 
 type stateSyncerClient struct {
@@ -441,7 +441,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 			break
 		}
 
-		if err := client.indexBlk(ctx); err != nil {
+		if err := client.backfillBlk(ctx, blk); err != nil {
 			// TODO: consider if this an internal error that should stop block backfilling
 			log.Warn(
 				"Failed block indexing. Reissuing request",

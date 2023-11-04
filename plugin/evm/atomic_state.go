@@ -28,6 +28,9 @@ type AtomicState interface {
 	Accept(commitBatch database.Batch) error
 	// Reject frees memory associated with the state change.
 	Reject() error
+
+	// Exported to allow block backfilling
+	UpdateAtomicTxRepo(blkHeigh uint64, blkHash common.Hash, txs []*Tx) error
 }
 
 // atomicState implements the AtomicState interface using
@@ -47,16 +50,8 @@ func (a *atomicState) Root() common.Hash {
 
 // Accept applies the state change to VM's persistent storage.
 func (a *atomicState) Accept(commitBatch database.Batch) error {
-	// Update the atomic tx repository. Note it is necessary to invoke
-	// the correct method taking bonus blocks into consideration.
-	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
-		if err := a.backend.repo.WriteBonus(a.blockHeight, a.txs); err != nil {
-			return err
-		}
-	} else {
-		if err := a.backend.repo.Write(a.blockHeight, a.txs); err != nil {
-			return err
-		}
+	if err := a.UpdateAtomicTxRepo(a.blockHeight, a.blockHash, a.txs); err != nil {
+		return err
 	}
 
 	// Accept the root of this atomic trie (will be persisted if at a commit interval)
@@ -85,6 +80,21 @@ func (a *atomicState) Accept(commitBatch database.Batch) error {
 	// Otherwise, atomically commit pending changes in the version db with
 	// atomic ops to shared memory.
 	return a.backend.sharedMemory.Apply(a.atomicOps, commitBatch, atomicChangesBatch)
+}
+
+func (a *atomicState) UpdateAtomicTxRepo(blkHeigh uint64, blkHash common.Hash, txs []*Tx) error {
+	// Update the atomic tx repository. Note it is necessary to invoke
+	// the correct method taking bonus blocks into consideration.
+	if a.backend.IsBonus(blkHeigh, blkHash) {
+		if err := a.backend.repo.WriteBonus(blkHeigh, txs); err != nil {
+			return err
+		}
+	} else {
+		if err := a.backend.repo.Write(blkHeigh, txs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Reject frees memory associated with the state change.

@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -289,3 +290,19 @@ func (b *Block) Bytes() []byte {
 }
 
 func (b *Block) String() string { return fmt.Sprintf("EVM block, ID = %s", b.ID()) }
+
+func (b *Block) Backfill(ctx context.Context) error {
+	batch := b.vm.chaindb.NewBatch()
+	rawdb.WriteBlock(batch, b.ethBlock)
+	rawdb.WriteCanonicalHash(batch, b.ethBlock.Hash(), b.ethBlock.NumberU64())
+	if err := batch.Write(); err != nil {
+		return err
+	}
+
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash())
+	if err != nil {
+		return err
+	}
+
+	return atomicState.UpdateAtomicTxRepo(b.ethBlock.NumberU64(), b.ethBlock.Hash(), b.atomicTxs)
+}
