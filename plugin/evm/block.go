@@ -299,10 +299,5 @@ func (b *Block) Backfill(ctx context.Context) error {
 		return err
 	}
 
-	atomicState, err := b.vm.atomicBackend.CreateUnverifiedAtomicState(b.ethBlock.Hash())
-	if err != nil {
-		return err
-	}
-
-	return atomicState.UpdateAtomicTxRepo(b.ethBlock.NumberU64(), b.ethBlock.Hash(), b.atomicTxs)
+	return b.vm.atomicBackend.UpdateAtomicTxRepo(b.ethBlock.NumberU64(), b.ethBlock.Hash(), b.atomicTxs)
 }

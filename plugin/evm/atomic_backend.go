@@ -38,9 +38,6 @@ type AtomicBackend interface {
 	// but not Accepted or Rejected yet.
 	GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error)
 
-	// Returns an AtomicState corresponding to a block hash that has been backfilled
-	CreateUnverifiedAtomicState(blockHash common.Hash) (AtomicState, error)
-
 	// AtomicTrie returns the atomic trie managed by this backend.
 	AtomicTrie() AtomicTrie
 
@@ -67,6 +64,9 @@ type AtomicBackend interface {
 
 	// IsBonus returns true if the block for atomicState is a bonus block
 	IsBonus(blockHeight uint64, blockHash common.Hash) bool
+
+	// Exported to allow block backfilling
+	UpdateAtomicTxRepo(blkHeigh uint64, blkHash common.Hash, txs []*Tx) error
 }
 
 // atomicBackend implements the AtomicBackend interface using
@@ -336,15 +336,6 @@ func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicSta
 	return nil, fmt.Errorf("cannot access atomic state for block %s", blockHash)
 }
 
-func (a *atomicBackend) CreateUnverifiedAtomicState(blockHash common.Hash) (AtomicState, error) {
-	return &atomicState{
-		backend:    a,
-		blockHash:  blockHash,
-		atomicOps:  nil,
-		atomicRoot: common.Hash{},
-	}, nil
-}
-
 // getAtomicRootAt returns the atomic trie root for a block that is either:
 // - the last accepted block
 // - a block that has been verified but not accepted or rejected yet.
@@ -426,4 +417,19 @@ func (a *atomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool 
 
 func (a *atomicBackend) AtomicTrie() AtomicTrie {
 	return a.atomicTrie
+}
+
+func (a *atomicBackend) UpdateAtomicTxRepo(blkHeigh uint64, blkHash common.Hash, txs []*Tx) error {
+	// Update the atomic tx repository. Note it is necessary to invoke
+	// the correct method taking bonus blocks into consideration.
+	if a.IsBonus(blkHeigh, blkHash) {
+		if err := a.repo.WriteBonus(blkHeigh, txs); err != nil {
+			return err
+		}
+	} else {
+		if err := a.repo.Write(blkHeigh, txs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
