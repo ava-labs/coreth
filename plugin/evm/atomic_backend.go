@@ -38,6 +38,9 @@ type AtomicBackend interface {
 	// but not Accepted or Rejected yet.
 	GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error)
 
+	// Returns an AtomicState corresponding to a block hash that has been backfilled
+	CreateUnverifiedAtomicState(blockHash common.Hash) (AtomicState, error)
+
 	// AtomicTrie returns the atomic trie managed by this backend.
 	AtomicTrie() AtomicTrie
 
@@ -331,6 +334,15 @@ func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicSta
 		return state, nil
 	}
 	return nil, fmt.Errorf("cannot access atomic state for block %s", blockHash)
+}
+
+func (a *atomicBackend) CreateUnverifiedAtomicState(blockHash common.Hash) (AtomicState, error) {
+	return &atomicState{
+		backend:    a,
+		blockHash:  blockHash,
+		atomicOps:  nil,
+		atomicRoot: common.Hash{},
+	}, nil
 }
 
 // getAtomicRootAt returns the atomic trie root for a block that is either:

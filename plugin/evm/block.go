@@ -299,7 +299,7 @@ func (b *Block) Backfill(ctx context.Context) error {
 		return err
 	}
 
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash())
+	atomicState, err := b.vm.atomicBackend.CreateUnverifiedAtomicState(b.ethBlock.Hash())
 	if err != nil {
 		return err
 	}
