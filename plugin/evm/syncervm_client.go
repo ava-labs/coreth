@@ -380,6 +380,21 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 
 		if latestBackfilledBlock.Height() == 1 {
 			// backfill completed, nothing else to do
+			if err := client.metadataDB.Delete(lastBackfilledBlockKey); err != nil {
+				return ids.Empty, 0, fmt.Errorf(
+					"failed clearing latest backfilled blockID from disk, %s: %w, %w",
+					client.latestBackfilledBlock,
+					err,
+					block.ErrInternalBlockBackfilling,
+				)
+			}
+			if err := client.db.Commit(); err != nil {
+				return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
+					err,
+					block.ErrInternalBlockBackfilling,
+				)
+			}
+
 			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
 		}
 
@@ -472,6 +487,21 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	}
 
 	if topBlk.Height() == 1 {
+		if err := client.metadataDB.Delete(lastBackfilledBlockKey); err != nil {
+			return ids.Empty, 0, fmt.Errorf(
+				"failed clearing latest backfilled blockID from disk, %s: %w, %w",
+				client.latestBackfilledBlock,
+				err,
+				block.ErrInternalBlockBackfilling,
+			)
+		}
+		if err := client.db.Commit(); err != nil {
+			return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
+				err,
+				block.ErrInternalBlockBackfilling,
+			)
+		}
+
 		return ids.Empty, 0, block.ErrStopBlockBackfilling
 	}
 
