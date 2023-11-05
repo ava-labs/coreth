@@ -446,13 +446,12 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		}
 
 		if err := blk.Backfill(ctx); err != nil {
-			// TODO: consider if this an internal error that should stop block backfilling
-			log.Warn(
-				"Failed block indexing. Reissuing request",
-				"failed block ID", blk.ID(),
-				"Requested block ID", topBlk.Parent(),
+			return ids.Empty, 0, fmt.Errorf(
+				"failed indexing block %s to disk: %w, %w",
+				blk.ID(),
+				err,
+				block.ErrInternalBlockBackfilling,
 			)
-			break
 		}
 		topBlk = blk
 	}
