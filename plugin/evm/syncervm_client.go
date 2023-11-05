@@ -138,6 +138,7 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncSummary: %w", err)
 	}
 	client.resumableSummary = summary
+	client.latestBackfilledBlock = ids.ID(summary.BlockHash)
 	return summary, nil
 }
 
@@ -194,6 +195,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			// Initialize snapshots if we're skipping state sync, since it will not have been initialized on
 			// startup.
 			client.chain.BlockChain().InitializeSnapshots()
+			client.latestBackfilledBlock = ids.ID(proposedSummary.BlockHash)
 			return block.StateSyncSkipped, nil
 		}
 
@@ -210,6 +212,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		snapshot.ResetSnapshotGeneration(client.chaindb)
 	}
 	client.syncSummary = proposedSummary
+	client.latestBackfilledBlock = ids.ID(proposedSummary.BlockHash)
 
 	// Update the current state sync summary key in the database
 	// Note: this must be performed after WipeSnapshot finishes so that we do not start a state sync
@@ -342,23 +345,26 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 		nextBlkID     ids.ID
 		nextBlkHeight uint64
 	)
+
 	switch lastBackfilledBlkID, err := client.metadataDB.Get(lastBackfilledBlockKey); err {
 	case database.ErrNotFound:
 		// backfill was never attempted. Start from state sync block
-		summaryBlkID := client.resumableSummary.BlockHash
-		summaryBlk, err := client.getBlk(ctx, ids.ID(summaryBlkID))
-		if err != nil {
+		summaryBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
+		switch err {
+		case nil:
+			nextBlkID = summaryBlk.Parent()
+			nextBlkHeight = summaryBlk.Height() - 1
+		case database.ErrNotFound:
+			log.Info("Can't find block to start backfilling from. Skipping backfilling")
+			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
+		default:
 			return ids.Empty, 0, fmt.Errorf(
 				"failed retrieving summary block %s: %w, %w",
-				summaryBlkID,
+				client.latestBackfilledBlock,
 				err,
 				block.ErrInternalBlockBackfilling,
 			)
 		}
-
-		client.latestBackfilledBlock = summaryBlk.ID()
-		nextBlkID = summaryBlk.Parent()
-		nextBlkHeight = summaryBlk.Height() - 1
 
 	case nil:
 		// backfill was attempted. Resume from latest backfilled block
