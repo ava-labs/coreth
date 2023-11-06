@@ -6,6 +6,7 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -42,6 +43,9 @@ type AtomicBackend interface {
 	// given txID that has been inserted but has not yet been accepted or rejected.
 	// This transaction is found in a 'processing' or 'undecided' block.
 	GetPendingTx(txID ids.ID) (*Tx, uint64, error)
+
+	// GetPendingTxs returns all pendingTxs in the atomicBackend's pendingTx map
+	GetPendingTxs() map[ids.ID]pendingTx
 
 	// AtomicTrie returns the atomic trie managed by this backend.
 	AtomicTrie() AtomicTrie
@@ -81,6 +85,7 @@ type pendingTx struct {
 // atomicBackend implements the AtomicBackend interface using
 // the AtomicTrie, AtomicTxRepository, and the VM's shared memory.
 type atomicBackend struct {
+	mu           sync.RWMutex
 	codec        codec.Manager
 	bonusBlocks  map[uint64]ids.ID    // Map of height to blockID for blocks to skip indexing
 	pendingTxs   map[ids.ID]pendingTx // Map of txID to pendingTx to track atomic txs in processing blocks
@@ -357,6 +362,11 @@ func (a *atomicBackend) GetPendingTx(txID ids.ID) (*Tx, uint64, error) {
 		}
 	}
 	return nil, 0, errNoAtomicTxsFound
+}
+
+// GetPendingTxs returns all pendingTxs in the atomicBackend's pendingTx map
+func (a *atomicBackend) GetPendingTxs() map[ids.ID]pendingTx {
+	return a.pendingTxs
 }
 
 // getAtomicRootAt returns the atomic trie root for a block that is either:
