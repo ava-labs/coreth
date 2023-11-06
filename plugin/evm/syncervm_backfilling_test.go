@@ -11,18 +11,26 @@ import (
 
 func TestPackUnpackHeights(t *testing.T) {
 	require := require.New(t)
-	tests := [][]uint64{
-		[]uint64{0, 1, 2, 3, 4},
-		[]uint64{},
-		[]uint64{1},
+	tests := [][]heightInterval{
+		[]heightInterval{
+			heightInterval{
+				upperBound: 10,
+				lowerBound: 2,
+			},
+			heightInterval{
+				upperBound: 100,
+				lowerBound: 30,
+			},
+		},
+		[]heightInterval{},
 	}
 
 	for _, test := range tests {
 		heights := test
-		b, err := packHeightsSlice(heights)
+		b, err := packHeightIntervals(heights)
 		require.NoError(err)
 
-		res, err := unpackHeightsSlice(b)
+		res, err := unpackHeightIntervals(b)
 		require.NoError(err)
 		require.Equal(heights, res)
 	}
