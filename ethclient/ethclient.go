@@ -681,8 +681,10 @@ func ToBlockNumArg(number *big.Int) string {
 		return hexutil.EncodeBig(number)
 	}
 	// It's negative.
-	if number.IsInt64() {
-		return rpc.BlockNumber(number.Int64()).String()
+	low := big.NewInt(-4)
+	high := big.NewInt(-1)
+	if number.Cmp(low) >= 0 && number.Cmp(high) <= 0 {
+		return rpc.LatestBlockNumber.String()
 	}
 	// It's negative and large, which is invalid.
 	return fmt.Sprintf("<invalid %d>", number)
