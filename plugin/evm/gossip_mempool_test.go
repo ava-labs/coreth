@@ -93,7 +93,7 @@ func TestAtomicMempoolIterate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
-			m, err := NewMempool(&snow.Context{}, 10, nil, nil)
+			m, err := NewMempool(&snow.Context{}, 10, makeAtomicBackend(t), nil)
 			require.NoError(err)
 
 			for _, add := range tt.add {

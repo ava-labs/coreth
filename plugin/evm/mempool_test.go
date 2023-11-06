@@ -15,9 +15,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func makeAtomicBackend(t *testing.T) AtomicBackend {
+	clientDB := versiondb.New(memdb.New())
+	repo, err := NewAtomicTxRepository(clientDB, message.Codec, 0, nil, nil, nil)
+	if err != nil {
+		t.Fatal("could not initialize atomix tx repository", err)
+	}
+	atomicBackend, err := NewAtomicBackend(clientDB, testSharedMemory(), nil, repo, 0, common.Hash{}, commitInterval)
+	if err != nil {
+		t.Fatal("could not initialize atomic backend", err)
+	}
+
+	return atomicBackend
+}
+
 func TestMempoolAddTx(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(&snow.Context{}, 5_000, nil, nil)
+	m, err := NewMempool(&snow.Context{}, 5_000, makeAtomicBackend(t), nil)
 	require.NoError(err)
 
 	txs := make([]*GossipAtomicTx, 0)
@@ -41,7 +55,7 @@ func TestMempoolAddTx(t *testing.T) {
 
 func TestMempoolRemoveTx(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(&snow.Context{}, 5_000, nil, nil)
+	m, err := NewMempool(&snow.Context{}, 5_000, makeAtomicBackend(t), nil)
 	require.NoError(err)
 
 	tx := newTestTx()
@@ -56,7 +70,7 @@ func TestMempoolRemoveTx(t *testing.T) {
 
 func TestMempoolRemoveTxs(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(&snow.Context{}, 5_000, nil, nil)
+	m, err := NewMempool(&snow.Context{}, 5_000, makeAtomicBackend(t), nil)
 	require.NoError(err)
 
 	txs := newTestTxs(1000)
@@ -77,17 +91,8 @@ func TestMempoolRemoveTxs(t *testing.T) {
 
 func TestMempoolGetTx(t *testing.T) {
 	require := require.New(t)
-	clientDB := versiondb.New(memdb.New())
-	repo, err := NewAtomicTxRepository(clientDB, message.Codec, 0, nil, nil, nil)
-	if err != nil {
-		t.Fatal("could not initialize atomix tx repository", err)
-	}
-	atomicBackend, err := NewAtomicBackend(clientDB, testSharedMemory(), nil, repo, 0, common.Hash{}, commitInterval)
-	if err != nil {
-		t.Fatal("could not initialize atomic backend", err)
-	}
 
-	m, err := NewMempool(&snow.Context{}, 5_000, atomicBackend, nil)
+	m, err := NewMempool(&snow.Context{}, 5_000, makeAtomicBackend(t), nil)
 	require.NoError(err)
 
 	tx := newTestTx()
@@ -110,7 +115,7 @@ func TestMempoolGetTx(t *testing.T) {
 
 func TestMempoolGetTxs(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(&snow.Context{}, 5_000, nil, nil)
+	m, err := NewMempool(&snow.Context{}, 5_000, makeAtomicBackend(t), nil)
 	require.NoError(err)
 
 	tx := newTestTx()
