@@ -70,9 +70,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			assert.True(ok, "unknown block type")
 
 			assert.Equal(txID, evmBlk.atomicTxs[0].ID(), "block does not include expected transaction")
-
-			has = mempool.has(txID)
-			assert.True(has, "tx should stay in mempool until block is accepted")
+			assert.False(mempool.has(txID), "tx should be removed from mempool on issuance")
 
 			err = blk.Verify(context.Background())
 			assert.NoError(err)
@@ -81,7 +79,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			assert.NoError(err)
 
 			has = mempool.has(txID)
-			assert.False(has, "tx shouldn't be in mempool after block is accepted")
+			assert.False(has, "tx shouldn't be in mempool")
 		})
 	}
 }

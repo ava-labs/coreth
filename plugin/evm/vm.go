@@ -761,10 +761,9 @@ func (vm *VM) createConsensusCallbacks() *dummy.ConsensusCallbacks {
 }
 
 func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	for {
-		tx, exists := vm.mempool.NextTx()
-		if !exists {
-			break
+	for _, tx := range vm.mempool.GetTxs() {
+		if tx == nil {
+			continue
 		}
 		// Take a snapshot of [state] before calling verifyTx so that if the transaction fails verification
 		// we can revert to [snapshot].
@@ -773,19 +772,19 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		snapshot := state.Snapshot()
 		rules := vm.chainConfig.AvalancheRules(header.Number, header.Time)
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
-			// Discard the transaction from the mempool on failed verification.
-			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
-			vm.mempool.DiscardCurrentTx(tx.ID())
+			// Remove the transaction from the mempool on failed verification.
+			log.Debug("removing tx from mempool on failed verification", "txID", tx.ID(), "err", err)
+			vm.mempool.RemoveTx(tx)
 			state.RevertToSnapshot(snapshot)
 			continue
 		}
 
 		atomicTxBytes, err := vm.codec.Marshal(codecVersion, tx)
 		if err != nil {
-			// Discard the transaction from the mempool and error if the transaction
+			// Remove the transaction from the mempool and error if the transaction
 			// cannot be marshalled. This should never happen.
-			log.Debug("discarding tx due to unmarshal err", "txID", tx.ID(), "err", err)
-			vm.mempool.DiscardCurrentTx(tx.ID())
+			log.Debug("removing tx due to unmarshal err", "txID", tx.ID(), "err", err)
+			vm.mempool.RemoveTx(tx)
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
@@ -817,16 +816,14 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		size              int
 	)
 
-	for {
-		tx, exists := vm.mempool.NextTx()
-		if !exists {
-			break
+	for _, tx := range vm.mempool.GetTxs() {
+		if tx == nil {
+			continue
 		}
 
 		// Ensure that adding [tx] to the block will not exceed the block size soft limit.
 		txSize := len(tx.SignedBytes())
 		if size+txSize > targetAtomicTxsSize {
-			vm.mempool.CancelCurrentTx(tx.ID())
 			break
 		}
 
@@ -844,8 +841,6 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		}
 		// ensure [gasUsed] + [batchGasUsed] doesnt exceed the [atomicGasLimit]
 		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); totalGasUsed.Cmp(params.AtomicGasLimit) > 0 {
-			// Send [tx] back to the mempool's tx heap.
-			vm.mempool.CancelCurrentTx(tx.ID())
 			break
 		}
 
@@ -856,8 +851,8 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			// valid, but we discard it early here based on the assumption that the proposed
 			// block will most likely be accepted.
 			// Discard the transaction from the mempool on failed verification.
-			log.Debug("discarding tx due to overlapping input utxos", "txID", tx.ID())
-			vm.mempool.DiscardCurrentTx(tx.ID())
+			log.Debug("removing tx from mempool due to overlapping input utxos", "txID", tx.ID())
+			vm.mempool.RemoveTx(tx)
 			continue
 		}
 
@@ -867,8 +862,8 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
 			// revert to a snapshot if we discard the transaction prior to this point.
-			log.Debug("discarding tx from mempool due to failed verification", "txID", tx.ID(), "err", err)
-			vm.mempool.DiscardCurrentTx(tx.ID())
+			log.Debug("removing tx from mempool due to failed verification", "txID", tx.ID(), "err", err)
+			vm.mempool.RemoveTx(tx)
 			state.RevertToSnapshot(snapshot)
 			continue
 		}
@@ -887,9 +882,9 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		atomicTxBytes, err := vm.codec.Marshal(codecVersion, batchAtomicTxs)
 		if err != nil {
 			// If we fail to marshal the batch of atomic transactions for any reason,
-			// discard the entire set of current transactions.
-			log.Debug("discarding txs due to error marshaling atomic transactions", "err", err)
-			vm.mempool.DiscardCurrentTxs()
+			// remove all transactions from the mempool.
+			log.Debug("removing txs due to error marshaling atomic transactions", "err", err)
+			vm.mempool.RemoveTxs()
 			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 		}
 		return atomicTxBytes, batchContribution, batchGasUsed, nil
@@ -1164,15 +1159,14 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	block, err := vm.miner.GenerateBlock()
 	vm.builder.handleGenerateBlock()
 	if err != nil {
-		vm.mempool.CancelCurrentTxs()
 		return nil, err
 	}
 
 	// Note: the status of block is set by ChainState
 	blk, err := vm.newBlock(block)
 	if err != nil {
-		log.Debug("discarding txs due to error making new block", "err", err)
-		vm.mempool.DiscardCurrentTxs()
+		log.Debug("removing txs due to error making new block", "err", err)
+		vm.mempool.RemoveTxs()
 		return nil, err
 	}
 
@@ -1189,14 +1183,15 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
 	if err := blk.verify(false /*=writes*/); err != nil {
-		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
 
 	log.Debug(fmt.Sprintf("Built block %s", blk.ID()))
-	// Marks the current transactions from the mempool as being successfully issued
-	// into a block.
-	vm.mempool.IssueCurrentTxs()
+
+	// Update mempool to remove issued txs from mempool
+	for _, pendingTx := range vm.atomicBackend.GetPendingTxs() {
+		vm.mempool.RemoveTx(pendingTx.tx)
+	}
 	return blk, nil
 }
 
@@ -1420,10 +1415,8 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 	}
 
 	// Check mempool for atomic txs
-	tx, dropped, found := vm.mempool.GetTx(txID)
+	tx, found := vm.mempool.GetTx(txID)
 	switch {
-	case found && dropped:
-		return tx, Dropped, 0, nil
 	case found:
 		return tx, Processing, 0, nil
 	default:

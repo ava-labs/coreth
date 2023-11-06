@@ -203,10 +203,9 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	txID := tx.ID()
 
 	mempool.AddTx(tx)
-	mempool.NextTx()
-	mempool.DiscardCurrentTx(txID)
+	mempool.RemoveTx(tx)
 
-	// Check the mempool does not contain the discarded transaction
+	// Check the mempool does not contain the removed transaction
 	assert.False(mempool.has(txID))
 
 	// Gossip the transaction to the VM and ensure that it is not added to the mempool

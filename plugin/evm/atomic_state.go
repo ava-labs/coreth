@@ -27,7 +27,8 @@ type AtomicState interface {
 	// Changes are persisted atomically along with the provided [commitBatch].
 	Accept(commitBatch database.Batch) error
 	// Reject frees memory associated with the state change.
-	Reject() error
+	// If deletePending is set to true we will also delete the pending changes
+	Reject(deletePending bool) error
 }
 
 // atomicState implements the AtomicState interface using
@@ -92,12 +93,14 @@ func (a *atomicState) Accept(commitBatch database.Batch) error {
 }
 
 // Reject frees memory associated with the state change.
-func (a *atomicState) Reject() error {
+func (a *atomicState) Reject(deletePending bool) error {
 	// Remove the block from the map of undecided blocks.
 	delete(a.backend.verifiedRoots, a.blockHash)
 	// Removes pendingTx associated with block from the pendingTx map
-	for _, tx := range a.txs {
-		a.backend.deletePendingTx(tx.ID(), a.blockHash)
+	if deletePending {
+		for _, tx := range a.txs {
+			a.deletePendingTx(tx.ID(), a.blockHash)
+		}
 	}
 	// Unpin the rejected atomic trie root from memory.
 	return a.backend.atomicTrie.RejectTrie(a.atomicRoot)

@@ -283,7 +283,7 @@ func (n *pushGossiper) gossipAtomicTx(tx *Tx) error {
 	}
 	// If the transaction is not pending according to the mempool
 	// then there is no need to gossip it further.
-	if _, pending := n.atomicMempool.GetPendingTx(txID); !pending {
+	if _, pending := n.atomicMempool.GetTx(txID); !pending {
 		return nil
 	}
 	n.recentAtomicTxs.Put(txID, nil)
@@ -456,11 +456,8 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 
 	txID := tx.ID()
 	h.stats.IncAtomicGossipReceived()
-	if _, dropped, found := h.atomicMempool.GetTx(txID); found {
+	if _, found := h.atomicMempool.GetTx(txID); found {
 		h.stats.IncAtomicGossipReceivedKnown()
-		return nil
-	} else if dropped {
-		h.stats.IncAtomicGossipReceivedDropped()
 		return nil
 	}
 

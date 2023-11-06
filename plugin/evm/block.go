@@ -149,11 +149,6 @@ func (b *Block) Accept(context.Context) error {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
-	for _, tx := range b.atomicTxs {
-		// Remove the accepted transaction from the mempool
-		vm.mempool.RemoveTx(tx)
-	}
-
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
 	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
@@ -174,7 +169,6 @@ func (b *Block) Reject(context.Context) error {
 	b.status = choices.Rejected
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
-		b.vm.mempool.RemoveTx(tx)
 		if err := b.vm.mempool.AddTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
@@ -184,7 +178,7 @@ func (b *Block) Reject(context.Context) error {
 		// should never occur since [b] must be verified before calling Reject
 		return err
 	}
-	if err := atomicState.Reject(); err != nil {
+	if err := atomicState.Reject(true); err != nil {
 		return err
 	}
 	return b.vm.blockChain.Reject(b.ethBlock)
@@ -242,11 +236,21 @@ func (b *Block) verify(writes bool) error {
 
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
 	if err != nil || !writes {
+		isErrorWithInsertion := (err != nil)
 		// if an error occurred inserting the block into the chain
 		// or if we are not pinning to memory, unpin the atomic trie
 		// changes from memory (if they were pinned).
 		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
-			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
+			if isErrorWithInsertion {
+				_ = atomicState.Reject(true)
+			} else {
+				// If we are not persisting changes, then we can free all the memory
+				// associated with the state change except for the pending transactions.
+				// Pending transactions are managed in memory to keep track of transactions
+				// in processing blocks.
+				_ = atomicState.Reject(writes)
+			}
+			// ignore this error so we can return the original error instead.
 		}
 	}
 	return err

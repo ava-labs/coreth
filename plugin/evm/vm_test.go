@@ -1023,6 +1023,113 @@ func TestIssueAtomicTxsEdgeCases(t *testing.T) {
 	assert.Equal(t, exportTxFetched.ID(), exportTx2.ID(), "expected ID of fetched export tx to match original txID")
 }
 
+func TestMempoolHasAtomicTxs(t *testing.T) {
+	importAmount := uint64(50000000)
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+
+	defer func() {
+		if err := vm.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.mempool.AddLocalTx(importTx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// tx should be in the mempool after addition
+	require.True(t, vm.mempool.has(importTx.ID()))
+
+	blk, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// tx should be removed from mempool after issuance
+	require.False(t, vm.mempool.has(importTx.ID()))
+
+	if err := blk.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Processing {
+		t.Fatalf("Expected status of built block to be %s, but found %s", choices.Processing, status)
+	}
+
+	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if status := blk.Status(); status != choices.Accepted {
+		t.Fatalf("Expected status of accepted block to be %s, but found %s", choices.Accepted, status)
+	}
+
+	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if lastAcceptedID != blk.ID() {
+		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
+	}
+
+	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount/2, vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.mempool.AddLocalTx(exportTx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// tx should be in the mempool after addition
+	require.True(t, vm.mempool.has(exportTx.ID()))
+
+	// Set to zero time
+	vm.clock.Set(time.Time{})
+
+	require.True(t, vm.mempool.has(exportTx.ID()))
+
+	// Block fails verification due to incorrect time
+	_, err = vm.BuildBlock(context.Background())
+	require.Error(t, err)
+
+	// tx should still be in mempool as block building failed due to a reason outside of the tx
+	require.True(t, vm.mempool.has(exportTx.ID()))
+
+	// make invalid atomic tx
+	tx := newTestTx()
+
+	if err := vm.mempool.AddLocalTx(tx); err != nil {
+		t.Fatal(err)
+	}
+
+	<-issuer
+
+	// tx should be in the mempool after addition
+	require.True(t, vm.mempool.has(tx.ID()))
+
+	// BuildBlock fails because miner cannot generate block
+	vm.miner.SetEtherbase(common.Address{})
+	_, err = vm.BuildBlock(context.Background())
+	require.Error(t, err)
+
+	// tx should still be in mempool as block building failed due to a reason outisde of the tx
+	require.True(t, vm.mempool.has(tx.ID()))
+}
+
 func TestBuildEthTxBlock(t *testing.T) {
 	importAmount := uint64(20000000)
 	issuer, vm, dbManager, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "{\"pruning-enabled\":true}", "", map[ids.ShortID]uint64{
@@ -1479,8 +1586,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			}
 
 			for i, tx := range evictedTxs {
-				_, discarded := vm.mempool.discardedTxs.Get(tx.ID())
-				assert.True(t, discarded, "expected discarded tx at index %d to be discarded", i)
+				removed := vm.mempool.has(tx.ID())
+				assert.False(t, removed, "expected tx at index %d to be removed from the mempool", i)
 			}
 		})
 	}
