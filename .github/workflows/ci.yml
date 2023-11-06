@@ -117,7 +117,7 @@ jobs:
     - run: ./scripts/build_test.sh -race
       shell: bash
   integration:
-    name: Coreth EVM Integration Tests
+    name: Integration Tests
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
