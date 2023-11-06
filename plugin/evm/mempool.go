@@ -43,6 +43,9 @@ type Mempool struct {
 	lock sync.RWMutex
 
 	ctx *snow.Context
+
+	// atomicBackend keeps track of issued transactions
+	atomicBackend AtomicBackend
 	// maxSize is the maximum number of transactions allowed to be kept in mempool
 	maxSize int
 	// Pending is a channel of length one, which the mempool ensures has an item on
@@ -64,21 +67,22 @@ type Mempool struct {
 }
 
 // NewMempool returns a Mempool with [maxSize]
-func NewMempool(ctx *snow.Context, maxSize int, verify func(tx *Tx) error) (*Mempool, error) {
+func NewMempool(ctx *snow.Context, maxSize int, atomicBackend AtomicBackend, verify func(tx *Tx) error) (*Mempool, error) {
 	bloom, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
 
 	return &Mempool{
-		ctx:          ctx,
-		Pending:      make(chan struct{}, 1),
-		txHeap:       newTxHeap(maxSize),
-		maxSize:      maxSize,
-		utxoSpenders: make(map[ids.ID]*Tx),
-		bloom:        bloom,
-		metrics:      newMempoolMetrics(),
-		verify:       verify,
+		ctx:           ctx,
+		atomicBackend: atomicBackend,
+		Pending:       make(chan struct{}, 1),
+		txHeap:        newTxHeap(maxSize),
+		maxSize:       maxSize,
+		utxoSpenders:  make(map[ids.ID]*Tx),
+		bloom:         bloom,
+		metrics:       newMempoolMetrics(),
+		verify:        verify,
 	}, nil
 }
 
@@ -95,9 +99,9 @@ func (m *Mempool) length() int {
 	return m.txHeap.Len()
 }
 
-// has indicates if a given [txID] is in the mempool
+// has checks if a given transaction ID [txID] is present in the mempool.
 func (m *Mempool) has(txID ids.ID) bool {
-	_, found := m.GetTx(txID)
+	_, found := m.txHeap.Get(txID)
 	return found
 }
 
@@ -323,17 +327,23 @@ func (m *Mempool) GetTxs() []*Tx {
 	return txs
 }
 
-// GetTx retrieves a transaction from the mempool based on its unique [txID].
-// It returns the transaction if found in the mempool, along with a boolean indicating
-// whether the transaction is present or not.
-func (m *Mempool) GetTx(txID ids.ID) (*Tx, bool) {
+// GetTx retrieves a transaction from the mempool or atomic backend based on its unique [txID].
+// If the transaction is found in the backend, it is returned with a blockHeight > 0  and true to indicate processing.
+// If the transaction is found in the mempool, it is returned with a blockHeight of 0 and true to indicate processing.
+// If the transaction is not found in the backend or mempool, it is not returned, and 'false' is returned instead.
+func (m *Mempool) GetTx(txID ids.ID) (*Tx, uint64, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	if tx, ok := m.txHeap.Get(txID); ok {
-		return tx, true
+	tx, blockHeight, err := m.atomicBackend.GetPendingTx(txID)
+	if err == nil {
+		return tx, blockHeight, true
 	}
-	return nil, false
+
+	if tx, ok := m.txHeap.Get(txID); ok {
+		return tx, 0, true
+	}
+	return nil, 0, false
 }
 
 // removeTx removes [txID] from the mempool.

@@ -540,12 +540,6 @@ func (vm *VM) Initialize(
 
 	vm.codec = Codec
 
-	// TODO: read size from settings
-	vm.mempool, err = NewMempool(chainCtx, defaultMempoolSize, vm.verifyTxAtTip)
-	if err != nil {
-		return fmt.Errorf("failed to initialize mempool: %w", err)
-	}
-
 	if err := vm.initializeMetrics(); err != nil {
 		return err
 	}
@@ -586,6 +580,12 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
+
+	// TODO: read size from settings
+	vm.mempool, err = NewMempool(chainCtx, defaultMempoolSize, vm.atomicBackend, vm.verifyTxAtTip)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mempool: %w", err)
+	}
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
@@ -1405,20 +1405,11 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
 		return nil, Unknown, 0, err
 	}
 
-	// Check processing blocks for atomic txs
-	// We check the atomic backend here because processing blocks can
-	// contain atomic txs and their status should report as processing.
-	// This takes precedence over the tx's mempool status, where
-	// the status may be dropped (if it was included in another processing block).
-	if tx, height, err := vm.atomicBackend.GetPendingTx(txID); err == nil {
-		return tx, Processing, height, nil
-	}
-
 	// Check mempool for atomic txs
-	tx, found := vm.mempool.GetTx(txID)
+	tx, blockHeight, found := vm.mempool.GetTx(txID)
 	switch {
 	case found:
-		return tx, Processing, 0, nil
+		return tx, Processing, blockHeight, nil
 	default:
 		return nil, Unknown, 0, nil
 	}
