@@ -15,9 +15,6 @@ fi
 # Coreth root directory
 CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 
-# Allow configuring the clone path to point to an existing clone
-AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
-
 # Load the version
 source "$CORETH_PATH"/scripts/versions.sh
 

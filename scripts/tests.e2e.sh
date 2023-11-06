@@ -12,7 +12,18 @@ if ! [[ "$0" =~ scripts/tests.e2e.sh ]]; then
   exit 255
 fi
 
+# Allow configuring the clone path to point to an existing clone
+export AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
+
 ./scripts/build_avalanchego.sh
 
+# Always return to the coreth path on exit
+CORETH_PATH="$(echo "${PWD}")"
+function cleanup {
+  cd "${CORETH_PATH}"
+}
+trap cleanup EXIT
+
 echo "running AvalancheGo e2e tests"
+cd "${AVALANCHEGO_CLONE_PATH}"
 E2E_SERIAL=1 ./scripts/tests.e2e.sh --ginkgo.label-filter='c || uses-c'
