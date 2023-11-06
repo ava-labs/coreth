@@ -22,6 +22,7 @@ var (
 )
 
 type user struct {
+	// This user's database, acquired from the keystore
 	db *encdb.Database
 }
 
