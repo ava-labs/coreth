@@ -28,7 +28,7 @@ import (
 
 // Shared network implementation of IntegrationFixture
 type sharedNetworkFixture struct {
-	// The URI of the only node the fixture is intended to communciate with
+	// The URI of the only node the fixture is intended to communicate with
 	nodeURI testnet.NodeURI
 
 	// Wallet to perform transactions
