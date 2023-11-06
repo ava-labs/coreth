@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+# Run Coreth EVM integration tests against the target version of AvalancheGo
+
 # e.g.,
 # ./scripts/tests.integration.sh
 # ./scripts/tests.integration.sh --ginkgo.label-filter=x   # All arguments are supplied to ginkgo
@@ -15,6 +17,12 @@ echo "building integration.test"
 go install -v github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
 ACK_GINKGO_RC=true ginkgo build ./tests/integration
 ./tests/integration/integration.test --help
+
+# Only build avalanchego if using the network fixture
+if [[ "${@}" =~ "--use-network-fixture" ]]; then
+  ./scripts/build_avalanchego.sh
+  AVALANCHEGO_PATH="$(realpath ${AVALANCHEGO_PATH:-./avalanchego/build/avalanchego})"
+fi
 
 # Execute in random order to identify unwanted dependency
 ginkgo -v --randomize-all ./tests/integration/integration.test -- "${@}"
