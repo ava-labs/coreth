@@ -16,10 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	discardedTxsCacheSize = 50
-)
-
 var errNoGasUsed = errors.New("no gas used")
 
 // mempoolMetrics defines the metrics for the atomic mempool
