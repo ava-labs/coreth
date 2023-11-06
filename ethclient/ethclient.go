@@ -677,7 +677,6 @@ func ToBlockNumArg(number *big.Int) string {
 	// It's negative.
 	if number.IsInt64() {
 		return rpc.BlockNumber(number.Int64()).String()
-
 	}
 	// It's negative and large, which is invalid.
 	return fmt.Sprintf("<invalid %d>", number)
