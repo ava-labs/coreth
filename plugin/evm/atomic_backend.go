@@ -44,7 +44,7 @@ type AtomicBackend interface {
 	// This transaction is found in a 'processing' or 'undecided' block.
 	GetPendingTx(txID ids.ID) (*Tx, uint64, error)
 
-	// GetPendingTxs returns all pendingTxs in the atomicBackend's pendingTx map
+	// GetPendingTxs returns all pendingTxs in the pendingTx map
 	GetPendingTxs() map[ids.ID]pendingTx
 
 	// AtomicTrie returns the atomic trie managed by this backend.
@@ -367,7 +367,7 @@ func (a *atomicBackend) GetPendingTx(txID ids.ID) (*Tx, uint64, error) {
 	return nil, 0, errNoAtomicTxsFound
 }
 
-// GetPendingTxs returns all pendingTxs in the atomicBackend's pendingTx map
+// GetPendingTxs returns all pendingTxs in the pendingTx map
 func (a *atomicBackend) GetPendingTxs() map[ids.ID]pendingTx {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

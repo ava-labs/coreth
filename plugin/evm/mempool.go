@@ -201,10 +201,15 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 		if _, exists := m.txHeap.Get(txID); exists {
 			return nil
 		}
-	}
-	if !force && m.verify != nil {
-		if err := m.verify(tx); err != nil {
-			return err
+
+		if _, _, err := m.atomicBackend.GetPendingTx(txID); err == nil {
+			return nil
+		}
+
+		if m.verify != nil {
+			if err := m.verify(tx); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -316,6 +321,9 @@ func (m *Mempool) GetFilter() ([]byte, []byte, error) {
 }
 
 func (m *Mempool) GetTxs() []*Tx {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	txs := make([]*Tx, 0, m.txHeap.maxHeap.Len())
 	for _, pendingTx := range m.txHeap.maxHeap.items {
 		txs = append(txs, pendingTx.tx)
