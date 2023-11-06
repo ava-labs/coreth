@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/choices"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -66,10 +67,18 @@ type stateSyncClientConfig struct {
 	toEngine chan<- commonEng.Message
 
 	// block backfilling stuff
-	blockBackfillEnabled  bool
-	latestBackfilledBlock ids.ID
-	parseBlk              func(context.Context, []byte) (*Block, error)
-	getBlk                func(context.Context, ids.ID) (*Block, error)
+	blockBackfillEnabled bool
+
+	// block backfilling is a lengthy process, so multiple state sync may complete
+	// before block backfilling does. We track downloaded blocks to avoid gaps in
+	// block indexes as well as multiple downloads of the same blocks
+	latestBackfilledBlock       ids.ID
+	downloadedBlocksUpperBounds []uint64
+	downloadedBlocksLowerBounds []uint64
+
+	parseBlk         func(context.Context, []byte) (*Block, error)
+	getBlk           func(context.Context, ids.ID) (*Block, error)
+	getBlkIDAtHeigth func(context.Context, uint64) (ids.ID, error)
 }
 
 type stateSyncerClient struct {
@@ -429,6 +438,8 @@ func (client *stateSyncerClient) getBlockBackfilStart(ctx context.Context) (
 		nextBlkHeight uint64
 	)
 
+	// TODO: assume download upper and lower bounds are loaded in memory
+
 	switch lastBackfilledBlkID, err := client.metadataDB.Get(lastBackfilledBlockKey); err {
 	case database.ErrNotFound:
 		// backfill was not ongoing. Check whether we should start backfilling from state summary
@@ -539,6 +550,33 @@ func (client *stateSyncerClient) blockBackfillNext(ctx context.Context, latestBl
 	}
 
 	return latestBlk.Parent(), latestBlk.Height() - 1, nil
+}
+
+func packHeightsSlice(heights []uint64) ([]byte, error) {
+	size := wrappers.IntLen + wrappers.LongLen*len(heights)
+	p := wrappers.Packer{Bytes: make([]byte, size)}
+	p.PackInt(uint32(len(heights)))
+	for _, h := range heights {
+		p.PackLong(h)
+	}
+	return p.Bytes, p.Err
+}
+
+func unpackHeightsSlice(b []byte) ([]uint64, error) {
+	p := wrappers.Packer{Bytes: b}
+	heightsLen := p.UnpackInt()
+	if p.Errored() {
+		return nil, p.Err
+	}
+	res := make([]uint64, 0, heightsLen)
+	for i := 0; i < int(heightsLen); i++ {
+		h := p.UnpackLong()
+		if p.Errored() {
+			return nil, p.Err
+		}
+		res = append(res, h)
+	}
+	return res, nil
 }
 
 func (client *stateSyncerClient) Shutdown() error {

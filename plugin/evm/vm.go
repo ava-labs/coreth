@@ -710,6 +710,9 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		getBlk: func(ctx context.Context, id ids.ID) (*Block, error) {
 			return vm.getEvmBlock(ctx, id)
 		},
+		getBlkIDAtHeigth: func(ctx context.Context, h uint64) (ids.ID, error) {
+			return vm.GetBlockIDAtHeight(ctx, h)
+		},
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
