@@ -50,7 +50,8 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
-	bw *BoundedWorkers
+	bw             *BoundedWorkers
+	maxParallelism int
 
 	accountLoadMeter  metrics.Meter
 	accountDupMeter   metrics.Meter
@@ -63,6 +64,9 @@ type triePrefetcher struct {
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string, parallelism int) *triePrefetcher {
+	if parallelism <= 0 {
+		parallelism = 1
+	}
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,
@@ -78,6 +82,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, parallel
 		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 		bw:                NewBoundedWorkers(parallelism),
+		maxParallelism:    parallelism,
 	}
 	return p
 }
@@ -121,9 +126,10 @@ func (p *triePrefetcher) close() {
 // state to be sealed while it may further mutate the state.
 func (p *triePrefetcher) copy() *triePrefetcher {
 	copy := &triePrefetcher{
-		db:      p.db,
-		root:    p.root,
-		fetches: make(map[string]Trie), // Active prefetchers use the fetches map
+		db:             p.db,
+		root:           p.root,
+		fetches:        make(map[string]Trie), // Active prefetchers use the fetches map
+		maxParallelism: p.maxParallelism,
 
 		accountLoadMeter:  p.accountLoadMeter,
 		accountDupMeter:   p.accountDupMeter,
@@ -195,8 +201,9 @@ type subfetcher struct {
 	addr  common.Address // Address of the account that the trie belongs to
 	trie  Trie           // Trie being populated with nodes
 
-	tasks [][]byte   // Items queued up for retrieval
-	lock  sync.Mutex // Lock protecting the task queue
+	tasks     [][]byte            // Items queued up for retrieval
+	scheduled map[string]struct{} // Map of tasks that have been scheduled to prevent duplicate work
+	lock      sync.Mutex          // Lock protecting the task queue
 
 	wake chan struct{} // Wake channel if a new task is scheduled
 	stop chan struct{} // Channel to interrupt processing
@@ -208,22 +215,31 @@ type subfetcher struct {
 	used     [][]byte            // Tracks the entries used in the end
 
 	bw *BoundedWorkers
+
+	trCopies chan Trie
+	trSema   chan struct{}
 }
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
 func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+	if p.maxParallelism < 10 {
+		panic("what's happening")
+	}
 	sf := &subfetcher{
-		db:    p.db,
-		state: p.root,
-		bw:    p.bw,
-		owner: owner,
-		root:  root,
-		addr:  addr,
-		wake:  make(chan struct{}, 1),
-		stop:  make(chan struct{}),
-		term:  make(chan struct{}),
-		seen:  make(map[string]struct{}),
+		db:        p.db,
+		state:     p.root,
+		bw:        p.bw,
+		owner:     owner,
+		root:      root,
+		addr:      addr,
+		wake:      make(chan struct{}, 1),
+		stop:      make(chan struct{}),
+		term:      make(chan struct{}),
+		seen:      make(map[string]struct{}),
+		scheduled: make(map[string]struct{}),
+		trCopies:  make(chan Trie, p.maxParallelism),
+		trSema:    make(chan struct{}, p.maxParallelism),
 	}
 	// Start by opening the trie and stop processing (skip calling loop) if it fails
 	if sf.owner == (common.Hash{}) {
@@ -250,7 +266,14 @@ func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr 
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// Append the tasks to the current queue
 	sf.lock.Lock()
-	sf.tasks = append(sf.tasks, keys...)
+	for _, key := range keys {
+		if _, ok := sf.scheduled[string(key)]; ok {
+			continue
+		} else {
+			sf.tasks = append(sf.tasks, key)
+			sf.scheduled[string(key)] = struct{}{}
+		}
+	}
 	sf.lock.Unlock()
 
 	// Notify the prefetcher, it's fine if it's already terminated
@@ -314,7 +337,7 @@ func (sf *subfetcher) fetchTasks(tasks [][]byte) [][]byte {
 	// Range over the work, starting an additional goroutine on demand or performing the work serially
 	// using [bw].
 	for task := range work {
-		t := sf.db.CopyTrie(sf.trie)
+		t := sf.getTrieCopy()
 		task := task
 		wg.Add(1)
 		sf.bw.Execute(func() {
@@ -325,6 +348,7 @@ func (sf *subfetcher) fetchTasks(tasks [][]byte) [][]byte {
 			for task := range work {
 				sf.fetchTask(t, task)
 			}
+			sf.trCopies <- t
 		})
 	}
 	wg.Wait()
@@ -336,17 +360,19 @@ func (sf *subfetcher) fetchTasks(tasks [][]byte) [][]byte {
 	return tasks
 }
 
-func (sf *subfetcher) fetchTask(t Trie, task []byte) {
-	// No termination request yet, prefetch the next entry
-	sf.seenLock.Lock()
-	_, ok := sf.seen[string(task)]
-	if ok {
-		sf.dups++
-		sf.seenLock.Unlock()
-		return
+func (sf *subfetcher) getTrieCopy() Trie {
+	select {
+	case tr := <-sf.trCopies:
+		return tr
+	case sf.trSema <- struct{}{}:
+		return sf.db.CopyTrie(sf.trie)
 	}
+}
+
+func (sf *subfetcher) fetchTask(t Trie, task []byte) {
 	// Mark it as seen before releasing the lock and performing the read
 	// to ensure we don't duplicate reads
+	sf.seenLock.Lock()
 	sf.seen[string(task)] = struct{}{}
 	sf.seenLock.Unlock()
 

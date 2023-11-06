@@ -72,6 +72,8 @@ var (
 	memcacheCommitLockTimeTimer = metrics.NewRegisteredResettingTimer("trie/memcache/commit/locktime", nil)
 	memcacheCommitNodesMeter    = metrics.NewRegisteredMeter("trie/memcache/commit/nodes", nil)
 	memcacheCommitSizeMeter     = metrics.NewRegisteredMeter("trie/memcache/commit/size", nil)
+
+	trieDiskReadTimer = metrics.NewRegisteredResettingTimer("trie/disk/node/read", nil)
 )
 
 // ChildResolver defines the required method to decode the provided
@@ -220,7 +222,9 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
+	start := time.Now()
 	enc := rawdb.ReadLegacyTrieNode(db.diskdb, hash)
+	trieDiskReadTimer.Update(time.Since(start))
 	if len(enc) != 0 {
 		if db.cleans != nil {
 			db.cleans.Set(hash[:], enc)
