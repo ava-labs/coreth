@@ -336,11 +336,94 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 }
 
 func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error) {
-	// Note: engine guarantee to call BackfillBlocksEnabled only after StateSyncDone event has been issued
 	if !client.blockBackfillEnabled {
 		return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
 	}
 
+	nextBlkID, nextBlkHeight, err := client.getBlockBackfilStart(ctx)
+	if err == nil {
+		log.Info(
+			"Starting block backfilling",
+			"nextBlockID", nextBlkID,
+			"nextBlockHeight", nextBlkHeight,
+		)
+	}
+	return nextBlkID, nextBlkHeight, err
+}
+
+func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
+	// 1. Parse blocks
+	blks := make(map[uint64]*Block)
+	for i, blkBytes := range blksBytes {
+		blk, err := client.parseBlk(ctx, blkBytes)
+		if err != nil {
+			// we don't stop backfilling on parse errors. We backfill what we can and
+			// request again what is left.
+			log.Warn(
+				"Failed parsing backfilled block",
+				"block index", i,
+			)
+			continue
+		}
+		blks[blk.Height()] = blk
+	}
+
+	// 2. Validate blocks continuity and store them
+	blkHeights := maps.Keys(blks)
+	sort.Slice(blkHeights, func(i, j int) bool {
+		return blkHeights[i] < blkHeights[j] // sort in ascending order by heights
+	})
+
+	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf(
+			"failed retrieving latest backfilled block, %s: %w, %w",
+			client.latestBackfilledBlock,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
+	for i := len(blkHeights) - 1; i >= 0; i-- {
+		blk := blks[blkHeights[i]]
+		if topBlk.Parent() != blk.ID() {
+			log.Warn(
+				"Unexpected backfilled block. Reissuing request",
+				"expected block ID", topBlk.Parent(),
+				"received block ID", blk.ID(),
+				"Requested block ID", topBlk.Parent(),
+			)
+			break
+		}
+
+		if err := blk.Backfill(ctx); err != nil {
+			return ids.Empty, 0, fmt.Errorf(
+				"failed indexing block %s to disk: %w, %w",
+				blk.ID(),
+				err,
+				block.ErrInternalBlockBackfilling,
+			)
+		}
+		topBlk = blk
+	}
+
+	nextBlkID, nextBlkHeight, err := client.blockBackfillNext(ctx, *topBlk)
+	if err == nil {
+		log.Info(
+			"Successfully backfilled blocks batch",
+			"nextBlockID", nextBlkID,
+			"nextBlockHeight", nextBlkHeight,
+		)
+	}
+
+	return nextBlkID, nextBlkHeight, err
+}
+
+// Note: engine guarantee to call BackfillBlocksEnabled only after StateSyncDone event has been issued
+func (client *stateSyncerClient) getBlockBackfilStart(ctx context.Context) (
+	ids.ID, // next block ID
+	uint64, // next block height
+	error,
+) {
 	var (
 		nextBlkID     ids.ID
 		nextBlkHeight uint64
@@ -411,70 +494,15 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 		)
 	}
 
-	log.Info(
-		"Starting block backfilling",
-		"nextblock ID", nextBlkID,
-		"nextblock height", nextBlkHeight,
-	)
 	return nextBlkID, nextBlkHeight, nil
 }
 
-func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
-	// 1. Parse blocks
-	blks := make(map[uint64]*Block)
-	for i, blkBytes := range blksBytes {
-		blk, err := client.parseBlk(ctx, blkBytes)
-		if err != nil {
-			// we don't stop backfilling on parse errors. We backfill what we can and
-			// request again what is left.
-			log.Warn(
-				"Failed parsing backfilled block",
-				"block index", i,
-			)
-			continue
-		}
-		blks[blk.Height()] = blk
-	}
-
-	// 2. Validate blocks continuity and store them
-	blkHeights := maps.Keys(blks)
-	sort.Slice(blkHeights, func(i, j int) bool {
-		return blkHeights[i] < blkHeights[j] // sort in ascending order by heights
-	})
-
-	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
-	if err != nil {
-		return ids.Empty, 0, fmt.Errorf(
-			"failed retrieving latest backfilled block, %s: %w, %w",
-			client.latestBackfilledBlock,
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
-	}
-	for i := len(blkHeights) - 1; i >= 0; i-- {
-		blk := blks[blkHeights[i]]
-		if topBlk.Parent() != blk.ID() {
-			log.Warn(
-				"Unexpected backfilled block. Reissuing request",
-				"expected block ID", topBlk.Parent(),
-				"received block ID", blk.ID(),
-				"Requested block ID", topBlk.Parent(),
-			)
-			break
-		}
-
-		if err := blk.Backfill(ctx); err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed indexing block %s to disk: %w, %w",
-				blk.ID(),
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-		topBlk = blk
-	}
-
-	if topBlk.Height() == 1 { // done backfilling
+func (client *stateSyncerClient) blockBackfillNext(ctx context.Context, latestBlk Block) (
+	ids.ID, // next block ID
+	uint64, // next block height
+	error,
+) {
+	if latestBlk.Height() == 1 { // done backfilling
 		if err := client.metadataDB.Delete(lastBackfilledBlockKey); err != nil {
 			return ids.Empty, 0, fmt.Errorf(
 				"failed clearing latest backfilled blockID from disk, %s: %w, %w",
@@ -494,7 +522,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		return ids.Empty, 0, block.ErrStopBlockBackfilling
 	}
 
-	client.latestBackfilledBlock = topBlk.ID()
+	client.latestBackfilledBlock = latestBlk.ID()
 	if err := client.metadataDB.Put(lastBackfilledBlockKey, client.latestBackfilledBlock[:]); err != nil {
 		return ids.Empty, 0, fmt.Errorf(
 			"failed storing latest backfilled blockID to disk, %s: %w, %w",
@@ -510,16 +538,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		)
 	}
 
-	var (
-		nextBlkID     = topBlk.Parent()
-		nextBlkHeight = topBlk.Height() - 1
-	)
-	log.Info(
-		"Successfully backfilled blocks batch",
-		"nextblock ID", nextBlkID,
-		"nextblock height", nextBlkHeight,
-	)
-	return nextBlkID, nextBlkHeight, nil
+	return latestBlk.Parent(), latestBlk.Height() - 1, nil
 }
 
 func (client *stateSyncerClient) Shutdown() error {
