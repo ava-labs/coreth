@@ -33,9 +33,7 @@ type vmFixture struct {
 	height       uint64
 }
 
-func CreateVMFixture(
-	t require.TestingT,
-) *vmFixture {
+func CreateVMFixture(t require.TestingT) *vmFixture {
 	require := require.New(t)
 
 	prefundedKey, err := secp256k1.NewPrivateKey()
@@ -58,11 +56,7 @@ func (v *vmFixture) Teardown() {
 	v.require.NoError(v.vm.Shutdown(context.Background()))
 }
 
-func (v *vmFixture) AllocateFundedKey() *secp256k1.PrivateKey {
-	// This method supports allocation of funded keys for a shared
-	// test network, but for the VM instance the fixture is not
-	// intended to be shared so its assumed safe to return the same
-	// key from every call.
+func (v *vmFixture) GetPrefundedKey() *secp256k1.PrivateKey {
 	return v.prefundedKey
 }
 
@@ -71,8 +65,8 @@ func (v *vmFixture) GetXChainID() ids.ID { return v.vm.ctx.XChainID }
 func (v *vmFixture) GetAVAXAssetID() ids.ID { return v.vm.ctx.AVAXAssetID }
 
 func (v *vmFixture) IssueImportTx(
-	ctx context.Context,
 	chainID ids.ID,
+	amount uint64, // Ignored - all available funds will be imported
 	to common.Address,
 	baseFee *big.Int,
 	keys []*secp256k1.PrivateKey,
@@ -84,7 +78,7 @@ func (v *vmFixture) IssueImportTx(
 
 	<-v.issuer
 
-	height := v.buildAndAcceptBlockForTx(ctx, importTx)
+	height := v.buildAndAcceptBlockForTx(context.Background(), importTx)
 
 	v.checkAtomicTxIndexing(importTx, height)
 
@@ -92,7 +86,6 @@ func (v *vmFixture) IssueImportTx(
 }
 
 func (v *vmFixture) IssueExportTx(
-	ctx context.Context,
 	assetID ids.ID,
 	amount uint64,
 	chainID ids.ID,
@@ -107,7 +100,7 @@ func (v *vmFixture) IssueExportTx(
 
 	<-v.issuer
 
-	height := v.buildAndAcceptBlockForTx(ctx, exportTx)
+	height := v.buildAndAcceptBlockForTx(context.Background(), exportTx)
 
 	v.checkAtomicTxIndexing(exportTx, height)
 

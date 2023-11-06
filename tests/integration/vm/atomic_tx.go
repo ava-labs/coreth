@@ -4,8 +4,6 @@
 package vm
 
 import (
-	"context"
-
 	ginkgo "github.com/onsi/ginkgo/v2"
 
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -17,14 +15,14 @@ import (
 
 var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 	ginkgo.It("should support issuing atomic transactions", func() {
-		vmFixture := i9n.NewIntegrationFixture()
+		f := i9n.GetFixture()
 
-		key := vmFixture.AllocateFundedKey()
+		key := f.GetPrefundedKey()
 		importAmount := uint64(50000000)
 
-		_ = vmFixture.IssueImportTx(
-			context.Background(),
-			vmFixture.GetXChainID(),
+		_ = f.IssueImportTx(
+			f.GetXChainID(),
+			importAmount,
 			evm.GetEthAddress(key),
 			i9n.InitialBaseFee,
 			[]*secp256k1.PrivateKey{
@@ -32,11 +30,10 @@ var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 			},
 		)
 
-		_ = vmFixture.IssueExportTx(
-			context.Background(),
-			vmFixture.GetAVAXAssetID(),
+		_ = f.IssueExportTx(
+			f.GetAVAXAssetID(),
 			importAmount-(2*params.AvalancheAtomicTxFee),
-			vmFixture.GetXChainID(),
+			f.GetXChainID(),
 			key.Address(),
 			i9n.InitialBaseFee,
 			[]*secp256k1.PrivateKey{
