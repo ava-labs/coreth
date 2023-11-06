@@ -144,6 +144,8 @@ func (bn BlockNumber) String() string {
 		return "pending"
 	case AcceptedBlockNumber:
 		return "accepted"
+	case SafeBlockNumber:
+		return "safe"
 	default:
 		if bn < 0 {
 			return fmt.Sprintf("<invalid %d>", bn)
