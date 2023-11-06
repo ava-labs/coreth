@@ -99,7 +99,7 @@ func (a *atomicState) Reject(deletePending bool) error {
 	// Removes pendingTx associated with block from the pendingTx map
 	if deletePending {
 		for _, tx := range a.txs {
-			a.deletePendingTx(tx.ID(), a.blockHash)
+			a.backend.deletePendingTx(tx.ID(), a.blockHash)
 		}
 	}
 	// Unpin the rejected atomic trie root from memory.

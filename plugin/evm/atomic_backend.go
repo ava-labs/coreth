@@ -356,6 +356,9 @@ func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicSta
 // in multiple processing atomic blocks, it returns an arbitrary blockHeight.
 // If no atomic transactions are pending then it returns the error [errNoAtomicTxsFound]
 func (a *atomicBackend) GetPendingTx(txID ids.ID) (*Tx, uint64, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
 	if pendingTx, found := a.pendingTxs[txID]; found {
 		for _, blockHeight := range pendingTx.blockMap {
 			return pendingTx.tx, blockHeight, nil
@@ -366,6 +369,9 @@ func (a *atomicBackend) GetPendingTx(txID ids.ID) (*Tx, uint64, error) {
 
 // GetPendingTxs returns all pendingTxs in the atomicBackend's pendingTx map
 func (a *atomicBackend) GetPendingTxs() map[ids.ID]pendingTx {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
 	return a.pendingTxs
 }
 
@@ -460,6 +466,9 @@ func (a *atomicBackend) AtomicTrie() AtomicTrie {
 // tx then we add a new entry with one block is added to the pendingTxs map. If the given [txID]
 // already exists then it adds another block to the tx's blockMap.
 func (a *atomicBackend) addToPendingTxs(txs []*Tx, blockHash common.Hash, blockHeight uint64) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	for _, tx := range txs {
 		if pTx, ok := a.pendingTxs[tx.ID()]; ok {
 			// pendingTx already exists in another pending block, add another block
@@ -480,6 +489,9 @@ func (a *atomicBackend) addToPendingTxs(txs []*Tx, blockHash common.Hash, blockH
 // If there are multiple processing blocks that hold the given pendingTx then it deletes the block given by [blockHash]
 // in the pendingTx's blockMap.
 func (a *atomicBackend) deletePendingTx(txID ids.ID, blockHash common.Hash) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	pendingTx, ok := a.pendingTxs[txID]
 	if !ok {
 		return
