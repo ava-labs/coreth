@@ -64,9 +64,6 @@ type triePrefetcher struct {
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string, parallelism int) *triePrefetcher {
-	if parallelism <= 0 {
-		parallelism = 1
-	}
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,
@@ -223,9 +220,6 @@ type subfetcher struct {
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
 func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
-	if p.maxParallelism < 10 {
-		panic("what's happening")
-	}
 	sf := &subfetcher{
 		db:        p.db,
 		state:     p.root,

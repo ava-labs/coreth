@@ -291,6 +291,10 @@ func NewBlockChain(
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified
 	}
+	if cacheConfig.TriePrefetcherWorkers <= 0 {
+		log.Warn("Overriding trie prefetcher workers", "TriePrefetcherWorkers", cacheConfig.TriePrefetcherWorkers)
+		cacheConfig.TriePrefetcherWorkers = 10
+	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
 		Cache:       cacheConfig.TrieCleanLimit,

@@ -90,6 +90,8 @@ type Config struct {
 	SnapshotVerify                  bool    // Whether to verify generated snapshots
 	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
 
+	TriePrefetcherWorkers int // Number of workers to use for trie prefetching during block execution
+
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
 
