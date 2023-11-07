@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# Run AvalancheGo e2e tests from the target version against the current state of coreth.
+# Build avalanchego binary from the target version against the current state of coreth.
 
 # e.g.,
 # ./scripts/build_avalanchego.sh
