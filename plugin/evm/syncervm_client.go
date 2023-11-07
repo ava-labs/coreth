@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -30,7 +29,6 @@ import (
 	"github.com/ava-labs/coreth/sync/statesync"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	safemath "github.com/ava-labs/avalanchego/utils/math"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
@@ -40,15 +38,7 @@ const (
 	parentsToGet = 256
 )
 
-var (
-	stateSyncSummaryKey  = []byte("stateSyncSummary")
-	downloadedHeightsKey = []byte("downloadedHeights")
-)
-
-type heightInterval struct {
-	upperBound uint64
-	lowerBound uint64
-}
+var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 // stateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
 type stateSyncClientConfig struct {
@@ -78,12 +68,6 @@ type stateSyncClientConfig struct {
 	// block backfilling stuff
 	blockBackfillEnabled bool
 
-	// block backfilling is a lengthy process, so multiple state sync may complete
-	// before block backfilling does. We track downloaded blocks to avoid gaps in
-	// block indexes as well as multiple downloads of the same blocks
-	backfilledHeights     []heightInterval
-	latestBackfilledBlock ids.ID
-
 	parseBlk         func(context.Context, []byte) (*Block, error)
 	getBlk           func(context.Context, ids.ID) (*Block, error)
 	getBlkIDAtHeigth func(context.Context, uint64) (ids.ID, error)
@@ -100,11 +84,23 @@ type stateSyncerClient struct {
 	// State Sync results
 	syncSummary  message.SyncSummary
 	stateSyncErr error
+
+	// block backfilling is a lengthy process, so multiple state sync may complete
+	// before block backfilling does. We track downloaded blocks to avoid gaps in
+	// block indexes as well as multiple downloads of the same blocks
+	dt                    DownloadsTracker
+	latestBackfilledBlock ids.ID
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 	return &stateSyncerClient{
 		stateSyncClientConfig: config,
+		dt: DownloadsTracker{
+			metadataDB:       config.metadataDB,
+			db:               config.db,
+			getBlk:           config.getBlk,
+			getBlkIDAtHeigth: config.getBlkIDAtHeigth,
+		},
 	}
 }
 
@@ -357,7 +353,7 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 		return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
 	}
 
-	nextBlkID, nextBlkHeight, err := client.getBlockBackfilStart(ctx)
+	nextBlkID, nextBlkHeight, err := client.dt.StartHeight(ctx, client.latestBackfilledBlock)
 	if err == nil {
 		log.Info(
 			"Starting block backfilling",
@@ -366,144 +362,6 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 		)
 	}
 	return nextBlkID, nextBlkHeight, err
-}
-
-// Note: engine guarantee to call BackfillBlocksEnabled only after StateSyncDone event has been issued
-func (client *stateSyncerClient) getBlockBackfilStart(ctx context.Context) (
-	ids.ID, // next block ID
-	uint64, // next block height
-	error,
-) {
-	var (
-		nextBlkID     ids.ID
-		nextBlkHeight uint64
-	)
-
-	// pull latest summary first. If available, it may extend the range
-	// of block heights to be downloaded
-	summaryBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
-	switch err {
-	case nil:
-		// nothing to do here
-	case database.ErrNotFound:
-		summaryBlk = nil // make sure this is nit
-	default:
-		return ids.Empty, 0, fmt.Errorf(
-			"failed retrieving summary block %s: %w, %w",
-			client.latestBackfilledBlock,
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
-	}
-
-	// load block heights that where under processing. Possibly extend them with latest state summary
-	switch dhBytes, err := client.metadataDB.Get(downloadedHeightsKey); err {
-	case database.ErrNotFound: // backfill was not ongoing
-		if summaryBlk == nil {
-			log.Info("Can't find state summary nor block to start backfilling from. Skipping backfilling")
-			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
-		}
-
-		// Start backfilling from current state summary
-		nextBlkID = summaryBlk.Parent()
-		nextBlkHeight = summaryBlk.Height() - 1
-
-		client.backfilledHeights = []heightInterval{
-			heightInterval{
-				upperBound: nextBlkHeight,
-				lowerBound: nextBlkHeight,
-			},
-		}
-		client.latestBackfilledBlock = summaryBlk.ID()
-
-		if err := client.storeBlockHeights(client.backfilledHeights); err != nil {
-			return ids.Empty, 0, err
-		}
-
-	case nil:
-		// backfill was ongoing. Resume from latest backfilled block
-		dh, err := unpackHeightIntervals(dhBytes)
-		if err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed parsing downloaded height: %w, %w",
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-
-		if summaryBlk != nil {
-			// extend height range to backfill from and store it
-			if len(dh) == 0 || (len(dh) > 0 && summaryBlk.Height() != dh[0].upperBound) {
-				dh = append([]heightInterval{
-					{
-						upperBound: summaryBlk.Height(),
-						lowerBound: summaryBlk.Height(),
-					},
-				}, dh...)
-
-				if err := client.storeBlockHeights(dh); err != nil {
-					return ids.Empty, 0, err
-				}
-			}
-		}
-
-		client.backfilledHeights = dh
-		lastBackfilledBlkID, err := client.getBlkIDAtHeigth(ctx, dh[0].lowerBound)
-		if err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed retrieving latest backfilled block ID, height %d: %w, %w",
-				dh[0].lowerBound,
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-		latestBackfilledBlock, err := client.getBlk(ctx, lastBackfilledBlkID)
-		if err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed retrieving latest backfilled block %s: %w, %w",
-				lastBackfilledBlkID,
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-		client.latestBackfilledBlock = lastBackfilledBlkID
-
-		if latestBackfilledBlock.Height() == 1 {
-			// backfill was interrupted just when last block was backfilled. Nothing else to do
-			client.latestBackfilledBlock = ids.Empty
-			client.backfilledHeights = []heightInterval{}
-
-			if err := client.metadataDB.Delete(downloadedHeightsKey); err != nil {
-				return ids.Empty, 0, fmt.Errorf(
-					"failed clearing latest backfilled blockID from disk, %s: %w, %w",
-					client.latestBackfilledBlock,
-					err,
-					block.ErrInternalBlockBackfilling,
-				)
-			}
-			if err := client.db.Commit(); err != nil {
-				return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
-					err,
-					block.ErrInternalBlockBackfilling,
-				)
-			}
-
-			log.Info("block backfilling completed")
-			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
-		}
-
-		nextBlkID = latestBackfilledBlock.Parent()
-		nextBlkHeight = latestBackfilledBlock.Height() - 1
-
-	default:
-		return ids.Empty, 0, fmt.Errorf(
-			"failed retrieving last backfilled block ID from disk: %w, %w",
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
-	}
-
-	return nextBlkID, nextBlkHeight, nil
 }
 
 func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
@@ -561,7 +419,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		topBlk = blk
 	}
 
-	nextBlkID, nextBlkHeight, err := client.blockBackfillNext(ctx, *topBlk)
+	nextBlkID, nextBlkHeight, err := client.dt.NextHeight(ctx, *topBlk)
 	if err == nil {
 		log.Info(
 			"Successfully backfilled blocks batch",
@@ -571,108 +429,6 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	}
 
 	return nextBlkID, nextBlkHeight, err
-}
-
-func (client *stateSyncerClient) blockBackfillNext(ctx context.Context, latestBlk Block) (
-	ids.ID, // next block ID
-	uint64, // next block height
-	error,
-) {
-	if latestBlk.Height() == 1 { // done backfilling
-		client.latestBackfilledBlock = ids.Empty
-		client.backfilledHeights = []heightInterval{}
-		if err := client.metadataDB.Delete(downloadedHeightsKey); err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed clearing downloaded heights from disk, %s: %w, %w",
-				client.latestBackfilledBlock,
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-		if err := client.db.Commit(); err != nil {
-			return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-
-		log.Info("block backfilling completed")
-		return ids.Empty, 0, block.ErrStopBlockBackfilling
-	}
-
-	// update latest backfilled block and possibly merge contiguous height intervals
-	client.backfilledHeights[0].lowerBound = latestBlk.Height()
-	for len(client.backfilledHeights) > 1 && client.backfilledHeights[0].lowerBound <= client.backfilledHeights[1].upperBound {
-		nextLowerBound := safemath.Min(client.backfilledHeights[0].lowerBound, client.backfilledHeights[1].lowerBound)
-		client.backfilledHeights[0].lowerBound = nextLowerBound
-
-		// drop height interval at position 1 (merged)
-		if len(client.backfilledHeights) > 2 {
-			client.backfilledHeights = append(client.backfilledHeights[:1], client.backfilledHeights[2:]...)
-		} else {
-			client.backfilledHeights = client.backfilledHeights[:len(client.backfilledHeights)-1]
-		}
-	}
-	if err := client.storeBlockHeights(client.backfilledHeights); err != nil {
-		return ids.Empty, 0, err
-	}
-
-	return latestBlk.Parent(), latestBlk.Height() - 1, nil
-}
-
-func packHeightIntervals(heights []heightInterval) ([]byte, error) {
-	size := wrappers.IntLen + wrappers.LongLen*2*len(heights)
-	p := wrappers.Packer{Bytes: make([]byte, size)}
-	p.PackInt(uint32(len(heights)))
-	for _, h := range heights {
-		p.PackLong(h.upperBound)
-		p.PackLong(h.upperBound)
-	}
-	return p.Bytes, p.Err
-}
-
-func unpackHeightIntervals(b []byte) ([]heightInterval, error) {
-	p := wrappers.Packer{Bytes: b}
-	heightsLen := p.UnpackInt()
-	if p.Errored() {
-		return nil, p.Err
-	}
-	res := make([]heightInterval, 0, heightsLen)
-	for i := 0; i < int(heightsLen); i++ {
-		up := p.UnpackLong()
-		if p.Errored() {
-			return nil, p.Err
-		}
-		lo := p.UnpackLong()
-		if p.Errored() {
-			return nil, p.Err
-		}
-		res = append(res, heightInterval{
-			upperBound: up,
-			lowerBound: lo,
-		})
-	}
-	return res, nil
-}
-
-func (client *stateSyncerClient) storeBlockHeights(h []heightInterval) error {
-	hi, err := packHeightIntervals(client.backfilledHeights)
-	if err != nil {
-		return fmt.Errorf(
-			"failed packing heights interval: %w, %w",
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
-	}
-	if err := client.metadataDB.Put(downloadedHeightsKey, hi); err != nil {
-		return fmt.Errorf(
-			"failed storing latest backfilled blockID to disk, %s: %w, %w",
-			client.latestBackfilledBlock,
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
-	}
-	return nil
 }
 
 func (client *stateSyncerClient) Shutdown() error {
