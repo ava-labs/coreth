@@ -45,7 +45,7 @@ func TestPackUnpackHeights(t *testing.T) {
 	}
 }
 
-func TestBlockDownloadStart(t *testing.T) {
+func TestDownloadTrackerStart(t *testing.T) {
 	require := require.New(t)
 
 	var (
@@ -126,7 +126,7 @@ func TestBlockDownloadStart(t *testing.T) {
 	}
 }
 
-func TestBlockDownloadNext(t *testing.T) {
+func TestDownloadTrackerNext(t *testing.T) {
 	require := require.New(t)
 
 	var (
@@ -229,7 +229,7 @@ func TestBlockDownloadNext(t *testing.T) {
 	require.ErrorIs(err, block.ErrBlockBackfillingNotEnabled)
 }
 
-func TestBlockDownloadNextWithMultipleStateSyncRuns(t *testing.T) {
+func TestDownloadTrackerNextWithMultipleStateSyncRuns(t *testing.T) {
 	require := require.New(t)
 
 	var (
