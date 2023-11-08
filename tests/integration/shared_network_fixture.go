@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"fmt"
 	"math/big"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -16,6 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/tests/fixture/testnet"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/avm"
@@ -50,14 +52,12 @@ func (f *sharedNetworkFixture) GetPrefundedKey() *secp256k1.PrivateKey {
 }
 
 func (f *sharedNetworkFixture) GetXChainID() ids.ID {
-	// TODO(marun) cache this value
 	id, err := info.NewClient(f.nodeURI.URI).GetBlockchainID(e2e.DefaultContext(), "X")
 	f.require.NoError(err)
 	return id
 }
 
 func (f *sharedNetworkFixture) GetAVAXAssetID() ids.ID {
-	// TODO(marun) cache this value
 	asset, err := avm.NewClient(f.nodeURI.URI, "X").GetAssetDescription(e2e.DefaultContext(), "AVAX")
 	f.require.NoError(err)
 	return asset.AssetID
@@ -72,9 +72,9 @@ func (f *sharedNetworkFixture) IssueImportTx(
 	keychain := secp256k1fx.NewKeychain(keys...)
 	wallet := e2e.NewWallet(keychain, f.nodeURI)
 	ethClient := e2e.NewEthClient(f.nodeURI)
+	chainAlias := getChainAlias(chainID)
 
-	// TODO(marun) Ensure this message accurately reflects the sending chain
-	ginkgo.By("exporting AVAX from the X-Chain to the C-Chain")
+	ginkgo.By(fmt.Sprintf("exporting AVAX from the %s-Chain to the C-Chain", chainAlias))
 	_, err := wallet.X().IssueExportTx(
 		wallet.C().BlockchainID(),
 		[]*avax.TransferableOutput{
@@ -96,8 +96,7 @@ func (f *sharedNetworkFixture) IssueImportTx(
 	)
 	f.require.NoError(err)
 
-	// TODO(marun) Ensure this message accurately reflects the sending chain
-	ginkgo.By("importing AVAX from the X-Chain to the C-Chain")
+	ginkgo.By(fmt.Sprintf("importing AVAX from the %s-Chain to the C-Chain", chainAlias))
 	tx, err := wallet.C().IssueImportTx(
 		chainID,
 		toEthAddress,
@@ -123,9 +122,9 @@ func (f *sharedNetworkFixture) IssueExportTx(
 	keychain := secp256k1fx.NewKeychain(keys...)
 	wallet := e2e.NewWallet(keychain, f.nodeURI)
 	ethClient := e2e.NewEthClient(f.nodeURI)
+	chainAlias := getChainAlias(chainID)
 
-	// TODO(marun) Ensure this message accurately reflects the recipient chain
-	ginkgo.By("exporting AVAX from the C-Chain to the X-Chain")
+	ginkgo.By(fmt.Sprintf("exporting AVAX from the C-Chain to the %s-Chain", chainAlias))
 	tx, err := wallet.C().IssueExportTx(
 		chainID,
 		[]*secp256k1fx.TransferOutput{
@@ -142,8 +141,7 @@ func (f *sharedNetworkFixture) IssueExportTx(
 	)
 	f.require.NoError(err)
 
-	// TODO(marun) Ensure this message accurately reflects the recipient chain
-	ginkgo.By("importing AVAX from the C-Chain to the X-Chain")
+	ginkgo.By(fmt.Sprintf("importing AVAX from the C-Chain to the %s-Chain", chainAlias))
 	_, err = wallet.X().IssueImportTx(
 		wallet.C().BlockchainID(),
 		&secp256k1fx.OutputOwners{
@@ -156,8 +154,7 @@ func (f *sharedNetworkFixture) IssueExportTx(
 	)
 	f.require.NoError(err)
 
-	// TODO(marun) Ensure this message accurately reflects the recipient chain
-	ginkgo.By("checking that the recipient address has received imported funds on the X-Chain")
+	ginkgo.By(fmt.Sprintf("checking that the recipient address has received imported funds on the %s-Chain", chainAlias))
 	balances, err := wallet.X().Builder().GetFTBalance(common.WithCustomAddresses(set.Of(
 		toAddress,
 	)))
@@ -173,4 +170,12 @@ func keysToAddresses(keys []*secp256k1.PrivateKey) []ids.ShortID {
 		addresses[i] = key.Address()
 	}
 	return addresses
+}
+
+// Determine the chain alias for a chainID representing either the X- or P-Chain.
+func getChainAlias(chainID ids.ID) string {
+	if chainID == constants.PlatformChainID {
+		return "P"
+	}
+	return "X"
 }

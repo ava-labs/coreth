@@ -5,6 +5,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -74,8 +75,7 @@ func (v *vmFixture) IssueImportTx(
 	to common.Address,
 	keys []*secp256k1.PrivateKey,
 ) *Tx {
-	// TODO(marun) Ensure this message accurately reflects the sending chain
-	ginkgo.By("importing AVAX from the X-Chain to the C-Chain")
+	ginkgo.By(fmt.Sprintf("importing AVAX from the %s-Chain to the C-Chain", v.getChainAlias(chainID)))
 
 	importTx, err := v.vm.newImportTx(chainID, to, initialBaseFee, keys)
 	v.require.NoError(err)
@@ -98,8 +98,7 @@ func (v *vmFixture) IssueExportTx(
 	to ids.ShortID,
 	keys []*secp256k1.PrivateKey,
 ) *Tx {
-	// TODO(marun) Ensure this message accurately reflects the recipient chain
-	ginkgo.By("exporting AVAX from the C-Chain to the X-Chain")
+	ginkgo.By(fmt.Sprintf("exporting AVAX from the C-Chain to the %s-Chain", v.getChainAlias(chainID)))
 
 	exportTx, err := v.vm.newExportTx(assetID, amount, chainID, to, initialBaseFee, keys)
 	v.require.NoError(err)
@@ -155,4 +154,12 @@ func (v *vmFixture) checkAtomicTxIndexing(tx *Tx, expectedHeight uint64) {
 	v.assert.Equal(Accepted, status)
 	v.assert.Equal(expectedHeight, height, "unexpected height")
 	v.assert.Equal(indexedTx.ID(), tx.ID(), "expected ID of indexed tx to match original txID")
+}
+
+// Determine the chain alias for a chainID representing either the X- or P-Chain.
+func (v *vmFixture) getChainAlias(chainID ids.ID) string {
+	if chainID == v.GetXChainID() {
+		return "X"
+	}
+	return "P"
 }
