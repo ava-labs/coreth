@@ -28,6 +28,7 @@ package state
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -327,9 +328,28 @@ func (sf *subfetcher) fetchTasks(tasks [][]byte) [][]byte {
 	tasks = tasks[:0] // Empty tasks, but hold onto the memory already allocated to tasks
 	close(work)
 
+	sf.executeWork(work)
+
+	// Read remaining tasks from the channel and return unfetched leftovers to the caller
+	for task := range work {
+		tasks = append(tasks, task)
+	}
+	return tasks
+}
+
+func (sf *subfetcher) executeWork(work <-chan []byte) {
+	t := sf.getTrieCopy()
+	for task := range work {
+		start := time.Now()
+		sf.fetchTask(t, task)
+		lat := time.Since(start)
+		if lat > 500*time.Microsecond {
+			break
+		}
+	}
+	sf.trCopies <- t
+
 	wg := sync.WaitGroup{}
-	// Range over the work, starting an additional goroutine on demand or performing the work serially
-	// using [bw].
 	for task := range work {
 		t := sf.getTrieCopy()
 		task := task
@@ -346,12 +366,6 @@ func (sf *subfetcher) fetchTasks(tasks [][]byte) [][]byte {
 		})
 	}
 	wg.Wait()
-
-	// Read remaining tasks from the channel and return unfetched leftovers to the caller
-	for task := range work {
-		tasks = append(tasks, task)
-	}
-	return tasks
 }
 
 func (sf *subfetcher) getTrieCopy() Trie {
