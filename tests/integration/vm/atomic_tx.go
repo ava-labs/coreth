@@ -8,9 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/tests"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
+	"github.com/ava-labs/avalanchego/utils/units"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm"
 	i9n "github.com/ava-labs/coreth/tests/integration"
 )
@@ -18,19 +19,24 @@ import (
 var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 	require := require.New(ginkgo.GinkgoT())
 
+	// Arbitrary amount to transfer
+	const importAmount = 100 * units.Avax
+	const exportAmount = 80 * units.Avax // Less than import to account for fees
+
 	ginkgo.It("should support issuing atomic transactions", func() {
 		f := i9n.GetFixture()
 
 		prefundedKey := f.GetPrefundedKey()
-		importAmount := uint64(50000000)
 
 		recipientKey, err := secp256k1.NewPrivateKey()
 		require.NoError(err)
+		recipientEthAddress := evm.GetEthAddress(recipientKey)
+		tests.Outf("{{blue}} using recipient address: %+v{{/}}\n", recipientEthAddress)
 
 		_ = f.IssueImportTx(
 			f.GetXChainID(),
 			importAmount,
-			evm.GetEthAddress(recipientKey),
+			recipientEthAddress,
 			[]*secp256k1.PrivateKey{
 				prefundedKey,
 			},
@@ -38,7 +44,7 @@ var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 
 		_ = f.IssueExportTx(
 			f.GetAVAXAssetID(),
-			importAmount-(2*params.AvalancheAtomicTxFee),
+			exportAmount,
 			f.GetXChainID(),
 			recipientKey.Address(),
 			[]*secp256k1.PrivateKey{
