@@ -12,13 +12,15 @@ if ! [[ "$0" =~ scripts/tests.e2e.sh ]]; then
   exit 255
 fi
 
+# Coreth root directory
+CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
+
 # Allow configuring the clone path to point to an existing clone
 export AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
 
 ./scripts/build_avalanchego.sh
 
 # Always return to the coreth path on exit
-CORETH_PATH="$(echo "${PWD}")"
 function cleanup {
   cd "${CORETH_PATH}"
 }
