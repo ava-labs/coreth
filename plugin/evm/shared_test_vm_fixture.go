@@ -10,6 +10,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	ginkgo "github.com/onsi/ginkgo/v2"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,8 +23,10 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 )
 
-// Arbitrarily large amount of AVAX (10^12) to fund keys on the C-Chain for testing
-var DefaultFundedKeyCChainAmount = new(big.Int).Exp(big.NewInt(10), big.NewInt(30), nil)
+var (
+	// Arbitrarily large amount of AVAX (10^12) to fund keys on the C-Chain for testing
+	defaultFundedKeyCChainAmount = new(big.Int).Exp(big.NewInt(10), big.NewInt(30), nil)
+)
 
 type vmFixture struct {
 	require      *require.Assertions
@@ -40,7 +44,7 @@ func CreateVMFixture(t require.TestingT) *vmFixture {
 	require.NoError(err)
 
 	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
-		prefundedKey.Address(): DefaultFundedKeyCChainAmount.Uint64(),
+		prefundedKey.Address(): defaultFundedKeyCChainAmount.Uint64(),
 	})
 
 	return &vmFixture{
@@ -66,12 +70,14 @@ func (v *vmFixture) GetAVAXAssetID() ids.ID { return v.vm.ctx.AVAXAssetID }
 
 func (v *vmFixture) IssueImportTx(
 	chainID ids.ID,
-	amount uint64, // Ignored - all available funds will be imported
+	_ uint64, // amount is ignored - all available funds will be imported
 	to common.Address,
-	baseFee *big.Int,
 	keys []*secp256k1.PrivateKey,
 ) *Tx {
-	importTx, err := v.vm.newImportTx(chainID, to, baseFee, keys)
+	// TODO(marun) Ensure this message accurately reflects the sending chain
+	ginkgo.By("importing AVAX from the X-Chain to the C-Chain")
+
+	importTx, err := v.vm.newImportTx(chainID, to, initialBaseFee, keys)
 	v.require.NoError(err)
 
 	v.require.NoError(v.vm.mempool.AddLocalTx(importTx))
@@ -90,10 +96,12 @@ func (v *vmFixture) IssueExportTx(
 	amount uint64,
 	chainID ids.ID,
 	to ids.ShortID,
-	baseFee *big.Int,
 	keys []*secp256k1.PrivateKey,
 ) *Tx {
-	exportTx, err := v.vm.newExportTx(assetID, amount, chainID, to, baseFee, keys)
+	// TODO(marun) Ensure this message accurately reflects the recipient chain
+	ginkgo.By("exporting AVAX from the C-Chain to the X-Chain")
+
+	exportTx, err := v.vm.newExportTx(assetID, amount, chainID, to, initialBaseFee, keys)
 	v.require.NoError(err)
 
 	v.require.NoError(v.vm.mempool.AddLocalTx(exportTx))

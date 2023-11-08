@@ -4,8 +4,6 @@
 package integration
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -14,12 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm"
-)
-
-var (
-	InitialBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
 )
 
 type IntegrationFixture interface {
@@ -33,7 +26,6 @@ type IntegrationFixture interface {
 		chainID ids.ID,
 		amount uint64,
 		to common.Address,
-		baseFee *big.Int,
 		keys []*secp256k1.PrivateKey,
 	) *evm.Tx
 
@@ -42,7 +34,6 @@ type IntegrationFixture interface {
 		amount uint64,
 		chainID ids.ID,
 		to ids.ShortID,
-		baseFee *big.Int,
 		keys []*secp256k1.PrivateKey,
 	) *evm.Tx
 }
