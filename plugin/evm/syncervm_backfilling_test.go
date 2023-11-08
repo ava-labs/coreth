@@ -117,3 +117,94 @@ func TestBlockDownloadStart(t *testing.T) {
 		require.Equal(secondStateSummaryBlk.Height()-1, nextBlkHeight)
 	}
 }
+
+func TestBlockDownloadNext(t *testing.T) {
+	require := require.New(t)
+
+	var (
+		baseDB     = memdb.New()
+		db         = versiondb.New(baseDB)
+		metadataDB = versiondb.New(baseDB)
+
+		blocks = make([]*Block, 0)
+	)
+
+	dt := DownloadsTracker{
+		metadataDB: metadataDB,
+		db:         db,
+		getBlk: func(_ context.Context, blkID ids.ID) (*Block, error) {
+			for _, blk := range blocks {
+				if blk.ID() == blkID {
+					return blk, nil
+				}
+			}
+			return nil, database.ErrNotFound
+		},
+		getBlkIDAtHeigth: func(_ context.Context, h uint64) (ids.ID, error) {
+			for _, blk := range blocks {
+				if blk.Height() == h {
+					return blk.ID(), nil
+				}
+			}
+			return ids.Empty, database.ErrNotFound
+		},
+	}
+
+	// start from state summary
+	firstStateSummaryHeight := big.NewInt(314)
+	firstStateSummaryBlk := &Block{
+		id:       ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{Number: firstStateSummaryHeight}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, firstStateSummaryBlk)
+
+	nextBlkID, nextBlkHeight, err := dt.StartHeight(context.Background(), firstStateSummaryBlk.ID())
+	require.NoError(err)
+	require.Equal(firstStateSummaryBlk.Parent(), nextBlkID)
+	require.Equal(firstStateSummaryBlk.Height()-1, nextBlkHeight)
+
+	// accept a bunch of blocks
+	var (
+		backfilledHeight1 = new(big.Int).Div(firstStateSummaryHeight, big.NewInt(2))
+		backfilledHeight2 = new(big.Int).Div(backfilledHeight1, big.NewInt(2))
+		backfilledHeight3 = big.NewInt(1)
+	)
+
+	// first backfilled block
+	backfilledBlk1 := &Block{
+		id:       ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{Number: backfilledHeight1}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, backfilledBlk1)
+
+	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk1)
+	require.NoError(err)
+	require.Equal(backfilledBlk1.Parent(), nextBlkID)
+	require.Equal(backfilledBlk1.Height()-1, nextBlkHeight)
+
+	// second backfilled block
+	backfilledBlk2 := &Block{
+		id:       ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{Number: backfilledHeight2}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, backfilledBlk1)
+
+	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk2)
+	require.NoError(err)
+	require.Equal(backfilledBlk2.Parent(), nextBlkID)
+	require.Equal(backfilledBlk2.Height()-1, nextBlkHeight)
+
+	// final backfilled block. Height 1 is the last block that can be backfilled.
+	backfilledBlk3 := &Block{
+		id:       ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{Number: backfilledHeight3}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, backfilledBlk1)
+
+	_, _, err = dt.NextHeight(context.Background(), backfilledBlk3)
+	require.ErrorIs(err, block.ErrStopBlockBackfilling)
+
+	// Once last block is backfilled, backfilling won't restart
+	_, _, err = dt.StartHeight(context.Background(), ids.Empty)
+	require.ErrorIs(err, block.ErrBlockBackfillingNotEnabled)
+}

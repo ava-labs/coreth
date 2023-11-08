@@ -165,28 +165,6 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 			)
 		}
 
-		if latestBackfilledBlock.Height() == 1 {
-			// backfill was interrupted just when last block was backfilled. Nothing else to do
-			dt.backfilledHeights = []heightInterval{}
-
-			if err := dt.metadataDB.Delete(downloadedHeightsKey); err != nil {
-				return ids.Empty, 0, fmt.Errorf(
-					"failed clearing latest backfilled blockID from disk: %w, %w",
-					err,
-					block.ErrInternalBlockBackfilling,
-				)
-			}
-			if err := dt.db.Commit(); err != nil {
-				return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
-					err,
-					block.ErrInternalBlockBackfilling,
-				)
-			}
-
-			log.Info("block backfilling completed")
-			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
-		}
-
 		nextBlkID = latestBackfilledBlock.Parent()
 		nextBlkHeight = latestBackfilledBlock.Height() - 1
 
@@ -201,7 +179,7 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 	return nextBlkID, nextBlkHeight, nil
 }
 
-func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk Block) (ids.ID, uint64, error) {
+func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk *Block) (ids.ID, uint64, error) {
 	if latestBlk.Height() == 1 { // done backfilling
 		dt.backfilledHeights = []heightInterval{}
 		if err := dt.metadataDB.Delete(downloadedHeightsKey); err != nil {
