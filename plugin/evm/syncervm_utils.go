@@ -109,8 +109,8 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 
 		dt.backfilledHeights = []heightInterval{
 			heightInterval{
-				upperBound: nextBlkHeight,
-				lowerBound: nextBlkHeight,
+				upperBound: summaryBlk.Height(),
+				lowerBound: summaryBlk.Height(),
 			},
 		}
 
@@ -146,27 +146,12 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 		}
 
 		dt.backfilledHeights = dh
-		lastBackfilledBlkID, err := dt.getBlkIDAtHeigth(ctx, dh[0].lowerBound)
+		latestBackfilledBlk, err := dt.getBlockAtHeight(ctx, dh[0].lowerBound)
 		if err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed retrieving latest backfilled block ID, height %d: %w, %w",
-				dh[0].lowerBound,
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
+			return ids.Empty, 0, err
 		}
-		latestBackfilledBlock, err := dt.getBlk(ctx, lastBackfilledBlkID)
-		if err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed retrieving latest backfilled block %s: %w, %w",
-				lastBackfilledBlkID,
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-
-		nextBlkID = latestBackfilledBlock.Parent()
-		nextBlkHeight = latestBackfilledBlock.Height() - 1
+		nextBlkID = latestBackfilledBlk.Parent()
+		nextBlkHeight = latestBackfilledBlk.Height() - 1
 
 	default:
 		return ids.Empty, 0, fmt.Errorf(
@@ -200,9 +185,14 @@ func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk *Block) (i
 		return ids.Empty, 0, block.ErrStopBlockBackfilling
 	}
 
+	var (
+		nextBlkID     = latestBlk.Parent()
+		nextBlkHeight = latestBlk.Height() - 1
+	)
+
 	// update latest backfilled block and possibly merge contiguous height intervals
 	dt.backfilledHeights[0].lowerBound = latestBlk.Height()
-	for len(dt.backfilledHeights) > 1 && dt.backfilledHeights[0].lowerBound <= dt.backfilledHeights[1].upperBound {
+	for len(dt.backfilledHeights) > 1 && dt.backfilledHeights[0].lowerBound <= dt.backfilledHeights[1].upperBound+1 {
 		nextLowerBound := safemath.Min(dt.backfilledHeights[0].lowerBound, dt.backfilledHeights[1].lowerBound)
 		dt.backfilledHeights[0].lowerBound = nextLowerBound
 
@@ -212,12 +202,24 @@ func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk *Block) (i
 		} else {
 			dt.backfilledHeights = dt.backfilledHeights[:len(dt.backfilledHeights)-1]
 		}
+
+		nextBlkHeight = nextLowerBound - 1
+	}
+
+	if nextBlkHeight != latestBlk.Height()-1 {
+		// merge of backfilled heights happened. nextBlkHeight is set right,
+		// nextBlkID must be updated
+		latestBackfilledBlk, err := dt.getBlockAtHeight(ctx, nextBlkHeight+1)
+		if err != nil {
+			return ids.Empty, 0, err
+		}
+		nextBlkID = latestBackfilledBlk.Parent()
 	}
 	if err := dt.storeBlockHeights(dt.backfilledHeights); err != nil {
 		return ids.Empty, 0, err
 	}
 
-	return latestBlk.Parent(), latestBlk.Height() - 1, nil
+	return nextBlkID, nextBlkHeight, nil
 }
 
 func (dt *DownloadsTracker) storeBlockHeights(h []heightInterval) error {
@@ -237,4 +239,26 @@ func (dt *DownloadsTracker) storeBlockHeights(h []heightInterval) error {
 		)
 	}
 	return nil
+}
+
+func (dt *DownloadsTracker) getBlockAtHeight(ctx context.Context, height uint64) (*Block, error) {
+	blkID, err := dt.getBlkIDAtHeigth(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed retrieving latest backfilled blockID at height %d: %w, %w",
+			height,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
+	blk, err := dt.getBlk(ctx, blkID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed retrieving latest backfilled blockID %s: %w, %w",
+			blkID,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
+	return blk, nil
 }

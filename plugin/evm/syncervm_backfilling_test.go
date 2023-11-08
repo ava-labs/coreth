@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,8 +91,12 @@ func TestBlockDownloadStart(t *testing.T) {
 	{
 		// state summary available, block backfilling starts from there
 		firstStateSummaryBlk := &Block{
-			id:       ids.GenerateTestID(),
-			ethBlock: types.NewBlock(&types.Header{Number: firstStateSummaryHeight}, nil, nil, nil, nil, nil, true),
+			id: ids.GenerateTestID(),
+			ethBlock: types.NewBlock(&types.Header{
+				Number:     firstStateSummaryHeight,
+				ParentHash: common.Hash(ids.GenerateTestID()),
+			},
+				nil, nil, nil, nil, nil, true),
 		}
 		blocks = append(blocks, firstStateSummaryBlk)
 
@@ -105,8 +110,11 @@ func TestBlockDownloadStart(t *testing.T) {
 		// another state summary available, while first block backfilling is not done.
 		// We restart from second state summary, which is the highest
 		secondStateSummaryBlk := &Block{
-			id:       ids.GenerateTestID(),
-			ethBlock: types.NewBlock(&types.Header{Number: secondStateSummaryHeight}, nil, nil, nil, nil, nil, true),
+			id: ids.GenerateTestID(),
+			ethBlock: types.NewBlock(&types.Header{
+				Number:     secondStateSummaryHeight,
+				ParentHash: common.Hash(ids.GenerateTestID()),
+			}, nil, nil, nil, nil, nil, true),
 		}
 		blocks = make([]*Block, 0) // wipe previous state summary
 		blocks = append(blocks, secondStateSummaryBlk)
@@ -153,8 +161,11 @@ func TestBlockDownloadNext(t *testing.T) {
 	// start from state summary
 	firstStateSummaryHeight := big.NewInt(314)
 	firstStateSummaryBlk := &Block{
-		id:       ids.GenerateTestID(),
-		ethBlock: types.NewBlock(&types.Header{Number: firstStateSummaryHeight}, nil, nil, nil, nil, nil, true),
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     firstStateSummaryHeight,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
 	}
 	blocks = append(blocks, firstStateSummaryBlk)
 
@@ -172,8 +183,11 @@ func TestBlockDownloadNext(t *testing.T) {
 
 	// first backfilled block
 	backfilledBlk1 := &Block{
-		id:       ids.GenerateTestID(),
-		ethBlock: types.NewBlock(&types.Header{Number: backfilledHeight1}, nil, nil, nil, nil, nil, true),
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     backfilledHeight1,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
 	}
 	blocks = append(blocks, backfilledBlk1)
 
@@ -184,8 +198,11 @@ func TestBlockDownloadNext(t *testing.T) {
 
 	// second backfilled block
 	backfilledBlk2 := &Block{
-		id:       ids.GenerateTestID(),
-		ethBlock: types.NewBlock(&types.Header{Number: backfilledHeight2}, nil, nil, nil, nil, nil, true),
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     backfilledHeight2,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
 	}
 	blocks = append(blocks, backfilledBlk1)
 
@@ -196,8 +213,11 @@ func TestBlockDownloadNext(t *testing.T) {
 
 	// final backfilled block. Height 1 is the last block that can be backfilled.
 	backfilledBlk3 := &Block{
-		id:       ids.GenerateTestID(),
-		ethBlock: types.NewBlock(&types.Header{Number: backfilledHeight3}, nil, nil, nil, nil, nil, true),
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     backfilledHeight3,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
 	}
 	blocks = append(blocks, backfilledBlk1)
 
@@ -207,4 +227,104 @@ func TestBlockDownloadNext(t *testing.T) {
 	// Once last block is backfilled, backfilling won't restart
 	_, _, err = dt.StartHeight(context.Background(), ids.Empty)
 	require.ErrorIs(err, block.ErrBlockBackfillingNotEnabled)
+}
+
+func TestBlockDownloadNextWithMultipleStateSyncRuns(t *testing.T) {
+	require := require.New(t)
+
+	var (
+		baseDB     = memdb.New()
+		db         = versiondb.New(baseDB)
+		metadataDB = versiondb.New(baseDB)
+
+		blocks = make([]*Block, 0)
+	)
+
+	dt := DownloadsTracker{
+		metadataDB: metadataDB,
+		db:         db,
+		getBlk: func(_ context.Context, blkID ids.ID) (*Block, error) {
+			for _, blk := range blocks {
+				if blk.ID() == blkID {
+					return blk, nil
+				}
+			}
+			return nil, database.ErrNotFound
+		},
+		getBlkIDAtHeigth: func(_ context.Context, h uint64) (ids.ID, error) {
+			for _, blk := range blocks {
+				if blk.Height() == h {
+					return blk.ID(), nil
+				}
+			}
+			return ids.Empty, database.ErrNotFound
+		},
+	}
+
+	var (
+		firstStateSummaryHeight   = big.NewInt(314)
+		firstRunLatestBlockHeight = new(big.Int).Div(firstStateSummaryHeight, big.NewInt(2))
+		secondStateSummaryHeight  = new(big.Int).Mul(firstStateSummaryHeight, big.NewInt(2))
+	)
+
+	// First run: we start from first state summary and backfill some blocks, till backfilledBlk1
+	firstStateSummaryBlk := &Block{
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     firstStateSummaryHeight,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, firstStateSummaryBlk)
+
+	nextBlkID, nextBlkHeight, err := dt.StartHeight(context.Background(), firstStateSummaryBlk.ID())
+	require.NoError(err)
+	require.Equal(firstStateSummaryBlk.Parent(), nextBlkID)
+	require.Equal(firstStateSummaryBlk.Height()-1, nextBlkHeight)
+
+	backfilledBlk1 := &Block{
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     firstRunLatestBlockHeight,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, backfilledBlk1)
+
+	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk1)
+	require.NoError(err)
+	require.Equal(backfilledBlk1.Parent(), nextBlkID)
+	require.Equal(backfilledBlk1.Height()-1, nextBlkHeight)
+
+	// Second run: we start from a higher state summary and backfill the full gap till first state summary height
+	secondStateSummaryBlk := &Block{
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     secondStateSummaryHeight,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, secondStateSummaryBlk)
+
+	nextBlkID, nextBlkHeight, err = dt.StartHeight(context.Background(), secondStateSummaryBlk.ID())
+	require.NoError(err)
+	require.Equal(secondStateSummaryBlk.Parent(), nextBlkID) // we start filling highest gaps
+	require.Equal(secondStateSummaryBlk.Height()-1, nextBlkHeight)
+
+	secondBlkHeight := new(big.Int).Add(firstStateSummaryHeight, big.NewInt(1)) // assume we just filled the highest block gap
+	backfilledBlk2 := &Block{
+		id: ids.GenerateTestID(),
+		ethBlock: types.NewBlock(&types.Header{
+			Number:     secondBlkHeight,
+			ParentHash: common.Hash(ids.GenerateTestID()),
+		}, nil, nil, nil, nil, nil, true),
+	}
+	blocks = append(blocks, backfilledBlk2)
+
+	// We expect that the system jumpt to request lowest gap, without requesting again blocks
+	// already downloaded in the first backfilling run
+	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk2)
+	require.NoError(err)
+	require.Equal(backfilledBlk1.Parent(), nextBlkID)
+	require.Equal(backfilledBlk1.Height()-1, nextBlkHeight)
 }
