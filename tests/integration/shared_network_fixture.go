@@ -6,6 +6,7 @@ package integration
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -14,9 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/api/info"
+	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/tests/fixture/testnet"
+	"github.com/ava-labs/avalanchego/tests/fixture/testnet/local"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -51,6 +54,34 @@ func (f *sharedNetworkFixture) Teardown() {
 	if !ginkgo.CurrentSpecReport().Failed() {
 		// Only check if bootstrap is possible for passing tests
 		e2e.CheckBootstrapIsPossible(e2e.Env.GetNetwork())
+
+		ginkgo.By(fmt.Sprintf("checking if restart of %q is possible with current network state", f.nodeURI.NodeID))
+		// TODO(marun) Ensure this works for more than local nodes
+		// TODO(marun) Allow this to be skipped just like the bootstrap check (to allow for parallel execution and simplify dev)
+		// TODO(marun) Simplify restart (here and for upgrade test)
+		network, err := local.ReadNetwork(e2e.Env.NetworkDir)
+		f.require.NoError(err)
+		var targetNode *local.LocalNode
+		for _, node := range network.Nodes {
+			if node.GetID() == f.nodeURI.NodeID {
+				targetNode = node
+				break
+			}
+		}
+		f.require.NotNil(targetNode)
+		f.require.NoError(targetNode.Stop())
+
+		bootstrapIPs, bootstrapIDs, err := network.GetBootstrapIPsAndIDs()
+		f.require.NoError(err)
+		f.require.NotEmpty(bootstrapIDs)
+		targetNode.Flags[config.BootstrapIDsKey] = strings.Join(bootstrapIDs, ",")
+		targetNode.Flags[config.BootstrapIPsKey] = strings.Join(bootstrapIPs, ",")
+		f.require.NoError(targetNode.WriteConfig())
+
+		f.require.NoError(targetNode.Start(ginkgo.GinkgoWriter, network.ExecPath))
+
+		ginkgo.By(fmt.Sprintf("waiting for node %q to report healthy after restart", targetNode.NodeID))
+		e2e.WaitForHealthy(targetNode)
 	}
 }
 
