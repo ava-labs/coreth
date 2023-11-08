@@ -47,6 +47,13 @@ func newSharedNetworkFixture(t require.TestingT) *sharedNetworkFixture {
 	}
 }
 
+func (f *sharedNetworkFixture) Teardown() {
+	if !ginkgo.CurrentSpecReport().Failed() {
+		// Only check if bootstrap is possible for passing tests
+		e2e.CheckBootstrapIsPossible(e2e.Env.GetNetwork())
+	}
+}
+
 func (f *sharedNetworkFixture) GetPrefundedKey() *secp256k1.PrivateKey {
 	return f.prefundedKey
 }

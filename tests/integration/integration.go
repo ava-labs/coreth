@@ -16,6 +16,8 @@ import (
 )
 
 type IntegrationFixture interface {
+	Teardown()
+
 	GetPrefundedKey() *secp256k1.PrivateKey
 
 	GetXChainID() ids.ID
@@ -39,15 +41,17 @@ type IntegrationFixture interface {
 }
 
 func GetFixture() IntegrationFixture {
+	var fixture IntegrationFixture
 	if e2e.Env == nil {
-		// Shared network fixture not initialized, return a fresh vm fixture
-		vmFixture := evm.CreateVMFixture(ginkgo.GinkgoT())
-		ginkgo.DeferCleanup(func() {
-			vmFixture.Teardown()
-		})
-		return vmFixture
+		// Shared network fixture not initialized, return a vm fixture
+		fixture = evm.CreateVMFixture(ginkgo.GinkgoT())
+	} else {
+		// e2e.Env being non-nil indicates availability of shared network fixture
+		fixture = newSharedNetworkFixture(ginkgo.GinkgoT())
 	}
+	ginkgo.DeferCleanup(func() {
+		fixture.Teardown()
+	})
 
-	// e2e.Env being non-nil indicates the use of a shared network fixture
-	return newSharedNetworkFixture(ginkgo.GinkgoT())
+	return fixture
 }
