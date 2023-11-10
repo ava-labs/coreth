@@ -51,7 +51,7 @@ const (
 	//
 	// This should be tuned such that increased parallelism makes up
 	// for maintenance of the extra trie copies.
-	targetTasksPerCopy = 12
+	targetTasksPerCopy = 4
 )
 
 // triePrefetcher is an active prefetcher, which receives accounts or storage
