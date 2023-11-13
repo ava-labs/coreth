@@ -462,7 +462,7 @@ func (vm *VM) Initialize(
 	}
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
-		BlockchainID: common.Hash(chainCtx.ChainID),
+		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
 
@@ -482,6 +482,10 @@ func (vm *VM) Initialize(
 	mainnetExtDataHashes = nil
 
 	vm.chainID = g.Config.ChainID
+
+	if err := vm.chainConfig.Verify(); err != nil {
+		return fmt.Errorf("failed to verify chain config: %w", err)
+	}
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g

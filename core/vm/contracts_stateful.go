@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/precompile"
+	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -31,17 +31,17 @@ type wrappedPrecompiledContract struct {
 	p PrecompiledContract
 }
 
-func newWrappedPrecompiledContract(p PrecompiledContract) precompile.StatefulPrecompiledContract {
+func newWrappedPrecompiledContract(p PrecompiledContract) contract.StatefulPrecompiledContract {
 	return &wrappedPrecompiledContract{p: p}
 }
 
 // Run implements the StatefulPrecompiledContract interface
-func (w *wrappedPrecompiledContract) Run(accessibleState precompile.PrecompileAccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (w *wrappedPrecompiledContract) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	return RunPrecompiledContract(w.p, input, suppliedGas)
 }
 
 // RunStatefulPrecompiledContract confirms runs [precompile] with the specified parameters.
-func RunStatefulPrecompiledContract(precompile precompile.StatefulPrecompiledContract, accessibleState precompile.PrecompileAccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func RunStatefulPrecompiledContract(precompile contract.StatefulPrecompiledContract, accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	return precompile.Run(accessibleState, caller, addr, input, suppliedGas, readOnly)
 }
 
@@ -51,7 +51,7 @@ type nativeAssetBalance struct {
 }
 
 // PackNativeAssetBalanceInput packs the arguments into the required input data for a transaction to be passed into
-// the native asset balance precompile.
+// the native asset balance contract.
 func PackNativeAssetBalanceInput(address common.Address, assetID common.Hash) []byte {
 	input := make([]byte, 52)
 	copy(input, address.Bytes())
@@ -71,7 +71,7 @@ func UnpackNativeAssetBalanceInput(input []byte) (common.Address, common.Hash, e
 }
 
 // Run implements StatefulPrecompiledContract
-func (b *nativeAssetBalance) Run(accessibleState precompile.PrecompileAccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (b *nativeAssetBalance) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes)
 	if suppliedGas < b.gasCost {
 		return nil, 0, vmerrs.ErrOutOfGas
@@ -97,7 +97,7 @@ type nativeAssetCall struct {
 }
 
 // PackNativeAssetCallInput packs the arguments into the required input data for a transaction to be passed into
-// the native asset precompile.
+// the native asset contract.
 // Assumes that [assetAmount] is non-nil.
 func PackNativeAssetCallInput(address common.Address, assetID common.Hash, assetAmount *big.Int, callData []byte) []byte {
 	input := make([]byte, 84+len(callData))
@@ -121,13 +121,13 @@ func UnpackNativeAssetCallInput(input []byte) (common.Address, common.Hash, *big
 }
 
 // Run implements StatefulPrecompiledContract
-func (c *nativeAssetCall) Run(accessibleState precompile.PrecompileAccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (c *nativeAssetCall) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes, assetAmount 32 bytes, callData variable length bytes)
 	return accessibleState.NativeAssetCall(caller, input, suppliedGas, c.gasCost, readOnly)
 }
 
 type deprecatedContract struct{}
 
-func (*deprecatedContract) Run(accessibleState precompile.PrecompileAccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (*deprecatedContract) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	return nil, suppliedGas, vmerrs.ErrExecutionReverted
 }
