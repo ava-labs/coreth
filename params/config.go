@@ -48,9 +48,6 @@ var (
 	// AvalancheLocalChainID ...
 	AvalancheLocalChainID = big.NewInt(43112)
 
-	DynamicFeeExtraDataSize        = 80
-	RollupWindow            uint64 = 10
-
 	errNonGenesisForkByHeight = errors.New("coreth only supports forking by height at the genesis block")
 )
 
