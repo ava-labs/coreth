@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	warpPrecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -461,6 +462,12 @@ func (vm *VM) Initialize(
 		extDataHashes = fujiExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheLocalChainID) == 0:
 		g.Config = params.AvalancheLocalChainConfig
+	}
+	// If the DUpgrade is activated, activate the Warp Precompile at the same time
+	if g.Config.DUpgradeBlockTimestamp != nil {
+		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
+			Config: warpPrecompile.NewDefaultConfig(g.Config.DUpgradeBlockTimestamp),
+		})
 	}
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{

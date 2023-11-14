@@ -27,5 +27,4 @@ func TestIsProhibited(t *testing.T) {
 	assert.False(t, IsProhibited(common.HexToAddress("0x0100000000000000000000000000000000000100")))
 	assert.False(t, IsProhibited(common.HexToAddress("0x0200000000000000000000000000000000000100")))
 	assert.False(t, IsProhibited(common.HexToAddress("0x0300000000000000000000000000000000000100")))
-
 }
