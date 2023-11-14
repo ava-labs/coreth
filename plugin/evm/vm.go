@@ -455,13 +455,16 @@ func (vm *VM) Initialize(
 	// Set the chain config for mainnet/fuji chain IDs
 	switch {
 	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
-		g.Config = params.AvalancheMainnetChainConfig
+		config := *params.AvalancheMainnetChainConfig
+		g.Config = &config
 		extDataHashes = mainnetExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
-		g.Config = params.AvalancheFujiChainConfig
+		config := *params.AvalancheFujiChainConfig
+		g.Config = &config
 		extDataHashes = fujiExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheLocalChainID) == 0:
-		g.Config = params.AvalancheLocalChainConfig
+		config := *params.AvalancheLocalChainConfig
+		g.Config = &config
 	}
 	// If the DUpgrade is activated, activate the Warp Precompile at the same time
 	if g.Config.DUpgradeBlockTimestamp != nil {
