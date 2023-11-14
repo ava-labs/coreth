@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
@@ -215,6 +216,7 @@ var (
 	errConflictingAtomicTx            = errors.New("conflicting atomic tx present")
 	errTooManyAtomicTx                = errors.New("too many atomic tx")
 	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
+	errInvalidHeaderPredicateResults  = errors.New("invalid header predicate results")
 )
 
 var originalStderr *os.File
@@ -483,10 +485,6 @@ func (vm *VM) Initialize(
 
 	vm.chainID = g.Config.ChainID
 
-	if err := vm.chainConfig.Verify(); err != nil {
-		return fmt.Errorf("failed to verify chain config: %w", err)
-	}
-
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
 	vm.ethConfig.NetworkId = vm.chainID.Uint64()
@@ -553,6 +551,10 @@ func (vm *VM) Initialize(
 		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
 			Size: secpCacheSize,
 		},
+	}
+
+	if err := vm.chainConfig.Verify(); err != nil {
+		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
 	vm.codec = Codec
@@ -758,15 +760,16 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 	block.status = choices.Accepted
 
 	config := &chain.Config{
-		DecidedCacheSize:    decidedCacheSize,
-		MissingCacheSize:    missingCacheSize,
-		UnverifiedCacheSize: unverifiedCacheSize,
-		BytesToIDCacheSize:  bytesToIDCacheSize,
-		GetBlockIDAtHeight:  vm.GetBlockIDAtHeight,
-		GetBlock:            vm.getBlock,
-		UnmarshalBlock:      vm.parseBlock,
-		BuildBlock:          vm.buildBlock,
-		LastAcceptedBlock:   block,
+		DecidedCacheSize:      decidedCacheSize,
+		MissingCacheSize:      missingCacheSize,
+		UnverifiedCacheSize:   unverifiedCacheSize,
+		BytesToIDCacheSize:    bytesToIDCacheSize,
+		GetBlockIDAtHeight:    vm.GetBlockIDAtHeight,
+		GetBlock:              vm.getBlock,
+		UnmarshalBlock:        vm.parseBlock,
+		BuildBlock:            vm.buildBlock,
+		BuildBlockWithContext: vm.buildBlockWithContext,
+		LastAcceptedBlock:     block,
 	}
 
 	// Register chain state metrics
@@ -1186,9 +1189,23 @@ func (vm *VM) Shutdown(context.Context) error {
 	return nil
 }
 
+func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
+	return vm.buildBlockWithContext(ctx, nil)
+}
+
 // buildBlock builds a block to be wrapped by ChainState
-func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
-	block, err := vm.miner.GenerateBlock()
+func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
+	if proposerVMBlockCtx != nil {
+		log.Debug("Building block with context", "pChainBlockHeight", proposerVMBlockCtx.PChainHeight)
+	} else {
+		log.Debug("Building block without context")
+	}
+	predicateCtx := &precompileconfig.PredicateContext{
+		SnowCtx:            vm.ctx,
+		ProposerVMBlockCtx: proposerVMBlockCtx,
+	}
+
+	block, err := vm.miner.GenerateBlock(predicateCtx)
 	vm.builder.handleGenerateBlock()
 	if err != nil {
 		vm.mempool.CancelCurrentTxs()
@@ -1215,7 +1232,7 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(false /*=writes*/); err != nil {
+	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
