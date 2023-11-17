@@ -203,7 +203,6 @@ func init() {
 	addrsList = append(addrsList, PrecompiledAddressesApricotPhasePre6...)
 	addrsList = append(addrsList, PrecompiledAddressesApricotPhase6...)
 	addrsList = append(addrsList, PrecompiledAddressesBanff...)
-	addrsList = append(addrsList, genesisContractAddr, NativeAssetBalanceAddr, NativeAssetCallAddr) // Add genesis multicoin contract and deprecated native asset precompiles to set of reserved addresses
 	for _, k := range addrsList {
 		PrecompileAllNativeAddresses[k] = struct{}{}
 	}
