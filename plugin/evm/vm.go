@@ -1056,9 +1056,11 @@ func (vm *VM) initBlockBuilding() error {
 	ethTxGossipHandler = &p2p.ValidatorHandler{
 		ValidatorSet: vm.validators,
 		Handler: &p2p.ThrottlerHandler{
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
 			Handler:   ethTxGossipHandler,
+			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+			Log:       vm.ctx.Log,
 		},
+		Log: vm.ctx.Log,
 	}
 	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
 	if err != nil {
@@ -1075,7 +1077,9 @@ func (vm *VM) initBlockBuilding() error {
 		Handler: &p2p.ThrottlerHandler{
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
 			Handler:   atomicTxGossipHandler,
+			Log:       vm.ctx.Log,
 		},
+		Log: vm.ctx.Log,
 	}
 
 	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
