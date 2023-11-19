@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.10.16-0.20231108120407-a2464ebe72bc
+	github.com/ava-labs/avalanchego v1.10.16-0.20231119212403-98d01e8d372a
 	github.com/cespare/cp v0.1.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/davecgh/go-spew v1.1.1
@@ -128,9 +128,8 @@ require (
 	go.opentelemetry.io/otel/sdk v1.11.0 // indirect
 	go.opentelemetry.io/otel/trace v1.11.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
-	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/multierr v1.8.0 // indirect
-	go.uber.org/zap v1.24.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	gonum.org/v1/gonum v0.11.0 // indirect
