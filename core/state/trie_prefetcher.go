@@ -550,7 +550,7 @@ func (to *trieOrchestrator) processTasks() {
 			// if not at [maxConcurrency])
 			//
 			// If workers are stopped before calling [Execute], this function may
-			// block forever.
+			// panic.
 			to.sf.p.workers.Execute(f)
 		}
 	}
