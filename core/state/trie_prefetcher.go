@@ -470,9 +470,9 @@ type trieOrchestrator struct {
 type trieWrapper struct {
 	t Trie
 
-	// keys is an approximation of how populated
-	// this [Trie] copy is (we want to return the most
-	// populated copy when we are done).
+	// operations is the number of keys that have been fetched on this
+	// [Trie] copy. It us used to approximate how populated this copy is (we want
+	// to return the most populated copy).
 	operations int
 }
 
