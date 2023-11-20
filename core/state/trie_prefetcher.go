@@ -396,7 +396,7 @@ func (sf *subfetcher) best() Trie {
 	// we make a copy of [best] in case this function is called multiple times.
 	//
 	// [best] defaults to [base] during initialization, so we are guaranteed to have a trie here.
-	return sf.db.CopyTrie(sf.to.best.t)
+	return sf.to.copyBest()
 }
 
 func (sf *subfetcher) abort() {
@@ -428,7 +428,7 @@ func (sf *subfetcher) bestOperations() int {
 		// Unable to open trie
 		return 0
 	}
-	return sf.to.best.operations
+	return sf.to.bestOperations()
 }
 
 // trieOrchestrator is not thread-safe.
@@ -451,10 +451,14 @@ type trieOrchestrator struct {
 
 	// best is the best Trie we have (as measured by how populated
 	// it is). It is updated by each worker goroutine as they complete
-	// tasks. [bestLock] is used to prevent concurrent updates to [best] and
-	// to any [trieWrapper].
-	best     *trieWrapper
-	bestLock sync.Mutex
+	// tasks.
+	//
+	// [bestLock] is used to prevent concurrent updates to [best] and
+	// any [trieWrapper]. This is cleaner and more efficient than adding
+	// a lock to each [trieWrapper] (as we never update the [operations]
+	// count without also comparing to [best]'s [operations]).
+	best                *trieWrapper
+	bestAndWrappersLock sync.Mutex
 
 	outstandingRequests sync.WaitGroup
 	tasksAllowed        bool
@@ -530,6 +534,23 @@ func (to *trieOrchestrator) copyBase() Trie {
 	defer to.baseLock.Unlock()
 
 	return to.sf.db.CopyTrie(to.base)
+}
+
+func (to *trieOrchestrator) copyBest() Trie {
+	to.bestAndWrappersLock.Lock()
+	defer to.bestAndWrappersLock.Unlock()
+
+	// Eventhough [bestAndWrappersLock] is held, we still need to
+	// wait for all outstanding requests to complete before invoking
+	// this function (does not lock individual copies).
+	return to.sf.db.CopyTrie(to.best.t)
+}
+
+func (to *trieOrchestrator) bestOperations() int {
+	to.bestAndWrappersLock.Lock()
+	defer to.bestAndWrappersLock.Unlock()
+
+	return to.best.operations
 }
 
 func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
@@ -608,12 +629,12 @@ func (to *trieOrchestrator) processTasks() {
 				to.outstandingRequests.Done()
 
 				// Update best copy, if our copy has more operations
-				to.bestLock.Lock()
+				to.bestAndWrappersLock.Lock()
 				tw.operations++
 				if tw.operations > to.best.operations {
 					to.best = tw
 				}
-				to.bestLock.Unlock()
+				to.bestAndWrappersLock.Unlock()
 
 				// Return copy when we are done with it, so someone else can use it
 				//
