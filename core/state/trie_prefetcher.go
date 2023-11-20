@@ -38,21 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	// triePrefetchMetricsPrefix is the prefix under which to publish the metrics.
-	triePrefetchMetricsPrefix = "trie/prefetch/"
-
-	// targetTasksPerCopy is the target number of tasks that should
-	// be assigned to a single trie copy batch lookup.
-	//
-	// Recall, a single trie lookup may in the worst case require
-	// one disk read per level of the trie. This means a single trie.Get
-	// call could take 7-10ms (7-10 levels, 1 ms per read).
-	//
-	// This should be tuned such that increased parallelism makes up
-	// for maintenance of the extra trie copies.
-	targetTasksPerCopy = 4
-)
+// triePrefetchMetricsPrefix is the prefix under which to publish the metrics.
+const triePrefetchMetricsPrefix = "trie/prefetch/"
 
 // triePrefetcher is an active prefetcher, which receives accounts or storage
 // items and does trie-loading of them. The goal is to get as much useful content
@@ -538,13 +525,7 @@ func (to *trieOrchestrator) processTasks() {
 
 		// Enqueue more work as soon as trie copies are available
 		lt := len(tasks)
-		for i := 0; i < lt; i += targetTasksPerCopy {
-			end := i + targetTasksPerCopy
-			if end > lt {
-				end = lt
-			}
-			fTasks := tasks[i:end]
-
+		for i := 0; i < lt; i++ {
 			// Wait for an available copy or create one
 			var t Trie
 			select {
@@ -558,33 +539,19 @@ func (to *trieOrchestrator) processTasks() {
 			}
 
 			// Enqueue work, unless stopped.
+			fTask := tasks[i]
 			f := func() {
-				for j, fTask := range fTasks {
-					// Check if we should stop
-					select {
-					case <-to.ctx.Done():
-						// Ensure we don't forget to mark tasks we've been
-						// given as complete.
-						to.restoreOutstandingRequests(len(fTasks[j:]))
-
-						// We don't worry about returning the trie copy
-						// because we won't need it again.
-						return
-					default:
-					}
-
-					// Perform task
-					var err error
-					if len(fTask) == common.AddressLength {
-						_, err = t.GetAccount(common.BytesToAddress(fTask))
-					} else {
-						_, err = t.GetStorage(to.sf.addr, fTask)
-					}
-					if err != nil {
-						log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
-					}
-					to.outstandingRequests.Done()
+				// Perform task
+				var err error
+				if len(fTask) == common.AddressLength {
+					_, err = t.GetAccount(common.BytesToAddress(fTask))
+				} else {
+					_, err = t.GetStorage(to.sf.addr, fTask)
 				}
+				if err != nil {
+					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
+				}
+				to.outstandingRequests.Done()
 
 				// Return copy when we are done with it, so someone else can use it
 				//
