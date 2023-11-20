@@ -58,10 +58,6 @@ type triePrefetcher struct {
 	subfetcherWaitTimer    metrics.Counter
 	subfetcherCopiesMeter  metrics.Meter
 
-	deliveryCopyMissMeter    metrics.Meter
-	deliveryRequestMissMeter metrics.Meter
-	deliveryWaitMissMeter    metrics.Meter
-
 	accountLoadMeter  metrics.Meter
 	accountDupMeter   metrics.Meter
 	accountSkipMeter  metrics.Meter
@@ -88,10 +84,6 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, maxConcu
 		subfetcherWorkersMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
 		subfetcherWaitTimer:    metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
 		subfetcherCopiesMeter:  metrics.GetOrRegisterMeter(prefix+"/subfetcher/copies", nil),
-
-		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
-		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
-		deliveryWaitMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/wait", nil),
 
 		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
 		accountDupMeter:   metrics.GetOrRegisterMeter(prefix+"/account/dup", nil),
@@ -184,10 +176,6 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		subfetcherWaitTimer:    p.subfetcherWaitTimer,
 		subfetcherCopiesMeter:  p.subfetcherCopiesMeter,
 
-		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
-		deliveryRequestMissMeter: p.deliveryRequestMissMeter,
-		deliveryWaitMissMeter:    p.deliveryWaitMissMeter,
-
 		accountLoadMeter:  p.accountLoadMeter,
 		accountDupMeter:   p.accountDupMeter,
 		accountSkipMeter:  p.accountSkipMeter,
@@ -242,7 +230,6 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	if p.fetches != nil {
 		trie := p.fetches[id]
 		if trie == nil {
-			p.deliveryCopyMissMeter.Mark(1)
 			return nil
 		}
 		return p.db.CopyTrie(trie)
@@ -251,7 +238,6 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		p.deliveryRequestMissMeter.Mark(1)
 		return nil
 	}
 
@@ -259,7 +245,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// being enqueued)
 	start := time.Now()
 	fetcher.wait()
-	p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
+	if metrics.Enabled {
+		p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
+	}
 
 	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
 	fetcher.abort()
@@ -267,7 +255,6 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Return a copy of one of the prefetched tries
 	trie := fetcher.peek()
 	if trie == nil {
-		p.deliveryWaitMissMeter.Mark(1)
 		return nil
 	}
 	return trie
