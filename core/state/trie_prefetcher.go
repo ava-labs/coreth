@@ -449,6 +449,10 @@ type trieOrchestrator struct {
 	base     Trie
 	baseLock sync.Mutex
 
+	// best is the best Trie we have (as measured by how populated
+	// it is). It is updated by each worker goroutine as they complete
+	// tasks. [bestLock] is used to prevent concurrent updates to [best] and
+	// to any [trieWrapper].
 	best     *trieWrapper
 	bestLock sync.Mutex
 
@@ -600,13 +604,12 @@ func (to *trieOrchestrator) processTasks() {
 				}
 				if err != nil {
 					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
-				} else {
-					tw.operations++
 				}
 				to.outstandingRequests.Done()
 
 				// Update best copy, if our copy has more operations
 				to.bestLock.Lock()
+				tw.operations++
 				if tw.operations > to.best.operations {
 					to.best = tw
 				}
