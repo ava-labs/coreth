@@ -276,7 +276,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// before this, no tasks will be dropped)
 	fetcher.abort()
 
-	// Return a copy of the best prefetched trie (if no keys were fetched, then we just return base)
+	// Return a copy of the best prefetched trie
 	trie := fetcher.best()
 	if trie == nil {
 		if metrics.Enabled {
