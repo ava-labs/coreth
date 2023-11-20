@@ -547,6 +547,9 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue task for processing (may spawn new goroutine
 			// if not at [maxConcurrency])
+			//
+			// If workers are stopped before calling [Execute], this function may
+			// block forever.
 			to.sf.p.workers.Execute(f)
 		}
 	}

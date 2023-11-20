@@ -54,6 +54,7 @@ func (b *BoundedWorkers) startWorker(f func()) {
 // Execute must not be called after Wait, otherwise it might panic.
 func (b *BoundedWorkers) Execute(f func()) {
 	b.outstandingWork.Add(1)
+
 	select {
 	case b.work <- f: // Feed hungry workers first.
 	case b.workerSpawner <- struct{}{}: // Allocate a new worker to execute immediately next.
