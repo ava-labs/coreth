@@ -516,11 +516,11 @@ func (to *trieOrchestrator) processTasks() {
 				to.copies++
 				t = to.copyBase()
 			case <-to.stop:
-				taskCount := len(tasks[i:])
-				to.outstandingRequests.Add(-taskCount)
+				remainingCount := len(tasks[i:])
 				to.taskLock.Lock()
-				to.skips += taskCount
+				to.skips += remainingCount
 				to.taskLock.Unlock()
+				to.outstandingRequests.Add(-remainingCount)
 				return
 			}
 
