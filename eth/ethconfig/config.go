@@ -156,4 +156,9 @@ type Config struct {
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
 	TxLookupLimit uint64
+
+	// SkipTxIndexing skips indexing transactions.
+	// This is useful for light clients that don't need to index transactions.
+	// This cannot be enabled at the same time with TxLookupLimit = 0 (meaning no limit for tx indexing).
+	SkipTxIndexing bool
 }

@@ -652,11 +652,14 @@ func TestTransactionIndices(t *testing.T) {
 
 	check := func(tail *uint64, chain *BlockChain) {
 		stored := rawdb.ReadTxIndexTail(chain.db)
-		require.EqualValues(tail, stored)
 
 		if tail == nil {
-			return
+			require.Nil(stored)
+			tail = new(uint64)
+		} else {
+			require.EqualValues(tail, stored, "expected tail %d, got %d", *tail, *stored)
 		}
+
 		for i := *tail; i <= chain.CurrentBlock().Number.Uint64(); i++ {
 			block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
 			if block.Transactions().Len() == 0 {
@@ -737,10 +740,128 @@ func TestTransactionIndices(t *testing.T) {
 	}
 }
 
+func TestTransactionIndicesSkipIndexing(t *testing.T) {
+	// Configure and generate a sample block chain
+	require := require.New(t)
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		funds   = big.NewInt(10000000000000)
+		gspec   = &Genesis{
+			Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+			Alloc:  GenesisAlloc{addr1: {Balance: funds}},
+		}
+		signer = types.LatestSigner(gspec.Config)
+	)
+	genDb, blocks, _, err := GenerateChainWithGenesis(gspec, dummy.NewDummyEngine(&TestCallbacks), 128, 10, func(i int, block *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		require.NoError(err)
+		block.AddTx(tx)
+	})
+	require.NoError(err)
+
+	blocks2, _, err := GenerateChain(gspec.Config, blocks[len(blocks)-1], dummy.NewDummyEngine(&TestCallbacks), genDb, 10, 10, nil)
+	require.NoError(err)
+
+	check := func(tail *uint64, to uint64, chain *BlockChain) {
+		stored := rawdb.ReadTxIndexTail(chain.db)
+		if tail == nil {
+			require.Nil(stored)
+			tail = new(uint64)
+		} else {
+			require.EqualValues(tail, stored, "expected tail %d, got %d", *tail, *stored)
+		}
+
+		for i := *tail; i < to; i++ {
+			block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+			if block.Transactions().Len() == 0 {
+				continue
+			}
+			for _, tx := range block.Transactions() {
+				index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash())
+				require.NotNilf(index, "Miss transaction indices, number %d hash %s", i, tx.Hash().Hex())
+			}
+		}
+
+		for i := to; i <= chain.CurrentBlock().Number.Uint64(); i++ {
+			block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+			if block.Transactions().Len() == 0 {
+				continue
+			}
+			for _, tx := range block.Transactions() {
+				index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash())
+				require.Nilf(index, "Transaction indices should be deleted, number %d hash %s", i, tx.Hash().Hex())
+			}
+		}
+	}
+
+	conf := &CacheConfig{
+		TrieCleanLimit:        256,
+		TrieDirtyLimit:        256,
+		TrieDirtyCommitTarget: 20,
+		Pruning:               true,
+		CommitInterval:        4096,
+		SnapshotLimit:         256,
+		SnapshotNoBuild:       true, // Ensure the test errors if snapshot initialization fails
+		AcceptorQueueLimit:    64,
+	}
+
+	// Init block chain and check all needed indices has been indexed.
+	chainDB := rawdb.NewMemoryDatabase()
+	chain, err := createBlockChain(chainDB, conf, gspec, common.Hash{})
+	require.NoError(err)
+
+	_, err = chain.InsertChain(blocks)
+	require.NoError(err)
+
+	for _, block := range blocks {
+		err := chain.Accept(block)
+		require.NoError(err)
+	}
+	chain.DrainAcceptorQueue()
+
+	chain.Stop()
+	check(nil, chain.CurrentHeader().Number.Uint64(), chain) // check all indices has been indexed until that point
+
+	lastAcceptedHash := chain.CurrentHeader().Hash()
+
+	// Reconstruct a block chain which only reserves limited tx indices
+	// 128 blocks were previously created with indexing. Now we add a new block at each test step.
+	limit := []uint64{130 /* 129 + 1 reserve all */, 64 /* drop stale */, 32 /* shorten history */}
+	to := []uint64{129 /* reserve all */, 130, 131}
+	tails := []uint64{0 /* reserve all */, 67 /* 130 - 64 + 1 */, 100 /* 131 - 32 + 1 */}
+	conf.SkipTxIndexing = true
+	for i, l := range limit {
+		conf.TxLookupLimit = l
+
+		chain, err := createBlockChain(chainDB, conf, gspec, lastAcceptedHash)
+		require.NoError(err)
+
+		newBlks := blocks2[i : i+1]
+		_, err = chain.InsertChain(newBlks) // Feed chain a higher block to trigger indices updater.
+		require.NoError(err)
+
+		err = chain.Accept(newBlks[0]) // Accept the block to trigger indices updater.
+		require.NoError(err)
+
+		chain.DrainAcceptorQueue()
+		time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
+
+		chain.Stop()
+		current := chain.CurrentHeader().Number.Uint64()
+		fmt.Println(current)
+		check(&tails[i], to[i], chain)
+
+		lastAcceptedHash = chain.CurrentHeader().Hash()
+	}
+}
+
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		forkA int
 		forkB int
 	}{
@@ -871,6 +992,29 @@ func TestTxLookupBlockChain(t *testing.T) {
 	}
 }
 
+func TestTxLookupSkipIndexingBlockChain(t *testing.T) {
+	cacheConf := &CacheConfig{
+		TrieCleanLimit:        256,
+		TrieDirtyLimit:        256,
+		TrieDirtyCommitTarget: 20,
+		Pruning:               true,
+		CommitInterval:        4096,
+		SnapshotLimit:         256,
+		SnapshotNoBuild:       true, // Ensure the test errors if snapshot initialization fails
+		AcceptorQueueLimit:    64,   // ensure channel doesn't block
+		TxLookupLimit:         5,
+		SkipTxIndexing:        true,
+	}
+	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+		return createBlockChain(db, cacheConf, gspec, lastAcceptedHash)
+	}
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, createTxLookupBlockChain)
+		})
+	}
+}
+
 func TestCreateThenDeletePreByzantium(t *testing.T) {
 	// We want to use pre-byzantium rules where we have intermediate state roots
 	// between transactions.
@@ -882,6 +1026,7 @@ func TestCreateThenDeletePreByzantium(t *testing.T) {
 	config.MuirGlacierBlock = nil
 	testCreateThenDelete(t, &config)
 }
+
 func TestCreateThenDeletePostByzantium(t *testing.T) {
 	testCreateThenDelete(t, params.TestChainConfig)
 }
@@ -906,7 +1051,8 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 		byte(vm.PUSH1), 0x1,
 		byte(vm.SSTORE),
 		// Get the runtime-code on the stack
-		byte(vm.PUSH32)}
+		byte(vm.PUSH32),
+	}
 	initCode = append(initCode, code...)
 	initCode = append(initCode, []byte{
 		byte(vm.PUSH1), 0x0, // offset
@@ -948,8 +1094,8 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 	})
 	// Import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfig, gspec, engine, vm.Config{
-		//Debug:  true,
-		//Tracer: logger.NewJSONLogger(nil, os.Stdout),
+		// Debug:  true,
+		// Tracer: logger.NewJSONLogger(nil, os.Stdout),
 	}, common.Hash{}, false)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
@@ -994,7 +1140,8 @@ func TestTransientStorageReset(t *testing.T) {
 		byte(vm.TSTORE),
 
 		// Get the runtime-code on the stack
-		byte(vm.PUSH32)}
+		byte(vm.PUSH32),
+	}
 	initCode = append(initCode, code...)
 	initCode = append(initCode, []byte{
 		byte(vm.PUSH1), 0x0, // offset

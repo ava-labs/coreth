@@ -160,6 +160,7 @@ type CacheConfig struct {
 	Preimages                       bool          // Whether to store preimage of trie key to the disk
 	AcceptedCacheSize               int           // Depth of accepted headers cache and accepted logs cache at the accepted tip
 	TxLookupLimit                   uint64        // Number of recent blocks for which to maintain transaction lookup indices
+	SkipTxIndexing                  bool          // Whether to skip transaction indexing
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
@@ -403,6 +404,8 @@ func NewBlockChain(
 	}
 
 	// Start tx indexer/unindexer if required.
+	// TODO: with skip tx indexing, we should not start the tx indexer if there is no tx to remove.
+	// or we can stop it once there is no lookback tx index to remove.
 	if bc.cacheConfig.TxLookupLimit != 0 {
 		bc.wg.Add(1)
 		go bc.dispatchTxUnindexer()
@@ -481,9 +484,11 @@ func (bc *BlockChain) dispatchTxUnindexer() {
 // This includes the following:
 // - transaction lookup indices
 // - updating the acceptor tip index
-func (bc *BlockChain) writeBlockAcceptedIndices(b *types.Block) error {
+func (bc *BlockChain) writeBlockAcceptedIndices(b *types.Block, skipTxIndices bool) error {
 	batch := bc.db.NewBatch()
-	rawdb.WriteTxLookupEntriesByBlock(batch, b)
+	if !skipTxIndices {
+		rawdb.WriteTxLookupEntriesByBlock(batch, b)
+	}
 	if err := rawdb.WriteAcceptorTip(batch, b.Hash()); err != nil {
 		return fmt.Errorf("%w: failed to write acceptor tip key", err)
 	}
@@ -574,7 +579,7 @@ func (bc *BlockChain) startAcceptor() {
 		}
 
 		// Update last processed and transaction lookup index
-		if err := bc.writeBlockAcceptedIndices(next); err != nil {
+		if err := bc.writeBlockAcceptedIndices(next, bc.cacheConfig.SkipTxIndexing); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
 		}
 
@@ -1863,7 +1868,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 		// Write any unsaved indices to disk
 		if writeIndices {
-			if err := bc.writeBlockAcceptedIndices(current); err != nil {
+			if err := bc.writeBlockAcceptedIndices(current, bc.cacheConfig.SkipTxIndexing); err != nil {
 				return fmt.Errorf("%w: failed to process accepted block indices", err)
 			}
 		}
