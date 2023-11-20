@@ -4,7 +4,6 @@
 package utils
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 )
@@ -52,25 +51,22 @@ func (b *BoundedWorkers) startWorker(f func()) {
 // Execute the given function on an existing goroutine waiting for more work, a new goroutine,
 // or return if the context is canceled.
 //
-// Execute must not be called after Wait.
-func (b *BoundedWorkers) Execute(ctx context.Context, f func()) bool {
+// Execute must not be called after Wait, otherwise it might panic.
+func (b *BoundedWorkers) Execute(f func()) {
 	b.outstandingWork.Add(1)
+
 	select {
 	case b.work <- f: // Feed hungry workers first.
-		return true
 	case b.workerSpawner <- struct{}{}: // Allocate a new worker to execute immediately next.
 		b.startWorker(f)
-		return true
-	case <-ctx.Done():
-		b.outstandingWork.Done()
-		return false
 	}
 }
 
 // Wait returns after all enqueued work finishes and all goroutines to exit.
 // Wait returns the number of workers that were spawned during the run.
 //
-// It is safe to call Wait multiple times.
+// It is safe to call Wait multiple times but not safe to call [Execute]
+// after [Wait] has been called.
 func (b *BoundedWorkers) Wait() int {
 	b.outstandingWork.Wait()
 	b.workClose.Do(func() {

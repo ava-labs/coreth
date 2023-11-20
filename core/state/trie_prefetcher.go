@@ -27,9 +27,7 @@
 package state
 
 import (
-	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/coreth/metrics"
@@ -59,10 +57,6 @@ type triePrefetcher struct {
 	subfetcherWaitTimer    metrics.Counter
 	subfetcherCopiesMeter  metrics.Meter
 
-	deliveryCopyMissMeter    metrics.Meter
-	deliveryRequestMissMeter metrics.Meter
-	deliveryWaitMissMeter    metrics.Meter
-
 	accountLoadMeter  metrics.Meter
 	accountDupMeter   metrics.Meter
 	accountSkipMeter  metrics.Meter
@@ -89,10 +83,6 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, maxConcu
 		subfetcherWorkersMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
 		subfetcherWaitTimer:    metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
 		subfetcherCopiesMeter:  metrics.GetOrRegisterMeter(prefix+"/subfetcher/copies", nil),
-
-		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
-		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
-		deliveryWaitMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/wait", nil),
 
 		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
 		accountDupMeter:   metrics.GetOrRegisterMeter(prefix+"/account/dup", nil),
@@ -122,7 +112,7 @@ func (p *triePrefetcher) close() {
 		largestLoad     int64
 	)
 	for _, fetcher := range p.fetchers {
-		fetcher.abort() // safe to call multiple times
+		fetcher.abort() // safe to call multiple times (should be a no-op on happy path)
 
 		if metrics.Enabled {
 			p.subfetcherCopiesMeter.Mark(int64(fetcher.copies()))
@@ -185,10 +175,6 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		subfetcherWaitTimer:    p.subfetcherWaitTimer,
 		subfetcherCopiesMeter:  p.subfetcherCopiesMeter,
 
-		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
-		deliveryRequestMissMeter: p.deliveryRequestMissMeter,
-		deliveryWaitMissMeter:    p.deliveryWaitMissMeter,
-
 		accountLoadMeter:  p.accountLoadMeter,
 		accountDupMeter:   p.accountDupMeter,
 		accountSkipMeter:  p.accountSkipMeter,
@@ -243,7 +229,6 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	if p.fetches != nil {
 		trie := p.fetches[id]
 		if trie == nil {
-			p.deliveryCopyMissMeter.Mark(1)
 			return nil
 		}
 		return p.db.CopyTrie(trie)
@@ -252,23 +237,19 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		p.deliveryRequestMissMeter.Mark(1)
 		return nil
 	}
 
-	// Wait for the fetcher to finish, if it exists (this will prevent any future tasks from
-	// being enqueued)
+	// Wait for the fetcher to finish and shutdown orchestrator, if it exists
 	start := time.Now()
 	fetcher.wait()
-	p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
-
-	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
-	fetcher.abort()
+	if metrics.Enabled {
+		p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
+	}
 
 	// Return a copy of one of the prefetched tries
 	trie := fetcher.peek()
 	if trie == nil {
-		p.deliveryWaitMissMeter.Mark(1)
 		return nil
 	}
 	return trie
@@ -323,11 +304,15 @@ func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr 
 	if sf.to != nil {
 		go sf.to.processTasks()
 	}
+	// We return [sf] here to ensure we don't try to re-create if
+	// we aren't able to setup a [newTrieOrchestrator] the first time.
 	return sf
 }
 
 // schedule adds a batch of trie keys to the queue to prefetch.
 // This should never block, so an array is used instead of a channel.
+//
+// This is not thread-safe.
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// Append the tasks to the current queue
 	tasks := make([][]byte, 0, len(keys))
@@ -383,7 +368,7 @@ func (sf *subfetcher) skips() int {
 		// Unable to open trie
 		return 0
 	}
-	return int(sf.to.skips.Load())
+	return sf.to.skipCount()
 }
 
 func (sf *subfetcher) copies() int {
@@ -396,9 +381,6 @@ func (sf *subfetcher) copies() int {
 
 // trieOrchestrator is not thread-safe.
 type trieOrchestrator struct {
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-
 	sf *subfetcher
 
 	// base is an unmodified Trie we keep for
@@ -412,13 +394,17 @@ type trieOrchestrator struct {
 	base     Trie
 	baseLock sync.Mutex
 
-	outstandingRequests sync.WaitGroup
-	tasksAllowed        bool
-	skips               atomic.Int32 // Number of tasks skipped
-	pendingTasks        [][]byte
-	pendingTasksLock    sync.Mutex
-	wake                chan struct{}
-	loopTerm            chan struct{}
+	tasksAllowed bool
+	skips        int // number of tasks skipped
+	pendingTasks [][]byte
+	taskLock     sync.Mutex
+
+	processingTasks sync.WaitGroup
+
+	wake     chan struct{}
+	stop     chan struct{}
+	stopOnce sync.Once
+	loopTerm chan struct{}
 
 	copies      int
 	copyChan    chan Trie
@@ -445,19 +431,14 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		}
 	}
 
-	// Create cancelable context
-	ctx, cancel := context.WithCancel(context.Background())
-
 	// Instantiate trieOrchestrator
 	to := &trieOrchestrator{
-		ctx:       ctx,
-		ctxCancel: cancel,
-
 		sf:   sf,
 		base: base,
 
 		tasksAllowed: true,
 		wake:         make(chan struct{}, 1),
+		stop:         make(chan struct{}),
 		loopTerm:     make(chan struct{}),
 
 		copyChan:    make(chan Trie, sf.p.maxConcurrency),
@@ -478,32 +459,34 @@ func (to *trieOrchestrator) copyBase() Trie {
 	return to.sf.db.CopyTrie(to.base)
 }
 
+func (to *trieOrchestrator) skipCount() int {
+	to.taskLock.Lock()
+	defer to.taskLock.Unlock()
+
+	return to.skips
+}
+
 func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
+	to.taskLock.Lock()
+	defer to.taskLock.Unlock()
+
 	if len(tasks) == 0 {
 		return
 	}
 
 	// Add tasks to [pendingTasks]
-	to.pendingTasksLock.Lock()
 	if !to.tasksAllowed {
-		to.skips.Add(int32(len(tasks)))
-		to.pendingTasksLock.Unlock()
+		to.skips += len(tasks)
 		return
 	}
-	to.outstandingRequests.Add(len(tasks))
+	to.processingTasks.Add(len(tasks))
 	to.pendingTasks = append(to.pendingTasks, tasks...)
-	to.pendingTasksLock.Unlock()
 
 	// Wake up processor
 	select {
 	case to.wake <- struct{}{}:
 	default:
 	}
-}
-
-func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
-	to.outstandingRequests.Add(-count)
-	to.skips.Add(int32(count))
 }
 
 func (to *trieOrchestrator) processTasks() {
@@ -513,15 +496,15 @@ func (to *trieOrchestrator) processTasks() {
 		// Determine if we should process or exit
 		select {
 		case <-to.wake:
-		case <-to.ctx.Done():
+		case <-to.stop:
 			return
 		}
 
 		// Get current tasks
-		to.pendingTasksLock.Lock()
+		to.taskLock.Lock()
 		tasks := to.pendingTasks
 		to.pendingTasks = nil
-		to.pendingTasksLock.Unlock()
+		to.taskLock.Unlock()
 
 		// Enqueue more work as soon as trie copies are available
 		lt := len(tasks)
@@ -533,8 +516,12 @@ func (to *trieOrchestrator) processTasks() {
 			case to.copySpawner <- struct{}{}:
 				to.copies++
 				t = to.copyBase()
-			case <-to.ctx.Done():
-				to.restoreOutstandingRequests(len(tasks[i:]))
+			case <-to.stop:
+				remainingCount := len(tasks[i:])
+				to.taskLock.Lock()
+				to.skips += remainingCount
+				to.taskLock.Unlock()
+				to.processingTasks.Add(-remainingCount)
 				return
 			}
 
@@ -551,7 +538,7 @@ func (to *trieOrchestrator) processTasks() {
 				if err != nil {
 					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
 				}
-				to.outstandingRequests.Done()
+				to.processingTasks.Done()
 
 				// Return copy when we are done with it, so someone else can use it
 				//
@@ -561,17 +548,17 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue task for processing (may spawn new goroutine
 			// if not at [maxConcurrency])
-			if !to.sf.p.workers.Execute(to.ctx, f) {
-				to.restoreOutstandingRequests(len(tasks[i:]))
-				return
-			}
+			//
+			// If workers are stopped before calling [Execute], this function may
+			// panic.
+			to.sf.p.workers.Execute(f)
 		}
 	}
 }
 
 func (to *trieOrchestrator) stopAcceptingTasks() {
-	to.pendingTasksLock.Lock()
-	defer to.pendingTasksLock.Unlock()
+	to.taskLock.Lock()
+	defer to.taskLock.Unlock()
 
 	if !to.tasksAllowed {
 		return
@@ -583,33 +570,47 @@ func (to *trieOrchestrator) stopAcceptingTasks() {
 	// are still waiting.
 }
 
+// wait stops accepting new tasks and waits for ongoing tasks to complete. If
+// wait is called, it is not necessary to call [abort].
+//
+// It is safe to call wait multiple times.
 func (to *trieOrchestrator) wait() {
 	// Prevent more tasks from being enqueued
 	to.stopAcceptingTasks()
 
-	// Wait for ongoing tasks to complete
-	to.outstandingRequests.Wait()
+	// Wait for processing tasks to complete
+	to.processingTasks.Wait()
 
-	// TODO: update the base trie to one with the most
-	// populated keys from prefetching
+	// Stop orchestrator loop
+	to.stopOnce.Do(func() {
+		close(to.stop)
+	})
+	<-to.loopTerm
 }
 
-// abort stops any ongoing tasks
+// abort stops any ongoing tasks and shuts down the orchestrator loop. If abort
+// is called, it is not necessary to call [wait].
+//
+// It is safe to call abort multiple times.
 func (to *trieOrchestrator) abort() {
 	// Prevent more tasks from being enqueued
 	to.stopAcceptingTasks()
 
-	// Stop all ongoing tasks
-	to.ctxCancel() // safe to call multiple times
+	// Stop orchestrator loop
+	to.stopOnce.Do(func() {
+		close(to.stop)
+	})
 	<-to.loopTerm
 
 	// Capture any dangling pending tasks (processTasks
 	// may exit before enqueing all pendingTasks)
-	to.pendingTasksLock.Lock()
-	to.restoreOutstandingRequests(len(to.pendingTasks))
+	to.taskLock.Lock()
+	pendingCount := len(to.pendingTasks)
+	to.skips += pendingCount
 	to.pendingTasks = nil
-	to.pendingTasksLock.Unlock()
+	to.taskLock.Unlock()
+	to.processingTasks.Add(-pendingCount)
 
-	// Wait for ongoing tasks to complete
-	to.outstandingRequests.Wait()
+	// Wait for processing tasks to complete
+	to.processingTasks.Wait()
 }
