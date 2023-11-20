@@ -55,9 +55,10 @@ type triePrefetcher struct {
 	maxConcurrency int
 	workers        *utils.BoundedWorkers
 
-	subfetcherWorkersMeter metrics.Meter
-	subfetcherWaitTimer    metrics.Counter
-	subfetcherCopiesMeter  metrics.Meter
+	subfetcherWorkersMeter        metrics.Meter
+	subfetcherWaitTimer           metrics.Counter
+	subfetcherCopiesMeter         metrics.Meter
+	subfetcherBestOperationsMeter metrics.Meter
 
 	deliveryCopyMissMeter    metrics.Meter
 	deliveryRequestMissMeter metrics.Meter
@@ -86,9 +87,10 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, maxConcu
 		maxConcurrency: maxConcurrency,
 		workers:        utils.NewBoundedWorkers(maxConcurrency), // Scale up as needed to [maxConcurrency]
 
-		subfetcherWorkersMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
-		subfetcherWaitTimer:    metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
-		subfetcherCopiesMeter:  metrics.GetOrRegisterMeter(prefix+"/subfetcher/copies", nil),
+		subfetcherWorkersMeter:        metrics.GetOrRegisterMeter(prefix+"/subfetcher/workers", nil),
+		subfetcherWaitTimer:           metrics.GetOrRegisterCounter(prefix+"/subfetcher/wait", nil),
+		subfetcherCopiesMeter:         metrics.GetOrRegisterMeter(prefix+"/subfetcher/copies", nil),
+		subfetcherBestOperationsMeter: metrics.GetOrRegisterMeter(prefix+"/subfetcher/best/operations", nil),
 
 		deliveryCopyMissMeter:    metrics.GetOrRegisterMeter(prefix+"/deliverymiss/copy", nil),
 		deliveryRequestMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss/request", nil),
@@ -126,6 +128,7 @@ func (p *triePrefetcher) close() {
 
 		if metrics.Enabled {
 			p.subfetcherCopiesMeter.Mark(int64(fetcher.copies()))
+			p.subfetcherBestOperationsMeter.Mark(int64(fetcher.bestOperations()))
 
 			if fetcher.root == p.root {
 				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
@@ -181,9 +184,10 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		root:    p.root,
 		fetches: make(map[string]Trie), // Active prefetchers use the fetchers map
 
-		subfetcherWorkersMeter: p.subfetcherWorkersMeter,
-		subfetcherWaitTimer:    p.subfetcherWaitTimer,
-		subfetcherCopiesMeter:  p.subfetcherCopiesMeter,
+		subfetcherWorkersMeter:        p.subfetcherWorkersMeter,
+		subfetcherWaitTimer:           p.subfetcherWaitTimer,
+		subfetcherCopiesMeter:         p.subfetcherCopiesMeter,
+		subfetcherBestOperationsMeter: p.subfetcherBestOperationsMeter,
 
 		deliveryCopyMissMeter:    p.deliveryCopyMissMeter,
 		deliveryRequestMissMeter: p.deliveryRequestMissMeter,
@@ -243,7 +247,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	if p.fetches != nil {
 		trie := p.fetches[id]
 		if trie == nil {
-			p.deliveryCopyMissMeter.Mark(1)
+			if metrics.Enabled {
+				p.deliveryCopyMissMeter.Mark(1)
+			}
 			return nil
 		}
 		return p.db.CopyTrie(trie)
@@ -252,7 +258,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		p.deliveryRequestMissMeter.Mark(1)
+		if metrics.Enabled {
+			p.deliveryRequestMissMeter.Mark(1)
+		}
 		return nil
 	}
 
@@ -260,15 +268,20 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// being enqueued)
 	start := time.Now()
 	fetcher.wait()
-	p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
+	if metrics.Enabled {
+		p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
+	}
 
-	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
+	// Shutdown any remaining fetcher goroutines to free memory as soon as possible (because we invoked [wait]
+	// before this, no tasks will be dropped)
 	fetcher.abort()
 
-	// Return a copy of one of the prefetched tries
-	trie := fetcher.peek()
+	// Return a copy of the best prefetched trie (if no keys were fetched, then we just return base)
+	trie := fetcher.best()
 	if trie == nil {
-		p.deliveryWaitMissMeter.Mark(1)
+		if metrics.Enabled {
+			p.deliveryWaitMissMeter.Mark(1)
+		}
 		return nil
 	}
 	return trie
@@ -370,6 +383,23 @@ func (sf *subfetcher) wait() {
 	sf.to.wait()
 }
 
+// best returns the best copy of the trie (as measured by how populated it is)
+//
+// best should ONLY be called after [wait] has returned (to ensure trie copies are no
+// longer being modified).
+func (sf *subfetcher) best() Trie {
+	if sf.to == nil {
+		// Unable to open trie
+		return nil
+	}
+	// Eventhough these tries can no longer be used by the prefetcher after [wait] returns,
+	// we make a copy of [best] and [base] in case this function is called multiple times.
+	if b := sf.to.best; b != nil {
+		return sf.db.CopyTrie(b)
+	}
+	return sf.to.copyBase()
+}
+
 func (sf *subfetcher) abort() {
 	if sf.to == nil {
 		// Unable to open trie
@@ -394,6 +424,14 @@ func (sf *subfetcher) copies() int {
 	return sf.to.copies
 }
 
+func (sf *subfetcher) bestOperations() int {
+	if sf.to == nil {
+		// Unable to open trie
+		return 0
+	}
+	return sf.to.bestOperations
+}
+
 // trieOrchestrator is not thread-safe.
 type trieOrchestrator struct {
 	ctx       context.Context
@@ -412,6 +450,10 @@ type trieOrchestrator struct {
 	base     Trie
 	baseLock sync.Mutex
 
+	best           Trie
+	bestOperations int
+	bestLock       sync.Mutex
+
 	outstandingRequests sync.WaitGroup
 	tasksAllowed        bool
 	skips               atomic.Int32 // Number of tasks skipped
@@ -421,8 +463,17 @@ type trieOrchestrator struct {
 	loopTerm            chan struct{}
 
 	copies      int
-	copyChan    chan Trie
+	copyChan    chan *trieWrapper
 	copySpawner chan struct{}
+}
+
+type trieWrapper struct {
+	t Trie
+
+	// keys is an approximation of how populated
+	// this [Trie] copy is (we want to return the most
+	// populated copy when we are done).
+	operations int
 }
 
 func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
@@ -460,14 +511,14 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		wake:         make(chan struct{}, 1),
 		loopTerm:     make(chan struct{}),
 
-		copyChan:    make(chan Trie, sf.p.maxConcurrency),
+		copyChan:    make(chan *trieWrapper, sf.p.maxConcurrency),
 		copySpawner: make(chan struct{}, sf.p.maxConcurrency),
 	}
 
 	// Create initial trie copy
 	to.copies++
 	to.copySpawner <- struct{}{}
-	to.copyChan <- to.copyBase()
+	to.copyChan <- &trieWrapper{t: to.copyBase()}
 	return to
 }
 
@@ -527,12 +578,12 @@ func (to *trieOrchestrator) processTasks() {
 		lt := len(tasks)
 		for i := 0; i < lt; i++ {
 			// Wait for an available copy or create one
-			var t Trie
+			var tw *trieWrapper
 			select {
-			case t = <-to.copyChan:
+			case tw = <-to.copyChan:
 			case to.copySpawner <- struct{}{}:
 				to.copies++
-				t = to.copyBase()
+				tw = &trieWrapper{t: to.copyBase()}
 			case <-to.ctx.Done():
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
@@ -544,19 +595,29 @@ func (to *trieOrchestrator) processTasks() {
 				// Perform task
 				var err error
 				if len(fTask) == common.AddressLength {
-					_, err = t.GetAccount(common.BytesToAddress(fTask))
+					_, err = tw.t.GetAccount(common.BytesToAddress(fTask))
 				} else {
-					_, err = t.GetStorage(to.sf.addr, fTask)
+					_, err = tw.t.GetStorage(to.sf.addr, fTask)
 				}
 				if err != nil {
 					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
+				} else {
+					tw.operations++
 				}
 				to.outstandingRequests.Done()
+
+				// Update best copy, if our copy has more operations
+				to.bestLock.Lock()
+				if tw.operations > to.bestOperations {
+					to.best = tw.t
+					to.bestOperations = tw.operations
+				}
+				to.bestLock.Unlock()
 
 				// Return copy when we are done with it, so someone else can use it
 				//
 				// channel is buffered and will not block
-				to.copyChan <- t
+				to.copyChan <- tw
 			}
 
 			// Enqueue task for processing (may spawn new goroutine
@@ -589,9 +650,6 @@ func (to *trieOrchestrator) wait() {
 
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
-
-	// TODO: update the base trie to one with the most
-	// populated keys from prefetching
 }
 
 // abort stops any ongoing tasks
