@@ -393,11 +393,10 @@ func (sf *subfetcher) best() Trie {
 		return nil
 	}
 	// Eventhough these tries can no longer be used by the prefetcher after [wait] returns,
-	// we make a copy of [best] and [base] in case this function is called multiple times.
-	if b := sf.to.best; b != nil {
-		return sf.db.CopyTrie(b)
-	}
-	return sf.to.copyBase()
+	// we make a copy of [best] in case this function is called multiple times.
+	//
+	// [best] defaults to [base] during initialization, so we are guaranteed to have a trie here.
+	return sf.db.CopyTrie(sf.to.best.t)
 }
 
 func (sf *subfetcher) abort() {
@@ -429,7 +428,7 @@ func (sf *subfetcher) bestOperations() int {
 		// Unable to open trie
 		return 0
 	}
-	return sf.to.bestOperations
+	return sf.to.best.operations
 }
 
 // trieOrchestrator is not thread-safe.
@@ -450,9 +449,8 @@ type trieOrchestrator struct {
 	base     Trie
 	baseLock sync.Mutex
 
-	best           Trie
-	bestOperations int
-	bestLock       sync.Mutex
+	best     *trieWrapper
+	bestLock sync.Mutex
 
 	outstandingRequests sync.WaitGroup
 	tasksAllowed        bool
@@ -518,7 +516,9 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 	// Create initial trie copy
 	to.copies++
 	to.copySpawner <- struct{}{}
-	to.copyChan <- &trieWrapper{t: to.copyBase()}
+	tw := &trieWrapper{t: to.copyBase()}
+	to.copyChan <- tw
+	to.best = tw
 	return to
 }
 
@@ -608,9 +608,8 @@ func (to *trieOrchestrator) processTasks() {
 
 				// Update best copy, if our copy has more operations
 				to.bestLock.Lock()
-				if tw.operations > to.bestOperations {
-					to.best = tw.t
-					to.bestOperations = tw.operations
+				if tw.operations > to.best.operations {
+					to.best = tw
 				}
 				to.bestLock.Unlock()
 
