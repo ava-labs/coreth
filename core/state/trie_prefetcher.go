@@ -400,9 +400,9 @@ type trieOrchestrator struct {
 	pendingTasks        [][]byte
 	taskLock            sync.Mutex
 
+	wake     chan struct{}
 	stop     chan struct{}
 	stopOnce sync.Once
-	wake     chan struct{}
 	loopTerm chan struct{}
 
 	copies      int
@@ -436,8 +436,8 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		base: base,
 
 		tasksAllowed: true,
-		stop:         make(chan struct{}),
 		wake:         make(chan struct{}, 1),
+		stop:         make(chan struct{}),
 		loopTerm:     make(chan struct{}),
 
 		copyChan:    make(chan Trie, sf.p.maxConcurrency),
