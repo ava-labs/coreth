@@ -28,7 +28,6 @@ package state
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/coreth/metrics"
@@ -113,7 +112,7 @@ func (p *triePrefetcher) close() {
 		largestLoad     int64
 	)
 	for _, fetcher := range p.fetchers {
-		fetcher.abort() // safe to call multiple times
+		fetcher.abort() // safe to call multiple times (should be a no-op on happy path)
 
 		if metrics.Enabled {
 			p.subfetcherCopiesMeter.Mark(int64(fetcher.copies()))
@@ -305,11 +304,15 @@ func newSubfetcher(p *triePrefetcher, owner common.Hash, root common.Hash, addr 
 	if sf.to != nil {
 		go sf.to.processTasks()
 	}
+	// We return [sf] here to ensure we don't try to re-create if
+	// we aren't able to setup a [newTrieOrchestrator] the first time.
 	return sf
 }
 
 // schedule adds a batch of trie keys to the queue to prefetch.
 // This should never block, so an array is used instead of a channel.
+//
+// This is not thread-safe.
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// Append the tasks to the current queue
 	tasks := make([][]byte, 0, len(keys))
@@ -365,7 +368,7 @@ func (sf *subfetcher) skips() int {
 		// Unable to open trie
 		return 0
 	}
-	return int(sf.to.skips.Load())
+	return sf.to.skipCount()
 }
 
 func (sf *subfetcher) copies() int {
@@ -393,9 +396,9 @@ type trieOrchestrator struct {
 
 	outstandingRequests sync.WaitGroup
 	tasksAllowed        bool
-	skips               atomic.Int32 // Number of tasks skipped
+	skips               int // number of tasks skipped
 	pendingTasks        [][]byte
-	pendingTasksLock    sync.Mutex
+	taskLock            sync.Mutex
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -455,32 +458,34 @@ func (to *trieOrchestrator) copyBase() Trie {
 	return to.sf.db.CopyTrie(to.base)
 }
 
+func (to *trieOrchestrator) skipCount() int {
+	to.taskLock.Lock()
+	defer to.taskLock.Unlock()
+
+	return to.skips
+}
+
 func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
+	to.taskLock.Lock()
+	defer to.taskLock.Unlock()
+
 	if len(tasks) == 0 {
 		return
 	}
 
 	// Add tasks to [pendingTasks]
-	to.pendingTasksLock.Lock()
 	if !to.tasksAllowed {
-		to.skips.Add(int32(len(tasks)))
-		to.pendingTasksLock.Unlock()
+		to.skips += len(tasks)
 		return
 	}
 	to.outstandingRequests.Add(len(tasks))
 	to.pendingTasks = append(to.pendingTasks, tasks...)
-	to.pendingTasksLock.Unlock()
 
 	// Wake up processor
 	select {
 	case to.wake <- struct{}{}:
 	default:
 	}
-}
-
-func (to *trieOrchestrator) restoreOutstandingRequests(count int) {
-	to.outstandingRequests.Add(-count)
-	to.skips.Add(int32(count))
 }
 
 func (to *trieOrchestrator) processTasks() {
@@ -495,10 +500,10 @@ func (to *trieOrchestrator) processTasks() {
 		}
 
 		// Get current tasks
-		to.pendingTasksLock.Lock()
+		to.taskLock.Lock()
 		tasks := to.pendingTasks
 		to.pendingTasks = nil
-		to.pendingTasksLock.Unlock()
+		to.taskLock.Unlock()
 
 		// Enqueue more work as soon as trie copies are available
 		lt := len(tasks)
@@ -511,7 +516,11 @@ func (to *trieOrchestrator) processTasks() {
 				to.copies++
 				t = to.copyBase()
 			case <-to.stop:
-				to.restoreOutstandingRequests(len(tasks[i:]))
+				taskCount := len(tasks[i:])
+				to.outstandingRequests.Add(-taskCount)
+				to.taskLock.Lock()
+				to.skips += taskCount
+				to.taskLock.Unlock()
 				return
 			}
 
@@ -544,8 +553,8 @@ func (to *trieOrchestrator) processTasks() {
 }
 
 func (to *trieOrchestrator) stopAcceptingTasks() {
-	to.pendingTasksLock.Lock()
-	defer to.pendingTasksLock.Unlock()
+	to.taskLock.Lock()
+	defer to.taskLock.Unlock()
 
 	if !to.tasksAllowed {
 		return
@@ -591,10 +600,12 @@ func (to *trieOrchestrator) abort() {
 
 	// Capture any dangling pending tasks (processTasks
 	// may exit before enqueing all pendingTasks)
-	to.pendingTasksLock.Lock()
-	to.restoreOutstandingRequests(len(to.pendingTasks))
+	to.taskLock.Lock()
+	pendingCount := len(to.pendingTasks)
+	to.skips += pendingCount
 	to.pendingTasks = nil
-	to.pendingTasksLock.Unlock()
+	to.taskLock.Unlock()
+	to.outstandingRequests.Add(-pendingCount)
 
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
