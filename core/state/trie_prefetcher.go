@@ -394,11 +394,12 @@ type trieOrchestrator struct {
 	base     Trie
 	baseLock sync.Mutex
 
-	outstandingRequests sync.WaitGroup
-	tasksAllowed        bool
-	skips               int // number of tasks skipped
-	pendingTasks        [][]byte
-	taskLock            sync.Mutex
+	tasksAllowed bool
+	skips        int // number of tasks skipped
+	pendingTasks [][]byte
+	taskLock     sync.Mutex
+
+	processingTasks sync.WaitGroup
 
 	wake     chan struct{}
 	stop     chan struct{}
@@ -478,7 +479,7 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 		to.skips += len(tasks)
 		return
 	}
-	to.outstandingRequests.Add(len(tasks))
+	to.processingTasks.Add(len(tasks))
 	to.pendingTasks = append(to.pendingTasks, tasks...)
 
 	// Wake up processor
@@ -520,7 +521,7 @@ func (to *trieOrchestrator) processTasks() {
 				to.taskLock.Lock()
 				to.skips += remainingCount
 				to.taskLock.Unlock()
-				to.outstandingRequests.Add(-remainingCount)
+				to.processingTasks.Add(-remainingCount)
 				return
 			}
 
@@ -537,7 +538,7 @@ func (to *trieOrchestrator) processTasks() {
 				if err != nil {
 					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)
 				}
-				to.outstandingRequests.Done()
+				to.processingTasks.Done()
 
 				// Return copy when we are done with it, so someone else can use it
 				//
@@ -577,8 +578,8 @@ func (to *trieOrchestrator) wait() {
 	// Prevent more tasks from being enqueued
 	to.stopAcceptingTasks()
 
-	// Wait for ongoing tasks to complete
-	to.outstandingRequests.Wait()
+	// Wait for processing tasks to complete
+	to.processingTasks.Wait()
 
 	// Stop orchestrator loop
 	to.stopOnce.Do(func() {
@@ -608,8 +609,8 @@ func (to *trieOrchestrator) abort() {
 	to.skips += pendingCount
 	to.pendingTasks = nil
 	to.taskLock.Unlock()
-	to.outstandingRequests.Add(-pendingCount)
+	to.processingTasks.Add(-pendingCount)
 
-	// Wait for ongoing tasks to complete
-	to.outstandingRequests.Wait()
+	// Wait for processing tasks to complete
+	to.processingTasks.Wait()
 }
