@@ -57,6 +57,8 @@ github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kd
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/ava-labs/avalanchego v1.10.16-0.20231120092715-76dbcc4e907b h1:cK4dpzUMRNjmVY9IEj34ySkudYXAJ82z9VsARsenSE4=
 github.com/ava-labs/avalanchego v1.10.16-0.20231120092715-76dbcc4e907b/go.mod h1:9l5VmWjlVDPzp0OzmKEs9GAqmwFX6hmT8Hxrp46CjdQ=
+github.com/ava-labs/avalanchego v1.10.16-0.20231120101941-326c2e9a0003 h1:5fUjO4I8ISeQVaWqOtxpTHZqGZevt3HXZz3r4e0LPYM=
+github.com/ava-labs/avalanchego v1.10.16-0.20231120101941-326c2e9a0003/go.mod h1:fqs1q/4eBdBeDT4XslWQhVCRtcjtf925bFGSL2gegT0=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
