@@ -504,6 +504,7 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 
 		sf:   sf,
 		base: base,
+		best: &trieWrapper{t: base},
 
 		tasksAllowed: true,
 		wake:         make(chan struct{}, 1),
@@ -516,9 +517,7 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 	// Create initial trie copy
 	to.copies++
 	to.copySpawner <- struct{}{}
-	tw := &trieWrapper{t: to.copyBase()}
-	to.copyChan <- tw
-	to.best = tw
+	to.copyChan <- &trieWrapper{t: to.copyBase()}
 	return to
 }
 
