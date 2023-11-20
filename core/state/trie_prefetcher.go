@@ -589,6 +589,9 @@ func (to *trieOrchestrator) wait() {
 
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
+
+	// TODO: update the base trie to one with the most
+	// populated keys from prefetching
 }
 
 // abort stops any ongoing tasks
