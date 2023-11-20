@@ -27,7 +27,6 @@
 package state
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -396,9 +395,6 @@ func (sf *subfetcher) copies() int {
 
 // trieOrchestrator is not thread-safe.
 type trieOrchestrator struct {
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-
 	sf *subfetcher
 
 	// base is an unmodified Trie we keep for
@@ -417,8 +413,11 @@ type trieOrchestrator struct {
 	skips               atomic.Int32 // Number of tasks skipped
 	pendingTasks        [][]byte
 	pendingTasksLock    sync.Mutex
-	wake                chan struct{}
-	loopTerm            chan struct{}
+
+	stop     chan struct{}
+	stopOnce sync.Once
+	wake     chan struct{}
+	loopTerm chan struct{}
 
 	copies      int
 	copyChan    chan Trie
@@ -445,18 +444,13 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		}
 	}
 
-	// Create cancelable context
-	ctx, cancel := context.WithCancel(context.Background())
-
 	// Instantiate trieOrchestrator
 	to := &trieOrchestrator{
-		ctx:       ctx,
-		ctxCancel: cancel,
-
 		sf:   sf,
 		base: base,
 
 		tasksAllowed: true,
+		stop:         make(chan struct{}),
 		wake:         make(chan struct{}, 1),
 		loopTerm:     make(chan struct{}),
 
@@ -513,7 +507,7 @@ func (to *trieOrchestrator) processTasks() {
 		// Determine if we should process or exit
 		select {
 		case <-to.wake:
-		case <-to.ctx.Done():
+		case <-to.stop:
 			return
 		}
 
@@ -533,7 +527,7 @@ func (to *trieOrchestrator) processTasks() {
 			case to.copySpawner <- struct{}{}:
 				to.copies++
 				t = to.copyBase()
-			case <-to.ctx.Done():
+			case <-to.stop:
 				to.restoreOutstandingRequests(len(tasks[i:]))
 				return
 			}
@@ -561,10 +555,7 @@ func (to *trieOrchestrator) processTasks() {
 
 			// Enqueue task for processing (may spawn new goroutine
 			// if not at [maxConcurrency])
-			if !to.sf.p.workers.Execute(to.ctx, f) {
-				to.restoreOutstandingRequests(len(tasks[i:]))
-				return
-			}
+			to.sf.p.workers.Execute(f)
 		}
 	}
 }
@@ -583,24 +574,28 @@ func (to *trieOrchestrator) stopAcceptingTasks() {
 	// are still waiting.
 }
 
+// wait stops accepting new tasks and waits for ongoing tasks to complete.
+//
+// It is safe to call wait multiple times.
 func (to *trieOrchestrator) wait() {
 	// Prevent more tasks from being enqueued
 	to.stopAcceptingTasks()
 
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
-
-	// TODO: update the base trie to one with the most
-	// populated keys from prefetching
 }
 
 // abort stops any ongoing tasks
+//
+// It is safe to call abort multiple times.
 func (to *trieOrchestrator) abort() {
 	// Prevent more tasks from being enqueued
 	to.stopAcceptingTasks()
 
 	// Stop all ongoing tasks
-	to.ctxCancel() // safe to call multiple times
+	to.stopOnce.Do(func() {
+		close(to.stop)
+	})
 	<-to.loopTerm
 
 	// Capture any dangling pending tasks (processTasks
