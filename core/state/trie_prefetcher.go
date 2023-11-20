@@ -241,16 +241,12 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		return nil
 	}
 
-	// Wait for the fetcher to finish, if it exists (this will prevent any future tasks from
-	// being enqueued)
+	// Wait for the fetcher to finish and shutdown orchestrator, if it exists
 	start := time.Now()
 	fetcher.wait()
 	if metrics.Enabled {
 		p.subfetcherWaitTimer.Inc(time.Since(start).Milliseconds())
 	}
-
-	// Shutdown any remaining fetcher goroutines to free memory as soon as possible
-	fetcher.abort()
 
 	// Return a copy of one of the prefetched tries
 	trie := fetcher.peek()
@@ -561,7 +557,8 @@ func (to *trieOrchestrator) stopAcceptingTasks() {
 	// are still waiting.
 }
 
-// wait stops accepting new tasks and waits for ongoing tasks to complete.
+// wait stops accepting new tasks and waits for ongoing tasks to complete. If
+// wait is called, it is not necessary to call [abort].
 //
 // It is safe to call wait multiple times.
 func (to *trieOrchestrator) wait() {
@@ -570,16 +567,23 @@ func (to *trieOrchestrator) wait() {
 
 	// Wait for ongoing tasks to complete
 	to.outstandingRequests.Wait()
+
+	// Stop orchestrator loop
+	to.stopOnce.Do(func() {
+		close(to.stop)
+	})
+	<-to.loopTerm
 }
 
-// abort stops any ongoing tasks
+// abort stops any ongoing tasks and shuts down the orchestrator loop. If abort
+// is called, it is not necessary to call [wait].
 //
 // It is safe to call abort multiple times.
 func (to *trieOrchestrator) abort() {
 	// Prevent more tasks from being enqueued
 	to.stopAcceptingTasks()
 
-	// Stop all ongoing tasks
+	// Stop orchestrator loop
 	to.stopOnce.Do(func() {
 		close(to.stop)
 	})
