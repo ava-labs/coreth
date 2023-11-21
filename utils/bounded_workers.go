@@ -9,11 +9,9 @@ import (
 )
 
 type BoundedWorkers struct {
-	workerSpawner      chan struct{}
 	workerCount        atomic.Int32
+	workerSpawner      chan struct{}
 	outstandingWorkers sync.WaitGroup
-
-	outstandingWork sync.WaitGroup
 
 	work      chan func()
 	workClose sync.Once
@@ -23,8 +21,8 @@ type BoundedWorkers struct {
 // will spawn up to [max] goroutines.
 func NewBoundedWorkers(max int) *BoundedWorkers {
 	return &BoundedWorkers{
-		work:          make(chan func()),
 		workerSpawner: make(chan struct{}, max),
+		work:          make(chan func()),
 	}
 }
 
@@ -39,11 +37,9 @@ func (b *BoundedWorkers) startWorker(f func()) {
 
 		if f != nil {
 			f()
-			b.outstandingWork.Done()
 		}
 		for f := range b.work {
 			f()
-			b.outstandingWork.Done()
 		}
 	}()
 }
@@ -53,8 +49,6 @@ func (b *BoundedWorkers) startWorker(f func()) {
 //
 // Execute must not be called after Wait, otherwise it might panic.
 func (b *BoundedWorkers) Execute(f func()) {
-	b.outstandingWork.Add(1)
-
 	// Ensure we feed idle workers first
 	select {
 	case b.work <- f:
@@ -74,10 +68,11 @@ func (b *BoundedWorkers) Execute(f func()) {
 // Wait returns after all enqueued work finishes and all goroutines to exit.
 // Wait returns the number of workers that were spawned during the run.
 //
+// Wait can only be called after ALL calls to [Execute] have returned.
+//
 // It is safe to call Wait multiple times but not safe to call [Execute]
 // after [Wait] has been called.
 func (b *BoundedWorkers) Wait() int {
-	b.outstandingWork.Wait()
 	b.workClose.Do(func() {
 		close(b.work)
 	})
