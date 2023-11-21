@@ -1,8 +1,9 @@
 # Release Notes
 
 ## [v0.12.9](https://github.com/ava-labs/coreth/releases/tag/v0.12.9)
+
 - Add concurrent prefetching of trie nodes during block processing
-- Add -1 as a valid option for tx-lookup-limit to disable transaction lookup indexing
+- Add `skip-tx-indexing` flag to disable transaction indexing and unindexing
 - Update acceptor tip before sending chain events to subscribers
 
 ## [v0.12.8](https://github.com/ava-labs/coreth/releases/tag/v0.12.8)
