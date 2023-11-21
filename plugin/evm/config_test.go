@@ -87,24 +87,20 @@ func TestUnmarshalConfig(t *testing.T) {
 		{
 			"zero tx lookup limit",
 			[]byte(`{"tx-lookup-limit": 0}`),
-			func() Config {
-				return Config{TxLookupLimit: 0}
-			}(),
+			Config{TxLookupLimit: 0},
 			false,
 		},
 		{
 			"1 tx lookup limit",
 			[]byte(`{"tx-lookup-limit": 1}`),
-			func() Config {
-				return Config{TxLookupLimit: 1}
-			}(),
+			Config{TxLookupLimit: 1},
 			false,
 		},
 		{
 			"-1 tx lookup limit",
 			[]byte(`{"tx-lookup-limit": -1}`),
-			Config{},
-			true,
+			Config{TxLookupLimit: -1},
+			false,
 		},
 		{
 			"allow unprotected tx hashes",
