@@ -753,7 +753,7 @@ func TestTransactionIndices(t *testing.T) {
 		require.NoError(err)
 
 		chain.DrainAcceptorQueue()
-		time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
+		time.Sleep(500 * time.Millisecond) // Wait for indices initialisation
 
 		chain.Stop()
 		isSkip := l == -1
