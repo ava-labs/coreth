@@ -225,6 +225,10 @@ func (b *Block) syntacticVerify() error {
 	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
 }
 
+func (*Block) VerifyProposer(context.Context) error {
+	return nil
+}
+
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
 	return b.verify(true)
