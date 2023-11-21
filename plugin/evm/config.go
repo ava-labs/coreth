@@ -5,6 +5,7 @@ package evm
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -68,6 +69,8 @@ var (
 	defaultAllowUnprotectedTxHashes = []common.Hash{
 		common.HexToHash("0xfefb2da535e927b85fe68eb81cb2e4a5827c905f78381a01ef2322aa9b0aee8e"), // EIP-1820: https://eips.ethereum.org/EIPS/eip-1820
 	}
+
+	errTxLookupLimit = errors.New("tx-lookup-limit must be >= -1")
 )
 
 type Duration struct {
@@ -289,6 +292,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("cannot use commit interval of 0 with pruning enabled")
 	}
 
+	if c.TxLookupLimit < -1 {
+		return errTxLookupLimit
+	}
 	return nil
 }
 

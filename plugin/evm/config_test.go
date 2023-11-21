@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // newTrue returns a pointer to a bool that is true
@@ -21,34 +21,39 @@ func newTrue() *bool {
 
 func TestUnmarshalConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		givenJSON   []byte
-		expected    Config
-		expectedErr bool
+		name                 string
+		givenJSON            []byte
+		expected             Config
+		expectedUnmarshalErr bool
+		expectedValidateErr  error
 	}{
 		{
 			"string durations parsed",
 			[]byte(`{"api-max-duration": "1m", "continuous-profiler-frequency": "2m", "tx-pool-rejournal": "3m30s"}`),
 			Config{APIMaxDuration: Duration{1 * time.Minute}, ContinuousProfilerFrequency: Duration{2 * time.Minute}, TxPoolRejournal: Duration{3*time.Minute + 30*time.Second}},
 			false,
+			nil,
 		},
 		{
 			"integer durations parsed",
 			[]byte(fmt.Sprintf(`{"api-max-duration": "%v", "continuous-profiler-frequency": "%v"}`, 1*time.Minute, 2*time.Minute)),
 			Config{APIMaxDuration: Duration{1 * time.Minute}, ContinuousProfilerFrequency: Duration{2 * time.Minute}},
 			false,
+			nil,
 		},
 		{
 			"nanosecond durations parsed",
 			[]byte(`{"api-max-duration": 5000000000, "continuous-profiler-frequency": 5000000000, "tx-pool-rejournal": 9000000000}`),
 			Config{APIMaxDuration: Duration{5 * time.Second}, ContinuousProfilerFrequency: Duration{5 * time.Second}, TxPoolRejournal: Duration{9 * time.Second}},
 			false,
+			nil,
 		},
 		{
 			"bad durations",
 			[]byte(`{"api-max-duration": "bad-duration"}`),
 			Config{},
 			true,
+			nil,
 		},
 
 		{
@@ -64,6 +69,7 @@ func TestUnmarshalConfig(t *testing.T) {
 				TxPoolGlobalQueue:  6,
 			},
 			false,
+			nil,
 		},
 
 		{
@@ -71,42 +77,56 @@ func TestUnmarshalConfig(t *testing.T) {
 			[]byte(`{"state-sync-enabled":true}`),
 			Config{StateSyncEnabled: newTrue()},
 			false,
+			nil,
 		},
 		{
 			"state sync sources",
 			[]byte(`{"state-sync-ids": "NodeID-CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"}`),
 			Config{StateSyncIDs: "NodeID-CaBYJ9kzHvrQFiYWowMkJGAQKGMJqZoat"},
 			false,
+			nil,
 		},
 		{
 			"empty tx lookup limit",
 			[]byte(`{}`),
 			Config{TxLookupLimit: 0},
 			false,
+			nil,
 		},
 		{
 			"zero tx lookup limit",
 			[]byte(`{"tx-lookup-limit": 0}`),
 			Config{TxLookupLimit: 0},
 			false,
+			nil,
 		},
 		{
 			"1 tx lookup limit",
 			[]byte(`{"tx-lookup-limit": 1}`),
 			Config{TxLookupLimit: 1},
 			false,
+			nil,
 		},
 		{
 			"-1 tx lookup limit",
 			[]byte(`{"tx-lookup-limit": -1}`),
 			Config{TxLookupLimit: -1},
 			false,
+			nil,
+		},
+		{
+			"negative tx lookup limit",
+			[]byte(`{"tx-lookup-limit": -2}`),
+			Config{},
+			false,
+			errTxLookupLimit,
 		},
 		{
 			"allow unprotected tx hashes",
 			[]byte(`{"allow-unprotected-tx-hashes": ["0x803351deb6d745e91545a6a3e1c0ea3e9a6a02a1a4193b70edfcd2f40f71a01c"]}`),
 			Config{AllowUnprotectedTxHashes: []common.Hash{common.HexToHash("0x803351deb6d745e91545a6a3e1c0ea3e9a6a02a1a4193b70edfcd2f40f71a01c")}},
 			false,
+			nil,
 		},
 	}
 
@@ -114,12 +134,18 @@ func TestUnmarshalConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var tmp Config
 			err := json.Unmarshal(tt.givenJSON, &tmp)
-			if tt.expectedErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, tmp)
+			if tt.expectedUnmarshalErr {
+				require.Error(t, err)
+				return
 			}
+
+			require.NoError(t, err)
+			valErr := tmp.Validate()
+			require.ErrorIs(t, valErr, tt.expectedValidateErr)
+			if tt.expectedValidateErr != nil {
+				return
+			}
+			require.Equal(t, tt.expected, tmp)
 		})
 	}
 }
