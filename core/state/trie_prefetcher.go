@@ -566,7 +566,7 @@ func (to *trieOrchestrator) stopAcceptingTasks() {
 	to.tasksAllowed = false
 
 	// We don't clear [to.pendingTasks] here because
-	// it will be faster to prefetch them eventhough we
+	// it will be faster to prefetch them even though we
 	// are still waiting.
 }
 

@@ -55,9 +55,18 @@ func (b *BoundedWorkers) startWorker(f func()) {
 func (b *BoundedWorkers) Execute(f func()) {
 	b.outstandingWork.Add(1)
 
+	// Ensure we feed idle workers first
 	select {
-	case b.work <- f: // Feed hungry workers first.
-	case b.workerSpawner <- struct{}{}: // Allocate a new worker to execute immediately next.
+	case b.work <- f:
+		return
+	default:
+	}
+
+	// Fallback to waiting for an idle worker or allocating
+	// a new worker (if we aren't yet at max concurrency)
+	select {
+	case b.work <- f:
+	case b.workerSpawner <- struct{}{}:
 		b.startWorker(f)
 	}
 }
