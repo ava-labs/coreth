@@ -153,7 +153,7 @@ type Config struct {
 
 	// TxLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
-	// 	* -1:  means skip tx indexing
+	//  * -1:  means skip tx indexing (already indexed txs will not be cleaned)
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
 	TxLookupLimit int64
