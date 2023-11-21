@@ -404,8 +404,6 @@ func NewBlockChain(
 	}
 
 	// Start tx indexer/unindexer if required.
-	// TODO: with skip tx indexing, we should not start the tx indexer if there is no tx to remove.
-	// or we can stop it once there is no lookback tx index to remove.
 	if bc.cacheConfig.TxLookupLimit != 0 {
 		bc.wg.Add(1)
 		go bc.dispatchTxUnindexer()

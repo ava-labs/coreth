@@ -68,8 +68,6 @@ var (
 	defaultAllowUnprotectedTxHashes = []common.Hash{
 		common.HexToHash("0xfefb2da535e927b85fe68eb81cb2e4a5827c905f78381a01ef2322aa9b0aee8e"), // EIP-1820: https://eips.ethereum.org/EIPS/eip-1820
 	}
-
-	errSkipIndexingWithNoLimit = fmt.Errorf("cannot skip tx indexing and have no limit for tx lookup at the same time")
 )
 
 type Duration struct {
@@ -200,8 +198,8 @@ type Config struct {
 	TxLookupLimit uint64 `json:"tx-lookup-limit"`
 
 	// SkipTxIndexing skips indexing transactions.
-	// This is useful for light clients that don't need to index transactions.
-	// This cannot be enabled at the same time with TxLookupLimit = 0 (meaning no limit for tx indexing).
+	// This is useful for validators that don't need to index transactions.
+	// TxLookupLimit can be still used to control unindexing old transactions.
 	SkipTxIndexing bool `json:"skip-tx-indexing"`
 }
 
@@ -293,10 +291,6 @@ func (c *Config) Validate() error {
 	// If pruning is enabled, the commit interval must be non-zero so the node commits state tries every CommitInterval blocks.
 	if c.Pruning && c.CommitInterval == 0 {
 		return fmt.Errorf("cannot use commit interval of 0 with pruning enabled")
-	}
-
-	if c.SkipTxIndexing && c.TxLookupLimit == 0 {
-		return errSkipIndexingWithNoLimit
 	}
 	return nil
 }
