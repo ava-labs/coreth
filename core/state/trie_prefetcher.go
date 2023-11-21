@@ -489,6 +489,13 @@ func (to *trieOrchestrator) enqueueTasks(tasks [][]byte) {
 	}
 }
 
+func (to *trieOrchestrator) handleStop(remaining int) {
+	to.taskLock.Lock()
+	to.skips += remaining
+	to.taskLock.Unlock()
+	to.processingTasks.Add(-remaining)
+}
+
 func (to *trieOrchestrator) processTasks() {
 	defer close(to.loopTerm)
 
@@ -509,28 +516,31 @@ func (to *trieOrchestrator) processTasks() {
 		// Enqueue more work as soon as trie copies are available
 		lt := len(tasks)
 		for i := 0; i < lt; i++ {
-			// Try to create to get an active copy first
+			// Try to stop as soon as possible, if channel is closed
+			remaining := lt - i
+			select {
+			case <-to.stop:
+				to.handleStop(remaining)
+				return
+			default:
+			}
+
+			// Try to create to get an active copy first (select is non-deterministic,
+			// so we may end up creating a new copy when we don't need to)
 			var t Trie
 			select {
 			case t = <-to.copyChan:
 			default:
-			}
-
-			// Wait for an available copy or create one, if we weren't
-			// able to get a previously created copy
-			if t == nil {
+				// Wait for an available copy or create one, if we weren't
+				// able to get a previously created copy
 				select {
+				case <-to.stop:
+					to.handleStop(remaining)
+					return
 				case t = <-to.copyChan:
 				case to.copySpawner <- struct{}{}:
 					to.copies++
 					t = to.copyBase()
-				case <-to.stop:
-					remainingCount := len(tasks[i:])
-					to.taskLock.Lock()
-					to.skips += remainingCount
-					to.taskLock.Unlock()
-					to.processingTasks.Add(-remainingCount)
-					return
 				}
 			}
 
