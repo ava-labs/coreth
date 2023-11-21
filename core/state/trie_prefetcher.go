@@ -509,20 +509,29 @@ func (to *trieOrchestrator) processTasks() {
 		// Enqueue more work as soon as trie copies are available
 		lt := len(tasks)
 		for i := 0; i < lt; i++ {
-			// Wait for an available copy or create one
+			// Try to create to get an active copy first
 			var t Trie
 			select {
 			case t = <-to.copyChan:
-			case to.copySpawner <- struct{}{}:
-				to.copies++
-				t = to.copyBase()
-			case <-to.stop:
-				remainingCount := len(tasks[i:])
-				to.taskLock.Lock()
-				to.skips += remainingCount
-				to.taskLock.Unlock()
-				to.processingTasks.Add(-remainingCount)
-				return
+			default:
+			}
+
+			// Wait for an available copy or create one, if we weren't
+			// able to get a previously created copy
+			if t == nil {
+				select {
+				case t = <-to.copyChan:
+				case to.copySpawner <- struct{}{}:
+					to.copies++
+					t = to.copyBase()
+				case <-to.stop:
+					remainingCount := len(tasks[i:])
+					to.taskLock.Lock()
+					to.skips += remainingCount
+					to.taskLock.Unlock()
+					to.processingTasks.Add(-remainingCount)
+					return
+				}
 			}
 
 			// Enqueue work, unless stopped.
