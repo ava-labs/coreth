@@ -763,7 +763,7 @@ func TestTransactionIndices(t *testing.T) {
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	cases := []struct {
+	var cases = []struct {
 		forkA int
 		forkB int
 	}{
