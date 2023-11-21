@@ -849,15 +849,16 @@ func TestTransactionSkipIndexing(t *testing.T) {
 	}
 
 	conf := &CacheConfig{
-		TrieCleanLimit:        256,
-		TrieDirtyLimit:        256,
-		TrieDirtyCommitTarget: 20,
-		Pruning:               true,
-		CommitInterval:        4096,
-		SnapshotLimit:         256,
-		SnapshotNoBuild:       true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:    64,
-		SkipTxIndexing:        true,
+		TrieCleanLimit:            256,
+		TrieDirtyLimit:            256,
+		TrieDirtyCommitTarget:     20,
+		TriePrefetcherParallelism: 4,
+		Pruning:                   true,
+		CommitInterval:            4096,
+		SnapshotLimit:             256,
+		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
+		AcceptorQueueLimit:        64,
+		SkipTxIndexing:            true,
 	}
 
 	// test1: Init block chain and check all indices has been skipped.
@@ -1345,7 +1346,7 @@ func TestEIP3651(t *testing.T) {
 	}
 }
 
-func createAndInsertChain(db ethdb.Database, cacheConfig *CacheConfig, gspec *Genesis, blocks []*types.Block, lastAcceptedHash common.Hash) (*BlockChain, error) {
+func createAndInsertChain(db ethdb.Database, cacheConfig *CacheConfig, gspec *Genesis, blocks types.Blocks, lastAcceptedHash common.Hash) (*BlockChain, error) {
 	chain, err := createBlockChain(db, cacheConfig, gspec, lastAcceptedHash)
 	if err != nil {
 		return nil, err
