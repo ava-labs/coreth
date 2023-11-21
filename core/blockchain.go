@@ -489,7 +489,7 @@ func (bc *BlockChain) dispatchTxUnindexer() {
 // - updating the acceptor tip index
 func (bc *BlockChain) writeBlockAcceptedIndices(b *types.Block) error {
 	batch := bc.db.NewBatch()
-	// -1 means skip writing tx lookup entries
+	// negative means skip writing tx lookup entries
 	if bc.cacheConfig.TxLookupLimit >= 0 {
 		rawdb.WriteTxLookupEntriesByBlock(batch, b)
 	}
