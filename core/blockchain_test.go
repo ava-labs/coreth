@@ -656,14 +656,15 @@ func TestTransactionIndices(t *testing.T) {
 
 	check := func(tail *uint64, txSkip bool, lastIndexed uint64, chain *BlockChain) {
 		stored := rawdb.ReadTxIndexTail(chain.db)
-
+		var tailValue uint64
 		if tail == nil {
 			require.Nil(stored)
-			tail = new(uint64)
+			tailValue = 0
 		} else {
 			require.EqualValues(tail, stored, "expected tail %d, got %d", *tail, *stored)
+			tailValue = *tail
 		}
-		for i := *tail; i <= lastIndexed; i++ {
+		for i := tailValue; i <= lastIndexed; i++ {
 			block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
 			if block.Transactions().Len() == 0 {
 				continue
@@ -674,7 +675,7 @@ func TestTransactionIndices(t *testing.T) {
 			}
 		}
 
-		for i := uint64(0); i < *tail; i++ {
+		for i := uint64(0); i < tailValue; i++ {
 			block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
 			if block.Transactions().Len() == 0 {
 				continue
