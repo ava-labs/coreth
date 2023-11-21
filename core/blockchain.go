@@ -484,9 +484,9 @@ func (bc *BlockChain) dispatchTxUnindexer() {
 // This includes the following:
 // - transaction lookup indices
 // - updating the acceptor tip index
-func (bc *BlockChain) writeBlockAcceptedIndices(b *types.Block, skipTxIndices bool) error {
+func (bc *BlockChain) writeBlockAcceptedIndices(b *types.Block) error {
 	batch := bc.db.NewBatch()
-	if !skipTxIndices {
+	if !bc.cacheConfig.SkipTxIndexing {
 		rawdb.WriteTxLookupEntriesByBlock(batch, b)
 	}
 	if err := rawdb.WriteAcceptorTip(batch, b.Hash()); err != nil {
@@ -579,7 +579,7 @@ func (bc *BlockChain) startAcceptor() {
 		}
 
 		// Update last processed and transaction lookup index
-		if err := bc.writeBlockAcceptedIndices(next, bc.cacheConfig.SkipTxIndexing); err != nil {
+		if err := bc.writeBlockAcceptedIndices(next); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
 		}
 
@@ -1868,7 +1868,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 		// Write any unsaved indices to disk
 		if writeIndices {
-			if err := bc.writeBlockAcceptedIndices(current, bc.cacheConfig.SkipTxIndexing); err != nil {
+			if err := bc.writeBlockAcceptedIndices(current); err != nil {
 				return fmt.Errorf("%w: failed to process accepted block indices", err)
 			}
 		}
