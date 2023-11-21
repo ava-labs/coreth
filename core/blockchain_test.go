@@ -661,7 +661,7 @@ func TestTransactionIndices(t *testing.T) {
 			require.Nil(stored)
 			tailValue = 0
 		} else {
-			require.Equal(*tail, *stored)
+			require.EqualValues(*tail, *stored, "expected tail %d, got %d", *tail, *stored)
 			tailValue = *tail
 		}
 		for i := tailValue; i <= lastIndexed; i++ {

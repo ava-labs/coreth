@@ -411,11 +411,9 @@ func NewBlockChain(
 }
 
 // unindexBlocks unindexes transactions depending on user configuration
+// Invariant: This should not be called if TxLookupLimit is negative.
 func (bc *BlockChain) unindexBlocks(tail uint64, head uint64, done chan struct{}) {
 	start := time.Now()
-	if bc.cacheConfig.TxLookupLimit < 0 {
-		return
-	}
 	txLookupLimit := uint64(bc.cacheConfig.TxLookupLimit)
 	defer func() {
 		txUnindexTimer.Inc(time.Since(start).Milliseconds())
@@ -431,12 +429,10 @@ func (bc *BlockChain) unindexBlocks(tail uint64, head uint64, done chan struct{}
 // dispatchTxUnindexer is responsible for the deletion of the
 // transaction index.
 // Invariant: If TxLookupLimit is 0, it means all tx indices will be preserved.
+// Invariant: This should not be called if TxLookupLimit is negative.
 // Meaning that this function should never be called.
 func (bc *BlockChain) dispatchTxUnindexer() {
 	defer bc.wg.Done()
-	if bc.cacheConfig.TxLookupLimit < 0 {
-		return
-	}
 	txLookupLimit := uint64(bc.cacheConfig.TxLookupLimit)
 
 	// If the user just upgraded to a new version which supports transaction
