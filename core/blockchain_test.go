@@ -1029,16 +1029,17 @@ func TestTxLookupBlockChain(t *testing.T) {
 
 func TestTxLookupSkipIndexingBlockChain(t *testing.T) {
 	cacheConf := &CacheConfig{
-		TrieCleanLimit:        256,
-		TrieDirtyLimit:        256,
-		TrieDirtyCommitTarget: 20,
-		Pruning:               true,
-		CommitInterval:        4096,
-		SnapshotLimit:         256,
-		SnapshotNoBuild:       true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:    64,   // ensure channel doesn't block
-		TxLookupLimit:         5,
-		SkipTxIndexing:        true,
+		TrieCleanLimit:            256,
+		TrieDirtyLimit:            256,
+		TrieDirtyCommitTarget:     20,
+		TriePrefetcherParallelism: 4,
+		Pruning:                   true,
+		CommitInterval:            4096,
+		SnapshotLimit:             256,
+		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
+		AcceptorQueueLimit:        64,   // ensure channel doesn't block
+		TxLookupLimit:             5,
+		SkipTxIndexing:            true,
 	}
 	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 		return createBlockChain(db, cacheConf, gspec, lastAcceptedHash)
