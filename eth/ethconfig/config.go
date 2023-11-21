@@ -160,7 +160,7 @@ type Config struct {
 	TxLookupLimit uint64
 
 	// SkipTxIndexing skips indexing transactions.
-	// This is useful for light clients that don't need to index transactions.
-	// This cannot be enabled at the same time with TxLookupLimit = 0 (meaning no limit for tx indexing).
+	// This is useful for validators that don't need to index transactions.
+	// TxLookupLimit can be still used to control unindexing old transactions.
 	SkipTxIndexing bool
 }
