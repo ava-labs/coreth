@@ -89,7 +89,7 @@ func (b *BlockRequestHandler) OnBlockRequest(ctx context.Context, nodeID ids.Nod
 			return nil, nil
 		}
 
-		if buf.Len()+totalBytes > maxTotalByteSize {
+		if buf.Len()+totalBytes > maxTotalByteSize && len(blocks) > 0 {
 			log.Debug("Skipping block due to max total bytes size", "totalBlockDataSize", totalBytes, "blockSize", buf.Len(), "maxTotalBytesSize", maxTotalByteSize)
 			break
 		}
