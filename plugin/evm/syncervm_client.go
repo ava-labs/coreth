@@ -384,7 +384,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	// 2. Validate blocks continuity and store them
 	blkHeights := maps.Keys(blks)
 	sort.Slice(blkHeights, func(i, j int) bool {
-		return blkHeights[i] < blkHeights[j] // sort in ascending order by heights
+		return blkHeights[i] > blkHeights[j] // sort in ascending order by heights
 	})
 
 	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
