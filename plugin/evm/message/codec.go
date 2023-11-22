@@ -12,7 +12,7 @@ import (
 
 const (
 	Version        = uint16(0)
-	maxMessageSize = 2 * units.MiB
+	maxMessageSize = 2*units.MiB - 64*units.KiB
 )
 
 var (

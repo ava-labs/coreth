@@ -21,8 +21,8 @@ import (
 const (
 	// parentLimit specifies how many parents to retrieve and send given a starting hash
 	// This value overrides any specified limit in blockRequest.Parents if it is greater than this value
-	parentLimit      = uint16(64)
-	maxTotalByteSize = units.MiB - units.KiB // Cap the total bytes size with one KiB allocated to encoding overhead from the codec
+	parentLimit           = uint16(64)
+	targetMessageByteSize = units.MiB - units.KiB // Target total block bytes slightly under original network codec max size of 1MB
 )
 
 // BlockRequestHandler is a peer.RequestHandler for message.BlockRequest
@@ -89,8 +89,8 @@ func (b *BlockRequestHandler) OnBlockRequest(ctx context.Context, nodeID ids.Nod
 			return nil, nil
 		}
 
-		if buf.Len()+totalBytes > maxTotalByteSize && len(blocks) > 0 {
-			log.Debug("Skipping block due to max total bytes size", "totalBlockDataSize", totalBytes, "blockSize", buf.Len(), "maxTotalBytesSize", maxTotalByteSize)
+		if buf.Len()+totalBytes > targetMessageByteSize && len(blocks) > 0 {
+			log.Debug("Skipping block due to max total bytes size", "totalBlockDataSize", totalBytes, "blockSize", buf.Len(), "maxTotalBytesSize", targetMessageByteSize)
 			break
 		}
 
