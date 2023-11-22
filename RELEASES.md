@@ -5,6 +5,7 @@
 - Add concurrent prefetching of trie nodes during block processing
 - Add `skip-tx-indexing` flag to disable transaction indexing and unindexing
 - Update acceptor tip before sending chain events to subscribers
+- Add soft cap on total block data size for state sync block requests
 
 ## [v0.12.8](https://github.com/ava-labs/coreth/releases/tag/v0.12.8)
 
