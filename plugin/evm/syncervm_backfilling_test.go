@@ -84,7 +84,7 @@ func TestDownloadTrackerStart(t *testing.T) {
 
 	{
 		// no state summary nor ever backfilled. Backfill won't run
-		_, _, err := dt.StartHeight(context.Background(), ids.Empty)
+		_, _, err := dt.GetStartHeight(context.Background(), ids.Empty)
 		require.ErrorIs(err, block.ErrBlockBackfillingNotEnabled)
 	}
 
@@ -100,7 +100,7 @@ func TestDownloadTrackerStart(t *testing.T) {
 		}
 		blocks = append(blocks, firstStateSummaryBlk)
 
-		nextBlkID, nextBlkHeight, err := dt.StartHeight(context.Background(), firstStateSummaryBlk.ID())
+		nextBlkID, nextBlkHeight, err := dt.GetStartHeight(context.Background(), firstStateSummaryBlk.ID())
 		require.NoError(err)
 		require.Equal(firstStateSummaryBlk.Parent(), nextBlkID)
 		require.Equal(firstStateSummaryBlk.Height()-1, nextBlkHeight)
@@ -119,7 +119,7 @@ func TestDownloadTrackerStart(t *testing.T) {
 		blocks = make([]*Block, 0) // wipe previous state summary
 		blocks = append(blocks, secondStateSummaryBlk)
 
-		nextBlkID, nextBlkHeight, err := dt.StartHeight(context.Background(), secondStateSummaryBlk.ID())
+		nextBlkID, nextBlkHeight, err := dt.GetStartHeight(context.Background(), secondStateSummaryBlk.ID())
 		require.NoError(err)
 		require.Equal(secondStateSummaryBlk.Parent(), nextBlkID)
 		require.Equal(secondStateSummaryBlk.Height()-1, nextBlkHeight)
@@ -169,7 +169,7 @@ func TestDownloadTrackerNext(t *testing.T) {
 	}
 	blocks = append(blocks, firstStateSummaryBlk)
 
-	nextBlkID, nextBlkHeight, err := dt.StartHeight(context.Background(), firstStateSummaryBlk.ID())
+	nextBlkID, nextBlkHeight, err := dt.GetStartHeight(context.Background(), firstStateSummaryBlk.ID())
 	require.NoError(err)
 	require.Equal(firstStateSummaryBlk.Parent(), nextBlkID)
 	require.Equal(firstStateSummaryBlk.Height()-1, nextBlkHeight)
@@ -191,7 +191,7 @@ func TestDownloadTrackerNext(t *testing.T) {
 	}
 	blocks = append(blocks, backfilledBlk1)
 
-	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk1)
+	nextBlkID, nextBlkHeight, err = dt.GetNextHeight(context.Background(), backfilledBlk1)
 	require.NoError(err)
 	require.Equal(backfilledBlk1.Parent(), nextBlkID)
 	require.Equal(backfilledBlk1.Height()-1, nextBlkHeight)
@@ -206,7 +206,7 @@ func TestDownloadTrackerNext(t *testing.T) {
 	}
 	blocks = append(blocks, backfilledBlk1)
 
-	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk2)
+	nextBlkID, nextBlkHeight, err = dt.GetNextHeight(context.Background(), backfilledBlk2)
 	require.NoError(err)
 	require.Equal(backfilledBlk2.Parent(), nextBlkID)
 	require.Equal(backfilledBlk2.Height()-1, nextBlkHeight)
@@ -221,11 +221,11 @@ func TestDownloadTrackerNext(t *testing.T) {
 	}
 	blocks = append(blocks, backfilledBlk1)
 
-	_, _, err = dt.NextHeight(context.Background(), backfilledBlk3)
+	_, _, err = dt.GetNextHeight(context.Background(), backfilledBlk3)
 	require.ErrorIs(err, block.ErrStopBlockBackfilling)
 
 	// Once last block is backfilled, backfilling won't restart
-	_, _, err = dt.StartHeight(context.Background(), ids.Empty)
+	_, _, err = dt.GetStartHeight(context.Background(), ids.Empty)
 	require.ErrorIs(err, block.ErrBlockBackfillingNotEnabled)
 }
 
@@ -277,7 +277,7 @@ func TestDownloadTrackerNextWithMultipleStateSyncRuns(t *testing.T) {
 	}
 	blocks = append(blocks, firstStateSummaryBlk)
 
-	nextBlkID, nextBlkHeight, err := dt.StartHeight(context.Background(), firstStateSummaryBlk.ID())
+	nextBlkID, nextBlkHeight, err := dt.GetStartHeight(context.Background(), firstStateSummaryBlk.ID())
 	require.NoError(err)
 	require.Equal(firstStateSummaryBlk.Parent(), nextBlkID)
 	require.Equal(firstStateSummaryBlk.Height()-1, nextBlkHeight)
@@ -291,7 +291,7 @@ func TestDownloadTrackerNextWithMultipleStateSyncRuns(t *testing.T) {
 	}
 	blocks = append(blocks, backfilledBlk1)
 
-	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk1)
+	nextBlkID, nextBlkHeight, err = dt.GetNextHeight(context.Background(), backfilledBlk1)
 	require.NoError(err)
 	require.Equal(backfilledBlk1.Parent(), nextBlkID)
 	require.Equal(backfilledBlk1.Height()-1, nextBlkHeight)
@@ -306,7 +306,7 @@ func TestDownloadTrackerNextWithMultipleStateSyncRuns(t *testing.T) {
 	}
 	blocks = append(blocks, secondStateSummaryBlk)
 
-	nextBlkID, nextBlkHeight, err = dt.StartHeight(context.Background(), secondStateSummaryBlk.ID())
+	nextBlkID, nextBlkHeight, err = dt.GetStartHeight(context.Background(), secondStateSummaryBlk.ID())
 	require.NoError(err)
 	require.Equal(secondStateSummaryBlk.Parent(), nextBlkID) // we start filling highest gaps
 	require.Equal(secondStateSummaryBlk.Height()-1, nextBlkHeight)
@@ -323,7 +323,7 @@ func TestDownloadTrackerNextWithMultipleStateSyncRuns(t *testing.T) {
 
 	// We expect that the system jumpt to request lowest gap, without requesting again blocks
 	// already downloaded in the first backfilling run
-	nextBlkID, nextBlkHeight, err = dt.NextHeight(context.Background(), backfilledBlk2)
+	nextBlkID, nextBlkHeight, err = dt.GetNextHeight(context.Background(), backfilledBlk2)
 	require.NoError(err)
 	require.Equal(backfilledBlk1.Parent(), nextBlkID)
 	require.Equal(backfilledBlk1.Height()-1, nextBlkHeight)

@@ -6,14 +6,18 @@ package evm
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	safemath "github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/utils/timer"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ethereum/go-ethereum/log"
+
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 var downloadedHeightsKey = []byte("downloadedHeights")
@@ -58,6 +62,9 @@ func unpackHeightIntervals(b []byte) ([]heightInterval, error) {
 	return res, nil
 }
 
+// block backfilling is a lengthy process, so multiple state sync may complete
+// before block backfilling does. We track downloaded blocks to avoid gaps in
+// block indexes as well as multiple downloads of the same blocks
 type DownloadsTracker struct {
 	metadataDB database.Database
 	db         *versiondb.Database
@@ -65,14 +72,16 @@ type DownloadsTracker struct {
 	getBlk           func(context.Context, ids.ID) (*Block, error)
 	getBlkIDAtHeigth func(context.Context, uint64) (ids.ID, error)
 
-	// block backfilling is a lengthy process, so multiple state sync may complete
-	// before block backfilling does. We track downloaded blocks to avoid gaps in
-	// block indexes as well as multiple downloads of the same blocks
 	backfilledHeights []heightInterval
+
+	// attributes needed to estimate ETA
+	startTime             time.Time // start time of this block download run
+	latestRequestedHeight uint64
+	downloadedHeights     uint64 // total downloaded heights for this run
 }
 
 // Note: engine guarantee to call BackfillBlocksEnabled only after StateSyncDone event has been issued
-func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids.ID) (ids.ID, uint64, error) {
+func (dt *DownloadsTracker) GetStartHeight(ctx context.Context, stateSummaryBlk ids.ID) (ids.ID, uint64, error) {
 	var (
 		nextBlkID     ids.ID
 		nextBlkHeight uint64
@@ -85,7 +94,7 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 	case nil:
 		// nothing to do here
 	case database.ErrNotFound:
-		summaryBlk = nil // make sure this is nit
+		summaryBlk = nil // make sure this is nil
 	default:
 		return ids.Empty, 0, fmt.Errorf(
 			"failed retrieving summary block %s: %w, %w",
@@ -131,6 +140,7 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 
 		if summaryBlk != nil {
 			// extend height range to backfill from and store it
+			// we place highest heights gap first, to fill latest blocks first
 			if len(dh) == 0 || (len(dh) > 0 && summaryBlk.Height() != dh[0].upperBound) {
 				dh = append([]heightInterval{
 					{
@@ -161,10 +171,13 @@ func (dt *DownloadsTracker) StartHeight(ctx context.Context, stateSummaryBlk ids
 		)
 	}
 
+	dt.startTime = time.Now()
+	dt.latestRequestedHeight = nextBlkHeight
+	dt.downloadedHeights = 0
 	return nextBlkID, nextBlkHeight, nil
 }
 
-func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk *Block) (ids.ID, uint64, error) {
+func (dt *DownloadsTracker) GetNextHeight(ctx context.Context, latestBlk *Block) (ids.ID, uint64, error) {
 	if latestBlk.Height() == 1 { // done backfilling
 		dt.backfilledHeights = []heightInterval{}
 		if err := dt.metadataDB.Delete(downloadedHeightsKey); err != nil {
@@ -181,9 +194,13 @@ func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk *Block) (i
 			)
 		}
 
-		log.Info("block backfilling completed")
+		log.Info("block backfilling completed",
+			"latest run duration", time.Since(dt.startTime),
+		)
 		return ids.Empty, 0, block.ErrStopBlockBackfilling
 	}
+
+	dt.downloadedHeights += dt.latestRequestedHeight - latestBlk.Height()
 
 	var (
 		nextBlkID     = latestBlk.Parent()
@@ -219,7 +236,24 @@ func (dt *DownloadsTracker) NextHeight(ctx context.Context, latestBlk *Block) (i
 		return ids.Empty, 0, err
 	}
 
+	dt.latestRequestedHeight = nextBlkHeight
+	if latestBlk.Height()%commonEng.StatusUpdateFrequency == 0 {
+		log.Info(
+			"Block backfilling ongoing",
+			"latest run duration", time.Since(dt.startTime),
+			"ETA", dt.eta(),
+		)
+	}
 	return nextBlkID, nextBlkHeight, nil
+}
+
+// eta returns the time estimated to complete download of all missing blocks
+func (dt *DownloadsTracker) eta() time.Duration {
+	missingHeights := uint64(0)
+	for _, h := range dt.backfilledHeights {
+		missingHeights += h.upperBound - h.lowerBound
+	}
+	return timer.EstimateETA(dt.startTime, dt.downloadedHeights, missingHeights)
 }
 
 func (dt *DownloadsTracker) storeBlockHeights(h []heightInterval) error {
