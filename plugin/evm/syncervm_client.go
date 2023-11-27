@@ -429,7 +429,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		topBlk = blk
 	}
 
-	nextBlkID, nextBlkHeight, err := client.dt.GetStartHeight(ctx, topBlk.ID())
+	nextBlkID, nextBlkHeight, err := client.dt.GetNextHeight(ctx, topBlk)
 	if err == nil {
 		log.Info(
 			"Successfully backfilled blocks batch",
