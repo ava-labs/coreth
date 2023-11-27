@@ -361,6 +361,16 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 			"nextBlockHeight", nextBlkHeight,
 		)
 	}
+
+	client.latestBackfilledBlock, err = client.getBlkIDAtHeigth(ctx, nextBlkHeight+1)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf(
+			"requested block at height %d, but its child is unknown: %w, %w",
+			nextBlkHeight+1,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
 	return nextBlkID, nextBlkHeight, err
 }
 
@@ -384,7 +394,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	// 2. Validate blocks continuity and store them
 	blkHeights := maps.Keys(blks)
 	sort.Slice(blkHeights, func(i, j int) bool {
-		return blkHeights[i] > blkHeights[j] // sort in ascending order by heights
+		return blkHeights[i] < blkHeights[j]
 	})
 
 	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
@@ -419,7 +429,7 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		topBlk = blk
 	}
 
-	nextBlkID, nextBlkHeight, err := client.dt.GetNextHeight(ctx, topBlk)
+	nextBlkID, nextBlkHeight, err := client.dt.GetStartHeight(ctx, topBlk.ID())
 	if err == nil {
 		log.Info(
 			"Successfully backfilled blocks batch",
@@ -428,6 +438,15 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 		)
 	}
 
+	client.latestBackfilledBlock, err = client.getBlkIDAtHeigth(ctx, nextBlkHeight+1)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf(
+			"requested block at height %d, but its child is unknown: %w, %w",
+			nextBlkHeight+1,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
 	return nextBlkID, nextBlkHeight, err
 }
 
