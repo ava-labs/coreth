@@ -240,10 +240,7 @@ func (dt *DownloadsTracker) GetNextHeight(ctx context.Context, latestBlk *Block)
 
 // eta returns the time estimated to complete download of all missing blocks
 func (dt *DownloadsTracker) eta() time.Duration {
-	missingHeights := uint64(0)
-	for _, h := range dt.backfilledHeights {
-		missingHeights += h.upperBound - h.lowerBound
-	}
+	missingHeights := dt.backfilledHeights[0].lowerBound
 	return timer.EstimateETA(dt.startTime, dt.downloadedHeights, missingHeights)
 }
 
