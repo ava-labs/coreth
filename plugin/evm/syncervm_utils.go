@@ -124,7 +124,7 @@ func (dt *DownloadsTracker) GetStartHeight(ctx context.Context, stateSummaryBlk 
 		}
 
 		if err := dt.storeBlockHeights(dt.backfilledHeights); err != nil {
-			return ids.Empty, 0, err
+			return ids.Empty, 0, fmt.Errorf("%w: %w", err, block.ErrInternalBlockBackfilling)
 		}
 
 	case nil:
@@ -150,7 +150,7 @@ func (dt *DownloadsTracker) GetStartHeight(ctx context.Context, stateSummaryBlk 
 				}, dh...)
 
 				if err := dt.storeBlockHeights(dh); err != nil {
-					return ids.Empty, 0, err
+					return ids.Empty, 0, fmt.Errorf("%w: %w", err, block.ErrInternalBlockBackfilling)
 				}
 			}
 		}
@@ -180,18 +180,8 @@ func (dt *DownloadsTracker) GetStartHeight(ctx context.Context, stateSummaryBlk 
 func (dt *DownloadsTracker) GetNextHeight(ctx context.Context, latestBlk *Block) (ids.ID, uint64, error) {
 	if latestBlk.Height() == 1 { // done backfilling
 		dt.backfilledHeights = []heightInterval{}
-		if err := dt.metadataDB.Delete(downloadedHeightsKey); err != nil {
-			return ids.Empty, 0, fmt.Errorf(
-				"failed clearing downloaded heights from disk: %w, %w",
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
-		}
-		if err := dt.db.Commit(); err != nil {
-			return ids.Empty, 0, fmt.Errorf("failed to commit db: %w, %w",
-				err,
-				block.ErrInternalBlockBackfilling,
-			)
+		if err := dt.clearBlockHeights(); err != nil {
+			return ids.Empty, 0, fmt.Errorf("%w: %w", err, block.ErrInternalBlockBackfilling)
 		}
 
 		log.Info("block backfilling completed",
@@ -233,7 +223,7 @@ func (dt *DownloadsTracker) GetNextHeight(ctx context.Context, latestBlk *Block)
 		nextBlkID = latestBackfilledBlk.Parent()
 	}
 	if err := dt.storeBlockHeights(dt.backfilledHeights); err != nil {
-		return ids.Empty, 0, err
+		return ids.Empty, 0, fmt.Errorf("%w: %w", err, block.ErrInternalBlockBackfilling)
 	}
 
 	dt.latestRequestedHeight = nextBlkHeight
@@ -259,18 +249,23 @@ func (dt *DownloadsTracker) eta() time.Duration {
 func (dt *DownloadsTracker) storeBlockHeights(h []heightInterval) error {
 	hi, err := packHeightIntervals(dt.backfilledHeights)
 	if err != nil {
-		return fmt.Errorf(
-			"failed packing heights interval: %w, %w",
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
+		return fmt.Errorf("failed packing heights interval: %w", err)
 	}
 	if err := dt.metadataDB.Put(downloadedHeightsKey, hi); err != nil {
-		return fmt.Errorf(
-			"failed storing latest backfilled blockID to disk: %w, %w",
-			err,
-			block.ErrInternalBlockBackfilling,
-		)
+		return fmt.Errorf("failed storing latest backfilled blockID to disk: %w", err)
+	}
+	if err := dt.db.Commit(); err != nil {
+		return fmt.Errorf("failed committing latest backfilled heights: %w", err)
+	}
+	return nil
+}
+
+func (dt *DownloadsTracker) clearBlockHeights() error {
+	if err := dt.metadataDB.Delete(downloadedHeightsKey); err != nil {
+		return fmt.Errorf("failed clearing downloaded heights from disk: %w", err)
+	}
+	if err := dt.db.Commit(); err != nil {
+		return fmt.Errorf("failed committing downloaded heights removal: %w", err)
 	}
 	return nil
 }
