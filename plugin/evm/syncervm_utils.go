@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ethereum/go-ethereum/log"
 
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
@@ -75,9 +74,9 @@ type DownloadsTracker struct {
 	backfilledHeights []heightInterval
 
 	// attributes needed to estimate ETA
-	startTime             time.Time // start time of this block download run
-	latestRequestedHeight uint64
-	downloadedHeights     uint64 // total downloaded heights for this run
+	startTime, latestLogTime time.Time // start time of this block download run
+	latestRequestedHeight    uint64
+	downloadedHeights        uint64 // total downloaded heights for this run
 }
 
 // Note: engine guarantee to call BackfillBlocksEnabled only after StateSyncDone event has been issued
@@ -171,7 +170,8 @@ func (dt *DownloadsTracker) GetStartHeight(ctx context.Context, stateSummaryBlk 
 		)
 	}
 
-	dt.startTime = time.Now()
+	dt.startTime = time.Now().Truncate(time.Second)
+	dt.latestLogTime = dt.startTime
 	dt.latestRequestedHeight = nextBlkHeight
 	dt.downloadedHeights = 0
 	return nextBlkID, nextBlkHeight, nil
@@ -227,12 +227,13 @@ func (dt *DownloadsTracker) GetNextHeight(ctx context.Context, latestBlk *Block)
 	}
 
 	dt.latestRequestedHeight = nextBlkHeight
-	if latestBlk.Height()%commonEng.StatusUpdateFrequency == 0 {
+	if time.Since(dt.latestLogTime) >= 5*time.Minute { // log every 5 minutes
 		log.Info(
 			"Block backfilling ongoing",
 			"latest run duration", time.Since(dt.startTime),
 			"ETA", dt.eta(),
 		)
+		dt.latestLogTime = time.Now()
 	}
 	return nextBlkID, nextBlkHeight, nil
 }
