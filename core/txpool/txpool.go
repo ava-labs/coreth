@@ -269,11 +269,10 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	rules    atomic.Pointer[params.Rules] // Rules for the currentHead
-	istanbul atomic.Bool                  // Fork indicator whether we are in the istanbul stage.
-	eip2718  atomic.Bool                  // Fork indicator whether we are using EIP-2718 type transactions.
-	eip1559  atomic.Bool                  // Fork indicator whether we are using EIP-1559 type transactions.
-	eip3860  atomic.Bool                  // Fork indicator whether EIP-3860 is activated. (activated in Shanghai Upgrade in Ethereum)
+	rules   atomic.Pointer[params.Rules] // Rules for the currentHead
+	eip2718 atomic.Bool                  // Fork indicator whether we are using EIP-2718 type transactions.
+	eip1559 atomic.Bool                  // Fork indicator whether we are using EIP-1559 type transactions.
+	eip3860 atomic.Bool                  // Fork indicator whether EIP-3860 is activated. (activated in Shanghai Upgrade in Ethereum)
 
 	currentHead *types.Header
 	// [currentState] is the state of the blockchain head. It is reset whenever
@@ -1524,7 +1523,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	rules := pool.chainconfig.AvalancheRules(next, newHead.Time)
 
 	pool.rules.Store(&rules)
-	pool.istanbul.Store(rules.IsIstanbul)
 	pool.eip2718.Store(rules.IsApricotPhase2)
 	pool.eip1559.Store(rules.IsApricotPhase3)
 	pool.eip3860.Store(rules.IsDUpgrade)
