@@ -33,7 +33,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
@@ -203,7 +202,6 @@ func init() {
 	addrsList = append(addrsList, PrecompiledAddressesApricotPhasePre6...)
 	addrsList = append(addrsList, PrecompiledAddressesApricotPhase6...)
 	addrsList = append(addrsList, PrecompiledAddressesBanff...)
-	addrsList = append(addrsList, genesisContractAddr, NativeAssetBalanceAddr, NativeAssetCallAddr) // Add genesis multicoin contract and deprecated native asset precompiles to set of reserved addresses
 	for _, k := range addrsList {
 		PrecompileAllNativeAddresses[k] = struct{}{}
 	}
@@ -214,10 +212,6 @@ func init() {
 		address := module.Address
 		if _, ok := PrecompileAllNativeAddresses[address]; ok {
 			panic(fmt.Errorf("precompile address collides with existing native address: %s", address))
-		}
-
-		if address == constants.BlackholeAddr {
-			panic(fmt.Errorf("cannot use address %s for stateful precompile - overlaps with blackhole address", address))
 		}
 	}
 }
