@@ -37,8 +37,11 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+
+	// Force-load precompiles to trigger registration
 	warpPrecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	_ "github.com/ava-labs/coreth/precompile/registry"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
