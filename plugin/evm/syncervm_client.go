@@ -354,13 +354,15 @@ func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids
 	}
 
 	nextBlkID, nextBlkHeight, err := client.dt.GetStartHeight(ctx, client.latestBackfilledBlock)
-	if err == nil {
-		log.Info(
-			"Starting block backfilling",
-			"nextBlockID", nextBlkID,
-			"nextBlockHeight", nextBlkHeight,
-		)
+	if err != nil {
+		return nextBlkID, nextBlkHeight, err
 	}
+
+	log.Info(
+		"Starting block backfilling",
+		"nextBlockID", nextBlkID,
+		"nextBlockHeight", nextBlkHeight,
+	)
 
 	client.latestBackfilledBlock, err = client.getBlkIDAtHeigth(ctx, nextBlkHeight+1)
 	if err != nil {
@@ -430,13 +432,15 @@ func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [
 	}
 
 	nextBlkID, nextBlkHeight, err := client.dt.GetNextHeight(ctx, topBlk)
-	if err == nil {
-		log.Info(
-			"Successfully backfilled blocks batch",
-			"nextBlockID", nextBlkID,
-			"nextBlockHeight", nextBlkHeight,
-		)
+	if err != nil {
+		return nextBlkID, nextBlkHeight, err
 	}
+
+	log.Info(
+		"Successfully backfilled blocks batch",
+		"nextBlockID", nextBlkID,
+		"nextBlockHeight", nextBlkHeight,
+	)
 
 	client.latestBackfilledBlock, err = client.getBlkIDAtHeigth(ctx, nextBlkHeight+1)
 	if err != nil {
