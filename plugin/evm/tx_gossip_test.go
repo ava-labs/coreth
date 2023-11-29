@@ -10,9 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
@@ -23,6 +20,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
 
 	"google.golang.org/protobuf/proto"
 

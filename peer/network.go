@@ -38,7 +38,6 @@ var (
 	_                     common.AppHandler    = &network{}
 )
 
-// TODO remove this interface
 type Network interface {
 	validators.Connector
 	common.AppHandler
