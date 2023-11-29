@@ -154,6 +154,18 @@ func (dt *DownloadsTracker) GetStartHeight(ctx context.Context, stateSummaryBlk 
 			}
 		}
 
+		if dh[0].lowerBound == 0 { // done backfilling, just cleanup metadata
+			dt.backfilledHeights = []heightInterval{}
+			if err := dt.clearBlockHeights(); err != nil {
+				return ids.Empty, 0, fmt.Errorf("%w: %w", err, block.ErrInternalBlockBackfilling)
+			}
+
+			log.Info("block backfilling completed",
+				"latest run duration", time.Since(dt.startTime),
+			)
+			return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
+		}
+
 		dt.backfilledHeights = dh
 		latestBackfilledBlk, err := dt.getBlockAtHeight(ctx, dh[0].lowerBound)
 		if err != nil {
