@@ -28,7 +28,8 @@ echo "checking out target AvalancheGo version ${avalanche_version}"
 if [[ -d "${AVALANCHEGO_CLONE_PATH}" ]]; then
   echo "updating existing clone"
   cd "${AVALANCHEGO_CLONE_PATH}"
-  git fetch
+  # Ensure the clone has all commits and tags that might be referenced by $avalanche_version
+  git fetch --tags
 else
   echo "creating new clone"
   git clone https://github.com/ava-labs/avalanchego.git "${AVALANCHEGO_CLONE_PATH}"
