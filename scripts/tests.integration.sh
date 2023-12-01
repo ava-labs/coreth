@@ -21,6 +21,11 @@ if [[ "$@" =~ "--use-network-fixture" ]]; then
   export AVALANCHEGO_PATH="$(realpath ${AVALANCHEGO_PATH:-${AVALANCHEGO_CLONE_PATH}/build/avalanchego})"
 fi
 
+# Ensure blst configuration
+CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
+source ./scripts/versions.sh
+source ./scripts/constants.sh
+
 echo "building integration.test"
 # Install the ginkgo binary (required for test build and run)
 go install -v github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
