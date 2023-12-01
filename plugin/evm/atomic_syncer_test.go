@@ -10,10 +10,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
+	"github.com/ava-labs/avalanchego/ids"
 
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethdb/memorydb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
@@ -35,7 +40,11 @@ type atomicSyncTestCheckpoint struct {
 
 // testAtomicSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
 // starting at [targetRoot], and stopping and resuming at each of the [checkpoints].
-func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight uint64, targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64) {
+func testAtomicSyncer(
+	t *testing.T, serverTrieDB *trie.Database, targetHeight uint64,
+	targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint,
+	finalExpectedNumLeaves int64,
+) AtomicBackend {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -119,6 +128,8 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 		assert.NoError(t, err)
 		assert.NotZero(t, root)
 	}
+
+	return atomicBackend
 }
 
 func TestAtomicSyncer(t *testing.T) {
@@ -128,6 +139,54 @@ func TestAtomicSyncer(t *testing.T) {
 	root, _, _ := syncutils.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicKeyLength)
 
 	testAtomicSyncer(t, serverTrieDB, targetHeight, root, nil, int64(targetHeight))
+}
+
+func mkSyncerTrie(t *testing.T, targetHeight uint64) *atomicTrie {
+	require := require.New(t)
+	db := memdb.New()
+	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
+	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
+
+	atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, testTxCodec(), 0, commitInterval)
+	require.NoError(err)
+	tr, err := atomicTrie.OpenTrie(types.EmptyRootHash)
+	require.NoError(err)
+	for i := 1; i <= int(targetHeight); i++ {
+		requests := make(map[ids.ID]*atomic.Requests)
+		if i%2 == 0 {
+			requests[ids.ID{1}] = &atomic.Requests{
+				// RemoveRequests: [][]byte{[]byte(fmt.Sprintf("xxx-%d", i))},
+				PutRequests: []*atomic.Element{&atomic.Element{
+					Key: []byte(fmt.Sprintf("xxx-%d", i)),
+				}},
+			}
+		} else {
+			requests[ids.ID{1}] = &atomic.Requests{
+				RemoveRequests: [][]byte{},
+			}
+		}
+		err := atomicTrie.UpdateTrie(tr, uint64(i), requests)
+		require.NoError(err)
+	}
+	root, nodes := tr.Commit(false)
+	err = atomicTrie.InsertTrie(nodes, root)
+	require.NoError(err)
+	atomicTrie.AcceptTrie(targetHeight, root)
+	require.NoError(err)
+	return atomicTrie
+}
+
+func TestAtomicSyncerWithApply(t *testing.T) {
+	require := require.New(t)
+	rand.Seed(1)
+	targetHeight := 10 * uint64(commitInterval)
+
+	atomicTrie := mkSyncerTrie(t, targetHeight)
+	ab := testAtomicSyncer(t, atomicTrie.trieDB, targetHeight, atomicTrie.lastAcceptedRoot, nil, int64(targetHeight))
+	err := ab.MarkApplyToSharedMemoryCursor(0)
+	require.NoError(err)
+	err = ab.ApplyToSharedMemory(targetHeight)
+	require.NoError(err)
 }
 
 func TestAtomicSyncerResume(t *testing.T) {

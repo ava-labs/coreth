@@ -230,7 +230,12 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 	}
 
 	lastCommittedRoot, _ := a.atomicTrie.LastCommitted()
-	log.Info("applying atomic operations to shared memory", "root", lastCommittedRoot, "lastAcceptedBlock", lastAcceptedBlock, "startHeight", binary.BigEndian.Uint64(sharedMemoryCursor[:wrappers.LongLen]))
+	log.Info(
+		"applying atomic operations to shared memory", "root", lastCommittedRoot,
+		"lastAcceptedBlock", lastAcceptedBlock,
+		"startHeight", binary.BigEndian.Uint64(sharedMemoryCursor[:wrappers.LongLen]),
+		"cursor", common.Bytes2Hex(sharedMemoryCursor),
+	)
 
 	it, err := a.atomicTrie.Iterator(lastCommittedRoot, sharedMemoryCursor)
 	if err != nil {
@@ -284,9 +289,22 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 				return err
 			}
 			// calling [sharedMemory.Apply] updates the last applied pointer atomically with the shared memory operation.
+			keyStr := common.Bytes2Hex(it.Key())
 			if err = a.sharedMemory.Apply(batchOps, batch); err != nil {
-				return err
+				for blockChainID, reqs := range batchOps {
+					log.Error(
+						"failed to apply atomic operation to shared memory",
+						"blockchainID", blockChainID, "requests", reqs, "key",
+						keyStr, "height", height,
+					)
+				}
+				return fmt.Errorf("%w: at key %s", err, keyStr)
 			}
+			log.Info(
+				"applied batch of atomic operations to shared memory",
+				"puts", putRequests, "removes", removeRequests, "key", keyStr,
+				"height", height,
+			)
 			putRequests, removeRequests = 0, 0
 			batchOps = make(map[ids.ID]*atomic.Requests)
 		}
