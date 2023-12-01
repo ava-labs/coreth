@@ -327,6 +327,7 @@ type VM struct {
 	networkCodec codec.Manager
 
 	validators *p2p.Validators
+	router     *p2p.Router
 
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
@@ -584,10 +585,10 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	p2pNetwork := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
-	vm.validators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
+	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
+	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
 	vm.networkCodec = message.Codec
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
+	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// initialize warp backend
@@ -1099,11 +1100,9 @@ func (vm *VM) initBlockBuilding() error {
 		Handler: &p2p.ThrottlerHandler{
 			Handler:   ethTxGossipHandler,
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Log:       vm.ctx.Log,
 		},
-		Log: vm.ctx.Log,
 	}
-	ethTxGossipClient, err := vm.Network.NewAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, p2p.WithValidatorSampling(vm.validators))
+	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
 	if err != nil {
 		return err
 	}
@@ -1118,12 +1117,10 @@ func (vm *VM) initBlockBuilding() error {
 		Handler: &p2p.ThrottlerHandler{
 			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
 			Handler:   atomicTxGossipHandler,
-			Log:       vm.ctx.Log,
 		},
-		Log: vm.ctx.Log,
 	}
 
-	atomicTxGossipClient, err := vm.Network.NewAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, p2p.WithValidatorSampling(vm.validators))
+	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
 	if err != nil {
 		return err
 	}

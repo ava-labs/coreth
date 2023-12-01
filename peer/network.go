@@ -77,10 +77,6 @@ type Network interface {
 	// TrackBandwidth should be called for each valid request with the bandwidth
 	// (length of response divided by request time), and with 0 if the response is invalid.
 	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
-
-	// NewAppProtocol reserves a protocol identifier and returns a corresponding
-	// client to send messages with
-	NewAppProtocol(protocol uint64, handler p2p.Handler, options ...p2p.ClientOption) (*p2p.Client, error)
 }
 
 // network is an implementation of Network that processes message requests for
@@ -92,16 +88,16 @@ type network struct {
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
 	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
 	activeCrossChainRequests   *semaphore.Weighted                // controls maximum number of active outbound cross chain requests
-	network                    *p2p.Network
-	appSender                  common.AppSender                 // avalanchego AppSender for sending messages
-	codec                      codec.Manager                    // Codec used for parsing messages
-	crossChainCodec            codec.Manager                    // Codec used for parsing cross chain messages
-	appRequestHandler          message.RequestHandler           // maps request type => handler
-	crossChainRequestHandler   message.CrossChainRequestHandler // maps cross chain request type => handler
-	gossipHandler              message.GossipHandler            // maps gossip type => handler
-	peers                      *peerTracker                     // tracking of peers & bandwidth
-	appStats                   stats.RequestHandlerStats        // Provide request handler metrics
-	crossChainStats            stats.RequestHandlerStats        // Provide cross chain request handler metrics
+	router                     *p2p.Router                        // handles messages being sent to the generic networking SDK
+	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
+	codec                      codec.Manager                      // Codec used for parsing messages
+	crossChainCodec            codec.Manager                      // Codec used for parsing cross chain messages
+	appRequestHandler          message.RequestHandler             // maps request type => handler
+	crossChainRequestHandler   message.CrossChainRequestHandler   // maps cross chain request type => handler
+	gossipHandler              message.GossipHandler              // maps gossip type => handler
+	peers                      *peerTracker                       // tracking of peers & bandwidth
+	appStats                   stats.RequestHandlerStats          // Provide request handler metrics
+	crossChainStats            stats.RequestHandlerStats          // Provide cross chain request handler metrics
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
@@ -114,8 +110,9 @@ type network struct {
 	closed utils.Atomic[bool]
 }
 
-func NewNetwork(p2pNetwork *p2p.Network, appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
+func NewNetwork(router *p2p.Router, appSender common.AppSender, codec codec.Manager, crossChainCodec codec.Manager, self ids.NodeID, maxActiveAppRequests int64, maxActiveCrossChainRequests int64) Network {
 	return &network{
+		router:                     router,
 		appSender:                  appSender,
 		codec:                      codec,
 		crossChainCodec:            crossChainCodec,
@@ -123,7 +120,6 @@ func NewNetwork(p2pNetwork *p2p.Network, appSender common.AppSender, codec codec
 		outstandingRequestHandlers: make(map[uint32]message.ResponseHandler),
 		activeAppRequests:          semaphore.NewWeighted(maxActiveAppRequests),
 		activeCrossChainRequests:   semaphore.NewWeighted(maxActiveCrossChainRequests),
-		network:                    p2pNetwork,
 		gossipHandler:              message.NoopMempoolGossipHandler{},
 		appRequestHandler:          message.NoopRequestHandler{},
 		crossChainRequestHandler:   message.NoopCrossChainRequestHandler{},
@@ -330,8 +326,8 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		log.Debug("forwarding AppRequest to SDK network", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
-		return n.network.AppRequest(ctx, nodeID, requestID, deadline, request)
+		log.Debug("forwarding AppRequest to SDK router", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
+		return n.router.AppRequest(ctx, nodeID, requestID, deadline, request)
 	}
 
 	bufferedDeadline, err := calculateTimeUntilDeadline(deadline, n.appStats)
@@ -366,8 +362,8 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding AppResponse to SDK network", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
-		return n.network.AppResponse(ctx, nodeID, requestID, response)
+		log.Debug("forwarding AppResponse to SDK router", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
+		return n.router.AppResponse(ctx, nodeID, requestID, response)
 	}
 
 	// We must release the slot
@@ -387,8 +383,8 @@ func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, reque
 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
-		log.Debug("forwarding AppRequestFailed to SDK network", "nodeID", nodeID, "requestID", requestID)
-		return n.network.AppRequestFailed(ctx, nodeID, requestID)
+		log.Debug("forwarding AppRequestFailed to SDK router", "nodeID", nodeID, "requestID", requestID)
+		return n.router.AppRequestFailed(ctx, nodeID, requestID)
 	}
 
 	// We must release the slot
@@ -460,7 +456,7 @@ func (n *network) AppGossip(_ context.Context, nodeID ids.NodeID, gossipBytes []
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
-func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion *version.Application) error {
+func (n *network) Connected(_ context.Context, nodeID ids.NodeID, nodeVersion *version.Application) error {
 	log.Debug("adding new peer", "nodeID", nodeID)
 
 	n.lock.Lock()
@@ -476,11 +472,11 @@ func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion 
 	}
 
 	n.peers.Connected(nodeID, nodeVersion)
-	return n.network.Connected(ctx, nodeID, nodeVersion)
+	return nil
 }
 
 // Disconnected removes given [nodeID] from the peer list
-func (n *network) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
+func (n *network) Disconnected(_ context.Context, nodeID ids.NodeID) error {
 	log.Debug("disconnecting peer", "nodeID", nodeID)
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -490,7 +486,7 @@ func (n *network) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 	}
 
 	n.peers.Disconnected(nodeID)
-	return n.network.Disconnected(ctx, nodeID)
+	return nil
 }
 
 // Shutdown disconnects all peers
@@ -541,10 +537,6 @@ func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	defer n.lock.Unlock()
 
 	n.peers.TrackBandwidth(nodeID, bandwidth)
-}
-
-func (n *network) NewAppProtocol(protocol uint64, handler p2p.Handler, options ...p2p.ClientOption) (*p2p.Client, error) {
-	return n.network.NewAppProtocol(protocol, handler, options...)
 }
 
 // invariant: peer/network must use explicitly even request ids.
