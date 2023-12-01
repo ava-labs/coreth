@@ -649,7 +649,6 @@ func (vm *VM) Initialize(
 		}
 		log.Info("VM script completed successfully")
 	}()
-	return errors.New("intentionally stopping VM initialization")
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
