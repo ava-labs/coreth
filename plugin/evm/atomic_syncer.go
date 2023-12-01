@@ -107,6 +107,12 @@ func (s *atomicSyncer) onLeafs(keys [][]byte, values [][]byte) error {
 					return err
 				}
 			}
+			// Trie should be re-opened after committing.
+			trie, err := s.atomicTrie.OpenTrie(root)
+			if err != nil {
+				return err
+			}
+			s.trie = trie
 			s.lastHeight = height
 		}
 
