@@ -109,5 +109,9 @@ func (a *atomicTrie) doRepairHeightMap(vdb *versiondb.Database, from, to uint64)
 	}
 
 	// mark height map as repaired
-	return database.PutUInt64(a.metadataDB, heightMapRepairKey, repairDone)
+	err = database.PutUInt64(a.metadataDB, heightMapRepairKey, repairDone)
+	if err != nil {
+		return err
+	}
+	return vdb.Commit()
 }
