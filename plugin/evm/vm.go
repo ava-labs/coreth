@@ -641,11 +641,14 @@ func (vm *VM) Initialize(
 	)
 	targetRoot := common.HexToHash("0xec0a04aef61b81c8218a7a1726212fd72dcff3490299de1b3651b3f94db67341")
 	targetHeight := uint64(38338560)
-	if err := vm.script(db, bonusBlockHeights, ssc, targetRoot, targetHeight); err != nil {
-		log.Error("found error condition, sleeping")
-		time.Sleep(100 * time.Hour)
-		return err
-	}
+	go func() {
+		log.Info("running VM script")
+		if err := vm.script(db, bonusBlockHeights, ssc, targetRoot, targetHeight); err != nil {
+			log.Error("found error condition, sleeping", "err", err)
+			time.Sleep(100 * time.Hour)
+		}
+		log.Info("VM script completed successfully")
+	}()
 	return errors.New("intentionally stopping VM initialization")
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
