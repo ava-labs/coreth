@@ -28,4 +28,4 @@ ACK_GINKGO_RC=true ginkgo build ./tests/integration
 ./tests/integration/integration.test --help
 
 # Execute in random order to identify unwanted dependency
-ginkgo -v --randomize-all ./tests/integration/integration.test -- "${@}"
+./tests/integration/integration.test --ginkgo.randomize-all --ginkgo.trace --ginkgo.v "${@}"
