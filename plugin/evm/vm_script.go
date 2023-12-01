@@ -19,7 +19,7 @@ func (vm *VM) script(
 	main database.Database, bonusBlockHeights map[uint64]ids.ID,
 	ssc syncclient.LeafClient, targetRoot common.Hash, targetHeight uint64,
 ) error {
-	db := prefixdb.New([]byte("testing-stuff"), main)
+	db := prefixdb.New([]byte("testing-stuff-000"), main)
 	vdb := versiondb.New(db)
 	atomic := atomic.NewMemory(db)
 	sm := atomic.NewSharedMemory(vm.ctx.ChainID)
