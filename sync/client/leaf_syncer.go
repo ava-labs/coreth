@@ -161,6 +161,7 @@ func (c *CallbackLeafSyncer) Start(ctx context.Context, numThreads int, onFailur
 	go func() {
 		err := eg.Wait()
 		if err != nil {
+			log.Error("error syncing trie", "err", err)
 			if err := onFailure(err); err != nil {
 				log.Error("error handling onFailure callback", "err", err)
 			}

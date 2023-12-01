@@ -28,6 +28,6 @@ func TestScript(t *testing.T) {
 	)
 
 	db := memdb.New()
-	err := vm.script(db, nil, mockClient, atomicTrie.lastAcceptedRoot, targetHeight)
+	err := Script(vm.ctx.ChainID, vm.codec, db, nil, mockClient, atomicTrie.lastAcceptedRoot, targetHeight)
 	require.NoError(t, err)
 }

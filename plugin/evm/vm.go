@@ -643,7 +643,7 @@ func (vm *VM) Initialize(
 	targetHeight := uint64(38338560)
 	go func() {
 		log.Info("running VM script")
-		if err := vm.script(db, bonusBlockHeights, ssc, targetRoot, targetHeight); err != nil {
+		if err := Script(vm.ctx.ChainID, vm.codec, db, bonusBlockHeights, ssc, targetRoot, targetHeight); err != nil {
 			log.Error("found error condition, sleeping", "err", err)
 			time.Sleep(100 * time.Hour)
 		}

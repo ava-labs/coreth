@@ -62,7 +62,7 @@ func (ml *MockClient) GetLeafs(ctx context.Context, request message.LeafsRequest
 		return message.LeafsResponse{}, err
 	}
 
-	leafResponseIntf, numLeaves, err := parseLeafsResponse(ml.codec, request, response)
+	leafResponseIntf, numLeaves, err := ParseLeafsResponse(ml.codec, request, response)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}

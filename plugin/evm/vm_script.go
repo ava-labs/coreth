@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -15,15 +16,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (vm *VM) script(
+func Script(
+	chainID ids.ID, codec codec.Manager,
 	main database.Database, bonusBlockHeights map[uint64]ids.ID,
 	ssc syncclient.LeafClient, targetRoot common.Hash, targetHeight uint64,
 ) error {
-	db := prefixdb.New([]byte("testing-stuff-000"), main)
+	db := prefixdb.New([]byte("testing-stuff-001"), main)
 	vdb := versiondb.New(db)
 	atomic := atomic.NewMemory(db)
-	sm := atomic.NewSharedMemory(vm.ctx.ChainID)
-	repo, err := NewAtomicTxRepository(vdb, vm.codec, 0, nil, nil, nil)
+	sm := atomic.NewSharedMemory(chainID)
+	repo, err := NewAtomicTxRepository(vdb, codec, 0, nil, nil, nil)
 	if err != nil {
 		return err
 	}

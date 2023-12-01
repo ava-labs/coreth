@@ -768,7 +768,7 @@ func TestGetLeafs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			responseBytes := test.getResponse(t, test.request)
 
-			response, _, err := parseLeafsResponse(client.codec, test.request, responseBytes)
+			response, _, err := ParseLeafsResponse(client.codec, test.request, responseBytes)
 			if test.expectedErr != nil {
 				if err == nil {
 					t.Fatalf("Expected error: %s, but found no error", test.expectedErr)

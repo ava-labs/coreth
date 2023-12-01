@@ -112,7 +112,7 @@ func NewClient(config *ClientConfig) *client {
 // - response keys do not correspond to the requested range.
 // - response does not contain a valid merkle proof.
 func (c *client) GetLeafs(ctx context.Context, req message.LeafsRequest) (message.LeafsResponse, error) {
-	data, err := c.get(ctx, req, parseLeafsResponse)
+	data, err := c.get(ctx, req, ParseLeafsResponse)
 	if err != nil {
 		return message.LeafsResponse{}, err
 	}
@@ -120,7 +120,7 @@ func (c *client) GetLeafs(ctx context.Context, req message.LeafsRequest) (messag
 	return data.(message.LeafsResponse), nil
 }
 
-// parseLeafsResponse validates given object as message.LeafsResponse
+// ParseLeafsResponse validates given object as message.LeafsResponse
 // assumes reqIntf is of type message.LeafsRequest
 // returns a non-nil error if the request should be retried
 // returns error when:
@@ -129,7 +129,7 @@ func (c *client) GetLeafs(ctx context.Context, req message.LeafsRequest) (messag
 // - first and last key in the response is not within the requested start and end range
 // - response keys are not in increasing order
 // - proof validation failed
-func parseLeafsResponse(codec codec.Manager, reqIntf message.Request, data []byte) (interface{}, int, error) {
+func ParseLeafsResponse(codec codec.Manager, reqIntf message.Request, data []byte) (interface{}, int, error) {
 	var leafsResponse message.LeafsResponse
 	if _, err := codec.Unmarshal(data, &leafsResponse); err != nil {
 		return nil, 0, err

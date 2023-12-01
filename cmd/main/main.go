@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/leveldb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/message"
 	"github.com/ava-labs/avalanchego/network/peer"
@@ -18,8 +19,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/ips"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/coreth/plugin/evm"
 	evmMessage "github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/pflag"
@@ -33,52 +35,13 @@ func main() {
 	fmt.Printf("termianted successfully\n")
 }
 
-type leafSyncTask struct {
-	root       common.Hash
-	start, end []byte
-	onLeafs    func(keys, vals [][]byte) error
-	onFinish   func() error
-}
-
-func (t *leafSyncTask) Root() common.Hash {
-	return t.root
-}
-
-func (t *leafSyncTask) Account() common.Hash {
-	return common.Hash{}
-}
-
-func (t *leafSyncTask) Start() []byte {
-	return t.start
-}
-
-func (t *leafSyncTask) End() []byte {
-	return t.end
-}
-
-func (t *leafSyncTask) NodeType() evmMessage.NodeType {
-	return evmMessage.AtomicTrieNode
-}
-
-func (t *leafSyncTask) OnStart() (bool, error) {
-	return false, nil
-}
-
-func (t *leafSyncTask) OnLeafs(keys, vals [][]byte) error {
-	return t.onLeafs(keys, vals)
-}
-
-func (t *leafSyncTask) OnFinish(ctx context.Context) error {
-	return t.onFinish()
-}
-
 type leafClient struct {
-	p              peer.Peer
-	creator        message.Creator
-	chainID        ids.ID
-	requestID      uint32
-	deadline       time.Duration
-	leafsResponses <-chan evmMessage.LeafsResponse
+	p         peer.Peer
+	creator   message.Creator
+	chainID   ids.ID
+	requestID uint32
+	deadline  time.Duration
+	responses <-chan *p2p.AppResponse
 }
 
 func newLeafClient(
@@ -87,14 +50,14 @@ func newLeafClient(
 	networkID uint32,
 	chainID ids.ID,
 ) (*leafClient, error) {
-	leafsResponses := make(chan evmMessage.LeafsResponse, 1000) // This is not correct, but it should work for now
+	responses := make(chan *p2p.AppResponse, 1000) // This is not correct, but it should work for now
 	fmt.Printf("starting test peer...\n")
 	p, err := peer.StartTestPeer(
 		ctx,
 		peerIP,
 		networkID,
 		router.InboundHandlerFunc(func(_ context.Context, msg message.InboundMessage) {
-			fmt.Printf("received msg \n%s\n", msg)
+			// fmt.Printf("received msg \n%s\n", msg)
 			if message.AppResponseOp != msg.Op() {
 				fmt.Printf("dropping op %s\n", msg.Op())
 				return
@@ -111,14 +74,8 @@ func newLeafClient(
 				return
 			}
 
-			var leafsResponse evmMessage.LeafsResponse
-			if _, err := evmMessage.Codec.Unmarshal(res.AppBytes, &leafsResponse); err != nil {
-				fmt.Printf("dropping \n%s\n with error %s\n", msg, err)
-				return
-			}
-
-			fmt.Printf("adding leafs response to queue from msg \n%s\n", msg)
-			leafsResponses <- leafsResponse
+			fmt.Printf("adding response to queue")
+			responses <- res
 		}),
 	)
 	if err != nil {
@@ -132,11 +89,11 @@ func newLeafClient(
 	}
 
 	return &leafClient{
-		p:              p,
-		creator:        creator,
-		chainID:        chainID,
-		deadline:       3 * time.Second,
-		leafsResponses: leafsResponses,
+		p:         p,
+		creator:   creator,
+		chainID:   chainID,
+		deadline:  3 * time.Second,
+		responses: responses,
 	}, nil
 }
 
@@ -157,12 +114,34 @@ func (l *leafClient) GetLeafs(ctx context.Context, request evmMessage.LeafsReque
 
 	fmt.Printf("waiting for response...\n")
 	select {
-	case res := <-l.leafsResponses:
+	case res := <-l.responses:
 		fmt.Printf("received response\n")
-		return res, nil
+
+		respIntf, numKeys, err := statesyncclient.ParseLeafsResponse(
+			evm.Codec, request, res.AppBytes,
+		)
+
+		if err != nil {
+			fmt.Printf("dropping \n%s\n with error %s\n", msg, err)
+			return evmMessage.LeafsResponse{}, err
+		}
+		leafsResponse := respIntf.(evmMessage.LeafsResponse)
+		fmt.Printf("received leafs response %d\n", numKeys)
+		return leafsResponse, nil
+
 	case <-time.After(l.deadline + 2*time.Second):
+		fmt.Printf("deadline\n")
 		return evmMessage.LeafsResponse{}, fmt.Errorf("request %s timed out after %s", request, l.deadline+2*time.Second)
 	}
+}
+
+func newDB() database.Database {
+	folder := os.TempDir()
+	db, err := leveldb.New(folder, nil, logging.NoLog{}, "", prometheus.NewRegistry())
+	if err != nil {
+		panic(err)
+	}
+	return db
 }
 
 func run() error {
@@ -192,32 +171,38 @@ func run() error {
 		return err
 	}
 
-	var (
-		tasks = make(chan syncclient.LeafSyncTask, 1)
-		start = make([]byte, 40)
-		end   = make([]byte, 40)
-	)
+	// var (
+	// 	tasks = make(chan syncclient.LeafSyncTask, 1)
+	// 	start = make([]byte, 40)
+	// 	end   = make([]byte, 40)
+	// )
 
-	fmt.Printf("creating leaf sync task...\n")
-	binary.BigEndian.PutUint64(start[0:8], v.GetUint64(StartKey))
-	binary.BigEndian.PutUint64(end[0:8], v.GetUint64(EndKey))
-	root := common.HexToHash(v.GetString(RootKey))
-	tasks <- &leafSyncTask{
-		root:  root,
-		start: start,
-		end:   end,
-		onLeafs: func(keys, vals [][]byte) error {
-			// TODO: log keys/vals in human readable format
-			return nil
-		},
-		onFinish: func() error {
-			return errors.New("trigger panic")
-		},
-	}
-	syncer := syncclient.NewCallbackLeafSyncer(leafClient, tasks, 1024)
-	syncer.Start(ctx, 1, func(err error) error {
-		return err
-	})
+	targetRoot := common.HexToHash("0xec0a04aef61b81c8218a7a1726212fd72dcff3490299de1b3651b3f94db67341")
+	targetHeight := uint64(38338560)
+	db := newDB()
+	err = evm.Script(cChainID, evm.Codec, db, nil, leafClient, targetRoot, targetHeight)
+	return err
 
-	return <-syncer.Done()
+	// fmt.Printf("creating leaf sync task...\n")
+	// binary.BigEndian.PutUint64(start[0:8], v.GetUint64(StartKey))
+	// binary.BigEndian.PutUint64(end[0:8], v.GetUint64(EndKey))
+	// root := common.HexToHash(v.GetString(RootKey))
+	// tasks <- &leafSyncTask{
+	// 	root:  root,
+	// 	start: start,
+	// 	end:   end,
+	// 	onLeafs: func(keys, vals [][]byte) error {
+	// 		// TODO: log keys/vals in human readable format
+	// 		return nil
+	// 	},
+	// 	onFinish: func() error {
+	// 		return errors.New("trigger panic")
+	// 	},
+	// }
+	// syncer := syncclient.NewCallbackLeafSyncer(leafClient, tasks, 1024)
+	// syncer.Start(ctx, 1, func(err error) error {
+	// 	return err
+	// })
+
+	// return <-syncer.Done()
 }
