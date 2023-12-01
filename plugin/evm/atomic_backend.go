@@ -398,7 +398,7 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 		return common.Hash{}, err
 	}
 
-	// Update the atomic trie with the atomic operations
+	// Insert the operations into the atomic trie
 	//
 	// Note: The atomic trie canonically contains the duplicate operations from
 	// any bonus blocks.
