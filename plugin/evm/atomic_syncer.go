@@ -107,7 +107,7 @@ func (s *atomicSyncer) onLeafs(keys [][]byte, values [][]byte) error {
 					return err
 				}
 			}
-			// Trie should be re-opened after committing.
+			// Trie must be re-opened after committing (not safe for re-use after commit)
 			trie, err := s.atomicTrie.OpenTrie(root)
 			if err != nil {
 				return err
