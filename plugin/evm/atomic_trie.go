@@ -185,7 +185,7 @@ func lastCommittedRootIfExists(db database.Database) (common.Hash, uint64, error
 
 	height, err := database.ParseUInt64(lastCommittedHeightBytes)
 	if err != nil {
-		return common.Hash{}, 0, fmt.Errorf("expected value length of lastCommittedKey to be %d but was %d: %w", wrappers.LongLen, len(lastCommittedHeightBytes), err)
+		return common.Hash{}, 0, fmt.Errorf("expected value at lastCommittedKey to be a valid uint64: %w", err)
 	}
 
 	hash, err := db.Get(lastCommittedHeightBytes)
