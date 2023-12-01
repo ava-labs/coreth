@@ -112,3 +112,11 @@ func (a *atomicTrieIterator) AtomicOps() *atomic.Requests {
 func (a *atomicTrieIterator) Key() []byte {
 	return a.key
 }
+
+// Value returns the current database value that the iterator is iterating
+func (a *atomicTrieIterator) Value() []byte {
+	if a.trieIterator == nil {
+		return nil
+	}
+	return a.trieIterator.Value
+}

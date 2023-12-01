@@ -36,6 +36,7 @@ var (
 	_                            AtomicTrie = &atomicTrie{}
 	lastCommittedKey                        = []byte("atomicTrieLastCommittedBlock")
 	appliedSharedMemoryCursorKey            = []byte("atomicTrieLastAppliedToSharedMemory")
+	heightMapRepairKey                      = []byte("atomicTrieHeightMapRepair")
 )
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
@@ -93,6 +94,9 @@ type AtomicTrieIterator interface {
 	// Key returns the current database key that the iterator is iterating
 	// returned []byte can be freely modified
 	Key() []byte
+
+	// Value returns the current database value that the iterator is iterating
+	Value() []byte
 
 	// BlockNumber returns the current block number
 	BlockNumber() uint64
