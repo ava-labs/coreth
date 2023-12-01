@@ -16,7 +16,7 @@ fi
 export AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
 
 # Only build avalanchego if using the network fixture
-if [[ "${@}" =~ "--use-network-fixture" ]]; then
+if [[ "$@" =~ "--use-network-fixture" ]]; then
   ./scripts/build_avalanchego.sh
   export AVALANCHEGO_PATH="$(realpath ${AVALANCHEGO_PATH:-${AVALANCHEGO_CLONE_PATH}/build/avalanchego})"
 fi
@@ -28,4 +28,4 @@ ACK_GINKGO_RC=true ginkgo build ./tests/integration
 ./tests/integration/integration.test --help
 
 # Execute in random order to identify unwanted dependency
-./tests/integration/integration.test --ginkgo.randomize-all --ginkgo.trace --ginkgo.v "${@}"
+./tests/integration/integration.test --ginkgo.randomize-all --ginkgo.trace --ginkgo.v "$@"
