@@ -170,10 +170,12 @@ func run() error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	// TODO: specify flags for IP_PORT, start, end, root
 	ipPortStr, ok := os.LookupEnv("IP_PORT")
 	if !ok {
 		return errors.New("must specify IP_PORT env var with valid ip port pair")
 	}
+
 	peerIP, err := ips.ToIPPort(ipPortStr)
 	if err != nil {
 		return err
@@ -203,6 +205,7 @@ func run() error {
 		start: start,
 		end:   end,
 		onLeafs: func(keys, vals [][]byte) error {
+			// TODO: log keys/vals in human readable format
 			return nil
 		},
 		onFinish: func() error {
