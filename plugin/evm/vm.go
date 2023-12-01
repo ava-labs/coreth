@@ -1050,6 +1050,8 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 		if err := vm.StateSyncClient.Error(); err != nil {
 			return err
 		}
+		log.Warn("delaying bootstrapping")
+		time.Sleep(100 * time.Hour)
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
 		// Initialize goroutines related to block building once we enter normal operation as there is no need to handle mempool gossip before this point.
