@@ -108,6 +108,11 @@ func (s *atomicSyncer) onLeafs(keys [][]byte, values [][]byte) error {
 				}
 			}
 			s.lastHeight = height
+			tr, err := s.atomicTrie.OpenTrie(root)
+			if err != nil {
+				return err
+			}
+			s.trie = tr
 		}
 
 		if err := s.trie.Update(key, values[i]); err != nil {
