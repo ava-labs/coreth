@@ -177,8 +177,8 @@ func run() error {
 	// 	end   = make([]byte, 40)
 	// )
 
-	targetRoot := common.HexToHash("0xec0a04aef61b81c8218a7a1726212fd72dcff3490299de1b3651b3f94db67341")
-	targetHeight := uint64(38338560)
+	targetRoot := common.HexToHash(v.GetString(RootKey))
+	targetHeight := v.GetUint64(HeightKey)
 	db := newDB()
 	err = evm.Script(cChainID, evm.Codec, db, nil, leafClient, targetRoot, targetHeight)
 	return err
