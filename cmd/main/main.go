@@ -22,6 +22,7 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -165,18 +166,17 @@ func (l *leafClient) GetLeafs(ctx context.Context, request evmMessage.LeafsReque
 }
 
 func run() error {
-	// committed atomic trie root=0xec0a04aef61b81c8218a7a1726212fd72dcff3490299de1b3651b3f94db67341 height=38,338,560
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// TODO: specify flags for IP_PORT, start, end, root
-	ipPortStr, ok := os.LookupEnv("IP_PORT")
-	if !ok {
-		return errors.New("must specify IP_PORT env var with valid ip port pair")
+	fs := BuildFlagSet()
+	v, err := BuildViper(fs, os.Args[1:])
+	if errors.Is(err, pflag.ErrHelp) {
+		os.Exit(0)
 	}
 
-	peerIP, err := ips.ToIPPort(ipPortStr)
+	peerIP, err := ips.ToIPPort(v.GetString(IPPortKey))
 	if err != nil {
 		return err
 	}
@@ -194,14 +194,16 @@ func run() error {
 
 	var (
 		tasks = make(chan syncclient.LeafSyncTask, 1)
-		start []byte
+		start = make([]byte, 40)
 		end   = make([]byte, 40)
 	)
 
 	fmt.Printf("creating leaf sync task...\n")
-	binary.BigEndian.PutUint64(end[0:8], 100)
+	binary.BigEndian.PutUint64(start[0:8], v.GetUint64(StartKey))
+	binary.BigEndian.PutUint64(end[0:8], v.GetUint64(EndKey))
+	root := common.HexToHash(v.GetString(RootKey))
 	tasks <- &leafSyncTask{
-		root:  common.HexToHash("0x048821c4aea120d3151b42175752bf8a4dfb92f654779bb65e845cf63d4d71c8"),
+		root:  root,
 		start: start,
 		end:   end,
 		onLeafs: func(keys, vals [][]byte) error {
