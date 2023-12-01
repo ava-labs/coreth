@@ -262,6 +262,15 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 			break
 		}
 
+		// If [height] is a bonus block, do not apply the atomic operations to shared memory
+		if _, found := a.bonusBlocks[height]; found {
+			log.Info(
+				"skipping bonus block in applying atomic ops from atomic trie to shared memory",
+				"height", height,
+			)
+			continue
+		}
+
 		putRequests += len(atomicOps.PutRequests)
 		removeRequests += len(atomicOps.RemoveRequests)
 		totalPutRequests += len(atomicOps.PutRequests)
