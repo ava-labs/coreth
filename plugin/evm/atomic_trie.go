@@ -27,7 +27,7 @@ import (
 const (
 	progressLogFrequency       = 30 * time.Second
 	atomicKeyLength            = wrappers.LongLen + common.HashLength
-	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
+	sharedMemoryApplyBatchSize = 0 // specifies the number of atomic operations to batch progress updates
 
 	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
 	atomicTrieMemoryCap     = 64 * units.MiB
