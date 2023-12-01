@@ -6,6 +6,7 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -216,6 +217,22 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 	return nil
 }
 
+func toStr(reqs *atomic.Requests) string {
+	sb := strings.Builder{}
+	sb.WriteString("removes: ")
+	for _, remove := range reqs.RemoveRequests {
+		sb.WriteString(common.Bytes2Hex(remove))
+		sb.WriteString(", ")
+	}
+
+	sb.WriteString("puts: ")
+	for _, put := range reqs.PutRequests {
+		sb.WriteString(common.Bytes2Hex(put.Key))
+		sb.WriteString(", ")
+	}
+	return sb.String()
+}
+
 // ApplyToSharedMemory applies the atomic operations that have been indexed into the trie
 // but not yet applied to shared memory for heights less than or equal to [lastAcceptedBlock].
 // This executes operations in the range [cursorHeight+1, lastAcceptedBlock].
@@ -294,8 +311,9 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 				for blockChainID, reqs := range batchOps {
 					log.Error(
 						"failed to apply atomic operation to shared memory",
-						"blockchainID", blockChainID, "requests", reqs, "key",
-						keyStr, "height", height,
+						"blockchainID", blockChainID,
+						"requests", toStr(reqs),
+						"key", keyStr, "height", height,
 					)
 				}
 				return fmt.Errorf("%w: at key %s", err, keyStr)
@@ -321,7 +339,14 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 		return err
 	}
 	if err = a.sharedMemory.Apply(batchOps, batch); err != nil {
-		return err
+		for blockChainID, reqs := range batchOps {
+			log.Error(
+				"failed to apply atomic operation to shared memory at end",
+				"blockchainID", blockChainID,
+				"requests", toStr(reqs),
+			)
+		}
+		return fmt.Errorf("%w: at end", err)
 	}
 	log.Info("finished applying atomic operations", "puts", totalPutRequests, "removes", totalRemoveRequests)
 	return nil

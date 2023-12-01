@@ -34,7 +34,7 @@ func (vm *VM) script(
 	}
 	syncer, err := testBackend.Syncer(ssc, targetRoot, targetHeight, defaultStateSyncRequestSize)
 	if err != nil {
-		return nil
+		return err
 	}
 	if err := syncer.Start(context.Background()); err != nil {
 		return err
