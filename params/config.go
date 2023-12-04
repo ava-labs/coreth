@@ -130,7 +130,7 @@ var (
 		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
 		BanffBlockTimestamp:             utils.NewUint64(0),
 		CortinaBlockTimestamp:           utils.NewUint64(0),
-		DUpgradeBlockTimestamp:          utils.NewUint64(5),
+		DUpgradeBlockTimestamp:          utils.NewUint64(0),
 	}
 
 	TestChainConfig = &ChainConfig{
