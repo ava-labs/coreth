@@ -109,7 +109,7 @@ func NewAtomicBackendWithBonusBlockRepair(
 		return nil, err
 	}
 	if len(bonusBlocksRlp) > 0 {
-		if err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksRlp); err != nil {
+		if _, err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksRlp); err != nil {
 			return nil, err
 		}
 		if err := db.Commit(); err != nil {

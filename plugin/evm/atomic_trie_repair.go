@@ -24,21 +24,23 @@ var (
 // can have a canonical atomic trie.
 // Initially, bonus blocks were not indexed into the atomic trie. However, a
 // regression caused some nodes to index these blocks.
-func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBlocks map[uint64]string) error {
+// Returns the number of heights repaired.
+func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBlocks map[uint64]string) (int, error) {
 	done, err := a.metadataDB.Has(repairedKey)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if done {
-		return nil
+		return 0, nil
 	}
 
 	root, lastCommitted := a.LastCommitted()
 	tr, err := a.OpenTrie(root)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
+	heightsRepaired := 0
 	puts, removes := 0, 0
 	for height, block := range bonusBlocks {
 		if height > lastCommitted {
@@ -48,11 +50,11 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 
 		blockID, ok := bonusBlockIDs[height]
 		if !ok {
-			return fmt.Errorf("missing block ID for height %d", height)
+			return 0, fmt.Errorf("missing block ID for height %d", height)
 		}
 		txs, err := extractAtomicTxsFromRlp(block, a.codec, blockID)
 		if err != nil {
-			return fmt.Errorf("failed to extract atomic txs from bonus block at height %d: %w", height, err)
+			return 0, fmt.Errorf("failed to extract atomic txs from bonus block at height %d: %w", height, err)
 		}
 		log.Info("repairing atomic trie", "height", height, "block", blockID, "txs", len(txs))
 		if len(txs) == 0 {
@@ -60,33 +62,33 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 		}
 		combinedOps, err := mergeAtomicOps(txs)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if err := a.UpdateTrie(tr, height, combinedOps); err != nil {
-			return err
+			return 0, err
 		}
 		for _, op := range combinedOps {
 			puts += len(op.PutRequests)
 			removes += len(op.RemoveRequests)
 		}
-		a.heightsRepaired++
+		heightsRepaired++
 	}
 	newRoot, nodes := tr.Commit(false)
 	if err := a.trieDB.Update(newRoot, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
-		return err
+		return 0, err
 	}
 	if err := a.commit(lastCommitted, newRoot); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := a.metadataDB.Put(repairedKey, []byte{1}); err != nil {
-		return err
+		return 0, err
 	}
 	log.Info(
 		"repaired atomic trie", "originalRoot", root, "newRoot", newRoot,
-		"heightsRepaired", a.heightsRepaired, "puts", puts, "removes", removes,
+		"heightsRepaired", heightsRepaired, "puts", puts, "removes", removes,
 	)
-	return nil
+	return heightsRepaired, nil
 }
 
 func extractAtomicTxsFromRlp(rlpHex string, codec codec.Manager, expectedHash ids.ID) ([]*Tx, error) {

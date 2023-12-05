@@ -64,7 +64,6 @@ func TestAtomicTrieRepair(t *testing.T) {
 		}
 		expected[height] = requests
 	}
-	require.Equal(len(expected), a.heightsRepaired)
 
 	// check that the trie is now repaired
 	db.Abort()
@@ -74,9 +73,9 @@ func TestAtomicTrieRepair(t *testing.T) {
 	)
 	require.NoError(err)
 	a = atomicBackend.AtomicTrie().(*atomicTrie)
-	err = a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksRlp)
+	heightsRepaired, err := a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksRlp)
 	require.NoError(err)
-	require.Zero(a.heightsRepaired) // migration should not run a second time
+	require.Zero(heightsRepaired) // migration should not run a second time
 
 	// iterate over the trie and check it contains the expected items
 	root, err := a.Root(commitHeight)
