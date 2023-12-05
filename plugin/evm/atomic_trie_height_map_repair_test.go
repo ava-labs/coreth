@@ -63,7 +63,7 @@ func TestAtomicTrieRepairHeightMap(t *testing.T) {
 
 	// repair the height map
 	testIterationDelay := time.Duration(0) // no need to wait between iterations in tests
-	repaired, err := atomicTrie.repairHeightMap(lastAccepted, testIterationDelay)
+	repaired, err := atomicTrie.RepairHeightMap(lastAccepted, testIterationDelay)
 	require.NoError(err)
 	verifyRoots(false)
 	require.True(repaired)
@@ -79,13 +79,13 @@ func TestAtomicTrieRepairHeightMap(t *testing.T) {
 	require.NoError(err)
 
 	// repair the height map
-	repaired, err = atomicTrie.repairHeightMap(lastAccepted, testIterationDelay)
+	repaired, err = atomicTrie.RepairHeightMap(lastAccepted, testIterationDelay)
 	require.NoError(err)
 	verifyRoots(false)
 	require.True(repaired)
 
 	// try to repair the height map again
-	repaired, err = atomicTrie.repairHeightMap(lastAccepted, testIterationDelay)
+	repaired, err = atomicTrie.RepairHeightMap(lastAccepted, testIterationDelay)
 	require.NoError(err)
 	require.False(repaired)
 }
