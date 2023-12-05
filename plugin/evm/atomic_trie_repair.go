@@ -20,7 +20,10 @@ var (
 )
 
 // TODO: Remove this after the DUpgrade
-// repairAtomicTrie applies the bonus blocks to the atomic trie
+// repairAtomicTrie applies the bonus blocks to the atomic trie so all nodes
+// can have a canonical atomic trie.
+// Initially, bonus blocks were not indexed into the atomic trie. However, a
+// regression caused some nodes to index these blocks.
 func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBlocks map[uint64]string) error {
 	done, err := a.metadataDB.Has(repairedKey)
 	if err != nil {
