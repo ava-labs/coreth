@@ -64,6 +64,10 @@ type AtomicBackend interface {
 
 	// IsBonus returns true if the block for atomicState is a bonus block
 	IsBonus(blockHeight uint64, blockHash common.Hash) bool
+
+	// Repair applies the bonus blocks to the atomic trie so all nodes
+	// can have a canonical atomic trie.
+	Repair(bonusBlocksRlp map[uint64]string) error
 }
 
 // atomicBackend implements the AtomicBackend interface using
@@ -75,8 +79,9 @@ type atomicBackend struct {
 	metadataDB   database.Database   // Underlying database containing the atomic trie metadata
 	sharedMemory atomic.SharedMemory
 
-	repo       AtomicTxRepository
-	atomicTrie AtomicTrie
+	repo        AtomicTxRepository
+	atomicTrie  *atomicTrie
+	stateSynced bool
 
 	lastAcceptedHash common.Hash
 	verifiedRoots    map[common.Hash]AtomicState
@@ -88,18 +93,6 @@ func NewAtomicBackend(
 	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (AtomicBackend, error) {
-	return NewAtomicBackendWithBonusBlockRepair(
-		db, sharedMemory, bonusBlocks, nil, repo,
-		lastAcceptedHeight, lastAcceptedHash, commitInterval,
-	)
-}
-
-func NewAtomicBackendWithBonusBlockRepair(
-	db *versiondb.Database, sharedMemory atomic.SharedMemory,
-	bonusBlocks map[uint64]ids.ID, bonusBlocksRlp map[uint64]string,
-	repo AtomicTxRepository,
-	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
-) (AtomicBackend, error) {
 	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
 	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
 	codec := repo.Codec()
@@ -107,14 +100,6 @@ func NewAtomicBackendWithBonusBlockRepair(
 	atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, codec, lastAcceptedHeight, commitInterval)
 	if err != nil {
 		return nil, err
-	}
-	if len(bonusBlocksRlp) > 0 {
-		if _, err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksRlp); err != nil {
-			return nil, err
-		}
-		if err := db.Commit(); err != nil {
-			return nil, err
-		}
 	}
 	atomicBackend := &atomicBackend{
 		codec:            codec,
@@ -403,6 +388,7 @@ func (a *atomicBackend) getAtomicRootAt(blockHash common.Hash) (common.Hash, err
 // SetLastAccepted is used after state-sync to update the last accepted block hash.
 func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 	a.lastAcceptedHash = lastAcceptedHash
+	a.stateSynced = true
 }
 
 // InsertTxs calculates the root of the atomic trie that would

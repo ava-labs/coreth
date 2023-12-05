@@ -34,11 +34,12 @@ func TestAtomicTrieRepair(t *testing.T) {
 	require.NoError(db.Commit())
 
 	// recreate the trie with the repair constructor
-	atomicBackend, err = NewAtomicBackendWithBonusBlockRepair(
-		db, testSharedMemory(), bonusBlockMainnetHeights, mainnetBonusBlocksRlp,
+	atomicBackend, err = NewAtomicBackend(
+		db, testSharedMemory(), bonusBlockMainnetHeights,
 		repo, commitHeight, common.Hash{}, commitInterval,
 	)
 	require.NoError(err)
+	atomicBackend.Repair(mainnetBonusBlocksRlp)
 	a = atomicBackend.AtomicTrie().(*atomicTrie)
 
 	// create a map to track the expected items in the atomic trie.
@@ -67,8 +68,8 @@ func TestAtomicTrieRepair(t *testing.T) {
 
 	// check that the trie is now repaired
 	db.Abort()
-	atomicBackend, err = NewAtomicBackendWithBonusBlockRepair(
-		db, testSharedMemory(), bonusBlockMainnetHeights, mainnetBonusBlocksRlp,
+	atomicBackend, err = NewAtomicBackend(
+		db, testSharedMemory(), bonusBlockMainnetHeights,
 		repo, commitHeight, common.Hash{}, commitInterval,
 	)
 	require.NoError(err)

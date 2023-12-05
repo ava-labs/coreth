@@ -101,3 +101,22 @@ func extractAtomicTxsFromRlp(rlpHex string, codec codec.Manager, expectedHash id
 	}
 	return ExtractAtomicTxs(ethBlock.ExtData(), false, codec)
 }
+
+func (a *atomicBackend) Repair(bonusBlocksRlp map[uint64]string) error {
+	if len(bonusBlocksRlp) > 0 {
+		if a.stateSynced {
+			// If the node is state synced, then the atomic trie may be incorrect
+			// so let's insert the bonus blocks into the atomic trie.
+			if err := a.atomicTrie.metadataDB.Delete(repairedKey); err != nil {
+				return err
+			}
+		}
+		if _, err := a.atomicTrie.repairAtomicTrie(a.bonusBlocks, bonusBlocksRlp); err != nil {
+			return err
+		}
+		if err := a.db.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
