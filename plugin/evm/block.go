@@ -6,6 +6,8 @@ package evm
 import (
 	"bytes"
 	"context"
+	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -37,6 +39,17 @@ var (
 		103546, 103571, 103572, 103619,
 		103287, 103624, 103591,
 	}
+
+	//go:embed bonus_blocks.json
+	mainnetBonusBlocksJson []byte
+
+	// mainnetBonusBlocksRlp is a map of bonus block numbers to their RLP-encoded
+	// block data. These blocks are hardcoded so nodes that do not have these blocks
+	// can add their atomic operations to the atomic trie so all nodes on have a
+	// canonical atomic trie.
+	// Initially, bonus blocks were not indexed into the atomic trie. However, a
+	// regression caused some nodes to index these blocks.
+	mainnetBonusBlocksRlp map[uint64]string
 
 	errMissingUTXOs = errors.New("missing UTXOs")
 )
@@ -108,6 +121,19 @@ func init() {
 			panic(err)
 		}
 		bonusBlockMainnetHeights[height] = blkID
+	}
+
+	err := json.Unmarshal(mainnetBonusBlocksJson, &mainnetBonusBlocksRlp)
+	if err != nil {
+		panic(err)
+	}
+	for height := range mainnetBonusBlocksRlp {
+		if _, ok := bonusBlockMainnetHeights[height]; !ok {
+			panic(fmt.Sprintf("missing bonus block at height %d", height))
+		}
+	}
+	if len(mainnetBonusBlocksRlp) != len(bonusBlockMainnetHeights) {
+		panic("mismatched bonus block heights")
 	}
 }
 
