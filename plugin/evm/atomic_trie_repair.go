@@ -50,6 +50,8 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 
 		blockID, ok := bonusBlockIDs[height]
 		if !ok {
+			// Should not happen since we enforce the keys of bonusBlockIDs
+			// to be the same as the keys of bonusBlocks on init.
 			return 0, fmt.Errorf("missing block ID for height %d", height)
 		}
 		txs, err := extractAtomicTxsFromRlp(block, a.codec, blockID)
