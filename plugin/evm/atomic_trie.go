@@ -121,7 +121,7 @@ type atomicTrie struct {
 	tipBuffer           *core.BoundedBuffer[common.Hash]
 
 	// TODO: Remove this after DUpgrade
-	// heightsRepaired is the number of heights repaired during the last call to repairAtomicTrie
+	// heightsRepaired is the number of heights repaired by calling [repairAtomicTrie]
 	heightsRepaired int
 }
 
