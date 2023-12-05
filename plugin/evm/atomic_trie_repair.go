@@ -56,7 +56,7 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 		}
 		log.Info("repairing atomic trie", "height", height, "block", blockID, "txs", len(txs))
 		if len(txs) == 0 {
-			continue
+			continue // Should not happen
 		}
 		combinedOps, err := mergeAtomicOps(txs)
 		if err != nil {

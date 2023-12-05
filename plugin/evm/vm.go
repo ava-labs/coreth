@@ -614,6 +614,11 @@ func (vm *VM) Initialize(
 		bonusBlockRepair = mainnetBonusBlocksRlp
 		canonicalBlockHeights = canonicalBlockMainnetHeights
 	}
+	defer func() {
+		// Free memory after VM is initialized
+		mainnetBonusBlocksRlp = nil
+		mainnetBonusBlocksJson = nil
+	}()
 
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
