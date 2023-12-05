@@ -88,6 +88,18 @@ func NewAtomicBackend(
 	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (AtomicBackend, error) {
+	return NewAtomicBackendWithBonusBlockRepair(
+		db, sharedMemory, bonusBlocks, nil, repo,
+		lastAcceptedHeight, lastAcceptedHash, commitInterval,
+	)
+}
+
+func NewAtomicBackendWithBonusBlockRepair(
+	db *versiondb.Database, sharedMemory atomic.SharedMemory,
+	bonusBlocks map[uint64]ids.ID, bonusBlocksRlp map[uint64]string,
+	repo AtomicTxRepository,
+	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
+) (AtomicBackend, error) {
 	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
 	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
 	codec := repo.Codec()
@@ -95,6 +107,11 @@ func NewAtomicBackend(
 	atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, codec, lastAcceptedHeight, commitInterval)
 	if err != nil {
 		return nil, err
+	}
+	if len(bonusBlocksRlp) > 0 {
+		if err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksRlp); err != nil {
+			return nil, err
+		}
 	}
 	atomicBackend := &atomicBackend{
 		codec:            codec,

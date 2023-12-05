@@ -606,10 +606,12 @@ func (vm *VM) Initialize(
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights     map[uint64]ids.ID
+		bonusBlockRepair      map[uint64]string
 		canonicalBlockHeights []uint64
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
 		bonusBlockHeights = bonusBlockMainnetHeights
+		bonusBlockRepair = mainnetBonusBlocksRlp
 		canonicalBlockHeights = canonicalBlockMainnetHeights
 	}
 
@@ -622,8 +624,10 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
-		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash, vm.config.CommitInterval,
+	vm.atomicBackend, err = NewAtomicBackendWithBonusBlockRepair(
+		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, bonusBlockRepair,
+		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
+		vm.config.CommitInterval,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)

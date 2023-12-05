@@ -119,6 +119,10 @@ type atomicTrie struct {
 	codec               codec.Manager
 	memoryCap           common.StorageSize
 	tipBuffer           *core.BoundedBuffer[common.Hash]
+
+	// TODO: Remove this after DUpgrade
+	// heightsRepaired is the number of heights repaired during the last call to repairAtomicTrie
+	heightsRepaired int
 }
 
 // newAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
