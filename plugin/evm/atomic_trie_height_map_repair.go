@@ -7,31 +7,34 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const repairDone = math.MaxUint64 // used as a marker for when the height map is repaired
+const (
+	repairDone     = math.MaxUint64         // used as a marker for when the height map is repaired
+	iterationDelay = 100 * time.Microsecond // delay between iterations of the repair loop
+)
 
-func (a *atomicTrie) repairHeightMap(vdb *versiondb.Database, to uint64) (bool, error) {
+func (a *atomicTrie) repairHeightMap(to uint64, iterationDelay time.Duration) (bool, error) {
 	repairFrom, err := database.GetUInt64(a.metadataDB, heightMapRepairKey)
 	switch {
 	case errors.Is(err, database.ErrNotFound):
-		// height map not repaired yet, proceed
+		repairFrom = 0 // height map not repaired yet, start at 0
 	case err != nil:
 		return false, err
 	case repairFrom == repairDone:
 		// height map already repaired, nothing to do
 		return false, nil
 	}
-	return true, a.doRepairHeightMap(vdb, repairFrom, to)
+	return true, a.doRepairHeightMap(repairFrom, to, iterationDelay)
 }
 
-func (a *atomicTrie) doRepairHeightMap(vdb *versiondb.Database, from, to uint64) error {
+func (a *atomicTrie) doRepairHeightMap(from, to uint64, iterationDelay time.Duration) error {
 	// open the atomic trie at the last known root with correct height map
 	// correspondance
 	fromRoot, err := getRoot(a.metadataDB, from)
@@ -44,9 +47,8 @@ func (a *atomicTrie) doRepairHeightMap(vdb *versiondb.Database, from, to uint64)
 	}
 
 	// hashes values inserted in [hasher], and stores the result in the height
-	// map at [commitHeight]. Additionally, updates the resume marker,
-	// commits to the version db, and re-opens [hasher] to respect the trie's
-	// no use after commit invariant.
+	// map at [commitHeight]. Additionally, it updates the resume marker and
+	// re-opens [hasher] to respect the trie's no use after commit invariant.
 	commitRepairedHeight := func(commitHeight uint64) error {
 		root, nodes := hasher.Commit(false)
 		err := a.trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
@@ -63,9 +65,6 @@ func (a *atomicTrie) doRepairHeightMap(vdb *versiondb.Database, from, to uint64)
 		}
 		err = database.PutUInt64(a.metadataDB, heightMapRepairKey, commitHeight)
 		if err != nil {
-			return err
-		}
-		if err := vdb.Commit(); err != nil {
 			return err
 		}
 		log.Info("repaired atomic trie height map", "height", commitHeight, "root", root)
@@ -98,6 +97,8 @@ func (a *atomicTrie) doRepairHeightMap(vdb *versiondb.Database, from, to uint64)
 		if err := hasher.Update(it.Key(), it.Value()); err != nil {
 			return fmt.Errorf("could not update atomic trie at root %s: %w", root, err)
 		}
+
+		time.Sleep(iterationDelay) // pause to avoid putting a spike of load on the disk
 	}
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("error iterating atomic trie: %w", err)
@@ -109,9 +110,5 @@ func (a *atomicTrie) doRepairHeightMap(vdb *versiondb.Database, from, to uint64)
 	}
 
 	// mark height map as repaired
-	err = database.PutUInt64(a.metadataDB, heightMapRepairKey, repairDone)
-	if err != nil {
-		return err
-	}
-	return vdb.Commit()
+	return database.PutUInt64(a.metadataDB, heightMapRepairKey, repairDone)
 }
