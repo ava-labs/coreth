@@ -112,6 +112,9 @@ func NewAtomicBackendWithBonusBlockRepair(
 		if err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksRlp); err != nil {
 			return nil, err
 		}
+		if err := db.Commit(); err != nil {
+			return nil, err
+		}
 	}
 	atomicBackend := &atomicBackend{
 		codec:            codec,
