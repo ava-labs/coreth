@@ -91,4 +91,11 @@ func TestAtomicTrieRepair(t *testing.T) {
 		foundKeys++
 	}
 	require.Equal(expectedKeys, foundKeys)
+
+	// verify the script runs correctly on machines that have already indexed
+	// bonus blocks.
+	require.NoError(a.metadataDB.Delete(repairedKey))
+	heightsRepaired, err = a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksRlp)
+	require.NoError(err)
+	require.Equal(len(bonusBlockMainnetHeights), heightsRepaired)
 }
