@@ -51,9 +51,11 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 	// re-opens [hasher] to respect the trie's no use after commit invariant.
 	commitRepairedHeight := func(commitHeight uint64) error {
 		root, nodes := hasher.Commit(false)
-		err := a.trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
-		if err != nil {
-			return err
+		if nodes != nil {
+			err := a.trieDB.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+			if err != nil {
+				return err
+			}
 		}
 		err = a.trieDB.Commit(root, false)
 		if err != nil {
@@ -103,8 +105,8 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("error iterating atomic trie: %w", err)
 	}
-	if height%a.commitInterval == 0 {
-		if err := commitRepairedHeight(height); err != nil {
+	for next := lastCommit + a.commitInterval; next <= to; next += a.commitInterval {
+		if err := commitRepairedHeight(next); err != nil {
 			return err
 		}
 	}

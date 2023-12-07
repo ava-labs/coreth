@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,11 +12,38 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAtomicTrieRepairHeightMap(t *testing.T) {
+	for i, test := range []testAtomicTrieRepairHeightMap{
+		{
+			lastAccepted:  3*testCommitInterval + 5,
+			skipAtomicTxs: func(height uint64) bool { return false },
+		},
+		{
+			lastAccepted:  3 * testCommitInterval,
+			skipAtomicTxs: func(height uint64) bool { return false },
+		},
+		{
+			lastAccepted:  3 * testCommitInterval,
+			skipAtomicTxs: func(height uint64) bool { return height > testCommitInterval && height <= 2*testCommitInterval },
+		},
+		{
+			lastAccepted:  3 * testCommitInterval,
+			skipAtomicTxs: func(height uint64) bool { return height > testCommitInterval+1 },
+		},
+	} {
+		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) { test.run(t) })
+	}
+}
+
+type testAtomicTrieRepairHeightMap struct {
+	lastAccepted  uint64
+	skipAtomicTxs func(height uint64) bool
+}
+
+func (test testAtomicTrieRepairHeightMap) run(t *testing.T) {
 	require := require.New(t)
 
 	db := versiondb.New(memdb.New())
@@ -26,18 +54,18 @@ func TestAtomicTrieRepairHeightMap(t *testing.T) {
 	atomicTrie := atomicBackend.AtomicTrie().(*atomicTrie)
 
 	heightMap := make(map[uint64]common.Hash)
-	lastAccepted := uint64(testCommitInterval*3 + 5) // process 305 blocks so that we get three commits (100, 200, 300)
-	for height := uint64(1); height <= lastAccepted; height++ {
+	for height := uint64(1); height <= test.lastAccepted; height++ {
 		atomicRequests := testDataImportTx().mustAtomicOps()
+		if test.skipAtomicTxs(height) {
+			atomicRequests = nil
+		}
 		err := indexAtomicTxs(atomicTrie, height, atomicRequests)
-		assert.NoError(t, err)
+		require.NoError(err)
 		if height%testCommitInterval == 0 {
 			root, _ := atomicTrie.LastCommitted()
 			heightMap[height] = root
 		}
 	}
-	// ensure we have 3 roots
-	require.Len(heightMap, 3)
 
 	// Verify that [atomicTrie] can access each of the expected roots
 	verifyRoots := func(expectZero bool) {
@@ -63,7 +91,7 @@ func TestAtomicTrieRepairHeightMap(t *testing.T) {
 
 	// repair the height map
 	testIterationDelay := time.Duration(0) // no need to wait between iterations in tests
-	repaired, err := atomicTrie.RepairHeightMap(lastAccepted, testIterationDelay)
+	repaired, err := atomicTrie.RepairHeightMap(test.lastAccepted, testIterationDelay)
 	require.NoError(err)
 	verifyRoots(false)
 	require.True(repaired)
@@ -79,13 +107,13 @@ func TestAtomicTrieRepairHeightMap(t *testing.T) {
 	require.NoError(err)
 
 	// repair the height map
-	repaired, err = atomicTrie.RepairHeightMap(lastAccepted, testIterationDelay)
+	repaired, err = atomicTrie.RepairHeightMap(test.lastAccepted, testIterationDelay)
 	require.NoError(err)
 	verifyRoots(false)
 	require.True(repaired)
 
 	// try to repair the height map again
-	repaired, err = atomicTrie.RepairHeightMap(lastAccepted, testIterationDelay)
+	repaired, err = atomicTrie.RepairHeightMap(test.lastAccepted, testIterationDelay)
 	require.NoError(err)
 	require.False(repaired)
 }
