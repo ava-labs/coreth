@@ -643,6 +643,10 @@ func (vm *VM) Initialize(
 	// TODO: remove after DUpgrade
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 ||
 		vm.chainID.Cmp(params.AvalancheFujiChainID) == 0 {
+		// XXX: Force the migration to run
+		if err := vm.atomicTrie.(*atomicTrie).metadataDB.Delete(heightMapRepairKey); err != nil {
+			return fmt.Errorf("failed to delete height map repair key: %w", err)
+		}
 		_, lastCommitted := vm.atomicTrie.LastCommitted()
 		vm.atomicTrie.RepairHeightMap(lastCommitted, 0)
 	}
