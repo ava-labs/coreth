@@ -644,7 +644,7 @@ func (vm *VM) Initialize(
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 ||
 		vm.chainID.Cmp(params.AvalancheFujiChainID) == 0 {
 		_, lastCommitted := vm.atomicTrie.LastCommitted()
-		go vm.atomicTrie.RepairHeightMap(lastCommitted, iterationDelay)
+		vm.atomicTrie.RepairHeightMap(lastCommitted, 0)
 	}
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
