@@ -825,8 +825,7 @@ func TestNetworkRouting(t *testing.T) {
 	protocol := 0
 	handler := &testSDKHandler{}
 	p2pNetwork := p2p.NewNetwork(logging.NoLog{}, sender, prometheus.NewRegistry(), "")
-	_, err := p2pNetwork.NewAppProtocol(uint64(protocol), handler)
-	require.NoError(err)
+	require.NoError(p2pNetwork.AddHandler(uint64(protocol), handler))
 
 	networkCodec := codec.NewManager(0)
 	crossChainCodec := codec.NewManager(0)
@@ -843,7 +842,7 @@ func TestNetworkRouting(t *testing.T) {
 
 	nodeID := ids.GenerateTestNodeID()
 	foobar := append([]byte{byte(protocol)}, []byte("foobar")...)
-	err = network.AppRequest(context.Background(), nodeID, 0, time.Time{}, foobar)
+	err := network.AppRequest(context.Background(), nodeID, 0, time.Time{}, foobar)
 	require.NoError(err)
 	require.True(handler.appRequested)
 

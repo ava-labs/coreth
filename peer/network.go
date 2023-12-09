@@ -78,9 +78,10 @@ type Network interface {
 	// (length of response divided by request time), and with 0 if the response is invalid.
 	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
 
-	// NewAppProtocol reserves a protocol identifier and returns a corresponding
-	// client to send messages with
-	NewAppProtocol(protocol uint64, handler p2p.Handler, options ...p2p.ClientOption) (*p2p.Client, error)
+	// NewClient returns a client to send messages with for the given protocol
+	NewClient(protocol uint64, options ...p2p.ClientOption) (*p2p.Client, error)
+	// NewAppProtocol registers a server handler for an application protocol
+	AddHandler(protocol uint64, handler p2p.Handler) error
 }
 
 // network is an implementation of Network that processes message requests for
@@ -543,8 +544,12 @@ func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	n.peers.TrackBandwidth(nodeID, bandwidth)
 }
 
-func (n *network) NewAppProtocol(protocol uint64, handler p2p.Handler, options ...p2p.ClientOption) (*p2p.Client, error) {
-	return n.network.NewAppProtocol(protocol, handler, options...)
+func (n *network) NewClient(protocol uint64, options ...p2p.ClientOption) (*p2p.Client, error) {
+	return n.network.NewClient(protocol, options...)
+}
+
+func (n *network) AddHandler(protocol uint64, handler p2p.Handler) error {
+	return n.network.AddHandler(protocol, handler)
 }
 
 // invariant: peer/network must use explicitly even request ids.

@@ -1086,8 +1086,8 @@ func (vm *VM) initBlockBuilding() error {
 		},
 		Log: vm.ctx.Log,
 	}
-	ethTxGossipClient, err := vm.Network.NewAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, p2p.WithValidatorSampling(vm.validators))
-	if err != nil {
+
+	if err := vm.Network.AddHandler(ethTxGossipProtocol, ethTxGossipHandler); err != nil {
 		return err
 	}
 
@@ -1106,8 +1106,7 @@ func (vm *VM) initBlockBuilding() error {
 		Log: vm.ctx.Log,
 	}
 
-	atomicTxGossipClient, err := vm.Network.NewAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, p2p.WithValidatorSampling(vm.validators))
-	if err != nil {
+	if err := vm.Network.AddHandler(atomicTxGossipProtocol, atomicTxGossipHandler); err != nil {
 		return err
 	}
 
@@ -1115,6 +1114,12 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxGossiper    gossip.Gossiper
 		atomicTxGossiper gossip.Gossiper
 	)
+
+	ethTxGossipClient, err := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+	if err != nil {
+		return fmt.Errorf("failed to create eth tx gossip client: %w", err)
+	}
+
 	ethTxGossiper, err = gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
 		ethTxGossipConfig,
 		vm.ctx.Log,
@@ -1136,6 +1141,11 @@ func (vm *VM) initBlockBuilding() error {
 		gossip.Every(ctx, vm.ctx.Log, ethTxGossiper, gossipFrequency)
 		vm.shutdownWg.Done()
 	}()
+
+	atomicTxGossipClient, err := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+	if err != nil {
+		return fmt.Errorf("failed to create atomic tx gossip client: %w", err)
+	}
 
 	atomicTxGossiper, err = gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
 		atomicTxGossipConfig,
