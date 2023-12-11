@@ -34,3 +34,62 @@ func TestMempoolAddTx(t *testing.T) {
 		require.True(m.bloom.Has(tx))
 	}
 }
+
+func TestMempoolGet(t *testing.T) {
+	tx1 := &GossipAtomicTx{
+		Tx: &Tx{
+			UnsignedAtomicTx: &TestUnsignedTx{
+				IDV: ids.GenerateTestID(),
+			},
+		},
+	}
+
+	tx2 := &GossipAtomicTx{
+		Tx: &Tx{
+			UnsignedAtomicTx: &TestUnsignedTx{
+				IDV: ids.GenerateTestID(),
+			},
+		},
+	}
+
+	tests := []struct {
+		name   string
+		add    []*GossipAtomicTx
+		get    *GossipAtomicTx
+		want   *GossipAtomicTx
+		wantOk bool
+	}{
+		{
+			name: "empty - does not have",
+			get:  tx1,
+		},
+		{
+			name: "populated - does not have",
+			add:  []*GossipAtomicTx{tx1},
+			get:  tx2,
+		},
+		{
+			name:   "populated - has",
+			add:    []*GossipAtomicTx{tx1},
+			get:    tx1,
+			want:   tx1,
+			wantOk: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require := require.New(t)
+			m, err := NewMempool(&snow.Context{}, 5_000, nil)
+			require.NoError(err)
+
+			for _, add := range tt.add {
+				require.NoError(m.Add(add))
+			}
+
+			got, ok := m.Get(tt.get.GetID())
+			require.Equal(tt.wantOk, ok)
+			require.Equal(tt.want, got)
+		})
+	}
+}

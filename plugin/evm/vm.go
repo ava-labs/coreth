@@ -1065,6 +1065,9 @@ func (vm *VM) initBlockBuilding() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
 
+	ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+	atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
 	vm.gossiper = vm.createGossiper(gossipStats)
@@ -1084,7 +1087,13 @@ func (vm *VM) initBlockBuilding() error {
 
 	if vm.ethTxGossipHandler == nil {
 		var ethTxGossipHandler p2p.Handler
-		ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
+		ethTxGossipHandler, err = gossip.NewHandler[GossipEthTx, *GossipEthTx](
+			vm.ctx.Log,
+			ethTxGossipClient,
+			ethTxPool,
+			ethTxGossipHandlerConfig,
+			vm.sdkMetrics,
+		)
 		if err != nil {
 			return err
 		}
@@ -1104,7 +1113,13 @@ func (vm *VM) initBlockBuilding() error {
 
 	if vm.atomicTxGossipHandler == nil {
 		var atomicTxGossipHandler p2p.Handler
-		atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
+		atomicTxGossipHandler, err = gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](
+			vm.ctx.Log,
+			atomicTxGossipClient,
+			vm.mempool,
+			atomicTxGossipHandlerConfig,
+			vm.sdkMetrics,
+		)
 		if err != nil {
 			return err
 		}
@@ -1123,7 +1138,6 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.ethTxGossiper == nil {
-		ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
 		ethTxGossiper, err := gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
 			ethTxGossipConfig,
 			vm.ctx.Log,
@@ -1149,7 +1163,6 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.atomicTxGossiper == nil {
-		atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
 		atomicTxGossiper, err := gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
 			atomicTxGossipConfig,
 			vm.ctx.Log,

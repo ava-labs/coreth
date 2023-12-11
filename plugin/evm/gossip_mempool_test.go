@@ -4,14 +4,27 @@
 package evm
 
 import (
+	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
-	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/params"
 )
 
 func TestGossipAtomicTxMarshal(t *testing.T) {
@@ -115,6 +128,99 @@ func TestAtomicMempoolIterate(t *testing.T) {
 
 			require.Len(matches, tt.expectedLen)
 			require.Subset(tt.possibleValues, matches)
+		})
+	}
+}
+
+func TestGossipEthTxPoolGet(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	signedTx1, err := types.SignTx(
+		types.NewTx(
+			&types.LegacyTx{
+				Nonce:    1,
+				Value:    big.NewInt(1),
+				Gas:      1_000_000,
+				GasPrice: big.NewInt(1),
+			},
+		),
+		types.HomesteadSigner{},
+		key,
+	)
+	require.NoError(t, err)
+
+	signedTx2, err := types.SignTx(
+		types.NewTx(
+			&types.LegacyTx{
+				Nonce:    2,
+				Value:    big.NewInt(1),
+				Gas:      1_000_000,
+				GasPrice: big.NewInt(1),
+			},
+		),
+		types.HomesteadSigner{},
+		key,
+	)
+	require.NoError(t, err)
+
+	tx1 := &GossipEthTx{
+		Tx: signedTx1,
+	}
+
+	tx2 := &GossipEthTx{
+		Tx: signedTx2,
+	}
+
+	tests := []struct {
+		name   string
+		add    []*GossipEthTx
+		get    *GossipEthTx
+		want   *GossipEthTx
+		wantOk bool
+	}{
+		{
+			name: "empty",
+			get:  tx1,
+		},
+		{
+			name: "does not have tx",
+			add:  []*GossipEthTx{tx1},
+			get:  tx2,
+		},
+		{
+			name:   "has tx",
+			add:    []*GossipEthTx{tx1},
+			get:    tx1,
+			want:   tx1,
+			wantOk: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require := require.New(t)
+
+			engine := dummy.NewFaker()
+
+			genesis := &core.Genesis{
+				Config:  params.TestChainConfig,
+				Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1_000_000_000)}},
+				BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
+			}
+
+			chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), core.DefaultCacheConfig, genesis, engine, vm.Config{}, common.Hash{}, false)
+			require.NoError(err)
+
+			mempool, err := NewGossipEthTxPool(txpool.NewTxPool(txpool.Config{}, params.TestChainConfig, chain))
+			require.NoError(err)
+
+			for _, add := range tt.add {
+				require.NoError(mempool.Add(add))
+			}
+
+			got, ok := mempool.Get(tt.get.GetID())
+			require.Equal(tt.wantOk, ok)
+			require.Equal(tt.want, got)
 		})
 	}
 }
