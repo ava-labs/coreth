@@ -13,15 +13,20 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
 
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/ava-labs/coreth/metrics"
 )
 
 const (
 	discardedTxsCacheSize = 50
 )
 
-var errNoGasUsed = errors.New("no gas used")
+var (
+	errNoGasUsed = errors.New("no gas used")
+
+	_ gossip.Set[*GossipAtomicTx] = (*Mempool)(nil)
+)
 
 // mempoolMetrics defines the metrics for the atomic mempool
 type mempoolMetrics struct {
@@ -326,6 +331,15 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	m.addPending()
 
 	return nil
+}
+
+func (m *Mempool) Get(id ids.ID) (*GossipAtomicTx, bool) {
+	tx, _, ok := m.GetTx(id)
+	if !ok {
+		return nil, false
+	}
+
+	return &GossipAtomicTx{Tx: tx}, true
 }
 
 func (m *Mempool) Iterate(f func(tx *GossipAtomicTx) bool) {

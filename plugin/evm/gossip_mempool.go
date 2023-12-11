@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
@@ -101,6 +102,16 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 // to receive an event if tx is actually added to the mempool or not.
 func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 	return g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]
+}
+
+// Get returns the tx if present in the mempool
+func (g *GossipEthTxPool) Get(id ids.ID) (*GossipEthTx, bool) {
+	tx := g.mempool.Get(common.Hash(id))
+	if tx == nil {
+		return nil, false
+	}
+
+	return &GossipEthTx{Tx: tx}, true
 }
 
 func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {
