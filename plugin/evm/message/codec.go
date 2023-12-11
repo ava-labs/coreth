@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	Codec = codec.NewManager(maxMessageSize)
+	Codec = codec.NewManager(maxMessageSize + wrappers.ShortLen) // Add room for the codec version
 	c := linearcodec.NewCustomMaxLength(maxMessageSize)
 
 	errs := wrappers.Errs{}
