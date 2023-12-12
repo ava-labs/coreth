@@ -12,13 +12,12 @@ import (
 	"testing"
 	"time"
 
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 
