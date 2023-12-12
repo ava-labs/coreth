@@ -78,7 +78,6 @@ func TestMempoolGetTx(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
 			m, err := NewMempool(&snow.Context{}, 5_000, nil)
