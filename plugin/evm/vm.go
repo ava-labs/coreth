@@ -1081,15 +1081,14 @@ func (vm *VM) initBlockBuilding() error {
 	if err != nil {
 		return err
 	}
-	ethTxGossipHandler = &p2p.ValidatorHandler{
-		ValidatorSet: vm.validators,
-		Handler: &p2p.ThrottlerHandler{
-			Handler:   ethTxGossipHandler,
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Log:       vm.ctx.Log,
-		},
-		Log: vm.ctx.Log,
-	}
+
+	ethTxGossipHandler = p2p.NewThrottlerHandler(
+		ethTxGossipHandler,
+		p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+		vm.ctx.Log,
+	)
+
+	ethTxGossipHandler = p2p.NewValidatorHandler(ethTxGossipHandler, vm.validators, vm.ctx.Log)
 
 	if err := vm.Network.AddHandler(ethTxGossipProtocol, ethTxGossipHandler); err != nil {
 		return err
@@ -1100,15 +1099,13 @@ func (vm *VM) initBlockBuilding() error {
 		return err
 	}
 
-	atomicTxGossipHandler = &p2p.ValidatorHandler{
-		ValidatorSet: vm.validators,
-		Handler: &p2p.ThrottlerHandler{
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   atomicTxGossipHandler,
-			Log:       vm.ctx.Log,
-		},
-		Log: vm.ctx.Log,
-	}
+	atomicTxGossipHandler = p2p.NewThrottlerHandler(
+		atomicTxGossipHandler,
+		p2p.NewSlidingWindowThrottler(throttlingLimit, throttlingLimit),
+		vm.ctx.Log,
+	)
+
+	atomicTxGossipHandler = p2p.NewValidatorHandler(atomicTxGossipHandler, vm.validators, vm.ctx.Log)
 
 	if err := vm.Network.AddHandler(atomicTxGossipProtocol, atomicTxGossipHandler); err != nil {
 		return err
