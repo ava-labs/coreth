@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
@@ -20,8 +23,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/require"
 
 	"google.golang.org/protobuf/proto"
 
@@ -60,9 +61,10 @@ func TestEthTxGossip(t *testing.T) {
 
 	// sender for the peer requesting gossip from [vm]
 	peerSender := &common.SenderTest{}
-	router := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	require.NoError(err)
 
-	client, err := router.NewClient(ethTxGossipProtocol)
+	client, err := network.NewClient(ethTxGossipProtocol)
 	require.NoError(err)
 
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
@@ -89,7 +91,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	sender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, appResponseBytes []byte) error {
 		go func() {
-			require.NoError(router.AppResponse(ctx, nodeID, requestID, appResponseBytes))
+			require.NoError(network.AppResponse(ctx, nodeID, requestID, appResponseBytes))
 		}()
 		return nil
 	}
@@ -166,7 +168,8 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// sender for the peer requesting gossip from [vm]
 	peerSender := &common.SenderTest{}
-	network := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	require.NoError(err)
 
 	client, err := network.NewClient(atomicTxGossipProtocol)
 	require.NoError(err)
