@@ -80,7 +80,7 @@ type Network interface {
 
 	// NewClient returns a client to send messages with for the given protocol
 	NewClient(protocol uint64, options ...p2p.ClientOption) (*p2p.Client, error)
-	// NewAppProtocol registers a server handler for an application protocol
+	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
 }
 
