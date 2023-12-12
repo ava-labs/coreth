@@ -79,7 +79,7 @@ type Network interface {
 	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
 
 	// NewClient returns a client to send messages with for the given protocol
-	NewClient(protocol uint64, options ...p2p.ClientOption) (*p2p.Client, error)
+	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
 }
@@ -544,7 +544,7 @@ func (n *network) TrackBandwidth(nodeID ids.NodeID, bandwidth float64) {
 	n.peers.TrackBandwidth(nodeID, bandwidth)
 }
 
-func (n *network) NewClient(protocol uint64, options ...p2p.ClientOption) (*p2p.Client, error) {
+func (n *network) NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client {
 	return n.p2pNetwork.NewClient(protocol, options...)
 }
 
