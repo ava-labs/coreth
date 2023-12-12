@@ -344,7 +344,7 @@ type VM struct {
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
 
-	p2pSender             p2p.AppSender
+	p2pSender             commonEng.AppSender
 	ethTxGossipHandler    p2p.Handler
 	atomicTxGossipHandler p2p.Handler
 	ethTxGossiper         gossip.Gossiper
@@ -591,7 +591,7 @@ func (vm *VM) Initialize(
 
 	// initialize peer network
 	if vm.p2pSender == nil {
-		vm.p2pSender = p2p.NewSender(appSender)
+		vm.p2pSender = appSender
 	}
 
 	p2pNetwork := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")

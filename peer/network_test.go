@@ -816,7 +816,7 @@ func TestNetworkRouting(t *testing.T) {
 	require := require.New(t)
 	protocol := 0
 	handler := &testSDKHandler{}
-	p2pNetwork := p2p.NewNetwork(logging.NoLog{}, &p2p.FakeSender{}, prometheus.NewRegistry(), "")
+	p2pNetwork := p2p.NewNetwork(logging.NoLog{}, &common.FakeSender{}, prometheus.NewRegistry(), "")
 	_, err := p2pNetwork.NewAppProtocol(uint64(protocol), handler)
 	require.NoError(err)
 

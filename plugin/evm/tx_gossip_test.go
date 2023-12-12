@@ -48,7 +48,7 @@ func TestEthTxGossip(t *testing.T) {
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
 
-	responseSender := &p2p.FakeSender{
+	responseSender := &common.FakeSender{
 		SentAppResponse: make(chan []byte, 1),
 	}
 	vm := &VM{
@@ -75,7 +75,7 @@ func TestEthTxGossip(t *testing.T) {
 	}()
 
 	// sender for the peer requesting gossip from [vm]
-	peerSender := &p2p.FakeSender{
+	peerSender := &common.FakeSender{
 		SentAppRequest: make(chan []byte, 1),
 	}
 	network := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
@@ -176,7 +176,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
 
-	responseSender := &p2p.FakeSender{
+	responseSender := &common.FakeSender{
 		SentAppResponse: make(chan []byte, 1),
 	}
 	vm := &VM{
@@ -203,7 +203,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	}()
 
 	// sender for the peer requesting gossip from [vm]
-	peerSender := &p2p.FakeSender{
+	peerSender := &common.FakeSender{
 		SentAppRequest: make(chan []byte, 1),
 	}
 	network := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
