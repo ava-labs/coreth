@@ -343,6 +343,12 @@ type VM struct {
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
+
+	p2pSender             p2p.AppSender
+	ethTxGossipHandler    p2p.Handler
+	atomicTxGossipHandler p2p.Handler
+	ethTxGossiper         gossip.Gossiper
+	atomicTxGossiper      gossip.Gossiper
 }
 
 // Codec implements the secp256k1fx interface
@@ -584,7 +590,11 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	p2pNetwork := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
+	if vm.p2pSender == nil {
+		vm.p2pSender = p2p.NewSender(appSender)
+	}
+
+	p2pNetwork := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
 	vm.validators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
@@ -1068,104 +1078,108 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	var (
-		ethTxGossipHandler    p2p.Handler
-		atomicTxGossipHandler p2p.Handler
-	)
-
-	ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
-	if err != nil {
-		return err
-	}
-	ethTxGossipHandler = &p2p.ValidatorHandler{
-		ValidatorSet: vm.validators,
-		Handler: &p2p.ThrottlerHandler{
-			Handler:   ethTxGossipHandler,
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Log:       vm.ctx.Log,
-		},
-		Log: vm.ctx.Log,
-	}
-
-	if err := vm.Network.AddHandler(ethTxGossipProtocol, ethTxGossipHandler); err != nil {
-		return err
-	}
-
-	atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
-	if err != nil {
-		return err
-	}
-
-	atomicTxGossipHandler = &p2p.ValidatorHandler{
-		ValidatorSet: vm.validators,
-		Handler: &p2p.ThrottlerHandler{
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   atomicTxGossipHandler,
-			Log:       vm.ctx.Log,
-		},
-		Log: vm.ctx.Log,
-	}
-
-	if err := vm.Network.AddHandler(atomicTxGossipProtocol, atomicTxGossipHandler); err != nil {
-		return err
-	}
-
-	var (
-		ethTxGossiper    gossip.Gossiper
-		atomicTxGossiper gossip.Gossiper
-	)
-
 	ethTxGossipClient, err := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
 	if err != nil {
-		return fmt.Errorf("failed to create eth tx gossip client: %w", err)
-	}
-
-	ethTxGossiper, err = gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
-		ethTxGossipConfig,
-		vm.ctx.Log,
-		ethTxPool,
-		ethTxGossipClient,
-		vm.sdkMetrics,
-	)
-	if err != nil {
 		return err
 	}
-	ethTxGossiper = gossip.ValidatorGossiper{
-		Gossiper:   ethTxGossiper,
-		NodeID:     vm.ctx.NodeID,
-		Validators: vm.validators,
+
+	if vm.ethTxGossipHandler == nil {
+		vm.ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
+		if err != nil {
+			return err
+		}
+
+		vm.ethTxGossipHandler = &p2p.ValidatorHandler{
+			ValidatorSet: vm.validators,
+			Handler: &p2p.ThrottlerHandler{
+				Handler:   vm.ethTxGossipHandler,
+				Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+				Log:       vm.ctx.Log,
+			},
+			Log: vm.ctx.Log,
+		}
 	}
 
-	vm.shutdownWg.Add(1)
-	go func() {
-		gossip.Every(ctx, vm.ctx.Log, ethTxGossiper, gossipFrequency)
-		vm.shutdownWg.Done()
-	}()
+	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
+		return err
+	}
 
 	atomicTxGossipClient, err := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
 	if err != nil {
-		return fmt.Errorf("failed to create atomic tx gossip client: %w", err)
-	}
-
-	atomicTxGossiper, err = gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
-		atomicTxGossipConfig,
-		vm.ctx.Log,
-		vm.mempool,
-		atomicTxGossipClient,
-		vm.sdkMetrics,
-	)
-	if err != nil {
 		return err
 	}
-	atomicTxGossiper = gossip.ValidatorGossiper{
-		Gossiper:   atomicTxGossiper,
-		NodeID:     vm.ctx.NodeID,
-		Validators: vm.validators,
+
+	if vm.atomicTxGossipHandler == nil {
+		vm.atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
+		if err != nil {
+			return err
+		}
+
+		vm.atomicTxGossipHandler = &p2p.ValidatorHandler{
+			ValidatorSet: vm.validators,
+			Handler: &p2p.ThrottlerHandler{
+				Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+				Handler:   vm.atomicTxGossipHandler,
+				Log:       vm.ctx.Log,
+			},
+			Log: vm.ctx.Log,
+		}
+	}
+
+	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {
+		return err
+	}
+
+	if vm.ethTxGossiper == nil {
+		vm.ethTxGossiper, err = gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
+			ethTxGossipConfig,
+			vm.ctx.Log,
+			ethTxPool,
+			ethTxGossipClient,
+			vm.sdkMetrics,
+		)
+		if err != nil {
+			return err
+		}
+
+		vm.ethTxGossiper = gossip.ValidatorGossiper{
+			Gossiper:   vm.ethTxGossiper,
+			NodeID:     vm.ctx.NodeID,
+			Validators: vm.validators,
+		}
+	}
+
+	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {
+		return err
 	}
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, atomicTxGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.ethTxGossiper, gossipFrequency)
+		vm.shutdownWg.Done()
+	}()
+
+	if vm.atomicTxGossiper == nil {
+		vm.atomicTxGossiper, err = gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
+			atomicTxGossipConfig,
+			vm.ctx.Log,
+			vm.mempool,
+			atomicTxGossipClient,
+			vm.sdkMetrics,
+		)
+		if err != nil {
+			return err
+		}
+		vm.atomicTxGossiper = gossip.ValidatorGossiper{
+			Gossiper:   vm.atomicTxGossiper,
+			NodeID:     vm.ctx.NodeID,
+			Validators: vm.validators,
+		}
+	}
+
+	vm.shutdownWg.Add(1)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxGossiper, gossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 
