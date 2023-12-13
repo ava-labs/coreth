@@ -344,7 +344,7 @@ type VM struct {
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
 
-	// Can be overridden in unit tests
+	// Initialize only sets these if nil so they can be overridden in tests
 	p2pSender             commonEng.AppSender
 	ethTxGossipHandler    p2p.Handler
 	atomicTxGossipHandler p2p.Handler
