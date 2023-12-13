@@ -421,6 +421,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	forwardedTx := &GossipEthTx{}
 	require.NoError(forwardedTx.Unmarshal(forwardedMsg.Gossip[0]))
 	require.Equal(gossipedTx.GetID(), forwardedTx.GetID())
+	require.True(vm.txPool.Has(signedTx.Hash()))
 }
 
 // Tests that a tx is gossiped when it is issued
@@ -491,4 +492,102 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	gossipedTx := &GossipAtomicTx{}
 	require.NoError(gossipedTx.Unmarshal(outboundGossipMsg.Gossip[0]))
 	require.Equal(tx.ID(), gossipedTx.Tx.ID())
+}
+
+// Tests that a tx is gossiped when it is issued
+func TestAtomicTxPushGossipInbound(t *testing.T) {
+	require := require.New(t)
+	ctx := context.Background()
+	snowCtx := snow.DefaultContextTest()
+	snowCtx.AVAXAssetID = ids.GenerateTestID()
+	snowCtx.XChainID = ids.GenerateTestID()
+	nodeID := ids.GenerateTestNodeID()
+	validatorState := &validators.TestState{
+		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
+			return ids.Empty, nil
+		},
+		GetCurrentHeightF: func(context.Context) (uint64, error) {
+			return 0, nil
+		},
+		GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+			return map[ids.NodeID]*validators.GetValidatorOutput{
+				nodeID: nil,
+			}, nil
+		},
+	}
+	snowCtx.ValidatorState = validatorState
+	memory := atomic.NewMemory(memdb.New())
+	snowCtx.SharedMemory = memory.NewSharedMemory(ids.Empty)
+
+	pk, err := secp256k1.NewPrivateKey()
+	require.NoError(err)
+	address := GetEthAddress(pk)
+	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
+	genesisBytes, err := genesis.MarshalJSON()
+	require.NoError(err)
+
+	sender := &common.FakeSender{
+		SentAppGossip: make(chan []byte, 1),
+	}
+	vm := &VM{
+		p2pSender: sender,
+	}
+
+	require.NoError(vm.Initialize(
+		ctx,
+		snowCtx,
+		memdb.New(),
+		genesisBytes,
+		nil,
+		nil,
+		make(chan common.Message),
+		nil,
+		&common.FakeSender{},
+	))
+	require.NoError(vm.SetState(ctx, snow.NormalOp))
+	require.NoError(vm.Connected(ctx, nodeID, nil))
+
+	// issue a tx to the vm
+	utxo, err := addUTXO(
+		memory,
+		snowCtx,
+		ids.GenerateTestID(),
+		0,
+		snowCtx.AVAXAssetID,
+		100_000_000_000,
+		pk.PublicKey().Address(),
+	)
+	require.NoError(err)
+	tx, err := vm.newImportTxWithUTXOs(vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	require.NoError(err)
+	require.NoError(vm.mempool.AddLocalTx(tx))
+
+	gossipedTx := &GossipAtomicTx{
+		Tx: tx,
+	}
+	gossipBytes, err := gossipedTx.Marshal()
+	require.NoError(err)
+
+	inboundGossip := &sdk.PushGossip{
+		Gossip: [][]byte{gossipBytes},
+	}
+	inboundGossipBytes, err := proto.Marshal(inboundGossip)
+	require.NoError(err)
+
+	var inboundGossipMsg []byte
+	inboundGossipMsg = append(binary.AppendUvarint(nil, atomicTxGossipProtocol), inboundGossipBytes...)
+
+	require.NoError(vm.AppGossip(ctx, nodeID, inboundGossipMsg))
+
+	forwardedBytes := <-sender.SentAppGossip
+	require.Equal(byte(atomicTxGossipProtocol), forwardedBytes[0])
+
+	forwardedGossipMsg := &sdk.PushGossip{}
+	require.NoError(proto.Unmarshal(forwardedBytes[1:], forwardedGossipMsg))
+	require.Len(forwardedGossipMsg.Gossip, 1)
+
+	forwardedTx := &GossipAtomicTx{}
+	require.NoError(forwardedTx.Unmarshal(forwardedGossipMsg.Gossip[0]))
+	require.Equal(tx.ID(), forwardedTx.Tx.ID())
+	require.True(vm.mempool.has(tx.ID()))
 }
