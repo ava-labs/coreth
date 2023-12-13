@@ -428,7 +428,7 @@ func TestRequestMinVersion(t *testing.T) {
 			context.Background(),
 			nodeID,
 			&version.Application{
-				Name:  version.LegacyAppName,
+				Name:  version.Client,
 				Major: 1,
 				Minor: 7,
 				Patch: 1,
@@ -440,14 +440,14 @@ func TestRequestMinVersion(t *testing.T) {
 	responseBytes, _, err := client.SendAppRequestAny(
 		context.Background(),
 		&version.Application{
-			Name:  version.LegacyAppName,
+			Name:  version.Client,
 			Major: 2,
 			Minor: 0,
 			Patch: 0,
 		},
 		requestBytes,
 	)
-	assert.Equal(t, err.Error(), "no peers found matching version avalanche/2.0.0 out of 1 peers")
+	assert.Equal(t, err.Error(), "no peers found matching version avalanchego/2.0.0 out of 1 peers")
 	assert.Nil(t, responseBytes)
 
 	// ensure version matches and the request goes through
