@@ -595,7 +595,10 @@ func (vm *VM) Initialize(
 		vm.p2pSender = appSender
 	}
 
-	p2pNetwork := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
+	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
+	if err != nil {
+		return fmt.Errorf("failed to initialize p2p network: %w", err)
+	}
 	vm.validators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
@@ -1080,50 +1083,48 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.ethTxGossipHandler == nil {
-		vm.ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
+		ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
 		if err != nil {
 			return err
 		}
 
-		vm.ethTxGossipHandler = &p2p.ValidatorHandler{
-			ValidatorSet: vm.validators,
-			Handler: &p2p.ThrottlerHandler{
-				Handler:   vm.ethTxGossipHandler,
-				Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-				Log:       vm.ctx.Log,
-			},
-			Log: vm.ctx.Log,
-		}
+		ethTxGossipHandler = p2p.NewThrottlerHandler(
+			ethTxGossipHandler,
+			p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+			vm.ctx.Log,
+		)
+
+		ethTxGossipHandler = p2p.NewValidatorHandler(ethTxGossipHandler, vm.validators, vm.ctx.Log)
+		vm.ethTxGossipHandler = vm.ethTxGossipHandler
 	}
-	ethTxGossipClient, err := vm.Network.NewAppProtocol(ethTxGossipProtocol, vm.ethTxGossipHandler, p2p.WithValidatorSampling(vm.validators))
-	if err != nil {
+
+	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
 		return err
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
-		if err != nil {
+		atomicTxGossipHandler := p2p.NewThrottlerHandler(
+			atomicTxGossipHandler,
+			p2p.NewSlidingWindowThrottler(throttlingLimit, throttlingLimit),
+			vm.ctx.Log,
+		)
+
+		atomicTxGossipHandler = p2p.NewValidatorHandler(atomicTxGossipHandler, vm.validators, vm.ctx.Log)
+
+		if err := vm.Network.AddHandler(atomicTxGossipProtocol, atomicTxGossipHandler); err != nil {
 			return err
 		}
 
-		vm.atomicTxGossipHandler = &p2p.ValidatorHandler{
-			ValidatorSet: vm.validators,
-			Handler: &p2p.ThrottlerHandler{
-				Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-				Handler:   vm.atomicTxGossipHandler,
-				Log:       vm.ctx.Log,
-			},
-			Log: vm.ctx.Log,
-		}
+		vm.atomicTxGossipHandler = atomicTxGossipHandler
 	}
 
-	atomicTxGossipClient, err := vm.Network.NewAppProtocol(atomicTxGossipProtocol, vm.atomicTxGossipHandler, p2p.WithValidatorSampling(vm.validators))
-	if err != nil {
+	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {
 		return err
 	}
 
 	if vm.ethTxGossiper == nil {
-		vm.ethTxGossiper, err = gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
+		ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+		ethTxGossiper, err := gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
 			ethTxGossipConfig,
 			vm.ctx.Log,
 			ethTxPool,
@@ -1134,11 +1135,13 @@ func (vm *VM) initBlockBuilding() error {
 			return err
 		}
 
-		vm.ethTxGossiper = gossip.ValidatorGossiper{
-			Gossiper:   vm.ethTxGossiper,
+		ethTxGossiper = gossip.ValidatorGossiper{
+			Gossiper:   ethTxGossiper,
 			NodeID:     vm.ctx.NodeID,
 			Validators: vm.validators,
 		}
+
+		vm.ethTxGossiper = ethTxGossiper
 	}
 
 	vm.shutdownWg.Add(1)
@@ -1148,7 +1151,8 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.atomicTxGossiper == nil {
-		vm.atomicTxGossiper, err = gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
+		atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+		atomicTxGossiper, err := gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
 			atomicTxGossipConfig,
 			vm.ctx.Log,
 			vm.mempool,
@@ -1158,11 +1162,13 @@ func (vm *VM) initBlockBuilding() error {
 		if err != nil {
 			return err
 		}
-		vm.atomicTxGossiper = gossip.ValidatorGossiper{
-			Gossiper:   vm.atomicTxGossiper,
+		atomicTxGossiper = gossip.ValidatorGossiper{
+			Gossiper:   atomicTxGossiper,
 			NodeID:     vm.ctx.NodeID,
 			Validators: vm.validators,
 		}
+
+		vm.atomicTxGossiper = atomicTxGossiper
 	}
 
 	vm.shutdownWg.Add(1)

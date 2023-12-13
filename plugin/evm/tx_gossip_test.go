@@ -78,10 +78,9 @@ func TestEthTxGossip(t *testing.T) {
 	peerSender := &common.FakeSender{
 		SentAppRequest: make(chan []byte, 1),
 	}
-	network := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
-
-	client, err := network.NewAppProtocol(ethTxGossipProtocol, &p2p.NoOpHandler{})
+	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
 	require.NoError(err)
+	client := network.NewClient(ethTxGossipProtocol)
 
 	// we only accept gossip requests from validators
 	requestingNodeID := ids.GenerateTestNodeID()
@@ -206,10 +205,9 @@ func TestAtomicTxGossip(t *testing.T) {
 	peerSender := &common.FakeSender{
 		SentAppRequest: make(chan []byte, 1),
 	}
-	network := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
-
-	client, err := network.NewAppProtocol(atomicTxGossipProtocol, &p2p.NoOpHandler{})
+	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
 	require.NoError(err)
+	client := network.NewClient(atomicTxGossipProtocol)
 
 	// we only accept gossip requests from validators
 	requestingNodeID := ids.GenerateTestNodeID()
