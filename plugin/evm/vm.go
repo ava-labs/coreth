@@ -1092,7 +1092,7 @@ func (vm *VM) initBlockBuilding() error {
 		var ethTxGossipHandler p2p.Handler
 		ethTxGossipHandler = gossip.NewHandler[GossipEthTx, *GossipEthTx](
 			vm.ctx.Log,
-			ethTxGossipClient,
+			vm.ethTxPushGossiper,
 			ethTxPool,
 			ethTxGossipMetrics,
 			txGossipMaxSize,
@@ -1118,7 +1118,7 @@ func (vm *VM) initBlockBuilding() error {
 		var atomicTxGossipHandler p2p.Handler
 		atomicTxGossipHandler = gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](
 			vm.ctx.Log,
-			atomicTxGossipClient,
+			vm.atomicTxPushGossiper,
 			vm.mempool,
 			atomicTxGossipMetrics,
 			txGossipMaxSize,
