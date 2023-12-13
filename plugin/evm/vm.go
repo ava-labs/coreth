@@ -1083,6 +1083,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.ethTxGossipHandler == nil {
+		var ethTxGossipHandler p2p.Handler
 		ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
 		if err != nil {
 			return err
@@ -1094,8 +1095,7 @@ func (vm *VM) initBlockBuilding() error {
 			vm.ctx.Log,
 		)
 
-		ethTxGossipHandler = p2p.NewValidatorHandler(ethTxGossipHandler, vm.validators, vm.ctx.Log)
-		vm.ethTxGossipHandler = vm.ethTxGossipHandler
+		vm.ethTxGossipHandler = p2p.NewValidatorHandler(ethTxGossipHandler, vm.validators, vm.ctx.Log)
 	}
 
 	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
@@ -1103,19 +1103,19 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		atomicTxGossipHandler := p2p.NewThrottlerHandler(
+		var atomicTxGossipHandler p2p.Handler
+		atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
+		if err != nil {
+			return err
+		}
+
+		atomicTxGossipHandler = p2p.NewThrottlerHandler(
 			atomicTxGossipHandler,
 			p2p.NewSlidingWindowThrottler(throttlingLimit, throttlingLimit),
 			vm.ctx.Log,
 		)
 
-		atomicTxGossipHandler = p2p.NewValidatorHandler(atomicTxGossipHandler, vm.validators, vm.ctx.Log)
-
-		if err := vm.Network.AddHandler(atomicTxGossipProtocol, atomicTxGossipHandler); err != nil {
-			return err
-		}
-
-		vm.atomicTxGossipHandler = atomicTxGossipHandler
+		vm.atomicTxGossipHandler = p2p.NewValidatorHandler(atomicTxGossipHandler, vm.validators, vm.ctx.Log)
 	}
 
 	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {
@@ -1135,13 +1135,11 @@ func (vm *VM) initBlockBuilding() error {
 			return err
 		}
 
-		ethTxGossiper = gossip.ValidatorGossiper{
+		vm.ethTxGossiper = &gossip.ValidatorGossiper{
 			Gossiper:   ethTxGossiper,
 			NodeID:     vm.ctx.NodeID,
 			Validators: vm.validators,
 		}
-
-		vm.ethTxGossiper = ethTxGossiper
 	}
 
 	vm.shutdownWg.Add(1)
@@ -1162,13 +1160,12 @@ func (vm *VM) initBlockBuilding() error {
 		if err != nil {
 			return err
 		}
-		atomicTxGossiper = gossip.ValidatorGossiper{
+
+		vm.atomicTxGossiper = &gossip.ValidatorGossiper{
 			Gossiper:   atomicTxGossiper,
 			NodeID:     vm.ctx.NodeID,
 			Validators: vm.validators,
 		}
-
-		vm.atomicTxGossiper = atomicTxGossiper
 	}
 
 	vm.shutdownWg.Add(1)
