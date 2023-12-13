@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 # Don't export them as they're used in the context of other calls
-avalanche_version=${AVALANCHE_VERSION:-'051706a'}
+avalanche_version=${AVALANCHE_VERSION:-'d19df2e'}
