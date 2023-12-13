@@ -150,8 +150,8 @@ func (m *Mempool) Add(tx *GossipAtomicTx) error {
 	return m.AddTx(tx.Tx)
 }
 
-// Add attempts to add [tx] to the mempool and returns an error if
-// it could not be addeed to the mempool.
+// AddTx attempts to add [tx] to the mempool and returns an error if
+// it could not be added to the mempool.
 func (m *Mempool) AddTx(tx *Tx) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
