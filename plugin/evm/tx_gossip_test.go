@@ -422,3 +422,73 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	require.NoError(forwardedTx.Unmarshal(forwardedMsg.Gossip[0]))
 	require.Equal(gossipedTx.GetID(), forwardedTx.GetID())
 }
+
+// Tests that a tx is gossiped when it is issued
+func TestAtomicTxPushGossipOutbound(t *testing.T) {
+	require := require.New(t)
+	ctx := context.Background()
+	snowCtx := snow.DefaultContextTest()
+	snowCtx.AVAXAssetID = ids.GenerateTestID()
+	snowCtx.XChainID = ids.GenerateTestID()
+	validatorState := &validators.TestState{
+		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
+			return ids.Empty, nil
+		},
+	}
+	snowCtx.ValidatorState = validatorState
+	memory := atomic.NewMemory(memdb.New())
+	snowCtx.SharedMemory = memory.NewSharedMemory(ids.Empty)
+
+	pk, err := secp256k1.NewPrivateKey()
+	require.NoError(err)
+	address := GetEthAddress(pk)
+	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
+	genesisBytes, err := genesis.MarshalJSON()
+	require.NoError(err)
+
+	sender := &common.FakeSender{
+		SentAppGossip: make(chan []byte, 1),
+	}
+	vm := &VM{
+		p2pSender: sender,
+	}
+
+	require.NoError(vm.Initialize(
+		ctx,
+		snowCtx,
+		memdb.New(),
+		genesisBytes,
+		nil,
+		nil,
+		make(chan common.Message),
+		nil,
+		&common.FakeSender{},
+	))
+	require.NoError(vm.SetState(ctx, snow.NormalOp))
+
+	// Issue a tx to the VM
+	utxo, err := addUTXO(
+		memory,
+		snowCtx,
+		ids.GenerateTestID(),
+		0,
+		snowCtx.AVAXAssetID,
+		100_000_000_000,
+		pk.PublicKey().Address(),
+	)
+	require.NoError(err)
+	tx, err := vm.newImportTxWithUTXOs(vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	require.NoError(err)
+	require.NoError(vm.mempool.AddLocalTx(tx))
+
+	gossipedBytes := <-sender.SentAppGossip
+	require.Equal(byte(atomicTxGossipProtocol), gossipedBytes[0])
+
+	outboundGossipMsg := &sdk.PushGossip{}
+	require.NoError(proto.Unmarshal(gossipedBytes[1:], outboundGossipMsg))
+	require.Len(outboundGossipMsg.Gossip, 1)
+
+	gossipedTx := &GossipAtomicTx{}
+	require.NoError(gossipedTx.Unmarshal(outboundGossipMsg.Gossip[0]))
+	require.Equal(tx.ID(), gossipedTx.Tx.ID())
+}
