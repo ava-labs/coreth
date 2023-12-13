@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.10.18-rc.2.0.20231213200236-5da7612b9e9b
+	github.com/ava-labs/avalanchego v1.10.18-rc.2.0.20231213210822-d19df2ec658b
 	github.com/cespare/cp v0.1.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/davecgh/go-spew v1.1.1

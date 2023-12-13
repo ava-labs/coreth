@@ -301,7 +301,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	vm := &VM{
 		p2pSender:            sender,
 		ethTxPullGossiper:    gossip.NoOpGossiper{},
-		atomicTxPullGossiper: gossip.NoOpAccumulator[*GossipAtomicTx]{},
+		atomicTxPullGossiper: gossip.NoOpGossiper{},
 		atomicTxPushGossiper: gossip.NoOpAccumulator[*GossipAtomicTx]{},
 	}
 
