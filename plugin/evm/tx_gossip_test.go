@@ -337,6 +337,11 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	// message
 	require.Equal(byte(ethTxGossipProtocol), sent[0])
 	require.NoError(proto.Unmarshal(sent[1:], got))
+
+	gossipedTx := &GossipEthTx{}
+	require.Len(got.Gossip, 1)
+	require.NoError(gossipedTx.Unmarshal(got.Gossip[0]))
+	require.Equal(ids.ID(signedTx.Hash()), gossipedTx.GetID())
 }
 
 // Tests that a gossiped tx is added to the mempool and forwarded
