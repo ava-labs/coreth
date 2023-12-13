@@ -5,11 +5,13 @@ package evm
 
 import (
 	"container/heap"
+	"context"
 	"math/big"
 	"sync"
 	"time"
 
 	"github.com/ava-labs/avalanchego/codec"
+	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 
 	"github.com/ava-labs/coreth/peer"
 
@@ -56,10 +58,12 @@ type pushGossiper struct {
 	ctx    *snow.Context
 	config Config
 
-	client        peer.NetworkClient
-	blockchain    *core.BlockChain
-	txPool        *txpool.TxPool
-	atomicMempool *Mempool
+	client           peer.NetworkClient
+	blockchain       *core.BlockChain
+	txPool           *txpool.TxPool
+	atomicMempool    *Mempool
+	ethTxGossiper    gossip.Accumulator[*GossipEthTx]
+	atomicTxGossiper gossip.Accumulator[*GossipAtomicTx]
 
 	// We attempt to batch transactions we need to gossip to avoid runaway
 	// amplification of mempol chatter.
@@ -80,7 +84,11 @@ type pushGossiper struct {
 
 // createGossiper constructs and returns a pushGossiper or noopGossiper
 // based on whether vm.chainConfig.ApricotPhase4BlockTimestamp is set
-func (vm *VM) createGossiper(stats GossipStats) Gossiper {
+func (vm *VM) createGossiper(
+	stats GossipStats,
+	ethTxGossiper gossip.Accumulator[*GossipEthTx],
+	atomicTxGossiper gossip.Accumulator[*GossipAtomicTx],
+) Gossiper {
 	net := &pushGossiper{
 		ctx:                vm.ctx,
 		config:             vm.config,
@@ -96,7 +104,10 @@ func (vm *VM) createGossiper(stats GossipStats) Gossiper {
 		recentEthTxs:       &cache.LRU[common.Hash, interface{}]{Size: recentCacheSize},
 		codec:              vm.networkCodec,
 		stats:              stats,
+		ethTxGossiper:      ethTxGossiper,
+		atomicTxGossiper:   atomicTxGossiper,
 	}
+
 	net.awaitEthTxGossip()
 	return net
 }
@@ -259,7 +270,24 @@ func (n *pushGossiper) awaitEthTxGossip() {
 						"len(txs)", attempted,
 						"err", err,
 					)
+					continue
 				}
+
+				gossipTxs := make([]*GossipEthTx, 0, len(txs))
+				for _, tx := range txs {
+					gossipTxs = append(gossipTxs, &GossipEthTx{Tx: tx})
+				}
+
+				n.ethTxGossiper.Add(gossipTxs...)
+				if err := n.ethTxGossiper.Gossip(context.TODO()); err != nil {
+					log.Warn(
+						"failed to send eth transactions",
+						"len(txs)", len(txs),
+						"err", err,
+					)
+					continue
+				}
+
 			case <-n.shutdownChan:
 				return
 			}
@@ -301,6 +329,11 @@ func (n *pushGossiper) gossipAtomicTx(tx *Tx) error {
 		"txID", txID,
 	)
 	n.stats.IncAtomicGossipSent()
+	n.atomicTxGossiper.Add(&GossipAtomicTx{Tx: tx})
+	if err := n.atomicTxGossiper.Gossip(context.TODO()); err != nil {
+		return err
+	}
+
 	return n.client.Gossip(msgBytes)
 }
 

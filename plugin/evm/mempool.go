@@ -21,7 +21,12 @@ const (
 	discardedTxsCacheSize = 50
 )
 
-var errNoGasUsed = errors.New("no gas used")
+var (
+	errTxAlreadyKnown = errors.New("tx already known")
+	errNoGasUsed      = errors.New("no gas used")
+
+	_ gossip.Set[*GossipAtomicTx] = (*Mempool)(nil)
+)
 
 // mempoolMetrics defines the metrics for the atomic mempool
 type mempoolMetrics struct {
@@ -152,6 +157,10 @@ func (m *Mempool) AddTx(tx *Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, false)
+	if errors.Is(err, errTxAlreadyKnown) {
+		return nil
+	}
+
 	if err != nil {
 		// unlike local txs, invalid remote txs are recorded as discarded
 		// so that they won't be requested again
@@ -219,13 +228,13 @@ func (m *Mempool) addTx(tx *Tx, force bool) error {
 	// If [txID] has already been issued or is in the currentTxs map
 	// there's no need to add it.
 	if _, exists := m.issuedTxs[txID]; exists {
-		return nil
+		return fmt.Errorf("%w: tx %s was issued previously", errTxAlreadyKnown, tx.ID())
 	}
 	if _, exists := m.currentTxs[txID]; exists {
-		return nil
+		return fmt.Errorf("%w: tx %s is being built into a block", errTxAlreadyKnown, tx.ID())
 	}
 	if _, exists := m.txHeap.Get(txID); exists {
-		return nil
+		return fmt.Errorf("%w: tx %s is pending", errTxAlreadyKnown, tx.ID())
 	}
 	if !force && m.verify != nil {
 		if err := m.verify(tx); err != nil {

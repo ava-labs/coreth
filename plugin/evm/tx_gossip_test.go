@@ -54,7 +54,7 @@ func TestEthTxGossip(t *testing.T) {
 	vm := &VM{
 		p2pSender:             responseSender,
 		atomicTxGossipHandler: &p2p.NoOpHandler{},
-		atomicTxGossiper:      &gossip.NoOpGossiper{},
+		atomicTxPullGossiper:  &gossip.NoOpGossiper{},
 	}
 
 	require.NoError(vm.Initialize(
@@ -182,7 +182,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	vm := &VM{
 		p2pSender:          responseSender,
 		ethTxGossipHandler: &p2p.NoOpHandler{},
-		ethTxGossiper:      &gossip.NoOpGossiper{},
+		ethTxPullGossiper:  &gossip.NoOpGossiper{},
 	}
 
 	require.NoError(vm.Initialize(
