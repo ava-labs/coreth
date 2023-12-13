@@ -397,8 +397,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	inboundGossipBytes, err := proto.Marshal(inboundGossip)
 	require.NoError(err)
 
-	var inboundGossipMsg []byte
-	inboundGossipMsg = append(binary.AppendUvarint(nil, ethTxGossipProtocol), inboundGossipBytes...)
+	inboundGossipMsg := append(binary.AppendUvarint(nil, ethTxGossipProtocol), inboundGossipBytes...)
 	require.NoError(vm.AppGossip(ctx, nodeID, inboundGossipMsg))
 
 	forwardedMsg := &sdk.PushGossip{}
@@ -556,8 +555,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	inboundGossipBytes, err := proto.Marshal(inboundGossip)
 	require.NoError(err)
 
-	var inboundGossipMsg []byte
-	inboundGossipMsg = append(binary.AppendUvarint(nil, atomicTxGossipProtocol), inboundGossipBytes...)
+	inboundGossipMsg := append(binary.AppendUvarint(nil, atomicTxGossipProtocol), inboundGossipBytes...)
 
 	require.NoError(vm.AppGossip(ctx, nodeID, inboundGossipMsg))
 
