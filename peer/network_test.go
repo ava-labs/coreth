@@ -846,9 +846,17 @@ func TestNetworkCrossChainAppRequestAfterShutdown(t *testing.T) {
 
 func TestNetworkRouting(t *testing.T) {
 	require := require.New(t)
+	sender := &testAppSender{
+		sendAppRequestFn: func(_ context.Context, s set.Set[ids.NodeID], u uint32, bytes []byte) error {
+			return nil
+		},
+		sendAppResponseFn: func(id ids.NodeID, u uint32, bytes []byte) error {
+			return nil
+		},
+	}
 	protocol := 0
 	handler := &testSDKHandler{}
-  p2pNetwork, err := p2p.NewNetwork(logging.NoLog{}, &common.SenderTest{}, prometheus.NewRegistry(), "")
+	p2pNetwork, err := p2p.NewNetwork(logging.NoLog{}, sender, prometheus.NewRegistry(), "")
 	require.NoError(err)
 	require.NoError(p2pNetwork.AddHandler(uint64(protocol), handler))
 
