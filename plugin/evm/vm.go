@@ -146,8 +146,8 @@ const (
 	txGossipMaxFalsePositiveRate   = 0.05
 	txGossipMaxSize                = 20 * units.KiB
 	maxValidatorSetStaleness       = time.Minute
-	throttlingPeriod               = 10 * time.Second
-	throttlingLimit                = 2
+	txGossipThrottlingPeriod       = 10 * time.Second
+	txGossipThrottlingLimit        = 2
 	gossipFrequency                = 10 * time.Second
 	txGossipPollSize               = 10
 )
@@ -1089,25 +1089,16 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.ethTxGossipHandler == nil {
-		var ethTxGossipHandler p2p.Handler
-		ethTxGossipHandler = gossip.NewHandler[GossipEthTx, *GossipEthTx](
+		vm.ethTxGossipHandler = newTxGossipHandler[GossipEthTx, *GossipEthTx](
 			vm.ctx.Log,
 			vm.ethTxPushGossiper,
 			ethTxPool,
 			ethTxGossipMetrics,
 			txGossipMaxSize,
+			txGossipThrottlingPeriod,
+			txGossipThrottlingLimit,
+			vm.validators,
 		)
-		if err != nil {
-			return err
-		}
-
-		ethTxGossipHandler = p2p.NewThrottlerHandler(
-			ethTxGossipHandler,
-			p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			vm.ctx.Log,
-		)
-
-		vm.ethTxGossipHandler = p2p.NewValidatorHandler(ethTxGossipHandler, vm.validators, vm.ctx.Log)
 	}
 
 	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
@@ -1115,22 +1106,16 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		var atomicTxGossipHandler p2p.Handler
-		atomicTxGossipHandler = gossip.NewHandler[GossipAtomicTx, *GossipAtomicTx](
+		vm.atomicTxGossipHandler = newTxGossipHandler[GossipAtomicTx, *GossipAtomicTx](
 			vm.ctx.Log,
 			vm.atomicTxPushGossiper,
 			vm.mempool,
 			atomicTxGossipMetrics,
 			txGossipMaxSize,
+			txGossipThrottlingPeriod,
+			txGossipThrottlingLimit,
+			vm.validators,
 		)
-
-		atomicTxGossipHandler = p2p.NewThrottlerHandler(
-			atomicTxGossipHandler,
-			p2p.NewSlidingWindowThrottler(throttlingLimit, throttlingLimit),
-			vm.ctx.Log,
-		)
-
-		vm.atomicTxGossipHandler = p2p.NewValidatorHandler(atomicTxGossipHandler, vm.validators, vm.ctx.Log)
 	}
 
 	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {

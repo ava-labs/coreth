@@ -350,16 +350,6 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	ctx := context.Background()
 	snowCtx := snow.DefaultContextTest()
 	nodeID := ids.GenerateTestNodeID()
-	snowCtx.ValidatorState = &validators.TestState{
-		GetCurrentHeightF: func(context.Context) (uint64, error) {
-			return 0, nil
-		},
-		GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
-			return map[ids.NodeID]*validators.GetValidatorOutput{
-				nodeID: nil,
-			}, nil
-		},
-	}
 
 	sender := &common.FakeSender{
 		SentAppGossip: make(chan []byte, 1),
@@ -505,14 +495,6 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	validatorState := &validators.TestState{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
-		},
-		GetCurrentHeightF: func(context.Context) (uint64, error) {
-			return 0, nil
-		},
-		GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
-			return map[ids.NodeID]*validators.GetValidatorOutput{
-				nodeID: nil,
-			}, nil
 		},
 	}
 	snowCtx.ValidatorState = validatorState
