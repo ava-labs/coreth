@@ -78,6 +78,7 @@ func TestEthTxGossip(t *testing.T) {
 	peerSender := &common.FakeSender{
 		SentAppRequest: make(chan []byte, 1),
 	}
+
 	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
 	require.NoError(err)
 	client := network.NewClient(ethTxGossipProtocol)
