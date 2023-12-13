@@ -12,12 +12,13 @@ import (
 	"testing"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 
@@ -428,6 +429,7 @@ func TestRequestMinVersion(t *testing.T) {
 			context.Background(),
 			nodeID,
 			&version.Application{
+				Name:  version.LegacyAppName,
 				Major: 1,
 				Minor: 7,
 				Patch: 1,
@@ -439,6 +441,7 @@ func TestRequestMinVersion(t *testing.T) {
 	responseBytes, _, err := client.SendAppRequestAny(
 		context.Background(),
 		&version.Application{
+			Name:  version.LegacyAppName,
 			Major: 2,
 			Minor: 0,
 			Patch: 0,
@@ -880,7 +883,7 @@ func TestNetworkRouting(t *testing.T) {
 	err = network.AppResponse(context.Background(), ids.GenerateTestNodeID(), 0, foobar)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 
-	err = network.AppRequestFailed(context.Background(), nodeID, 0)
+	err = network.AppRequestFailed(context.Background(), nodeID, 0, common.ErrTimeout)
 	require.ErrorIs(err, p2p.ErrUnrequestedResponse)
 }
 
