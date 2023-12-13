@@ -425,7 +425,7 @@ func TestRequestMinVersion(t *testing.T) {
 	responseBytes, _, err := client.SendAppRequestAny(
 		context.Background(),
 		&version.Application{
-			Name:  "avalanche",
+			Name:  version.LegacyAppName,
 			Major: 2,
 			Minor: 0,
 			Patch: 0,
