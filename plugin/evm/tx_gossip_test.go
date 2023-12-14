@@ -299,8 +299,9 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	}
 
 	vm := &VM{
-		p2pSender:         sender,
-		ethTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:            sender,
+		ethTxPullGossiper:    gossip.NoOpGossiper{},
+		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	pk, err := secp256k1.NewPrivateKey()
@@ -355,8 +356,9 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender:         sender,
-		ethTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:            sender,
+		ethTxPullGossiper:    gossip.NoOpGossiper{},
+		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	pk, err := secp256k1.NewPrivateKey()
@@ -440,7 +442,9 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender: sender,
+		p2pSender:            sender,
+		ethTxPullGossiper:    gossip.NoOpGossiper{},
+		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	require.NoError(vm.Initialize(
@@ -511,7 +515,9 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender: sender,
+		p2pSender:            sender,
+		ethTxPullGossiper:    gossip.NoOpGossiper{},
+		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	require.NoError(vm.Initialize(
