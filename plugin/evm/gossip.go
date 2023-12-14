@@ -31,7 +31,6 @@ var (
 
 func newTxGossipHandler[T any, U gossip.GossipableAny[T]](
 	log logging.Logger,
-	accumulator gossip.Accumulator[U],
 	mempool gossip.Set[U],
 	metrics gossip.Metrics,
 	maxMessageSize int,
@@ -42,7 +41,9 @@ func newTxGossipHandler[T any, U gossip.GossipableAny[T]](
 	// push gossip messages can be handled from any peer
 	handler := gossip.NewHandler[T, U](
 		log,
-		accumulator,
+		// Don't forward gossip to avoid double-forwarding while legacy
+		// gossip is still running.
+		gossip.NoOpAccumulator[U]{},
 		mempool,
 		metrics,
 		maxMessageSize,
