@@ -1091,7 +1091,9 @@ func (vm *VM) initBlockBuilding() error {
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = newTxGossipHandler[GossipEthTx, *GossipEthTx](
 			vm.ctx.Log,
-			vm.ethTxPushGossiper,
+			// Don't forward gossip to avoid double-forwarding while legacy
+			// gossip is still running.
+			gossip.NoOpAccumulator[*GossipEthTx]{},
 			ethTxPool,
 			ethTxGossipMetrics,
 			txGossipMaxSize,
@@ -1108,7 +1110,9 @@ func (vm *VM) initBlockBuilding() error {
 	if vm.atomicTxGossipHandler == nil {
 		vm.atomicTxGossipHandler = newTxGossipHandler[GossipAtomicTx, *GossipAtomicTx](
 			vm.ctx.Log,
-			vm.atomicTxPushGossiper,
+			// Don't forward gossip to avoid double-forwarding while legacy
+			// gossip is still running.
+			gossip.NoOpAccumulator[*GossipAtomicTx]{},
 			vm.mempool,
 			atomicTxGossipMetrics,
 			txGossipMaxSize,
