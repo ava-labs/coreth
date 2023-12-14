@@ -350,7 +350,6 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
 	snowCtx := snow.DefaultContextTest()
-	nodeID := ids.GenerateTestNodeID()
 
 	sender := &common.FakeSender{
 		SentAppGossip: make(chan []byte, 1),
@@ -380,7 +379,6 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 		&common.FakeSender{},
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
-	require.NoError(vm.Connected(ctx, nodeID, nil))
 
 	tx := types.NewTransaction(0, address, big.NewInt(10), 100_000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), pk.ToECDSA())
@@ -400,7 +398,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	require.NoError(err)
 
 	inboundGossipMsg := append(binary.AppendUvarint(nil, ethTxGossipProtocol), inboundGossipBytes...)
-	require.NoError(vm.AppGossip(ctx, nodeID, inboundGossipMsg))
+	require.NoError(vm.AppGossip(ctx, ids.EmptyNodeID, inboundGossipMsg))
 
 	forwardedMsg := &sdk.PushGossip{}
 	outboundGossipBytes := <-sender.SentAppGossip
@@ -494,7 +492,6 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	snowCtx := snow.DefaultContextTest()
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	snowCtx.XChainID = ids.GenerateTestID()
-	nodeID := ids.GenerateTestNodeID()
 	validatorState := &validators.TestState{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
@@ -532,7 +529,6 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		&common.FakeSender{},
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
-	require.NoError(vm.Connected(ctx, nodeID, nil))
 
 	// issue a tx to the vm
 	utxo, err := addUTXO(
@@ -563,7 +559,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	inboundGossipMsg := append(binary.AppendUvarint(nil, atomicTxGossipProtocol), inboundGossipBytes...)
 
-	require.NoError(vm.AppGossip(ctx, nodeID, inboundGossipMsg))
+	require.NoError(vm.AppGossip(ctx, ids.EmptyNodeID, inboundGossipMsg))
 
 	forwardedBytes := <-sender.SentAppGossip
 	require.Equal(byte(atomicTxGossipProtocol), forwardedBytes[0])
