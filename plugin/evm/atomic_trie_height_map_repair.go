@@ -49,8 +49,10 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 	// hashes values inserted in [hasher], and stores the result in the height
 	// map at [commitHeight]. Additionally, it updates the resume marker and
 	// re-opens [hasher] to respect the trie's no use after commit invariant.
-	lastLog := from
-	logEach := uint64(100_000)
+	var (
+		lastLog = time.Now()
+		logEach = 5 * time.Minute
+	)
 	commitRepairedHeight := func(commitHeight uint64) error {
 		root, nodes := hasher.Commit(false)
 		if nodes != nil {
@@ -71,9 +73,9 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 		if err != nil {
 			return err
 		}
-		if commitHeight >= lastLog+logEach {
-			log.Info("repaired atomic trie height map", "height", commitHeight, "root", root)
-			lastLog = commitHeight
+		if time.Since(lastLog) > logEach {
+			log.Info("repairing atomic trie height map", "height", commitHeight, "root", root)
+			lastLog = time.Now()
 		}
 		hasher, err = a.OpenTrie(root)
 		return err
@@ -117,5 +119,9 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 	}
 
 	// mark height map as repaired
-	return database.PutUInt64(a.metadataDB, heightMapRepairKey, repairDone)
+	if err := database.PutUInt64(a.metadataDB, heightMapRepairKey, repairDone); err != nil {
+		return err
+	}
+	log.Info("atomic trie height map repair complete", "height", height, "root", root)
+	return nil
 }
