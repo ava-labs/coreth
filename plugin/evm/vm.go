@@ -648,7 +648,7 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("failed to delete height map repair key: %w", err)
 		}
 		_, lastCommitted := vm.atomicTrie.LastCommitted()
-		vm.atomicTrie.RepairHeightMap(lastCommitted, 0)
+		go vm.atomicTrie.RepairHeightMap(lastCommitted, iterationDelay)
 	}
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
