@@ -6,13 +6,10 @@ package evm
 import (
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -25,7 +22,7 @@ var (
 // Initially, bonus blocks were not indexed into the atomic trie. However, a
 // regression caused some nodes to index these blocks.
 // Returns the number of heights repaired.
-func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBlocks map[uint64]string) (int, error) {
+func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBlocks map[uint64]*types.Block) (int, error) {
 	done, err := a.metadataDB.Has(repairedKey)
 	if err != nil {
 		return 0, err
@@ -54,14 +51,11 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 			// to be the same as the keys of bonusBlocks on init.
 			return 0, fmt.Errorf("missing block ID for height %d", height)
 		}
-		txs, err := extractAtomicTxsFromRlp(block, a.codec, blockID)
+		txs, err := ExtractAtomicTxs(block.ExtData(), false, a.codec)
 		if err != nil {
 			return 0, fmt.Errorf("failed to extract atomic txs from bonus block at height %d: %w", height, err)
 		}
 		log.Info("repairing atomic trie", "height", height, "block", blockID, "txs", len(txs))
-		if len(txs) == 0 {
-			continue // Should not happen
-		}
 		combinedOps, err := mergeAtomicOps(txs)
 		if err != nil {
 			return 0, err
@@ -93,15 +87,4 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 		"heightsRepaired", heightsRepaired, "puts", puts, "removes", removes,
 	)
 	return heightsRepaired, nil
-}
-
-func extractAtomicTxsFromRlp(rlpHex string, codec codec.Manager, expectedHash ids.ID) ([]*Tx, error) {
-	ethBlock := new(types.Block)
-	if err := rlp.DecodeBytes(common.Hex2Bytes(rlpHex), ethBlock); err != nil {
-		return nil, err
-	}
-	if ids.ID(ethBlock.Hash()) != expectedHash {
-		return nil, fmt.Errorf("block ID mismatch at (%s != %s)", ids.ID(ethBlock.Hash()), expectedHash)
-	}
-	return ExtractAtomicTxs(ethBlock.ExtData(), false, codec)
 }

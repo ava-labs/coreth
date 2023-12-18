@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/types"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -96,7 +97,7 @@ func NewAtomicBackend(
 
 func NewAtomicBackendWithBonusBlockRepair(
 	db *versiondb.Database, sharedMemory atomic.SharedMemory,
-	bonusBlocks map[uint64]ids.ID, bonusBlocksRlp map[uint64]string,
+	bonusBlocks map[uint64]ids.ID, bonusBlocksParsed map[uint64]*types.Block,
 	repo AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (AtomicBackend, error) {
@@ -108,8 +109,8 @@ func NewAtomicBackendWithBonusBlockRepair(
 	if err != nil {
 		return nil, err
 	}
-	if len(bonusBlocksRlp) > 0 {
-		if _, err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksRlp); err != nil {
+	if len(bonusBlocksParsed) > 0 {
+		if _, err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksParsed); err != nil {
 			return nil, err
 		}
 		if err := db.Commit(); err != nil {

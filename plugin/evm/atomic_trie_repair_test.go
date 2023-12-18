@@ -35,7 +35,7 @@ func TestAtomicTrieRepair(t *testing.T) {
 
 	// recreate the trie with the repair constructor
 	atomicBackend, err = NewAtomicBackendWithBonusBlockRepair(
-		db, testSharedMemory(), bonusBlockMainnetHeights, mainnetBonusBlocksRlp,
+		db, testSharedMemory(), bonusBlockMainnetHeights, mainnetBonusBlocksParsed,
 		repo, commitHeight, common.Hash{}, commitInterval,
 	)
 	require.NoError(err)
@@ -46,8 +46,8 @@ func TestAtomicTrieRepair(t *testing.T) {
 	// and empty slices as equal
 	expectedKeys := 0
 	expected := make(map[uint64]map[ids.ID][]byte)
-	for height, rlp := range mainnetBonusBlocksRlp {
-		txs, err := extractAtomicTxsFromRlp(rlp, Codec, bonusBlockMainnetHeights[height])
+	for height, block := range mainnetBonusBlocksParsed {
+		txs, err := ExtractAtomicTxs(block.ExtData(), false, a.codec)
 		require.NoError(err)
 		if len(txs) == 0 {
 			continue
@@ -68,12 +68,12 @@ func TestAtomicTrieRepair(t *testing.T) {
 	// check that the trie is now repaired
 	db.Abort()
 	atomicBackend, err = NewAtomicBackendWithBonusBlockRepair(
-		db, testSharedMemory(), bonusBlockMainnetHeights, mainnetBonusBlocksRlp,
+		db, testSharedMemory(), bonusBlockMainnetHeights, mainnetBonusBlocksParsed,
 		repo, commitHeight, common.Hash{}, commitInterval,
 	)
 	require.NoError(err)
 	a = atomicBackend.AtomicTrie().(*atomicTrie)
-	heightsRepaired, err := a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksRlp)
+	heightsRepaired, err := a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksParsed)
 	require.NoError(err)
 	require.Zero(heightsRepaired) // migration should not run a second time
 
@@ -95,7 +95,7 @@ func TestAtomicTrieRepair(t *testing.T) {
 	// verify the script runs correctly on machines that have already indexed
 	// bonus blocks.
 	require.NoError(a.metadataDB.Delete(repairedKey))
-	heightsRepaired, err = a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksRlp)
+	heightsRepaired, err = a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksParsed)
 	require.NoError(err)
 	require.Equal(len(bonusBlockMainnetHeights), heightsRepaired)
 }

@@ -606,17 +606,17 @@ func (vm *VM) Initialize(
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights     map[uint64]ids.ID
-		bonusBlockRepair      map[uint64]string
+		bonusBlockRepair      map[uint64]*types.Block
 		canonicalBlockHeights []uint64
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
 		bonusBlockHeights = bonusBlockMainnetHeights
-		bonusBlockRepair = mainnetBonusBlocksRlp
+		bonusBlockRepair = mainnetBonusBlocksParsed
 		canonicalBlockHeights = canonicalBlockMainnetHeights
 	}
 	defer func() {
 		// Free memory after VM is initialized
-		mainnetBonusBlocksRlp = nil
+		mainnetBonusBlocksParsed = nil
 		mainnetBonusBlocksJson = nil
 	}()
 
