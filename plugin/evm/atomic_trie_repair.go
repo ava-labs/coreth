@@ -74,9 +74,9 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 		if err := a.trieDB.Update(newRoot, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
 			return 0, err
 		}
-	}
-	if err := a.commit(lastCommitted, newRoot); err != nil {
-		return 0, err
+		if err := a.commit(lastCommitted, newRoot); err != nil {
+			return 0, err
+		}
 	}
 
 	if err := a.metadataDB.Put(repairedKey, []byte{1}); err != nil {
