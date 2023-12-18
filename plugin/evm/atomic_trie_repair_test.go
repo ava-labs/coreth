@@ -98,9 +98,6 @@ func verifyAtomicTrieIsAlreadyRepaired(
 	for height, block := range mainnetBonusBlocksParsed {
 		txs, err := ExtractAtomicTxs(block.ExtData(), false, Codec)
 		require.NoError(err)
-		if len(txs) == 0 {
-			continue
-		}
 
 		requests := make(map[ids.ID][]byte)
 		ops, err := mergeAtomicOps(txs)
