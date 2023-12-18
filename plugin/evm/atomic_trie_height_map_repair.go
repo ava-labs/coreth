@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	repairDone     = math.MaxUint64         // used as a marker for when the height map is repaired
-	iterationDelay = 100 * time.Microsecond // delay between iterations of the repair loop
+	repairDone = math.MaxUint64 // used as a marker for when the height map is repaired
+
+	iterationsPerDelay = 1000                   // after this many iterations, pause for [iterationDelay]
+	iterationDelay     = 100 * time.Millisecond // delay between iterations of the repair loop
 )
 
 func (a *atomicTrie) RepairHeightMap(to uint64, iterationDelay time.Duration) (bool, error) {
@@ -90,6 +92,7 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 
 	var height uint64
 	lastCommit := from
+	numIterations := 0
 	for it.Next() {
 		height = it.BlockNumber()
 		if height > to {
@@ -107,7 +110,10 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 			return fmt.Errorf("could not update atomic trie at root %s: %w", root, err)
 		}
 
-		time.Sleep(iterationDelay) // pause to avoid putting a spike of load on the disk
+		numIterations++
+		if numIterations%iterationsPerDelay == 0 {
+			time.Sleep(iterationDelay) // pause to avoid putting a spike of load on the disk
+		}
 	}
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("error iterating atomic trie: %w", err)
