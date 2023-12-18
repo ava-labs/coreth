@@ -39,7 +39,7 @@ func TestAtomicTrieRepair(t *testing.T) {
 				// but has not yet run the repair
 				_, err := a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksParsed)
 				require.NoError(err)
-				a.metadataDB.Delete(repairedKey)
+				require.NoError(a.metadataDB.Delete(repairedKey))
 			},
 			expectedHeightsRepaired: len(mainnetBonusBlocksParsed),
 		},
