@@ -4,7 +4,6 @@
 package evm
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -16,25 +15,25 @@ import (
 )
 
 func TestAtomicTrieRepairHeightMap(t *testing.T) {
-	for i, test := range []testAtomicTrieRepairHeightMap{
-		{
+	for name, test := range map[string]testAtomicTrieRepairHeightMap{
+		"last accepted after commit interval": {
 			lastAccepted:  3*testCommitInterval + 5,
 			skipAtomicTxs: func(height uint64) bool { return false },
 		},
-		{
+		"last accepted exactly a commit interval": {
 			lastAccepted:  3 * testCommitInterval,
 			skipAtomicTxs: func(height uint64) bool { return false },
 		},
-		{
+		"no atomic txs in a commit interval": {
 			lastAccepted:  3 * testCommitInterval,
 			skipAtomicTxs: func(height uint64) bool { return height > testCommitInterval && height <= 2*testCommitInterval },
 		},
-		{
+		"no atomic txs in the most recent commit intervals": {
 			lastAccepted:  3 * testCommitInterval,
 			skipAtomicTxs: func(height uint64) bool { return height > testCommitInterval+1 },
 		},
 	} {
-		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) { test.run(t) })
+		t.Run(name, func(t *testing.T) { test.run(t) })
 	}
 }
 
