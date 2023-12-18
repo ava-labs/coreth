@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/spf13/cast"
 )
 
@@ -205,6 +206,10 @@ type Config struct {
 	// This is useful for validators that don't need to index transactions.
 	// TxLookupLimit can be still used to control unindexing old transactions.
 	SkipTxIndexing bool `json:"skip-tx-indexing"`
+
+	// WarpOffChainMessages encodes off-chain messages (unrelated to on-chain event ie. block or AddressedCall)
+	// that the node should be willing to sign.
+	WarpOffChainMessages []hexutil.Bytes `json:"warp-off-chain-messages"`
 }
 
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled
