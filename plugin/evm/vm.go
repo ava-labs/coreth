@@ -629,7 +629,7 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackendWithBonusBlockRepair(
+	vm.atomicBackend, _, err = NewAtomicBackendWithBonusBlockRepair(
 		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, bonusBlockRepair,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,

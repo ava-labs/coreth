@@ -89,10 +89,11 @@ func NewAtomicBackend(
 	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (AtomicBackend, error) {
-	return NewAtomicBackendWithBonusBlockRepair(
+	atomicBacked, _, err := NewAtomicBackendWithBonusBlockRepair(
 		db, sharedMemory, bonusBlocks, nil, repo,
 		lastAcceptedHeight, lastAcceptedHash, commitInterval,
 	)
+	return atomicBacked, err
 }
 
 func NewAtomicBackendWithBonusBlockRepair(
@@ -100,21 +101,22 @@ func NewAtomicBackendWithBonusBlockRepair(
 	bonusBlocks map[uint64]ids.ID, bonusBlocksParsed map[uint64]*types.Block,
 	repo AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
-) (AtomicBackend, error) {
+) (AtomicBackend, int, error) {
 	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
 	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
 	codec := repo.Codec()
 
 	atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, codec, lastAcceptedHeight, commitInterval)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	var heightsRepaired int
 	if len(bonusBlocksParsed) > 0 {
-		if _, err := atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksParsed); err != nil {
-			return nil, err
+		if heightsRepaired, err = atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksParsed); err != nil {
+			return nil, 0, err
 		}
 		if err := db.Commit(); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
 	atomicBackend := &atomicBackend{
@@ -134,9 +136,9 @@ func NewAtomicBackendWithBonusBlockRepair(
 	// return an atomic trie that is out of sync with shared memory.
 	// In normal operation, the cursor is not set, such that this call will be a no-op.
 	if err := atomicBackend.ApplyToSharedMemory(lastAcceptedHeight); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return atomicBackend, atomicBackend.initialize(lastAcceptedHeight)
+	return atomicBackend, heightsRepaired, atomicBackend.initialize(lastAcceptedHeight)
 }
 
 // initializes the atomic trie using the atomic repository height index.
