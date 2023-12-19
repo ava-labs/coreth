@@ -73,6 +73,7 @@ type Client interface {
 	BlockByHash(context.Context, common.Hash) (*types.Block, error)
 	BlockByNumber(context.Context, *big.Int) (*types.Block, error)
 	BlockNumber(context.Context) (uint64, error)
+	BlockReceipts(context.Context, rpc.BlockNumberOrHash) ([]*types.Receipt, error)
 	HeaderByHash(context.Context, common.Hash) (*types.Header, error)
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 	TransactionByHash(context.Context, common.Hash) (tx *types.Transaction, isPending bool, err error)
@@ -180,7 +181,7 @@ func (ec *client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 	var r []*types.Receipt
 	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash)
 	if err == nil && r == nil {
-		return nil, ethereum.NotFound
+		return nil, interfaces.NotFound
 	}
 	return r, err
 }
