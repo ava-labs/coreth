@@ -157,7 +157,7 @@ func (m *Mempool) Add(tx *GossipAtomicTx) error {
 
 	if err != nil {
 		txID := tx.Tx.ID()
-		m.discardedTxs.Put(tx.Tx.ID(), tx.Tx)
+		m.discardedTxs.Put(txID, tx.Tx)
 		log.Debug("failed to issue remote tx to mempool",
 			"txID", txID,
 			"err", err,
