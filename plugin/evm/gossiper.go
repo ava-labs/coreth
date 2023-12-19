@@ -249,6 +249,12 @@ func (n *pushGossiper) awaitEthTxGossip() {
 						"err", err,
 					)
 				}
+				if err := n.ethTxGossiper.Gossip(context.TODO()); err != nil {
+					log.Warn(
+						"failed to send eth transactions",
+						"err", err,
+					)
+				}
 			case <-regossipTicker.C:
 				for _, tx := range n.queueRegossipTxs() {
 					n.ethTxsToGossip[tx.Hash()] = tx
