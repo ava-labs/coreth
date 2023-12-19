@@ -270,6 +270,8 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
+
+	marshaller := GossipAtomicTxMarshaller{}
 	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
@@ -277,8 +279,8 @@ func TestAtomicTxGossip(t *testing.T) {
 		require.NoError(proto.Unmarshal(responseBytes, response))
 		require.Len(response.Gossip, 1)
 
-		gotTx := &GossipAtomicTx{}
-		require.NoError(gotTx.Unmarshal(response.Gossip[0]))
+		gotTx, err := marshaller.UnmarshalGossip(response.Gossip[0])
+		require.NoError(err)
 		require.Equal(tx.ID(), gotTx.GetID())
 
 		wg.Done()
