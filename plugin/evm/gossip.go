@@ -46,7 +46,7 @@ func newTxGossipHandler[T gossip.Gossipable](
 		log,
 		marshaller,
 		// Don't forward gossip to avoid double-forwarding
-		gossip.NoOpAccumulator[U]{},
+		gossip.NoOpAccumulator[T]{},
 		mempool,
 		metrics,
 		maxMessageSize,
