@@ -270,7 +270,6 @@ func (n *pushGossiper) awaitEthTxGossip() {
 						"len(txs)", attempted,
 						"err", err,
 					)
-					continue
 				}
 
 				gossipTxs := make([]*GossipEthTx, 0, len(txs))
@@ -285,7 +284,6 @@ func (n *pushGossiper) awaitEthTxGossip() {
 						"len(txs)", len(txs),
 						"err", err,
 					)
-					continue
 				}
 
 			case <-n.shutdownChan:
