@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -164,7 +165,7 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 }
 
 func NewContext() *snow.Context {
-	ctx := snow.DefaultContextTest()
+	ctx := snowtest.EmptyContext()
 	ctx.NodeID = ids.GenerateTestNodeID()
 	ctx.NetworkID = testNetworkID
 	ctx.ChainID = testCChainID

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/stretchr/testify/require"
@@ -23,7 +23,7 @@ func TestGetValidatorSetPrimaryNetwork(t *testing.T) {
 	otherSubnetID := ids.GenerateTestID()
 
 	mockState := validators.NewMockState(ctrl)
-	snowCtx := snow.DefaultContextTest()
+	snowCtx := snowtest.EmptyContext()
 	snowCtx.SubnetID = mySubnetID
 	snowCtx.ValidatorState = mockState
 	state := NewState(snowCtx)

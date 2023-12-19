@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -27,7 +27,7 @@ import (
 func TestGetBlockchainID(t *testing.T) {
 	callerAddr := common.HexToAddress("0x0123")
 
-	defaultSnowCtx := snow.DefaultContextTest()
+	defaultSnowCtx := snowtest.EmptyContext()
 	blockchainID := defaultSnowCtx.ChainID
 
 	tests := map[string]testutils.PrecompileTest{
@@ -85,7 +85,7 @@ func TestGetBlockchainID(t *testing.T) {
 func TestSendWarpMessage(t *testing.T) {
 	callerAddr := common.HexToAddress("0x0123")
 
-	defaultSnowCtx := snow.DefaultContextTest()
+	defaultSnowCtx := snowtest.EmptyContext()
 	blockchainID := defaultSnowCtx.ChainID
 	sendWarpMessagePayload := utils.RandomBytes(100)
 

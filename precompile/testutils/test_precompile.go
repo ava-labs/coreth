@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -103,7 +103,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 		blockContext.EXPECT().Number().Return(big.NewInt(0)).AnyTimes()
 		blockContext.EXPECT().Timestamp().Return(uint64(time.Now().Unix())).AnyTimes()
 	}
-	snowContext := snow.DefaultContextTest()
+	snowContext := snowtest.EmptyContext()
 
 	accessibleState := contract.NewMockAccessibleState(ctrl)
 	accessibleState.EXPECT().GetStateDB().Return(state).AnyTimes()

@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/utils"
@@ -134,7 +135,7 @@ var (
 	}
 
 	TestChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -161,7 +162,7 @@ var (
 	}
 
 	TestLaunchConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -188,7 +189,7 @@ var (
 	}
 
 	TestApricotPhase1Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -215,7 +216,7 @@ var (
 	}
 
 	TestApricotPhase2Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -242,7 +243,7 @@ var (
 	}
 
 	TestApricotPhase3Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -269,7 +270,7 @@ var (
 	}
 
 	TestApricotPhase4Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -296,7 +297,7 @@ var (
 	}
 
 	TestApricotPhase5Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -323,7 +324,7 @@ var (
 	}
 
 	TestApricotPhasePre6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -350,7 +351,7 @@ var (
 	}
 
 	TestApricotPhase6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -377,7 +378,7 @@ var (
 	}
 
 	TestApricotPhasePost6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -404,7 +405,7 @@ var (
 	}
 
 	TestBanffChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -431,7 +432,7 @@ var (
 	}
 
 	TestCortinaChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -458,7 +459,7 @@ var (
 	}
 
 	TestDUpgradeChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{snowtest.EmptyContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
