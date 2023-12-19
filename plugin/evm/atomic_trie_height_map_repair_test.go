@@ -5,7 +5,6 @@ package evm
 
 import (
 	"testing"
-	"time"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -89,8 +88,7 @@ func (test testAtomicTrieRepairHeightMap) run(t *testing.T) {
 	verifyRoots(true)
 
 	// repair the height map
-	testIterationDelay := time.Duration(0) // no need to wait between iterations in tests
-	repaired, err := atomicTrie.RepairHeightMap(test.lastAccepted, testIterationDelay)
+	repaired, err := atomicTrie.RepairHeightMap(test.lastAccepted)
 	require.NoError(err)
 	verifyRoots(false)
 	require.True(repaired)
@@ -106,13 +104,13 @@ func (test testAtomicTrieRepairHeightMap) run(t *testing.T) {
 	require.NoError(err)
 
 	// repair the height map
-	repaired, err = atomicTrie.RepairHeightMap(test.lastAccepted, testIterationDelay)
+	repaired, err = atomicTrie.RepairHeightMap(test.lastAccepted)
 	require.NoError(err)
 	verifyRoots(false)
 	require.True(repaired)
 
 	// try to repair the height map again
-	repaired, err = atomicTrie.RepairHeightMap(test.lastAccepted, testIterationDelay)
+	repaired, err = atomicTrie.RepairHeightMap(test.lastAccepted)
 	require.NoError(err)
 	require.False(repaired)
 }

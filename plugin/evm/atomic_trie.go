@@ -86,7 +86,7 @@ type AtomicTrie interface {
 
 	// RepairHeightMap repairs the height map of the atomic trie by iterating
 	// over all leaves in the trie and committing the trie at every commit interval.
-	RepairHeightMap(to uint64, iterationDelay time.Duration) (bool, error)
+	RepairHeightMap(to uint64) (bool, error)
 }
 
 // AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie

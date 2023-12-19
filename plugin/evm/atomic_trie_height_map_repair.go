@@ -22,7 +22,7 @@ const (
 	iterationDelay     = 100 * time.Millisecond // delay between iterations of the repair loop
 )
 
-func (a *atomicTrie) RepairHeightMap(to uint64, iterationDelay time.Duration) (bool, error) {
+func (a *atomicTrie) RepairHeightMap(to uint64) (bool, error) {
 	repairFrom, err := database.GetUInt64(a.metadataDB, heightMapRepairKey)
 	switch {
 	case errors.Is(err, database.ErrNotFound):
@@ -33,10 +33,10 @@ func (a *atomicTrie) RepairHeightMap(to uint64, iterationDelay time.Duration) (b
 		// height map already repaired, nothing to do
 		return false, nil
 	}
-	return true, a.repairHeightMap(repairFrom, to, iterationDelay)
+	return true, a.repairHeightMap(repairFrom, to)
 }
 
-func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Duration) error {
+func (a *atomicTrie) repairHeightMap(from, to uint64) error {
 	// open the atomic trie at the last known root with correct height map
 	// correspondance
 	fromRoot, err := getRoot(a.metadataDB, from)
