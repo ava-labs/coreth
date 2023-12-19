@@ -176,10 +176,10 @@ func (ec *client) BlockNumber(ctx context.Context) (uint64, error) {
 	return uint64(result), err
 }
 
-// BlockReceipts returns the receipts of a given block number or hash
+// BlockReceipts returns the receipts of a given block number or hash.
 func (ec *client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
 	var r []*types.Receipt
-	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash)
+	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash.String())
 	if err == nil && r == nil {
 		return nil, interfaces.NotFound
 	}
