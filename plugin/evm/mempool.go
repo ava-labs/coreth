@@ -147,7 +147,7 @@ func (m *Mempool) Add(tx *GossipAtomicTx) error {
 	m.ctx.Lock.RLock()
 	defer m.ctx.Lock.RUnlock()
 
-	return m.AddTx(tx.Tx)
+	return m.addTx(tx.Tx, false)
 }
 
 // AddTx attempts to add [tx] to the mempool and returns an error if
