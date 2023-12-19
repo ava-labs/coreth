@@ -62,10 +62,10 @@ func (a *atomicTrie) repairHeightMap(from, to uint64, iterationDelay time.Durati
 			if err != nil {
 				return err
 			}
-		}
-		err = a.trieDB.Commit(root, false)
-		if err != nil {
-			return err
+			err = a.trieDB.Commit(root, false)
+			if err != nil {
+				return err
+			}
 		}
 		err = a.metadataDB.Put(database.PackUInt64(commitHeight), root[:])
 		if err != nil {
