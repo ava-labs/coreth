@@ -37,7 +37,6 @@ func TestMempoolAddTx(t *testing.T) {
 
 // Add should return an error if a tx is already known
 func TestMempoolAdd(t *testing.T) {
-
 	require := require.New(t)
 	m, err := NewMempool(&snow.Context{}, 5_000, nil)
 	require.NoError(err)
