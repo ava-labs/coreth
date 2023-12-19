@@ -144,10 +144,27 @@ func (m *Mempool) atomicTxGasPrice(tx *Tx) (uint64, error) {
 }
 
 func (m *Mempool) Add(tx *GossipAtomicTx) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	m.ctx.Lock.RLock()
 	defer m.ctx.Lock.RUnlock()
 
-	return m.addTx(tx.Tx, false)
+	err := m.addTx(tx.Tx, false)
+	if errors.Is(err, errTxAlreadyKnown) {
+		return err
+	}
+
+	if err != nil {
+		txID := tx.Tx.ID()
+		m.discardedTxs.Put(tx.Tx.ID(), tx.Tx)
+		log.Debug("failed to issue remote tx to mempool",
+			"txID", txID,
+			"err", err,
+		)
+	}
+
+	return err
 }
 
 // AddTx attempts to add [tx] to the mempool and returns an error if
