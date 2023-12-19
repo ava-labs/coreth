@@ -144,7 +144,7 @@ const (
 	txGossipBloomMaxItems          = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
 	txGossipMaxFalsePositiveRate   = 0.05
-	txGossipMaxSize                = 20 * units.KiB
+	txGossipTargetMessageSize      = 20 * units.KiB
 	maxValidatorSetStaleness       = time.Minute
 	txGossipThrottlingPeriod       = 10 * time.Second
 	txGossipThrottlingLimit        = 2
@@ -1064,11 +1064,11 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.ethTxPushGossiper == nil {
-		vm.ethTxPushGossiper = gossip.NewPushGossiper[*GossipEthTx](ethTxGossipClient, ethTxGossipMetrics, txGossipMaxSize)
+		vm.ethTxPushGossiper = gossip.NewPushGossiper[*GossipEthTx](ethTxGossipClient, ethTxGossipMetrics, txGossipTargetMessageSize)
 	}
 
 	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper = gossip.NewPushGossiper[*GossipAtomicTx](atomicTxGossipClient, atomicTxGossipMetrics, txGossipMaxSize)
+		vm.atomicTxPushGossiper = gossip.NewPushGossiper[*GossipAtomicTx](atomicTxGossipClient, atomicTxGossipMetrics, txGossipTargetMessageSize)
 	}
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
@@ -1093,7 +1093,7 @@ func (vm *VM) initBlockBuilding() error {
 			vm.ctx.Log,
 			ethTxPool,
 			ethTxGossipMetrics,
-			txGossipMaxSize,
+			txGossipTargetMessageSize,
 			txGossipThrottlingPeriod,
 			txGossipThrottlingLimit,
 			vm.validators,
@@ -1109,7 +1109,7 @@ func (vm *VM) initBlockBuilding() error {
 			vm.ctx.Log,
 			vm.mempool,
 			atomicTxGossipMetrics,
-			txGossipMaxSize,
+			txGossipTargetMessageSize,
 			txGossipThrottlingPeriod,
 			txGossipThrottlingLimit,
 			vm.validators,
