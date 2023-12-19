@@ -35,7 +35,7 @@ func TestGossipAtomicTxMarshaller(t *testing.T) {
 
 	got, err := marshaller.UnmarshalGossip(bytes)
 	require.NoError(err)
-	require.Equal(want.GetID(), got.GetID())
+	require.Equal(want.GossipID(), got.GossipID())
 }
 
 func TestAtomicMempoolIterate(t *testing.T) {
@@ -132,5 +132,5 @@ func TestGossipEthTxMarshaller(t *testing.T) {
 
 	got, err := marshaller.UnmarshalGossip(bytes)
 	require.NoError(err)
-	require.Equal(want.GetID(), got.GetID())
+	require.Equal(want.GossipID(), got.GossipID())
 }
