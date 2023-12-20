@@ -80,6 +80,8 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 		}
 	}
 
+	// Putting either true or false are both considered repaired since we check
+	// for the presence of the key to skip the repair.
 	if database.PutBool(a.metadataDB, repairedKey, true); err != nil {
 		return 0, err
 	}
