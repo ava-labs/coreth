@@ -189,10 +189,10 @@ func (b *backend) GetBlockSignature(blockID ids.ID) ([bls.SignatureLen]byte, err
 }
 
 func (b *backend) GetMessage(messageID ids.ID) (*avalancheWarp.UnsignedMessage, error) {
-	if message, ok := b.offchainAddressedCallMsgs[messageID]; ok {
+	if message, ok := b.messageCache.Get(messageID); ok {
 		return message, nil
 	}
-	if message, ok := b.messageCache.Get(messageID); ok {
+	if message, ok := b.offchainAddressedCallMsgs[messageID]; ok {
 		return message, nil
 	}
 
