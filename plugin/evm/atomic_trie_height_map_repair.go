@@ -53,7 +53,7 @@ func (a *atomicTrie) repairHeightMap(from, to uint64) error {
 	// re-opens [hasher] to respect the trie's no use after commit invariant.
 	var (
 		lastLog = time.Now()
-		logEach = 5 * time.Minute
+		logEach = 90 * time.Second
 	)
 	commitRepairedHeight := func(commitHeight uint64) error {
 		root, nodes := hasher.Commit(false)
