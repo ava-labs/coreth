@@ -6,6 +6,7 @@ package evm
 import (
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -79,7 +80,7 @@ func (a *atomicTrie) repairAtomicTrie(bonusBlockIDs map[uint64]ids.ID, bonusBloc
 		}
 	}
 
-	if err := a.metadataDB.Put(repairedKey, []byte{1}); err != nil {
+	if database.PutBool(a.metadataDB, repairedKey, true); err != nil {
 		return 0, err
 	}
 	log.Info(
