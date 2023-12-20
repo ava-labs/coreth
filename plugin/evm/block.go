@@ -42,6 +42,17 @@ var (
 	// regression caused some nodes to index these blocks.
 	mainnetBonusBlocksParsed map[uint64]*types.Block = make(map[uint64]*types.Block)
 
+	//go:embed bonus_blocks.json
+	mainnetBonusBlocksJson []byte
+
+	// mainnetBonusBlocksParsed is a map of bonus block numbers to the parsed
+	// data. These blocks are hardcoded so nodes that do not have these blocks
+	// can add their atomic operations to the atomic trie so all nodes on have a
+	// canonical atomic trie.
+	// Initially, bonus blocks were not indexed into the atomic trie. However, a
+	// regression caused some nodes to index these blocks.
+	mainnetBonusBlocksParsed map[uint64]*types.Block = make(map[uint64]*types.Block)
+
 	errMissingUTXOs = errors.New("missing UTXOs")
 )
 

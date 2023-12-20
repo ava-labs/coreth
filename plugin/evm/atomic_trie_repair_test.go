@@ -17,7 +17,7 @@ import (
 )
 
 type atomicTrieRepairTest struct {
-	setup                   func(a *atomicTrie)
+	setup                   func(a *atomicTrie, db *versiondb.Database)
 	expectedHeightsRepaired int
 }
 
@@ -25,23 +25,25 @@ func TestAtomicTrieRepair(t *testing.T) {
 	require := require.New(t)
 	for name, test := range map[string]atomicTrieRepairTest{
 		"needs repair": {
-			setup:                   func(a *atomicTrie) {},
+			setup:                   func(a *atomicTrie, db *versiondb.Database) {},
 			expectedHeightsRepaired: len(mainnetBonusBlocksParsed),
 		},
 		"should not be repaired twice": {
-			setup: func(a *atomicTrie) {
+			setup: func(a *atomicTrie, db *versiondb.Database) {
 				_, err := a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksParsed)
 				require.NoError(err)
+				require.NoError(db.Commit())
 			},
 			expectedHeightsRepaired: 0,
 		},
 		"did not need repair": {
-			setup: func(a *atomicTrie) {
+			setup: func(a *atomicTrie, db *versiondb.Database) {
 				// simulates a node that has the bonus blocks in the atomic trie
 				// but has not yet run the repair
 				_, err := a.repairAtomicTrie(bonusBlockMainnetHeights, mainnetBonusBlocksParsed)
 				require.NoError(err)
 				require.NoError(a.metadataDB.Delete(repairedKey))
+				require.NoError(db.Commit())
 			},
 			expectedHeightsRepaired: len(mainnetBonusBlocksParsed),
 		},
@@ -70,7 +72,7 @@ func (test atomicTrieRepairTest) test(t *testing.T) {
 	require.NoError(db.Commit())
 
 	// perform additional setup
-	test.setup(a)
+	test.setup(a, db)
 
 	// recreate the trie with the repair constructor to test the repair
 	var heightsRepaired int
@@ -80,7 +82,6 @@ func (test atomicTrieRepairTest) test(t *testing.T) {
 	)
 	require.NoError(err)
 	require.Equal(test.expectedHeightsRepaired, heightsRepaired)
-	a = atomicBackend.AtomicTrie().(*atomicTrie)
 
 	// call Abort to make sure the repair has called Commit
 	db.Abort()

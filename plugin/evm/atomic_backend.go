@@ -115,8 +115,10 @@ func NewAtomicBackendWithBonusBlockRepair(
 		if heightsRepaired, err = atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksParsed); err != nil {
 			return nil, 0, err
 		}
-		if err := db.Commit(); err != nil {
-			return nil, 0, err
+		if heightsRepaired > 0 {
+			if err := db.Commit(); err != nil {
+				return nil, 0, err
+			}
 		}
 	}
 	atomicBackend := &atomicBackend{
