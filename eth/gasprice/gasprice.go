@@ -252,7 +252,7 @@ func (oracle *Oracle) estimateNextBaseFee(ctx context.Context) (*big.Int, error)
 	// If the block does have a baseFee, calculate the next base fee
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
-	_, nextBaseFee, err := dummy.EstimateNextBaseFee(oracle.backend.ChainConfig(), header, oracle.clock.Unix())
+	_, nextBaseFee, err := dummy.EstimateNextBaseFee(oracle.backend.ChainConfig(), header, uint64(oracle.clock.Unix()))
 	return nextBaseFee, err
 }
 
@@ -336,7 +336,7 @@ func (oracle *Oracle) suggestDynamicFees(ctx context.Context) (*big.Int, *big.In
 			return new(big.Int).Set(lastPrice), new(big.Int).Set(lastBaseFee), err
 		}
 
-		if feeInfo.timestamp+oracle.maxLookbackSeconds < currentTime {
+		if feeInfo.timestamp+oracle.maxLookbackSeconds < uint64(currentTime) {
 			break
 		}
 
