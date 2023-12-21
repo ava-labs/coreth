@@ -589,8 +589,15 @@ func (vm *VM) Initialize(
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
-	// initialize warp backend
-	vm.warpBackend = warp.NewBackend(vm.ctx.NetworkID, vm.ctx.ChainID, vm.ctx.WarpSigner, vm, vm.warpDB, warpSignatureCacheSize)
+	// Initialize warp backend
+	offchainWarpMessages := make([][]byte, len(vm.config.WarpOffChainMessages))
+	for i, hexMsg := range vm.config.WarpOffChainMessages {
+		offchainWarpMessages[i] = []byte(hexMsg)
+	}
+	vm.warpBackend, err = warp.NewBackend(vm.ctx.NetworkID, vm.ctx.ChainID, vm.ctx.WarpSigner, vm, vm.warpDB, warpSignatureCacheSize, offchainWarpMessages)
+	if err != nil {
+		return err
+	}
 
 	// clear warpdb on initialization if config enabled
 	if vm.config.PruneWarpDB {
@@ -605,12 +612,19 @@ func (vm *VM) Initialize(
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights     map[uint64]ids.ID
+		bonusBlockRepair      map[uint64]*types.Block
 		canonicalBlockHeights []uint64
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
 		bonusBlockHeights = bonusBlockMainnetHeights
+		bonusBlockRepair = mainnetBonusBlocksParsed
 		canonicalBlockHeights = canonicalBlockMainnetHeights
 	}
+	defer func() {
+		// Free memory after VM is initialized
+		mainnetBonusBlocksParsed = nil
+		mainnetBonusBlocksJson = nil
+	}()
 
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
@@ -621,13 +635,23 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
-		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash, vm.config.CommitInterval,
+	vm.atomicBackend, _, err = NewAtomicBackendWithBonusBlockRepair(
+		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, bonusBlockRepair,
+		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
+		vm.config.CommitInterval,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
+
+	// Run the atomic trie height map repair in the background on mainnet/fuji
+	// TODO: remove after DUpgrade
+	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 ||
+		vm.chainID.Cmp(params.AvalancheFujiChainID) == 0 {
+		_, lastCommitted := vm.atomicTrie.LastCommitted()
+		go vm.atomicTrie.RepairHeightMap(lastCommitted)
+	}
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
