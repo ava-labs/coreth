@@ -424,6 +424,8 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
 	snowCtx := corethUtils.TestSnowContext()
+	snowCtx.AVAXAssetID = ids.GenerateTestID()
+	snowCtx.XChainID = ids.GenerateTestID()
 	validatorState := &validators.TestState{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
@@ -495,6 +497,8 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
 	snowCtx := corethUtils.TestSnowContext()
+	snowCtx.AVAXAssetID = ids.GenerateTestID()
+	snowCtx.XChainID = ids.GenerateTestID()
 	validatorState := &validators.TestState{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
