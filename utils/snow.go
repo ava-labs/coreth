@@ -24,6 +24,7 @@ func TestSnowContext() *snow.Context {
 		NodeID:       ids.EmptyNodeID,
 		PublicKey:    pk,
 		Log:          logging.NoLog{},
+		BCLookup:     ids.NewAliaser(),
 		Metrics:      metrics.NewOptionalGatherer(),
 		ChainDataDir: "",
 	}
