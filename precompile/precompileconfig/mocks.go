@@ -291,16 +291,16 @@ func (m *MockChainConfig) EXPECT() *MockChainConfigMockRecorder {
 	return m.recorder
 }
 
-// IsDUpgrade mocks base method.
-func (m *MockChainConfig) IsDUpgrade(time uint64) bool {
+// IsDurango mocks base method.
+func (m *MockChainConfig) IsDurango(time uint64) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDUpgrade", time)
+	ret := m.ctrl.Call(m, "IsDurango", time)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsDUpgrade indicates an expected call of IsDUpgrade.
-func (mr *MockChainConfigMockRecorder) IsDUpgrade(time interface{}) *gomock.Call {
+// IsDurango indicates an expected call of IsDurango.
+func (mr *MockChainConfigMockRecorder) IsDurango(time interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDUpgrade", reflect.TypeOf((*MockChainConfig)(nil).IsDUpgrade), time)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDurango", reflect.TypeOf((*MockChainConfig)(nil).IsDurango), time)
 }
