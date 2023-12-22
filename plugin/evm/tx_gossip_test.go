@@ -35,12 +35,13 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	corethUtils "github.com/ava-labs/coreth/utils"
 )
 
 func TestEthTxGossip(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := snowtest.EmptyContext()
+	snowCtx := corethUtils.TestSnowContext()
 	validatorState := &validators.TestState{}
 	snowCtx.ValidatorState = validatorState
 
@@ -161,7 +162,7 @@ func TestEthTxGossip(t *testing.T) {
 func TestAtomicTxGossip(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := snowtest.EmptyContext()
+	snowCtx := corethUtils.TestSnowContext()
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	snowCtx.XChainID = ids.GenerateTestID()
 	validatorState := &validators.TestState{

@@ -14,18 +14,18 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMessageSignatureHandler(t *testing.T) {
 	database := memdb.New()
-	snowCtx := snowtest.EmptyContext()
+	snowCtx := utils.TestSnowContext()
 	blsSecretKey, err := bls.NewSecretKey()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
@@ -129,7 +129,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 
 func TestBlockSignatureHandler(t *testing.T) {
 	database := memdb.New()
-	snowCtx := snowtest.EmptyContext()
+	snowCtx := utils.TestSnowContext()
 	blsSecretKey, err := bls.NewSecretKey()
 	require.NoError(t, err)
 

@@ -8,16 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/snow/snowtest"
-
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
 
 func TestBlockBuilderShutsDown(t *testing.T) {
 	shutdownChan := make(chan struct{})
 	wg := &sync.WaitGroup{}
 	builder := &blockBuilder{
-		ctx:          snowtest.EmptyContext(),
+		ctx:          utils.TestSnowContext(),
 		chainConfig:  params.TestChainConfig,
 		shutdownChan: shutdownChan,
 		shutdownWg:   wg,
@@ -34,7 +33,7 @@ func TestBlockBuilderSkipsTimerInitialization(t *testing.T) {
 	shutdownChan := make(chan struct{})
 	wg := &sync.WaitGroup{}
 	builder := &blockBuilder{
-		ctx:          snowtest.EmptyContext(),
+		ctx:          utils.TestSnowContext(),
 		chainConfig:  params.TestChainConfig,
 		shutdownChan: shutdownChan,
 		shutdownWg:   wg,
