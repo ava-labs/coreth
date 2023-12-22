@@ -297,7 +297,7 @@ func TestAtomicTxGossip(t *testing.T) {
 func TestEthTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := snow.DefaultContextTest()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	sender := &common.FakeSender{
 		SentAppGossip: make(chan []byte, 1),
 	}
@@ -354,7 +354,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 func TestEthTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := snow.DefaultContextTest()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 
 	sender := &common.FakeSender{
 		SentAppGossip: make(chan []byte, 1),
@@ -423,9 +423,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := snow.DefaultContextTest()
-	snowCtx.AVAXAssetID = ids.GenerateTestID()
-	snowCtx.XChainID = ids.GenerateTestID()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	validatorState := &validators.TestState{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
@@ -496,9 +494,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := snow.DefaultContextTest()
-	snowCtx.AVAXAssetID = ids.GenerateTestID()
-	snowCtx.XChainID = ids.GenerateTestID()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	validatorState := &validators.TestState{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
