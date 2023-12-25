@@ -71,7 +71,6 @@ func newTxGossipHandler[T gossip.Gossipable](
 }
 
 type txGossipHandler struct {
-	p2p.NoOpHandler
 	appGossipHandler  p2p.Handler
 	appRequestHandler p2p.Handler
 }
