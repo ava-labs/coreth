@@ -126,6 +126,24 @@ func init() {
 	}
 }
 
+func newPrefundedGenesis(
+	balance int,
+	addresses ...common.Address,
+) *core.Genesis {
+	alloc := core.GenesisAlloc{}
+	for _, address := range addresses {
+		alloc[address] = core.GenesisAccount{
+			Balance: big.NewInt(int64(balance)),
+		}
+	}
+
+	return &core.Genesis{
+		Config:     params.TestChainConfig,
+		Difficulty: big.NewInt(0),
+		Alloc:      alloc,
+	}
+}
+
 // BuildGenesisTest returns the genesis bytes for Coreth VM to be used in testing
 func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 	ss := StaticService{}
@@ -146,7 +164,7 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 }
 
 func NewContext() *snow.Context {
-	ctx := snow.DefaultContextTest()
+	ctx := utils.TestSnowContext()
 	ctx.NodeID = ids.GenerateTestNodeID()
 	ctx.NetworkID = testNetworkID
 	ctx.ChainID = testCChainID
@@ -232,6 +250,7 @@ func GenesisVM(t *testing.T,
 	*atomic.Memory,
 	*engCommon.SenderTest) {
 	vm := &VM{}
+	vm.p2pSender = &engCommon.FakeSender{}
 	ctx, db, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
 	appSender := &engCommon.SenderTest{T: t}
 	appSender.CantSendAppGossip = true
