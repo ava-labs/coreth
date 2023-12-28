@@ -58,7 +58,6 @@ type StateDB interface {
 
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
-	Finalise(deleteEmptyObjects bool)
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
