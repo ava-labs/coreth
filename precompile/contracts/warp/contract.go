@@ -109,7 +109,7 @@ func getBlockchainID(accessibleState contract.AccessibleState, caller common.Add
 // UnpackGetVerifiedWarpBlockHashInput attempts to unpack [input] into the uint32 type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackGetVerifiedWarpBlockHashInput(input []byte) (uint32, error) {
-	// We don't use strict mode here because it was disabled with the Durango.
+	// We don't use strict mode here because it was disabled with Durango.
 	res, err := WarpABI.UnpackInput("getVerifiedWarpBlockHash", input, false)
 	if err != nil {
 		return 0, err

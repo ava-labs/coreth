@@ -81,6 +81,6 @@ type Accepter interface {
 // about the chain configuration. The precompile can access this information to initialize
 // its state.
 type ChainConfig interface {
-	// IsDurango returns true if the time is after the Durango.
+	// IsDurango returns true if the time is after Durango.
 	IsDurango(time uint64) bool
 }
