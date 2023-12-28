@@ -20,7 +20,6 @@ import (
 	"errors"
 
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
@@ -119,7 +118,7 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		var overflow bool
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
 		if gas, overflow = math.SafeAdd(gas, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
-			return 0, vmerrs.ErrGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 		return gas, nil
 	}
@@ -158,7 +157,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
 			if !contract.UseGas(coldCost) {
-				return 0, vmerrs.ErrOutOfGas
+				return 0, ErrOutOfGas
 			}
 		}
 		// Now call the old calculator, which takes into account

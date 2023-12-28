@@ -21,7 +21,6 @@ import (
 	"sort"
 
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -208,7 +207,7 @@ func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 // opTstore implements TSTORE opcode
 func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
-		return nil, vmerrs.ErrWriteProtection
+		return nil, ErrWriteProtection
 	}
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()

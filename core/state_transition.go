@@ -69,7 +69,7 @@ func (result *ExecutionResult) Return() []byte {
 // Revert returns the concrete revert reason if the execution is aborted by `REVERT`
 // opcode. Note the reason can be nil if no data supplied with revert opcode.
 func (result *ExecutionResult) Revert() []byte {
-	if result.Err != vmerrs.ErrExecutionReverted {
+	if result.Err != vm.ErrExecutionReverted {
 		return nil
 	}
 	return common.CopyBytes(result.ReturnData)
@@ -417,7 +417,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check whether the init code size has been exceeded.
 	if rules.IsDUpgrade && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", vmerrs.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+		return nil, fmt.Errorf("%w: code size %v limit %v", vm.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}
 
 	// Execute the preparatory steps for state transition which includes:
