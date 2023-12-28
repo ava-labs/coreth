@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -152,8 +142,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
-	// Note: this avoids invoking the tracer in any way for simple value
-	// transfers to EOA accounts.
 	if len(contract.Code) == 0 {
 		return nil, nil
 	}
@@ -179,7 +167,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		res     []byte // result of the opcode execution function
 		debug   = in.evm.Config.Tracer != nil
 	)
-
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
@@ -222,7 +209,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !contract.UseGas(cost) {
 			return nil, vmerrs.ErrOutOfGas
 		}
-
 		if operation.dynamicGas != nil {
 			// All ops with a dynamic memory usage also has a dynamic gas cost.
 			var memorySize uint64
@@ -261,7 +247,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
 		}
-
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
 		if err != nil {
@@ -269,6 +254,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		pc++
 	}
+
 	if err == errStopToken {
 		err = nil // clear stop token error
 	}

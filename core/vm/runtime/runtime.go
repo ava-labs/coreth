@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -128,10 +118,9 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		rules   = cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time)
 	)
 	// Execute the preparatory steps for state transition which includes:
-	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
 	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
-
 	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(address, code)
@@ -162,10 +151,9 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		rules  = cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time)
 	)
 	// Execute the preparatory steps for state transition which includes:
-	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
 	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
-
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
@@ -191,7 +179,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		rules   = cfg.ChainConfig.AvalancheRules(vmenv.Context.BlockNumber, vmenv.Context.Time)
 	)
 	// Execute the preparatory steps for state transition which includes:
-	// - prepare accessList(post-berlin/ApricotPhase2)
+	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
 	statedb.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
 

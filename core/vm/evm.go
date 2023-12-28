@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -253,7 +243,8 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 func (evm *EVM) SetBlockContext(blockCtx BlockContext) {
 	evm.Context = blockCtx
 	num := blockCtx.BlockNumber
-	evm.chainRules = evm.chainConfig.AvalancheRules(num, blockCtx.Time)
+	timestamp := blockCtx.Time
+	evm.chainRules = evm.chainConfig.AvalancheRules(num, timestamp)
 }
 
 // Call executes the contract associated with the addr with the given input as
@@ -266,9 +257,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, vmerrs.ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
-	// Note: it is not possible for a negative value to be passed in here due to the fact
-	// that [value] will be popped from the stack and decoded to a *big.Int, which will
-	// always yield a positive result.
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, vmerrs.ErrInsufficientBalance
 	}
@@ -437,9 +425,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// Note although it's noop to transfer X ether to caller itself. But
 	// if caller doesn't have enough balance, it would be an error to allow
 	// over-charging itself. So the check here is necessary.
-	// Note: it is not possible for a negative value to be passed in here due to the fact
-	// that [value] will be popped from the stack and decoded to a *big.Int, which will
-	// always yield a positive result.
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, vmerrs.ErrInsufficientBalance
 	}
@@ -593,9 +578,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, common.Address{}, gas, vmerrs.ErrDepth
 	}
-	// Note: it is not possible for a negative value to be passed in here due to the fact
-	// that [value] will be popped from the stack and decoded to a *big.Int, which will
-	// always yield a positive result.
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, vmerrs.ErrInsufficientBalance
 	}
