@@ -137,6 +137,8 @@ github.com/crate-crypto/go-kzg-4844 v0.2.0 h1:UVuHOE+5tIWrim4zf/Xaa43+MIsDCPyW76
 github.com/crate-crypto/go-kzg-4844 v0.2.0/go.mod h1:SBP7ikXEgDnUPONgm33HtuDZEDtWa3L4QtN1ocJSEQ4=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cyberdelia/templates v0.0.0-20141128023046-ca7fffd4298c/go.mod h1:GyV+0YP4qX0UQ7r2MoYZ+AvYDp12OF5yg4q8rGnyNh4=
+github.com/darioush/go-ethereum v1.10.16-0.20230525100100-e501b3b05db8 h1:Weev3bP45K4exWChOb8KaHO+ayELFEASBHNBvB20NYU=
+github.com/darioush/go-ethereum v1.10.16-0.20230525100100-e501b3b05db8/go.mod h1:/oo2X/dZLJjf2mJ6YT9wcWxa4nNJDBKDBU6sFIpx1Gs=
 github.com/davecgh/go-spew v0.0.0-20171005155431-ecdeabc65495/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
