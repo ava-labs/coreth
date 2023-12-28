@@ -893,7 +893,7 @@ func (fb *filterBackend) SubscribeAcceptedTransactionEvent(ch chan<- core.NewTxs
 	return fb.bc.SubscribeAcceptedTransactionEvent(ch)
 }
 
-func (fb *filterBackend) AllowUnfinalizedQueries() bool {
+func (fb *filterBackend) IsAllowUnfinalizedQueries() bool {
 	return false
 }
 

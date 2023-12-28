@@ -77,7 +77,7 @@ func (b *testBackend) ChainDb() ethdb.Database {
 	return b.db
 }
 
-func (b *testBackend) AllowUnfinalizedQueries() bool {
+func (b *testBackend) IsAllowUnfinalizedQueries() bool {
 	return true
 }
 
