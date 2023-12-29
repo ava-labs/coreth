@@ -31,6 +31,10 @@ type Config struct {
 	ExtraEips               []int     // Additional EIPS that are to be enabled
 
 	CustomPrecompiles map[common.Address]RunFunc
+	Multicoiner       Multicoiner
+	JumpTable         *JumpTable
+	IsProhibited      func(addr common.Address) error
+	InterpreterHook   func(contract *Contract) *Contract
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -58,6 +62,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	var table *JumpTable
 	switch {
+	case evm.Config.JumpTable != nil:
+		table = evm.Config.JumpTable
 	case evm.chainRules.IsShanghai:
 		table = &shanghaiInstructionSet
 	case evm.chainRules.IsMerge:
@@ -105,6 +111,10 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	if hook := in.evm.Config.InterpreterHook; hook != nil {
+		contract = hook(contract)
+	}
+
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()

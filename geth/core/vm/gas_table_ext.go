@@ -11,6 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
+type withGetCommittedStateAP1 interface {
+	GetCommittedStateAP1(address common.Address, key common.Hash) common.Hash
+}
+
 // gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
 //
 // When calling SSTORE, check if the (address, storage_key) pair is in accessed_storage_keys.
@@ -54,7 +58,7 @@ func _gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 		//		return params.SloadGasEIP2200, nil
 		return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
 	}
-	original := evm.StateDB.GetCommittedStateAP1(contract.Address(), x.Bytes32())
+	original := evm.StateDB.(withGetCommittedStateAP1).GetCommittedStateAP1(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			return cost + params.SstoreSetGasEIP2200, nil
@@ -111,7 +115,7 @@ func gasSStoreAP1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if current == value { // noop (1)
 		return params.SloadGasEIP2200, nil
 	}
-	original := evm.StateDB.GetCommittedStateAP1(contract.Address(), x.Bytes32())
+	original := evm.StateDB.(withGetCommittedStateAP1).GetCommittedStateAP1(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			return params.SstoreSetGasEIP2200, nil

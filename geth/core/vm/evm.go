@@ -437,6 +437,13 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+	// If there is any collision with a prohibited address, return an error instead
+	// of allowing the contract to be created.
+	if isProhibited := evm.Config.IsProhibited; isProhibited != nil {
+		if err := isProhibited(address); err != nil {
+			return nil, common.Address{}, gas, err
+		}
+	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
