@@ -355,6 +355,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	case err != nil:
 		return err
 	case resp.Error != nil:
+		_ = json.Unmarshal(resp.Result, result)
 		return resp.Error
 	case len(resp.Result) == 0:
 		return ErrNoResult
