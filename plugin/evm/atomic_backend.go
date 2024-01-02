@@ -65,6 +65,9 @@ type AtomicBackend interface {
 
 	// IsBonus returns true if the block for atomicState is a bonus block
 	IsBonus(blockHeight uint64, blockHash common.Hash) bool
+
+	// Exported to allow block backfilling
+	UpdateAtomicTxRepo(blkHeigh uint64, blkHash common.Hash, txs []*Tx) error
 }
 
 // atomicBackend implements the AtomicBackend interface using
@@ -473,4 +476,19 @@ func (a *atomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool 
 
 func (a *atomicBackend) AtomicTrie() AtomicTrie {
 	return a.atomicTrie
+}
+
+func (a *atomicBackend) UpdateAtomicTxRepo(blkHeight uint64, blkHash common.Hash, txs []*Tx) error {
+	// Update the atomic tx repository. Note it is necessary to invoke
+	// the correct method taking bonus blocks into consideration.
+	if a.IsBonus(blkHeight, blkHash) {
+		if err := a.repo.WriteBonus(blkHeight, txs); err != nil {
+			return err
+		}
+	} else {
+		if err := a.repo.Write(blkHeight, txs); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -51,16 +51,9 @@ func (a *atomicState) Accept(commitBatch database.Batch, requests map[ids.ID]*at
 	for chainID, requests := range requests {
 		mergeAtomicOpsToMap(a.atomicOps, chainID, requests)
 	}
-	// Update the atomic tx repository. Note it is necessary to invoke
-	// the correct method taking bonus blocks into consideration.
-	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
-		if err := a.backend.repo.WriteBonus(a.blockHeight, a.txs); err != nil {
-			return err
-		}
-	} else {
-		if err := a.backend.repo.Write(a.blockHeight, a.txs); err != nil {
-			return err
-		}
+
+	if err := a.backend.UpdateAtomicTxRepo(a.blockHeight, a.blockHash, a.txs); err != nil {
+		return err
 	}
 
 	// Accept the root of this atomic trie (will be persisted if at a commit interval)

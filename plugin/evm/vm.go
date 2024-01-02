@@ -18,6 +18,7 @@ import (
 	"time"
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
+	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 
@@ -67,7 +68,6 @@ import (
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
-	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
@@ -729,6 +729,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // disk to ensure that we do not continue syncing from an invalid snapshot.
 func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
+	blockBackfillEnabled := vm.blockBackfillEnabled(lastAcceptedHeight)
+
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
 	if stateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
@@ -755,7 +757,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 				BlockParser:      vm,
 			},
 		),
-		enabled:              stateSyncEnabled,
+		stateSyncEnabled:     stateSyncEnabled,
 		skipResume:           vm.config.StateSyncSkipResume,
 		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
 		stateSyncRequestSize: vm.config.StateSyncRequestSize,
@@ -766,6 +768,18 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		db:                   vm.db,
 		atomicBackend:        vm.atomicBackend,
 		toEngine:             vm.toEngine,
+
+		// block backfilling related part
+		blockBackfillEnabled: blockBackfillEnabled,
+		parseBlk: func(ctx context.Context, b []byte) (*Block, error) {
+			return vm.parseEvmBlock(ctx, b)
+		},
+		getBlk: func(ctx context.Context, id ids.ID) (*Block, error) {
+			return vm.getEvmBlock(ctx, id)
+		},
+		getBlkIDAtHeigth: func(ctx context.Context, h uint64) (ids.ID, error) {
+			return vm.GetBlockIDAtHeight(ctx, h)
+		},
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1311,8 +1325,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	return blk, nil
 }
 
-// parseBlock parses [b] into a block to be wrapped by ChainState.
-func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
+func (vm *VM) parseEvmBlock(_ context.Context, b []byte) (*Block, error) {
 	ethBlock := new(types.Block)
 	if err := rlp.DecodeBytes(b, ethBlock); err != nil {
 		return nil, err
@@ -1331,6 +1344,11 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	return block, nil
 }
 
+// parseBlock parses [b] into a block to be wrapped by ChainState.
+func (vm *VM) parseBlock(ctx context.Context, b []byte) (snowman.Block, error) {
+	return vm.parseEvmBlock(ctx, b)
+}
+
 func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 	block, err := vm.parseBlock(context.TODO(), b)
 	if err != nil {
@@ -1342,7 +1360,11 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 
 // getBlock attempts to retrieve block [id] from the VM to be wrapped
 // by ChainState.
-func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
+func (vm *VM) getBlock(ctx context.Context, id ids.ID) (snowman.Block, error) {
+	return vm.getEvmBlock(ctx, id)
+}
+
+func (vm *VM) getEvmBlock(_ context.Context, id ids.ID) (*Block, error) {
 	ethBlock := vm.blockChain.GetBlockByHash(common.Hash(id))
 	// If [ethBlock] is nil, return [database.ErrNotFound] here
 	// so that the miss is considered cacheable.
@@ -2009,4 +2031,13 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
+}
+
+func (vm *VM) blockBackfillEnabled(lastAcceptedHeight uint64) bool {
+	if vm.config.BlockBackfillEnabled != nil {
+		// if the config is set, use that
+		return *vm.config.BlockBackfillEnabled
+	}
+
+	return vm.stateSyncEnabled(lastAcceptedHeight)
 }

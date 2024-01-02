@@ -6,13 +6,18 @@ package evm
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
+
+	"golang.org/x/exp/maps"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -21,10 +26,10 @@ import (
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
 const (
@@ -37,7 +42,8 @@ var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 // stateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
 type stateSyncClientConfig struct {
-	enabled    bool
+	stateSyncEnabled bool
+
 	skipResume bool
 	// Specifies the number of blocks behind the latest state summary that the chain must be
 	// in order to prefer performing state sync over falling back to the normal bootstrapping
@@ -58,6 +64,13 @@ type stateSyncClientConfig struct {
 	client syncclient.Client
 
 	toEngine chan<- commonEng.Message
+
+	// block backfilling stuff
+	blockBackfillEnabled bool
+
+	parseBlk         func(context.Context, []byte) (*Block, error)
+	getBlk           func(context.Context, ids.ID) (*Block, error)
+	getBlkIDAtHeigth func(context.Context, uint64) (ids.ID, error)
 }
 
 type stateSyncerClient struct {
@@ -71,11 +84,23 @@ type stateSyncerClient struct {
 	// State Sync results
 	syncSummary  message.SyncSummary
 	stateSyncErr error
+
+	// block backfilling is a lengthy process, so multiple state sync may complete
+	// before block backfilling does. We track downloaded blocks to avoid gaps in
+	// block indexes as well as multiple downloads of the same blocks
+	dt                    DownloadsTracker
+	latestBackfilledBlock ids.ID
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 	return &stateSyncerClient{
 		stateSyncClientConfig: config,
+		dt: DownloadsTracker{
+			metadataDB:       config.metadataDB,
+			db:               config.db,
+			getBlk:           config.getBlk,
+			getBlkIDAtHeigth: config.getBlkIDAtHeigth,
+		},
 	}
 }
 
@@ -105,7 +130,7 @@ type Syncer interface {
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
 func (client *stateSyncerClient) StateSyncEnabled(context.Context) (bool, error) {
-	return client.enabled, nil
+	return client.stateSyncEnabled, nil
 }
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
@@ -126,6 +151,7 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncSummary: %w", err)
 	}
 	client.resumableSummary = summary
+	client.latestBackfilledBlock = ids.ID(summary.BlockHash)
 	return summary, nil
 }
 
@@ -182,6 +208,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			// Initialize snapshots if we're skipping state sync, since it will not have been initialized on
 			// startup.
 			client.chain.BlockChain().InitializeSnapshots()
+			client.latestBackfilledBlock = ids.ID(proposedSummary.BlockHash)
 			return block.StateSyncSkipped, nil
 		}
 
@@ -198,6 +225,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		snapshot.ResetSnapshotGeneration(client.chaindb)
 	}
 	client.syncSummary = proposedSummary
+	client.latestBackfilledBlock = ids.ID(proposedSummary.BlockHash)
 
 	// Update the current state sync summary key in the database
 	// Note: this must be performed after WipeSnapshot finishes so that we do not start a state sync
@@ -321,11 +349,109 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 }
 
 func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error) {
-	return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
+	if !client.blockBackfillEnabled {
+		return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
+	}
+
+	nextBlkID, nextBlkHeight, err := client.dt.GetStartHeight(ctx, client.latestBackfilledBlock)
+	if err != nil {
+		return nextBlkID, nextBlkHeight, err
+	}
+
+	log.Info(
+		"Starting block backfilling",
+		"nextBlockID", nextBlkID,
+		"nextBlockHeight", nextBlkHeight,
+	)
+
+	client.latestBackfilledBlock, err = client.getBlkIDAtHeigth(ctx, nextBlkHeight+1)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf(
+			"requested block at height %d, but its child is unknown: %w, %w",
+			nextBlkHeight+1,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
+	return nextBlkID, nextBlkHeight, err
 }
 
 func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
-	return ids.Empty, 0, block.ErrStopBlockBackfilling
+	// 1. Parse blocks
+	blks := make(map[uint64]*Block)
+	for i, blkBytes := range blksBytes {
+		blk, err := client.parseBlk(ctx, blkBytes)
+		if err != nil {
+			// we don't stop backfilling on parse errors. We backfill what we can and
+			// request again what is left.
+			log.Warn(
+				"Failed parsing backfilled block",
+				"block index", i,
+			)
+			continue
+		}
+		blks[blk.Height()] = blk
+	}
+
+	// 2. Validate blocks continuity and store them
+	blkHeights := maps.Keys(blks)
+	sort.Slice(blkHeights, func(i, j int) bool {
+		return blkHeights[i] < blkHeights[j]
+	})
+
+	topBlk, err := client.getBlk(ctx, client.latestBackfilledBlock)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf(
+			"failed retrieving latest backfilled block, %s: %w, %w",
+			client.latestBackfilledBlock,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
+	for i := len(blkHeights) - 1; i >= 0; i-- {
+		blk := blks[blkHeights[i]]
+		if topBlk.Parent() != blk.ID() {
+			log.Warn(
+				"Unexpected backfilled block. Reissuing request",
+				"expected block ID", topBlk.Parent(),
+				"received block ID", blk.ID(),
+				"Requested block ID", topBlk.Parent(),
+			)
+			break
+		}
+
+		if err := blk.Backfill(ctx); err != nil {
+			return ids.Empty, 0, fmt.Errorf(
+				"failed indexing block %s to disk: %w, %w",
+				blk.ID(),
+				err,
+				block.ErrInternalBlockBackfilling,
+			)
+		}
+		topBlk = blk
+	}
+
+	nextBlkID, nextBlkHeight, err := client.dt.GetNextHeight(ctx, topBlk)
+	if err != nil {
+		return nextBlkID, nextBlkHeight, err
+	}
+
+	log.Info(
+		"Successfully backfilled blocks batch",
+		"nextBlockID", nextBlkID,
+		"nextBlockHeight", nextBlkHeight,
+	)
+
+	client.latestBackfilledBlock, err = client.getBlkIDAtHeigth(ctx, nextBlkHeight+1)
+	if err != nil {
+		return ids.Empty, 0, fmt.Errorf(
+			"requested block at height %d, but its child is unknown: %w, %w",
+			nextBlkHeight+1,
+			err,
+			block.ErrInternalBlockBackfilling,
+		)
+	}
+	return nextBlkID, nextBlkHeight, err
 }
 
 func (client *stateSyncerClient) Shutdown() error {

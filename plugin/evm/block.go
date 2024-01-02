@@ -475,3 +475,14 @@ func (b *Block) Bytes() []byte {
 }
 
 func (b *Block) String() string { return fmt.Sprintf("EVM block, ID = %s", b.ID()) }
+
+func (b *Block) Backfill(ctx context.Context) error {
+	batch := b.vm.chaindb.NewBatch()
+	rawdb.WriteBlock(batch, b.ethBlock)
+	rawdb.WriteCanonicalHash(batch, b.ethBlock.Hash(), b.ethBlock.NumberU64())
+	if err := batch.Write(); err != nil {
+		return err
+	}
+
+	return b.vm.atomicBackend.UpdateAtomicTxRepo(b.ethBlock.NumberU64(), b.ethBlock.Hash(), b.atomicTxs)
+}
