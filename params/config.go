@@ -134,7 +134,7 @@ var (
 	}
 
 	TestChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -161,7 +161,7 @@ var (
 	}
 
 	TestLaunchConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -188,7 +188,7 @@ var (
 	}
 
 	TestApricotPhase1Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -215,7 +215,7 @@ var (
 	}
 
 	TestApricotPhase2Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -242,7 +242,7 @@ var (
 	}
 
 	TestApricotPhase3Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -269,7 +269,7 @@ var (
 	}
 
 	TestApricotPhase4Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -296,7 +296,7 @@ var (
 	}
 
 	TestApricotPhase5Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -323,7 +323,7 @@ var (
 	}
 
 	TestApricotPhasePre6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -350,7 +350,7 @@ var (
 	}
 
 	TestApricotPhase6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -377,7 +377,7 @@ var (
 	}
 
 	TestApricotPhasePost6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -404,7 +404,7 @@ var (
 	}
 
 	TestBanffChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -431,7 +431,7 @@ var (
 	}
 
 	TestCortinaChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -458,7 +458,7 @@ var (
 	}
 
 	TestDUpgradeChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{snow.DefaultContextTest()},
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
 		ChainID:                         big.NewInt(1),
 		HomesteadBlock:                  big.NewInt(0),
 		DAOForkBlock:                    nil,
@@ -581,18 +581,18 @@ func (c *ChainConfig) Description() string {
 	if c.MuirGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Muir Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md)\n", c.MuirGlacierBlock)
 	}
-	banner += fmt.Sprintf(" - Apricot Phase 1 Timestamp:        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.3.0)\n", c.ApricotPhase1BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase 2 Timestamp:        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.4.0)\n", c.ApricotPhase2BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase 3 Timestamp:        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.5.0)\n", c.ApricotPhase3BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase 4 Timestamp:        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.6.0)\n", c.ApricotPhase4BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase 5 Timestamp:        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.7.0)\n", c.ApricotPhase5BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase P6 Timestamp        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", c.ApricotPhasePre6BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase 6 Timestamp:        #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", c.ApricotPhase6BlockTimestamp)
-	banner += fmt.Sprintf(" - Apricot Phase Post-6 Timestamp:   #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0\n", c.ApricotPhasePost6BlockTimestamp)
-	banner += fmt.Sprintf(" - Banff Timestamp:                  #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.9.0)\n", c.BanffBlockTimestamp)
-	banner += fmt.Sprintf(" - Cortina Timestamp:                #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.10.0)\n", c.CortinaBlockTimestamp)
-	banner += fmt.Sprintf(" - DUpgrade Timestamp:               #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.11.0)\n", c.DUpgradeBlockTimestamp)
-	banner += fmt.Sprintf(" - Cancun Timestamp:                 #%-8v (https://github.com/ava-labs/avalanchego/releases/tag/v1.12.0)\n", c.CancunTime)
+	banner += fmt.Sprintf(" - Apricot Phase 1 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.3.0)\n", ptrToString(c.ApricotPhase1BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase 2 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.4.0)\n", ptrToString(c.ApricotPhase2BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase 3 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.5.0)\n", ptrToString(c.ApricotPhase3BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase 4 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.6.0)\n", ptrToString(c.ApricotPhase4BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase 5 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.7.0)\n", ptrToString(c.ApricotPhase5BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase P6 Timestamp        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", ptrToString(c.ApricotPhasePre6BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase 6 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", ptrToString(c.ApricotPhase6BlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase Post-6 Timestamp:   @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0\n", ptrToString(c.ApricotPhasePost6BlockTimestamp))
+	banner += fmt.Sprintf(" - Banff Timestamp:                  @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.9.0)\n", ptrToString(c.BanffBlockTimestamp))
+	banner += fmt.Sprintf(" - Cortina Timestamp:                @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.10.0)\n", ptrToString(c.CortinaBlockTimestamp))
+	banner += fmt.Sprintf(" - DUpgrade Timestamp:               @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.11.0)\n", ptrToString(c.DUpgradeBlockTimestamp))
+	banner += fmt.Sprintf(" - Cancun Timestamp:                 @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.12.0)\n", ptrToString(c.CancunTime))
 	banner += "\n"
 	return banner
 }
@@ -1042,7 +1042,14 @@ func (err *ConfigCompatError) Error() string {
 	if err.StoredBlock != nil {
 		return fmt.Sprintf("mismatching %s in database (have block %d, want block %d, rewindto block %d)", err.What, err.StoredBlock, err.NewBlock, err.RewindToBlock)
 	}
-	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, err.StoredTime, err.NewTime, err.RewindToTime)
+	return fmt.Sprintf("mismatching %s in database (have timestamp %s, want timestamp %s, rewindto timestamp %d)", err.What, ptrToString(err.StoredTime), ptrToString(err.NewTime), err.RewindToTime)
+}
+
+func ptrToString(val *uint64) string {
+	if val == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", *val)
 }
 
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
