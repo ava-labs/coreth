@@ -1364,6 +1364,10 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	return vm.blockChain.SetPreference(block.(*Block).ethBlock)
 }
 
+func (vm *VM) GetPreference(ctx context.Context) (ids.ID, error) {
+	return ids.ID(vm.blockChain.CurrentBlock().Hash()), nil
+}
+
 // VerifyHeightIndex always returns a nil error since the index is maintained by
 // vm.blockChain.
 func (vm *VM) VerifyHeightIndex(context.Context) error {
