@@ -85,7 +85,7 @@ func (p *peerTracker) shouldTrackNewPeer() bool {
 func (p *peerTracker) getResponsivePeer() (ids.NodeID, utils_math.Averager, bool) {
 	nodeID, ok := p.responsivePeers.Peek()
 	if !ok {
-		return ids.NodeID{}, nil, false
+		return ids.EmptyNodeID, nil, false
 	}
 	averager, ok := p.bandwidthHeap.Remove(nodeID)
 	if ok {

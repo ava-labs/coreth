@@ -18,6 +18,7 @@ import (
 	"time"
 
 	avalanchegoMetrics "github.com/ava-labs/avalanchego/api/metrics"
+	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 
@@ -67,7 +68,6 @@ import (
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
-	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"

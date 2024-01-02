@@ -112,7 +112,6 @@ var (
 
 func init() {
 	var b []byte
-
 	for _, key := range []string{
 		"24jUJ9vZexUM6expyMcT48LBx27k1m7xpraoV62oSQAHdziao5",
 		"2MMvUMsxx6zsHSNXJdFD8yc5XkancvwyKPwpw4xUK3TCGDuNBY",
