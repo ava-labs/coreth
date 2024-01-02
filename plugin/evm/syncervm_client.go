@@ -85,6 +85,9 @@ type StateSyncClient interface {
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
 	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
 
+	BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error)
+	BackfillBlocks(ctx context.Context, blocks [][]byte) (ids.ID, uint64, error)
+
 	// additional methods required by the evm package
 	StateSyncClearOngoingSummary() error
 	Shutdown() error
@@ -315,6 +318,14 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	err = <-evmSyncer.Done()
 	log.Info("state sync: sync finished", "root", client.syncSummary.BlockRoot, "err", err)
 	return err
+}
+
+func (client *stateSyncerClient) BackfillBlocksEnabled(ctx context.Context) (ids.ID, uint64, error) {
+	return ids.Empty, 0, block.ErrBlockBackfillingNotEnabled
+}
+
+func (client *stateSyncerClient) BackfillBlocks(ctx context.Context, blksBytes [][]byte) (ids.ID, uint64, error) {
+	return ids.Empty, 0, block.ErrStopBlockBackfilling
 }
 
 func (client *stateSyncerClient) Shutdown() error {
