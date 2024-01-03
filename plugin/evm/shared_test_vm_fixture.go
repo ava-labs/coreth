@@ -84,9 +84,7 @@ func (v *vmFixture) IssueImportTx(
 
 	<-v.issuer
 
-	height := v.buildAndAcceptBlockForTx(context.Background(), importTx)
-
-	v.checkAtomicTxIndexing(importTx, height)
+	v.buildAndAcceptBlockForTx(context.Background(), importTx)
 
 	return importTx
 }
@@ -107,14 +105,12 @@ func (v *vmFixture) IssueExportTx(
 
 	<-v.issuer
 
-	height := v.buildAndAcceptBlockForTx(context.Background(), exportTx)
-
-	v.checkAtomicTxIndexing(exportTx, height)
+	v.buildAndAcceptBlockForTx(context.Background(), exportTx)
 
 	return exportTx
 }
 
-func (v *vmFixture) buildAndAcceptBlockForTx(ctx context.Context, tx *Tx) uint64 {
+func (v *vmFixture) buildAndAcceptBlockForTx(ctx context.Context, tx *Tx) {
 	require := v.require
 
 	blk, err := v.vm.BuildBlock(ctx)
@@ -144,7 +140,8 @@ func (v *vmFixture) buildAndAcceptBlockForTx(ctx context.Context, tx *Tx) uint64
 	require.Zero(len(logs))
 
 	v.height += uint64(1)
-	return v.height
+
+	v.checkAtomicTxIndexing(tx, v.height)
 }
 
 func (v *vmFixture) checkAtomicTxIndexing(tx *Tx, expectedHeight uint64) {

@@ -15,6 +15,10 @@ on:
         required: true
         default: 'master'
 
+env:
+  go_version: '~1.20.12'
+  tmpnet_data_path: ~/.tmpnet/networks/1000
+
 jobs:
   lint:
     name: Lint
@@ -31,7 +35,7 @@ jobs:
           token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
-          go-version: '~1.21.7'
+          go-version: ${{ env.go_version }}
           check-latest: true
       - name: change avalanchego dep
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -134,7 +138,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v3
       with:
-        go-version: '~1.20.8'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: Run integration tests
       run: ./scripts/tests.integration.sh --use-network-fixture
@@ -144,7 +148,8 @@ jobs:
       if: always()
       with:
         name: tmpnet-integration-data
-        path: ~/.tmpnet/networks/1000
+        path: ${{ env.tmpnet_data_path }}
+        if-no-files-found: error
 
   avalanchego_e2e:
     name: AvalancheGo E2E Tests v${{ matrix.go }} (${{ matrix.os }})
@@ -164,7 +169,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v5
       with:
-        go-version: '~1.21.7'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: Run e2e tests
       run: E2E_SERIAL=1 ./scripts/tests.e2e.sh
@@ -174,4 +179,5 @@ jobs:
       if: always()
       with:
         name: tmpnet-e2e-data
-        path: ~/.tmpnet/networks/1000
+        path: ${{ env.tmpnet_data_path }}
+        if-no-files-found: error
