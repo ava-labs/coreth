@@ -173,7 +173,7 @@ func (n *pushGossiper) queueExecutableTxs(state *state.StateDB, baseFee *big.Int
 	// Add up to [maxTxs] transactions to be gossiped
 	queued := make([]*types.Transaction, 0, maxTxs)
 	for len(heads) > 0 && len(queued) < maxTxs {
-		tx := heads[0].Tx
+		tx := heads[0].Tx()
 		queued = append(queued, tx)
 		heap.Pop(&heads)
 	}

@@ -439,16 +439,6 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-// FirstSeen is the time a transaction is first seen.
-func (tx *Transaction) FirstSeen() time.Time {
-	return tx.time
-}
-
-// SetFirstSeen sets overwrites the time a transaction is first seen.
-func (tx *Transaction) SetFirstSeen(t time.Time) {
-	tx.time = t
-}
-
 // Transactions implements DerivableList for transactions.
 type Transactions []*Transaction
 
@@ -514,7 +504,7 @@ func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // TxWithMinerFee wraps a transaction with its gas price or effective miner gasTipCap
 type TxWithMinerFee struct {
-	Tx       *Transaction
+	tx       *Transaction
 	minerFee *big.Int
 }
 
@@ -527,7 +517,7 @@ func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) (*TxWithMinerFee, erro
 		return nil, err
 	}
 	return &TxWithMinerFee{
-		Tx:       tx,
+		tx:       tx,
 		minerFee: minerFee,
 	}, nil
 }
@@ -542,7 +532,7 @@ func (s TxByPriceAndTime) Less(i, j int) bool {
 	// deterministic sorting
 	cmp := s[i].minerFee.Cmp(s[j].minerFee)
 	if cmp == 0 {
-		return s[i].Tx.time.Before(s[j].Tx.time)
+		return s[i].tx.time.Before(s[j].tx.time)
 	}
 	return cmp > 0
 }
@@ -606,12 +596,12 @@ func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 	if len(t.heads) == 0 {
 		return nil
 	}
-	return t.heads[0].Tx
+	return t.heads[0].tx
 }
 
 // Shift replaces the current best head with the next one from the same account.
 func (t *TransactionsByPriceAndNonce) Shift() {
-	acc, _ := Sender(t.signer, t.heads[0].Tx)
+	acc, _ := Sender(t.signer, t.heads[0].tx)
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
 		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee); err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
