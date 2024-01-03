@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
@@ -18,8 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
-	"github.com/ava-labs/avalanchego/tests/fixture/testnet"
-	"github.com/ava-labs/avalanchego/tests/fixture/testnet/local"
+	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -36,7 +36,7 @@ type sharedNetworkFixture struct {
 	require *require.Assertions
 
 	// The URI of the only node the fixture is intended to communicate with
-	nodeURI testnet.NodeURI
+	nodeURI tmpnet.NodeURI
 
 	// Pre-funded key used to configure the wallet
 	preFundedKey *secp256k1.PrivateKey
@@ -53,32 +53,35 @@ func newSharedNetworkFixture(t require.TestingT) *sharedNetworkFixture {
 func (f *sharedNetworkFixture) Teardown() {
 	if !ginkgo.CurrentSpecReport().Failed() {
 		// Only check if bootstrap is possible for passing tests
+		// TODO(marun) Ensure this is safe to perform on teardown. Currently it uses DeferCleanup to stop the node.
 		e2e.CheckBootstrapIsPossible(e2e.Env.GetNetwork())
 
+		// TODO(marun) Allow node restart to be skipped just like the bootstrap check (to allow for parallel execution and faster dev iteration)
 		ginkgo.By(fmt.Sprintf("checking if restart of %q is possible with current network state", f.nodeURI.NodeID))
-		// TODO(marun) Ensure this works for more than local nodes
-		// TODO(marun) Allow this to be skipped just like the bootstrap check (to allow for parallel execution and simplify dev)
-		// TODO(marun) Simplify restart (here and for upgrade test)
-		network, err := local.ReadNetwork(e2e.Env.NetworkDir)
+		network, err := tmpnet.ReadNetwork(e2e.Env.NetworkDir)
 		f.require.NoError(err)
-		var targetNode *local.LocalNode
+		var targetNode *tmpnet.Node
 		for _, node := range network.Nodes {
-			if node.GetID() == f.nodeURI.NodeID {
+			if node.NodeID == f.nodeURI.NodeID {
 				targetNode = node
 				break
 			}
 		}
 		f.require.NotNil(targetNode)
-		f.require.NoError(targetNode.Stop())
 
+		ctx, cancel := context.WithTimeout(context.Background(), e2e.DefaultTimeout)
+		defer cancel()
+		f.require.NoError(targetNode.Stop(ctx))
+
+		// TODO(marun) Update to use Network.StartNode which handles bootstrap setup automatically once https://github.com/ava-labs/avalanchego/pull/2464 merges
 		bootstrapIPs, bootstrapIDs, err := network.GetBootstrapIPsAndIDs()
 		f.require.NoError(err)
 		f.require.NotEmpty(bootstrapIDs)
 		targetNode.Flags[config.BootstrapIDsKey] = strings.Join(bootstrapIDs, ",")
 		targetNode.Flags[config.BootstrapIPsKey] = strings.Join(bootstrapIPs, ",")
-		f.require.NoError(targetNode.WriteConfig())
+		f.require.NoError(targetNode.Write())
 
-		f.require.NoError(targetNode.Start(ginkgo.GinkgoWriter, network.ExecPath))
+		f.require.NoError(targetNode.Start(ginkgo.GinkgoWriter))
 
 		ginkgo.By(fmt.Sprintf("waiting for node %q to report healthy after restart", targetNode.NodeID))
 		e2e.WaitForHealthy(targetNode)
