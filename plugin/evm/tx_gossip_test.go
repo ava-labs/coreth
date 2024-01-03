@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
+
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
@@ -32,10 +34,29 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
 )
+
+func newPrefundedGenesis(
+	balance int,
+	addresses ...ethcommon.Address,
+) *core.Genesis {
+	alloc := core.GenesisAlloc{}
+	for _, address := range addresses {
+		alloc[address] = core.GenesisAccount{
+			Balance: big.NewInt(int64(balance)),
+		}
+	}
+
+	return &core.Genesis{
+		Config:     params.TestChainConfig,
+		Difficulty: big.NewInt(0),
+		Alloc:      alloc,
+	}
+}
 
 func TestEthTxGossip(t *testing.T) {
 	require := require.New(t)

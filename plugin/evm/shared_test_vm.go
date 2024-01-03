@@ -35,6 +35,7 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
@@ -114,7 +115,7 @@ func testSharedMemory() atomic.SharedMemory {
 }
 
 func NewContext() *snow.Context {
-	ctx := snow.DefaultContextTest()
+	ctx := utils.TestSnowContext()
 	ctx.NodeID = ids.GenerateTestNodeID()
 	ctx.NetworkID = testNetworkID
 	ctx.ChainID = testCChainID
