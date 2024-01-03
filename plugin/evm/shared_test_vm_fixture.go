@@ -32,7 +32,7 @@ var (
 type vmFixture struct {
 	require      *require.Assertions
 	assert       *assert.Assertions
-	prefundedKey *secp256k1.PrivateKey
+	preFundedKey *secp256k1.PrivateKey
 	vm           *VM
 	issuer       chan engCommon.Message
 	height       uint64
@@ -41,17 +41,17 @@ type vmFixture struct {
 func CreateVMFixture(t require.TestingT) *vmFixture {
 	require := require.New(t)
 
-	prefundedKey, err := secp256k1.NewPrivateKey()
+	preFundedKey, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
 
 	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
-		prefundedKey.Address(): defaultFundedKeyCChainAmount.Uint64(),
+		preFundedKey.Address(): defaultFundedKeyCChainAmount.Uint64(),
 	})
 
 	return &vmFixture{
 		require:      require,
 		assert:       assert.New(t),
-		prefundedKey: prefundedKey,
+		preFundedKey: preFundedKey,
 		vm:           vm,
 		issuer:       issuer,
 	}
@@ -61,8 +61,8 @@ func (v *vmFixture) Teardown() {
 	v.require.NoError(v.vm.Shutdown(context.Background()))
 }
 
-func (v *vmFixture) GetPrefundedKey() *secp256k1.PrivateKey {
-	return v.prefundedKey
+func (v *vmFixture) GetPreFundedKey() *secp256k1.PrivateKey {
+	return v.preFundedKey
 }
 
 func (v *vmFixture) GetXChainID() ids.ID { return v.vm.ctx.XChainID }

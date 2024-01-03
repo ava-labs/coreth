@@ -38,15 +38,15 @@ type sharedNetworkFixture struct {
 	// The URI of the only node the fixture is intended to communicate with
 	nodeURI testnet.NodeURI
 
-	// Prefunded key used to configure the wallet
-	prefundedKey *secp256k1.PrivateKey
+	// Pre-funded key used to configure the wallet
+	preFundedKey *secp256k1.PrivateKey
 }
 
 func newSharedNetworkFixture(t require.TestingT) *sharedNetworkFixture {
 	return &sharedNetworkFixture{
 		require:      require.New(t),
 		nodeURI:      e2e.Env.GetRandomNodeURI(),
-		prefundedKey: e2e.Env.AllocateFundedKey(),
+		preFundedKey: e2e.Env.AllocatePreFundedKey(),
 	}
 }
 
@@ -85,8 +85,8 @@ func (f *sharedNetworkFixture) Teardown() {
 	}
 }
 
-func (f *sharedNetworkFixture) GetPrefundedKey() *secp256k1.PrivateKey {
-	return f.prefundedKey
+func (f *sharedNetworkFixture) GetPreFundedKey() *secp256k1.PrivateKey {
+	return f.preFundedKey
 }
 
 func (f *sharedNetworkFixture) GetXChainID() ids.ID {

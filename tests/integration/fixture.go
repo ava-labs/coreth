@@ -18,7 +18,7 @@ import (
 type IntegrationFixture interface {
 	Teardown()
 
-	GetPrefundedKey() *secp256k1.PrivateKey
+	GetPreFundedKey() *secp256k1.PrivateKey
 
 	GetXChainID() ids.ID
 

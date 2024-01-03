@@ -26,7 +26,7 @@ var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 	ginkgo.It("should support issuing atomic transactions", func() {
 		f := i9n.GetFixture()
 
-		prefundedKey := f.GetPrefundedKey()
+		preFundedKey := f.GetPreFundedKey()
 
 		recipientKey, err := secp256k1.NewPrivateKey()
 		require.NoError(err)
@@ -38,7 +38,7 @@ var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 			importAmount,
 			recipientEthAddress,
 			[]*secp256k1.PrivateKey{
-				prefundedKey,
+				preFundedKey,
 			},
 		)
 
