@@ -460,10 +460,10 @@ func (vm *VM) Initialize(
 		config := *params.AvalancheLocalChainConfig
 		g.Config = &config
 	}
-	// If the DUpgrade is activated, activate the Warp Precompile at the same time
-	if g.Config.DUpgradeBlockTimestamp != nil {
+	// If the Durango is activated, activate the Warp Precompile at the same time
+	if g.Config.DurangoBlockTimestamp != nil {
 		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpPrecompile.NewDefaultConfig(g.Config.DUpgradeBlockTimestamp),
+			Config: warpPrecompile.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
 		})
 	}
 	// Set the Avalanche Context on the ChainConfig
@@ -611,14 +611,12 @@ func (vm *VM) Initialize(
 	}
 	// initialize bonus blocks on mainnet
 	var (
-		bonusBlockHeights     map[uint64]ids.ID
-		bonusBlockRepair      map[uint64]*types.Block
-		canonicalBlockHeights []uint64
+		bonusBlockHeights map[uint64]ids.ID
+		bonusBlockRepair  map[uint64]*types.Block
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
 		bonusBlockHeights = bonusBlockMainnetHeights
 		bonusBlockRepair = mainnetBonusBlocksParsed
-		canonicalBlockHeights = canonicalBlockMainnetHeights
 	}
 	defer func() {
 		// Free memory after VM is initialized
@@ -629,7 +627,6 @@ func (vm *VM) Initialize(
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
 		vm.db, vm.codec, lastAcceptedHeight,
-		bonusBlockHeights, canonicalBlockHeights,
 		vm.getAtomicTxFromPreApricot5BlockByHeight,
 	)
 	if err != nil {
@@ -646,7 +643,7 @@ func (vm *VM) Initialize(
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	// Run the atomic trie height map repair in the background on mainnet/fuji
-	// TODO: remove after DUpgrade
+	// TODO: remove after Durango
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 ||
 		vm.chainID.Cmp(params.AvalancheFujiChainID) == 0 {
 		_, lastCommitted := vm.atomicTrie.LastCommitted()
