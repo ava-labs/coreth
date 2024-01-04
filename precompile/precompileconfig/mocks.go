@@ -188,9 +188,9 @@ func (m *MockChainConfig) IsDurango(arg0 uint64) bool {
 }
 
 // IsDUpgrade indicates an expected call of IsDurango.
-func (mr *MockChainConfigMockRecorder) IsDUpgrade(arg0 interface{}) *gomock.Call {
+func (mr *MockChainConfigMockRecorder) IsDurango(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDurango", reflect.TypeOf((*MockChainConfig)(nil).IsDUpgrade), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDurango", reflect.TypeOf((*MockChainConfig)(nil).IsDurango), arg0)
 }
 
 // MockAccepter is a mock of Accepter interface.
