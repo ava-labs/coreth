@@ -68,7 +68,6 @@ type StateDB interface {
 
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
-	Finalise(deleteEmptyObjects bool)
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
@@ -91,7 +90,7 @@ type StateDB interface {
 	Snapshot() int
 
 	AddLog(addr common.Address, topics []common.Hash, data []byte, blockNumber uint64)
-	GetLogData() [][]byte
+	GetLogData() (topics [][]common.Hash, data [][]byte)
 	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
 	SetPredicateStorageSlots(address common.Address, predicates [][]byte)
 
