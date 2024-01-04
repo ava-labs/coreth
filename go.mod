@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.10.18-rc.9
+	github.com/ava-labs/avalanchego v1.10.18-rc.8
 	github.com/cespare/cp v0.1.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/davecgh/go-spew v1.1.1
@@ -19,7 +19,6 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/go-bexpr v0.1.10
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
-	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.2-0.20230321075855-87b91420868c
 	github.com/kylelemons/godebug v1.1.0

@@ -8,16 +8,20 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	warpValidators "github.com/ava-labs/coreth/warp/validators"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+const (
+	WarpDefaultQuorumNumerator uint64 = 67
+	WarpQuorumNumeratorMinimum uint64 = 33
+	WarpQuorumDenominator      uint64 = 100
 )
 
 var (
@@ -30,11 +34,13 @@ var (
 	errOverflowSignersGasCost  = errors.New("overflow calculating warp signers gas cost")
 	errInvalidPredicateBytes   = errors.New("cannot unpack predicate bytes")
 	errInvalidWarpMsg          = errors.New("cannot unpack warp message")
+	errCannotParseWarpMsg      = errors.New("cannot parse warp message")
 	errInvalidWarpMsgPayload   = errors.New("cannot unpack warp message payload")
 	errInvalidAddressedPayload = errors.New("cannot unpack addressed payload")
 	errInvalidBlockHashPayload = errors.New("cannot unpack block hash payload")
 	errCannotGetNumSigners     = errors.New("cannot fetch num signers from warp message")
-	errWarpCannotBeActivated   = errors.New("warp cannot be activated before DUpgrade")
+	errWarpCannotBeActivated   = errors.New("warp cannot be activated before Durango")
+	errFailedVerification      = errors.New("cannot verify warp signature")
 )
 
 // Config implements the precompileconfig.Config interface and
@@ -77,19 +83,19 @@ func (*Config) Key() string { return ConfigKey }
 // Verify tries to verify Config and returns an error accordingly.
 func (c *Config) Verify(chainConfig precompileconfig.ChainConfig) error {
 	if c.Timestamp() != nil {
-		// If Warp attempts to activate before the DUpgrade, fail verification
+		// If Warp attempts to activate before Durango, fail verification
 		timestamp := *c.Timestamp()
-		if !chainConfig.IsDUpgrade(timestamp) {
+		if !chainConfig.IsDurango(timestamp) {
 			return errWarpCannotBeActivated
 		}
 	}
 
-	if c.QuorumNumerator > params.WarpQuorumDenominator {
-		return fmt.Errorf("cannot specify quorum numerator (%d) > quorum denominator (%d)", c.QuorumNumerator, params.WarpQuorumDenominator)
+	if c.QuorumNumerator > WarpQuorumDenominator {
+		return fmt.Errorf("cannot specify quorum numerator (%d) > quorum denominator (%d)", c.QuorumNumerator, WarpQuorumDenominator)
 	}
 	// If a non-default quorum numerator is specified and it is less than the minimum, return an error
-	if c.QuorumNumerator != 0 && c.QuorumNumerator < params.WarpQuorumNumeratorMinimum {
-		return fmt.Errorf("cannot specify quorum numerator (%d) < min quorum numerator (%d)", c.QuorumNumerator, params.WarpQuorumNumeratorMinimum)
+	if c.QuorumNumerator != 0 && c.QuorumNumerator < WarpQuorumNumeratorMinimum {
+		return fmt.Errorf("cannot specify quorum numerator (%d) < min quorum numerator (%d)", c.QuorumNumerator, WarpQuorumNumeratorMinimum)
 	}
 	return nil
 }
@@ -123,32 +129,6 @@ func (c *Config) Accept(acceptCtx *precompileconfig.AcceptContext, blockHash com
 		return fmt.Errorf("failed to add warp message during accept (TxHash: %s, LogIndex: %d): %w", txHash, logIndex, err)
 	}
 	return nil
-}
-
-// verifyWarpMessage checks that [warpMsg] can be parsed as an addressed payload and verifies the Warp Message Signature
-// within [predicateContext].
-func (c *Config) verifyWarpMessage(predicateContext *precompileconfig.PredicateContext, warpMsg *warp.Message) bool {
-	// Use default quorum numerator unless config specifies a non-default option
-	quorumNumerator := params.WarpDefaultQuorumNumerator
-	if c.QuorumNumerator != 0 {
-		quorumNumerator = c.QuorumNumerator
-	}
-
-	log.Debug("verifying warp message", "warpMsg", warpMsg, "quorumNum", quorumNumerator, "quorumDenom", params.WarpQuorumDenominator)
-	if err := warpMsg.Signature.Verify(
-		context.Background(),
-		&warpMsg.UnsignedMessage,
-		predicateContext.SnowCtx.NetworkID,
-		warpValidators.NewState(predicateContext.SnowCtx), // Wrap validators.State on the chain snow context to special case the Primary Network
-		predicateContext.ProposerVMBlockCtx.PChainHeight,
-		quorumNumerator,
-		params.WarpQuorumDenominator,
-	); err != nil {
-		log.Debug("failed to verify warp signature", "msgID", warpMsg.ID(), "err", err)
-		return false
-	}
-
-	return true
 }
 
 // PredicateGas returns the amount of gas necessary to verify the predicate
@@ -199,29 +179,39 @@ func (c *Config) PredicateGas(predicateBytes []byte) (uint64, error) {
 	return totalGas, nil
 }
 
-func (c *Config) verifyPredicate(predicateContext *precompileconfig.PredicateContext, predicateBytes []byte) bool {
+// VerifyPredicate returns whether the predicate described by [predicateBytes] passes verification.
+func (c *Config) VerifyPredicate(predicateContext *precompileconfig.PredicateContext, predicateBytes []byte) error {
 	unpackedPredicateBytes, err := predicate.UnpackPredicate(predicateBytes)
 	if err != nil {
-		return false
+		return fmt.Errorf("%w: %w", errInvalidPredicateBytes, err)
 	}
 
 	// Note: PredicateGas should be called before VerifyPredicate, so we should never reach an error case here.
-	warpMessage, err := warp.ParseMessage(unpackedPredicateBytes)
+	warpMsg, err := warp.ParseMessage(unpackedPredicateBytes)
 	if err != nil {
-		return false
+		return fmt.Errorf("%w: %w", errCannotParseWarpMsg, err)
 	}
-	return c.verifyWarpMessage(predicateContext, warpMessage)
-}
 
-// VerifyPredicate computes indices of predicates that failed verification as a bitset then returns the result
-// as a byte slice.
-func (c *Config) VerifyPredicate(predicateContext *precompileconfig.PredicateContext, predicates [][]byte) []byte {
-	resultBitSet := set.NewBits()
-
-	for predicateIndex, predicateBytes := range predicates {
-		if !c.verifyPredicate(predicateContext, predicateBytes) {
-			resultBitSet.Add(predicateIndex)
-		}
+	quorumNumerator := WarpDefaultQuorumNumerator
+	if c.QuorumNumerator != 0 {
+		quorumNumerator = c.QuorumNumerator
 	}
-	return resultBitSet.Bytes()
+
+	log.Debug("verifying warp message", "warpMsg", warpMsg, "quorumNum", quorumNumerator, "quorumDenom", WarpQuorumDenominator)
+	err = warpMsg.Signature.Verify(
+		context.Background(),
+		&warpMsg.UnsignedMessage,
+		predicateContext.SnowCtx.NetworkID,
+		warpValidators.NewState(predicateContext.SnowCtx), // Wrap validators.State on the chain snow context to special case the Primary Network
+		predicateContext.ProposerVMBlockCtx.PChainHeight,
+		quorumNumerator,
+		WarpQuorumDenominator,
+	)
+
+	if err != nil {
+		log.Debug("failed to verify warp signature", "msgID", warpMsg.ID(), "err", err)
+		return fmt.Errorf("%w: %w", errFailedVerification, err)
+	}
+
+	return nil
 }
