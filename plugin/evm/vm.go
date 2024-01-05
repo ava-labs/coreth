@@ -141,15 +141,15 @@ const (
 	atomicTxGossipProtocol = 0x1
 
 	// gossip constants
-	txGossipBloomMaxItems          = 8 * 1024
-	txGossipBloomFalsePositiveRate = 0.01
-	txGossipMaxFalsePositiveRate   = 0.05
-	txGossipTargetMessageSize      = 20 * units.KiB
-	maxValidatorSetStaleness       = time.Minute
-	txGossipThrottlingPeriod       = 10 * time.Second
-	txGossipThrottlingLimit        = 2
-	gossipFrequency                = 10 * time.Second
-	txGossipPollSize               = 10
+	txGossipBloomMinTargetItems          = 8 * 1024
+	txGossipBloomTargetFalsePositiveRate = 0.01
+	txGossipBloomResetFalsePositiveRate  = 0.05
+	txGossipTargetMessageSize            = 20 * units.KiB
+	maxValidatorSetStaleness             = time.Minute
+	txGossipThrottlingPeriod             = 10 * time.Second
+	txGossipThrottlingLimit              = 2
+	gossipFrequency                      = 10 * time.Second
+	txGossipPollSize                     = 10
 )
 
 // Define the API endpoints for the VM

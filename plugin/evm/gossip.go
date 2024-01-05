@@ -109,7 +109,7 @@ func (tx *GossipAtomicTx) GossipID() ids.ID {
 }
 
 func NewGossipEthTxPool(mempool *txpool.TxPool) (*GossipEthTxPool, error) {
-	bloom, err := gossip.NewBloomFilter(txGossipBloomMaxItems, txGossipBloomFalsePositiveRate)
+	bloom, err := gossip.NewBloomFilter(txGossipBloomMinTargetItems, txGossipBloomTargetFalsePositiveRate, txGossipBloomResetFalsePositiveRate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bloom filter: %w", err)
 	}
@@ -139,10 +139,11 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 			return
 		case pendingTxs := <-g.pendingTxs:
 			g.lock.Lock()
+			optimalSize := g.mempool.PendingSize() + len(pendingTxs.Txs) // should never come close to overflowing
 			for _, pendingTx := range pendingTxs.Txs {
 				tx := &GossipEthTx{Tx: pendingTx}
 				g.bloom.Add(tx)
-				reset, err := gossip.ResetBloomFilterIfNeeded(g.bloom, txGossipMaxFalsePositiveRate)
+				reset, err := gossip.ResetBloomFilterIfNeeded(g.bloom, optimalSize)
 				if err != nil {
 					log.Error("failed to reset bloom filter", "err", err)
 					continue
