@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -1143,4 +1133,16 @@ func (c *ChainConfig) AvalancheRules(blockNum *big.Int, timestamp uint64) Rules 
 func (r *Rules) IsPrecompileEnabled(addr common.Address) bool {
 	_, ok := r.ActivePrecompiles[addr]
 	return ok
+}
+
+type X struct{}
+type (
+	Y = X
+	Z X
+)
+
+func x() {
+	y := Y{}
+	z := Z(y)
+	_ = z
 }
