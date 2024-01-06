@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/ethereum"
 
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
@@ -37,7 +38,6 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/ethdb"
-	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
@@ -53,16 +53,16 @@ var (
 	_ bind.ContractBackend        = (*SimulatedBackend)(nil)
 	_ bind.DeployBackend          = (*SimulatedBackend)(nil)
 
-	_ interfaces.ChainReader            = (*SimulatedBackend)(nil)
-	_ interfaces.ChainStateReader       = (*SimulatedBackend)(nil)
-	_ interfaces.TransactionReader      = (*SimulatedBackend)(nil)
-	_ interfaces.TransactionSender      = (*SimulatedBackend)(nil)
-	_ interfaces.ContractCaller         = (*SimulatedBackend)(nil)
-	_ interfaces.GasEstimator           = (*SimulatedBackend)(nil)
-	_ interfaces.GasPricer              = (*SimulatedBackend)(nil)
-	_ interfaces.LogFilterer            = (*SimulatedBackend)(nil)
-	_ interfaces.AcceptedStateReader    = (*SimulatedBackend)(nil)
-	_ interfaces.AcceptedContractCaller = (*SimulatedBackend)(nil)
+	_ ethereum.ChainReader            = (*SimulatedBackend)(nil)
+	_ ethereum.ChainStateReader       = (*SimulatedBackend)(nil)
+	_ ethereum.TransactionReader      = (*SimulatedBackend)(nil)
+	_ ethereum.TransactionSender      = (*SimulatedBackend)(nil)
+	_ ethereum.ContractCaller         = (*SimulatedBackend)(nil)
+	_ ethereum.GasEstimator           = (*SimulatedBackend)(nil)
+	_ ethereum.GasPricer              = (*SimulatedBackend)(nil)
+	_ ethereum.LogFilterer            = (*SimulatedBackend)(nil)
+	_ ethereum.AcceptedStateReader    = (*SimulatedBackend)(nil)
+	_ ethereum.AcceptedContractCaller = (*SimulatedBackend)(nil)
 )
 
 var (
@@ -275,7 +275,7 @@ func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common
 
 	receipt, _, _, _ := rawdb.ReadReceipt(b.database, txHash, b.config)
 	if receipt == nil {
-		return nil, interfaces.NotFound
+		return nil, ethereum.NotFound
 	}
 	return receipt, nil
 }
@@ -296,7 +296,7 @@ func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.
 	if tx != nil {
 		return tx, false, nil
 	}
-	return nil, false, interfaces.NotFound
+	return nil, false, ethereum.NotFound
 }
 
 // BlockByHash retrieves a block based on the block hash.
@@ -458,7 +458,7 @@ func (e *revertError) ErrorData() interface{} {
 }
 
 // CallContract executes a contract call.
-func (b *SimulatedBackend) CallContract(ctx context.Context, call interfaces.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -481,7 +481,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call interfaces.Cal
 }
 
 // AcceptedCallContract executes a contract call on the accepted state.
-func (b *SimulatedBackend) AcceptedCallContract(ctx context.Context, call interfaces.CallMsg) ([]byte, error) {
+func (b *SimulatedBackend) AcceptedCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.acceptedState.RevertToSnapshot(b.acceptedState.Snapshot())
@@ -526,7 +526,7 @@ func (b *SimulatedBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, erro
 
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
-func (b *SimulatedBackend) EstimateGas(ctx context.Context, call interfaces.CallMsg) (uint64, error) {
+func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -630,7 +630,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call interfaces.Call
 
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call interfaces.CallMsg, header *types.Header, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, header *types.Header, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Gas prices post 1559 need to be initialized
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -739,7 +739,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 // returning all the results in one batch.
 //
 // TODO(karalabe): Deprecate when the subscription one can return past data too.
-func (b *SimulatedBackend) FilterLogs(ctx context.Context, query interfaces.FilterQuery) ([]types.Log, error) {
+func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
 	var filter *filters.Filter
 	if query.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
@@ -771,7 +771,7 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query interfaces.Filt
 
 // SubscribeFilterLogs creates a background log filtering operation, returning a
 // subscription immediately, which can be used to stream the found events.
-func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, query interfaces.FilterQuery, ch chan<- types.Log) (interfaces.Subscription, error) {
+func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
 	// Subscribe to contract events
 	sink := make(chan []*types.Log)
 
@@ -804,7 +804,7 @@ func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, query interf
 }
 
 // SubscribeNewHead returns an event subscription for a new header.
-func (b *SimulatedBackend) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (interfaces.Subscription, error) {
+func (b *SimulatedBackend) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	// subscribe to a new head
 	sink := make(chan *types.Header)
 	sub := b.events.SubscribeNewHeads(sink)
