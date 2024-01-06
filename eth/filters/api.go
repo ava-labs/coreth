@@ -27,6 +27,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethereum"
+	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
@@ -235,7 +236,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 		headerSub *Subscription
 	)
 
-	if api.sys.backend.AllowUnfinalizedQueries() {
+	if api.sys.backend.IsAllowUnfinalizedQueries() {
 		headerSub = api.events.SubscribeNewHeads(headers)
 	} else {
 		headerSub = api.events.SubscribeAcceptedHeads(headers)
@@ -281,7 +282,7 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 			headersSub event.Subscription
 		)
 
-		if api.sys.backend.AllowUnfinalizedQueries() {
+		if api.sys.backend.IsAllowUnfinalizedQueries() {
 			headersSub = api.events.SubscribeNewHeads(headers)
 		} else {
 			headersSub = api.events.SubscribeAcceptedHeads(headers)
@@ -318,8 +319,8 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 		err         error
 	)
 
-	if api.sys.backend.AllowUnfinalizedQueries() {
-		logsSub, err = api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
+	if api.sys.backend.IsAllowUnfinalizedQueries() {
+		logsSub, err = api.events.SubscribeLogs(interfaces.FilterQuery(crit), matchedLogs)
 		if err != nil {
 			return nil, err
 		}
@@ -373,8 +374,8 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 		err     error
 	)
 
-	if api.sys.backend.AllowUnfinalizedQueries() {
-		logsSub, err = api.events.SubscribeLogs(ethereum.FilterQuery(crit), logs)
+	if api.sys.backend.IsAllowUnfinalizedQueries() {
+		logsSub, err = api.events.SubscribeLogs(interfaces.FilterQuery(crit), logs)
 		if err != nil {
 			return rpc.ID(""), err
 		}

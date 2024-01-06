@@ -87,6 +87,7 @@ type Backend interface {
 	Engine() consensus.Engine
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
+	StateAtNextBlock(ctx context.Context, parent, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, StateReleaseFunc, error)
 }
 
@@ -393,7 +394,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				s1, s2 := statedb.Database().TrieDB().Size()
 				preferDisk = s1+s2 > defaultTracechainMemLimit
 			}
-			statedb, release, err = api.backend.StateAtBlock(ctx, block, reexec, statedb, false, preferDisk)
+			statedb, release, err = api.backend.StateAtNextBlock(ctx, block, next, reexec, statedb, false, preferDisk)
 			if err != nil {
 				failed = err
 				break
@@ -540,7 +541,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := api.backend.StateAtNextBlock(ctx, parent, block, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -617,7 +618,7 @@ func (api *baseAPI) traceBlock(ctx context.Context, block *types.Block, config *
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := api.backend.StateAtNextBlock(ctx, parent, block, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -759,7 +760,7 @@ func (api *FileTracerAPI) standardTraceBlockToFile(ctx context.Context, block *t
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := api.backend.StateAtNextBlock(ctx, parent, block, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -939,10 +940,18 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
+		originalTime := block.Time()
+		config.BlockOverrides.Apply(&vmctx)
+		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
+		// Should be applied before the state overrides.
+		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, &vmctx, statedb)
+		if err != nil {
+			return nil, err
+		}
+
 		if err := config.StateOverrides.Apply(statedb); err != nil {
 			return nil, err
 		}
-		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
 	msg, err := args.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
@@ -1067,8 +1076,8 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		copy.CortinaBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.DUpgradeBlockTimestamp; timestamp != nil {
-		copy.DUpgradeBlockTimestamp = timestamp
+	if timestamp := override.DurangoBlockTimestamp; timestamp != nil {
+		copy.DurangoBlockTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {

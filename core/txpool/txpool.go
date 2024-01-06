@@ -1104,7 +1104,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	pool.mu.Unlock()
 
-	var nilSlot = 0
+	nilSlot := 0
 	for _, err := range newErrs {
 		for errs[nilSlot] != nil {
 			nilSlot++
@@ -1176,6 +1176,8 @@ func (pool *TxPool) HasLocal(hash common.Hash) bool {
 	return pool.all.GetLocal(hash) != nil
 }
 
+// RemoveTx removes a single transaction from the queue, moving all subsequent
+// transactions back to the future queue.
 func (pool *TxPool) RemoveTx(hash common.Hash) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -1515,7 +1517,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.rules.Store(&rules)
 	pool.eip2718.Store(rules.IsApricotPhase2)
 	pool.eip1559.Store(rules.IsApricotPhase3)
-	pool.eip3860.Store(rules.IsDUpgrade)
+	pool.eip3860.Store(rules.IsDurango)
 }
 
 // promoteExecutables moves transactions that have become processable from the
