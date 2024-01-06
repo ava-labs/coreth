@@ -27,7 +27,6 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethereum"
-	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
@@ -320,7 +319,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	)
 
 	if api.sys.backend.IsAllowUnfinalizedQueries() {
-		logsSub, err = api.events.SubscribeLogs(interfaces.FilterQuery(crit), matchedLogs)
+		logsSub, err = api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
 		if err != nil {
 			return nil, err
 		}
@@ -353,7 +352,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 }
 
 // FilterCriteria represents a request to create a new filter.
-// Same as interfaces.FilterQuery but with UnmarshalJSON() method.
+// Same as ethereum.FilterQuery but with UnmarshalJSON() method.
 type FilterCriteria ethereum.FilterQuery
 
 // NewFilter creates a new filter and returns the filter id. It can be
@@ -375,7 +374,7 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	)
 
 	if api.sys.backend.IsAllowUnfinalizedQueries() {
-		logsSub, err = api.events.SubscribeLogs(interfaces.FilterQuery(crit), logs)
+		logsSub, err = api.events.SubscribeLogs(ethereum.FilterQuery(crit), logs)
 		if err != nil {
 			return rpc.ID(""), err
 		}
