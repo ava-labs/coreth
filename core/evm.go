@@ -22,6 +22,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -164,4 +165,14 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) 
 func TransferMultiCoin(db vm.StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
 	db.SubBalanceMultiCoin(sender, coinID, amount)
 	db.AddBalanceMultiCoin(recipient, coinID, amount)
+}
+
+type EVM struct {
+	*vm.EVM
+}
+
+func NewEVM(blockCtx vm.BlockContext, txCtx vm.TxContext, statedb vm.StateDB, chainConfig *params.ChainConfig, config vm.Config) *EVM {
+	return &EVM{
+		vm.NewEVM(blockCtx, txCtx, statedb, chainConfig, config),
+	}
 }
