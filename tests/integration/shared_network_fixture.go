@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -18,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/tests"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -54,7 +56,7 @@ func (f *sharedNetworkFixture) Teardown() {
 	if !ginkgo.CurrentSpecReport().Failed() {
 		// Only check if bootstrap is possible for passing tests
 		// TODO(marun) Ensure this is safe to perform on teardown. Currently it uses DeferCleanup to stop the node.
-		e2e.CheckBootstrapIsPossible(e2e.Env.GetNetwork())
+		CheckBootstrapIsPossible(e2e.Env.GetNetwork())
 
 		// TODO(marun) Allow node restart to be skipped just like the bootstrap check (to allow for parallel execution and faster dev iteration)
 		ginkgo.By(fmt.Sprintf("checking if restart of %q is possible with current network state", f.nodeURI.NodeID))
@@ -219,4 +221,33 @@ func getChainAlias(chainID ids.ID) string {
 		return "P"
 	}
 	return "X"
+}
+
+// TODO(marun) Remove when e2e.CheckBootstrapIsPossible is available in a tagged release of avalanchego
+func CheckBootstrapIsPossible(network *tmpnet.Network) {
+	require := require.New(ginkgo.GinkgoT())
+
+	if len(os.Getenv(e2e.SkipBootstrapChecksEnvName)) > 0 {
+		tests.Outf("{{yellow}}Skipping bootstrap check due to the %s env var being set", e2e.SkipBootstrapChecksEnvName)
+		return
+	}
+	ginkgo.By("checking if bootstrap is possible with the current network state")
+
+	ctx, cancel := context.WithTimeout(context.Background(), e2e.DefaultTimeout)
+	defer cancel()
+
+	node, err := network.AddEphemeralNode(ctx, ginkgo.GinkgoWriter, tmpnet.FlagsMap{})
+	// AddEphemeralNode will initiate node stop if an error is encountered during start,
+	// so no further cleanup effort is required if an error is seen here.
+	require.NoError(err)
+
+	// Ensure the node is always stopped at the end of the check
+	defer func() {
+		ctx, cancel = context.WithTimeout(context.Background(), e2e.DefaultTimeout)
+		defer cancel()
+		require.NoError(node.Stop(ctx))
+	}()
+
+	// Check that the node becomes healthy within timeout
+	require.NoError(tmpnet.WaitForHealthy(ctx, node))
 }
