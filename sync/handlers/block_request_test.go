@@ -161,7 +161,7 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	memdb := memorydb.New()
+	memdb := rawdb.NewMemoryDatabase()
 	genesis := gspec.MustCommit(memdb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(gspec.Config, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {

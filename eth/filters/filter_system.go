@@ -38,7 +38,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"

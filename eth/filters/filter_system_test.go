@@ -42,7 +42,6 @@ import (
 	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
