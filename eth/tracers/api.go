@@ -32,7 +32,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/ethdb"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -190,6 +190,8 @@ type StdTraceConfig struct {
 	logger.Config
 	Reexec *uint64
 	TxHash common.Hash
+	// Chain overrides, can be used to execute a trace using future fork rules
+	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
 // txTraceResult is the result of a single transaction trace.
