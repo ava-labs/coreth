@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package vm
+package core
 
 import (
 	"math/big"
@@ -9,50 +9,12 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestPrecompiledContractSpendsGas(t *testing.T) {
-	unwrapped := &sha256hash{}
-
-	input := []byte{'J', 'E', 'T', 'S'}
-	requiredGas := unwrapped.RequiredGas(input)
-	_, remainingGas, err := RunPrecompiledContract(unwrapped, input, requiredGas)
-	if err != nil {
-		t.Fatalf("Unexpectedly failed to run precompiled contract: %s", err)
-	}
-
-	if remainingGas != 0 {
-		t.Fatalf("Found more remaining gas than expected: %d", remainingGas)
-	}
-}
-
-// CanTransfer checks whether there are enough funds in the address' account to make a transfer.
-// This does not take the necessary gas in to account to make the transfer valid.
-func CanTransfer(db StateDB, addr common.Address, amount *big.Int) bool {
-	return db.GetBalance(addr).Cmp(amount) >= 0
-}
-
-func CanTransferMC(db StateDB, addr common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
-	log.Info("CanTransferMC", "address", addr, "to", to, "coinID", coinID, "amount", amount)
-	return db.GetBalanceMultiCoin(addr, coinID).Cmp(amount) >= 0
-}
-
-// Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func Transfer(db StateDB, sender, recipient common.Address, amount *big.Int) {
-	db.SubBalance(sender, amount)
-	db.AddBalance(recipient, amount)
-}
-
-// Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func TransferMultiCoin(db StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
-	db.SubBalanceMultiCoin(sender, coinID, amount)
-	db.AddBalanceMultiCoin(recipient, coinID, amount)
-}
 
 func TestPackNativeAssetCallInput(t *testing.T) {
 	addr := common.BytesToAddress([]byte("hello"))
@@ -71,13 +33,11 @@ func TestPackNativeAssetCallInput(t *testing.T) {
 }
 
 func TestStatefulPrecompile(t *testing.T) {
-	vmCtx := BlockContext{
-		BlockNumber:       big.NewInt(0),
-		Time:              0,
-		CanTransfer:       CanTransfer,
-		CanTransferMC:     CanTransferMC,
-		Transfer:          Transfer,
-		TransferMultiCoin: TransferMultiCoin,
+	vmCtx := vm.BlockContext{
+		BlockNumber: big.NewInt(0),
+		Time:        0,
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
 	}
 
 	type statefulContractTest struct {
@@ -468,8 +428,8 @@ func TestStatefulPrecompile(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			stateDB := test.setupStateDB()
 			// Create EVM with BlockNumber and Time initialized to 0 to enable Apricot Rules.
-			evm := NewEVM(vmCtx, TxContext{}, stateDB, params.TestApricotPhase5Config, Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
-			ret, gasRemaining, err := evm.Call(AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
+			evm := NewEVM(vmCtx, vm.TxContext{}, stateDB, params.TestApricotPhase5Config, vm.Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
+			ret, gasRemaining, err := evm.Call(vm.AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
 			// Place gas remaining check before error check, so that it is not skipped when there is an error
 			assert.Equal(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining")
 

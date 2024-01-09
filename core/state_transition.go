@@ -223,8 +223,8 @@ func ApplyMessage(evm *EVM, msg *Message, gp *GasPool) (*ExecutionResult, error)
 	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
-type StateDB interface {
-	vm.StateDB
+type stateDB interface {
+	StateDB
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 }
 
@@ -259,7 +259,7 @@ type StateTransition struct {
 	msg          *Message
 	gasRemaining uint64
 	initialGas   uint64
-	state        StateDB
+	state        stateDB
 	evm          *EVM
 }
 
@@ -269,7 +269,7 @@ func NewStateTransition(evm *EVM, msg *Message, gp *GasPool) *StateTransition {
 		gp:    gp,
 		evm:   evm,
 		msg:   msg,
-		state: evm.StateDB.(StateDB),
+		state: unwrapStateDB(evm.StateDB).(stateDB),
 	}
 }
 
@@ -410,7 +410,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gasRemaining -= gas
 
 	// Check clause 6
-	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {
+	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(&stateDBWrapper{st.state}, msg.From, msg.Value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 

@@ -21,8 +21,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	gethvm "github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
@@ -157,7 +157,7 @@ func CanTransfer(db gethvm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
-func CanTransferMC(db vm.StateDB, addr common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
+func CanTransferMC(db StateDB, addr common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
 	return db.GetBalanceMultiCoin(addr, coinID).Cmp(amount) >= 0
 }
 
@@ -168,7 +168,7 @@ func Transfer(db gethvm.StateDB, sender, recipient common.Address, amount *big.I
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func TransferMultiCoin(db vm.StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
+func TransferMultiCoin(db StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
 	db.SubBalanceMultiCoin(sender, coinID, amount)
 	db.AddBalanceMultiCoin(recipient, coinID, amount)
 }
@@ -177,10 +177,10 @@ type EVM struct {
 	*gethvm.EVM
 
 	chainConfig *params.ChainConfig
-	stateDB     vm.StateDB
+	stateDB     StateDB
 }
 
-func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb vm.StateDB, chainConfig *params.ChainConfig, config gethvm.Config) *EVM {
+func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb StateDB, chainConfig *params.ChainConfig, config gethvm.Config) *EVM {
 	evm := &EVM{
 		chainConfig: chainConfig,
 		stateDB:     statedb,
@@ -201,14 +201,14 @@ func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb vm.Sta
 	}
 	config.ActivePrecompiles = ActivePrecompiles(rules)
 	config.IsProhibited = func(addr common.Address) error {
-		if vm.IsProhibited(addr) {
+		if IsProhibited(addr) {
 			return vmerrs.ErrAddrProhibited
 		}
 		return nil
 	}
 	config.Multicoiner = &multicoiner{}
 	config.InterpreterHook = func(contract *gethvm.Contract) *gethvm.Contract {
-		if !rules.IsApricotPhase2 && contract.Address() == vm.BuiltinAddr {
+		if !rules.IsApricotPhase2 && contract.Address() == BuiltinAddr {
 			return contract.AsGenesisContract()
 		}
 		return contract
@@ -219,13 +219,13 @@ func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb vm.Sta
 	var precompiles map[common.Address]contract.StatefulPrecompiledContract
 	switch {
 	case rules.IsBanff:
-		precompiles = vm.PrecompiledContractsBanff
+		precompiles = PrecompiledContractsBanff
 	case rules.IsApricotPhase6:
-		precompiles = vm.PrecompiledContractsApricotPhase6
+		precompiles = PrecompiledContractsApricotPhase6
 	case rules.IsApricotPhasePre6:
-		precompiles = vm.PrecompiledContractsApricotPhasePre6
+		precompiles = PrecompiledContractsApricotPhasePre6
 	case rules.IsApricotPhase2:
-		precompiles = vm.PrecompiledContractsApricotPhase2
+		precompiles = PrecompiledContractsApricotPhase2
 	}
 	for addr, precompile := range precompiles {
 		addr, precompile := addr, precompile
@@ -295,18 +295,12 @@ func (evm *EVM) GetStateDB() contract.StateDB {
 }
 
 type stateDBWrapper struct {
-	vm.StateDB
+	StateDB
 }
 
 func (s *stateDBWrapper) AddLog(log *gethtypes.Log) {
 	s.StateDB.AddLog(log.Address, log.Topics, log.Data, log.BlockNumber)
 }
-
-func ActivePrecompiles(rules params.Rules) []common.Address {
-	return vm.ActivePrecompiles(rules)
-}
-
-var NativeAssetCallAddr = vm.NativeAssetCallAddr
 
 type chainConfigWrapper struct {
 	*params.ChainConfig
@@ -338,7 +332,7 @@ func (c *chainConfigWrapper) Rules(blockNum *big.Int, isMerge bool, timestamp ui
 
 type multicoiner struct{}
 
-func unwrapStateDB(db gethvm.StateDB) vm.StateDB {
+func unwrapStateDB(db gethvm.StateDB) StateDB {
 	return db.(*stateDBWrapper).StateDB
 }
 
@@ -355,5 +349,20 @@ func (mc *multicoiner) TransferMultiCoin(stateDB gethvm.StateDB, from common.Add
 }
 
 func (mc *multicoiner) UnpackNativeAssetCallInput(input []byte) (common.Address, common.Hash, *big.Int, []byte, error) {
-	return vm.UnpackNativeAssetCallInput(input)
+	return UnpackNativeAssetCallInput(input)
+}
+
+// IsProhibited returns true if [addr] is in the prohibited list of addresses which should
+// not be allowed as an EOA or newly created contract address.
+func IsProhibited(addr common.Address) bool {
+	if addr == constants.BlackholeAddr {
+		return true
+	}
+
+	return modules.ReservedAddress(addr)
+}
+
+var BuiltinAddr = common.Address{
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 }

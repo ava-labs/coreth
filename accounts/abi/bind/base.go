@@ -25,8 +25,8 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -279,14 +279,14 @@ func wrapNativeAssetCall(opts *TransactOpts, contract *common.Address, input []b
 			return nil, nil, errNativeAssetDeployContract
 		}
 		// wrap input with native asset call params
-		input = vm.PackNativeAssetCallInput(
+		input = core.PackNativeAssetCallInput(
 			*contract,
 			opts.NativeAssetCall.AssetID,
 			opts.NativeAssetCall.AssetAmount,
 			input,
 		)
 		// target addr is now precompile
-		contract = &vm.NativeAssetCallAddr
+		contract = &core.NativeAssetCallAddr
 	}
 	return contract, input, nil
 }
