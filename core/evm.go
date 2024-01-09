@@ -187,6 +187,18 @@ func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb vm.Sta
 	}
 
 	rules := chainConfig.AvalancheRules(blockCtx.BlockNumber, blockCtx.Time)
+	switch {
+	case rules.IsDurango:
+		config.JumpTable = &gethvm.DurangoInstructionSet
+	case rules.IsApricotPhase3:
+		config.JumpTable = &gethvm.ApricotPhase3InstructionSet
+	case rules.IsApricotPhase2:
+		config.JumpTable = &gethvm.ApricotPhase2InstructionSet
+	case rules.IsApricotPhase1:
+		config.JumpTable = &gethvm.ApricotPhase1InstructionSet
+	case rules.IsIstanbul:
+		config.JumpTable = &gethvm.LaunchInstructionSet
+	}
 	config.ActivePrecompiles = ActivePrecompiles(rules)
 	config.IsProhibited = func(addr common.Address) error {
 		if vm.IsProhibited(addr) {

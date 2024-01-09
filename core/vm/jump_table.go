@@ -58,6 +58,13 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
+var (
+	_ = berlinInstructionSet
+	_ = londonInstructionSet
+	_ = mergeInstructionSet
+	_ = shanghaiInstructionSet
+)
+
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
