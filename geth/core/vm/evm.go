@@ -93,6 +93,14 @@ type BlockContext struct {
 	Extra interface{}
 }
 
+func (bc *BlockContext) Number() *big.Int {
+	return bc.BlockNumber
+}
+
+func (bc *BlockContext) Timestamp() uint64 {
+	return bc.Time
+}
+
 // TxContext provides the EVM with information about a transaction.
 // All fields can change between transactions.
 type TxContext struct {
@@ -120,7 +128,7 @@ type EVM struct {
 	depth int
 
 	// chainConfig contains information about the current chain
-	chainConfig *params.ChainConfig
+	chainConfig ChainConfig
 	// chain rules contains the chain rules for the current epoch
 	chainRules params.Rules
 	// virtual machine configuration options used to initialise the
@@ -137,9 +145,15 @@ type EVM struct {
 	callGasTemp uint64
 }
 
+type ChainConfig interface {
+	Rules(blockNum *big.Int, isMerge bool, timestamp uint64) params.Rules
+	IsLondon(blockNum *big.Int) bool
+	IsEIP158(blockNum *big.Int) bool
+}
+
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig ChainConfig, config Config) *EVM {
 	evm := &EVM{
 		Context:     blockCtx,
 		TxContext:   txCtx,
@@ -544,4 +558,11 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 }
 
 // ChainConfig returns the environment's chain configuration
-func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+func (evm *EVM) ChainConfig() ChainConfig { return evm.chainConfig }
+
+func (evm *EVM) ActivePrecompiles() []common.Address {
+	if evm.Config.ActivePrecompiles != nil {
+		return evm.Config.ActivePrecompiles
+	}
+	return ActivePrecompiles(evm.chainRules)
+}

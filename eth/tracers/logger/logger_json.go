@@ -21,7 +21,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )

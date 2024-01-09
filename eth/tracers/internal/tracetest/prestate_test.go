@@ -37,8 +37,8 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/tests"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -114,16 +114,14 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 					GasPrice: tx.GasPrice(),
 				}
 				context = vm.BlockContext{
-					CanTransfer:       core.CanTransfer,
-					CanTransferMC:     core.CanTransferMC,
-					Transfer:          core.Transfer,
-					TransferMultiCoin: core.TransferMultiCoin,
-					Coinbase:          test.Context.Miner,
-					BlockNumber:       blockNumber,
-					Time:              uint64(test.Context.Time),
-					Difficulty:        (*big.Int)(test.Context.Difficulty),
-					GasLimit:          uint64(test.Context.GasLimit),
-					BaseFee:           test.Genesis.BaseFee,
+					CanTransfer: core.CanTransfer,
+					Transfer:    core.Transfer,
+					Coinbase:    test.Context.Miner,
+					BlockNumber: blockNumber,
+					Time:        uint64(test.Context.Time),
+					Difficulty:  (*big.Int)(test.Context.Difficulty),
+					GasLimit:    uint64(test.Context.GasLimit),
+					BaseFee:     test.Genesis.BaseFee,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)

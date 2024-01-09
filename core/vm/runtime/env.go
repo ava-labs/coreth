@@ -18,7 +18,7 @@ package runtime
 
 import (
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/geth/core/vm"
 )
 
 func NewEnv(cfg *Config) *core.EVM {
@@ -27,17 +27,15 @@ func NewEnv(cfg *Config) *core.EVM {
 		GasPrice: cfg.GasPrice,
 	}
 	blockContext := vm.BlockContext{
-		CanTransfer:       core.CanTransfer,
-		CanTransferMC:     core.CanTransferMC,
-		Transfer:          core.Transfer,
-		TransferMultiCoin: core.TransferMultiCoin,
-		GetHash:           cfg.GetHashFn,
-		Coinbase:          cfg.Coinbase,
-		BlockNumber:       cfg.BlockNumber,
-		Time:              cfg.Time,
-		Difficulty:        cfg.Difficulty,
-		GasLimit:          cfg.GasLimit,
-		BaseFee:           cfg.BaseFee,
+		CanTransfer: core.CanTransfer,
+		Transfer:    core.Transfer,
+		GetHash:     cfg.GetHashFn,
+		Coinbase:    cfg.Coinbase,
+		BlockNumber: cfg.BlockNumber,
+		Time:        cfg.Time,
+		Difficulty:  cfg.Difficulty,
+		GasLimit:    cfg.GasLimit,
+		BaseFee:     cfg.BaseFee,
 	}
 
 	return core.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

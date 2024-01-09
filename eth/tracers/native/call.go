@@ -33,8 +33,8 @@ import (
 	"sync/atomic"
 
 	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"

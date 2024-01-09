@@ -23,7 +23,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
@@ -106,7 +106,7 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
-	evm.Reset(txContext, statedb)
+	evm.Reset(txContext, &stateDBWrapper{statedb})
 
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)

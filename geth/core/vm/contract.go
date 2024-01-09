@@ -192,3 +192,12 @@ func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAn
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
 }
+
+func (contract *Contract) AsGenesisContract() *Contract {
+	self := AccountRef(contract.Caller())
+	if _, ok := contract.caller.(*Contract); ok {
+		contract = contract.AsDelegate()
+	}
+	contract.self = self
+	return contract
+}

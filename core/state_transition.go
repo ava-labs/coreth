@@ -22,10 +22,9 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 )
@@ -224,6 +223,15 @@ func ApplyMessage(evm *EVM, msg *Message, gp *GasPool) (*ExecutionResult, error)
 	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
+type StateDB interface {
+	vm.StateDB
+	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
+}
+
+type withAvalancheRules interface {
+	AvalancheRules(blockNumber *big.Int, timestamp uint64) params.Rules
+}
+
 // StateTransition represents a state transition.
 //
 // == The State Transitioning Model
@@ -251,7 +259,7 @@ type StateTransition struct {
 	msg          *Message
 	gasRemaining uint64
 	initialGas   uint64
-	state        vm.StateDB
+	state        StateDB
 	evm          *EVM
 }
 
@@ -261,7 +269,7 @@ func NewStateTransition(evm *EVM, msg *Message, gp *GasPool) *StateTransition {
 		gp:    gp,
 		evm:   evm,
 		msg:   msg,
-		state: evm.StateDB,
+		state: evm.StateDB.(StateDB),
 	}
 }
 
@@ -318,13 +326,14 @@ func (st *StateTransition) preCheck() error {
 				msg.From.Hex(), codeHash)
 		}
 		// Make sure the sender is not prohibited
-		if vm.IsProhibited(msg.From) {
-			return fmt.Errorf("%w: address %v", vmerrs.ErrAddrProhibited, msg.From)
+		if err := st.evm.Config.IsProhibited(msg.From); err != nil {
+			return fmt.Errorf("%w: address %v", err, msg.From)
 		}
 	}
 
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsApricotPhase3(st.evm.Context.Time) {
+	rules := st.evm.ChainConfig().(withAvalancheRules).AvalancheRules(st.evm.Context.BlockNumber, st.evm.Context.Time)
+	if rules.IsApricotPhase3 {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		if !st.evm.Config.NoBaseFee || msg.GasFeeCap.BitLen() > 0 || msg.GasTipCap.BitLen() > 0 {
 			if l := msg.GasFeeCap.BitLen(); l > 256 {
@@ -386,7 +395,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	var (
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From)
-		rules            = st.evm.ChainConfig().AvalancheRules(st.evm.Context.BlockNumber, st.evm.Context.Time)
+		rules            = st.evm.ChainConfig().(withAvalancheRules).AvalancheRules(st.evm.Context.BlockNumber, st.evm.Context.Time)
 		contractCreation = msg.To == nil
 	)
 
@@ -413,7 +422,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin/ApricotPhase2)
 	// - reset transient storage(eip 1153)
-	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, st.evm.ActivePrecompiles(), msg.AccessList)
 
 	var (
 		ret   []byte

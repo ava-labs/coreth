@@ -30,6 +30,7 @@ type Config struct {
 	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int     // Additional EIPS that are to be enabled
 
+	ActivePrecompiles []common.Address
 	CustomPrecompiles map[common.Address]RunFunc
 	Multicoiner       Multicoiner
 	JumpTable         *JumpTable

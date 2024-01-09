@@ -1134,15 +1134,3 @@ func (r *Rules) IsPrecompileEnabled(addr common.Address) bool {
 	_, ok := r.ActivePrecompiles[addr]
 	return ok
 }
-
-type X struct{}
-type (
-	Y = X
-	Z X
-)
-
-func x() {
-	y := Y{}
-	z := Z(y)
-	_ = z
-}
