@@ -128,21 +128,6 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	}
 }
 
-// RunPrecompiledContract runs and evaluates the output of a precompiled contract.
-// It returns
-// - the returned bytes,
-// - the _remaining_ gas,
-// - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
-	gasCost := p.RequiredGas(input)
-	if suppliedGas < gasCost {
-		return nil, 0, vm.ErrOutOfGas
-	}
-	suppliedGas -= gasCost
-	output, err := p.Run(input)
-	return output, suppliedGas, err
-}
-
 var (
 	big0 = big.NewInt(0)
 )
