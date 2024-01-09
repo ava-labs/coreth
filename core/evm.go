@@ -23,7 +23,6 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
-	gethvm "github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
@@ -32,6 +31,7 @@ import (
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	gethparams "github.com/ethereum/go-ethereum/params"
 	//"github.com/ethereum/go-ethereum/log"
@@ -48,7 +48,7 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) gethvm.BlockContext {
+func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
 	predicateBytes, ok := predicate.GetPredicateResultBytes(header.Extra)
 	if !ok {
 		return newEVMBlockContext(header, chain, author, nil)
@@ -71,11 +71,11 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 // in header.Extra.
 // This function is used to create a BlockContext when the header Extra data is not fully formed yet and it's more efficient to pass in predicateResults
 // directly rather than re-encode the latest results when executing each individaul transaction.
-func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) gethvm.BlockContext {
+func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) vm.BlockContext {
 	return newEVMBlockContext(header, chain, author, predicateResults)
 }
 
-func newEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) gethvm.BlockContext {
+func newEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -90,7 +90,7 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
-	return gethvm.BlockContext{
+	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
@@ -105,8 +105,8 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
-func NewEVMTxContext(msg *Message) gethvm.TxContext {
-	return gethvm.TxContext{
+func NewEVMTxContext(msg *Message) vm.TxContext {
+	return vm.TxContext{
 		Origin:   msg.From,
 		GasPrice: new(big.Int).Set(msg.GasPrice),
 	}
@@ -153,7 +153,7 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
-func CanTransfer(db gethvm.StateDB, addr common.Address, amount *big.Int) bool {
+func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
@@ -162,7 +162,7 @@ func CanTransferMC(db StateDB, addr common.Address, to common.Address, coinID co
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func Transfer(db gethvm.StateDB, sender, recipient common.Address, amount *big.Int) {
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 }
@@ -174,13 +174,13 @@ func TransferMultiCoin(db StateDB, sender, recipient common.Address, coinID comm
 }
 
 type EVM struct {
-	*gethvm.EVM
+	*vm.EVM
 
 	chainConfig *params.ChainConfig
 	stateDB     StateDB
 }
 
-func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb StateDB, chainConfig *params.ChainConfig, config gethvm.Config) *EVM {
+func NewEVM(blockCtx vm.BlockContext, txCtx vm.TxContext, statedb StateDB, chainConfig *params.ChainConfig, config vm.Config) *EVM {
 	evm := &EVM{
 		chainConfig: chainConfig,
 		stateDB:     statedb,
@@ -189,15 +189,15 @@ func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb StateD
 	rules := chainConfig.AvalancheRules(blockCtx.BlockNumber, blockCtx.Time)
 	switch {
 	case rules.IsDurango:
-		config.JumpTable = &gethvm.DurangoInstructionSet
+		config.JumpTable = &vm.DurangoInstructionSet
 	case rules.IsApricotPhase3:
-		config.JumpTable = &gethvm.ApricotPhase3InstructionSet
+		config.JumpTable = &vm.ApricotPhase3InstructionSet
 	case rules.IsApricotPhase2:
-		config.JumpTable = &gethvm.ApricotPhase2InstructionSet
+		config.JumpTable = &vm.ApricotPhase2InstructionSet
 	case rules.IsApricotPhase1:
-		config.JumpTable = &gethvm.ApricotPhase1InstructionSet
+		config.JumpTable = &vm.ApricotPhase1InstructionSet
 	case rules.IsIstanbul:
-		config.JumpTable = &gethvm.LaunchInstructionSet
+		config.JumpTable = &vm.LaunchInstructionSet
 	}
 	config.ActivePrecompiles = ActivePrecompiles(rules)
 	config.IsProhibited = func(addr common.Address) error {
@@ -207,13 +207,13 @@ func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb StateD
 		return nil
 	}
 	config.Multicoiner = &multicoiner{}
-	config.InterpreterHook = func(contract *gethvm.Contract) *gethvm.Contract {
+	config.InterpreterHook = func(contract *vm.Contract) *vm.Contract {
 		if !rules.IsApricotPhase2 && contract.Address() == BuiltinAddr {
 			return contract.AsGenesisContract()
 		}
 		return contract
 	}
-	config.CustomPrecompiles = make(map[common.Address]gethvm.RunFunc)
+	config.CustomPrecompiles = make(map[common.Address]vm.RunFunc)
 
 	// stateful precompiles
 	var precompiles map[common.Address]contract.StatefulPrecompiledContract
@@ -248,26 +248,26 @@ func NewEVM(blockCtx gethvm.BlockContext, txCtx gethvm.TxContext, statedb StateD
 		}
 	}
 
-	evm.EVM = gethvm.NewEVM(blockCtx, txCtx, &stateDBWrapper{statedb}, &chainConfigWrapper{chainConfig}, config)
+	evm.EVM = vm.NewEVM(blockCtx, txCtx, &stateDBWrapper{statedb}, &chainConfigWrapper{chainConfig}, config)
 	return evm
 }
 
 func fromVMErr(err error) error {
 	switch err {
 	case vmerrs.ErrExecutionReverted:
-		return gethvm.ErrExecutionReverted
+		return vm.ErrExecutionReverted
 	case vmerrs.ErrOutOfGas:
-		return gethvm.ErrOutOfGas
+		return vm.ErrOutOfGas
 	case vmerrs.ErrInsufficientBalance:
-		return gethvm.ErrInsufficientBalance
+		return vm.ErrInsufficientBalance
 	case vmerrs.ErrWriteProtection:
-		return gethvm.ErrWriteProtection
+		return vm.ErrWriteProtection
 	}
 	return err
 }
 
 type blockContext struct {
-	*gethvm.BlockContext
+	*vm.BlockContext
 }
 
 func (bc *blockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
@@ -332,19 +332,19 @@ func (c *chainConfigWrapper) Rules(blockNum *big.Int, isMerge bool, timestamp ui
 
 type multicoiner struct{}
 
-func unwrapStateDB(db gethvm.StateDB) StateDB {
+func unwrapStateDB(db vm.StateDB) StateDB {
 	return db.(*stateDBWrapper).StateDB
 }
 
-func (mc *multicoiner) GetBalanceMultiCoin(db gethvm.StateDB, addr common.Address, coinID common.Hash) *big.Int {
+func (mc *multicoiner) GetBalanceMultiCoin(db vm.StateDB, addr common.Address, coinID common.Hash) *big.Int {
 	return unwrapStateDB(db).GetBalanceMultiCoin(addr, coinID)
 }
 
-func (mc *multicoiner) CanTransferMC(stateDB gethvm.StateDB, from common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
+func (mc *multicoiner) CanTransferMC(stateDB vm.StateDB, from common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
 	return CanTransferMC(unwrapStateDB(stateDB), from, to, coinID, amount)
 }
 
-func (mc *multicoiner) TransferMultiCoin(stateDB gethvm.StateDB, from common.Address, to common.Address, coinID common.Hash, amount *big.Int) {
+func (mc *multicoiner) TransferMultiCoin(stateDB vm.StateDB, from common.Address, to common.Address, coinID common.Hash, amount *big.Int) {
 	TransferMultiCoin(unwrapStateDB(stateDB), from, to, coinID, amount)
 }
 

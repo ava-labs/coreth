@@ -26,9 +26,9 @@ import (
 
 	"github.com/ava-labs/coreth/eth/tracers"
 	jsassets "github.com/ava-labs/coreth/eth/tracers/js/internal/tracers"
-	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 

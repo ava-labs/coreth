@@ -38,9 +38,9 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
-	"github.com/ava-labs/coreth/geth/core/vm"
 	"github.com/ava-labs/coreth/tests"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // prestateTrace is the result of a prestateTrace run.
