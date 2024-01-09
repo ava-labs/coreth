@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMempoolAddTx(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(ids.Empty, 5_000, nil)
+	m, err := NewMempool(&snow.Context{}, 5_000, nil)
 	require.NoError(err)
 
 	txs := make([]*GossipAtomicTx, 0)
@@ -32,4 +33,23 @@ func TestMempoolAddTx(t *testing.T) {
 	for _, tx := range txs {
 		require.True(m.bloom.Has(tx))
 	}
+}
+
+// Add should return an error if a tx is already known
+func TestMempoolAdd(t *testing.T) {
+	require := require.New(t)
+	m, err := NewMempool(&snow.Context{}, 5_000, nil)
+	require.NoError(err)
+
+	tx := &GossipAtomicTx{
+		Tx: &Tx{
+			UnsignedAtomicTx: &TestUnsignedTx{
+				IDV: ids.GenerateTestID(),
+			},
+		},
+	}
+
+	require.NoError(m.Add(tx))
+	err = m.Add(tx)
+	require.ErrorIs(err, errTxAlreadyKnown)
 }

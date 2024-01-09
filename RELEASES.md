@@ -1,6 +1,26 @@
 # Release Notes
 
+## [v0.12.9](https://github.com/ava-labs/coreth/releases/tag/v0.12.9)
+
+- Add concurrent prefetching of trie nodes during block processing
+- Add `skip-tx-indexing` flag to disable transaction indexing and unindexing
+- Update acceptor tip before sending chain events to subscribers
+- Add soft cap on total block data size for state sync block requests
+
+## [v0.12.8](https://github.com/ava-labs/coreth/releases/tag/v0.12.8)
+
+- Bump AvalancheGo to v1.10.15
+- Fix crash in prestate tracer on memory read
+
+## [v0.12.7](https://github.com/ava-labs/coreth/releases/tag/v0.12.7)
+
+- Bump AvalancheGo to v1.10.14
+
 ## [v0.12.6](https://github.com/ava-labs/coreth/releases/tag/v0.12.6)
+
+- Remove lock options from HTTP handlers
+- Fix deadlock in `eth_getLogs` when matcher session hits a missing block
+- Replace Kurtosis E2E tests with avctl test framework
 
 ## [v0.12.5](https://github.com/ava-labs/coreth/releases/tag/v0.12.5)
 

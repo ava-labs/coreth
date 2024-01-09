@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/types"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -88,13 +89,37 @@ func NewAtomicBackend(
 	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (AtomicBackend, error) {
+	atomicBacked, _, err := NewAtomicBackendWithBonusBlockRepair(
+		db, sharedMemory, bonusBlocks, nil, repo,
+		lastAcceptedHeight, lastAcceptedHash, commitInterval,
+	)
+	return atomicBacked, err
+}
+
+func NewAtomicBackendWithBonusBlockRepair(
+	db *versiondb.Database, sharedMemory atomic.SharedMemory,
+	bonusBlocks map[uint64]ids.ID, bonusBlocksParsed map[uint64]*types.Block,
+	repo AtomicTxRepository,
+	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
+) (AtomicBackend, int, error) {
 	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
 	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
 	codec := repo.Codec()
 
 	atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, codec, lastAcceptedHeight, commitInterval)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	var heightsRepaired int
+	if len(bonusBlocksParsed) > 0 {
+		if heightsRepaired, err = atomicTrie.repairAtomicTrie(bonusBlocks, bonusBlocksParsed); err != nil {
+			return nil, 0, err
+		}
+		if heightsRepaired > 0 {
+			if err := db.Commit(); err != nil {
+				return nil, 0, err
+			}
+		}
 	}
 	atomicBackend := &atomicBackend{
 		codec:            codec,
@@ -113,9 +138,9 @@ func NewAtomicBackend(
 	// return an atomic trie that is out of sync with shared memory.
 	// In normal operation, the cursor is not set, such that this call will be a no-op.
 	if err := atomicBackend.ApplyToSharedMemory(lastAcceptedHeight); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return atomicBackend, atomicBackend.initialize(lastAcceptedHeight)
+	return atomicBackend, heightsRepaired, atomicBackend.initialize(lastAcceptedHeight)
 }
 
 // initializes the atomic trie using the atomic repository height index.
@@ -161,10 +186,8 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 			return err
 		}
 
-		if _, found := a.bonusBlocks[height]; found {
-			// If [height] is a bonus block, do not index the atomic operations into the trie
-			continue
-		}
+		// Note: The atomic trie canonically contains the duplicate operations
+		// from any bonus blocks.
 		if err := a.atomicTrie.UpdateTrie(tr, height, combinedOps); err != nil {
 			return err
 		}
@@ -180,6 +203,11 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 			if err := a.db.Commit(); err != nil {
 				return err
 			}
+		}
+		// Trie must be re-opened after committing (not safe for re-use after commit)
+		tr, err = a.atomicTrie.OpenTrie(root)
+		if err != nil {
+			return err
 		}
 
 		heightsIndexed++
@@ -229,8 +257,10 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 		return err
 	}
 
+	lastHeight := binary.BigEndian.Uint64(sharedMemoryCursor[:wrappers.LongLen])
+
 	lastCommittedRoot, _ := a.atomicTrie.LastCommitted()
-	log.Info("applying atomic operations to shared memory", "root", lastCommittedRoot, "lastAcceptedBlock", lastAcceptedBlock, "startHeight", binary.BigEndian.Uint64(sharedMemoryCursor[:wrappers.LongLen]))
+	log.Info("applying atomic operations to shared memory", "root", lastCommittedRoot, "lastAcceptedBlock", lastAcceptedBlock, "startHeight", lastHeight)
 
 	it, err := a.atomicTrie.Iterator(lastCommittedRoot, sharedMemoryCursor)
 	if err != nil {
@@ -248,20 +278,34 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 	// specifying the last atomic operation that was applied to shared memory.
 	// To avoid applying the same operation twice, we call [it.Next()] in the
 	// latter case.
+	var lastBlockchainID ids.ID
 	if len(sharedMemoryCursor) > wrappers.LongLen {
+		lastBlockchainID, err = ids.ToID(sharedMemoryCursor[wrappers.LongLen:])
+		if err != nil {
+			return err
+		}
+
 		it.Next()
 	}
 
 	batchOps := make(map[ids.ID]*atomic.Requests)
 	for it.Next() {
 		height := it.BlockNumber()
-		atomicOps := it.AtomicOps()
-
 		if height > lastAcceptedBlock {
 			log.Warn("Found height above last accepted block while applying operations to shared memory", "height", height, "lastAcceptedBlock", lastAcceptedBlock)
 			break
 		}
 
+		// If [height] is a bonus block, do not apply the atomic operations to shared memory
+		if _, found := a.bonusBlocks[height]; found {
+			log.Debug(
+				"skipping bonus block in applying atomic ops from atomic trie to shared memory",
+				"height", height,
+			)
+			continue
+		}
+
+		atomicOps := it.AtomicOps()
 		putRequests += len(atomicOps.PutRequests)
 		removeRequests += len(atomicOps.RemoveRequests)
 		totalPutRequests += len(atomicOps.PutRequests)
@@ -270,7 +314,9 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 			log.Info("atomic trie iteration", "height", height, "puts", totalPutRequests, "removes", totalRemoveRequests)
 			lastUpdate = time.Now()
 		}
-		mergeAtomicOpsToMap(batchOps, it.BlockchainID(), atomicOps)
+
+		blockchainID := it.BlockchainID()
+		mergeAtomicOpsToMap(batchOps, blockchainID, atomicOps)
 
 		if putRequests+removeRequests > sharedMemoryApplyBatchSize {
 			// Update the cursor to the key of the atomic operation being executed on shared memory.
@@ -285,8 +331,14 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 			}
 			// calling [sharedMemory.Apply] updates the last applied pointer atomically with the shared memory operation.
 			if err = a.sharedMemory.Apply(batchOps, batch); err != nil {
-				return err
+				return fmt.Errorf("failed committing shared memory operations between %d:%s and %d:%s with: %w",
+					lastHeight, lastBlockchainID,
+					height, blockchainID,
+					err,
+				)
 			}
+			lastHeight = height
+			lastBlockchainID = blockchainID
 			putRequests, removeRequests = 0, 0
 			batchOps = make(map[ids.ID]*atomic.Requests)
 		}
@@ -303,7 +355,11 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 		return err
 	}
 	if err = a.sharedMemory.Apply(batchOps, batch); err != nil {
-		return err
+		return fmt.Errorf("failed committing shared memory operations between %d:%s and %d with: %w",
+			lastHeight, lastBlockchainID,
+			lastAcceptedBlock,
+			err,
+		)
 	}
 	log.Info("finished applying atomic operations", "puts", totalPutRequests, "removes", totalRemoveRequests)
 	return nil
@@ -372,7 +428,10 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 		return common.Hash{}, err
 	}
 
-	// update the atomic trie
+	// Insert the operations into the atomic trie
+	//
+	// Note: The atomic trie canonically contains the duplicate operations from
+	// any bonus blocks.
 	atomicOps, err := mergeAtomicOps(txs)
 	if err != nil {
 		return common.Hash{}, err

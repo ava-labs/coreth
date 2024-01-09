@@ -36,13 +36,18 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+
+	// Force-load precompiles to trigger registration
+	warpPrecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	_ "github.com/ava-labs/coreth/precompile/registry"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/warp"
+	warpValidators "github.com/ava-labs/coreth/warp/validators"
 	"github.com/ethereum/go-ethereum/ethdb"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -66,7 +71,6 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/manager"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
@@ -118,16 +122,17 @@ var (
 const (
 	// Max time from current time allowed for blocks, before they're considered future blocks
 	// and fail verification
-	maxFutureBlockTime   = 10 * time.Second
-	maxUTXOsToFetch      = 1024
-	defaultMempoolSize   = 4096
-	codecVersion         = uint16(0)
-	secpFactoryCacheSize = 1024
+	maxFutureBlockTime = 10 * time.Second
+	maxUTXOsToFetch    = 1024
+	defaultMempoolSize = 4096
+	codecVersion       = uint16(0)
 
-	decidedCacheSize    = 10 * units.MiB
-	missingCacheSize    = 50
-	unverifiedCacheSize = 5 * units.MiB
-	bytesToIDCacheSize  = 5 * units.MiB
+	secpCacheSize          = 1024
+	decidedCacheSize       = 10 * units.MiB
+	missingCacheSize       = 50
+	unverifiedCacheSize    = 5 * units.MiB
+	bytesToIDCacheSize     = 5 * units.MiB
+	warpSignatureCacheSize = 500
 
 	targetAtomicTxsSize = 40 * units.KiB
 
@@ -139,39 +144,22 @@ const (
 	txGossipBloomMaxItems          = 8 * 1024
 	txGossipBloomFalsePositiveRate = 0.01
 	txGossipMaxFalsePositiveRate   = 0.05
-	txGossipTargetResponseSize     = 20 * units.KiB
+	txGossipTargetMessageSize      = 20 * units.KiB
 	maxValidatorSetStaleness       = time.Minute
-	throttlingPeriod               = 10 * time.Second
-	throttlingLimit                = 2
+	txGossipThrottlingPeriod       = 10 * time.Second
+	txGossipThrottlingLimit        = 2
 	gossipFrequency                = 10 * time.Second
-)
-
-var (
-	ethTxGossipConfig = gossip.Config{
-		Namespace: "eth_tx_gossip",
-		PollSize:  10,
-	}
-	ethTxGossipHandlerConfig = gossip.HandlerConfig{
-		Namespace:          "eth_tx_gossip",
-		TargetResponseSize: txGossipTargetResponseSize,
-	}
-
-	atomicTxGossipConfig = gossip.Config{
-		Namespace: "atomic_tx_gossip",
-		PollSize:  10,
-	}
-	atomicTxGossipHandlerConfig = gossip.HandlerConfig{
-		Namespace:          "atomic_tx_gossip",
-		TargetResponseSize: txGossipTargetResponseSize,
-	}
+	txGossipPollSize               = 10
 )
 
 // Define the API endpoints for the VM
 const (
-	avaxEndpoint   = "/avax"
-	adminEndpoint  = "/admin"
-	ethRPCEndpoint = "/rpc"
-	ethWSEndpoint  = "/ws"
+	avaxEndpoint            = "/avax"
+	adminEndpoint           = "/admin"
+	ethRPCEndpoint          = "/rpc"
+	ethWSEndpoint           = "/ws"
+	ethTxGossipNamespace    = "eth_tx_gossip"
+	atomicTxGossipNamespace = "atomic_tx_gossip"
 )
 
 var (
@@ -179,6 +167,7 @@ var (
 	lastAcceptedKey = []byte("last_accepted_key")
 	acceptedPrefix  = []byte("snowman_accepted")
 	metadataPrefix  = []byte("metadata")
+	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
 
 	// Prefixes for atomic trie
@@ -214,6 +203,7 @@ var (
 	errConflictingAtomicTx            = errors.New("conflicting atomic tx present")
 	errTooManyAtomicTx                = errors.New("too many atomic tx")
 	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
+	errInvalidHeaderPredicateResults  = errors.New("invalid header predicate results")
 )
 
 var originalStderr *os.File
@@ -280,6 +270,10 @@ type VM struct {
 	// block.
 	acceptedBlockDB database.Database
 
+	// [warpDB] is used to store warp message signatures
+	// set to a prefixDB with the prefix [warpPrefix]
+	warpDB database.Database
+
 	toEngine chan<- commonEng.Message
 
 	syntacticBlockValidator BlockValidator
@@ -305,8 +299,8 @@ type VM struct {
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
 
-	fx          secp256k1fx.Fx
-	secpFactory secp256k1.Factory
+	fx        secp256k1fx.Fx
+	secpCache secp256k1.RecoverCache
 
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
@@ -316,7 +310,6 @@ type VM struct {
 	networkCodec codec.Manager
 
 	validators *p2p.Validators
-	router     *p2p.Router
 
 	// Metrics
 	multiGatherer avalanchegoMetrics.MultiGatherer
@@ -329,6 +322,19 @@ type VM struct {
 	// State sync server and client
 	StateSyncServer
 	StateSyncClient
+
+	// Avalanche Warp Messaging backend
+	// Used to serve BLS signatures of warp messages over RPC
+	warpBackend warp.Backend
+
+	// Initialize only sets these if nil so they can be overridden in tests
+	p2pSender             commonEng.AppSender
+	ethTxGossipHandler    p2p.Handler
+	atomicTxGossipHandler p2p.Handler
+	ethTxPullGossiper     gossip.Gossiper
+	atomicTxPullGossiper  gossip.Gossiper
+	ethTxPushGossiper     gossip.Accumulator[*GossipEthTx]
+	atomicTxPushGossiper  gossip.Accumulator[*GossipAtomicTx]
 }
 
 // Codec implements the secp256k1fx interface
@@ -358,7 +364,7 @@ func (vm *VM) GetActivationTime() time.Time {
 func (vm *VM) Initialize(
 	_ context.Context,
 	chainCtx *snow.Context,
-	dbManager manager.Manager,
+	db database.Database,
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
@@ -414,13 +420,16 @@ func (vm *VM) Initialize(
 
 	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
-	baseDB := dbManager.Current().Database
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, baseDB)})
-	vm.db = versiondb.New(baseDB)
+	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, db)})
+	vm.db = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
+	// Note warpDB is not part of versiondb because it is not necessary
+	// that warp signatures are committed to the database atomically with
+	// the last accepted block.
+	vm.warpDB = prefixdb.New(warpPrefix, db)
 
 	if vm.config.InspectDatabase {
 		start := time.Now()
@@ -440,17 +449,26 @@ func (vm *VM) Initialize(
 	// Set the chain config for mainnet/fuji chain IDs
 	switch {
 	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
-		g.Config = params.AvalancheMainnetChainConfig
+		config := *params.AvalancheMainnetChainConfig
+		g.Config = &config
 		extDataHashes = mainnetExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
-		g.Config = params.AvalancheFujiChainConfig
+		config := *params.AvalancheFujiChainConfig
+		g.Config = &config
 		extDataHashes = fujiExtDataHashes
 	case g.Config.ChainID.Cmp(params.AvalancheLocalChainID) == 0:
-		g.Config = params.AvalancheLocalChainConfig
+		config := *params.AvalancheLocalChainConfig
+		g.Config = &config
+	}
+	// If the Durango is activated, activate the Warp Precompile at the same time
+	if g.Config.DurangoBlockTimestamp != nil {
+		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
+			Config: warpPrecompile.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
+		})
 	}
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
-		BlockchainID: common.Hash(chainCtx.ChainID),
+		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
 
@@ -506,6 +524,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TrieCleanRejournal = vm.config.TrieCleanRejournal.Duration
 	vm.ethConfig.TrieDirtyCache = vm.config.TrieDirtyCache
 	vm.ethConfig.TrieDirtyCommitTarget = vm.config.TrieDirtyCommitTarget
+	vm.ethConfig.TriePrefetcherParallelism = vm.config.TriePrefetcherParallelism
 	vm.ethConfig.SnapshotCache = vm.config.SnapshotCache
 	vm.ethConfig.Pruning = vm.config.Pruning
 	vm.ethConfig.AcceptorQueueLimit = vm.config.AcceptorQueueLimit
@@ -522,6 +541,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SkipUpgradeCheck = vm.config.SkipUpgradeCheck
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TxLookupLimit = vm.config.TxLookupLimit
+	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -533,16 +553,20 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
-	vm.secpFactory = secp256k1.Factory{
-		Cache: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpFactoryCacheSize,
+	vm.secpCache = secp256k1.RecoverCache{
+		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
+			Size: secpCacheSize,
 		},
+	}
+
+	if err := vm.chainConfig.Verify(); err != nil {
+		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
 	vm.codec = Codec
 
 	// TODO: read size from settings
-	vm.mempool, err = NewMempool(chainCtx.AVAXAssetID, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = NewMempool(chainCtx, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -552,41 +576,79 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize peer network
-	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.router = p2p.NewRouter(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
+	if vm.p2pSender == nil {
+		vm.p2pSender = appSender
+	}
+
+	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
+	if err != nil {
+		return fmt.Errorf("failed to initialize p2p network: %w", err)
+	}
+	vm.validators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.networkCodec = message.Codec
-	vm.Network = peer.NewNetwork(vm.router, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
+	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
+
+	// Initialize warp backend
+	offchainWarpMessages := make([][]byte, len(vm.config.WarpOffChainMessages))
+	for i, hexMsg := range vm.config.WarpOffChainMessages {
+		offchainWarpMessages[i] = []byte(hexMsg)
+	}
+	vm.warpBackend, err = warp.NewBackend(vm.ctx.NetworkID, vm.ctx.ChainID, vm.ctx.WarpSigner, vm, vm.warpDB, warpSignatureCacheSize, offchainWarpMessages)
+	if err != nil {
+		return err
+	}
+
+	// clear warpdb on initialization if config enabled
+	if vm.config.PruneWarpDB {
+		if err := vm.warpBackend.Clear(); err != nil {
+			return fmt.Errorf("failed to prune warpDB: %w", err)
+		}
+	}
 
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
 	// initialize bonus blocks on mainnet
 	var (
-		bonusBlockHeights     map[uint64]ids.ID
-		canonicalBlockHeights []uint64
+		bonusBlockHeights map[uint64]ids.ID
+		bonusBlockRepair  map[uint64]*types.Block
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
 		bonusBlockHeights = bonusBlockMainnetHeights
-		canonicalBlockHeights = canonicalBlockMainnetHeights
+		bonusBlockRepair = mainnetBonusBlocksParsed
 	}
+	defer func() {
+		// Free memory after VM is initialized
+		mainnetBonusBlocksParsed = nil
+		mainnetBonusBlocksJson = nil
+	}()
 
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
 		vm.db, vm.codec, lastAcceptedHeight,
-		bonusBlockHeights, canonicalBlockHeights,
 		vm.getAtomicTxFromPreApricot5BlockByHeight,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
-		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash, vm.config.CommitInterval,
+	vm.atomicBackend, _, err = NewAtomicBackendWithBonusBlockRepair(
+		vm.db, vm.ctx.SharedMemory, bonusBlockHeights, bonusBlockRepair,
+		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
+		vm.config.CommitInterval,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
+
+	// Run the atomic trie height map repair in the background on mainnet/fuji
+	// TODO: remove after Durango
+	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 ||
+		vm.chainID.Cmp(params.AvalancheFujiChainID) == 0 {
+		_, lastCommitted := vm.atomicTrie.LastCommitted()
+		go vm.atomicTrie.RepairHeightMap(lastCommitted)
+	}
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
@@ -594,7 +656,7 @@ func (vm *VM) Initialize(
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
 	// ignored by the VM's codec.
-	vm.baseCodec = linearcodec.NewDefault()
+	vm.baseCodec = linearcodec.NewDefault(time.Time{})
 
 	if err := vm.fx.Initialize(vm); err != nil {
 		return err
@@ -732,15 +794,16 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 	block.status = choices.Accepted
 
 	config := &chain.Config{
-		DecidedCacheSize:    decidedCacheSize,
-		MissingCacheSize:    missingCacheSize,
-		UnverifiedCacheSize: unverifiedCacheSize,
-		BytesToIDCacheSize:  bytesToIDCacheSize,
-		GetBlockIDAtHeight:  vm.GetBlockIDAtHeight,
-		GetBlock:            vm.getBlock,
-		UnmarshalBlock:      vm.parseBlock,
-		BuildBlock:          vm.buildBlock,
-		LastAcceptedBlock:   block,
+		DecidedCacheSize:      decidedCacheSize,
+		MissingCacheSize:      missingCacheSize,
+		UnverifiedCacheSize:   unverifiedCacheSize,
+		BytesToIDCacheSize:    bytesToIDCacheSize,
+		GetBlockIDAtHeight:    vm.GetBlockIDAtHeight,
+		GetBlock:              vm.getBlock,
+		UnmarshalBlock:        vm.parseBlock,
+		BuildBlock:            vm.buildBlock,
+		BuildBlockWithContext: vm.buildBlockWithContext,
+		LastAcceptedBlock:     block,
 	}
 
 	// Register chain state metrics
@@ -939,6 +1002,9 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 			}
 		}
 		// Update the atomic backend with [txs] from this block.
+		//
+		// Note: The atomic trie canonically contains the duplicate operations
+		// from any bonus blocks.
 		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
 		if err != nil {
 			return nil, nil, err
@@ -1005,9 +1071,43 @@ func (vm *VM) initBlockBuilding() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
 
+	ethTxGossipMarshaller := GossipEthTxMarshaller{}
+	atomicTxGossipMarshaller := GossipAtomicTxMarshaller{}
+
+	ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+	atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+
+	ethTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
+	}
+
+	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
+	}
+
+	if vm.ethTxPushGossiper == nil {
+		vm.ethTxPushGossiper = gossip.NewPushGossiper[*GossipEthTx](
+			ethTxGossipMarshaller,
+			ethTxGossipClient,
+			ethTxGossipMetrics,
+			txGossipTargetMessageSize,
+		)
+	}
+
+	if vm.atomicTxPushGossiper == nil {
+		vm.atomicTxPushGossiper = gossip.NewPushGossiper[*GossipAtomicTx](
+			atomicTxGossipMarshaller,
+			atomicTxGossipClient,
+			atomicTxGossipMetrics,
+			txGossipTargetMessageSize,
+		)
+	}
+
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
-	vm.gossiper = vm.createGossiper(gossipStats)
+	vm.gossiper = vm.createGossiper(gossipStats, vm.ethTxPushGossiper, vm.atomicTxPushGossiper)
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
@@ -1022,90 +1122,83 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	var (
-		ethTxGossipHandler    p2p.Handler
-		atomicTxGossipHandler p2p.Handler
-	)
+	if vm.ethTxGossipHandler == nil {
+		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
+			vm.ctx.Log,
+			ethTxGossipMarshaller,
+			ethTxPool,
+			ethTxGossipMetrics,
+			txGossipTargetMessageSize,
+			txGossipThrottlingPeriod,
+			txGossipThrottlingLimit,
+			vm.validators,
+		)
+	}
 
-	ethTxGossipHandler, err = gossip.NewHandler[*GossipEthTx](ethTxPool, ethTxGossipHandlerConfig, vm.sdkMetrics)
-	if err != nil {
-		return err
-	}
-	ethTxGossipHandler = &p2p.ValidatorHandler{
-		ValidatorSet: vm.validators,
-		Handler: &p2p.ThrottlerHandler{
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   ethTxGossipHandler,
-		},
-	}
-	ethTxGossipClient, err := vm.router.RegisterAppProtocol(ethTxGossipProtocol, ethTxGossipHandler, vm.validators)
-	if err != nil {
+	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
 		return err
 	}
 
-	atomicTxGossipHandler, err = gossip.NewHandler[*GossipAtomicTx](vm.mempool, atomicTxGossipHandlerConfig, vm.sdkMetrics)
-	if err != nil {
+	if vm.atomicTxGossipHandler == nil {
+		vm.atomicTxGossipHandler = newTxGossipHandler[*GossipAtomicTx](
+			vm.ctx.Log,
+			atomicTxGossipMarshaller,
+			vm.mempool,
+			atomicTxGossipMetrics,
+			txGossipTargetMessageSize,
+			txGossipThrottlingPeriod,
+			txGossipThrottlingLimit,
+			vm.validators,
+		)
+	}
+
+	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {
 		return err
 	}
 
-	atomicTxGossipHandler = &p2p.ValidatorHandler{
-		ValidatorSet: vm.validators,
-		Handler: &p2p.ThrottlerHandler{
-			Throttler: p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
-			Handler:   atomicTxGossipHandler,
-		},
-	}
+	if vm.ethTxPullGossiper == nil {
+		ethTxPullGossiper := gossip.NewPullGossiper[*GossipEthTx](
+			vm.ctx.Log,
+			ethTxGossipMarshaller,
+			ethTxPool,
+			ethTxGossipClient,
+			ethTxGossipMetrics,
+			txGossipPollSize,
+		)
 
-	atomicTxGossipClient, err := vm.router.RegisterAppProtocol(atomicTxGossipProtocol, atomicTxGossipHandler, vm.validators)
-	if err != nil {
-		return err
-	}
-
-	var (
-		ethTxGossiper    gossip.Gossiper
-		atomicTxGossiper gossip.Gossiper
-	)
-	ethTxGossiper, err = gossip.NewPullGossiper[GossipEthTx, *GossipEthTx](
-		ethTxGossipConfig,
-		vm.ctx.Log,
-		ethTxPool,
-		ethTxGossipClient,
-		vm.sdkMetrics,
-	)
-	if err != nil {
-		return err
-	}
-	ethTxGossiper = gossip.ValidatorGossiper{
-		Gossiper:   ethTxGossiper,
-		NodeID:     vm.ctx.NodeID,
-		Validators: vm.validators,
+		vm.ethTxPullGossiper = gossip.ValidatorGossiper{
+			Gossiper:   ethTxPullGossiper,
+			NodeID:     vm.ctx.NodeID,
+			Validators: vm.validators,
+		}
 	}
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, ethTxGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, gossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 
-	atomicTxGossiper, err = gossip.NewPullGossiper[GossipAtomicTx, *GossipAtomicTx](
-		atomicTxGossipConfig,
-		vm.ctx.Log,
-		vm.mempool,
-		atomicTxGossipClient,
-		vm.sdkMetrics,
-	)
-	if err != nil {
-		return err
-	}
-	atomicTxGossiper = gossip.ValidatorGossiper{
-		Gossiper:   atomicTxGossiper,
-		NodeID:     vm.ctx.NodeID,
-		Validators: vm.validators,
+	if vm.atomicTxPullGossiper == nil {
+		atomicTxPullGossiper := gossip.NewPullGossiper[*GossipAtomicTx](
+			vm.ctx.Log,
+			atomicTxGossipMarshaller,
+			vm.mempool,
+			atomicTxGossipClient,
+			atomicTxGossipMetrics,
+			txGossipPollSize,
+		)
+
+		vm.atomicTxPullGossiper = &gossip.ValidatorGossiper{
+			Gossiper:   atomicTxPullGossiper,
+			NodeID:     vm.ctx.NodeID,
+			Validators: vm.validators,
+		}
 	}
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, atomicTxGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, gossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 
@@ -1124,15 +1217,15 @@ func (vm *VM) setAppRequestHandlers() {
 			Cache: vm.config.StateSyncServerTrieCache,
 		},
 	)
-	syncRequestHandler := handlers.NewSyncHandler(
+	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
 		evmTrieDB,
 		vm.atomicTrie.TrieDB(),
+		vm.warpBackend,
 		vm.networkCodec,
-		handlerstats.NewHandlerStats(metrics.Enabled),
 	)
-	vm.Network.SetRequestHandler(syncRequestHandler)
+	vm.Network.SetRequestHandler(networkHandler)
 }
 
 // setCrossChainAppRequestHandler sets the request handlers for the VM to serve cross chain
@@ -1160,9 +1253,23 @@ func (vm *VM) Shutdown(context.Context) error {
 	return nil
 }
 
+func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
+	return vm.buildBlockWithContext(ctx, nil)
+}
+
 // buildBlock builds a block to be wrapped by ChainState
-func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
-	block, err := vm.miner.GenerateBlock()
+func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
+	if proposerVMBlockCtx != nil {
+		log.Debug("Building block with context", "pChainBlockHeight", proposerVMBlockCtx.PChainHeight)
+	} else {
+		log.Debug("Building block without context")
+	}
+	predicateCtx := &precompileconfig.PredicateContext{
+		SnowCtx:            vm.ctx,
+		ProposerVMBlockCtx: proposerVMBlockCtx,
+	}
+
+	block, err := vm.miner.GenerateBlock(predicateCtx)
 	vm.builder.handleGenerateBlock()
 	if err != nil {
 		vm.mempool.CancelCurrentTxs()
@@ -1174,9 +1281,6 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	if err != nil {
 		log.Debug("discarding txs due to error making new block", "err", err)
 		vm.mempool.DiscardCurrentTxs()
-		return nil, err
-	}
-	if err != nil {
 		return nil, err
 	}
 
@@ -1192,7 +1296,7 @@ func (vm *VM) buildBlock(_ context.Context) (snowman.Block, error) {
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(false /*=writes*/); err != nil {
+	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
@@ -1331,6 +1435,13 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 			return nil, err
 		}
 		enabledAPIs = append(enabledAPIs, "snowman")
+	}
+	if vm.config.WarpAPIEnabled {
+		validatorsState := warpValidators.NewState(vm.ctx)
+		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx.NetworkID, vm.ctx.SubnetID, vm.ctx.ChainID, validatorsState, vm.warpBackend, vm.client)); err != nil {
+			return nil, err
+		}
+		enabledAPIs = append(enabledAPIs, "warp")
 	}
 
 	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
@@ -1481,6 +1592,8 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 		}
 	}
 
+	// We don’t need to revert the state here in case verifyTx errors, because
+	// [preferredState] is thrown away either way.
 	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
 }
 

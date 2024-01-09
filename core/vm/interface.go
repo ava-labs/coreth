@@ -89,7 +89,13 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	Snapshot() int
 
-	AddLog(*types.Log)
+	AddLog(addr common.Address, topics []common.Hash, data []byte, blockNumber uint64)
+	GetLogData() (topics [][]common.Hash, data [][]byte)
+	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
+	SetPredicateStorageSlots(address common.Address, predicates [][]byte)
+
+	GetTxHash() common.Hash
+
 	AddPreimage(common.Hash, []byte)
 }
 

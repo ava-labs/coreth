@@ -127,7 +127,7 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 		if err != nil {
 			return fmt.Errorf("failed to calculate base fee: %w", err)
 		}
-		if !bytes.Equal(expectedRollupWindowBytes, header.Extra) {
+		if len(header.Extra) < len(expectedRollupWindowBytes) || !bytes.Equal(expectedRollupWindowBytes, header.Extra[:len(expectedRollupWindowBytes)]) {
 			return fmt.Errorf("expected rollup window bytes: %x, found %x", expectedRollupWindowBytes, header.Extra)
 		}
 		if header.BaseFee == nil {
@@ -187,23 +187,26 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 
 // modified from consensus.go
 func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
-	var (
-		config = chain.Config()
-	)
+	config := chain.Config()
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
 	}
-	// Ensure that the header's extra-data section is of a reasonable size
-	if !config.IsApricotPhase3(header.Time) {
+	switch {
+	case config.IsDurango(header.Time):
+		if len(header.Extra) < params.DynamicFeeExtraDataSize {
+			return fmt.Errorf("expected extra-data field length >= %d, found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
+		}
+	case config.IsApricotPhase3(header.Time):
+		if len(header.Extra) != params.DynamicFeeExtraDataSize {
+			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
+		}
+	default:
 		if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 			return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
 		}
-	} else {
-		if uint64(len(header.Extra)) != params.ApricotPhase3ExtraDataSize {
-			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.ApricotPhase3ExtraDataSize, len(header.Extra))
-		}
 	}
+
 	// Ensure gas-related header fields are correct
 	if err := self.verifyHeaderGasFields(config, header, parent); err != nil {
 		return err
@@ -212,7 +215,7 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header 
 	if header.Time > uint64(time.Now().Add(allowedFutureBlockTime).Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	//if header.Time <= parent.Time {
+	// if header.Time <= parent.Time {
 	if header.Time < parent.Time {
 		return errInvalidBlockTime
 	}
@@ -390,7 +393,8 @@ func (self *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *type
 }
 
 func (self *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	uncles []*types.Header, receipts []*types.Receipt,
+) (*types.Block, error) {
 	var (
 		contribution, extDataGasUsed *big.Int
 		extraData                    []byte
