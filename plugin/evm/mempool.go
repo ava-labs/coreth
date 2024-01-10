@@ -375,7 +375,7 @@ func (m *Mempool) Iterate(f func(tx *GossipAtomicTx) bool) {
 	}
 }
 
-func (m *Mempool) GetFilter() ([]byte, []byte, error) {
+func (m *Mempool) GetFilter() ([]byte, []byte) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 

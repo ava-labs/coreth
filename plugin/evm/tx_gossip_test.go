@@ -99,8 +99,7 @@ func TestEthTxGossip(t *testing.T) {
 	// Ask the VM for any new transactions. We should get nothing at first.
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMinTargetElements, txGossipBloomTargetFalsePositiveRate, txGossipBloomResetFalsePositiveRate)
 	require.NoError(err)
-	emptyBloomFilterBytes, _, err := emptyBloomFilter.Marshal()
-	require.NoError(err)
+	emptyBloomFilterBytes, _ := emptyBloomFilter.Marshal()
 	request := &sdk.PullGossipRequest{
 		Filter: emptyBloomFilterBytes,
 		Salt:   agoUtils.RandomBytes(32),
@@ -227,8 +226,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	// Ask the VM for any new transactions. We should get nothing at first.
 	emptyBloomFilter, err := gossip.NewBloomFilter(txGossipBloomMinTargetElements, txGossipBloomTargetFalsePositiveRate, txGossipBloomResetFalsePositiveRate)
 	require.NoError(err)
-	emptyBloomFilterBytes, _, err := emptyBloomFilter.Marshal()
-	require.NoError(err)
+	emptyBloomFilterBytes, _ := emptyBloomFilter.Marshal()
 	request := &sdk.PullGossipRequest{
 		Filter: emptyBloomFilterBytes,
 		Salt:   agoUtils.RandomBytes(32),

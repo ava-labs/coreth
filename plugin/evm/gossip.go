@@ -175,7 +175,7 @@ func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {
 	})
 }
 
-func (g *GossipEthTxPool) GetFilter() ([]byte, []byte, error) {
+func (g *GossipEthTxPool) GetFilter() ([]byte, []byte) {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
