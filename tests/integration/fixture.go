@@ -49,9 +49,7 @@ func GetFixture() IntegrationFixture {
 		// e2e.Env being non-nil indicates availability of shared network fixture
 		fixture = newSharedNetworkFixture(ginkgo.GinkgoT())
 	}
-	ginkgo.DeferCleanup(func() {
-		fixture.Teardown()
-	})
+	ginkgo.DeferCleanup(fixture.Teardown)
 
 	return fixture
 }
