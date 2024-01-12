@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -35,9 +25,9 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/interfaces"
+	"github.com/ava-labs/coreth/ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -195,7 +185,7 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		return err
 	}
 	var (
-		msg    = interfaces.CallMsg{From: opts.From, To: &c.address, Data: input}
+		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
@@ -289,14 +279,14 @@ func wrapNativeAssetCall(opts *TransactOpts, contract *common.Address, input []b
 			return nil, nil, errNativeAssetDeployContract
 		}
 		// wrap input with native asset call params
-		input = vm.PackNativeAssetCallInput(
+		input = core.PackNativeAssetCallInput(
 			*contract,
 			opts.NativeAssetCall.AssetID,
 			opts.NativeAssetCall.AssetAmount,
 			input,
 		)
 		// target addr is now precompile
-		contract = &vm.NativeAssetCallAddr
+		contract = &core.NativeAssetCallAddr
 	}
 	return contract, input, nil
 }
@@ -405,7 +395,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 			return 0, ErrNoCode
 		}
 	}
-	msg := interfaces.CallMsg{
+	msg := ethereum.CallMsg{
 		From:      opts.From,
 		To:        contract,
 		GasPrice:  gasPrice,
@@ -493,7 +483,7 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 	// Start the background filtering
 	logs := make(chan types.Log, 128)
 
-	config := interfaces.FilterQuery{
+	config := ethereum.FilterQuery{
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 		FromBlock: new(big.Int).SetUint64(opts.Start),
@@ -542,7 +532,7 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 	// Start the background filtering
 	logs := make(chan types.Log, 128)
 
-	config := interfaces.FilterQuery{
+	config := ethereum.FilterQuery{
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 	}

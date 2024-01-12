@@ -1,13 +1,3 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -2170,6 +2160,11 @@ func golangBindings(t *testing.T, overload bool) {
 	}
 	pwd, _ := os.Getwd()
 	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ava-labs/coreth@v0.0.0", "-replace", "github.com/ava-labs/coreth="+filepath.Join(pwd, "..", "..", "..")) // Repo root
+	replacer.Dir = pkg
+	if out, err := replacer.CombinedOutput(); err != nil {
+		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
+	}
+	replacer = exec.Command(gocmd, "mod", "edit", "-x", "-replace", "github.com/ethereum/go-ethereum=github.com/darioush/go-ethereum@coreth-000")
 	replacer.Dir = pkg
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)

@@ -1,13 +1,3 @@
-// (c) 2019-2021, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
 // Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -30,27 +20,14 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
-//go:generate go run github.com/fjl/gencodec -type AccessTuple -out gen_access_tuple.go
-
 // AccessList is an EIP-2930 access list.
-type AccessList []AccessTuple
-
-// AccessTuple is the element type of an access list.
-type AccessTuple struct {
-	Address     common.Address `json:"address"     gencodec:"required"`
-	StorageKeys []common.Hash  `json:"storageKeys" gencodec:"required"`
-}
-
-// StorageKeys returns the total number of storage keys in the access list.
-func (al AccessList) StorageKeys() int {
-	sum := 0
-	for _, tuple := range al {
-		sum += len(tuple.StorageKeys)
-	}
-	return sum
-}
+type (
+	AccessList  = types.AccessList
+	AccessTuple = types.AccessTuple
+)
 
 // AccessListTx is the data of EIP-2930 access list transactions.
 type AccessListTx struct {
