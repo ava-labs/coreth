@@ -33,8 +33,10 @@ var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 		recipientEthAddress := evm.GetEthAddress(recipientKey)
 		tests.Outf("{{blue}} using recipient address: %+v{{/}}\n", recipientEthAddress)
 
+		xChainID := f.GetXChainID()
+
 		_ = f.IssueImportTx(
-			f.GetXChainID(),
+			xChainID,
 			importAmount,
 			recipientEthAddress,
 			[]*secp256k1.PrivateKey{
@@ -45,7 +47,7 @@ var _ = ginkgo.Describe("[VM] [Atomic TX]", func() {
 		_ = f.IssueExportTx(
 			f.GetAVAXAssetID(),
 			exportAmount,
-			f.GetXChainID(),
+			xChainID,
 			recipientKey.Address(),
 			[]*secp256k1.PrivateKey{
 				recipientKey,

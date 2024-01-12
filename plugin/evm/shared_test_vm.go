@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/api/keystore"
@@ -219,8 +218,8 @@ func GenesisVM(t require.TestingT,
 	require.NoError(t, err)
 
 	if finishBootstrapping {
-		assert.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
-		assert.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
+		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
+		require.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
 	}
 
 	return issuer, vm, db, m, appSender

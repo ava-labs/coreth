@@ -13,7 +13,6 @@ import (
 
 	ginkgo "github.com/onsi/ginkgo/v2"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -31,7 +30,6 @@ var (
 
 type vmFixture struct {
 	require      *require.Assertions
-	assert       *assert.Assertions
 	preFundedKey *secp256k1.PrivateKey
 	vm           *VM
 	issuer       chan engCommon.Message
@@ -50,7 +48,6 @@ func CreateVMFixture(t require.TestingT) *vmFixture {
 
 	return &vmFixture{
 		require:      require,
-		assert:       assert.New(t),
 		preFundedKey: preFundedKey,
 		vm:           vm,
 		issuer:       issuer,
@@ -148,9 +145,9 @@ func (v *vmFixture) checkAtomicTxIndexing(tx *Tx, expectedHeight uint64) {
 	// Check that the atomic transactions were indexed as expected.
 	indexedTx, status, height, err := v.vm.getAtomicTx(tx.ID())
 	v.require.NoError(err)
-	v.assert.Equal(Accepted, status)
-	v.assert.Equal(expectedHeight, height, "unexpected height")
-	v.assert.Equal(indexedTx.ID(), tx.ID(), "expected ID of indexed tx to match original txID")
+	v.require.Equal(Accepted, status)
+	v.require.Equal(expectedHeight, height, "unexpected height")
+	v.require.Equal(indexedTx.ID(), tx.ID(), "expected ID of indexed tx to match original txID")
 }
 
 // Determine the chain alias for a chainID representing either the X- or P-Chain.
