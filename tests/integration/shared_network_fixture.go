@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/api/info"
-	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
@@ -75,15 +73,7 @@ func (f *sharedNetworkFixture) Teardown() {
 		defer cancel()
 		f.require.NoError(targetNode.Stop(ctx))
 
-		// TODO(marun) Update to use Network.StartNode which handles bootstrap setup automatically once https://github.com/ava-labs/avalanchego/pull/2464 merges
-		bootstrapIPs, bootstrapIDs, err := network.GetBootstrapIPsAndIDs()
-		f.require.NoError(err)
-		f.require.NotEmpty(bootstrapIDs)
-		targetNode.Flags[config.BootstrapIDsKey] = strings.Join(bootstrapIDs, ",")
-		targetNode.Flags[config.BootstrapIPsKey] = strings.Join(bootstrapIPs, ",")
-		f.require.NoError(targetNode.Write())
-
-		f.require.NoError(targetNode.Start(ginkgo.GinkgoWriter))
+		f.require.NoError(network.StartNode(ctx, ginkgo.GinkgoWriter, targetNode))
 
 		ginkgo.By(fmt.Sprintf("waiting for node %q to report healthy after restart", targetNode.NodeID))
 		e2e.WaitForHealthy(targetNode)
