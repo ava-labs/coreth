@@ -46,7 +46,6 @@ ref=""
 if git rev-parse --quiet --verify "origin/${avalanche_version}^{commit}" >/dev/null; then
   echo "checking out branch ${avalanche_version}"
   ref="origin/${avalanche_version}"
-  git checkout -B "test-${avalanche_version}" "origin/${avalanche_version}"
 else
   echo "checking out tag ${avalanche_version}"
   ref="${avalanche_version}"
