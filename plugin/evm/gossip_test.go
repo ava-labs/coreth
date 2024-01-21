@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -160,7 +159,7 @@ func TestGossipSubscribe(t *testing.T) {
 	txPool.SetGasPrice(common.Big1)
 	txPool.SetMinFee(common.Big0)
 
-	gossipTxPool, err := NewGossipEthTxPool(txPool, prometheus.NewRegistry())
+	gossipTxPool, err := NewGossipEthTxPool(txPool)
 	require.NoError(err)
 
 	// use a custom bloom filter to test the bloom filter reset
