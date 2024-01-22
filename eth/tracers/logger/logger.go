@@ -86,6 +86,7 @@ type structLogMarshaling struct {
 	Gas         math.HexOrDecimal64
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
+	Meq         *int `json:"meq,omitempty"`
 	ReturnData  hexutil.Bytes
 	OpName      string `json:"opName"`          // adds call to OpName() in MarshalJSON
 	ErrorString string `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
@@ -456,6 +457,7 @@ type StructLogRes struct {
 	Error         string             `json:"error,omitempty"`
 	Stack         *[]string          `json:"stack,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
+	Meq           *int               `json:"meq,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
 }
@@ -472,6 +474,7 @@ func formatLogs(logs []StructLog) []StructLogRes {
 			Depth:         trace.Depth,
 			Error:         trace.ErrorString(),
 			RefundCounter: trace.RefundCounter,
+			Meq:           trace.Meq,
 		}
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
