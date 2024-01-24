@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (b *Block) WithBodyExt(version uint32, extdata *[]byte) *Block {
+func (b *Block) WithExtData(version uint32, extdata *[]byte) *Block {
 	b.version = version
 	b.setExtDataHelper(extdata, false)
 	return b
