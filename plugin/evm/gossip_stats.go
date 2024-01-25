@@ -74,7 +74,7 @@ func NewGossipStats() GossipStats {
 		atomicGossipReceivedDropped: metrics.GetOrRegisterCounter("gossip_atomic_received_dropped", nil),
 		atomicGossipReceivedKnown:   metrics.GetOrRegisterCounter("gossip_atomic_received_known", nil),
 		atomicGossipReceivedNew:     metrics.GetOrRegisterCounter("gossip_atomic_received_new", nil),
-		ethTxsGossipReceivedError:   metrics.GetOrRegisterCounter("gossip_atomic_received_error", nil),
+		ethTxsGossipReceivedError:   metrics.GetOrRegisterCounter("gossip_eth_txs_received_error", nil),
 		ethTxsGossipReceivedKnown:   metrics.GetOrRegisterCounter("gossip_eth_txs_received_known", nil),
 		ethTxsGossipReceivedNew:     metrics.GetOrRegisterCounter("gossip_eth_txs_received_new", nil),
 	}
