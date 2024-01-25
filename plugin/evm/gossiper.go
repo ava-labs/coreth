@@ -554,7 +554,7 @@ func (h *GossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip
 			if err == txpool.ErrAlreadyKnown {
 				h.stats.IncEthTxsGossipReceivedKnown()
 			} else {
-				h.stats.IncAtomicGossipReceivedError()
+				h.stats.IncEthTxsGossipReceivedError()
 			}
 			continue
 		}
