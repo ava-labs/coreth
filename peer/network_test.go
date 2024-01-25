@@ -20,7 +20,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/subnet-evm/plugin/evm/message"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
