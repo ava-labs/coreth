@@ -20,6 +20,7 @@ type GossipReceivedStats interface {
 
 	// new vs. known txs received
 	IncAtomicGossipReceivedDropped()
+	IncAtomicGossipReceivedError()
 	IncAtomicGossipReceivedKnown()
 	IncAtomicGossipReceivedNew()
 	IncEthTxsGossipReceivedError()
@@ -53,6 +54,7 @@ type gossipStats struct {
 
 	// new vs. known txs received
 	atomicGossipReceivedDropped metrics.Counter
+	atomicGossipReceivedError   metrics.Counter
 	atomicGossipReceivedKnown   metrics.Counter
 	atomicGossipReceivedNew     metrics.Counter
 	ethTxsGossipReceivedError   metrics.Counter
@@ -72,6 +74,7 @@ func NewGossipStats() GossipStats {
 		ethTxsRegossipQueuedRemote: metrics.GetOrRegisterCounter("regossip_eth_txs_queued_remote_tx_count", nil),
 
 		atomicGossipReceivedDropped: metrics.GetOrRegisterCounter("gossip_atomic_received_dropped", nil),
+		atomicGossipReceivedError:   metrics.GetOrRegisterCounter("gossip_atomic_received_error", nil),
 		atomicGossipReceivedKnown:   metrics.GetOrRegisterCounter("gossip_atomic_received_known", nil),
 		atomicGossipReceivedNew:     metrics.GetOrRegisterCounter("gossip_atomic_received_new", nil),
 		ethTxsGossipReceivedError:   metrics.GetOrRegisterCounter("gossip_eth_txs_received_error", nil),
@@ -86,6 +89,7 @@ func (g *gossipStats) IncEthTxsGossipReceived() { g.ethTxsGossipReceived.Inc(1) 
 
 // new vs. known txs received
 func (g *gossipStats) IncAtomicGossipReceivedDropped() { g.atomicGossipReceivedDropped.Inc(1) }
+func (g *gossipStats) IncAtomicGossipReceivedError()   { g.atomicGossipReceivedError.Inc(1) }
 func (g *gossipStats) IncAtomicGossipReceivedKnown()   { g.atomicGossipReceivedKnown.Inc(1) }
 func (g *gossipStats) IncAtomicGossipReceivedNew()     { g.atomicGossipReceivedNew.Inc(1) }
 func (g *gossipStats) IncEthTxsGossipReceivedError()   { g.ethTxsGossipReceivedError.Inc(1) }

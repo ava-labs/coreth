@@ -512,6 +512,7 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 			"peerID", nodeID,
 			"err", err,
 		)
+		h.stats.IncAtomicGossipReceivedError()
 	}
 
 	return nil
