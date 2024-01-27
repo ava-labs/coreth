@@ -1841,6 +1841,13 @@ func (pool *TxPool) updateBaseFee() {
 	}
 }
 
+func (pool *TxPool) SetBaseFee(baseFee *big.Int) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.priced.SetBaseFee(baseFee)
+}
+
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
 type addressByHeartbeat struct {
 	address   common.Address
