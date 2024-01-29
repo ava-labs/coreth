@@ -517,6 +517,7 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 			"peerID", nodeID,
 			"err", err,
 		)
+		h.stats.IncAtomicGossipReceivedError()
 	}
 
 	return nil
@@ -559,7 +560,7 @@ func (h *GossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip
 			if err == txpool.ErrAlreadyKnown {
 				h.stats.IncEthTxsGossipReceivedKnown()
 			} else {
-				h.stats.IncAtomicGossipReceivedError()
+				h.stats.IncEthTxsGossipReceivedError()
 			}
 			continue
 		}
