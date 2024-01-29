@@ -192,10 +192,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	// Fill the block with all available pending transactions.
-	if header.BaseFee != nil {
-		w.eth.TxPool().SetBaseFee(header.BaseFee)
-	}
-	pending := w.eth.TxPool().Pending(true)
+	pending := w.eth.TxPool().PendingWithBaseFee(true, header.BaseFee)
 
 	// Split the pending transactions into locals and remotes
 	localTxs := make(map[common.Address]types.Transactions)
