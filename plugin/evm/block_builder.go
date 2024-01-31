@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/snow"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/coreth/core"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -102,7 +102,7 @@ func (b *blockBuilder) handleGenerateBlock() {
 // needToBuild returns true if there are outstanding transactions to be issued
 // into a block.
 func (b *blockBuilder) needToBuild() bool {
-	size := b.txPool.PendingSize()
+	size := b.txPool.PendingSize(true)
 	return size > 0 || b.mempool.Len() > 0
 }
 

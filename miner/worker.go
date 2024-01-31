@@ -157,6 +157,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		Extra:      nil,
 		Time:       timestamp,
 	}
+
 	// Set BaseFee and Extra data field if we are post ApricotPhase3
 	if w.chainConfig.IsApricotPhase3(timestamp) {
 		var err error
@@ -165,6 +166,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 			return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 		}
 	}
+
 	if w.coinbase == (common.Address{}) {
 		return nil, errors.New("cannot mine without etherbase")
 	}
@@ -192,7 +194,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending(true)
+	pending := w.eth.TxPool().PendingWithBaseFee(true, header.BaseFee)
 
 	// Split the pending transactions into locals and remotes
 	localTxs := make(map[common.Address]types.Transactions)
