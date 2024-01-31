@@ -117,7 +117,7 @@ func roundUpCacheSize(input int, allocSize int) int {
 func New(
 	stack *node.Node,
 	config *Config,
-	cb *dummy.ConsensusCallbacks,
+	cb dummy.ConsensusCallbacks,
 	chainDb ethdb.Database,
 	settings Settings,
 	lastAcceptedHash common.Hash,
@@ -154,7 +154,7 @@ func New(
 		chainDb:           chainDb,
 		eventMux:          new(event.TypeMux),
 		accountManager:    stack.AccountManager(),
-		engine:            dummy.NewDummyEngine(cb),
+		engine:            dummy.NewFakerWithClock(cb, clock),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		etherbase:         config.Miner.Etherbase,
@@ -358,9 +358,12 @@ func (s *Ethereum) Stop() error {
 
 	// Clean shutdown marker as the last thing before closing db
 	s.shutdownTracker.Stop()
+	log.Info("Stopped shutdownTracker")
 
 	s.chainDb.Close()
+	log.Info("Closed chaindb")
 	s.eventMux.Stop()
+	log.Info("Stopped EventMux")
 	return nil
 }
 

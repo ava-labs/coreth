@@ -260,7 +260,7 @@ func (ec *client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(txs, uncles, body.Version, (*[]byte)(body.BlockExtraData)), nil
+	return types.NewBlockWithHeader(head).WithBody(txs, uncles).WithExtData(body.Version, (*[]byte)(body.BlockExtraData)), nil
 }
 
 // HeaderByHash returns the block header with the given hash.
@@ -414,7 +414,7 @@ func (ec *client) SubscribeNewAcceptedTransactions(ctx context.Context, ch chan<
 	return sub, nil
 }
 
-// SubscribeNewAcceptedTransactions subscribes to notifications about the accepted transaction hashes on the given channel.
+// SubscribeNewPendingTransactions subscribes to notifications about the pending transaction hashes on the given channel.
 func (ec *client) SubscribeNewPendingTransactions(ctx context.Context, ch chan<- *common.Hash) (interfaces.Subscription, error) {
 	sub, err := ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 	if err != nil {

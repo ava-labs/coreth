@@ -115,7 +115,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 		Alloc:    alloc,
 	}
 	cacheConfig := &core.CacheConfig{}
-	blockchain, _ := core.NewBlockChain(database, cacheConfig, &genesis, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
+	blockchain, _ := core.NewBlockChain(database, cacheConfig, &genesis, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -581,7 +581,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call interfaces.Call
 			if transfer == nil {
 				transfer = new(big.Int)
 			}
-			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+			log.Info("Gas estimation capped by limited funds", "original", hi, "balance", balance,
 				"sent", transfer, "feecap", feeCap, "fundable", allowance)
 			hi = allowance.Uint64()
 		}

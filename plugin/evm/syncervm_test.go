@@ -27,10 +27,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
@@ -43,7 +39,10 @@ import (
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestSkipStateSync(t *testing.T) {
@@ -495,7 +494,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 
 	blocksToBuild := 10
 	txsPerBlock := 10
-	toAddress := testEthAddrs[2] // arbitrary choice
+	toAddress := testEthAddrs[1] // arbitrary choice
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, gen *core.BlockGen) {
 		b, err := predicate.NewResults().Bytes()
 		if err != nil {
@@ -505,7 +504,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		i := 0
 		for k := range fundedAccounts {
 			tx := types.NewTransaction(gen.TxNonce(k.Address), toAddress, big.NewInt(1), 21000, initialBaseFee, nil)
-			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(serverVM.chainID), k.PrivateKey)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(serverVM.chainConfig.ChainID), k.PrivateKey)
 			require.NoError(err)
 			gen.AddTx(signedTx)
 			i++
@@ -536,7 +535,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		i := 0
 		for k := range fundedAccounts {
 			tx := types.NewTransaction(gen.TxNonce(k.Address), toAddress, big.NewInt(1), 21000, initialBaseFee, nil)
-			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(serverVM.chainID), k.PrivateKey)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(serverVM.chainConfig.ChainID), k.PrivateKey)
 			require.NoError(err)
 			gen.AddTx(signedTx)
 			i++
@@ -556,7 +555,7 @@ func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Bl
 	header := blk.Header()
 	header.Root = root
 	receipts := rawdb.ReadRawReceipts(db, blk.Hash(), blk.NumberU64())
-	newBlk := types.NewBlock(
+	newBlk := types.NewBlockWithExtData(
 		header, blk.Transactions(), blk.Uncles(), receipts, trie.NewStackTrie(nil), blk.ExtData(), true,
 	)
 	rawdb.WriteBlock(db, newBlk)
@@ -591,7 +590,7 @@ func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, 
 	_, _, err := core.GenerateChain(
 		vm.chainConfig,
 		vm.blockChain.LastAcceptedBlock(),
-		dummy.NewDummyEngine(vm.createConsensusCallbacks()),
+		dummy.NewFakerWithCallbacks(vm.createConsensusCallbacks()),
 		vm.chaindb,
 		numBlocks,
 		10,
