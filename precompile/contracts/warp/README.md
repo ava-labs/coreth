@@ -71,7 +71,7 @@ The `blockchainID` in Avalanche refers to the txID that created the blockchain o
 
 ### Predicate Encoding
 
-Avalanche Warp Messages are encoded as a signed Avalanche [Warp Message](https://github.com/ava-labs/avalanchego/blob/master/vms/platformvm/warp/message.go#L7) where the [UnsignedMessage](https://github.com/ava-labs/avalanchego/blob/master/vms/platformvm/warp/unsigned_message.go#L14)'s payload includes an [AddressedPayload](https://github.com/ava-labs/avalanchego/blob/master/vms/platformvm/warp/payload/payload.go).
+Avalanche Warp Messages are encoded as a signed Avalanche [Warp Message](https://github.com/ava-labs/avalanchego/blob/master/vms/platformvm/warp/message.go) where the [UnsignedMessage](https://github.com/ava-labs/avalanchego/blob/master/vms/platformvm/warp/unsigned_message.go)'s payload includes an [AddressedPayload](https://github.com/ava-labs/avalanchego/blob/master/vms/platformvm/warp/payload/payload.go).
 
 Since the predicate is encoded into the [Transaction Access List](https://eips.ethereum.org/EIPS/eip-2930), it is packed into 32 byte hashes intended to declare storage slots that should be pre-warmed into the cache prior to transaction execution.
 
