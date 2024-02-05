@@ -110,14 +110,18 @@ type SimulatedBackend struct {
 func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64, addr common.Address, ctrl admin.AdminController) *SimulatedBackend {
 	cpcfg := params.TestChainConfig
 	cpcfg.ChainID = big.NewInt(1337)
-	genesis := core.Genesis{Config: cpcfg, GasLimit: gasLimit, Alloc: alloc, InitialAdmin: addr}
+	genesis := core.Genesis{
+		Config:       cpcfg,
+		GasLimit:     gasLimit,
+		Alloc:        alloc,
+		InitialAdmin: addr,
+	}
 	if addr.String() != "0x0000000000000000000000000000000000000000" {
 		genesis.PreDeploy()
 	}
 	genesis.MustCommit(database)
 	cacheConfig := &core.CacheConfig{}
-
-	blockchain, _ := core.NewBlockChain(database, cacheConfig, genesis.Config, dummy.NewFaker(), vm.Config{AdminContoller: ctrl}, common.Hash{})
+	blockchain, _ := core.NewBlockChain(database, cacheConfig, &genesis, dummy.NewFaker(), vm.Config{AdminContoller: ctrl}, common.Hash{}, false)
 
 	backend := &SimulatedBackend{
 		database:   database,

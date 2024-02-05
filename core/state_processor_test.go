@@ -112,8 +112,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				GasLimit: params.CortinaGasLimit,
 			}
-			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
 		)
 		defer blockchain.Stop()
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
@@ -212,7 +211,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
 			},
 		} {
-			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(nil), dummy.NewFaker(), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -251,8 +250,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				GasLimit: params.ApricotPhase1GasLimit,
 			}
-			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -266,7 +264,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
 			},
 		} {
-			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(nil), dummy.NewFaker(), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -292,8 +290,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				GasLimit: params.CortinaGasLimit,
 			}
-			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -307,7 +304,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
 			},
 		} {
-			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(nil), dummy.NewFaker(), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -318,7 +315,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}
 	}
 
-	// ErrMaxInitCodeSizeExceeded, for this we need extra Shanghai (Cortina/EIP-3860) enabled.
+	// ErrMaxInitCodeSizeExceeded, for this we need extra Shanghai (DUpgrade/EIP-3860) enabled.
 	{
 		var (
 			db    = rawdb.NewMemoryDatabase()
@@ -347,6 +344,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					ApricotPhasePost6BlockTimestamp: big.NewInt(0),
 					BanffBlockTimestamp:             big.NewInt(0),
 					CortinaBlockTimestamp:           big.NewInt(0),
+					DUpgradeBlockTimestamp:          big.NewInt(0),
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -356,8 +354,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				GasLimit: params.CortinaGasLimit,
 			}
-			genesis        = gspec.MustCommit(db)
-			blockchain, _  = NewBlockChain(db, DefaultCacheConfig, gspec.Config, dummy.NewFaker(), vm.Config{}, common.Hash{})
+			blockchain, _  = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 			smallInitCode  = [320]byte{}
 		)
@@ -380,7 +377,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0x849278f616d51ab56bba399551317213ce7a10e4d9cbc3d14bb663e50cb7ab99]: intrinsic gas too low: have 54299, want 54300",
 			},
 		} {
-			block := GenerateBadBlock(genesis, dummy.NewFaker(), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(nil), dummy.NewFaker(), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -439,8 +436,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 }
 
 func CostOfUsingGasLimitEachBlock(gspec *Genesis) {
-	db := rawdb.NewMemoryDatabase()
-	genesis := gspec.MustCommit(db)
+	genesis := gspec.ToBlock(nil)
 	totalPaid := big.NewInt(0)
 	parent := genesis.Header()
 	gasLimit := new(big.Int).SetUint64(gspec.GasLimit)
