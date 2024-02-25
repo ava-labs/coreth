@@ -144,6 +144,7 @@ const (
 	atomicTxGossipProtocol = 0x1
 
 	// gossip constants
+	pushGossipFrequency                  = 100 * time.Millisecond
 	txGossipBloomMinTargetElements       = 8 * 1024
 	txGossipBloomTargetFalsePositiveRate = 0.01
 	txGossipBloomResetFalsePositiveRate  = 0.05
@@ -152,7 +153,7 @@ const (
 	maxValidatorSetStaleness             = time.Minute
 	txGossipThrottlingPeriod             = 10 * time.Second
 	txGossipThrottlingLimit              = 2
-	gossipFrequency                      = 10 * time.Second
+	pullGossipFrequency                  = 10 * time.Second
 	txGossipPollSize                     = 10
 )
 
@@ -1182,11 +1183,11 @@ func (vm *VM) initBlockBuilding() error {
 
 	vm.shutdownWg.Add(2)
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPushGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPushGossiper, pushGossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, pullGossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 
@@ -1209,11 +1210,11 @@ func (vm *VM) initBlockBuilding() error {
 
 	vm.shutdownWg.Add(2)
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, pushGossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, gossipFrequency)
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, pullGossipFrequency)
 		vm.shutdownWg.Done()
 	}()
 
