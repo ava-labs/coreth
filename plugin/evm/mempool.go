@@ -201,7 +201,6 @@ func (m *Mempool) AddLocalTx(tx *Tx) error {
 		return nil
 	}
 
-	// TODO: Add to tx gossiper
 	return err
 }
 
