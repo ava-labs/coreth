@@ -293,8 +293,6 @@ type VM struct {
 
 	builder *blockBuilder
 
-	gossiper Gossiper
-
 	baseCodec codec.Registry
 	codec     codec.Manager
 	clock     mockable.Clock
@@ -691,6 +689,10 @@ func (vm *VM) initializeMetrics() error {
 	return nil
 }
 
+func (vm *VM) SendPushGossip(tx *types.Transaction) {
+	vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
+}
+
 func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	nodecfg := &node.Config{
 		CorethVersion:         Version,
@@ -706,6 +708,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		node,
 		&vm.ethConfig,
 		vm.createConsensusCallbacks(),
+		vm,
 		vm.chaindb,
 		vm.config.EthBackendSettings(),
 		lastAcceptedHash,
@@ -1112,7 +1115,6 @@ func (vm *VM) initBlockBuilding() error {
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	gossipStats := NewGossipStats()
-	vm.gossiper = vm.createGossiper(gossipStats, vm.ethTxPushGossiper, vm.atomicTxPushGossiper)
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
@@ -1178,8 +1180,11 @@ func (vm *VM) initBlockBuilding() error {
 		}
 	}
 
-	// TODO: run push gossip.Every here
-	vm.shutdownWg.Add(1)
+	vm.shutdownWg.Add(2)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPushGossiper, gossipFrequency)
+		vm.shutdownWg.Done()
+	}()
 	go func() {
 		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, gossipFrequency)
 		vm.shutdownWg.Done()
@@ -1202,7 +1207,11 @@ func (vm *VM) initBlockBuilding() error {
 		}
 	}
 
-	vm.shutdownWg.Add(1)
+	vm.shutdownWg.Add(2)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, gossipFrequency)
+		vm.shutdownWg.Done()
+	}()
 	go func() {
 		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, gossipFrequency)
 		vm.shutdownWg.Done()

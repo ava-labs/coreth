@@ -324,7 +324,11 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return b.eth.txPool.AddLocal(signedTx)
+	if err := b.eth.txPool.AddLocal(signedTx); err != nil {
+		return err
+	}
+	b.eth.vm.SendPushGossip(signedTx)
+	return nil
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {

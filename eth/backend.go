@@ -70,6 +70,10 @@ type Settings struct {
 	MaxBlocksPerRequest int64 // Maximum number of blocks to serve per getLogs request
 }
 
+type VM interface {
+	SendPushGossip(*types.Transaction)
+}
+
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	config *Config
@@ -77,6 +81,7 @@ type Ethereum struct {
 	// Handlers
 	txPool     *txpool.TxPool
 	blockchain *core.BlockChain
+	vm         VM
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -118,6 +123,7 @@ func New(
 	stack *node.Node,
 	config *Config,
 	cb dummy.ConsensusCallbacks,
+	vmi VM,
 	chainDb ethdb.Database,
 	settings Settings,
 	lastAcceptedHash common.Hash,
@@ -151,6 +157,7 @@ func New(
 
 	eth := &Ethereum{
 		config:            config,
+		vm:                vmi,
 		chainDb:           chainDb,
 		eventMux:          new(event.TypeMux),
 		accountManager:    stack.AccountManager(),
