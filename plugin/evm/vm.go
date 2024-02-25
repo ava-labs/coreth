@@ -1178,6 +1178,7 @@ func (vm *VM) initBlockBuilding() error {
 		}
 	}
 
+	// TODO: run push gossip.Every here
 	vm.shutdownWg.Add(1)
 	go func() {
 		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, gossipFrequency)
