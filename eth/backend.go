@@ -70,7 +70,7 @@ type Settings struct {
 	MaxBlocksPerRequest int64 // Maximum number of blocks to serve per getLogs request
 }
 
-type VM interface {
+type Gossiper interface {
 	SendPushGossip(*types.Transaction)
 }
 
@@ -81,7 +81,7 @@ type Ethereum struct {
 	// Handlers
 	txPool     *txpool.TxPool
 	blockchain *core.BlockChain
-	vm         VM
+	gossiper   Gossiper
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -123,7 +123,7 @@ func New(
 	stack *node.Node,
 	config *Config,
 	cb dummy.ConsensusCallbacks,
-	vmi VM,
+	gossiper Gossiper,
 	chainDb ethdb.Database,
 	settings Settings,
 	lastAcceptedHash common.Hash,
@@ -157,7 +157,7 @@ func New(
 
 	eth := &Ethereum{
 		config:            config,
-		vm:                vmi,
+		gossiper:          gossiper,
 		chainDb:           chainDb,
 		eventMux:          new(event.TypeMux),
 		accountManager:    stack.AccountManager(),

@@ -327,7 +327,7 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	if err := b.eth.txPool.AddLocal(signedTx); err != nil {
 		return err
 	}
-	b.eth.vm.SendPushGossip(signedTx)
+	b.eth.gossiper.SendPushGossip(signedTx)
 	return nil
 }
 
