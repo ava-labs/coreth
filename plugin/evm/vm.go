@@ -690,6 +690,7 @@ func (vm *VM) initializeMetrics() error {
 	return nil
 }
 
+// TODO: move somewhere else
 func (vm *VM) SendPushGossip(tx *types.Transaction) {
 	vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
 }
