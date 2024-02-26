@@ -34,7 +34,7 @@ import (
 const (
 	// We allow [recentCacheSize] to be fairly large because we only store hashes
 	// in the cache, not entire transactions.
-	recentCacheSize = 512
+	recentCacheSize = 4096
 
 	// [ethTxsGossipInterval] is how often we attempt to gossip newly seen
 	// transactions to other nodes.
@@ -42,7 +42,7 @@ const (
 
 	// [minGossipBatchInterval] is the minimum amount of time that must pass
 	// before our last gossip to peers.
-	minGossipBatchInterval = 50 * time.Millisecond
+	minGossipBatchInterval = 100 * time.Millisecond
 )
 
 // Gossiper handles outgoing gossip of transactions
@@ -279,20 +279,6 @@ func (n *pushGossiper) awaitEthTxGossip() {
 					log.Warn(
 						"failed to send eth transactions",
 						"len(txs)", attempted,
-						"err", err,
-					)
-				}
-
-				gossipTxs := make([]*GossipEthTx, 0, len(txs))
-				for _, tx := range txs {
-					gossipTxs = append(gossipTxs, &GossipEthTx{Tx: tx})
-				}
-
-				n.ethTxGossiper.Add(gossipTxs...)
-				if err := n.ethTxGossiper.Gossip(context.TODO()); err != nil {
-					log.Warn(
-						"failed to send eth transactions",
-						"len(txs)", len(txs),
 						"err", err,
 					)
 				}
