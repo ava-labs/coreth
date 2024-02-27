@@ -332,6 +332,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 
 	// issue a tx
 	require.NoError(vm.txPool.AddLocal(signedTx))
+	vm.ethTxPushGossiper.Add(&GossipEthTx{signedTx})
 
 	sent := <-sender.SentAppGossip
 	got := &sdk.PushGossip{}
@@ -476,6 +477,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	tx, err := vm.newImportTxWithUTXOs(vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
+	vm.atomicTxPushGossiper.Add(&GossipAtomicTx{tx})
 
 	gossipedBytes := <-sender.SentAppGossip
 	require.Equal(byte(atomicTxGossipProtocol), gossipedBytes[0])

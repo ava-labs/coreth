@@ -145,7 +145,7 @@ const (
 
 	// gossip constants
 	pushGossipFrequency                  = 100 * time.Millisecond
-	pushGossipDiscardedSize              = 4096
+	pushGossipDiscardedSize              = 16_384
 	pushRegossipFrequency                = 10 * time.Second
 	txGossipBloomMinTargetElements       = 8 * 1024
 	txGossipBloomTargetFalsePositiveRate = 0.01
@@ -1102,7 +1102,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.ethTxPushGossiper == nil {
-		vm.ethTxPushGossiper = gossip.NewPushGossiper[*GossipEthTx](
+		vm.ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
 			ethTxGossipMarshaller,
 			ethTxPool,
 			ethTxGossipClient,
@@ -1111,10 +1111,13 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipTargetMessageSize,
 			pushRegossipFrequency,
 		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
+		}
 	}
 
 	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper = gossip.NewPushGossiper[*GossipAtomicTx](
+		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*GossipAtomicTx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
 			atomicTxGossipClient,
@@ -1123,6 +1126,9 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipTargetMessageSize,
 			pushRegossipFrequency,
 		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
+		}
 	}
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
