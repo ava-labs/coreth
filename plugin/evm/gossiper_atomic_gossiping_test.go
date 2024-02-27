@@ -68,7 +68,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 
 	assert.False(txRequested, "tx should not have been requested")
 	txGossipedLock.Lock()
-	assert.Equal(1, txGossiped, "tx should have been gossiped")
+	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 	assert.True(vm.mempool.has(tx.ID()))
 
@@ -80,7 +80,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	vm.ctx.Lock.Lock()
 
 	txGossipedLock.Lock()
-	assert.Equal(1, txGossiped, "tx should have only been gossiped once")
+	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 
 	// show that conflicting tx is not added to mempool
@@ -98,7 +98,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 
 	assert.False(txRequested, "tx should not have been requested")
 	txGossipedLock.Lock()
-	assert.Equal(1, txGossiped, "tx should not have been gossiped")
+	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 	assert.False(vm.mempool.has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
 }
