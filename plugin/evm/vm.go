@@ -1106,7 +1106,7 @@ func (vm *VM) initBlockBuilding() error {
 			ethTxGossipMetrics,
 			pushGossipDiscardedElements,
 			txGossipTargetMessageSize,
-			vm.config.TxRegossipFrequency.Duration,
+			vm.config.RegossipFrequency.Duration,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
@@ -1121,7 +1121,7 @@ func (vm *VM) initBlockBuilding() error {
 			atomicTxGossipMetrics,
 			pushGossipDiscardedElements,
 			txGossipTargetMessageSize,
-			vm.config.TxRegossipFrequency.Duration,
+			vm.config.RegossipFrequency.Duration,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
