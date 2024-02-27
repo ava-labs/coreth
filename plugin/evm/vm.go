@@ -145,6 +145,8 @@ const (
 
 	// gossip constants
 	pushGossipFrequency                  = 100 * time.Millisecond
+	pushGossipDiscardedSize              = 4096
+	pushRegossipFrequency                = 10 * time.Second
 	txGossipBloomMinTargetElements       = 8 * 1024
 	txGossipBloomTargetFalsePositiveRate = 0.01
 	txGossipBloomResetFalsePositiveRate  = 0.05
@@ -1077,45 +1079,11 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	atomicTxGossipMarshaller := GossipAtomicTxMarshaller{}
-
 	ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
-	atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
-
 	ethTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
 	}
-
-	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
-	if err != nil {
-		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
-	}
-
-	if vm.ethTxPushGossiper == nil {
-		vm.ethTxPushGossiper = gossip.NewPushGossiper[*GossipEthTx](
-			ethTxGossipMarshaller,
-			ethTxGossipClient,
-			ethTxGossipMetrics,
-			txGossipTargetMessageSize,
-		)
-	}
-
-	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper = gossip.NewPushGossiper[*GossipAtomicTx](
-			atomicTxGossipMarshaller,
-			atomicTxGossipClient,
-			atomicTxGossipMetrics,
-			txGossipTargetMessageSize,
-		)
-	}
-
-	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	gossipStats := NewGossipStats()
-	vm.builder = vm.NewBlockBuilder(vm.toEngine)
-	vm.builder.awaitSubmittedTxs()
-	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
-
 	ethTxPool, err := NewGossipEthTxPool(vm.txPool, vm.sdkMetrics)
 	if err != nil {
 		return err
@@ -1125,6 +1093,43 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxPool.Subscribe(ctx)
 		vm.shutdownWg.Done()
 	}()
+
+	atomicTxGossipMarshaller := GossipAtomicTxMarshaller{}
+	atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
+	}
+
+	if vm.ethTxPushGossiper == nil {
+		vm.ethTxPushGossiper = gossip.NewPushGossiper[*GossipEthTx](
+			ethTxGossipMarshaller,
+			ethTxPool,
+			ethTxGossipClient,
+			ethTxGossipMetrics,
+			pushGossipDiscardedSize,
+			txGossipTargetMessageSize,
+			pushRegossipFrequency,
+		)
+	}
+
+	if vm.atomicTxPushGossiper == nil {
+		vm.atomicTxPushGossiper = gossip.NewPushGossiper[*GossipAtomicTx](
+			atomicTxGossipMarshaller,
+			vm.mempool,
+			atomicTxGossipClient,
+			atomicTxGossipMetrics,
+			pushGossipDiscardedSize,
+			txGossipTargetMessageSize,
+			pushRegossipFrequency,
+		)
+	}
+
+	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
+	gossipStats := NewGossipStats()
+	vm.builder = vm.NewBlockBuilder(vm.toEngine)
+	vm.builder.awaitSubmittedTxs()
+	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
 
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
