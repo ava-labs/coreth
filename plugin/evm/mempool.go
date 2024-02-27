@@ -428,6 +428,14 @@ func (m *Mempool) GetTx(txID ids.ID) (*Tx, bool, bool) {
 	return nil, false, false
 }
 
+// Has returns true if the mempool contains [txID] or it was issued.
+func (m *Mempool) Has(txID ids.ID) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	return m.has(txID)
+}
+
 // IssueCurrentTx marks [currentTx] as issued if there is one
 func (m *Mempool) IssueCurrentTxs() {
 	m.lock.Lock()
