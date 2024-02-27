@@ -35,6 +35,8 @@ const (
 	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
 	defaultContinuousProfilerFrequency                = 15 * time.Minute
 	defaultContinuousProfilerMaxFiles                 = 5
+	defaultPushGossipFrequency                        = 250 * time.Millisecond
+	defaultPullGossipFrequency                        = 10 * time.Second
 	defaultTxRegossipFrequency                        = 10 * time.Second
 	defaultOfflinePruningBloomFilterSize       uint64 = 512 // Default size (MB) for the offline pruner to use
 	defaultLogLevel                                   = "info"
@@ -150,6 +152,8 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
+	PushGossipFrequency Duration `json:"push-gossip-frequency"`
+	PullGossipFrequency Duration `json:"pull-gossip-frequency"`
 	RegossipFrequency   Duration `json:"regossip-frequency"`
 	TxRegossipFrequency Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
 
@@ -249,6 +253,8 @@ func (c *Config) SetDefaults() {
 	c.CommitInterval = defaultCommitInterval
 	c.SnapshotWait = defaultSnapshotWait
 	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
+	c.PushGossipFrequency.Duration = defaultPushGossipFrequency
+	c.PullGossipFrequency.Duration = defaultPullGossipFrequency
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
 	c.LogLevel = defaultLogLevel
 	c.LogJSONFormat = defaultLogJSONFormat
