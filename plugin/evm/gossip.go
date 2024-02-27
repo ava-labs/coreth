@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -46,8 +47,6 @@ func newTxGossipHandler[T gossip.Gossipable](
 	handler := gossip.NewHandler[T](
 		log,
 		marshaller,
-		// Don't forward gossip to avoid double-forwarding
-		gossip.NoOpAccumulator[T]{},
 		mempool,
 		metrics,
 		maxMessageSize,
@@ -168,6 +167,12 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 // to receive an event if tx is actually added to the mempool or not.
 func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 	return g.mempool.AddRemotes([]*types.Transaction{tx.Tx})[0]
+}
+
+// Has should just return whether or not the [txID] is still in the mempool,
+// not whether it is in the mempool AND pending.
+func (g *GossipEthTxPool) Has(txID ids.ID) bool {
+	return g.mempool.Has(common.Hash(txID[:]))
 }
 
 func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {

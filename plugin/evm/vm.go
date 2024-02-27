@@ -333,11 +333,11 @@ type VM struct {
 	// Initialize only sets these if nil so they can be overridden in tests
 	p2pSender             commonEng.AppSender
 	ethTxGossipHandler    p2p.Handler
-	atomicTxGossipHandler p2p.Handler
+	ethTxPushGossiper     *gossip.PushGossiper[*GossipEthTx]
 	ethTxPullGossiper     gossip.Gossiper
+	atomicTxGossipHandler p2p.Handler
+	atomicTxPushGossiper  *gossip.PushGossiper[*GossipAtomicTx]
 	atomicTxPullGossiper  gossip.Gossiper
-	ethTxPushGossiper     gossip.Accumulator[*GossipEthTx]
-	atomicTxPushGossiper  gossip.Accumulator[*GossipAtomicTx]
 }
 
 // Codec implements the secp256k1fx interface
