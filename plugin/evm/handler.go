@@ -19,10 +19,10 @@ type GossipHandler struct {
 	vm            *VM
 	atomicMempool *Mempool
 	txPool        *txpool.TxPool
-	stats         GossipReceivedStats
+	stats         GossipStats
 }
 
-func NewGossipHandler(vm *VM, stats GossipReceivedStats) *GossipHandler {
+func NewGossipHandler(vm *VM, stats GossipStats) *GossipHandler {
 	return &GossipHandler{
 		vm:            vm,
 		atomicMempool: vm.mempool,
