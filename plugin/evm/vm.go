@@ -707,7 +707,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		node,
 		&vm.ethConfig,
 		vm.createConsensusCallbacks(),
-		&EthPushGossiper{vm},
+		&EthPushGossiper{vm: vm},
 		vm.chaindb,
 		vm.config.EthBackendSettings(),
 		lastAcceptedHash,
