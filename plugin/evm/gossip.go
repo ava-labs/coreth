@@ -47,7 +47,7 @@ func newTxGossipHandler[T gossip.Gossipable](
 	validators *p2p.Validators,
 ) txGossipHandler {
 	// push gossip messages can be handled from any peer
-	handler := gossip.NewHandler[T](
+	handler := gossip.NewHandler(
 		log,
 		marshaller,
 		mempool,
