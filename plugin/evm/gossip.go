@@ -209,3 +209,11 @@ type GossipEthTx struct {
 func (tx *GossipEthTx) GossipID() ids.ID {
 	return ids.ID(tx.Tx.Hash())
 }
+
+type ETHBackendPushGossiper struct {
+	vm *VM
+}
+
+func (e *ETHBackendPushGossiper) Add(tx *types.Transaction) {
+	e.vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
+}

@@ -690,11 +690,6 @@ func (vm *VM) initializeMetrics() error {
 	return nil
 }
 
-// TODO: move somewhere else
-func (vm *VM) SendPushGossip(tx *types.Transaction) {
-	vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
-}
-
 func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	nodecfg := &node.Config{
 		CorethVersion:         Version,
@@ -710,7 +705,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		node,
 		&vm.ethConfig,
 		vm.createConsensusCallbacks(),
-		vm,
+		&ETHBackendPushGossiper{vm},
 		vm.chaindb,
 		vm.config.EthBackendSettings(),
 		lastAcceptedHash,
