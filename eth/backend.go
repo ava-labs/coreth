@@ -70,8 +70,8 @@ type Settings struct {
 	MaxBlocksPerRequest int64 // Maximum number of blocks to serve per getLogs request
 }
 
-type Gossiper interface {
-	SendPushGossip(*types.Transaction)
+type PushGossiper interface {
+	Add(*types.Transaction)
 }
 
 // Ethereum implements the Ethereum full node service.
@@ -81,7 +81,7 @@ type Ethereum struct {
 	// Handlers
 	txPool     *txpool.TxPool
 	blockchain *core.BlockChain
-	gossiper   Gossiper
+	gossiper   PushGossiper
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -123,7 +123,7 @@ func New(
 	stack *node.Node,
 	config *Config,
 	cb dummy.ConsensusCallbacks,
-	gossiper Gossiper,
+	gossiper PushGossiper,
 	chainDb ethdb.Database,
 	settings Settings,
 	lastAcceptedHash common.Hash,

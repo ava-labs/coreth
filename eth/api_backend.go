@@ -327,7 +327,10 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	if err := b.eth.txPool.AddLocal(signedTx); err != nil {
 		return err
 	}
-	b.eth.gossiper.SendPushGossip(signedTx)
+
+	// We only enqueue transactions for push gossip if they were submitted over the RPC and
+	// added to the mempool.
+	b.eth.gossiper.Add(signedTx)
 	return nil
 }
 
