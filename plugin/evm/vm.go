@@ -145,7 +145,7 @@ const (
 
 	// gossip constants
 	pushGossipFrequency                  = 100 * time.Millisecond
-	pushGossipDiscardedSize              = 16_384
+	pushGossipDiscardedSize              = 16 * units.KiB
 	pushRegossipFrequency                = 10 * time.Second
 	txGossipBloomMinTargetElements       = 8 * 1024
 	txGossipBloomTargetFalsePositiveRate = 0.01
