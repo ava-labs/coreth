@@ -70,6 +70,8 @@ type Settings struct {
 	MaxBlocksPerRequest int64 // Maximum number of blocks to serve per getLogs request
 }
 
+// PushGossiper sends pushes pending transactions to peers until they are
+// removed from the mempool.
 type PushGossiper interface {
 	Add(*types.Transaction)
 }

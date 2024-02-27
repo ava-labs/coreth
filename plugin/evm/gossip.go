@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/eth"
 )
 
 var (
@@ -31,6 +32,8 @@ var (
 	_ gossip.Marshaller[*GossipAtomicTx] = (*GossipAtomicTxMarshaller)(nil)
 	_ gossip.Marshaller[*GossipEthTx]    = (*GossipEthTxMarshaller)(nil)
 	_ gossip.Set[*GossipEthTx]           = (*GossipEthTxPool)(nil)
+
+	_ eth.PushGossiper = (*EthPushGossiper)(nil)
 )
 
 func newTxGossipHandler[T gossip.Gossipable](
@@ -210,10 +213,12 @@ func (tx *GossipEthTx) GossipID() ids.ID {
 	return ids.ID(tx.Tx.Hash())
 }
 
-type ETHBackendPushGossiper struct {
+// EthPushGossiper is used by the ETH backend to push transactions
+// issued over the RPC and added to the mempool to peers.
+type EthPushGossiper struct {
 	vm *VM
 }
 
-func (e *ETHBackendPushGossiper) Add(tx *types.Transaction) {
+func (e *EthPushGossiper) Add(tx *types.Transaction) {
 	e.vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
 }
