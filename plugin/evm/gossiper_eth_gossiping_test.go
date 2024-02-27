@@ -5,9 +5,11 @@ package evm
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"math/big"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,6 +46,29 @@ func fundAddressByGenesis(addrs []common.Address) (string, error) {
 
 	bytes, err := json.Marshal(genesis)
 	return string(bytes), err
+}
+
+func getValidEthTxs(key *ecdsa.PrivateKey, count int, gasPrice *big.Int) []*types.Transaction {
+	res := make([]*types.Transaction, count)
+
+	to := common.Address{}
+	amount := big.NewInt(0)
+	gasLimit := uint64(37000)
+
+	for i := 0; i < count; i++ {
+		tx, _ := types.SignTx(
+			types.NewTransaction(
+				uint64(i),
+				to,
+				amount,
+				gasLimit,
+				gasPrice,
+				[]byte(strings.Repeat("aaaaaaaaaa", 100))),
+			types.HomesteadSigner{}, key)
+		tx.SetFirstSeen(time.Now().Add(-1 * time.Minute))
+		res[i] = tx
+	}
+	return res
 }
 
 // show that a geth tx discovered from gossip is requested to the same node that
