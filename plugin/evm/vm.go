@@ -146,7 +146,6 @@ const (
 	// gossip constants
 	pushGossipFrequency                  = 100 * time.Millisecond
 	pushGossipDiscardedSize              = 16 * units.KiB
-	pushRegossipFrequency                = 10 * time.Second
 	txGossipBloomMinTargetElements       = 8 * 1024
 	txGossipBloomTargetFalsePositiveRate = 0.01
 	txGossipBloomResetFalsePositiveRate  = 0.05
@@ -1109,7 +1108,7 @@ func (vm *VM) initBlockBuilding() error {
 			ethTxGossipMetrics,
 			pushGossipDiscardedSize,
 			txGossipTargetMessageSize,
-			pushRegossipFrequency,
+			vm.config.TxRegossipFrequency.Duration,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
@@ -1124,7 +1123,7 @@ func (vm *VM) initBlockBuilding() error {
 			atomicTxGossipMetrics,
 			pushGossipDiscardedSize,
 			txGossipTargetMessageSize,
-			pushRegossipFrequency,
+			vm.config.TxRegossipFrequency.Duration,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
