@@ -220,5 +220,10 @@ type EthPushGossiper struct {
 }
 
 func (e *EthPushGossiper) Add(tx *types.Transaction) {
+	// eth.Backend is initialized before the [ethTxPushGossiper] is created, so
+	// we just ignore any gossip requests until it is set.
+	if e.vm.ethTxPushGossiper == nil {
+		return
+	}
 	e.vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
 }
