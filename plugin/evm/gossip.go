@@ -175,7 +175,7 @@ func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 // Has should just return whether or not the [txID] is still in the mempool,
 // not whether it is in the mempool AND pending.
 func (g *GossipEthTxPool) Has(txID ids.ID) bool {
-	return g.mempool.Has(common.Hash(txID[:]))
+	return g.mempool.Has(common.Hash(txID))
 }
 
 func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {
