@@ -326,6 +326,10 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
 
+	defer func() {
+		require.NoError(vm.Shutdown(ctx))
+	}()
+
 	tx := types.NewTransaction(0, address, big.NewInt(10), 100_000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), pk.ToECDSA())
 	require.NoError(err)
@@ -381,6 +385,10 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 		&common.FakeSender{},
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
+
+	defer func() {
+		require.NoError(vm.Shutdown(ctx))
+	}()
 
 	tx := types.NewTransaction(0, address, big.NewInt(10), 100_000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), pk.ToECDSA())
@@ -450,6 +458,10 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		&common.FakeSender{},
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
+
+	defer func() {
+		require.NoError(vm.Shutdown(ctx))
+	}()
 
 	// Issue a tx to the VM
 	utxo, err := addUTXO(
@@ -522,6 +534,10 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		&common.FakeSender{},
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
+
+	defer func() {
+		require.NoError(vm.Shutdown(ctx))
+	}()
 
 	// issue a tx to the vm
 	utxo, err := addUTXO(
