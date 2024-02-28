@@ -213,17 +213,15 @@ func (tx *GossipEthTx) GossipID() ids.ID {
 	return ids.ID(tx.Tx.Hash())
 }
 
-// EthPushGossiper is used by the ETH backend to push transactions
-// issued over the RPC and added to the mempool to peers.
+// EthPushGossiper is used by the ETH backend to push transactions issued over
+// the RPC and added to the mempool to peers.
 type EthPushGossiper struct {
 	vm *VM
 }
 
 func (e *EthPushGossiper) Add(tx *types.Transaction) {
-	// eth.Backend is initialized before the [ethTxPushGossiper] is created, so
-	// we just ignore any gossip requests until it is set.
-	if e.vm.ethTxPushGossiper == nil {
-		return
-	}
+	// eth.Backend is initialized before [ethTxPushGossiper] is created. Because
+	// the RPC doesn't allow requests before bootstrapping has finished,
+	// [ethTxPushGossiper] will be initialized before this function is called.
 	e.vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
 }
