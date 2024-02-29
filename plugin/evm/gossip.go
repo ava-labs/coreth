@@ -24,6 +24,8 @@ import (
 	"github.com/ava-labs/coreth/eth"
 )
 
+const pendingTxsBuffer = 10
+
 var (
 	_ p2p.Handler = (*txGossipHandler)(nil)
 
@@ -119,7 +121,7 @@ func NewGossipEthTxPool(mempool *txpool.TxPool, registerer prometheus.Registerer
 
 	return &GossipEthTxPool{
 		mempool:    mempool,
-		pendingTxs: make(chan core.NewTxsEvent),
+		pendingTxs: make(chan core.NewTxsEvent, pendingTxsBuffer),
 		bloom:      bloom,
 	}, nil
 }
