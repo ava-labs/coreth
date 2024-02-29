@@ -24,6 +24,8 @@ import (
 	"github.com/ava-labs/coreth/eth"
 )
 
+const pendingTxsBuffer = 10
+
 var (
 	_ p2p.Handler = (*txGossipHandler)(nil)
 
@@ -119,7 +121,7 @@ func NewGossipEthTxPool(mempool *txpool.TxPool, registerer prometheus.Registerer
 
 	return &GossipEthTxPool{
 		mempool:    mempool,
-		pendingTxs: make(chan core.NewTxsEvent),
+		pendingTxs: make(chan core.NewTxsEvent, pendingTxsBuffer),
 		bloom:      bloom,
 	}, nil
 }
@@ -213,8 +215,8 @@ func (tx *GossipEthTx) GossipID() ids.ID {
 	return ids.ID(tx.Tx.Hash())
 }
 
-// EthPushGossiper is used by the ETH backend to push transactions
-// issued over the RPC and added to the mempool to peers.
+// EthPushGossiper is used by the ETH backend to push transactions issued over
+// the RPC and added to the mempool to peers.
 type EthPushGossiper struct {
 	vm *VM
 }
@@ -222,8 +224,9 @@ type EthPushGossiper struct {
 func (e *EthPushGossiper) Add(tx *types.Transaction) {
 	// eth.Backend is initialized before the [ethTxPushGossiper] is created, so
 	// we just ignore any gossip requests until it is set.
-	if e.vm.ethTxPushGossiper == nil {
+	ethTxPushGossiper := e.vm.ethTxPushGossiper.Get()
+	if ethTxPushGossiper == nil {
 		return
 	}
-	e.vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
+	ethTxPushGossiper.Add(&GossipEthTx{tx})
 }
