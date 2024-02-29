@@ -35,8 +35,10 @@ const (
 	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
 	defaultContinuousProfilerFrequency                = 15 * time.Minute
 	defaultContinuousProfilerMaxFiles                 = 5
-	defaultPushGossipNumValidators                    = 10
-	defaultPushGossipNumPeers                         = 0
+	defaultPushGossipFirstNumValidators               = 100
+	defaultPushGossipFirstNumPeers                    = 0
+	defaultPushGossipFollowupNumValidators            = 10
+	defaultPushGossipFollowupNumPeers                 = 0
 	defaultPushGossipFrequency                        = 100 * time.Millisecond
 	defaultPullGossipFrequency                        = 1 * time.Second
 	defaultTxRegossipFrequency                        = 10 * time.Second
@@ -152,12 +154,14 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	PushGossipNumValidators int      `json:"push-gossip-num-validators"`
-	PushGossipNumPeers      int      `json:"push-gossip-num-peers"`
-	PushGossipFrequency     Duration `json:"push-gossip-frequency"`
-	PullGossipFrequency     Duration `json:"pull-gossip-frequency"`
-	RegossipFrequency       Duration `json:"regossip-frequency"`
-	TxRegossipFrequency     Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	PushGossipFirstNumValidators    int      `json:"push-gossip-first-num-validators"`
+	PushGossipFirstNumPeers         int      `json:"push-gossip-first-num-peers"`
+	PushGossipFollowupNumValidators int      `json:"push-gossip-followup-num-validators"`
+	PushGossipFollowupNumPeers      int      `json:"push-gossip-followup-num-peers"`
+	PushGossipFrequency             Duration `json:"push-gossip-frequency"`
+	PullGossipFrequency             Duration `json:"pull-gossip-frequency"`
+	RegossipFrequency               Duration `json:"regossip-frequency"`
+	TxRegossipFrequency             Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -253,8 +257,10 @@ func (c *Config) SetDefaults() {
 	c.CommitInterval = defaultCommitInterval
 	c.SnapshotWait = defaultSnapshotWait
 	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
-	c.PushGossipNumValidators = defaultPushGossipNumValidators
-	c.PushGossipNumPeers = defaultPushGossipNumPeers
+	c.PushGossipFirstNumValidators = defaultPushGossipFirstNumValidators
+	c.PushGossipFirstNumPeers = defaultPushGossipFirstNumPeers
+	c.PushGossipFollowupNumValidators = defaultPushGossipFollowupNumValidators
+	c.PushGossipFollowupNumPeers = defaultPushGossipFollowupNumPeers
 	c.PushGossipFrequency.Duration = defaultPushGossipFrequency
 	c.PullGossipFrequency.Duration = defaultPullGossipFrequency
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
