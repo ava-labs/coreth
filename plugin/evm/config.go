@@ -41,7 +41,7 @@ const (
 	defaultPushRegossipNumPeers                       = 0
 	defaultPushGossipFrequency                        = 100 * time.Millisecond
 	defaultPullGossipFrequency                        = 1 * time.Second
-	defaultTxRegossipFrequency                        = 10 * time.Second
+	defaultTxRegossipFrequency                        = 30 * time.Second
 	defaultOfflinePruningBloomFilterSize       uint64 = 512 // Default size (MB) for the offline pruner to use
 	defaultLogLevel                                   = "info"
 	defaultLogJSONFormat                              = false
