@@ -35,8 +35,11 @@ const (
 	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
 	defaultContinuousProfilerFrequency                = 15 * time.Minute
 	defaultContinuousProfilerMaxFiles                 = 5
-	defaultTxRegossipFrequency                        = 1 * time.Minute
-	defaultTxRegossipMaxSize                          = 15
+	defaultPushGossipNumValidators                    = 10
+	defaultPushGossipNumPeers                         = 0
+	defaultPushGossipFrequency                        = 100 * time.Millisecond
+	defaultPullGossipFrequency                        = 1 * time.Second
+	defaultTxRegossipFrequency                        = 10 * time.Second
 	defaultOfflinePruningBloomFilterSize       uint64 = 512 // Default size (MB) for the offline pruner to use
 	defaultLogLevel                                   = "info"
 	defaultLogJSONFormat                              = false
@@ -128,14 +131,12 @@ type Config struct {
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
 
-	TxPoolJournal      string   `json:"tx-pool-journal"`
-	TxPoolRejournal    Duration `json:"tx-pool-rejournal"`
-	TxPoolPriceLimit   uint64   `json:"tx-pool-price-limit"`
-	TxPoolPriceBump    uint64   `json:"tx-pool-price-bump"`
-	TxPoolAccountSlots uint64   `json:"tx-pool-account-slots"`
-	TxPoolGlobalSlots  uint64   `json:"tx-pool-global-slots"`
-	TxPoolAccountQueue uint64   `json:"tx-pool-account-queue"`
-	TxPoolGlobalQueue  uint64   `json:"tx-pool-global-queue"`
+	TxPoolPriceLimit   uint64 `json:"tx-pool-price-limit"`
+	TxPoolPriceBump    uint64 `json:"tx-pool-price-bump"`
+	TxPoolAccountSlots uint64 `json:"tx-pool-account-slots"`
+	TxPoolGlobalSlots  uint64 `json:"tx-pool-global-slots"`
+	TxPoolAccountQueue uint64 `json:"tx-pool-account-queue"`
+	TxPoolGlobalQueue  uint64 `json:"tx-pool-global-queue"`
 
 	APIMaxDuration           Duration      `json:"api-max-duration"`
 	WSCPURefillRate          Duration      `json:"ws-cpu-refill-rate"`
@@ -151,12 +152,12 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	RemoteGossipOnlyEnabled   bool     `json:"remote-gossip-only-enabled"`
-	RegossipFrequency         Duration `json:"regossip-frequency"`
-	RegossipMaxTxs            int      `json:"regossip-max-txs"`
-	RemoteTxGossipOnlyEnabled bool     `json:"remote-tx-gossip-only-enabled"` // Deprecated: use RemoteGossipOnlyEnabled instead
-	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"`         // Deprecated: use RegossipFrequency instead
-	TxRegossipMaxSize         int      `json:"tx-regossip-max-size"`          // Deprecated: use RegossipMaxTxs instead
+	PushGossipNumValidators int      `json:"push-gossip-num-validators"`
+	PushGossipNumPeers      int      `json:"push-gossip-num-peers"`
+	PushGossipFrequency     Duration `json:"push-gossip-frequency"`
+	PullGossipFrequency     Duration `json:"pull-gossip-frequency"`
+	RegossipFrequency       Duration `json:"regossip-frequency"`
+	TxRegossipFrequency     Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -229,8 +230,6 @@ func (c *Config) SetDefaults() {
 	c.RPCTxFeeCap = defaultRpcTxFeeCap
 	c.MetricsExpensiveEnabled = defaultMetricsExpensiveEnabled
 
-	c.TxPoolJournal = txpool.DefaultConfig.Journal
-	c.TxPoolRejournal = Duration{txpool.DefaultConfig.Rejournal}
 	c.TxPoolPriceLimit = txpool.DefaultConfig.PriceLimit
 	c.TxPoolPriceBump = txpool.DefaultConfig.PriceBump
 	c.TxPoolAccountSlots = txpool.DefaultConfig.AccountSlots
@@ -254,7 +253,10 @@ func (c *Config) SetDefaults() {
 	c.CommitInterval = defaultCommitInterval
 	c.SnapshotWait = defaultSnapshotWait
 	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
-	c.RegossipMaxTxs = defaultTxRegossipMaxSize
+	c.PushGossipNumValidators = defaultPushGossipNumValidators
+	c.PushGossipNumPeers = defaultPushGossipNumPeers
+	c.PushGossipFrequency.Duration = defaultPushGossipFrequency
+	c.PullGossipFrequency.Duration = defaultPullGossipFrequency
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
 	c.LogLevel = defaultLogLevel
 	c.LogJSONFormat = defaultLogJSONFormat
@@ -319,17 +321,9 @@ func (c *Config) Deprecate() string {
 		msg += "coreth-admin-api-dir is deprecated, use admin-api-dir instead. "
 		c.AdminAPIDir = c.CorethAdminAPIDir
 	}
-	if c.RemoteTxGossipOnlyEnabled {
-		msg += "remote-tx-gossip-only-enabled is deprecated, use tx-gossip-enabled instead. "
-		c.RemoteGossipOnlyEnabled = c.RemoteTxGossipOnlyEnabled
-	}
 	if c.TxRegossipFrequency != (Duration{}) {
 		msg += "tx-regossip-frequency is deprecated, use regossip-frequency instead. "
 		c.RegossipFrequency = c.TxRegossipFrequency
-	}
-	if c.TxRegossipMaxSize != 0 {
-		msg += "tx-regossip-max-size is deprecated, use regossip-max-txs instead. "
-		c.RegossipMaxTxs = c.TxRegossipMaxSize
 	}
 
 	return msg
