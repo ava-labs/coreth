@@ -1105,12 +1105,12 @@ func (vm *VM) initBlockBuilding() error {
 			ethTxGossipClient,
 			ethTxGossipMetrics,
 			gossip.BranchingFactor{
-				Validators: vm.config.PushGossipFirstNumValidators,
-				Peers:      vm.config.PushGossipFirstNumPeers,
+				Validators: vm.config.PushGossipNumValidators,
+				Peers:      vm.config.PushGossipNumPeers,
 			},
 			gossip.BranchingFactor{
-				Validators: vm.config.PushGossipFollowupNumValidators,
-				Peers:      vm.config.PushGossipFollowupNumPeers,
+				Validators: vm.config.PushRegossipNumValidators,
+				Peers:      vm.config.PushRegossipNumPeers,
 			},
 			pushGossipDiscardedElements,
 			txGossipTargetMessageSize,
@@ -1129,12 +1129,12 @@ func (vm *VM) initBlockBuilding() error {
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
 			gossip.BranchingFactor{
-				Validators: vm.config.PushGossipFirstNumValidators,
-				Peers:      vm.config.PushGossipFirstNumPeers,
+				Validators: vm.config.PushGossipNumValidators,
+				Peers:      vm.config.PushGossipNumPeers,
 			},
 			gossip.BranchingFactor{
-				Validators: vm.config.PushGossipFollowupNumValidators,
-				Peers:      vm.config.PushGossipFollowupNumPeers,
+				Validators: vm.config.PushRegossipNumValidators,
+				Peers:      vm.config.PushRegossipNumPeers,
 			},
 			pushGossipDiscardedElements,
 			txGossipTargetMessageSize,
