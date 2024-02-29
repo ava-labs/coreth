@@ -94,6 +94,7 @@ import (
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 
+	avalancheUtils "github.com/ava-labs/avalanchego/utils"
 	avalancheJSON "github.com/ava-labs/avalanchego/utils/json"
 )
 
@@ -332,7 +333,7 @@ type VM struct {
 	// Initialize only sets these if nil so they can be overridden in tests
 	p2pSender             commonEng.AppSender
 	ethTxGossipHandler    p2p.Handler
-	ethTxPushGossiper     *gossip.PushGossiper[*GossipEthTx]
+	ethTxPushGossiper     avalancheUtils.Atomic[*gossip.PushGossiper[*GossipEthTx]]
 	ethTxPullGossiper     gossip.Gossiper
 	atomicTxGossipHandler p2p.Handler
 	atomicTxPushGossiper  *gossip.PushGossiper[*GossipAtomicTx]
@@ -1096,8 +1097,9 @@ func (vm *VM) initBlockBuilding() error {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
 	}
 
-	if vm.ethTxPushGossiper == nil {
-		vm.ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
+	ethTxPushGossiper := vm.ethTxPushGossiper.Get()
+	if ethTxPushGossiper == nil {
+		ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
 			ethTxGossipMarshaller,
 			ethTxPool,
 			ethTxGossipClient,
@@ -1109,6 +1111,7 @@ func (vm *VM) initBlockBuilding() error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
 		}
+		vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 	}
 
 	if vm.atomicTxPushGossiper == nil {
@@ -1185,7 +1188,7 @@ func (vm *VM) initBlockBuilding() error {
 
 	vm.shutdownWg.Add(2)
 	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
+		gossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 	go func() {

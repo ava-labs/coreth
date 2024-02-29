@@ -220,8 +220,11 @@ type EthPushGossiper struct {
 }
 
 func (e *EthPushGossiper) Add(tx *types.Transaction) {
-	// eth.Backend is initialized before [ethTxPushGossiper] is created. Because
-	// the RPC doesn't allow requests before bootstrapping has finished,
-	// [ethTxPushGossiper] will be initialized before this function is called.
-	e.vm.ethTxPushGossiper.Add(&GossipEthTx{tx})
+	// eth.Backend is initialized before the [ethTxPushGossiper] is created, so
+	// we just ignore any gossip requests until it is set.
+	ethTxPushGossiper := e.vm.ethTxPushGossiper.Get()
+	if ethTxPushGossiper == nil {
+		return
+	}
+	ethTxPushGossiper.Add(&GossipEthTx{tx})
 }

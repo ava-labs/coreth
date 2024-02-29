@@ -336,7 +336,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 
 	// issue a tx
 	require.NoError(vm.txPool.AddLocal(signedTx))
-	vm.ethTxPushGossiper.Add(&GossipEthTx{signedTx})
+	vm.ethTxPushGossiper.Get().Add(&GossipEthTx{signedTx})
 
 	sent := <-sender.SentAppGossip
 	got := &sdk.PushGossip{}
