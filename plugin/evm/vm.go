@@ -145,6 +145,7 @@ const (
 	atomicTxGossipProtocol = 0x1
 
 	// gossip constants
+	pushGossipNumNonValidators           = 0
 	pushGossipDiscardedElements          = 16_384
 	txGossipBloomMinTargetElements       = 8 * 1024
 	txGossipBloomTargetFalsePositiveRate = 0.01
@@ -1105,7 +1106,7 @@ func (vm *VM) initBlockBuilding() error {
 			ethTxGossipClient,
 			ethTxGossipMetrics,
 			vm.config.PushGossipNumValidators,
-			vm.config.PushGossipNumNonValidators,
+			pushGossipNumNonValidators,
 			vm.config.PushGossipNumPeers,
 			pushGossipDiscardedElements,
 			txGossipTargetMessageSize,
@@ -1124,7 +1125,7 @@ func (vm *VM) initBlockBuilding() error {
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
 			vm.config.PushGossipNumValidators,
-			vm.config.PushGossipNumNonValidators,
+			pushGossipNumNonValidators,
 			vm.config.PushGossipNumPeers,
 			pushGossipDiscardedElements,
 			txGossipTargetMessageSize,
