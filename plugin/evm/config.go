@@ -35,11 +35,13 @@ const (
 	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
 	defaultContinuousProfilerFrequency                = 15 * time.Minute
 	defaultContinuousProfilerMaxFiles                 = 5
-	defaultPushGossipNumValidators                    = 10
+	defaultPushGossipNumValidators                    = 100
 	defaultPushGossipNumPeers                         = 0
+	defaultPushRegossipNumValidators                  = 10
+	defaultPushRegossipNumPeers                       = 0
 	defaultPushGossipFrequency                        = 100 * time.Millisecond
 	defaultPullGossipFrequency                        = 1 * time.Second
-	defaultTxRegossipFrequency                        = 10 * time.Second
+	defaultTxRegossipFrequency                        = 30 * time.Second
 	defaultOfflinePruningBloomFilterSize       uint64 = 512 // Default size (MB) for the offline pruner to use
 	defaultLogLevel                                   = "info"
 	defaultLogJSONFormat                              = false
@@ -131,12 +133,13 @@ type Config struct {
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
 
-	TxPoolPriceLimit   uint64 `json:"tx-pool-price-limit"`
-	TxPoolPriceBump    uint64 `json:"tx-pool-price-bump"`
-	TxPoolAccountSlots uint64 `json:"tx-pool-account-slots"`
-	TxPoolGlobalSlots  uint64 `json:"tx-pool-global-slots"`
-	TxPoolAccountQueue uint64 `json:"tx-pool-account-queue"`
-	TxPoolGlobalQueue  uint64 `json:"tx-pool-global-queue"`
+	TxPoolPriceLimit   uint64   `json:"tx-pool-price-limit"`
+	TxPoolPriceBump    uint64   `json:"tx-pool-price-bump"`
+	TxPoolAccountSlots uint64   `json:"tx-pool-account-slots"`
+	TxPoolGlobalSlots  uint64   `json:"tx-pool-global-slots"`
+	TxPoolAccountQueue uint64   `json:"tx-pool-account-queue"`
+	TxPoolGlobalQueue  uint64   `json:"tx-pool-global-queue"`
+	TxPoolLifetime     Duration `json:"tx-pool-lifetime"`
 
 	APIMaxDuration           Duration      `json:"api-max-duration"`
 	WSCPURefillRate          Duration      `json:"ws-cpu-refill-rate"`
@@ -152,12 +155,14 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	PushGossipNumValidators int      `json:"push-gossip-num-validators"`
-	PushGossipNumPeers      int      `json:"push-gossip-num-peers"`
-	PushGossipFrequency     Duration `json:"push-gossip-frequency"`
-	PullGossipFrequency     Duration `json:"pull-gossip-frequency"`
-	RegossipFrequency       Duration `json:"regossip-frequency"`
-	TxRegossipFrequency     Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	PushGossipNumValidators   int      `json:"push-gossip-num-validators"`
+	PushGossipNumPeers        int      `json:"push-gossip-num-peers"`
+	PushRegossipNumValidators int      `json:"push-regossip-num-validators"`
+	PushRegossipNumPeers      int      `json:"push-regossip-num-peers"`
+	PushGossipFrequency       Duration `json:"push-gossip-frequency"`
+	PullGossipFrequency       Duration `json:"pull-gossip-frequency"`
+	RegossipFrequency         Duration `json:"regossip-frequency"`
+	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -236,6 +241,7 @@ func (c *Config) SetDefaults() {
 	c.TxPoolGlobalSlots = txpool.DefaultConfig.GlobalSlots
 	c.TxPoolAccountQueue = txpool.DefaultConfig.AccountQueue
 	c.TxPoolGlobalQueue = txpool.DefaultConfig.GlobalQueue
+	c.TxPoolLifetime.Duration = txpool.DefaultConfig.Lifetime
 
 	c.APIMaxDuration.Duration = defaultApiMaxDuration
 	c.WSCPURefillRate.Duration = defaultWsCpuRefillRate
@@ -255,6 +261,8 @@ func (c *Config) SetDefaults() {
 	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
 	c.PushGossipNumValidators = defaultPushGossipNumValidators
 	c.PushGossipNumPeers = defaultPushGossipNumPeers
+	c.PushRegossipNumValidators = defaultPushRegossipNumValidators
+	c.PushRegossipNumPeers = defaultPushRegossipNumPeers
 	c.PushGossipFrequency.Duration = defaultPushGossipFrequency
 	c.PullGossipFrequency.Duration = defaultPullGossipFrequency
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
