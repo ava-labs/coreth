@@ -32,6 +32,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ava-labs/subnet-evm/core/txpool"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/utils"
@@ -128,7 +129,7 @@ func TestEthTxGossip(t *testing.T) {
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), pk.ToECDSA())
 	require.NoError(err)
 
-	errs := vm.txPool.AddLocals([]*types.Transaction{signedTx})
+	errs := vm.txPool.Add([]*txpool.Transaction{{Tx: signedTx}}, true, true)
 	require.Len(errs, 1)
 	require.Nil(errs[0])
 
@@ -335,7 +336,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	require.NoError(err)
 
 	// issue a tx
-	require.NoError(vm.txPool.AddLocal(signedTx))
+	require.NoError(vm.txPool.Add([]*txpool.Transaction{{Tx: signedTx}}, true, true)[0])
 	vm.ethTxPushGossiper.Get().Add(&GossipEthTx{signedTx})
 
 	sent := <-sender.SentAppGossip
