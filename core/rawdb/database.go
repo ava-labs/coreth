@@ -184,6 +184,7 @@ type OpenOptions struct {
 	Cache     int    // the capacity(in megabytes) of the data caching
 	Handles   int    // number of files to be open simultaneously
 	ReadOnly  bool
+	Ephemeral bool
 }
 
 // openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
@@ -206,7 +207,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	if o.Type == dbPebble || existingDb == dbPebble {
 		if PebbleEnabled {
 			log.Info("Using pebble as the backing database")
-			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
 		} else {
 			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
@@ -219,7 +220,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	// on supported platforms and LevelDB on anything else.
 	if PebbleEnabled {
 		log.Info("Defaulting to pebble as the backing database")
-		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
 	} else {
 		log.Info("Defaulting to leveldb as the backing database")
 		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
