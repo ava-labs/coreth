@@ -33,7 +33,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/subnet-evm/utils"
+	"github.com/ava-labs/coreth/utils"
 )
 
 func TestCheckCompatible(t *testing.T) {
