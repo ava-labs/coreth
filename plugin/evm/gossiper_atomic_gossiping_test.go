@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/subnet-evm/plugin/evm/message"
 )
 
 // show that a txID discovered from gossip is requested to the same node only if

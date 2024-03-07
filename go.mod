@@ -1,10 +1,11 @@
-module github.com/ava-labs/coreth
+module github.com/ava-labs/subnet-evm
 
 go 1.21
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
 	github.com/ava-labs/avalanchego v1.11.2
+	github.com/ava-labs/coreth v0.13.1-rc.5
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
