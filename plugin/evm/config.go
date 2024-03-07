@@ -35,7 +35,7 @@ const (
 	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
 	defaultContinuousProfilerFrequency                = 15 * time.Minute
 	defaultContinuousProfilerMaxFiles                 = 5
-	defaultPushGossipNumValidators                    = 100
+	defaultPushGossipNumValidators                    = 750
 	defaultPushGossipNumPeers                         = 0
 	defaultPushRegossipNumValidators                  = 10
 	defaultPushRegossipNumPeers                       = 0
