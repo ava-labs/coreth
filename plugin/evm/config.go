@@ -35,6 +35,7 @@ const (
 	defaultMaxBlocksPerRequest                        = 0 // Default to no maximum on the number of blocks per getLogs request
 	defaultContinuousProfilerFrequency                = 15 * time.Minute
 	defaultContinuousProfilerMaxFiles                 = 5
+	defaultPushGossipPercentStake                     = .9
 	defaultPushGossipNumValidators                    = 100
 	defaultPushGossipNumPeers                         = 0
 	defaultPushRegossipNumValidators                  = 10
@@ -155,6 +156,7 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
+	PushGossipPercentStake    float64  `json:"push-gossip-percent-stake"`
 	PushGossipNumValidators   int      `json:"push-gossip-num-validators"`
 	PushGossipNumPeers        int      `json:"push-gossip-num-peers"`
 	PushRegossipNumValidators int      `json:"push-regossip-num-validators"`
@@ -259,6 +261,7 @@ func (c *Config) SetDefaults() {
 	c.CommitInterval = defaultCommitInterval
 	c.SnapshotWait = defaultSnapshotWait
 	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
+	c.PushGossipPercentStake = defaultPushGossipPercentStake
 	c.PushGossipNumValidators = defaultPushGossipNumValidators
 	c.PushGossipNumPeers = defaultPushGossipNumPeers
 	c.PushRegossipNumValidators = defaultPushRegossipNumValidators
