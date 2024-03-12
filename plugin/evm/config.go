@@ -318,6 +318,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("cannot use commit interval of 0 with pruning enabled")
 	}
 
+	if c.PushGossipPercentStake < 0 || c.PushGossipPercentStake > 1 {
+		return fmt.Errorf("push-gossip-percent-stake is %f but must be in the range [0, 1]", c.PushGossipPercentStake)
+	}
 	return nil
 }
 
