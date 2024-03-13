@@ -33,7 +33,7 @@ require (
 	github.com/status-im/keycard-go v0.2.0
 	github.com/stretchr/testify v1.8.4
 	github.com/tyler-smith/go-bip39 v1.1.0
-	github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa
+	github.com/urfave/cli/v2 v2.27.1
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.18.0
