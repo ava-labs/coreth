@@ -657,7 +657,7 @@ func (vm *VM) Initialize(
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
 	// ignored by the VM's codec.
-	vm.baseCodec = linearcodec.NewDefault(time.Time{})
+	vm.baseCodec = linearcodec.NewDefault()
 
 	if err := vm.fx.Initialize(vm); err != nil {
 		return err
@@ -1099,8 +1099,9 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	pushGossipParams := gossip.BranchingFactor{
-		Validators: vm.config.PushGossipNumValidators,
-		Peers:      vm.config.PushGossipNumPeers,
+		StakePercentage: vm.config.PushGossipPercentStake,
+		Validators:      vm.config.PushGossipNumValidators,
+		Peers:           vm.config.PushGossipNumPeers,
 	}
 	pushRegossipParams := gossip.BranchingFactor{
 		Validators: vm.config.PushRegossipNumValidators,
@@ -1112,6 +1113,7 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
 			ethTxGossipMarshaller,
 			ethTxPool,
+			vm.validators,
 			ethTxGossipClient,
 			ethTxGossipMetrics,
 			pushGossipParams,
@@ -1130,6 +1132,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*GossipAtomicTx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
+			vm.validators,
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
 			pushGossipParams,
