@@ -555,21 +555,6 @@ func TestVMUpgrades(t *testing.T) {
 		expectedGasPrice *big.Int
 	}{
 		{
-			name:             "Apricot Phase 0",
-			genesis:          genesisJSONApricotPhase0,
-			expectedGasPrice: big.NewInt(params.LaunchMinGasPrice),
-		},
-		{
-			name:             "Apricot Phase 1",
-			genesis:          genesisJSONApricotPhase1,
-			expectedGasPrice: big.NewInt(params.ApricotPhase1MinGasPrice),
-		},
-		{
-			name:             "Apricot Phase 2",
-			genesis:          genesisJSONApricotPhase2,
-			expectedGasPrice: big.NewInt(params.ApricotPhase1MinGasPrice),
-		},
-		{
 			name:             "Apricot Phase 3",
 			genesis:          genesisJSONApricotPhase3,
 			expectedGasPrice: big.NewInt(0),
