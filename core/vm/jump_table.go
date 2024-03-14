@@ -100,7 +100,7 @@ func newCancunInstructionSet() JumpTable {
 }
 
 // newDurangoInstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg, subnet-evm, durango instructions.
+// constantinople, istanbul, petersburg, apricotPhase1, 2, and 3, durango instructions.
 func newDurangoInstructionSet() JumpTable {
 	instructionSet := newApricotPhase3InstructionSet()
 	enable3855(&instructionSet) // PUSH0 instruction

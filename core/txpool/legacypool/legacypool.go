@@ -79,7 +79,7 @@ var (
 var (
 	evictionInterval      = time.Minute      // Time interval to check for evictable transactions
 	statsReportInterval   = 8 * time.Second  // Time interval to report transaction pool stats
-	baseFeeUpdateInterval = 10 * time.Second // Time interval at which to schedule a base fee update for the tx pool after SubnetEVM is enabled
+	baseFeeUpdateInterval = 10 * time.Second // Time interval at which to schedule a base fee update for the tx pool after ApricotPhase3 is enabled
 )
 
 var (
@@ -1811,7 +1811,7 @@ func (pool *LegacyPool) startPeriodicFeeUpdate() {
 	}
 
 	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
-	// when starting up in Subnet EVM before the base fee is updated.
+	// when starting up in ApricotPhase3 before the base fee is updated.
 	if time.Now().After(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp)) {
 		pool.updateBaseFee()
 	}
