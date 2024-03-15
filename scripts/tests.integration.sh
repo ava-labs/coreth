@@ -16,9 +16,10 @@ fi
 export AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
 
 # Only build avalanchego if using the network fixture
-if [[ "$@" =~ "--use-network-fixture" ]]; then
+if [[ "$*" =~ "--use-network-fixture" ]]; then
   ./scripts/build_avalanchego.sh
-  export AVALANCHEGO_PATH="$(realpath ${AVALANCHEGO_PATH:-${AVALANCHEGO_CLONE_PATH}/build/avalanchego})"
+  AVALANCHEGO_PATH="$(realpath "${AVALANCHEGO_PATH:-${AVALANCHEGO_CLONE_PATH}/build/avalanchego}")"
+  export AVALANCHEGO_PATH
 fi
 
 # Ensure blst configuration
