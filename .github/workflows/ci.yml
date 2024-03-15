@@ -15,6 +15,10 @@ on:
         required: true
         default: 'master'
 
+env:
+  go_version: '~1.21.7'
+  tmpnet_data_path: ~/.tmpnet/networks/1000
+
 jobs:
   lint:
     name: Lint
@@ -31,7 +35,7 @@ jobs:
           token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
-          go-version: '~1.21.7'
+          go-version: ${{ env.go_version }}
           check-latest: true
       - name: change avalanchego dep
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -68,7 +72,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v5
       with:
-        go-version: '~1.21.7'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: change avalanchego dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -80,6 +84,8 @@ jobs:
     - run: ./scripts/build.sh evm
       shell: bash
     - run: ./scripts/build_test.sh
+      shell: bash
+    - run: ./scripts/tests.integration.sh
       shell: bash
     - run: ./scripts/coverage.sh
       shell: bash
@@ -101,7 +107,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v5
       with:
-        go-version: '~1.21.7'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: change avalanchego dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -114,6 +120,37 @@ jobs:
       shell: bash
     - run: ./scripts/build_test.sh -race
       shell: bash
+  integration:
+    name: Integration Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ]
+    steps:
+    - uses: actions/checkout@v3
+    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: actions/checkout@v3
+      with:
+        repository: ${{ github.event.inputs.avalanchegoRepo }}
+        ref: ${{ github.event.inputs.avalanchegoBranch }}
+        path: avalanchego
+        token: ${{ secrets.AVALANCHE_PAT }}
+    - uses: actions/setup-go@v3
+      with:
+        go-version: ${{ env.go_version }}
+        check-latest: true
+    - name: Run integration tests
+      run: ./scripts/tests.integration.sh --use-network-fixture
+      shell: bash
+    - name: Upload tmpnet network dir
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: tmpnet-integration-data
+        path: ${{ env.tmpnet_data_path }}
+        if-no-files-found: error
+
   avalanchego_e2e:
     name: AvalancheGo E2E Tests v${{ matrix.go }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -132,7 +169,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v5
       with:
-        go-version: '~1.21.7'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: Run e2e tests
       run: E2E_SERIAL=1 ./scripts/tests.e2e.sh
@@ -141,5 +178,6 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: tmpnet-data
-        path: ~/.tmpnet/networks/1000
+        name: tmpnet-e2e-data
+        path: ${{ env.tmpnet_data_path }}
+        if-no-files-found: error

@@ -16,10 +16,9 @@ fi
 CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 
 # Allow configuring the clone path to point to an existing clone
-AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
+export AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
 
-# Load the version
-source "$CORETH_PATH"/scripts/versions.sh
+./scripts/build_avalanchego.sh
 
 # Always return to the coreth path on exit
 function cleanup {
@@ -27,25 +26,6 @@ function cleanup {
 }
 trap cleanup EXIT
 
-echo "checking out target AvalancheGo version ${avalanche_version}"
-if [[ -d "${AVALANCHEGO_CLONE_PATH}" ]]; then
-  echo "updating existing clone"
-  cd "${AVALANCHEGO_CLONE_PATH}"
-  git fetch
-else
-  echo "creating new clone"
-  git clone https://github.com/ava-labs/avalanchego.git "${AVALANCHEGO_CLONE_PATH}"
-  cd "${AVALANCHEGO_CLONE_PATH}"
-fi
-# Branch will be reset to $avalanche_version if it already exists
-git checkout -B "test-${avalanche_version}" "${avalanche_version}"
-
-echo "updating coreth dependency to point to ${CORETH_PATH}"
-go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
-go mod tidy
-
-echo "building avalanchego"
-./scripts/build.sh -r
-
 echo "running AvalancheGo e2e tests"
+cd "${AVALANCHEGO_CLONE_PATH}"
 E2E_SERIAL=1 ./scripts/tests.e2e.sh --ginkgo.label-filter='c || uses-c'
