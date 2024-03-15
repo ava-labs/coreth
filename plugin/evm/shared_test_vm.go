@@ -19,7 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -156,7 +156,7 @@ func setupGenesis(t require.TestingT,
 ) (*snow.Context,
 	database.Database,
 	[]byte,
-	chan engCommon.Message,
+	chan commonEng.Message,
 	*atomic.Memory) {
 	if len(genesisJSON) == 0 {
 		genesisJSON = genesisJSONLatest
@@ -166,24 +166,22 @@ func setupGenesis(t require.TestingT,
 
 	baseDB := memdb.New()
 
-	m := atomic.NewMemory(prefixdb.New([]byte{0}, baseDB))
-	ctx.SharedMemory = m.NewSharedMemory(ctx.ChainID)
+	// initialize the atomic memory
+	atomicMemory := atomic.NewMemory(prefixdb.New([]byte{0}, baseDB))
+	ctx.SharedMemory = atomicMemory.NewSharedMemory(ctx.ChainID)
 
 	// NB: this lock is intentionally left locked when this function returns.
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
 
-	userKeystore := keystore.New(
-		logging.NoLog{},
-		memdb.New(),
-	)
+	userKeystore := keystore.New(logging.NoLog{}, memdb.New())
 	err := userKeystore.CreateUser(username, password)
 	require.NoError(t, err)
 	ctx.Keystore = userKeystore.NewBlockchainKeyStore(ctx.ChainID)
 
-	issuer := make(chan engCommon.Message, 1)
+	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
-	return ctx, prefixedDB, genesisBytes, issuer, m
+	return ctx, prefixedDB, genesisBytes, issuer, atomicMemory
 }
 
 // GenesisVM creates a VM instance with the genesis test bytes and returns
@@ -194,35 +192,35 @@ func GenesisVM(t require.TestingT,
 	genesisJSON string,
 	configJSON string,
 	upgradeJSON string,
-) (chan engCommon.Message,
+) (chan commonEng.Message,
 	*VM, database.Database,
 	*atomic.Memory,
-	*engCommon.SenderTest) {
+	*commonEng.SenderTest) {
 	vm := &VM{}
-	vm.p2pSender = &engCommon.FakeSender{}
-	ctx, db, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
-	appSender := &engCommon.SenderTest{T: t}
+	vm.p2pSender = &commonEng.FakeSender{}
+	ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
+	appSender := &commonEng.SenderTest{T: t}
 	appSender.CantSendAppGossip = true
-	appSender.SendAppGossipF = func(context.Context, []byte) error { return nil }
+	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 	err := vm.Initialize(
 		context.Background(),
 		ctx,
-		db,
+		dbManager,
 		genesisBytes,
 		[]byte(upgradeJSON),
 		[]byte(configJSON),
 		issuer,
-		[]*engCommon.Fx{},
+		[]*commonEng.Fx{},
 		appSender,
 	)
-	require.NoError(t, err)
+	require.NoError(t, err, "error initializing GenesisVM")
 
 	if finishBootstrapping {
 		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
 		require.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
 	}
 
-	return issuer, vm, db, m, appSender
+	return issuer, vm, dbManager, m, appSender
 }
 
 func addUTXO(sharedMemory *atomic.Memory, ctx *snow.Context, txID ids.ID, index uint32, assetID ids.ID, amount uint64, addr ids.ShortID) (*avax.UTXO, error) {
@@ -263,7 +261,7 @@ func addUTXO(sharedMemory *atomic.Memory, ctx *snow.Context, txID ids.ID, index 
 // GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map
 // Generates UTXOIDs by using a hash of the address in the [utxos] map such that the UTXOs will be generated deterministically.
 // If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
-func GenesisVMWithUTXOs(t require.TestingT, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (chan engCommon.Message, *VM, database.Database, *atomic.Memory, *engCommon.SenderTest) {
+func GenesisVMWithUTXOs(t require.TestingT, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (chan commonEng.Message, *VM, database.Database, *atomic.Memory, *commonEng.SenderTest) {
 	require := require.New(t)
 	issuer, vm, db, sharedMemory, sender := GenesisVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON)
 	for addr, avaxAmount := range utxos {

@@ -12,6 +12,7 @@ import (
 	"github.com/onsi/gomega"
 
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
+	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 
 	// ensure test packages are scanned by ginkgo
 	_ "github.com/ava-labs/coreth/tests/integration/vm"
@@ -41,7 +42,7 @@ func init() {
 var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	if useNetworkFixture {
 		// Run only once in the first ginkgo process
-		return e2e.NewTestEnvironment(flagVars).Marshal()
+		return e2e.NewTestEnvironment(flagVars, &tmpnet.Network{}).Marshal()
 	}
 	return nil
 }, func(envBytes []byte) {
