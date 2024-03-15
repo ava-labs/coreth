@@ -16,7 +16,7 @@ on:
         default: 'master'
 
 env:
-  go_version: '~1.20.12'
+  go_version: '~1.21.7'
   tmpnet_data_path: ~/.tmpnet/networks/1000
 
 jobs:
@@ -72,7 +72,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v5
       with:
-        go-version: '~1.21.7'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: change avalanchego dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -107,7 +107,7 @@ jobs:
         token: ${{ secrets.AVALANCHE_PAT }}
     - uses: actions/setup-go@v5
       with:
-        go-version: '~1.21.7'
+        go-version: ${{ env.go_version }}
         check-latest: true
     - name: change avalanchego dep
       if: ${{ github.event_name == 'workflow_dispatch' }}
