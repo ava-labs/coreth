@@ -20,6 +20,7 @@ var errNoKey = errors.New("PrecompileUpgrade cannot be empty")
 // It is used to unmarshal the json into the correct precompile config type
 // based on the key. Keys are defined in each precompile module, and registered in
 // precompile/registry/registry.go.
+// For test
 type PrecompileUpgrade struct {
 	precompileconfig.Config
 }

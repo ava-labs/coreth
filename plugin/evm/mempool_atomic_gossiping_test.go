@@ -17,6 +17,7 @@ import (
 
 // shows that a locally generated AtomicTx can be added to mempool and then
 // removed by inclusion in a block
+// for test
 func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 	for _, name := range []string{"import", "export"} {
 		t.Run(name, func(t *testing.T) {
