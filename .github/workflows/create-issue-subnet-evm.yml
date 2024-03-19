@@ -24,6 +24,8 @@ jobs:
   sync_pr:
     # TODO: uncomment after testing
     # if: github.event.pull_request.merged == true
+    permissions:
+      issues: write
     if: |
      !contains(github.event.pull_request.labels.*.name, 'do not sync')
     runs-on: ubuntu-latest
