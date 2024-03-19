@@ -47,4 +47,4 @@ jobs:
           --body "$ISSUE_BODY" \
           --label "coreth-sync,automated" \
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
