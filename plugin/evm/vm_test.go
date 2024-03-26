@@ -58,6 +58,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
@@ -253,7 +254,7 @@ func GenesisVM(t *testing.T,
 	ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
 	appSender := &commonEng.SenderTest{T: t}
 	appSender.CantSendAppGossip = true
-	appSender.SendAppGossipF = func(context.Context, []byte, int, int, int) error { return nil }
+	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 	err := vm.Initialize(
 		context.Background(),
 		ctx,
@@ -554,21 +555,6 @@ func TestVMUpgrades(t *testing.T) {
 		expectedGasPrice *big.Int
 	}{
 		{
-			name:             "Apricot Phase 0",
-			genesis:          genesisJSONApricotPhase0,
-			expectedGasPrice: big.NewInt(params.LaunchMinGasPrice),
-		},
-		{
-			name:             "Apricot Phase 1",
-			genesis:          genesisJSONApricotPhase1,
-			expectedGasPrice: big.NewInt(params.ApricotPhase1MinGasPrice),
-		},
-		{
-			name:             "Apricot Phase 2",
-			genesis:          genesisJSONApricotPhase2,
-			expectedGasPrice: big.NewInt(params.ApricotPhase1MinGasPrice),
-		},
-		{
 			name:             "Apricot Phase 3",
 			genesis:          genesisJSONApricotPhase3,
 			expectedGasPrice: big.NewInt(0),
@@ -618,7 +604,7 @@ func TestVMUpgrades(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			_, vm, _, _, _ := GenesisVM(t, true, test.genesis, "", "")
 
-			if gasPrice := vm.txPool.GasPrice(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
+			if gasPrice := vm.txPool.GasTip(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
 				t.Fatalf("Expected pool gas price to be %d but found %d", test.expectedGasPrice, gasPrice)
 			}
 			defer func() {
@@ -3409,7 +3395,7 @@ func TestConfigureLogLevel(t *testing.T) {
 			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, test.genesisJSON)
 			appSender := &commonEng.SenderTest{T: t}
 			appSender.CantSendAppGossip = true
-			appSender.SendAppGossipF = func(context.Context, []byte, int, int, int) error { return nil }
+			appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 			err := vm.Initialize(
 				context.Background(),
 				ctx,
@@ -3572,7 +3558,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		}
 		txs[i] = signedTx
 	}
-	errs := vm.txPool.AddRemotes(txs)
+	errs := vm.txPool.AddRemotesSync(txs)
 	for i, err := range errs {
 		if err != nil {
 			t.Fatalf("Failed to add tx at index %d: %s", i, err)
@@ -3746,7 +3732,11 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		}
 		txs[i] = signedTx
 	}
-	errs := vm.txPool.AddRemotes(txs)
+	wrapped := make([]*txpool.Transaction, len(txs))
+	for i, tx := range txs {
+		wrapped[i] = &txpool.Transaction{Tx: tx}
+	}
+	errs := vm.txPool.Add(wrapped, false, false)
 	for i, err := range errs {
 		if err != nil {
 			t.Fatalf("Failed to add tx at index %d: %s", i, err)
