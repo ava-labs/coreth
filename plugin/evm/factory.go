@@ -7,6 +7,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 )
 
 var (
@@ -16,8 +17,14 @@ var (
 	_ vms.Factory = &Factory{}
 )
 
-type Factory struct{}
+type FactoryConfig struct {
+	ProposerVMConfig proposervm.Config
+}
 
-func (*Factory) New(logging.Logger) (interface{}, error) {
-	return &VM{}, nil
+type Factory struct {
+	FactoryConfig FactoryConfig
+}
+
+func (f *Factory) New(logging.Logger) (interface{}, error) {
+	return proposervm.New(&VM{}, f.FactoryConfig.ProposerVMConfig), nil
 }
