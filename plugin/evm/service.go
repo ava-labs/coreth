@@ -519,7 +519,6 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 	}
 	reply.Tx = txBytes
 	reply.Encoding = args.Encoding
-
 	if status == Accepted {
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
