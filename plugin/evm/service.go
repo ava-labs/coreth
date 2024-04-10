@@ -473,10 +473,10 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 
 	reply.Status = status
 	if status == Accepted {
-		lastAccepted := service.vm.blockChain.LastAcceptedBlock()
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
+		lastAccepted := service.vm.blockChain.LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			reply.Status = Processing
 			return nil
