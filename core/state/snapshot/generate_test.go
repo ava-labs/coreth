@@ -554,7 +554,7 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 }
 
 func enableLogging() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 }
 
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
