@@ -33,9 +33,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie/trienode"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -148,7 +148,7 @@ func testNodeIteratorCoverage(t *testing.T, scheme string) {
 	db, nodeDb, trie, _ := makeTestTrie(scheme)
 
 	// Gather all the node hashes found by the iterator
-	var elements = make(map[common.Hash]iterationElement)
+	elements := make(map[common.Hash]iterationElement)
 	for it := trie.MustNodeIterator(nil); it.Next(true); {
 		if it.Hash() != (common.Hash{}) {
 			elements[it.Hash()] = iterationElement{
@@ -498,9 +498,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool, scheme strin
 	if !memonly {
 		triedb.Commit(root, false)
 	}
-	var (
-		barNodeBlob []byte
-	)
+	var barNodeBlob []byte
 	tr, _ := New(TrieID(root), triedb)
 	if memonly {
 		tr.reader.banned = map[string]struct{}{string(barNodePath): {}}
@@ -661,7 +659,7 @@ func testIteratorNodeBlob(t *testing.T, scheme string) {
 	triedb.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 	triedb.Commit(root, false)
 
-	var found = make(map[common.Hash][]byte)
+	found := make(map[common.Hash][]byte)
 	trie, _ = New(TrieID(root), triedb)
 	it := trie.MustNodeIterator(nil)
 	for it.Next(true) {

@@ -17,7 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -1776,7 +1776,6 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
 			chainID, atomicRequests, err := exportTx.AtomicOps()
-
 			if err != nil {
 				t.Fatalf("Failed to accept export transaction due to: %s", err)
 			}
@@ -1964,7 +1963,6 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
 			chainID, atomicRequests, err := exportTx.AtomicOps()
-
 			if err != nil {
 				t.Fatalf("Failed to accept export transaction due to: %s", err)
 			}

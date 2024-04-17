@@ -40,10 +40,10 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state/snapshot"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -817,7 +817,7 @@ func TestStateDBAccessList(t *testing.T) {
 		t.Helper()
 		// convert to common.Address form
 		var addresses []common.Address
-		var addressMap = make(map[common.Address]struct{})
+		addressMap := make(map[common.Address]struct{})
 		for _, astring := range astrings {
 			address := addr(astring)
 			addresses = append(addresses, address)
@@ -840,10 +840,10 @@ func TestStateDBAccessList(t *testing.T) {
 		if !state.AddressInAccessList(addr(addrString)) {
 			t.Fatalf("scope missing address/slots %v", addrString)
 		}
-		var address = addr(addrString)
+		address := addr(addrString)
 		// convert to common.Hash form
 		var slots []common.Hash
-		var slotMap = make(map[common.Hash]struct{})
+		slotMap := make(map[common.Hash]struct{})
 		for _, slotString := range slotStrings {
 			s := slot(slotString)
 			slots = append(slots, s)

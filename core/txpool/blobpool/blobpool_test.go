@@ -39,14 +39,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/subnet-evm/consensus/dummy"
+	"github.com/ava-labs/subnet-evm/consensus/misc/eip4844"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/txpool"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -346,7 +346,7 @@ func TestOpenDrops(t *testing.T) {
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0o700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
 
 	// Insert a malformed transaction to verify that decoding errors (or format
@@ -627,7 +627,7 @@ func TestOpenIndex(t *testing.T) {
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0o700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
 
 	// Insert a sequence of transactions with varying price points to check that
@@ -640,8 +640,8 @@ func TestOpenIndex(t *testing.T) {
 		txExecFeeCaps = []uint64{100, 90, 200, 10, 80, 300}
 		txBlobFeeCaps = []uint64{55, 66, 77, 33, 22, 11}
 
-		//basefeeJumps = []float64{39.098, 38.204, 44.983, 19.549, 37.204, 48.426} // log 1.125 (exec fee cap)
-		//blobfeeJumps = []float64{34.023, 35.570, 36.879, 29.686, 26.243, 20.358} // log 1.125 (blob fee cap)
+		// basefeeJumps = []float64{39.098, 38.204, 44.983, 19.549, 37.204, 48.426} // log 1.125 (exec fee cap)
+		// blobfeeJumps = []float64{34.023, 35.570, 36.879, 29.686, 26.243, 20.358} // log 1.125 (blob fee cap)
 
 		evictExecTipCaps  = []uint64{10, 10, 5, 5, 1, 1}
 		evictExecFeeJumps = []float64{39.098, 38.204, 38.204, 19.549, 19.549, 19.549} //  min(log 1.125 (exec fee cap))
@@ -717,7 +717,7 @@ func TestOpenHeap(t *testing.T) {
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0o700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
 
 	// Insert a few transactions from a few accounts. To remove randomness from
@@ -805,7 +805,7 @@ func TestOpenCap(t *testing.T) {
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0o700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
 
 	// Insert a few transactions from a few accounts
@@ -1218,7 +1218,7 @@ func TestAdd(t *testing.T) {
 		storage, _ := os.MkdirTemp("", "blobpool-")
 		defer os.RemoveAll(storage) // late defer, still ok
 
-		os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+		os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0o700)
 		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
 
 		// Insert the seed transactions for the pool startup

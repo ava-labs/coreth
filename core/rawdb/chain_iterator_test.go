@@ -33,7 +33,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -75,7 +75,7 @@ func TestChainIterator(t *testing.T) {
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
 
-	var cases = []struct {
+	cases := []struct {
 		from, to uint64
 		reverse  bool
 		expect   []int

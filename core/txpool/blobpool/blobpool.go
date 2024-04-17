@@ -38,14 +38,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/subnet-evm/consensus/dummy"
+	"github.com/ava-labs/subnet-evm/consensus/misc/eip4844"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/txpool"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/metrics"
+	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
@@ -367,11 +367,11 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 	)
 	if p.config.Datadir != "" {
 		queuedir = filepath.Join(p.config.Datadir, pendingTransactionStore)
-		if err := os.MkdirAll(queuedir, 0700); err != nil {
+		if err := os.MkdirAll(queuedir, 0o700); err != nil {
 			return err
 		}
 		limbodir = filepath.Join(p.config.Datadir, limboedTransactionStore)
-		if err := os.MkdirAll(limbodir, 0700); err != nil {
+		if err := os.MkdirAll(limbodir, 0o700); err != nil {
 			return err
 		}
 	}

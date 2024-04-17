@@ -13,7 +13,10 @@ if ! [[ "$0" =~ scripts/tests.e2e.sh ]]; then
 fi
 
 # Coreth root directory
-CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
+CORETH_PATH=$(
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+  cd .. && pwd
+)
 
 # Allow configuring the clone path to point to an existing clone
 AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
@@ -41,7 +44,7 @@ fi
 git checkout -B "test-${avalanche_version}" "${avalanche_version}"
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
-go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
+go mod edit -replace "github.com/ava-labs/subnet-evm=${CORETH_PATH}"
 go mod tidy
 
 echo "building avalanchego"

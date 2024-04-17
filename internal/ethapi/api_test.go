@@ -37,18 +37,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/bloombits"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/internal/blocktest"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/subnet-evm/accounts"
+	"github.com/ava-labs/subnet-evm/consensus"
+	"github.com/ava-labs/subnet-evm/consensus/dummy"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/bloombits"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/core/vm"
+	"github.com/ava-labs/subnet-evm/internal/blocktest"
+	"github.com/ava-labs/subnet-evm/params"
+	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -134,7 +134,8 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				"r": "0xac639f4319e9268898e29444b97101f1225e2a0837151626da23e73dda2443fc",
 				"s": "0x4fcc3f4c3a75f70ee45bb42d4b0aad432cc8c0140efb3e2611d6a6dda8460907"
 			}`,
-		}, {
+		},
+		{
 			Tx: &types.LegacyTx{
 				Nonce:    5,
 				GasPrice: big.NewInt(6),
@@ -211,7 +212,8 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				"s": "0x2dc134b6bc43abbdfebef0b2d62c175459fc1e8ddff60c8e740c461d7ea1522f",
 				"yParity": "0x1"
 			}`,
-		}, {
+		},
+		{
 			Tx: &types.AccessListTx{
 				ChainID:  config.ChainID,
 				Nonce:    5,
@@ -257,7 +259,8 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				"s": "0x32a908d1bc2db0229354f4dd392ffc37934e24ae8b18a620c6588c72660b6238",
 				"yParity": "0x1"
 			}`,
-		}, {
+		},
+		{
 			Tx: &types.DynamicFeeTx{
 				ChainID:   config.ChainID,
 				Nonce:     5,
@@ -306,7 +309,8 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				"s": "0x31da567e2b3a83e58e42f7902c3706926c926625f6978c24fdaa21b9d143bbf7",
 				"yParity": "0x0"
 			}`,
-		}, {
+		},
+		{
 			Tx: &types.DynamicFeeTx{
 				ChainID:    config.ChainID,
 				Nonce:      5,
@@ -385,6 +389,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
+
 func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil
 }
@@ -402,9 +407,11 @@ func (b testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 	}
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
+
 func (b testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return b.chain.GetHeaderByHash(hash), nil
 }
+
 func (b testBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.HeaderByNumber(ctx, blockNr)
@@ -423,9 +430,11 @@ func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
+
 func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.chain.GetBlockByHash(hash), nil
 }
+
 func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
@@ -435,9 +444,11 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	}
 	panic("unknown type rpc.BlockNumberOrHash")
 }
+
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
 	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
 }
+
 func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	if number == rpc.PendingBlockNumber {
 		panic("pending state not implemented")
@@ -452,6 +463,7 @@ func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 	stateDb, err := b.chain.StateAt(header.Root)
 	return stateDb, header, err
 }
+
 func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
@@ -467,6 +479,7 @@ func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	receipts := rawdb.ReadReceipts(b.db, hash, header.Number.Uint64(), header.Time, b.chain.Config())
 	return receipts, nil
 }
+
 func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) (*vm.EVM, func() error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {
@@ -479,18 +492,23 @@ func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state
 	}
 	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig), vmError
 }
+
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	panic("implement me")
 }
+
 func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	panic("implement me")
 }
+
 func (b testBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	panic("implement me")
 }
+
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	panic("implement me")
 }
+
 func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
 	return tx, blockHash, blockNumber, index, nil
@@ -504,9 +522,11 @@ func (b testBackend) Stats() (pending int, queued int) { panic("implement me") }
 func (b testBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	panic("implement me")
 }
+
 func (b testBackend) TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
 	panic("implement me")
 }
+
 func (b testBackend) SubscribeNewTxsEvent(events chan<- core.NewTxsEvent) event.Subscription {
 	panic("implement me")
 }
@@ -515,12 +535,15 @@ func (b testBackend) Engine() consensus.Engine         { return b.chain.Engine()
 func (b testBackend) GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
 	panic("implement me")
 }
+
 func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	panic("implement me")
 }
+
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
+
 func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
@@ -560,7 +583,7 @@ func TestEstimateGas(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
 	}))
-	var testSuite = []struct {
+	testSuite := []struct {
 		blockNumber rpc.BlockNumber
 		call        TransactionArgs
 		overrides   StateOverride
@@ -664,7 +687,7 @@ func TestCall(t *testing.T) {
 		b.AddTx(tx)
 	}))
 	randomAccounts := newAccounts(3)
-	var testSuite = []struct {
+	testSuite := []struct {
 		blockNumber    rpc.BlockNumber
 		overrides      StateOverride
 		call           TransactionArgs
@@ -866,7 +889,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, nil, blocktest.NewHasher())
 
-	var testSuite = []struct {
+	testSuite := []struct {
 		inclTx bool
 		fullTx bool
 		want   string
@@ -1096,7 +1119,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 	}
 	pendingHash := pending.Hash()
 
-	var testSuite = []struct {
+	testSuite := []struct {
 		blockNumber rpc.BlockNumber
 		blockHash   *common.Hash
 		fullTx      bool
@@ -1799,7 +1822,7 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		blockHashes[i] = header.Hash()
 	}
 
-	var testSuite = []struct {
+	testSuite := []struct {
 		txHash common.Hash
 		want   string
 	}{
@@ -2041,7 +2064,7 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 		blockHashes[i] = header.Hash()
 	}
 
-	var testSuite = []struct {
+	testSuite := []struct {
 		test rpc.BlockNumberOrHash
 		want string
 	}{

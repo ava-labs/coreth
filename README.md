@@ -12,7 +12,7 @@ Coreth is a dependency of AvalancheGo which is used to implement the EVM based V
 
 ```bash
 cd $GOPATH/src/github.com/ava-labs/avalanchego
-go mod edit -replace github.com/ava-labs/coreth=../coreth
+go mod edit -replace github.com/ava-labs/subnet-evm=../coreth
 ```
 
 Now that AvalancheGo depends on the local version of Coreth, we can build with the normal build script:
@@ -33,19 +33,19 @@ The C-Chain supports the following API namespaces:
 - `txpool`
 - `debug`
 
-Only the `eth` namespace is enabled by default. 
+Only the `eth` namespace is enabled by default.
 To enable the other namespaces see the instructions for passing the C-Chain config to AvalancheGo [here.](https://docs.avax.network/nodes/configure/chain-config-flags#enabling-evm-apis)
 Full documentation for the C-Chain's API can be found [here.](https://docs.avax.network/reference/avalanchego/c-chain/api)
 
 ## Compatibility
 
-The C-Chain is compatible with almost all Ethereum tooling, including [Core,](https://docs.avax.network/build/dapp/launch-dapp#through-core) [Metamask,](https://docs.avax.network/build/dapp/launch-dapp#through-metamask) [Remix](https://docs.avax.network/build/tutorials/smart-contracts/deploy-a-smart-contract-on-avalanche-using-remix-and-metamask)  and [Truffle.](https://docs.avax.network/build/tutorials/smart-contracts/using-truffle-with-the-avalanche-c-chain)
+The C-Chain is compatible with almost all Ethereum tooling, including [Core,](https://docs.avax.network/build/dapp/launch-dapp#through-core) [Metamask,](https://docs.avax.network/build/dapp/launch-dapp#through-metamask) [Remix](https://docs.avax.network/build/tutorials/smart-contracts/deploy-a-smart-contract-on-avalanche-using-remix-and-metamask) and [Truffle.](https://docs.avax.network/build/tutorials/smart-contracts/using-truffle-with-the-avalanche-c-chain)
 
 ## Differences Between Avalanche C-Chain and Ethereum
 
 ### Atomic Transactions
 
-As a network composed of multiple blockchains, Avalanche uses *atomic transactions* to move assets between chains. Coreth modifies the Ethereum block format by adding an *ExtraData* field, which contains the atomic transactions.
+As a network composed of multiple blockchains, Avalanche uses _atomic transactions_ to move assets between chains. Coreth modifies the Ethereum block format by adding an _ExtraData_ field, which contains the atomic transactions.
 
 ### Block Timing
 
@@ -65,12 +65,12 @@ To support these changes, there have been a number of changes to the C-Chain blo
 
 ### Block Body
 
-* `Version`: provides version of the `ExtData` in the block. Currently, this field is always 0.
-* `ExtData`: extra data field within the block body to store atomic transaction bytes.
+- `Version`: provides version of the `ExtData` in the block. Currently, this field is always 0.
+- `ExtData`: extra data field within the block body to store atomic transaction bytes.
 
 ### Block Header
 
-* `ExtDataHash`: the hash of the bytes in the `ExtDataHash` field
-* `BaseFee`: Added by EIP-1559 to represent the base fee of the block (present in Ethereum as of EIP-1559)
-* `ExtDataGasUsed`: amount of gas consumed by the atomic transactions in the block
-* `BlockGasCost`: surcharge for producing a block faster than the target rate
+- `ExtDataHash`: the hash of the bytes in the `ExtDataHash` field
+- `BaseFee`: Added by EIP-1559 to represent the base fee of the block (present in Ethereum as of EIP-1559)
+- `ExtDataGasUsed`: amount of gas consumed by the atomic transactions in the block
+- `BlockGasCost`: surcharge for producing a block faster than the target rate

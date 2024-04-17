@@ -32,11 +32,11 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/rpc"
-	"github.com/ava-labs/coreth/signer/core/apitypes"
+	"github.com/ava-labs/subnet-evm/accounts"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/interfaces"
+	"github.com/ava-labs/subnet-evm/rpc"
+	"github.com/ava-labs/subnet-evm/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/event"
@@ -166,7 +166,7 @@ func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain int
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 	var res hexutil.Bytes
-	var signAddress = common.NewMixedcaseAddress(account.Address)
+	signAddress := common.NewMixedcaseAddress(account.Address)
 	if err := api.client.Call(&res, "account_signData",
 		mimeType,
 		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
@@ -182,7 +182,7 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
 	var signature hexutil.Bytes
-	var signAddress = common.NewMixedcaseAddress(account.Address)
+	signAddress := common.NewMixedcaseAddress(account.Address)
 	if err := api.client.Call(&signature, "account_signData",
 		accounts.MimetypeTextPlain,
 		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
@@ -259,6 +259,7 @@ func (api *ExternalSigner) SignTextWithPassphrase(account accounts.Account, pass
 func (api *ExternalSigner) SignTxWithPassphrase(account accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	return nil, errors.New("password-operations not supported on external signers")
 }
+
 func (api *ExternalSigner) SignDataWithPassphrase(account accounts.Account, passphrase, mimeType string, data []byte) ([]byte, error) {
 	return nil, errors.New("password-operations not supported on external signers")
 }

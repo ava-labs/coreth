@@ -31,9 +31,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/accounts/external"
-	"github.com/ava-labs/coreth/accounts/keystore"
+	"github.com/ava-labs/subnet-evm/accounts"
+	"github.com/ava-labs/subnet-evm/accounts/external"
+	"github.com/ava-labs/subnet-evm/accounts/keystore"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -108,7 +108,7 @@ func (c *Config) GetKeyStoreDir() (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	if err := os.MkdirAll(keydir, 0700); err != nil {
+	if err := os.MkdirAll(keydir, 0o700); err != nil {
 		return "", false, err
 	}
 

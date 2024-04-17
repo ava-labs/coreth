@@ -34,10 +34,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/interfaces"
+	"github.com/ava-labs/subnet-evm/accounts/abi"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/core/vm"
+	"github.com/ava-labs/subnet-evm/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -518,7 +518,6 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 		}
 		return nil
 	}), nil
-
 	if err != nil {
 		return nil, nil, err
 	}

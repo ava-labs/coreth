@@ -39,14 +39,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/txpool"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/params"
+	"github.com/ava-labs/subnet-evm/trie"
+	"github.com/ava-labs/subnet-evm/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -926,6 +926,7 @@ func TestQueueAccountLimiting(t *testing.T) {
 func TestQueueGlobalLimiting(t *testing.T) {
 	testQueueGlobalLimiting(t, false)
 }
+
 func TestQueueGlobalLimitingNoLocals(t *testing.T) {
 	testQueueGlobalLimiting(t, true)
 }
@@ -1017,6 +1018,7 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 func TestQueueTimeLimiting(t *testing.T) {
 	testQueueTimeLimiting(t, false)
 }
+
 func TestQueueTimeLimitingNoLocals(t *testing.T) {
 	testQueueTimeLimiting(t, true)
 }

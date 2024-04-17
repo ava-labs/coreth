@@ -35,8 +35,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -232,7 +232,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 	if b.headerCnt > b.indexer.sectionSize {
 		b.t.Error("Processing too many headers")
 	}
-	//t.processCh <- header.Number.Uint64()
+	// t.processCh <- header.Number.Uint64()
 	select {
 	case <-time.After(10 * time.Second):
 		b.t.Error("Unexpected call to Process")
