@@ -30,7 +30,7 @@ function cleanup {
 }
 trap cleanup EXIT
 
-echo "checking out target AvalancheGo version ${avalanche_version}"
+echo "checking out target AvalancheGo version ${AVALANCHE_VERSION}"
 if [[ -d "${AVALANCHEGO_CLONE_PATH}" ]]; then
   echo "updating existing clone"
   cd "${AVALANCHEGO_CLONE_PATH}"
@@ -40,8 +40,8 @@ else
   git clone https://github.com/ava-labs/avalanchego.git "${AVALANCHEGO_CLONE_PATH}"
   cd "${AVALANCHEGO_CLONE_PATH}"
 fi
-# Branch will be reset to $avalanche_version if it already exists
-git checkout -B "test-${avalanche_version}" "${avalanche_version}"
+# Branch will be reset to $AVALANCHE_VERSION if it already exists
+git checkout -B "test-${AVALANCHE_VERSION}" "${AVALANCHE_VERSION}"
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
 go mod edit -replace "github.com/ava-labs/subnet-evm=${CORETH_PATH}"

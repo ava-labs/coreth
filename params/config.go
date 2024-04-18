@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/version"
@@ -446,14 +445,6 @@ func getChainConfig(networkID uint32, chainID *big.Int) *ChainConfig {
 	}
 }
 
-func getUpgradeTime(networkID uint32, upgradeTimes map[uint32]time.Time) *uint64 {
-	if upgradeTime, ok := upgradeTimes[networkID]; ok {
-		return utils.TimeToNewUint64(upgradeTime)
-	}
-	// If the upgrade time isn't specified, default being enabled in the
-	// genesis.
-	return utils.NewUint64(0)
-}
 
 // ChainConfig is the core config which determines the blockchain settings.
 //
@@ -810,12 +801,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			// Next one must be higher number
 			if lastFork.timestamp == nil && cur.timestamp != nil {
 				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
-					lastFork.name, cur.name, cur.timestamp)
+					lastFork.name, cur.name, *cur.timestamp)
 			}
 			if lastFork.timestamp != nil && cur.timestamp != nil {
 				if *lastFork.timestamp > *cur.timestamp {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
-						lastFork.name, lastFork.timestamp, cur.name, cur.timestamp)
+						lastFork.name, *lastFork.timestamp, cur.name, *cur.timestamp)
 				}
 			}
 		}

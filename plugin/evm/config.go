@@ -202,10 +202,12 @@ type Config struct {
 	// on RPC nodes.
 	AcceptedCacheSize int `json:"accepted-cache-size"`
 
-	// TxLookupLimit is the maximum number of blocks from head whose tx indices
+	// TransactionHistory is the maximum number of blocks from head whose tx indices
 	// are reserved:
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
+	TransactionHistory uint64 `json:"transaction-history"`
+	// Deprecated, use 'TransactionHistory' instead.
 	TxLookupLimit uint64 `json:"tx-lookup-limit"`
 
 	// SkipTxIndexing skips indexing transactions.
@@ -336,6 +338,10 @@ func (c *Config) Deprecate() string {
 	if c.TxRegossipFrequency != (Duration{}) {
 		msg += "tx-regossip-frequency is deprecated, use regossip-frequency instead. "
 		c.RegossipFrequency = c.TxRegossipFrequency
+	}
+	if c.TxLookupLimit != 0 {
+		msg += "tx-lookup-limit is deprecated, use transaction-history instead. "
+		c.TransactionHistory = c.TxLookupLimit
 	}
 
 	return msg

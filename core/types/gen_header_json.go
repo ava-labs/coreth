@@ -37,6 +37,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		BlockGasCost   *hexutil.Big    `json:"blockGasCost" rlp:"optional"`
 		BlobGasUsed    *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
 		ExcessBlobGas  *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
+		ParentBeaconRoot *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
 		Hash           common.Hash     `json:"hash"`
 	}
 	var enc Header
@@ -61,6 +62,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.BlockGasCost = (*hexutil.Big)(h.BlockGasCost)
 	enc.BlobGasUsed = (*hexutil.Uint64)(h.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(h.ExcessBlobGas)
+	enc.ParentBeaconRoot = h.ParentBeaconRoot
 	enc.Hash = h.Hash()
 	return json.Marshal(&enc)
 }
@@ -89,6 +91,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		BlockGasCost   *hexutil.Big    `json:"blockGasCost" rlp:"optional"`
 		BlobGasUsed    *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
 		ExcessBlobGas  *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
+		ParentBeaconRoot *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -170,6 +173,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExcessBlobGas != nil {
 		h.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
+	}
+	if dec.ParentBeaconRoot != nil {
+		h.ParentBeaconRoot = dec.ParentBeaconRoot
 	}
 	return nil
 }
