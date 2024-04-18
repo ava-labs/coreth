@@ -58,7 +58,6 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
@@ -3732,11 +3731,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		}
 		txs[i] = signedTx
 	}
-	wrapped := make([]*txpool.Transaction, len(txs))
-	for i, tx := range txs {
-		wrapped[i] = &txpool.Transaction{Tx: tx}
-	}
-	errs := vm.txPool.Add(wrapped, false, false)
+	errs := vm.txPool.Add(txs, false, false)
 	for i, err := range errs {
 		if err != nil {
 			t.Fatalf("Failed to add tx at index %d: %s", i, err)

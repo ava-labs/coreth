@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/coreth/utils"
 )
 
 // UpgradeConfig includes the following configs that may be specified in upgradeBytes:
@@ -120,11 +121,11 @@ func (c *ChainConfig) ToWithUpgradesJSON() *ChainConfigWithUpgradesJSON {
 	}
 }
 
-func getUpgradeTime(networkID uint32, upgradeTimes map[uint32]time.Time) uint64 {
+func getUpgradeTime(networkID uint32, upgradeTimes map[uint32]time.Time) *uint64 {
 	if upgradeTime, ok := upgradeTimes[networkID]; ok {
-		return uint64(upgradeTime.Unix())
+		return utils.NewUint64(uint64(upgradeTime.Unix()))
 	}
 	// If the upgrade time isn't specified, default being enabled in the
 	// genesis.
-	return 0
+	return utils.NewUint64(0)
 }
