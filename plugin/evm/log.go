@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 
-	corethlog "github.com/ava-labs/subnet-evm/log"
+	corethlog "github.com/ava-labs/coreth/log"
 )
 
 type CorethLogger struct {

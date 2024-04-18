@@ -34,9 +34,9 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/version"
-	"github.com/ava-labs/subnet-evm/precompile/modules"
-	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
-	"github.com/ava-labs/subnet-evm/utils"
+	"github.com/ava-labs/coreth/precompile/modules"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -444,7 +444,6 @@ func getChainConfig(networkID uint32, chainID *big.Int) *ChainConfig {
 		DurangoBlockTimestamp:           getUpgradeTime(networkID, version.DurangoTimes),
 	}
 }
-
 
 // ChainConfig is the core config which determines the blockchain settings.
 //
