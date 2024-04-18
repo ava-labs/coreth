@@ -275,5 +275,13 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	if cancun && ethHeader.BlobGasUsed == nil {
 		return errors.New("header is missing blobGasUsed")
 	}
+	if !cancun && ethHeader.ParentBeaconRoot != nil {
+		return fmt.Errorf("invalid parentBeaconRoot: have %x, expected nil", ethHeader.ParentBeaconRoot)
+	}
+	// TODO: decide what to do after Cancun
+	// currently we are enforcing it to be empty hash
+	if cancun && (ethHeader.ParentBeaconRoot == nil || *ethHeader.ParentBeaconRoot != (common.Hash{})) {
+		return fmt.Errorf("invalid parentBeaconRoot: have %x, expected empty hash", ethHeader.ParentBeaconRoot)
+	}
 	return nil
 }
