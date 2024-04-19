@@ -2616,7 +2616,7 @@ func TestUncleBlock(t *testing.T) {
 // contains no transactions.
 func TestEmptyBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONDurango, "", "", map[ids.ShortID]uint64{
+	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2655,9 +2655,9 @@ func TestEmptyBlock(t *testing.T) {
 		false,
 	)
 
-	// if len(emptyEthBlock.ExtData()) != 0 || emptyEthBlock.Header().ExtDataHash != (common.Hash{}) {
-	// 	t.Fatalf("emptyEthBlock should not have any extra data")
-	// }
+	if len(emptyEthBlock.ExtData()) != 0 || emptyEthBlock.Header().ExtDataHash != (common.Hash{}) {
+		t.Fatalf("emptyEthBlock should not have any extra data")
+	}
 
 	emptyBlock, err := vm.newBlock(emptyEthBlock)
 	if err != nil {
