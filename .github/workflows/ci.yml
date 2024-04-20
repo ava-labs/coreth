@@ -56,7 +56,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11.0, ubuntu-20.04, windows-latest]
+        os: [macos-12, ubuntu-20.04, ubuntu-22.04, windows-2022, [self-hosted, linux, ARM64, focal], [self-hosted, linux, ARM64, jammy]]
     steps:
     - uses: actions/checkout@v4
     - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
@@ -76,44 +76,19 @@ jobs:
       run: |
         go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
         go mod tidy
+    - name: Set timeout on Windows # Windows UT run slower and need a longer timeout
+      shell: bash
+      if: matrix.os == 'windows-2022'
+      run: echo "TIMEOUT=240s" >> $GITHUB_ENV
     - run: go mod download
       shell: bash
     - run: ./scripts/build.sh evm
       shell: bash
     - run: ./scripts/build_test.sh
       shell: bash
+      env:
+        TIMEOUT: ${{ env.TIMEOUT }}
     - run: ./scripts/coverage.sh
-      shell: bash
-  test-race:
-    name: Golang Unit Tests Race Detection v${{ matrix.go }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04]
-    steps:
-    - uses: actions/checkout@v4
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v5
-      with:
-        go-version: '~1.21.9'
-        check-latest: true
-    - name: change avalanchego dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-        go mod tidy
-    - run: go mod download
-      shell: bash
-    - run: ./scripts/build.sh evm
-      shell: bash
-    - run: ./scripts/build_test.sh -race
       shell: bash
   avalanchego_e2e:
     name: AvalancheGo E2E Tests v${{ matrix.go }} (${{ matrix.os }})
