@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1484,12 +1485,13 @@ func checkTxIndicesHelper(t *testing.T, expectedTail *uint64, indexedFrom uint64
 	} else {
 		var stored uint64
 		tailValue := *expectedTail
-		require.Eventually(
-			func() bool {
+
+		require.EventuallyWithT(
+			func(c *assert.CollectT) {
 				stored = *rawdb.ReadTxIndexTail(db)
-				return tailValue == stored
+				require.Equal(c, tailValue, stored, "expected tail to be %d, found %d", tailValue, stored)
 			},
-			30*time.Second, 1*time.Second, "expected tail to be %d eventually (was %d)", tailValue, stored)
+			30*time.Second, 1*time.Second, "expected tail to be %d eventually", tailValue)
 	}
 
 	for i := uint64(0); i <= head; i++ {
