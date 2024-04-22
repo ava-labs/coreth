@@ -1489,7 +1489,7 @@ func checkTxIndicesHelper(t *testing.T, expectedTail *uint64, indexedFrom uint64
 				stored = *rawdb.ReadTxIndexTail(db)
 				return tailValue == stored
 			},
-			30*time.Second, 500*time.Millisecond, "expected tail to be %d eventually (was %d)", tailValue, stored)
+			30*time.Second, 1*time.Second, "expected tail to be %d eventually (was %d)", tailValue, stored)
 	}
 
 	for i := uint64(0); i <= head; i++ {

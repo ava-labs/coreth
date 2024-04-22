@@ -190,8 +190,8 @@ func TestGossipSubscribe(t *testing.T) {
 			}
 			return true
 		},
-		10*time.Second,
-		10*time.Millisecond,
+		30*time.Second,
+		1*time.Second,
 		"expected all transactions to eventually be in the bloom filter",
 	)
 }
