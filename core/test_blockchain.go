@@ -1488,9 +1488,9 @@ func checkTxIndicesHelper(t *testing.T, expectedTail *uint64, indexedFrom uint64
 		require.EventuallyWithTf(t,
 			func(c *assert.CollectT) {
 				stored = *rawdb.ReadTxIndexTail(db)
-				require.Equalf(c, tailValue, stored, "expected tail to be %d, found %d", tailValue, stored)
+				require.Equalf(t, tailValue, stored, "expected tail to be %d, found %d", tailValue, stored)
 			},
-			30*time.Second, 1*time.Second, "expected tail to be %d eventually", tailValue)
+			30*time.Second, 500*time.Millisecond, "expected tail to be %d eventually", tailValue)
 	}
 
 	for i := uint64(0); i <= head; i++ {
