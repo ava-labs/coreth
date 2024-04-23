@@ -539,6 +539,8 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 
 		syncerVM.blockChain.DrainAcceptorQueue()
 
+		syncerVM.blockChain.WaitUnindexer()
+
 		core.CheckTxIndices(t, &tail, syncerVM.blockChain.LastAcceptedBlock().NumberU64(), syncerVM.chaindb, true)
 	}
 

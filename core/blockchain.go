@@ -297,6 +297,9 @@ type BlockChain struct {
 	// [wg] is used to wait for the async blockchain processes to finish on shutdown.
 	wg sync.WaitGroup
 
+	// [unindexorWg] is used to wait for the async tx indexer/unindexer to finish on shutdown and for tests.
+	unindexorWg sync.WaitGroup
+
 	// quit channel is used to listen for when the blockchain is shut down to close
 	// async processes.
 	// WaitGroups are used to ensure that async processes have finished during shutdown.
@@ -463,7 +466,7 @@ func (bc *BlockChain) unindexBlocks(tail uint64, head uint64, done chan struct{}
 		txUnindexTimer.Inc(time.Since(start).Milliseconds())
 		bc.txIndexTailLock.Unlock()
 		close(done)
-		bc.wg.Done()
+		bc.unindexorWg.Done()
 	}()
 
 	// If head is 0, it means the chain is just initialized and no blocks are inserted,
@@ -503,7 +506,7 @@ func (bc *BlockChain) maintainTxIndex(headCh <-chan ChainEvent) {
 	if head := bc.CurrentBlock(); head != nil && head.Number.Uint64() > txLookupLimit {
 		done = make(chan struct{})
 		tail := rawdb.ReadTxIndexTail(bc.db)
-		bc.wg.Add(1)
+		bc.unindexorWg.Add(1)
 		go bc.unindexBlocks(*tail, head.Number.Uint64(), done)
 	}
 
@@ -519,7 +522,7 @@ func (bc *BlockChain) maintainTxIndex(headCh <-chan ChainEvent) {
 				done = make(chan struct{})
 				// Note: tail will not be nil since it is initialized in this function.
 				tail := rawdb.ReadTxIndexTail(bc.db)
-				bc.wg.Add(1)
+				bc.unindexorWg.Add(1)
 				go bc.unindexBlocks(*tail, headNum, done)
 			}
 		case <-done:
@@ -703,6 +706,10 @@ func (bc *BlockChain) DrainAcceptorQueue() {
 	}
 
 	bc.acceptorWg.Wait()
+}
+
+func (bc *BlockChain) WaitUnindexer() {
+	bc.unindexorWg.Wait()
 }
 
 // stopAcceptor sends a signal to the Acceptor to stop processing accepted
@@ -1010,6 +1017,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 
 	// Waiting for background processes to complete
 	log.Info("Waiting for background processes to complete")
+	bc.unindexorWg.Wait()
 	bc.wg.Wait()
 }
 
