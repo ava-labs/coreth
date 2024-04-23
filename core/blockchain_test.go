@@ -588,7 +588,6 @@ func TestTransactionIndices(t *testing.T) {
 		require.NoError(err)
 	}
 	chain.DrainAcceptorQueue()
-	chain.WaitUnindexer()
 
 	lastAcceptedBlock := blocks[len(blocks)-1]
 	require.Equal(lastAcceptedBlock.Hash(), chain.CurrentHeader().Hash())
@@ -613,7 +612,6 @@ func TestTransactionIndices(t *testing.T) {
 			require.NoError(err)
 
 			tail := getTail(l, lastAcceptedBlock.NumberU64())
-			chain.WaitUnindexer()
 			// check if startup indices are correct
 			CheckTxIndices(t, tail, lastAcceptedBlock.NumberU64(), chain.db, false)
 
@@ -627,7 +625,6 @@ func TestTransactionIndices(t *testing.T) {
 			chain.DrainAcceptorQueue()
 
 			tail = getTail(l, lastAcceptedBlock.NumberU64())
-			chain.WaitUnindexer()
 			// check if indices are updated correctly
 			CheckTxIndices(t, tail, lastAcceptedBlock.NumberU64(), chain.db, false)
 			chain.Stop()
@@ -1310,8 +1307,6 @@ func createAndInsertChain(db ethdb.Database, cacheConfig *CacheConfig, gspec *Ge
 	if err != nil {
 		return nil, err
 	}
-	// wait for the unindexor initialization to complete
-	chain.WaitUnindexer()
 	_, err = chain.InsertChain(blocks)
 	if err != nil {
 		return nil, err
@@ -1321,8 +1316,6 @@ func createAndInsertChain(db ethdb.Database, cacheConfig *CacheConfig, gspec *Ge
 		if err != nil {
 			return nil, err
 		}
-		// wait for the unindexor to complete before proceeding
-		chain.WaitUnindexer()
 	}
 	chain.DrainAcceptorQueue()
 
