@@ -132,11 +132,22 @@ type GossipEthTxPool struct {
 
 	bloom *gossip.BloomFilter
 	lock  sync.RWMutex
+
+	// subscribed is set to true when the gossip subscription is active
+	// mostly used for testing
+	subscribed bool
+}
+
+// IsSubscribed returns whether or not the gossip subscription is active.
+func (g *GossipEthTxPool) IsSubscribed() bool {
+	return g.subscribed
 }
 
 func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 	sub := g.mempool.SubscribeNewTxsEvent(g.pendingTxs)
 	defer sub.Unsubscribe()
+
+	g.subscribed = true
 
 	for {
 		select {
