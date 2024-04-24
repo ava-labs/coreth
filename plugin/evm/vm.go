@@ -619,11 +619,14 @@ func (vm *VM) Initialize(
 		bonusBlockHeights = bonusBlockMainnetHeights
 		bonusBlockRepair = mainnetBonusBlocksParsed
 	}
-	defer func() {
-		// Free memory after VM is initialized
-		mainnetBonusBlocksParsed = nil
-		mainnetBonusBlocksJson = nil
-	}()
+	if vm.chainID.Cmp(params.AvalancheFujiChainID) == 0 ||
+		vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
+		// Free memory after VM is initialized on mainnet/fuji (not testing)
+		defer func() {
+			mainnetBonusBlocksParsed = nil
+			mainnetBonusBlocksJson = nil
+		}()
+	}
 
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
