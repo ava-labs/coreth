@@ -699,7 +699,8 @@ func TestTransactionSkipIndexing(t *testing.T) {
 
 	// test2: specify lookuplimit with tx index skipping enabled. Blocks should not be indexed but tail should be updated.
 	conf.TxLookupLimit = 2
-	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks2[0:1], chain.CurrentHeader().Hash(),
+	chainDB = rawdb.NewMemoryDatabase()
+	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks, common.Hash{},
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
 			tail := bNumber - conf.TxLookupLimit + 1
