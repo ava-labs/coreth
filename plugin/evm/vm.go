@@ -621,14 +621,11 @@ func (vm *VM) Initialize(
 		bonusBlockRepair  map[uint64]*types.Block
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
-		bonusBlockHeights = bonusBlockMainnetHeights
-		bonusBlockRepair = mainnetBonusBlocksParsed
+		bonusBlockRepair, bonusBlockHeights, err = readMainnetBonusBlocks()
+		if err != nil {
+			return fmt.Errorf("failed to read mainnet bonus blocks: %w", err)
+		}
 	}
-	defer func() {
-		// Free memory after VM is initialized
-		mainnetBonusBlocksParsed = nil
-		mainnetBonusBlocksJson = nil
-	}()
 
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(
