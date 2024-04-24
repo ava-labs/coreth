@@ -145,9 +145,11 @@ func (g *GossipEthTxPool) IsSubscribed() bool {
 
 func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 	sub := g.mempool.SubscribeNewTxsEvent(g.pendingTxs)
-	defer sub.Unsubscribe()
-
 	g.subscribed = true
+	defer func() {
+		sub.Unsubscribe()
+		g.subscribed = false
+	}()
 
 	for {
 		select {
