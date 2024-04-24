@@ -9,7 +9,7 @@
 ## [v0.13.0](https://github.com/ava-labs/coreth/releases/tag/v0.13.0)
 
 - Bump AvalancheGo to v1.11.1
-- Bump minimum Go version to 1.21.9
+- Bump minimum Go version to 1.21.7
 - Add more error messages to warp backend
 
 ## [v0.12.10](https://github.com/ava-labs/coreth/releases/tag/v0.12.10)
