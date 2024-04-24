@@ -135,7 +135,8 @@ type GossipEthTxPool struct {
 }
 
 func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
-	g.mempool.SubscribeNewTxsEvent(g.pendingTxs)
+	sub := g.mempool.SubscribeNewTxsEvent(g.pendingTxs)
+	defer sub.Unsubscribe()
 
 	for {
 		select {
