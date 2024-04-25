@@ -1140,7 +1140,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		})
 		pending = types.NewBlock(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, blocktest.NewHasher())
 	)
-	backend := newTestBackend(t, genBlocks, genesis, dummy.NewCoinbaseFaker(), func(i int, b *core.BlockGen) {
+	backend := newTestBackend(t, genBlocks, genesis, dummy.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei

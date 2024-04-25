@@ -333,7 +333,7 @@ func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 
 	// The use of [Cap] in [insertTrie] prevents exceeding the configured memory
 	// limit (and OOM) in case there is a large backlog of processing (unaccepted) blocks.
-	if nodeSize, _, _ := a.trieDB.Size(); nodeSize <= a.memoryCap {
+	if _, nodeSize, _ := a.trieDB.Size(); nodeSize <= a.memoryCap {
 		return nil
 	}
 	if err := a.trieDB.Cap(a.memoryCap - ethdb.IdealBatchSize); err != nil {

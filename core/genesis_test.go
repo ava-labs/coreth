@@ -60,8 +60,6 @@ func TestGenesisBlockForTesting(t *testing.T) {
 }
 
 func TestSetupGenesis(t *testing.T) {
-	apricotPhase1Config := *params.TestApricotPhase1Config
-	apricotPhase1Config.ApricotPhase1BlockTimestamp = utils.NewUint64(100)
 	testSetupGenesis(t, rawdb.HashScheme)
 	testSetupGenesis(t, rawdb.PathScheme)
 }
