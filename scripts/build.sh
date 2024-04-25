@@ -5,10 +5,7 @@ set -o nounset
 set -o pipefail
 
 # Root directory
-CORETH_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]}")"
-    cd .. && pwd
-)
+CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 
 # Load the versions
 source "$CORETH_PATH"/scripts/versions.sh
