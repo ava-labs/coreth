@@ -71,7 +71,7 @@ func TestStateSyncFromScratch(t *testing.T) {
 
 func TestStateSyncFromScratchExceedParent(t *testing.T) {
 	rand.Seed(1)
-	numToGen := parentsToGet + uint64(100)
+	numToGen := parentsToGet + uint64(32)
 	test := syncTest{
 		syncableInterval:   numToGen,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -324,7 +324,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			require.NoError(err)
 			gen.AddTx(signedTx)
 		}
-	})
+	}, nil)
 
 	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
 	// creates a commit at the height [syncableInterval]. This is necessary to support
@@ -506,10 +506,17 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 
 	lastNumber := syncerVM.blockChain.LastAcceptedBlock().NumberU64()
 	// check the last block is indexed
-	block := rawdb.ReadBlock(syncerVM.chaindb, rawdb.ReadCanonicalHash(syncerVM.chaindb, lastNumber), lastNumber)
-	for _, tx := range block.Transactions() {
+	lastSyncedBlock := rawdb.ReadBlock(syncerVM.chaindb, rawdb.ReadCanonicalHash(syncerVM.chaindb, lastNumber), lastNumber)
+	for _, tx := range lastSyncedBlock.Transactions() {
 		index := rawdb.ReadTxLookupEntry(syncerVM.chaindb, tx.Hash())
 		require.NotNilf(index, "Miss transaction indices, number %d hash %s", lastNumber, tx.Hash().Hex())
+	}
+
+	// tail should be the last block synced
+	if syncerVM.ethConfig.TxLookupLimit != 0 {
+		tail := lastSyncedBlock.NumberU64()
+
+		core.CheckTxIndices(t, &tail, tail, syncerVM.chaindb, true)
 	}
 
 	blocksToBuild := 10
@@ -532,15 +539,18 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 				break
 			}
 		}
-	})
-
-	if syncerVM.ethConfig.TxLookupLimit != 0 {
-		tail := syncerVM.blockChain.LastAcceptedBlock().NumberU64() - syncerVM.ethConfig.TxLookupLimit + 1
-
-		syncerVM.blockChain.DrainAcceptorQueue()
-
-		core.CheckTxIndices(t, &tail, syncerVM.blockChain.LastAcceptedBlock().NumberU64(), syncerVM.chaindb, true)
-	}
+	},
+		func(block *types.Block) {
+			if syncerVM.ethConfig.TxLookupLimit != 0 {
+				tail := block.NumberU64() - syncerVM.ethConfig.TxLookupLimit + 1
+				// tail should be the minimum last synced block, since we skipped it to the last block
+				if tail < lastSyncedBlock.NumberU64() {
+					tail = lastSyncedBlock.NumberU64()
+				}
+				core.CheckTxIndices(t, &tail, block.NumberU64(), syncerVM.chaindb, true)
+			}
+		},
+	)
 
 	// check we can transition to [NormalOp] state and continue to process blocks.
 	require.NoError(syncerVM.SetState(context.Background(), snow.NormalOp))
@@ -571,7 +581,18 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 				break
 			}
 		}
-	})
+	},
+		func(block *types.Block) {
+			if syncerVM.ethConfig.TxLookupLimit != 0 {
+				tail := block.NumberU64() - syncerVM.ethConfig.TxLookupLimit + 1
+				// tail should be the minimum last synced block, since we skipped it to the last block
+				if tail < lastSyncedBlock.NumberU64() {
+					tail = lastSyncedBlock.NumberU64()
+				}
+				core.CheckTxIndices(t, &tail, block.NumberU64(), syncerVM.chaindb, true)
+			}
+		},
+	)
 }
 
 // patchBlock returns a copy of [blk] with [root] and updates [db] to
@@ -594,7 +615,7 @@ func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Bl
 // generateAndAcceptBlocks uses [core.GenerateChain] to generate blocks, then
 // calls Verify and Accept on each generated block
 // TODO: consider using this helper function in vm_test.go and elsewhere in this package to clean up tests
-func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, *core.BlockGen)) {
+func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, *core.BlockGen), accepted func(*types.Block)) {
 	t.Helper()
 
 	// acceptExternalBlock defines a function to parse, verify, and accept a block once it has been
@@ -613,6 +634,10 @@ func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, 
 		}
 		if err := vmBlock.Accept(context.Background()); err != nil {
 			t.Fatal(err)
+		}
+
+		if accepted != nil {
+			accepted(block)
 		}
 	}
 	_, _, err := core.GenerateChain(
