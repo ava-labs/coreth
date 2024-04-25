@@ -3,16 +3,21 @@
 set -euo pipefail
 
 # Avalanche root directory
-CORETH_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
-
-# Load the versions
-source "$CORETH_PATH"/scripts/versions.sh
+CORETH_PATH=$(
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+  cd .. && pwd
+)
 
 # Load the constants
 source "$CORETH_PATH"/scripts/constants.sh
 
-echo "Building Docker Image: $dockerhub_repo:$build_image_id based of $avalanche_version"
-docker build -t "$dockerhub_repo:$build_image_id" "$CORETH_PATH" -f "$CORETH_PATH/Dockerfile" \
-  --build-arg AVALANCHE_VERSION="$avalanche_version" \
-  --build-arg CORETH_COMMIT="$coreth_commit" \
-  --build-arg CURRENT_BRANCH="$current_branch"
+# Load the versions
+source "$CORETH_PATH"/scripts/versions.sh
+
+# WARNING: this will use the most recent commit even if there are un-committed changes present
+BUILD_IMAGE_ID=${BUILD_IMAGE_ID:-"${CURRENT_BRANCH}"}
+echo "Building Docker Image: $DOCKERHUB_REPO:$BUILD_IMAGE_ID based of AvalancheGo@$AVALANCHE_VERSION"
+docker build -t "$DOCKERHUB_REPO:$BUILD_IMAGE_ID" "$CORETH_PATH" -f "$CORETH_PATH/Dockerfile" \
+  --build-arg AVALANCHE_VERSION="$AVALANCHE_VERSION" \
+  --build-arg CORETH_COMMIT="$CORETH_COMMIT" \
+  --build-arg CURRENT_BRANCH="$CURRENT_BRANCH"
