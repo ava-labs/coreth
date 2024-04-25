@@ -237,6 +237,8 @@ func New(
 
 	eth.bloomIndexer.Start(eth.blockchain)
 
+	// Uncomment the following to enable the new blobpool
+
 	// config.BlobPool.Datadir = ""
 	// blobPool := blobpool.New(config.BlobPool, &chainWithFinalBlock{eth.blockchain})
 
