@@ -4149,7 +4149,6 @@ func TestParentBeaconRootBlock(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			importAmount := uint64(1000000000)
-			// use Durango VM first
 			issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, test.genesisJSON, "", "", map[ids.ShortID]uint64{
 				testShortIDAddrs[0]: importAmount,
 			})
