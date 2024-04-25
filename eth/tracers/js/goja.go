@@ -34,9 +34,9 @@ import (
 
 	"github.com/dop251/goja"
 
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth/tracers"
-	jsassets "github.com/ava-labs/coreth/eth/tracers/js/internal/tracers"
+	"github.com/ava-labs/subnet-evm/core/vm"
+	"github.com/ava-labs/subnet-evm/eth/tracers"
+	jsassets "github.com/ava-labs/subnet-evm/eth/tracers/js/internal/tracers"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -246,7 +246,12 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	t.ctx["to"] = t.vm.ToValue(to.Bytes())
 	t.ctx["input"] = t.vm.ToValue(input)
 	t.ctx["gas"] = t.vm.ToValue(t.gasLimit)
-	t.ctx["gasPrice"] = t.vm.ToValue(env.TxContext.GasPrice)
+	gasPriceBig, err := t.toBig(t.vm, env.TxContext.GasPrice.String())
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["gasPrice"] = gasPriceBig
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
 		t.err = err

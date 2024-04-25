@@ -27,19 +27,24 @@
 package trie
 
 import (
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/trie/triedb/hashdb"
-	"github.com/ava-labs/coreth/trie/triedb/pathdb"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/trie/triedb/hashdb"
+	"github.com/ava-labs/subnet-evm/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // newTestDatabase initializes the trie database with specified scheme.
 func newTestDatabase(diskdb ethdb.Database, scheme string) *Database {
-	db := prepare(diskdb, nil)
+	config := &Config{Preimages: false}
 	if scheme == rawdb.HashScheme {
-		db.backend = hashdb.New(diskdb, nil, mptResolver{})
+		config.HashDB = &hashdb.Config{
+			CleanCacheSize: 0,
+		} // disable clean cache
 	} else {
-		db.backend = pathdb.New(diskdb, &pathdb.Config{}) // disable clean/dirty cache
+		config.PathDB = &pathdb.Config{
+			CleanCacheSize: 0,
+			DirtyCacheSize: 0,
+		} // disable clean/dirty cache
 	}
-	return db
+	return NewDatabase(diskdb, config)
 }

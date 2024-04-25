@@ -30,7 +30,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -107,10 +107,10 @@ const crashesToKeep = 10
 func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
-	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading unclean shutdown markers", "error", err)
-	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
-		return nil, 0, err
+	if data, err := db.Get(uncleanShutdownKey); err == nil {
+		if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
+			return nil, 0, err
+		}
 	}
 	var discarded = uncleanShutdowns.Discarded
 	var previous = make([]uint64, len(uncleanShutdowns.Recent))

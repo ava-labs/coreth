@@ -39,14 +39,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/txpool"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/params"
+	"github.com/ava-labs/subnet-evm/trie"
+	"github.com/ava-labs/subnet-evm/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -1538,9 +1538,7 @@ func TestMinGasPriceEnforced(t *testing.T) {
 		t.Fatalf("Min tip not enforced")
 	}
 
-	poolTx := txpool.Transaction{Tx: tx}
-
-	if err := pool.Add([]*txpool.Transaction{&poolTx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
 		t.Fatalf("Min tip not enforced")
 	}
 
@@ -1551,14 +1549,12 @@ func TestMinGasPriceEnforced(t *testing.T) {
 		t.Fatalf("Min tip not enforced")
 	}
 
-	poolTx = txpool.Transaction{Tx: tx}
-
-	if err := pool.Add([]*txpool.Transaction{&poolTx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
 		t.Fatalf("Min tip not enforced")
 	}
 	// Make sure the tx is accepted if locals are enabled
 	pool.config.NoLocals = false
-	if err := pool.Add([]*txpool.Transaction{&poolTx}, true, false)[0]; err != nil {
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; err != nil {
 		t.Fatalf("Min tip enforced with locals enabled, error: %v", err)
 	}
 }

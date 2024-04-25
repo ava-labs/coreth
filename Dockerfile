@@ -16,7 +16,7 @@ WORKDIR $GOPATH/src/github.com/ava-labs/avalanchego
 # Run go mod download here to improve caching of AvalancheGo specific depednencies
 RUN go mod download
 # Replace the coreth dependency
-RUN go mod edit -replace github.com/ava-labs/coreth=../coreth
+RUN go mod edit -replace github.com/ava-labs/subnet-evm=../coreth
 RUN go mod download && go mod tidy -compat=1.21
 
 # Build the AvalancheGo binary with local version of coreth.

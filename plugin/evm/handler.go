@@ -9,9 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/subnet-evm/core/txpool"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/plugin/evm/message"
 )
 
 // GossipHandler handles incoming gossip messages
@@ -118,11 +118,7 @@ func (h *GossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip
 		return nil
 	}
 	h.stats.IncEthTxsGossipReceived()
-	wrapped := make([]*txpool.Transaction, len(txs))
-	for i, tx := range txs {
-		wrapped[i] = &txpool.Transaction{Tx: tx}
-	}
-	errs := h.txPool.Add(wrapped, false, false)
+	errs := h.txPool.Add(txs, false, false)
 	for i, err := range errs {
 		if err != nil {
 			log.Trace(

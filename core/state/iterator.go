@@ -31,8 +31,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -122,7 +122,7 @@ func (it *nodeIterator) step() error {
 	}
 	// Otherwise we've reached an account node, initiate data iteration
 	var account types.StateAccount
-	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
+	if err := rlp.DecodeBytes(it.stateIt.LeafBlob(), &account); err != nil {
 		return err
 	}
 	// Lookup the preimage of account hash

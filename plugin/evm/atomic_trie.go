@@ -14,11 +14,12 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/trie/trienode"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie"
+	"github.com/ava-labs/subnet-evm/trie/triedb/hashdb"
+	"github.com/ava-labs/subnet-evm/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -154,10 +155,12 @@ func newAtomicTrie(
 		}
 	}
 
-	trieDB := trie.NewDatabaseWithConfig(
+	trieDB := trie.NewDatabase(
 		rawdb.NewDatabase(Database{atomicTrieDB}),
 		&trie.Config{
-			Cache: 64, // Allocate 64MB of memory for clean cache
+			HashDB: &hashdb.Config{
+				CleanCacheSize: 64 * units.MiB, // Allocate 64MB of memory for clean cache
+			},
 		},
 	)
 
@@ -330,7 +333,7 @@ func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 
 	// The use of [Cap] in [insertTrie] prevents exceeding the configured memory
 	// limit (and OOM) in case there is a large backlog of processing (unaccepted) blocks.
-	if nodeSize, _ := a.trieDB.Size(); nodeSize <= a.memoryCap {
+	if nodeSize, _, _ := a.trieDB.Size(); nodeSize <= a.memoryCap {
 		return nil
 	}
 	if err := a.trieDB.Cap(a.memoryCap - ethdb.IdealBatchSize); err != nil {

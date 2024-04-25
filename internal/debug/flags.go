@@ -36,7 +36,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ava-labs/coreth/internal/flags"
+	"github.com/ava-labs/subnet-evm/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
@@ -95,8 +95,9 @@ var (
 		Category: flags.LoggingCategory,
 	}
 	logRotateFlag = &cli.BoolFlag{
-		Name:  "log.rotate",
-		Usage: "Enables log file rotation",
+		Name:     "log.rotate",
+		Usage:    "Enables log file rotation",
+		Category: flags.LoggingCategory,
 	}
 	logMaxSizeMBsFlag = &cli.IntFlag{
 		Name:     "log.maxsize",

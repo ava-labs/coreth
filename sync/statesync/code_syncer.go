@@ -11,9 +11,9 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/plugin/evm/message"
+	statesyncclient "github.com/ava-labs/subnet-evm/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -58,7 +58,7 @@ type codeSyncer struct {
 	done   <-chan struct{}
 }
 
-// newCodeSyncer returns a a code syncer that will sync code bytes from the network in a separate thread.
+// newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
 func newCodeSyncer(config CodeSyncerConfig) *codeSyncer {
 	return &codeSyncer{
 		CodeSyncerConfig:      config,

@@ -18,10 +18,10 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/txpool"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/eth"
 )
 
 const pendingTxsBuffer = 10
@@ -157,8 +157,8 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 				if reset {
 					log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
 
-					g.mempool.IteratePending(func(tx *txpool.Transaction) bool {
-						g.bloom.Add(&GossipEthTx{Tx: tx.Tx})
+					g.mempool.IteratePending(func(tx *types.Transaction) bool {
+						g.bloom.Add(&GossipEthTx{Tx: tx})
 						return true
 					})
 				}
@@ -171,7 +171,7 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 // Add enqueues the transaction to the mempool. Subscribe should be called
 // to receive an event if tx is actually added to the mempool or not.
 func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
-	return g.mempool.Add([]*txpool.Transaction{{Tx: tx.Tx}}, false, false)[0]
+	return g.mempool.Add([]*types.Transaction{tx.Tx}, false, false)[0]
 }
 
 // Has should just return whether or not the [txID] is still in the mempool,
@@ -181,8 +181,8 @@ func (g *GossipEthTxPool) Has(txID ids.ID) bool {
 }
 
 func (g *GossipEthTxPool) Iterate(f func(tx *GossipEthTx) bool) {
-	g.mempool.IteratePending(func(tx *txpool.Transaction) bool {
-		return f(&GossipEthTx{Tx: tx.Tx})
+	g.mempool.IteratePending(func(tx *types.Transaction) bool {
+		return f(&GossipEthTx{Tx: tx})
 	})
 }
 

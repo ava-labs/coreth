@@ -30,11 +30,11 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/core/vm"
+	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -55,6 +55,7 @@ type Config struct {
 	EVMConfig   vm.Config
 	BaseFee     *big.Int
 	BlobHashes  []common.Hash
+	Random      *common.Hash
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash

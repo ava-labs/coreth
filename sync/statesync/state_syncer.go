@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ava-labs/coreth/core/state/snapshot"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/subnet-evm/core/state/snapshot"
+	syncclient "github.com/ava-labs/subnet-evm/sync/client"
+	"github.com/ava-labs/subnet-evm/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"golang.org/x/sync/errgroup"
@@ -67,7 +67,7 @@ func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
 		db:              config.DB,
 		client:          config.Client,
 		root:            config.Root,
-		trieDB:          trie.NewDatabase(config.DB),
+		trieDB:          trie.NewDatabase(config.DB, nil),
 		snapshot:        snapshot.NewDiskLayer(config.DB),
 		stats:           newTrieSyncStats(),
 		triesInProgress: make(map[common.Hash]*trieToSync),

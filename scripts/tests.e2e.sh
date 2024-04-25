@@ -41,7 +41,7 @@ fi
 git checkout -B "test-${avalanche_version}" "${avalanche_version}"
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
-go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
+go mod edit -replace "github.com/ava-labs/subnet-evm=${CORETH_PATH}"
 go mod tidy
 
 echo "building avalanchego"

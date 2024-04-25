@@ -34,8 +34,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -127,6 +127,10 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 				break
 			} else if err != nil {
 				return false, fmt.Errorf("block %d: failed to parse: %v", index, err)
+			}
+			// ignore the genesis block when importing blocks
+			if block.NumberU64() == 0 {
+				continue
 			}
 			blocks = append(blocks, block)
 			index++

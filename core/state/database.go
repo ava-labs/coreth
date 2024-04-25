@@ -30,10 +30,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/trie/trienode"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie"
+	"github.com/ava-labs/subnet-evm/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -68,7 +68,7 @@ type Database interface {
 	// DiskDB returns the underlying key-value disk database.
 	DiskDB() ethdb.KeyValueStore
 
-	// TrieDB retrieves the low level trie database used for data storage.
+	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *trie.Database
 }
 
@@ -157,7 +157,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        trie.NewDatabaseWithConfig(db, config),
+		triedb:        trie.NewDatabase(db, config),
 	}
 }
 

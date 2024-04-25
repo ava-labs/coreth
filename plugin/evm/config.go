@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/coreth/core/txpool/legacypool"
-	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/subnet-evm/core/txpool/legacypool"
+	"github.com/ava-labs/subnet-evm/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/spf13/cast"
@@ -154,15 +154,16 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	PushGossipPercentStake    float64  `json:"push-gossip-percent-stake"`
-	PushGossipNumValidators   int      `json:"push-gossip-num-validators"`
-	PushGossipNumPeers        int      `json:"push-gossip-num-peers"`
-	PushRegossipNumValidators int      `json:"push-regossip-num-validators"`
-	PushRegossipNumPeers      int      `json:"push-regossip-num-peers"`
-	PushGossipFrequency       Duration `json:"push-gossip-frequency"`
-	PullGossipFrequency       Duration `json:"pull-gossip-frequency"`
-	RegossipFrequency         Duration `json:"regossip-frequency"`
-	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	PushGossipPercentStake    float64          `json:"push-gossip-percent-stake"`
+	PushGossipNumValidators   int              `json:"push-gossip-num-validators"`
+	PushGossipNumPeers        int              `json:"push-gossip-num-peers"`
+	PushRegossipNumValidators int              `json:"push-regossip-num-validators"`
+	PushRegossipNumPeers      int              `json:"push-regossip-num-peers"`
+	PushGossipFrequency       Duration         `json:"push-gossip-frequency"`
+	PullGossipFrequency       Duration         `json:"pull-gossip-frequency"`
+	RegossipFrequency         Duration         `json:"regossip-frequency"`
+	TxRegossipFrequency       Duration         `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	PriorityRegossipAddresses []common.Address `json:"priority-regossip-addresses"`
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -202,10 +203,12 @@ type Config struct {
 	// on RPC nodes.
 	AcceptedCacheSize int `json:"accepted-cache-size"`
 
-	// TxLookupLimit is the maximum number of blocks from head whose tx indices
+	// TransactionHistory is the maximum number of blocks from head whose tx indices
 	// are reserved:
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
+	TransactionHistory uint64 `json:"transaction-history"`
+	// Deprecated, use 'TransactionHistory' instead.
 	TxLookupLimit uint64 `json:"tx-lookup-limit"`
 
 	// SkipTxIndexing skips indexing transactions.
@@ -258,7 +261,6 @@ func (c *Config) SetDefaults() {
 	c.AcceptorQueueLimit = defaultAcceptorQueueLimit
 	c.CommitInterval = defaultCommitInterval
 	c.SnapshotWait = defaultSnapshotWait
-	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
 	c.PushGossipPercentStake = defaultPushGossipPercentStake
 	c.PushGossipNumValidators = defaultPushGossipNumValidators
 	c.PushGossipNumPeers = defaultPushGossipNumPeers
@@ -266,6 +268,7 @@ func (c *Config) SetDefaults() {
 	c.PushRegossipNumPeers = defaultPushRegossipNumPeers
 	c.PushGossipFrequency.Duration = defaultPushGossipFrequency
 	c.PullGossipFrequency.Duration = defaultPullGossipFrequency
+	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
 	c.LogLevel = defaultLogLevel
 	c.LogJSONFormat = defaultLogJSONFormat
@@ -336,6 +339,10 @@ func (c *Config) Deprecate() string {
 	if c.TxRegossipFrequency != (Duration{}) {
 		msg += "tx-regossip-frequency is deprecated, use regossip-frequency instead. "
 		c.RegossipFrequency = c.TxRegossipFrequency
+	}
+	if c.TxLookupLimit != 0 {
+		msg += "tx-lookup-limit is deprecated, use transaction-history instead. "
+		c.TransactionHistory = c.TxLookupLimit
 	}
 
 	return msg

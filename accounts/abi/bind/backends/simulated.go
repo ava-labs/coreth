@@ -34,22 +34,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/vmerrs"
+	"github.com/ava-labs/subnet-evm/eth"
+	"github.com/ava-labs/subnet-evm/vmerrs"
 
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/bloombits"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth/filters"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/subnet-evm/accounts/abi"
+	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
+	"github.com/ava-labs/subnet-evm/consensus/dummy"
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/core/bloombits"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/core/vm"
+	"github.com/ava-labs/subnet-evm/eth/filters"
+	"github.com/ava-labs/subnet-evm/interfaces"
+	"github.com/ava-labs/subnet-evm/params"
+	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -235,7 +235,6 @@ func (b *SimulatedBackend) CodeAt(ctx context.Context, contract common.Address, 
 	if err != nil {
 		return nil, err
 	}
-
 	return stateDB.GetCode(contract), nil
 }
 
@@ -248,7 +247,6 @@ func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Addres
 	if err != nil {
 		return nil, err
 	}
-
 	return stateDB.GetBalance(contract), nil
 }
 
@@ -261,7 +259,6 @@ func (b *SimulatedBackend) NonceAt(ctx context.Context, contract common.Address,
 	if err != nil {
 		return 0, err
 	}
-
 	return stateDB.GetNonce(contract), nil
 }
 
@@ -274,7 +271,6 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 	if err != nil {
 		return nil, err
 	}
-
 	val := stateDB.GetState(contract, key)
 	return val[:], nil
 }
@@ -739,8 +735,10 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if err != nil {
 		return err
 	}
-	stateDB, _ := b.blockchain.State()
-
+	stateDB, err := b.blockchain.State()
+	if err != nil {
+		return err
+	}
 	b.acceptedBlock = blocks[0]
 	b.acceptedState, _ = state.New(b.acceptedBlock.Root(), stateDB.Database(), nil)
 	return nil
@@ -858,11 +856,12 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	blocks, _, _ := core.GenerateChain(b.config, block, dummy.NewFaker(), b.database, 1, 10, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
-	stateDB, _ := b.blockchain.State()
-
+	stateDB, err := b.blockchain.State()
+	if err != nil {
+		return err
+	}
 	b.acceptedBlock = blocks[0]
 	b.acceptedState, _ = state.New(b.acceptedBlock.Root(), stateDB.Database(), nil)
-
 	return nil
 }
 
