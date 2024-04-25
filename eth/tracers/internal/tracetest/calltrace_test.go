@@ -386,6 +386,7 @@ func TestInternals(t *testing.T) {
 					},
 				}, false, rawdb.HashScheme)
 			defer triedb.Close()
+
 			evm := vm.NewEVM(context, txContext, statedb, params.AvalancheMainnetChainConfig, vm.Config{Tracer: tc.tracer})
 			msg := &core.Message{
 				To:                &to,

@@ -154,15 +154,16 @@ type Config struct {
 	KeystoreInsecureUnlockAllowed bool   `json:"keystore-insecure-unlock-allowed"`
 
 	// Gossip Settings
-	PushGossipPercentStake    float64  `json:"push-gossip-percent-stake"`
-	PushGossipNumValidators   int      `json:"push-gossip-num-validators"`
-	PushGossipNumPeers        int      `json:"push-gossip-num-peers"`
-	PushRegossipNumValidators int      `json:"push-regossip-num-validators"`
-	PushRegossipNumPeers      int      `json:"push-regossip-num-peers"`
-	PushGossipFrequency       Duration `json:"push-gossip-frequency"`
-	PullGossipFrequency       Duration `json:"pull-gossip-frequency"`
-	RegossipFrequency         Duration `json:"regossip-frequency"`
-	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	PushGossipPercentStake    float64          `json:"push-gossip-percent-stake"`
+	PushGossipNumValidators   int              `json:"push-gossip-num-validators"`
+	PushGossipNumPeers        int              `json:"push-gossip-num-peers"`
+	PushRegossipNumValidators int              `json:"push-regossip-num-validators"`
+	PushRegossipNumPeers      int              `json:"push-regossip-num-peers"`
+	PushGossipFrequency       Duration         `json:"push-gossip-frequency"`
+	PullGossipFrequency       Duration         `json:"pull-gossip-frequency"`
+	RegossipFrequency         Duration         `json:"regossip-frequency"`
+	TxRegossipFrequency       Duration         `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	PriorityRegossipAddresses []common.Address `json:"priority-regossip-addresses"`
 
 	// Log
 	LogLevel      string `json:"log-level"`
@@ -260,7 +261,6 @@ func (c *Config) SetDefaults() {
 	c.AcceptorQueueLimit = defaultAcceptorQueueLimit
 	c.CommitInterval = defaultCommitInterval
 	c.SnapshotWait = defaultSnapshotWait
-	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
 	c.PushGossipPercentStake = defaultPushGossipPercentStake
 	c.PushGossipNumValidators = defaultPushGossipNumValidators
 	c.PushGossipNumPeers = defaultPushGossipNumPeers
@@ -268,6 +268,7 @@ func (c *Config) SetDefaults() {
 	c.PushRegossipNumPeers = defaultPushRegossipNumPeers
 	c.PushGossipFrequency.Duration = defaultPushGossipFrequency
 	c.PullGossipFrequency.Duration = defaultPullGossipFrequency
+	c.RegossipFrequency.Duration = defaultTxRegossipFrequency
 	c.OfflinePruningBloomFilterSize = defaultOfflinePruningBloomFilterSize
 	c.LogLevel = defaultLogLevel
 	c.LogJSONFormat = defaultLogJSONFormat

@@ -416,6 +416,10 @@ func (vm *VM) Initialize(
 		log.Warn("Deprecation Warning", "msg", deprecateMsg)
 	}
 
+	if deprecateMsg != "" {
+		log.Warn("Deprecation Warning", "msg", deprecateMsg)
+	}
+
 	if len(fxs) > 0 {
 		return errUnsupportedFXs
 	}
@@ -617,11 +621,14 @@ func (vm *VM) Initialize(
 		bonusBlockRepair  map[uint64]*types.Block
 	)
 	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
-		bonusBlockRepair, bonusBlockHeights, err = readMainnetBonusBlocks()
-		if err != nil {
-			return fmt.Errorf("failed to read mainnet bonus blocks: %w", err)
-		}
+		bonusBlockHeights = bonusBlockMainnetHeights
+		bonusBlockRepair = mainnetBonusBlocksParsed
 	}
+	defer func() {
+		// Free memory after VM is initialized
+		mainnetBonusBlocksParsed = nil
+		mainnetBonusBlocksJson = nil
+	}()
 
 	// initialize atomic repository
 	vm.atomicTxRepository, err = NewAtomicTxRepository(

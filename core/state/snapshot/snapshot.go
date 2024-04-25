@@ -568,9 +568,6 @@ func (t *Tree) AbortGeneration() {
 // for it to shutdown before returning (if it is running). This call should not
 // be made concurrently.
 func (dl *diskLayer) abortGeneration() bool {
-	dl.lock.Lock()
-	defer dl.lock.Unlock()
-
 	// Store ideal time for abort to get better estimate of load
 	//
 	// Note that we set this time regardless if abortion was skipped otherwise we
@@ -859,6 +856,7 @@ func (t *Tree) verify(root common.Hash, force bool) error {
 		}
 		return hash, nil
 	}, newGenerateStats(), true)
+
 	if err != nil {
 		return err
 	}

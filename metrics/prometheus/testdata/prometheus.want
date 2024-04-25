@@ -67,3 +67,4 @@ test_timer {quantile="0.95"} 1.2e+08
 test_timer {quantile="0.99"} 1.2e+08
 test_timer {quantile="0.999"} 1.2e+08
 test_timer {quantile="0.9999"} 1.2e+08
+

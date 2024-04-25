@@ -123,7 +123,7 @@ func (c *ChainConfig) ToWithUpgradesJSON() *ChainConfigWithUpgradesJSON {
 
 func getUpgradeTime(networkID uint32, upgradeTimes map[uint32]time.Time) *uint64 {
 	if upgradeTime, ok := upgradeTimes[networkID]; ok {
-		return utils.NewUint64(uint64(upgradeTime.Unix()))
+		return utils.TimeToNewUint64(upgradeTime)
 	}
 	// If the upgrade time isn't specified, default being enabled in the
 	// genesis.

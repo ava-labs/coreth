@@ -139,7 +139,7 @@ func TestGetBlocks(t *testing.T) {
 	// set random seed for deterministic tests
 	rand.Seed(1)
 
-	gspec := &core.Genesis{
+	var gspec = &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()

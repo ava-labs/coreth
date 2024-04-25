@@ -695,7 +695,7 @@ func TestReadStateDuringFlattening(t *testing.T) {
 	snap := snaps.Snapshot(diffRootC)
 
 	// Register the testing hook to access the state after flattening
-	result := make(chan *types.SlimAccount)
+	var result = make(chan *types.SlimAccount)
 	snaps.onFlatten = func() {
 		// Spin up a thread to read the account from the pre-created
 		// snapshot handler. It's expected to be blocked.

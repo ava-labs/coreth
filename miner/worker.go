@@ -104,7 +104,7 @@ type worker struct {
 	mu         sync.RWMutex   // The lock used to protect the coinbase and extra fields
 	coinbase   common.Address
 	clock      *mockable.Clock // Allows us mock the clock for testing
-	beaconRoot *common.Hash    // TODO: set to empty hash, retained for upstream compatibility and future use
+	beaconRoot *common.Hash    // TODO: not set anywhere, retained for upstream compatibility and future use
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, clock *mockable.Clock) *worker {
@@ -117,7 +117,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		mux:         mux,
 		coinbase:    config.Etherbase,
 		clock:       clock,
-		beaconRoot:  &common.Hash{},
 	}
 
 	return worker
