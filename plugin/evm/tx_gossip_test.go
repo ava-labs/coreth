@@ -379,7 +379,9 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 
 	sender := &common.SenderTest{}
 	vm := &VM{
-		ethTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:            sender,
+		ethTxPullGossiper:    gossip.NoOpGossiper{},
+		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	pk, err := secp256k1.NewPrivateKey()

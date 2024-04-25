@@ -416,10 +416,6 @@ func (vm *VM) Initialize(
 		log.Warn("Deprecation Warning", "msg", deprecateMsg)
 	}
 
-	if deprecateMsg != "" {
-		log.Warn("Deprecation Warning", "msg", deprecateMsg)
-	}
-
 	if len(fxs) > 0 {
 		return errUnsupportedFXs
 	}
