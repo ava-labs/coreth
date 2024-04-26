@@ -463,7 +463,7 @@ func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 }
 
 func TestCall(t *testing.T) {
-	method, methodWithArg := "something", "somethingArrrrg"
+	var method, methodWithArg = "something", "somethingArrrrg"
 	tests := []struct {
 		name, method string
 		opts         *bind.CallOpts

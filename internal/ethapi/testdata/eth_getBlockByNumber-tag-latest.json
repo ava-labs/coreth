@@ -1,7 +1,7 @@
 {
   "baseFeePerGas": "0x28a7a56427",
-  "blockGasCost": "0x0",
   "blockExtraData": "0x",
+  "blockGasCost": "0x0",
   "difficulty": "0x1",
   "extDataGasUsed": "0x0",
   "extDataHash": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",

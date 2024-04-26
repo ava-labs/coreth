@@ -47,7 +47,6 @@ func (h *handlerStats) IncBlockSignatureMiss()    { h.blockSignatureMiss.Inc(1) 
 func (h *handlerStats) UpdateBlockSignatureRequestTime(duration time.Duration) {
 	h.blockSignatureRequestDuration.Inc(int64(duration))
 }
-
 func (h *handlerStats) Clear() {
 	h.messageSignatureRequest.Clear()
 	h.messageSignatureHit.Clear()

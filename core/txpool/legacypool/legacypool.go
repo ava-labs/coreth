@@ -1076,6 +1076,7 @@ func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
 func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error {
 	// Do not treat as local if local transactions have been disabled
 	local = local && !pool.config.NoLocals
+
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
 		errs = make([]error, len(txs))
@@ -1108,7 +1109,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error 
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	pool.mu.Unlock()
 
-	nilSlot := 0
+	var nilSlot = 0
 	for _, err := range newErrs {
 		for errs[nilSlot] != nil {
 			nilSlot++

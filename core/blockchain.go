@@ -147,7 +147,7 @@ const (
 )
 
 // CacheConfig contains the configuration values for the trie database
-// that's resident in a blockchain.
+// and state snapshot these are resident in a blockchain.
 type CacheConfig struct {
 	TrieCleanLimit                  int     // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieDirtyLimit                  int     // Memory limit (MB) at which to block on insert and force a flush of dirty trie nodes to disk

@@ -270,7 +270,7 @@ func (db *Database) Nodes() []common.Hash {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	hashes := make([]common.Hash, 0, len(db.dirties))
+	var hashes = make([]common.Hash, 0, len(db.dirties))
 	for hash := range db.dirties {
 		hashes = append(hashes, hash)
 	}
@@ -728,7 +728,7 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted.
-	metadataSize := common.StorageSize(len(db.dirties) * cachedNodeSize)
+	var metadataSize = common.StorageSize(len(db.dirties) * cachedNodeSize)
 	return 0, db.dirtiesSize + db.childrenSize + metadataSize
 }
 

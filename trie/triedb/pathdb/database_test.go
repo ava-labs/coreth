@@ -123,7 +123,7 @@ func newTester(t *testing.T) *tester {
 		}
 	)
 	for i := 0; i < 2*128; i++ {
-		parent := types.EmptyRootHash
+		var parent = types.EmptyRootHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
 		}
@@ -393,7 +393,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	)
 	defer tester.release()
 
-	cases := []struct {
+	var cases = []struct {
 		root   common.Hash
 		expect bool
 	}{
