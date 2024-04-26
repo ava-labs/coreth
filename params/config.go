@@ -752,6 +752,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "petersburgBlock", block: c.PetersburgBlock},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
+		{name: "cancunTime", timestamp: c.CancunTime},
 	}
 
 	// Check that forks are enabled in order
@@ -783,20 +784,36 @@ func checkForks(forks []fork, blockFork bool) error {
 			return errNonGenesisForkByHeight
 		}
 		if lastFork.name != "" {
-			// Next one must be higher number
-			if lastFork.block == nil && cur.block != nil {
-				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
-					lastFork.name, cur.name, cur.block)
-			}
-			if lastFork.block != nil && cur.block != nil {
-				if lastFork.block.Cmp(cur.block) > 0 {
-					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
+			switch {
+			// Non-optional forks must all be present in the chain config up to the last defined fork
+			case lastFork.block == nil && lastFork.timestamp == nil && (cur.block != nil || cur.timestamp != nil):
+				if cur.block != nil {
+					return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at block %v",
+						lastFork.name, cur.name, cur.block)
+				} else {
+					return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at timestamp %v",
+						lastFork.name, cur.name, cur.timestamp)
+				}
+
+			// Fork (whether defined by block or timestamp) must follow the fork definition sequence
+			case (lastFork.block != nil && cur.block != nil) || (lastFork.timestamp != nil && cur.timestamp != nil):
+				if lastFork.block != nil && lastFork.block.Cmp(cur.block) > 0 {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at block %v, but %v enabled at block %v",
 						lastFork.name, lastFork.block, cur.name, cur.block)
+				} else if lastFork.timestamp != nil && *lastFork.timestamp > *cur.timestamp {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at timestamp %v, but %v enabled at timestamp %v",
+						lastFork.name, lastFork.timestamp, cur.name, cur.timestamp)
+				}
+
+				// Timestamp based forks can follow block based ones, but not the other way around
+				if lastFork.timestamp != nil && cur.block != nil {
+					return fmt.Errorf("unsupported fork ordering: %v used timestamp ordering, but %v reverted to block ordering",
+						lastFork.name, cur.name)
 				}
 			}
 		}
 		// If it was optional and not set, then ignore it
-		if !cur.optional || cur.block != nil {
+		if !cur.optional || (cur.block != nil || cur.timestamp != nil) {
 			lastFork = cur
 		}
 	}

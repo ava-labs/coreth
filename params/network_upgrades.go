@@ -16,7 +16,6 @@ func (c *ChainConfig) forkOrder() []fork {
 		{name: "banffBlockTimestamp", timestamp: c.BanffBlockTimestamp},
 		{name: "cortinaBlockTimestamp", timestamp: c.CortinaBlockTimestamp},
 		{name: "durangoBlockTimestamp", timestamp: c.DurangoBlockTimestamp},
-		{name: "cancunTime", timestamp: c.CancunTime}, // XXX: should this be in ethForks?
 	}
 }
 
