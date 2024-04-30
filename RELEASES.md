@@ -12,7 +12,7 @@
 - Integrate stake weighted gossip selection
 - Update go-ethereum to v1.12.2
 - Force precompile modules registration in ethclient
-- Bump Avalanchego to 1.11.3
+- Bump Avalanchego to v1.11.3
 
 ## [v0.13.1](https://github.com/ava-labs/coreth/releases/tag/v0.13.1)
 
