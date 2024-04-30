@@ -132,7 +132,6 @@ func TestGetBlockSignature(t *testing.T) {
 		TestVM: common.TestVM{T: t},
 		GetBlockF: func(ctx context.Context, i ids.ID) (snowman.Block, error) {
 			if i == blkID {
-				return &snowman.
 				return &snowmantest.Block{
 					TestDecidable: choices.TestDecidable{
 						IDV:     blkID,
