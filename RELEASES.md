@@ -8,7 +8,7 @@
 - Disable blobpool
 - Testing improvements
 
-## [v0.13.2](https://github.com/ava-labs/coreth/releasaes/tag/v0.13.2)
+## [v0.13.2](https://github.com/ava-labs/coreth/releases/tag/v0.13.2)
 - Integrate stake weighted gossip selection
 - Update go-ethereum to v1.12.2
 - Force precompile modules registration in ethclient
