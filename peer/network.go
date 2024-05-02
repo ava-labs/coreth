@@ -505,12 +505,11 @@ func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion 
 		return nil
 	}
 
-	if nodeID == n.self {
+	if nodeID != n.self {
 		log.Debug("skipping registering self as peer")
-		return nil
+		n.peers.Connected(nodeID, nodeVersion)
 	}
 
-	n.peers.Connected(nodeID, nodeVersion)
 	return n.p2pNetwork.Connected(ctx, nodeID, nodeVersion)
 }
 
