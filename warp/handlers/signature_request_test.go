@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
+	"github.com/ava-labs/avalanchego/snow/consensus/snowman/snowmantest"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -62,12 +63,12 @@ func TestMessageSignatureHandler(t *testing.T) {
 				}, signature[:]
 			},
 			verifyStats: func(t *testing.T, stats *handlerStats) {
-				require.EqualValues(t, 1, stats.messageSignatureRequest.Count())
-				require.EqualValues(t, 1, stats.messageSignatureHit.Count())
-				require.EqualValues(t, 0, stats.messageSignatureMiss.Count())
-				require.EqualValues(t, 0, stats.blockSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.blockSignatureHit.Count())
-				require.EqualValues(t, 0, stats.blockSignatureMiss.Count())
+				require.EqualValues(t, 1, stats.messageSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 1, stats.messageSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureMiss.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureMiss.Snapshot().Count())
 			},
 		},
 		"offchain message": {
@@ -77,12 +78,12 @@ func TestMessageSignatureHandler(t *testing.T) {
 				}, offchainSignature[:]
 			},
 			verifyStats: func(t *testing.T, stats *handlerStats) {
-				require.EqualValues(t, 1, stats.messageSignatureRequest.Count())
-				require.EqualValues(t, 1, stats.messageSignatureHit.Count())
-				require.EqualValues(t, 0, stats.messageSignatureMiss.Count())
-				require.EqualValues(t, 0, stats.blockSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.blockSignatureHit.Count())
-				require.EqualValues(t, 0, stats.blockSignatureMiss.Count())
+				require.EqualValues(t, 1, stats.messageSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 1, stats.messageSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureMiss.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureMiss.Snapshot().Count())
 			},
 		},
 		"unknown message": {
@@ -92,12 +93,12 @@ func TestMessageSignatureHandler(t *testing.T) {
 				}, emptySignature[:]
 			},
 			verifyStats: func(t *testing.T, stats *handlerStats) {
-				require.EqualValues(t, 1, stats.messageSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.messageSignatureHit.Count())
-				require.EqualValues(t, 1, stats.messageSignatureMiss.Count())
-				require.EqualValues(t, 0, stats.blockSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.blockSignatureHit.Count())
-				require.EqualValues(t, 0, stats.blockSignatureMiss.Count())
+				require.EqualValues(t, 1, stats.messageSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 1, stats.messageSignatureMiss.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureMiss.Snapshot().Count())
 			},
 		},
 	}
@@ -139,7 +140,7 @@ func TestBlockSignatureHandler(t *testing.T) {
 		TestVM: common.TestVM{T: t},
 		GetBlockF: func(ctx context.Context, i ids.ID) (snowman.Block, error) {
 			if i == blkID {
-				return &snowman.TestBlock{
+				return &snowmantest.Block{
 					TestDecidable: choices.TestDecidable{
 						IDV:     blkID,
 						StatusV: choices.Accepted,
@@ -177,12 +178,12 @@ func TestBlockSignatureHandler(t *testing.T) {
 				}, signature[:]
 			},
 			verifyStats: func(t *testing.T, stats *handlerStats) {
-				require.EqualValues(t, 0, stats.messageSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.messageSignatureHit.Count())
-				require.EqualValues(t, 0, stats.messageSignatureMiss.Count())
-				require.EqualValues(t, 1, stats.blockSignatureRequest.Count())
-				require.EqualValues(t, 1, stats.blockSignatureHit.Count())
-				require.EqualValues(t, 0, stats.blockSignatureMiss.Count())
+				require.EqualValues(t, 0, stats.messageSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureMiss.Snapshot().Count())
+				require.EqualValues(t, 1, stats.blockSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 1, stats.blockSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureMiss.Snapshot().Count())
 			},
 		},
 		"unknown block": {
@@ -192,12 +193,12 @@ func TestBlockSignatureHandler(t *testing.T) {
 				}, emptySignature[:]
 			},
 			verifyStats: func(t *testing.T, stats *handlerStats) {
-				require.EqualValues(t, 0, stats.messageSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.messageSignatureHit.Count())
-				require.EqualValues(t, 0, stats.messageSignatureMiss.Count())
-				require.EqualValues(t, 1, stats.blockSignatureRequest.Count())
-				require.EqualValues(t, 0, stats.blockSignatureHit.Count())
-				require.EqualValues(t, 1, stats.blockSignatureMiss.Count())
+				require.EqualValues(t, 0, stats.messageSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 0, stats.messageSignatureMiss.Snapshot().Count())
+				require.EqualValues(t, 1, stats.blockSignatureRequest.Snapshot().Count())
+				require.EqualValues(t, 0, stats.blockSignatureHit.Snapshot().Count())
+				require.EqualValues(t, 1, stats.blockSignatureMiss.Snapshot().Count())
 			},
 		},
 	}

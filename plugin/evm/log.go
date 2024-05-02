@@ -12,11 +12,6 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-const (
-	errorKey   = "LOG15_ERROR"
-	timeFormat = "2006-01-02T15:04:05-0700"
-)
-
 type CorethLogger struct {
 	log.Logger
 
