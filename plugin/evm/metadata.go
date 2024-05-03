@@ -4,21 +4,10 @@
 package evm
 
 import (
-	"errors"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/hashing"
-	"github.com/ava-labs/avalanchego/vms/components/verify"
 )
 
-var (
-	errNilMetadata           = errors.New("nil metadata is not valid")
-	errMetadataNotInitialize = errors.New("metadata was never initialized and is not valid")
-
-	_ verify.Verifiable = (*Metadata)(nil)
-)
-
-// TODO: Delete this once the downstream dependencies have been updated.
 type Metadata struct {
 	id            ids.ID // The ID of this data
 	unsignedBytes []byte // Unsigned byte representation of this data
@@ -45,15 +34,4 @@ func (md *Metadata) Bytes() []byte {
 // Bytes returns the binary representation of this data
 func (md *Metadata) SignedBytes() []byte {
 	return md.bytes
-}
-
-func (md *Metadata) Verify() error {
-	switch {
-	case md == nil:
-		return errNilMetadata
-	case md.id == ids.Empty:
-		return errMetadataNotInitialize
-	default:
-		return nil
-	}
 }
