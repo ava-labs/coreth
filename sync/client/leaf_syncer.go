@@ -9,16 +9,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/subnet-evm/plugin/evm/message"
+	"github.com/ava-labs/subnet-evm/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
 )
 
-var (
-	errFailedToFetchLeafs = errors.New("failed to fetch leafs")
-)
+var errFailedToFetchLeafs = errors.New("failed to fetch leafs")
 
 // LeafSyncTask represents a complete task to be completed by the leaf syncer.
 // Note: each LeafSyncTask is processed on its own goroutine and there will

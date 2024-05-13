@@ -31,7 +31,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
@@ -100,7 +100,7 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 		return err
 	}
 	// Ensure the file is synced to disk
-	f, err := os.OpenFile(tempname, os.O_RDWR, 0666)
+	f, err := os.OpenFile(tempname, os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}

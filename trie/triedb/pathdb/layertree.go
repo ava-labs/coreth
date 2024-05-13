@@ -31,9 +31,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/trie/triestate"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie/trienode"
+	"github.com/ava-labs/subnet-evm/trie/triestate"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -60,7 +60,7 @@ func (tree *layerTree) reset(head layer) {
 	tree.lock.Lock()
 	defer tree.lock.Unlock()
 
-	var layers = make(map[common.Hash]layer)
+	layers := make(map[common.Hash]layer)
 	for head != nil {
 		layers[head.rootHash()] = head
 		head = head.parentLayer()

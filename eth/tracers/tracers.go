@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/subnet-evm/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -45,8 +45,10 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type ctorFn func(*Context, json.RawMessage) (Tracer, error)
-type jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
+type (
+	ctorFn   func(*Context, json.RawMessage) (Tracer, error)
+	jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
+)
 
 type elem struct {
 	ctor ctorFn

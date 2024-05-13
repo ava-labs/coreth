@@ -21,11 +21,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/subnet-evm/params"
 )
 
 func TestCalcExcessBlobGas(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		excess uint64
 		blobs  uint64
 		want   uint64

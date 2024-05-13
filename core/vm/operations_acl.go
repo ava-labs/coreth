@@ -29,8 +29,8 @@ package vm
 import (
 	"errors"
 
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/vmerrs"
+	"github.com/ava-labs/subnet-evm/params"
+	"github.com/ava-labs/subnet-evm/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
@@ -78,7 +78,7 @@ func makeGasSStoreFunc() gasFunc {
 		}
 
 		// EIP-2200 original clause:
-		//return params.SloadGasEIP2200, nil // dirty update (2.2)
+		// return params.SloadGasEIP2200, nil // dirty update (2.2)
 		return cost + params.WarmStorageReadCostEIP2929, nil // dirty update (2.2)
 	}
 }

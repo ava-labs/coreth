@@ -34,11 +34,11 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie/testutil"
-	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/trie/triestate"
+	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ava-labs/subnet-evm/trie/testutil"
+	"github.com/ava-labs/subnet-evm/trie/trienode"
+	"github.com/ava-labs/subnet-evm/trie/triestate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -123,7 +123,7 @@ func newTester(t *testing.T) *tester {
 		}
 	)
 	for i := 0; i < 2*128; i++ {
-		var parent = types.EmptyRootHash
+		parent := types.EmptyRootHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
 		}
@@ -393,7 +393,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	)
 	defer tester.release()
 
-	var cases = []struct {
+	cases := []struct {
 		root   common.Hash
 		expect bool
 	}{

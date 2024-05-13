@@ -34,7 +34,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -162,7 +162,7 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 	st.val = dec.Val
 	st.key = dec.Key
 
-	var hasChild = make([]byte, 1)
+	hasChild := make([]byte, 1)
 	for i := range st.children {
 		if _, err := r.Read(hasChild); err != nil {
 			return err

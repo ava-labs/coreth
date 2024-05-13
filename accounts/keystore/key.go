@@ -38,7 +38,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ava-labs/coreth/accounts"
+	"github.com/ava-labs/subnet-evm/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
@@ -204,7 +204,7 @@ func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Accou
 func writeTemporaryKeyFile(file string, content []byte) (string, error) {
 	// Create the keystore directory with appropriate permissions
 	// in case it is not present yet.
-	const dirPerm = 0700
+	const dirPerm = 0o700
 	if err := os.MkdirAll(filepath.Dir(file), dirPerm); err != nil {
 		return "", err
 	}
