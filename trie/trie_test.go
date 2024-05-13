@@ -39,9 +39,9 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/ava-labs/subnet-evm/core/rawdb"
-	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ava-labs/subnet-evm/trie/trienode"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -346,7 +346,7 @@ func TestLargeValue(t *testing.T) {
 
 // TestRandomCases tests som cases that were found via random fuzzing
 func TestRandomCases(t *testing.T) {
-	var rt = []randTestStep{
+	rt := []randTestStep{
 		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 0
 		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 1
 		{op: 0, key: common.Hex2Bytes("d51b182b95d677e5f1c82508c0228de96b73092d78ce78b2230cd948674f66fd1483bd"), value: common.Hex2Bytes("0000000000000002")},           // step 2
@@ -406,7 +406,7 @@ const (
 )
 
 func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
-	var finishedFn = func() bool {
+	finishedFn := func() bool {
 		size--
 		return size == 0
 	}
@@ -415,7 +415,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 
 func generateSteps(finished func() bool, r io.Reader) randTest {
 	var allKeys [][]byte
-	var one = []byte{0}
+	one := []byte{0}
 	genKey := func() []byte {
 		r.Read(one)
 		if len(allKeys) < 2 || one[0]%100 > 90 {
@@ -495,7 +495,7 @@ func runRandTestBool(rt randTest) bool {
 }
 
 func runRandTest(rt randTest) error {
-	var scheme = rawdb.HashScheme
+	scheme := rawdb.HashScheme
 	if rand.Intn(2) == 0 {
 		scheme = rawdb.PathScheme
 	}
@@ -704,7 +704,7 @@ func BenchmarkHash(b *testing.B) {
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
-	//trie.hashRoot(nil, nil)
+	// trie.hashRoot(nil, nil)
 	trie.Hash()
 }
 
@@ -808,7 +808,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
 		// and will consume different amount of data from the rand source.
-		//balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+		// balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
 		// Therefore, we instead just read via byte buffer
 		numBytes := random.Uint32() % 33 // [0, 32] bytes
 		balanceBytes := make([]byte, numBytes)
@@ -1228,9 +1228,9 @@ func TestDecodeNode(t *testing.T) {
 
 func FuzzTrie(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
-		var steps = 500
-		var input = bytes.NewReader(data)
-		var finishedFn = func() bool {
+		steps := 500
+		input := bytes.NewReader(data)
+		finishedFn := func() bool {
 			steps--
 			return steps < 0 || input.Len() == 0
 		}

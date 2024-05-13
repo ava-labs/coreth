@@ -37,17 +37,17 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ava-labs/subnet-evm/consensus"
-	"github.com/ava-labs/subnet-evm/consensus/dummy"
-	"github.com/ava-labs/subnet-evm/core"
-	"github.com/ava-labs/subnet-evm/core/rawdb"
-	"github.com/ava-labs/subnet-evm/core/state"
-	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ava-labs/subnet-evm/core/vm"
-	"github.com/ava-labs/subnet-evm/eth/tracers/logger"
-	"github.com/ava-labs/subnet-evm/internal/ethapi"
-	"github.com/ava-labs/subnet-evm/params"
-	"github.com/ava-labs/subnet-evm/rpc"
+	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/eth/tracers/logger"
+	"github.com/ava-labs/coreth/internal/ethapi"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -246,7 +246,8 @@ func TestTraceCall(t *testing.T) {
 			Value:    big.NewInt(1000),
 			Gas:      params.TxGas,
 			GasPrice: b.BaseFee(),
-			Data:     nil}),
+			Data:     nil,
+		}),
 			signer, accounts[0].key)
 		b.AddTx(tx)
 		nonce++
@@ -259,7 +260,8 @@ func TestTraceCall(t *testing.T) {
 				Value:    big.NewInt(1000),
 				Gas:      params.TxGas,
 				GasPrice: b.BaseFee(),
-				Data:     nil}),
+				Data:     nil,
+			}),
 				signer, accounts[0].key)
 			b.AddTx(tx)
 			nonce++
@@ -271,7 +273,8 @@ func TestTraceCall(t *testing.T) {
 				Value:    big.NewInt(1000),
 				Gas:      params.TxGas,
 				GasPrice: b.BaseFee(),
-				Data:     nil}),
+				Data:     nil,
+			}),
 				signer, accounts[0].key)
 			b.AddTx(tx)
 			nonce++
@@ -462,7 +465,8 @@ func TestTraceTransaction(t *testing.T) {
 			Value:    big.NewInt(1000),
 			Gas:      params.TxGas,
 			GasPrice: new(big.Int).Add(b.BaseFee(), big.NewInt(int64(500*params.GWei))),
-			Data:     nil}),
+			Data:     nil,
+		}),
 			signer, accounts[0].key)
 		b.AddTx(tx)
 		target = tx.Hash()
@@ -520,7 +524,8 @@ func TestTraceBlock(t *testing.T) {
 			Value:    big.NewInt(1000),
 			Gas:      params.TxGas,
 			GasPrice: b.BaseFee(),
-			Data:     nil}),
+			Data:     nil,
+		}),
 			signer, accounts[0].key)
 		b.AddTx(tx)
 		txHash = tx.Hash()
@@ -617,7 +622,8 @@ func TestTracingWithOverrides(t *testing.T) {
 			Value:    big.NewInt(1000),
 			Gas:      params.TxGas,
 			GasPrice: b.BaseFee(),
-			Data:     nil}),
+			Data:     nil,
+		}),
 			signer, accounts[0].key)
 		b.AddTx(tx)
 	})

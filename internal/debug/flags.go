@@ -36,7 +36,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ava-labs/subnet-evm/internal/flags"
+	"github.com/ava-labs/coreth/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
@@ -236,7 +236,7 @@ func Setup(ctx *cli.Context) error {
 		output = io.MultiWriter(terminalOutput, logOutputFile)
 	} else if logFile != "" {
 		var err error
-		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err != nil {
 			return err
 		}
 		output = io.MultiWriter(logOutputFile, terminalOutput)

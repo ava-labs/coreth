@@ -34,7 +34,7 @@ import (
 	mrand "math/rand"
 	"testing"
 
-	"github.com/ava-labs/subnet-evm/core/rawdb"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -482,7 +482,7 @@ func TestBadRangeProof(t *testing.T) {
 			keys = append(keys, entries[i].k)
 			vals = append(vals, entries[i].v)
 		}
-		var first = keys[0]
+		first := keys[0]
 		testcase := mrand.Intn(6)
 		var index int
 		switch testcase {
