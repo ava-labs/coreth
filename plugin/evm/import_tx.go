@@ -5,9 +5,9 @@ package evm
 
 import (
 	"fmt"
+	"github.com/tenderly/coreth/core/vm"
 	"math/big"
 
-	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -410,7 +410,7 @@ func (vm *VM) newImportTxWithUTXOs(
 
 // EVMStateTransfer performs the state transfer to increase the balances of
 // accounts accordingly with the imported EVMOutputs
-func (tx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error {
+func (tx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state vm.StateDB) error {
 	for _, to := range tx.Outs {
 		if to.AssetID == ctx.AVAXAssetID {
 			log.Debug("crosschain", "src", tx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", "AVAX")

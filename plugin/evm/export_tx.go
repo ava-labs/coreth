@@ -5,9 +5,9 @@ package evm
 
 import (
 	"fmt"
+	"github.com/tenderly/coreth/core/vm"
 	"math/big"
 
-	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -357,7 +357,7 @@ func (vm *VM) newExportTx(
 }
 
 // EVMStateTransfer executes the state update from the atomic export transaction
-func (tx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error {
+func (tx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state vm.StateDB) error {
 	addrs := map[[20]byte]uint64{}
 	for _, from := range tx.Ins {
 		if from.AssetID == ctx.AVAXAssetID {

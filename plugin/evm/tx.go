@@ -7,12 +7,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/tenderly/coreth/core/vm"
 	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -113,7 +113,7 @@ type UnsignedAtomicTx interface {
 	// The set of atomic requests must be returned in a consistent order.
 	AtomicOps() (ids.ID, *atomic.Requests, error)
 
-	EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error
+	EVMStateTransfer(ctx *snow.Context, state vm.StateDB) error
 }
 
 // Tx is a signed transaction

@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"github.com/tenderly/coreth/core/vm"
 	"math/big"
 	"math/rand"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/tenderly/coreth/core/state"
 	"github.com/tenderly/coreth/params"
 )
 
@@ -70,7 +70,7 @@ func (t *TestTx) SemanticVerify(vm *VM, stx *Tx, parent *Block, baseFee *big.Int
 }
 
 // EVMStateTransfer implements the UnsignedAtomicTx interface
-func (t *TestTx) EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error {
+func (t *TestTx) EVMStateTransfer(ctx *snow.Context, state vm.StateDB) error {
 	return t.EVMStateTransferV
 }
 
