@@ -67,13 +67,16 @@ type DumpAccount struct {
 	IsMultiCoin bool                   `json:"isMultiCoin"`
 	Storage     map[common.Hash]string `json:"storage,omitempty"`
 	Address     *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
-	SecureKey   hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
+	AddressHash hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
 }
 
 // Dump represents the full dump in a collected format, as one large map.
 type Dump struct {
-	Root     string                         `json:"root"`
-	Accounts map[common.Address]DumpAccount `json:"accounts"`
+	Root     string                 `json:"root"`
+	Accounts map[string]DumpAccount `json:"accounts"`
+	// Next can be set to represent that this dump is only partial, and Next
+	// is where an iterator should be positioned in order to continue the dump.
+	Next []byte `json:"next,omitempty"` // nil if no more accounts
 }
 
 // OnRoot implements DumpCollector interface
@@ -83,27 +86,11 @@ func (d *Dump) OnRoot(root common.Hash) {
 
 // OnAccount implements DumpCollector interface
 func (d *Dump) OnAccount(addr *common.Address, account DumpAccount) {
-	if addr != nil {
-		d.Accounts[*addr] = account
+	if addr == nil {
+		d.Accounts[fmt.Sprintf("pre(%s)", account.AddressHash)] = account
 	}
-}
-
-// IteratorDump is an implementation for iterating over data.
-type IteratorDump struct {
-	Root     string                         `json:"root"`
-	Accounts map[common.Address]DumpAccount `json:"accounts"`
-	Next     []byte                         `json:"next,omitempty"` // nil if no more accounts
-}
-
-// OnRoot implements DumpCollector interface
-func (d *IteratorDump) OnRoot(root common.Hash) {
-	d.Root = fmt.Sprintf("%x", root)
-}
-
-// OnAccount implements DumpCollector interface
-func (d *IteratorDump) OnAccount(addr *common.Address, account DumpAccount) {
 	if addr != nil {
-		d.Accounts[*addr] = account
+		d.Accounts[(*addr).String()] = account
 	}
 }
 
@@ -122,7 +109,7 @@ func (d iterativeDump) OnAccount(addr *common.Address, account DumpAccount) {
 		IsMultiCoin: account.IsMultiCoin,
 		Code:        account.Code,
 		Storage:     account.Storage,
-		SecureKey:   account.SecureKey,
+		AddressHash: account.AddressHash,
 		Address:     addr,
 	}
 	d.Encode(dumpAccount)
@@ -153,6 +140,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 	trieIt, err := s.trie.NodeIterator(conf.Start)
 	if err != nil {
+		log.Error("Trie dumping error", "err", err)
 		return nil
 	}
 	it := trie.NewIterator(trieIt)
@@ -167,21 +155,22 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			Root:        data.Root[:],
 			CodeHash:    data.CodeHash,
 			IsMultiCoin: data.IsMultiCoin,
-			SecureKey:   it.Key,
+			AddressHash: it.Key,
 		}
 		var (
-			addrBytes = s.trie.GetKey(it.Key)
-			addr      = common.BytesToAddress(addrBytes)
 			address   *common.Address
+			addr      common.Address
+			addrBytes = s.trie.GetKey(it.Key)
 		)
 		if addrBytes == nil {
-			// Preimage missing
 			missingPreimages++
 			if conf.OnlyWithAddresses {
 				continue
 			}
 		} else {
+			addr = common.BytesToAddress(addrBytes)
 			address = &addr
+			account.Address = address
 		}
 		obj := newObject(s, addr, &data)
 		if !conf.SkipCode {
@@ -232,12 +221,13 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	return nextKey
 }
 
-// RawDump returns the entire state an a single large object
+// RawDump returns the state. If the processing is aborted e.g. due to options
+// reaching Max, the `Next` key is set on the returned Dump.
 func (s *StateDB) RawDump(opts *DumpConfig) Dump {
 	dump := &Dump{
-		Accounts: make(map[common.Address]DumpAccount),
+		Accounts: make(map[string]DumpAccount),
 	}
-	s.DumpToCollector(dump, opts)
+	dump.Next = s.DumpToCollector(dump, opts)
 	return *dump
 }
 
@@ -246,7 +236,7 @@ func (s *StateDB) Dump(opts *DumpConfig) []byte {
 	dump := s.RawDump(opts)
 	json, err := json.MarshalIndent(dump, "", "    ")
 	if err != nil {
-		fmt.Println("Dump err", err)
+		log.Error("Error dumping state", "err", err)
 	}
 	return json
 }
@@ -254,13 +244,4 @@ func (s *StateDB) Dump(opts *DumpConfig) []byte {
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
 func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) {
 	s.DumpToCollector(iterativeDump{output}, opts)
-}
-
-// IteratorDump dumps out a batch of accounts starts with the given start key
-func (s *StateDB) IteratorDump(opts *DumpConfig) IteratorDump {
-	iterator := &IteratorDump{
-		Accounts: make(map[common.Address]DumpAccount),
-	}
-	iterator.Next = s.DumpToCollector(iterator, opts)
-	return *iterator
 }
