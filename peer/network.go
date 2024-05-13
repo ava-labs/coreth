@@ -506,7 +506,7 @@ func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion 
 	}
 
 	if nodeID != n.self {
-		log.Debug("skipping registering self as peer")
+		// The legacy peer tracker doesn't expect to be connected to itself.
 		n.peers.Connected(nodeID, nodeVersion)
 	}
 
