@@ -28,7 +28,10 @@ func TestMempoolAddTx(t *testing.T) {
 		}
 
 		txs = append(txs, tx)
-		require.NoError(m.Add(tx))
+	}
+	errs := m.Add(txs...)
+	for _, err := range errs {
+		require.NoError(err)
 	}
 
 	for _, tx := range txs {
@@ -50,7 +53,7 @@ func TestMempoolAdd(t *testing.T) {
 		},
 	}
 
-	require.NoError(m.Add(tx))
-	err = m.Add(tx)
+	require.NoError(m.Add(tx)[0])
+	err = m.Add(tx)[0]
 	require.ErrorIs(err, errTxAlreadyKnown)
 }

@@ -110,8 +110,9 @@ func TestAtomicMempoolIterate(t *testing.T) {
 			m, err := NewMempool(&snow.Context{}, prometheus.NewRegistry(), 10, nil)
 			require.NoError(err)
 
-			for _, add := range tt.add {
-				require.NoError(m.Add(add))
+			errs := m.Add(tt.add...)
+			for _, err := range errs {
+				require.NoError(err)
 			}
 
 			matches := make([]*GossipAtomicTx, 0)

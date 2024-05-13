@@ -139,28 +139,31 @@ func (m *Mempool) atomicTxGasPrice(tx *Tx) (uint64, error) {
 	return burned / gasUsed, nil
 }
 
-func (m *Mempool) Add(tx *GossipAtomicTx) error {
+func (m *Mempool) Add(txs ...*GossipAtomicTx) []error {
 	m.ctx.Lock.RLock()
 	defer m.ctx.Lock.RUnlock()
 
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	err := m.addTx(tx.Tx, false)
-	if errors.Is(err, errTxAlreadyKnown) {
-		return err
+	errs := make([]error, len(txs))
+	for i, tx := range txs {
+		errs[i] = m.addTx(tx.Tx, false)
+		if errors.Is(errs[i], errTxAlreadyKnown) {
+			continue
+		}
+
+		if errs[i] != nil {
+			txID := tx.Tx.ID()
+			m.discardedTxs.Put(txID, tx.Tx)
+			log.Debug("failed to issue remote tx to mempool",
+				"txID", txID,
+				"err", errs[i],
+			)
+		}
 	}
 
-	if err != nil {
-		txID := tx.Tx.ID()
-		m.discardedTxs.Put(txID, tx.Tx)
-		log.Debug("failed to issue remote tx to mempool",
-			"txID", txID,
-			"err", err,
-		)
-	}
-
-	return err
+	return errs
 }
 
 // AddTx attempts to add [tx] to the mempool and returns an error if
