@@ -149,15 +149,15 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
-		account := DumpAccount{
-			Balance:     data.Balance.String(),
-			Nonce:       data.Nonce,
-			Root:        data.Root[:],
-			CodeHash:    data.CodeHash,
-			IsMultiCoin: data.IsMultiCoin,
-			AddressHash: it.Key,
-		}
 		var (
+			account = DumpAccount{
+				Balance:     data.Balance.String(),
+				Nonce:       data.Nonce,
+				Root:        data.Root[:],
+				CodeHash:    data.CodeHash,
+				IsMultiCoin: data.IsMultiCoin,
+				AddressHash: it.Key,
+			}
 			address   *common.Address
 			addr      common.Address
 			addrBytes = s.trie.GetKey(it.Key)
