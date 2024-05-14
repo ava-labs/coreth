@@ -30,11 +30,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/commontype"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
@@ -491,12 +489,4 @@ func (cm *chainMaker) GetHeader(hash common.Hash, number uint64) *types.Header {
 
 func (cm *chainMaker) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return cm.blockByNumber(number)
-}
-
-func (cm *chainMaker) GetFeeConfigAt(parent *types.Header) (commontype.FeeConfig, *big.Int, error) {
-	return cm.config.FeeConfig, nil, nil
-}
-
-func (cm *chainMaker) GetCoinbaseAt(parent *types.Header) (common.Address, bool, error) {
-	return constants.BlackholeAddr, cm.config.AllowFeeRecipients, nil
 }

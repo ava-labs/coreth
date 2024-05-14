@@ -7,15 +7,16 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"runtime"
 	"strings"
 
+	"github.com/ava-labs/coreth/log"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/log"
+	gethlog "github.com/ethereum/go-ethereum/log"
+	"golang.org/x/exp/slog"
 )
 
-type SubnetEVMLogger struct {
+type CorethLogger struct {
 	gethlog.Logger
 
 	logLevel *slog.LevelVar
@@ -65,7 +66,7 @@ func (c *CorethLogger) SetLogLevel(level string) error {
 	if err != nil {
 		return err
 	}
-	s.logLevel.Set(logLevel)
+	c.logLevel.Set(logLevel)
 	return nil
 }
 

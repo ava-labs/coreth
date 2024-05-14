@@ -305,7 +305,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	genesis := &Genesis{
-		BaseFee:    big.NewInt(params.TestInitialBaseFee),
+		BaseFee:    big.NewInt(params.ApricotPhase3InitialBaseFee),
 		Config:     verkleConfig,
 		Timestamp:  verkleTime,
 		Difficulty: big.NewInt(0),
