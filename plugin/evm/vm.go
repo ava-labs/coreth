@@ -582,11 +582,18 @@ func (vm *VM) Initialize(
 		vm.p2pSender = appSender
 	}
 
-	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
+	p2pNetwork, err := p2p.NewNetwork(
+		vm.ctx.Log,
+		vm.p2pSender,
+		vm.ctx.ValidatorState,
+		maxValidatorSetStaleness,
+		vm.sdkMetrics,
+		"p2p",
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
-	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
+	vm.validators = p2pNetwork.Validators
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
