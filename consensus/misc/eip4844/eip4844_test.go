@@ -25,7 +25,7 @@ import (
 )
 
 func TestCalcExcessBlobGas(t *testing.T) {
-	tests := []struct {
+	var tests = []struct {
 		excess uint64
 		blobs  uint64
 		want   uint64

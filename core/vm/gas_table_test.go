@@ -144,7 +144,7 @@ var createGasTests = []struct {
 
 func TestCreateGas(t *testing.T) {
 	for i, tt := range createGasTests {
-		gasUsed := uint64(0)
+		var gasUsed = uint64(0)
 		doCheck := func(testGas int) bool {
 			address := common.BytesToAddress([]byte("contract"))
 			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -164,7 +164,7 @@ func TestCreateGas(t *testing.T) {
 			// Note: we use Cortina instead of AllEthashProtocolChanges (upstream)
 			// because it is the last fork before the activation of EIP-3860
 			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.TestCortinaChainConfig, config)
-			startGas := uint64(testGas)
+			var startGas = uint64(testGas)
 			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
 			if err != nil {
 				return false

@@ -221,7 +221,7 @@ func TestAccessListLeak(t *testing.T) {
 	root, nodes, _ := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
-	cases := []struct {
+	var cases = []struct {
 		op func(tr *Trie)
 	}{
 		{
