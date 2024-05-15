@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/ava-labs/coreth/log"
-	"github.com/ava-labs/coreth/utils"
 	gethlog "github.com/ethereum/go-ethereum/log"
 	"golang.org/x/exp/slog"
 )
@@ -62,7 +61,7 @@ func InitLogger(alias string, level string, jsonFormat bool, writer io.Writer) (
 // SetLogLevel sets the log level of initialized log handler.
 func (c *CorethLogger) SetLogLevel(level string) error {
 	// Set log level
-	logLevel, err := utils.LvlFromString(level)
+	logLevel, err := log.LvlFromString(level)
 	if err != nil {
 		return err
 	}
@@ -72,7 +71,7 @@ func (c *CorethLogger) SetLogLevel(level string) error {
 
 // locationTrims are trimmed for display to avoid unwieldy log lines.
 var locationTrims = []string{
-	"subnet-evm/",
+	"coreth/",
 }
 
 func trimPrefixes(s string) string {
