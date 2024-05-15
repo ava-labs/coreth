@@ -102,7 +102,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 }
 
 func TestBlockRequestHandler(t *testing.T) {
-	gspec := &core.Genesis{
+	var gspec = &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
@@ -214,7 +214,7 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 }
 
 func TestBlockRequestHandlerCtxExpires(t *testing.T) {
-	gspec := &core.Genesis{
+	var gspec = &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()

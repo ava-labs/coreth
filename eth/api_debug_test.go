@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -38,13 +39,15 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"golang.org/x/exp/slices"
 )
 
-// var dumper = spew.ConfigState{Indent: "    "}
+var dumper = spew.ConfigState{Indent: "    "}
 
 func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.Dump {
 	result := statedb.RawDump(&state.DumpConfig{
@@ -165,69 +168,73 @@ func TestEmptyAccountRange(t *testing.T) {
 	}
 }
 
-// TODO: figure out if this test can be re-enabled with our partitioned state
-// func TestStorageRangeAt(t *testing.T) {
-// 	t.Parallel()
+func TestStorageRangeAt(t *testing.T) {
+	t.Parallel()
 
-// 	// Create a state where account 0x010000... has a few storage entries.
-// 	var (
-// 		db     = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
-// 		sdb, _ = state.New(types.EmptyRootHash, db, nil)
-// 		addr   = common.Address{0x01}
-// 		keys   = []common.Hash{ // hashes of Keys of storage
-// 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),
-// 			common.HexToHash("426fcb404ab2d5d8e61a3d918108006bbb0a9be65e92235bb10eefbdb6dcd053"),
-// 			common.HexToHash("48078cfed56339ea54962e72c37c7f588fc4f8e5bc173827ba75cb10a63a96a5"),
-// 			common.HexToHash("5723d2c3a83af9b735e3b7f21531e5623d183a9095a56604ead41f3582fdfb75"),
-// 		}
-// 		storage = storageMap{
-// 			keys[0]: {Key: &common.Hash{0x02}, Value: common.Hash{0x01}},
-// 			keys[1]: {Key: &common.Hash{0x04}, Value: common.Hash{0x02}},
-// 			keys[2]: {Key: &common.Hash{0x01}, Value: common.Hash{0x03}},
-// 			keys[3]: {Key: &common.Hash{0x03}, Value: common.Hash{0x04}},
-// 		}
-// 	)
-// 	for _, entry := range storage {
-// 		sdb.SetState(addr, *entry.Key, entry.Value)
-// 	}
-// 	root, _ := sdb.Commit(0, false, false)
-// 	sdb, _ = state.New(root, db, nil)
+	// Create a state where account 0x010000... has a few storage entries.
+	var (
+		db          = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
+		sdb, _      = state.New(types.EmptyRootHash, db, nil)
+		addr        = common.Address{0x01}
+		keys        = []common.Hash{}
+		storage     = storageMap{}
+		storageList = []storageEntry{
+			{Key: &common.Hash{0x00, 0x02}, Value: common.Hash{0x01}},
+			{Key: &common.Hash{0x00, 0x04}, Value: common.Hash{0x02}},
+			{Key: &common.Hash{0x00, 0x01}, Value: common.Hash{0x03}},
+			{Key: &common.Hash{0x00, 0x03}, Value: common.Hash{0x04}},
+		}
+	)
+	// Note: This test is modified compared to upstream since coreth normalizes
+	// state keys before storing them. This means the original values cannot be
+	// used, and the keys array and storage map must be re-calculated.
+	for _, entry := range storageList {
+		k := crypto.Keccak256Hash(entry.Key.Bytes())
+		keys = append(keys, k)
+		storage[k] = entry
+	}
+	slices.SortFunc(keys, common.Hash.Cmp)
+	for _, entry := range storage {
+		sdb.SetState(addr, *entry.Key, entry.Value)
+	}
+	root, _ := sdb.Commit(0, false, false)
+	sdb, _ = state.New(root, db, nil)
 
-// 	// Check a few combinations of limit and start/end.
-// 	tests := []struct {
-// 		start []byte
-// 		limit int
-// 		want  StorageRangeResult
-// 	}{
-// 		{
-// 			start: []byte{}, limit: 0,
-// 			want: StorageRangeResult{storageMap{}, &keys[0]},
-// 		},
-// 		{
-// 			start: []byte{}, limit: 100,
-// 			want: StorageRangeResult{storage, nil},
-// 		},
-// 		{
-// 			start: []byte{}, limit: 2,
-// 			want: StorageRangeResult{storageMap{keys[0]: storage[keys[0]], keys[1]: storage[keys[1]]}, &keys[2]},
-// 		},
-// 		{
-// 			start: []byte{0x00}, limit: 4,
-// 			want: StorageRangeResult{storage, nil},
-// 		},
-// 		{
-// 			start: []byte{0x40}, limit: 2,
-// 			want: StorageRangeResult{storageMap{keys[1]: storage[keys[1]], keys[2]: storage[keys[2]]}, &keys[3]},
-// 		},
-// 	}
-// 	for _, test := range tests {
-// 		result, err := storageRangeAt(sdb, root, addr, test.start, test.limit)
-// 		if err != nil {
-// 			t.Error(err)
-// 		}
-// 		if !reflect.DeepEqual(result, test.want) {
-// 			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
-// 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
-// 		}
-// 	}
-// }
+	// Check a few combinations of limit and start/end.
+	tests := []struct {
+		start []byte
+		limit int
+		want  StorageRangeResult
+	}{
+		{
+			start: []byte{}, limit: 0,
+			want: StorageRangeResult{storageMap{}, &keys[0]},
+		},
+		{
+			start: []byte{}, limit: 100,
+			want: StorageRangeResult{storage, nil},
+		},
+		{
+			start: []byte{}, limit: 2,
+			want: StorageRangeResult{storageMap{keys[0]: storage[keys[0]], keys[1]: storage[keys[1]]}, &keys[2]},
+		},
+		{
+			start: []byte{0x00}, limit: 4,
+			want: StorageRangeResult{storage, nil},
+		},
+		{
+			start: []byte{0x40}, limit: 2,
+			want: StorageRangeResult{storageMap{keys[1]: storage[keys[1]], keys[2]: storage[keys[2]]}, &keys[3]},
+		},
+	}
+	for _, test := range tests {
+		result, err := storageRangeAt(sdb, root, addr, test.start, test.limit)
+		if err != nil {
+			t.Error(err)
+		}
+		if !reflect.DeepEqual(result, test.want) {
+			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
+				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
+		}
+	}
+}

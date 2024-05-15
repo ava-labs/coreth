@@ -496,10 +496,10 @@ type ChainConfig struct {
 	// and Avalanche Warp Messaging. (nil = no fork, 0 = already activated)
 	// Note: EIP-4895 is excluded since withdrawals are not relevant to the Avalanche C-Chain or Subnets running the EVM.
 	DurangoBlockTimestamp *uint64 `json:"durangoBlockTimestamp,omitempty"`
-	// Verkle activates the Verkle upgrade from Ethereum. (nil = no fork, 0 = already activated)
-	VerkleTime *uint64 `json:"verkleTime,omitempty"` // Verkle switch time (nil = no fork, 0 = already on verkle)
 	// Cancun activates the Cancun upgrade from Ethereum. (nil = no fork, 0 = already activated)
 	CancunTime *uint64 `json:"cancunTime,omitempty"`
+	// Verkle activates the Verkle upgrade from Ethereum. (nil = no fork, 0 = already activated)
+	VerkleTime *uint64 `json:"verkleTime,omitempty"` // Verkle switch time (nil = no fork, 0 = already on verkle)
 
 	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Skip encoding/decoding directly into ChainConfig.
 }

@@ -273,7 +273,6 @@ func (b *backendMock) activateLondon() {
 func (b *backendMock) deactivateLondon() {
 	b.current.Time = uint64(900)
 }
-
 func (b *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(42), nil
 }

@@ -45,10 +45,8 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type (
-	ctorFn   func(*Context, json.RawMessage) (Tracer, error)
-	jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
-)
+type ctorFn func(*Context, json.RawMessage) (Tracer, error)
+type jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
 
 type elem struct {
 	ctor ctorFn
