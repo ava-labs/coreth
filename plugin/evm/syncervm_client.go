@@ -176,9 +176,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			if err := client.StateSyncClearOngoingSummary(); err != nil {
 				return block.StateSyncSkipped, fmt.Errorf("failed to clear ongoing summary after skipping state sync: %w", err)
 			}
-			// Initialize snapshots if we're skipping state sync, since it will not have been initialized on
-			// startup.
-			client.chain.BlockChain().InitializeSnapshots()
 			return block.StateSyncSkipped, nil
 		}
 
