@@ -127,11 +127,11 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 }
 
 // ClearOngoingSummary clears any marker of an ongoing state sync summary
-func (vm *stateSyncerClient) ClearOngoingSummary() error {
-	if err := vm.metadataDB.Delete(stateSyncSummaryKey); err != nil {
+func (client *stateSyncerClient) ClearOngoingSummary() error {
+	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return fmt.Errorf("failed to clear ongoing summary: %w", err)
 	}
-	if err := vm.db.Commit(); err != nil {
+	if err := client.db.Commit(); err != nil {
 		return fmt.Errorf("failed to commit db while clearing ongoing summary: %w", err)
 	}
 
