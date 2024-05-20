@@ -582,18 +582,11 @@ func (vm *VM) Initialize(
 		vm.p2pSender = appSender
 	}
 
-	p2pNetwork, err := p2p.NewNetwork(
-		vm.ctx.Log,
-		vm.p2pSender,
-		vm.ctx.ValidatorState,
-		maxValidatorSetStaleness,
-		vm.sdkMetrics,
-		"p2p",
-	)
+	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
-	vm.validators = p2pNetwork.Validators
+	vm.validators = p2p.NewValidators(vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -1083,9 +1076,11 @@ func (vm *VM) initBlockBuilding() error {
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
 	ethTxGossipClient := vm.Network.NewClient(
 		ethTxGossipProtocol,
-		p2p.WithSamplingFilters(
-			p2p.NewPeerSamplingFilter(vm.ctx.NodeID),
-			p2p.NewValidatorSamplingFilter(vm.validators),
+		p2p.WithSampler(
+			p2p.NewUniformSampler(
+				p2p.NewPeerSamplingFilter(vm.ctx.NodeID),
+				p2p.NewValidatorSamplingFilter(vm.validators),
+			),
 		),
 	)
 	ethTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
@@ -1105,9 +1100,11 @@ func (vm *VM) initBlockBuilding() error {
 	atomicTxGossipMarshaller := GossipAtomicTxMarshaller{}
 	atomicTxGossipClient := vm.Network.NewClient(
 		atomicTxGossipProtocol,
-		p2p.WithSamplingFilters(
-			p2p.NewPeerSamplingFilter(vm.ctx.NodeID),
-			p2p.NewValidatorSamplingFilter(vm.validators),
+		p2p.WithSampler(
+			p2p.NewUniformSampler(
+				p2p.NewPeerSamplingFilter(vm.ctx.NodeID),
+				p2p.NewValidatorSamplingFilter(vm.validators),
+			),
 		),
 	)
 	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
