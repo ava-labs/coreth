@@ -770,7 +770,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
 	// sync using a snapshot that has been modified by the node running normal operations.
 	if !stateSyncEnabled {
-		return vm.StateSyncClient.StateSyncClearOngoingSummary()
+		return vm.StateSyncClient.ClearOngoingSummary()
 	}
 
 	return nil
@@ -1053,6 +1053,10 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 	case snow.Bootstrapping:
 		vm.bootstrapped = false
 		if err := vm.StateSyncClient.Error(); err != nil {
+			return err
+		}
+		// After starting bootstrapping, do not attempt to resume a previous state sync.
+		if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
 			return err
 		}
 		// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
