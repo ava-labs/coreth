@@ -633,12 +633,6 @@ func (bc *BlockChain) startAcceptor() {
 		start := time.Now()
 		acceptorQueueGauge.Dec(1)
 
-		if err := bc.flattenSnapshot(func() error {
-			return bc.stateManager.AcceptTrie(next)
-		}, next.Hash()); err != nil {
-			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
-		}
-
 		// Update last processed and transaction lookup index
 		if err := bc.writeBlockAcceptedIndices(next); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
@@ -1135,11 +1129,16 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		}
 	}
 
-	// Enqueue block in the acceptor
 	bc.lastAccepted = block
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
+
+	if err := bc.flattenSnapshot(func() error {
+		return bc.stateManager.AcceptTrie(block)
+	}, block.Hash()); err != nil {
+		return fmt.Errorf("unable to flatten snapshot for block %#x: %w", block.Hash(), err)
+	}
 	return nil
 }
 
