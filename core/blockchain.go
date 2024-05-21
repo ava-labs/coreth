@@ -83,7 +83,6 @@ var (
 	blockValidationTimer        = metrics.NewRegisteredCounter("chain/block/validations/state", nil)
 	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", nil)
 
-	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", nil)
 	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", nil)
 	acceptorWorkCount            = metrics.NewRegisteredCounter("chain/acceptor/work/count", nil)
 	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("chain/block/gas/used/processed", nil)
@@ -430,9 +429,6 @@ func NewBlockChain(
 		bc.setTxIndexTail(latestStateSynced)
 	}
 
-	// Start processing accepted blocks effects in the background
-	go bc.startAcceptor()
-
 	// Start tx indexer/unindexer if required.
 	if bc.cacheConfig.TxLookupLimit != 0 {
 		bc.wg.Add(1)
@@ -626,108 +622,58 @@ func (bc *BlockChain) warmAcceptedCaches() {
 
 // startAcceptor starts processing items on the [acceptorQueue]. If a [nil]
 // object is placed on the [acceptorQueue], the [startAcceptor] will exit.
-func (bc *BlockChain) startAcceptor() {
-	log.Info("Starting Acceptor", "queue length", bc.cacheConfig.AcceptorQueueLimit)
+func (bc *BlockChain) accept(next *types.Block) error {
+	start := time.Now()
 
-	for next := range bc.acceptorQueue {
-		start := time.Now()
-		acceptorQueueGauge.Dec(1)
-
-		if err := bc.flattenSnapshot(func() error {
-			return bc.stateManager.AcceptTrie(next)
-		}, next.Hash()); err != nil {
-			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
-		}
-
-		// Update last processed and transaction lookup index
-		if err := bc.writeBlockAcceptedIndices(next); err != nil {
-			log.Crit("failed to write accepted block effects", "err", err)
-		}
-
-		// Ensure [hc.acceptedNumberCache] and [acceptedLogsCache] have latest content
-		bc.hc.acceptedNumberCache.Put(next.NumberU64(), next.Header())
-		logs := bc.collectUnflattenedLogs(next, false)
-		bc.acceptedLogsCache.Put(next.Hash(), logs)
-
-		// Update the acceptor tip before sending events to ensure that any client acting based off of
-		// the events observes the updated acceptorTip on subsequent requests
-		bc.acceptorTipLock.Lock()
-		bc.acceptorTip = next
-		bc.acceptorTipLock.Unlock()
-
-		// Update accepted feeds
-		flattenedLogs := types.FlattenLogs(logs)
-		bc.chainAcceptedFeed.Send(ChainEvent{Block: next, Hash: next.Hash(), Logs: flattenedLogs})
-		if len(flattenedLogs) > 0 {
-			bc.logsAcceptedFeed.Send(flattenedLogs)
-		}
-		if len(next.Transactions()) != 0 {
-			bc.txAcceptedFeed.Send(NewTxsEvent{next.Transactions()})
-		}
-
-		bc.acceptorWg.Done()
-
-		acceptorWorkTimer.Inc(time.Since(start).Milliseconds())
-		acceptorWorkCount.Inc(1)
-		// Note: in contrast to most accepted metrics, we increment the accepted log metrics in the acceptor queue because
-		// the logs are already processed in the acceptor queue.
-		acceptedLogsCounter.Inc(int64(len(logs)))
-	}
-}
-
-// addAcceptorQueue adds a new *types.Block to the [acceptorQueue]. This will
-// block if there are [AcceptorQueueLimit] items in [acceptorQueue].
-func (bc *BlockChain) addAcceptorQueue(b *types.Block) {
-	// We only acquire a read lock here because it is ok to add items to the
-	// [acceptorQueue] concurrently.
-	bc.acceptorClosingLock.RLock()
-	defer bc.acceptorClosingLock.RUnlock()
-
-	if bc.acceptorClosed {
-		return
+	if err := bc.flattenSnapshot(func() error {
+		return bc.stateManager.AcceptTrie(next)
+	}, next.Hash()); err != nil {
+		log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
 	}
 
-	acceptorQueueGauge.Inc(1)
-	bc.acceptorWg.Add(1)
-	bc.acceptorQueue <- b
+	// Update last processed and transaction lookup index
+	if err := bc.writeBlockAcceptedIndices(next); err != nil {
+		log.Crit("failed to write accepted block effects", "err", err)
+	}
+
+	// Ensure [hc.acceptedNumberCache] and [acceptedLogsCache] have latest content
+	bc.hc.acceptedNumberCache.Put(next.NumberU64(), next.Header())
+	logs := bc.collectUnflattenedLogs(next, false)
+	bc.acceptedLogsCache.Put(next.Hash(), logs)
+
+	// Update the acceptor tip before sending events to ensure that any client acting based off of
+	// the events observes the updated acceptorTip on subsequent requests
+	bc.acceptorTipLock.Lock()
+	bc.acceptorTip = next
+	bc.acceptorTipLock.Unlock()
+
+	// Update accepted feeds
+	flattenedLogs := types.FlattenLogs(logs)
+	bc.chainAcceptedFeed.Send(ChainEvent{Block: next, Hash: next.Hash(), Logs: flattenedLogs})
+	if len(flattenedLogs) > 0 {
+		bc.logsAcceptedFeed.Send(flattenedLogs)
+	}
+	if len(next.Transactions()) != 0 {
+		bc.txAcceptedFeed.Send(NewTxsEvent{next.Transactions()})
+	}
+
+	acceptorWorkTimer.Inc(time.Since(start).Milliseconds())
+	acceptorWorkCount.Inc(1)
+	// Note: in contrast to most accepted metrics, we increment the accepted log metrics in the acceptor queue because
+	// the logs are already processed in the acceptor queue.
+	acceptedLogsCounter.Inc(int64(len(logs)))
+	return nil
 }
 
 // DrainAcceptorQueue blocks until all items in [acceptorQueue] have been
 // processed.
 func (bc *BlockChain) DrainAcceptorQueue() {
-	bc.acceptorClosingLock.RLock()
-	defer bc.acceptorClosingLock.RUnlock()
-
-	if bc.acceptorClosed {
-		return
-	}
-
-	bc.acceptorWg.Wait()
 }
 
 // stopAcceptor sends a signal to the Acceptor to stop processing accepted
 // blocks. The Acceptor will exit once all items in [acceptorQueue] have been
 // processed.
 func (bc *BlockChain) stopAcceptor() {
-	bc.acceptorClosingLock.Lock()
-	defer bc.acceptorClosingLock.Unlock()
-
-	// If [acceptorClosed] is already false, we should just return here instead
-	// of attempting to close [acceptorQueue] more than once (will cause
-	// a panic).
-	//
-	// This typically happens when a test calls [stopAcceptor] directly (prior to
-	// shutdown) and then [stopAcceptor] is called again in shutdown.
-	if bc.acceptorClosed {
-		return
-	}
-
-	// Although nothing should be added to [acceptorQueue] after
-	// [acceptorClosed] is updated, we close the channel so the Acceptor
-	// goroutine exits.
-	bc.acceptorWg.Wait()
-	bc.acceptorClosed = true
-	close(bc.acceptorQueue)
 }
 
 func (bc *BlockChain) InitializeSnapshots() {
@@ -1137,10 +1083,9 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
-	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
-	return nil
+	return bc.accept(block)
 }
 
 func (bc *BlockChain) Reject(block *types.Block) error {

@@ -392,7 +392,7 @@ func TestRepopulateMissingTries(t *testing.T) {
 	}
 }
 
-func TestUngracefulAsyncShutdown(t *testing.T) {
+func TestUngracefulShutdown(t *testing.T) {
 	var (
 		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 			blockchain, err := createBlockChain(db, &CacheConfig{
@@ -469,23 +469,16 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 		} else {
 			// If > 3, all txs should be accessible on lookup
 			for _, tx := range block.Transactions() {
-				missingTxs = append(missingTxs, tx.Hash())
+				foundTxs = append(foundTxs, tx.Hash())
 			}
 		}
 	}
 
-	// After inserting all blocks, we should confirm that txs added after the
-	// async worker shutdown cannot be found.
+	// After inserting all blocks, we should confirm that txs added can be found.
 	for _, tx := range foundTxs {
 		txLookup := blockchain.GetTransactionLookup(tx)
 		if txLookup == nil {
 			t.Fatalf("missing transaction: %v", tx)
-		}
-	}
-	for _, tx := range missingTxs {
-		txLookup := blockchain.GetTransactionLookup(tx)
-		if txLookup != nil {
-			t.Fatalf("transaction should be missing: %v", tx)
 		}
 	}
 
