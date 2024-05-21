@@ -1129,6 +1129,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		}
 	}
 
+	// Enqueue block in the acceptor
 	bc.lastAccepted = block
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
