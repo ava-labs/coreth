@@ -280,12 +280,6 @@ type BlockChain struct {
 	// WaitGroups are used to ensure that async processes have finished during shutdown.
 	quit chan struct{}
 
-	// [acceptorTip] is the last block processed by the acceptor. This is
-	// returned as the LastAcceptedBlock() to ensure clients get only fully
-	// processed blocks. This may be equal to [lastAccepted].
-	acceptorTip     *types.Block
-	acceptorTipLock sync.Mutex
-
 	// [acceptedLogsCache] stores recently accepted logs to improve the performance of eth_getLogs.
 	acceptedLogsCache FIFOCache[common.Hash, [][]*types.Log]
 
@@ -362,13 +356,6 @@ func NewBlockChain(
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return nil, err
 	}
-
-	// After loading the last state (and reprocessing if necessary), we are
-	// guaranteed that [acceptorTip] is equal to [lastAccepted].
-	//
-	// It is critical to update this vaue before performing any state repairs so
-	// that all accepted blocks can be considered.
-	bc.acceptorTip = bc.lastAccepted
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
@@ -588,8 +575,8 @@ func (bc *BlockChain) warmAcceptedCaches() {
 	log.Info("Warmed accepted caches", "start", startIndex, "end", lastAccepted, "t", time.Since(startTime))
 }
 
-// startAcceptor starts processing items on the [acceptorQueue]. If a [nil]
-// object is placed on the [acceptorQueue], the [startAcceptor] will exit.
+// accept processes a block that has been verified and updates the snapshot
+// and indexes.
 func (bc *BlockChain) accept(next *types.Block) error {
 	start := time.Now()
 
@@ -608,12 +595,6 @@ func (bc *BlockChain) accept(next *types.Block) error {
 	bc.hc.acceptedNumberCache.Put(next.NumberU64(), next.Header())
 	logs := bc.collectUnflattenedLogs(next, false)
 	bc.acceptedLogsCache.Put(next.Hash(), logs)
-
-	// Update the acceptor tip before sending events to ensure that any client acting based off of
-	// the events observes the updated acceptorTip on subsequent requests
-	bc.acceptorTipLock.Lock()
-	bc.acceptorTip = next
-	bc.acceptorTipLock.Unlock()
 
 	// Update accepted feeds
 	flattenedLogs := types.FlattenLogs(logs)
@@ -994,10 +975,10 @@ func (bc *BlockChain) LastConsensusAcceptedBlock() *types.Block {
 //
 // Note: During initialization, [acceptorTip] is equal to [lastAccepted].
 func (bc *BlockChain) LastAcceptedBlock() *types.Block {
-	bc.acceptorTipLock.Lock()
-	defer bc.acceptorTipLock.Unlock()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 
-	return bc.acceptorTip
+	return bc.lastAccepted
 }
 
 // Accept sets a minimum height at which no reorg can pass. Additionally,
@@ -2056,7 +2037,6 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 
 	// Update all in-memory chain markers
 	bc.lastAccepted = block
-	bc.acceptorTip = block
 	bc.currentBlock.Store(block.Header())
 	bc.hc.SetCurrentHeader(block.Header())
 
