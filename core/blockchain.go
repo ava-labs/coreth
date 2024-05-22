@@ -608,8 +608,6 @@ func (bc *BlockChain) accept(next *types.Block) error {
 
 	acceptorWorkTimer.Inc(time.Since(start).Milliseconds())
 	acceptorWorkCount.Inc(1)
-	// Note: in contrast to most accepted metrics, we increment the accepted log metrics in the acceptor queue because
-	// the logs are already processed in the acceptor queue.
 	acceptedLogsCounter.Inc(int64(len(logs)))
 	return nil
 }
