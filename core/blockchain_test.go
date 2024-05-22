@@ -433,26 +433,23 @@ func TestUngracefulShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Insert three blocks into the chain and accept only the first block.
+	// Insert and accept three blocks into the chain.
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatal(err)
 	}
 
-	foundTxs := []common.Hash{}
-	missingTxs := []common.Hash{}
+	allTxs := []common.Hash{}
 	for _, block := range chain {
 		if err := blockchain.Accept(block); err != nil {
 			t.Fatal(err)
 		}
-
-		// All txs should be accessible on lookup
 		for _, tx := range block.Transactions() {
-			foundTxs = append(foundTxs, tx.Hash())
+			allTxs = append(allTxs, tx.Hash())
 		}
 	}
 
-	// After inserting all blocks, we should confirm that txs added can be found.
-	for _, tx := range foundTxs {
+	// After accepting the blocks, all txs should be queryable.
+	for _, tx := range allTxs {
 		txLookup := blockchain.GetTransactionLookup(tx)
 		if txLookup == nil {
 			t.Fatalf("missing transaction: %v", tx)
@@ -486,15 +483,13 @@ func TestUngracefulShutdown(t *testing.T) {
 	}
 
 	_, newChain, restartedChain := checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
-
-	allTxs := append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
 		if bc.snaps == nil {
 			t.Fatal("snapshot initialization failed")
 		}
 
-		// We should confirm all transactions can now be queried
+		// All transactions should still be queryable after a restart.
 		for _, tx := range allTxs {
 			txLookup := bc.GetTransactionLookup(tx)
 			if txLookup == nil {
