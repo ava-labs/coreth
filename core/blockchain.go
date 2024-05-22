@@ -491,6 +491,21 @@ func (bc *BlockChain) maintainTxIndex(headCh <-chan ChainEvent) {
 	}
 }
 
+// writeBlockAcceptedIndices writes any indices that must be persisted for accepted block.
+// This includes the following:
+// - transaction lookup indices
+// - updating the acceptor tip index
+func (bc *BlockChain) writeBlockAcceptedIndices(b *types.Block) error {
+	batch := bc.db.NewBatch()
+	if err := bc.batchBlockAcceptedIndices(batch, b); err != nil {
+		return err
+	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("%w: failed to write accepted indices entries batch", err)
+	}
+	return nil
+}
+
 func (bc *BlockChain) batchBlockAcceptedIndices(batch ethdb.Batch, b *types.Block) error {
 	if !bc.cacheConfig.SkipTxIndexing {
 		rawdb.WriteTxLookupEntriesByBlock(batch, b)
@@ -572,12 +587,8 @@ func (bc *BlockChain) accept(next *types.Block) error {
 	}
 
 	// Update last processed and transaction lookup index
-	batch := bc.db.NewBatch()
-	if err := bc.batchBlockAcceptedIndices(batch, next); err != nil {
-		return err
-	}
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("%w: failed to write accepted indices batch", err)
+	if err := bc.writeBlockAcceptedIndices(next); err != nil {
+		log.Crit("failed to write accepted block effects", "err", err)
 	}
 
 	// Ensure [hc.acceptedNumberCache] and [acceptedLogsCache] have latest content
