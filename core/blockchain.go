@@ -154,7 +154,6 @@ type CacheConfig struct {
 	TriePrefetcherParallelism       int     // Max concurrent disk reads trie prefetcher should perform at once
 	CommitInterval                  uint64  // Commit the trie every [CommitInterval] blocks.
 	Pruning                         bool    // Whether to disable trie write caching and GC altogether (archive node)
-	AcceptorQueueLimit              int     // Blocks to queue before blocking during acceptance
 	PopulateMissingTries            *uint64 // If non-nil, sets the starting height for re-generating historical tries.
 	PopulateMissingTriesParallelism int     // Number of readers to use when trying to populate missing tries.
 	AllowMissingTries               bool    // Whether to allow an archive node to run with pruning enabled
@@ -200,7 +199,6 @@ var DefaultCacheConfig = &CacheConfig{
 	TriePrefetcherParallelism: 16,
 	Pruning:                   true,
 	CommitInterval:            4096,
-	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
 	StateScheme:               rawdb.HashScheme,
@@ -274,25 +272,6 @@ type BlockChain struct {
 
 	senderCacher *TxSenderCacher
 
-	// [acceptorQueue] is a processing queue for the Acceptor. This is
-	// different than [chainAcceptedFeed], which is sent an event after an accepted
-	// block is processed (after each loop of the accepted worker). If there is a
-	// clean shutdown, all items inserted into the [acceptorQueue] will be processed.
-	acceptorQueue chan *types.Block
-
-	// [acceptorClosingLock], and [acceptorClosed] are used
-	// to synchronize the closing of the [acceptorQueue] channel.
-	//
-	// Because we can't check if a channel is closed without reading from it
-	// (which we don't want to do as we may remove a processing block), we need
-	// to use a second variable to ensure we don't close a closed channel.
-	acceptorClosingLock sync.RWMutex
-	acceptorClosed      bool
-
-	// [acceptorWg] is used to wait for the acceptorQueue to clear. This is used
-	// during shutdown and in tests.
-	acceptorWg sync.WaitGroup
-
 	// [wg] is used to wait for the async blockchain processes to finish on shutdown.
 	wg sync.WaitGroup
 
@@ -306,10 +285,6 @@ type BlockChain struct {
 	// processed blocks. This may be equal to [lastAccepted].
 	acceptorTip     *types.Block
 	acceptorTipLock sync.Mutex
-
-	// [flattenLock] prevents the [acceptor] from flattening snapshots while
-	// a block is being verified.
-	flattenLock sync.Mutex
 
 	// [acceptedLogsCache] stores recently accepted logs to improve the performance of eth_getLogs.
 	acceptedLogsCache FIFOCache[common.Hash, [][]*types.Log]
@@ -362,7 +337,6 @@ func NewBlockChain(
 		engine:            engine,
 		vmConfig:          vmConfig,
 		senderCacher:      NewTxSenderCacher(runtime.NumCPU()),
-		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
@@ -571,12 +545,6 @@ func (bc *BlockChain) flattenSnapshot(postAbortWork func() error, hash common.Ha
 		return err
 	}
 
-	// Ensure we avoid flattening the snapshot while we are processing a block, or
-	// block execution will fallback to reading from the trie (which is much
-	// slower).
-	bc.flattenLock.Lock()
-	defer bc.flattenLock.Unlock()
-
 	// Flatten the entire snap Trie to disk
 	//
 	// Note: This resumes snapshot generation.
@@ -663,17 +631,6 @@ func (bc *BlockChain) accept(next *types.Block) error {
 	// the logs are already processed in the acceptor queue.
 	acceptedLogsCounter.Inc(int64(len(logs)))
 	return nil
-}
-
-// DrainAcceptorQueue blocks until all items in [acceptorQueue] have been
-// processed.
-func (bc *BlockChain) DrainAcceptorQueue() {
-}
-
-// stopAcceptor sends a signal to the Acceptor to stop processing accepted
-// blocks. The Acceptor will exit once all items in [acceptorQueue] have been
-// processed.
-func (bc *BlockChain) stopAcceptor() {
 }
 
 func (bc *BlockChain) InitializeSnapshots() {
@@ -825,9 +782,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 
 // ValidateCanonicalChain confirms a canonical chain is well-formed.
 func (bc *BlockChain) ValidateCanonicalChain() error {
-	// Ensure all accepted blocks are fully processed
-	bc.DrainAcceptorQueue()
-
 	current := bc.CurrentBlock()
 	i := 0
 	log.Info("Beginning to validate canonical chain", "startBlock", current.Number)
@@ -940,11 +894,6 @@ func (bc *BlockChain) stopWithoutSaving() {
 
 	log.Info("Closing quit channel")
 	close(bc.quit)
-	// Wait for accepted feed to process all remaining items
-	log.Info("Stopping Acceptor")
-	start := time.Now()
-	bc.stopAcceptor()
-	log.Info("Acceptor queue drained", "t", time.Since(start))
 
 	// Stop senderCacher's goroutines
 	log.Info("Shutting down sender cacher")
@@ -1327,10 +1276,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 
 	// Instantiate the statedb to use for processing transactions
 	//
-	// NOTE: Flattening a snapshot during block execution requires fetching state
-	// entries directly from the trie (much slower).
-	bc.flattenLock.Lock()
-	defer bc.flattenLock.Unlock()
 	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
 	if err != nil {
 		return err

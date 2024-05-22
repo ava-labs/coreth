@@ -499,8 +499,6 @@ func TestCrossChainMessagestoVM(t *testing.T) {
 
 	requestingChainID := ids.ID(common.BytesToHash([]byte{1, 2, 3, 4, 5}))
 
-	// we need all items in the acceptor queue to be processed before we process a cross chain request
-	vm.blockChain.DrainAcceptorQueue()
 	err = vm.Network.CrossChainAppRequest(context.Background(), requestingChainID, 1, time.Now().Add(60*time.Second), crossChainRequest)
 	require.NoError(err)
 	require.True(calledSendCrossChainAppResponseFn, "sendCrossChainAppResponseFn was not called")
@@ -752,7 +750,6 @@ func TestIssueAtomicTxs(t *testing.T) {
 	} else if lastAcceptedID != blk.ID() {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
 	}
-	vm.blockChain.DrainAcceptorQueue()
 	filterAPI := filters.NewFilterAPI(filters.NewFilterSystem(vm.eth.APIBackend, filters.Config{
 		Timeout: 5 * time.Minute,
 	}))
