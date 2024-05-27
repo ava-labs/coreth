@@ -667,16 +667,15 @@ func (vm *VM) Initialize(
 func (vm *VM) initializeMetrics() error {
 	vm.sdkMetrics = prometheus.NewRegistry()
 	// If metrics are enabled, register the default metrics registry
-	if metrics.Enabled {
-		gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
-		if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
-			return err
-		}
-		if err := vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics); err != nil {
-			return err
-		}
+	if !metrics.Enabled {
+		return nil
 	}
-	return nil
+
+	gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
+	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
+		return err
+	}
+	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
 
 func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
@@ -809,6 +808,10 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 		return fmt.Errorf("could not create metered state: %w", err)
 	}
 	vm.State = state
+
+	if !metrics.Enabled {
+		return nil
+	}
 
 	return vm.ctx.Metrics.Register(chainStateMetricsPrefix, chainStateRegisterer)
 }
