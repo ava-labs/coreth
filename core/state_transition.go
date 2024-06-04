@@ -33,12 +33,12 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -236,8 +236,13 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
+func ApplyMessage(evm *EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDb()
+}
+
+type stateDB interface {
+	StateDB
+	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 }
 
 // StateTransition represents a state transition.
@@ -267,17 +272,17 @@ type StateTransition struct {
 	msg          *Message
 	gasRemaining uint64
 	initialGas   uint64
-	state        vm.StateDB
-	evm          *vm.EVM
+	state        stateDB
+	evm          *EVM
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *EVM, msg *Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:    gp,
 		evm:   evm,
 		msg:   msg,
-		state: evm.StateDB,
+		state: unwrapStateDB(evm.StateDB).(stateDB),
 	}
 }
 
@@ -346,12 +351,12 @@ func (st *StateTransition) preCheck() error {
 				msg.From.Hex(), codeHash)
 		}
 		// Make sure the sender is not prohibited
-		if vm.IsProhibited(msg.From) {
+		if IsProhibited(msg.From) {
 			return fmt.Errorf("%w: address %v", vmerrs.ErrAddrProhibited, msg.From)
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsApricotPhase3(st.evm.Context.Time) {
+	if st.evm.chainConfig.IsApricotPhase3(st.evm.Context.Time) {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		skipCheck := st.evm.Config.NoBaseFee && msg.GasFeeCap.BitLen() == 0 && msg.GasTipCap.BitLen() == 0
 		if !skipCheck {
@@ -441,7 +446,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	var (
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From)
-		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Time)
+		rules            = st.evm.chainConfig.Rules(st.evm.Context.BlockNumber, st.evm.Context.Time)
 		contractCreation = msg.To == nil
 	)
 
@@ -456,7 +461,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gasRemaining -= gas
 
 	// Check clause 6
-	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {
+	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(&stateDBWrapper{st.state}, msg.From, msg.Value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 
@@ -468,7 +473,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin/ApricotPhase2)
 	// - reset transient storage(eip 1153)
-	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, ActivePrecompiles(rules), msg.AccessList)
 
 	var (
 		ret   []byte
