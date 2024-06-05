@@ -187,7 +187,8 @@ type Config struct {
 	StateSyncRequestSize     uint16 `json:"state-sync-request-size"`
 
 	// Database Settings
-	InspectDatabase bool `json:"inspect-database"` // Inspects the database on startup if enabled.
+	InspectDatabase  bool   `json:"inspect-database"`   // Inspects the database on startup if enabled.
+	UseChainDatabase string `json:"use-chain-database"` // Use the chain database directory to store the database if set to "leveldb" or "pebbledb".
 
 	// SkipUpgradeCheck disables checking that upgrades must take place before the last
 	// accepted block. Skipping this check is useful when a node operator does not update

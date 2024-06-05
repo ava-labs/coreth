@@ -22,6 +22,8 @@ import (
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/ava-labs/avalanchego/database/leveldb"
+	"github.com/ava-labs/avalanchego/database/pebbledb"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
@@ -135,6 +137,7 @@ const (
 	warpSignatureCacheSize = 500
 
 	// Prefixes for metrics gatherers
+	dbMetricsPrefix         = "db"
 	ethMetricsPrefix        = "eth"
 	sdkMetricsPrefix        = "sdk"
 	chainStateMetricsPrefix = "chain_state"
@@ -316,6 +319,7 @@ type VM struct {
 	validators *p2p.Validators
 
 	// Metrics
+	dbMetrics  *prometheus.Registry
 	sdkMetrics *prometheus.Registry
 
 	bootstrapped bool
@@ -421,12 +425,19 @@ func (vm *VM) Initialize(
 
 	// Enable debug-level metrics that might impact runtime performance
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
+	if err := vm.initializeMetrics(); err != nil {
+		return err
+	}
 
 	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
+	chainDB, err := vm.chainDB(db)
+	if err != nil {
+		return err
+	}
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, db)})
+	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, chainDB)})
 	vm.db = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
@@ -501,7 +512,7 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
+	log.Info("VM lastAccepted", "hash", lastAcceptedHash, "height", lastAcceptedHeight)
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -565,10 +576,6 @@ func (vm *VM) Initialize(
 	}
 
 	vm.codec = Codec
-
-	if err := vm.initializeMetrics(); err != nil {
-		return err
-	}
 
 	// TODO: read size from settings
 	vm.mempool, err = NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
@@ -665,6 +672,7 @@ func (vm *VM) Initialize(
 }
 
 func (vm *VM) initializeMetrics() error {
+	vm.dbMetrics = prometheus.NewRegistry()
 	vm.sdkMetrics = prometheus.NewRegistry()
 	// If metrics are enabled, register the default metrics registry
 	if !metrics.Enabled {
@@ -673,6 +681,9 @@ func (vm *VM) initializeMetrics() error {
 
 	gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
+		return err
+	}
+	if err := vm.ctx.Metrics.Register(dbMetricsPrefix, vm.dbMetrics); err != nil {
 		return err
 	}
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
@@ -2048,4 +2059,31 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
+}
+
+// chainDB returns the database to be used by the chain.
+func (vm *VM) chainDB(db database.Database) (database.Database, error) {
+	switch vm.config.UseChainDatabase {
+	case leveldb.Name:
+		namespace := leveldb.Name
+		dbPath := filepath.Join(vm.ctx.ChainDataDir, leveldb.Name)
+		db, err := leveldb.New(dbPath, nil, vm.ctx.Log, namespace, vm.dbMetrics)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create %s at %s: %w", leveldb.Name, dbPath, err)
+		}
+		log.Info("Using leveldb database", "path", dbPath)
+		return db, nil
+	case pebbledb.Name:
+		namespace := pebbledb.Name
+		dbPath := filepath.Join(vm.ctx.ChainDataDir, pebbledb.Name)
+		db, err := pebbledb.New(dbPath, nil, vm.ctx.Log, namespace, vm.dbMetrics)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create %s at %s: %w", pebbledb.Name, dbPath, err)
+		}
+		log.Info("Using pebbledb database", "path", dbPath)
+		return db, nil
+	default:
+		log.Info("Using avalanchego database")
+		return db, nil
+	}
 }
