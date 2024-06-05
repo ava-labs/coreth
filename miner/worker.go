@@ -93,7 +93,7 @@ type worker struct {
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
 	txPool      TxPool
-	chain       *core.BlockChain
+	chain       BlockChain
 
 	// Feeds
 	// TODO remove since this will never be written to
@@ -107,7 +107,7 @@ type worker struct {
 	beaconRoot *common.Hash    // TODO: set to empty hash, retained for upstream compatibility and future use
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, chain *core.BlockChain, txPool TxPool, mux *event.TypeMux, clock *mockable.Clock) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, chain BlockChain, txPool TxPool, mux *event.TypeMux, clock *mockable.Clock) *worker {
 	worker := &worker{
 		config:      config,
 		chainConfig: chainConfig,
@@ -137,7 +137,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 
 	tstart := w.clock.Time()
 	timestamp := uint64(tstart.Unix())
-	parent := w.chain.CurrentBlock()
+	parent := w.chain.CurrentHeader()
 	// Note: in order to support asynchronous block production, blocks are allowed to have
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
