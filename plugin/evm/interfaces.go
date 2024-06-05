@@ -4,9 +4,12 @@
 package evm
 
 import (
-	"github.com/ava-labs/coreth/core/state"
+	"math/big"
+
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 type BlockChain interface {
@@ -21,10 +24,51 @@ type BlockChain interface {
 	GetBlock(common.Hash, uint64) *types.Block
 	DrainAcceptorQueue()
 	HasState(common.Hash) bool
-	State() (*state.StateDB, error)
-	StateAt(common.Hash) (*state.StateDB, error)
+	State() (StateDB, error)
+	StateAt(common.Hash) (StateDB, error)
 	ValidateCanonicalChain() error
 	InsertBlockManual(*types.Block, bool) error
 	GetBlockByHash(common.Hash) *types.Block
 	SetPreference(*types.Block) error
+}
+
+type ethBlockChainer struct {
+	*core.BlockChain
+}
+
+func (e *ethBlockChainer) State() (StateDB, error) {
+	return e.BlockChain.State()
+}
+
+func (e *ethBlockChainer) StateAt(root common.Hash) (StateDB, error) {
+	return e.BlockChain.StateAt(root)
+}
+
+type StateDB interface {
+	SubBalance(common.Address, *big.Int)
+	AddBalance(common.Address, *big.Int)
+	GetBalance(common.Address) *big.Int
+
+	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
+	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+
+	GetNonce(common.Address) uint64
+	SetNonce(common.Address, uint64)
+}
+
+type TxPool interface {
+	PendingSize(enforceTips bool) int
+	IteratePending(f func(tx *types.Transaction) bool)
+
+	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
+	SubscribeNewReorgEvent(ch chan<- core.NewTxPoolReorgEvent) event.Subscription
+
+	Add(txs []*types.Transaction, local bool, sync bool) []error
+	AddRemotesSync(txs []*types.Transaction) []error
+	Has(hash common.Hash) bool
+
+	SetMinFee(fee *big.Int)
+	SetGasTip(tip *big.Int)
+	GasTip() *big.Int
 }
