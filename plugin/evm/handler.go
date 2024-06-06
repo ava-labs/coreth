@@ -18,7 +18,7 @@ import (
 type GossipHandler struct {
 	vm            *VM
 	atomicMempool *Mempool
-	txPool        *txpool.TxPool
+	txPool        TxPool
 	stats         GossipStats
 }
 
