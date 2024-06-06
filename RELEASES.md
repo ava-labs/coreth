@@ -1,6 +1,6 @@
 # Release Notes
 
-## [v0.13.5](https://github.com/ava-labs/coreth/releases/tag/v0.13.4)
+## [v0.13.5](https://github.com/ava-labs/coreth/releases/tag/v0.13.5)
 - Bump AvalancheGo to v1.11.7
 - Bump golang version requirement to 1.21.11
 - Switches timestamp log back to "timestamp" (as was before v0.13.4)
