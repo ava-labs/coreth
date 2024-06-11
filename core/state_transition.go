@@ -282,7 +282,7 @@ func NewStateTransition(evm *EVM, msg *Message, gp *GasPool) *StateTransition {
 		gp:    gp,
 		evm:   evm,
 		msg:   msg,
-		state: unwrapStateDB(evm.StateDB).(stateDB),
+		state: evm.stateDB.(stateDB),
 	}
 }
 
