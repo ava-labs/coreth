@@ -321,6 +321,14 @@ func (t *Tree) Snapshots(blockHash common.Hash, limits int, nodisk bool) []Snaps
 	return ret
 }
 
+func (t *Tree) UpdateWithBlockHash(
+	root, parent common.Hash,
+	blockHash, parentBlockHash common.Hash,
+	destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte,
+) error {
+	return t.Update(blockHash, root, parentBlockHash, destructs, accounts, storage)
+}
+
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 func (t *Tree) Update(blockHash, blockRoot, parentBlockHash common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
