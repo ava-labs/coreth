@@ -48,7 +48,6 @@ import (
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/common"
@@ -57,6 +56,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -180,6 +180,7 @@ func (c *CacheConfig) triedbConfig() *trie.Config {
 		config.HashDB = &hashdb.Config{
 			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:    trieCleanCacheStatsNamespace,
+			RefCounting:    true,
 		}
 	}
 	if c.StateScheme == rawdb.PathScheme {
@@ -187,6 +188,12 @@ func (c *CacheConfig) triedbConfig() *trie.Config {
 			StateHistory:   c.StateHistory,
 			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
+		}
+	} else {
+		config.HashDB = &hashdb.Config{
+			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
+			StatsPrefix:    trieCleanCacheStatsNamespace,
+			RefCounting:    true,
 		}
 	}
 	return config
@@ -331,7 +338,6 @@ func NewBlockChain(
 	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
-	triedb.EnableRefCounting()
 
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the

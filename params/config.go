@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
+	gethparams "github.com/ethereum/go-ethereum/params"
 )
 
 const maxJSONLen = 64 * 1024 * 1024 // 64MB
@@ -1099,4 +1100,23 @@ func (c *ChainConfig) Rules(blockNum *big.Int, timestamp uint64) Rules {
 	}
 
 	return rules
+}
+
+func (rules Rules) AsGeth() gethparams.Rules {
+	return gethparams.Rules{
+		ChainID:          rules.ChainID,
+		IsHomestead:      rules.IsHomestead,
+		IsEIP150:         rules.IsEIP150,
+		IsEIP155:         rules.IsEIP155,
+		IsEIP158:         rules.IsEIP158,
+		IsByzantium:      rules.IsByzantium,
+		IsConstantinople: rules.IsConstantinople,
+		IsPetersburg:     rules.IsPetersburg,
+		IsIstanbul:       rules.IsIstanbul,
+		IsBerlin:         rules.IsApricotPhase2,
+		IsLondon:         rules.IsApricotPhase3,
+		IsMerge:          rules.IsDurango,
+		IsShanghai:       rules.IsDurango,
+		IsCancun:         rules.IsCancun,
+	}
 }

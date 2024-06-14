@@ -46,7 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	gethparams "github.com/ethereum/go-ethereum/params"
-	//"github.com/ethereum/go-ethereum/log"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -368,27 +367,7 @@ func (c *chainConfigWrapper) IsLondon(blockNum *big.Int) bool {
 }
 
 func (c *chainConfigWrapper) Rules(blockNum *big.Int, isMerge bool, timestamp uint64) gethparams.Rules {
-	rules := c.ChainConfig.Rules(blockNum, timestamp)
-	return asGethRules(rules)
-}
-
-func asGethRules(rules params.Rules) gethparams.Rules {
-	return gethparams.Rules{
-		ChainID:          rules.ChainID,
-		IsHomestead:      rules.IsHomestead,
-		IsEIP150:         rules.IsEIP150,
-		IsEIP155:         rules.IsEIP155,
-		IsEIP158:         rules.IsEIP158,
-		IsByzantium:      rules.IsByzantium,
-		IsConstantinople: rules.IsConstantinople,
-		IsPetersburg:     rules.IsPetersburg,
-		IsIstanbul:       rules.IsIstanbul,
-		IsBerlin:         rules.IsApricotPhase2,
-		IsLondon:         rules.IsApricotPhase3,
-		IsMerge:          rules.IsDurango,
-		IsShanghai:       rules.IsDurango,
-		IsCancun:         rules.IsCancun,
-	}
+	return c.ChainConfig.Rules(blockNum, timestamp).AsGeth()
 }
 
 type multicoiner struct{}

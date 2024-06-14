@@ -36,13 +36,14 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/trie/triestate"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/triedb/database"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 const (
@@ -99,6 +100,16 @@ type cache interface {
 type Config struct {
 	CleanCacheSize int    // Maximum memory allowance (in bytes) for caching clean nodes
 	StatsPrefix    string // Prefix for cache stats (disabled if empty)
+	RefCounting    bool   // Whether to enable reference counting for trie nodes
+}
+
+func (c *Config) New(diskdb ethdb.Database, resolver database.ChildResolver) database.HashBackend {
+	return New(diskdb, c, resolver)
+}
+
+func (c *Config) WithRefCounting() *Config {
+	c.RefCounting = true
+	return c
 }
 
 // Defaults is the default setting for database if it's not specified.
@@ -117,8 +128,9 @@ var Defaults = &Config{
 // The trie Database is thread-safe in its mutations and is thread-safe in providing individual,
 // independent node access.
 type Database struct {
-	diskdb   ethdb.Database // Persistent storage for matured trie nodes
-	resolver ChildResolver  // The handler to resolve children of nodes
+	diskdb      ethdb.Database // Persistent storage for matured trie nodes
+	resolver    ChildResolver  // The handler to resolve children of nodes
+	refCounting bool           // Whether to enable reference counting for trie nodes
 
 	cleans  cache                       // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
@@ -174,10 +186,11 @@ func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Databas
 		cleans = utils.NewMeteredCache(config.CleanCacheSize, config.StatsPrefix, cacheStatsUpdateFrequency)
 	}
 	return &Database{
-		diskdb:   diskdb,
-		resolver: resolver,
-		cleans:   cleans,
-		dirties:  make(map[common.Hash]*cachedNode),
+		diskdb:      diskdb,
+		resolver:    resolver,
+		refCounting: config.RefCounting,
+		cleans:      cleans,
+		dirties:     make(map[common.Hash]*cachedNode),
 	}
 }
 
@@ -637,26 +650,12 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	return db.update(root, parent, nodes)
-}
-
-// UpdateAndReferenceRoot inserts the dirty nodes in provided nodeset into
-// database and links the account trie with multiple storage tries if necessary,
-// then adds a reference [from] root to the metaroot while holding the db's lock.
-func (db *Database) UpdateAndReferenceRoot(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
-	// Ensure the parent state is present and signal a warning if not.
-	if parent != types.EmptyRootHash {
-		if blob, _ := db.node(parent); len(blob) == 0 {
-			log.Error("parent state is not present")
-		}
-	}
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
 	if err := db.update(root, parent, nodes); err != nil {
 		return err
 	}
-	db.reference(root, common.Hash{})
+	if db.refCounting {
+		db.reference(root, common.Hash{})
+	}
 	return nil
 }
 
@@ -733,7 +732,7 @@ func (db *Database) Scheme() string {
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (*reader, error) {
+func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}

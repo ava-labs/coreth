@@ -37,10 +37,10 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // noopReleaser is returned in case there is no operation expected
@@ -142,7 +142,6 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		logged time.Time
 		parent common.Hash
 	)
-	triedb.EnableRefCounting()
 	for current.NumberU64() < origin {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err

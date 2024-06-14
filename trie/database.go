@@ -21,11 +21,11 @@ import (
 
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/triedb/pathdb"
-	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/trie/triestate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // Config defines all necessary options for database.
@@ -80,11 +80,10 @@ type backend interface {
 // types of node backend as an entrypoint. It's responsible for all interactions
 // relevant with trie nodes and node preimages.
 type Database struct {
-	config      *Config        // Configuration for trie database
-	diskdb      ethdb.Database // Persistent database to store the snapshot
-	preimages   *preimageStore // The store for caching preimages
-	backend     backend        // The backend for managing trie nodes
-	refCounting bool           // True if Update should increment the root's reference count
+	config    *Config        // Configuration for trie database
+	diskdb    ethdb.Database // Persistent database to store the snapshot
+	preimages *preimageStore // The store for caching preimages
+	backend   backend        // The backend for managing trie nodes
 }
 
 // NewDatabase initializes the trie database with default settings, note
@@ -137,15 +136,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
-	hdb, ok := db.backend.(*hashdb.Database)
-	if ok && db.refCounting {
-		return hdb.UpdateAndReferenceRoot(root, parent, block, nodes, states)
-	}
 	return db.backend.Update(root, parent, block, nodes, states)
-}
-
-func (db *Database) EnableRefCounting() {
-	db.refCounting = true
 }
 
 // Commit iterates over all the children of a particular node, writes them out
