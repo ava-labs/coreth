@@ -29,11 +29,11 @@ package state
 
 import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/common"
 	gethstate "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 )
