@@ -37,10 +37,10 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -297,7 +297,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		// Write state changes to db
-		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), false)
+		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}

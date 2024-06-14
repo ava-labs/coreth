@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/testutils"
 	"github.com/ava-labs/coreth/predicate"
@@ -79,7 +79,7 @@ func TestGetBlockchainID(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, state.NewTestStateDB, tests)
+	testutils.RunPrecompileTests(t, Module, core.NewTestStateDB, tests)
 }
 
 func TestSendWarpMessage(t *testing.T) {
@@ -169,7 +169,7 @@ func TestSendWarpMessage(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, state.NewTestStateDB, tests)
+	testutils.RunPrecompileTests(t, Module, core.NewTestStateDB, tests)
 }
 
 func TestGetVerifiedWarpMessage(t *testing.T) {
@@ -187,6 +187,9 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 	require.NoError(t, err)
 	warpMessage, err := avalancheWarp.NewMessage(unsignedWarpMsg, &avalancheWarp.BitSetSignature{}) // Create message with empty signature for testing
 	require.NoError(t, err)
+	// passes 'warpMessage' through the 'access list' without proper packing
+	// which encodes the message length (required for well-formed predicate)
+	unpackedWarpMessage := utils.HashSliceToBytes(utils.BytesToHashSlice(warpMessage.Bytes()))
 	warpMessagePredicateBytes := predicate.PackPredicate(warpMessage.Bytes())
 	getVerifiedWarpMsg, err := PackGetVerifiedWarpMessage(0)
 	require.NoError(t, err)
@@ -381,12 +384,12 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
-				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessage.Bytes()})
+				state.SetPredicateStorageSlots(ContractAddress, [][]byte{unpackedWarpMessage})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + GasCostPerWarpMessageBytes*uint64(len(warpMessage.Bytes())),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + GasCostPerWarpMessageBytes*uint64(len(unpackedWarpMessage)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidPredicateBytes.Error(),
 		},
@@ -454,7 +457,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, state.NewTestStateDB, tests)
+	testutils.RunPrecompileTests(t, Module, core.NewTestStateDB, tests)
 }
 
 func TestGetVerifiedWarpBlockHash(t *testing.T) {
@@ -468,6 +471,9 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 	require.NoError(t, err)
 	warpMessage, err := avalancheWarp.NewMessage(unsignedWarpMsg, &avalancheWarp.BitSetSignature{}) // Create message with empty signature for testing
 	require.NoError(t, err)
+	// passes 'warpMessage' through the 'access list' without proper packing
+	// which encodes the message length (required for well-formed predicate)
+	unpackedWarpMessage := utils.HashSliceToBytes(utils.BytesToHashSlice(warpMessage.Bytes()))
 	warpMessagePredicateBytes := predicate.PackPredicate(warpMessage.Bytes())
 	getVerifiedWarpBlockHash, err := PackGetVerifiedWarpBlockHash(0)
 	require.NoError(t, err)
@@ -659,12 +665,12 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
-				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessage.Bytes()})
+				state.SetPredicateStorageSlots(ContractAddress, [][]byte{unpackedWarpMessage})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + GasCostPerWarpMessageBytes*uint64(len(warpMessage.Bytes())),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + GasCostPerWarpMessageBytes*uint64(len(unpackedWarpMessage)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidPredicateBytes.Error(),
 		},
@@ -732,7 +738,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, state.NewTestStateDB, tests)
+	testutils.RunPrecompileTests(t, Module, core.NewTestStateDB, tests)
 }
 
 func TestPackEvents(t *testing.T) {

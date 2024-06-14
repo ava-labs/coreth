@@ -27,7 +27,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
@@ -44,10 +43,10 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	warpValidators "github.com/ava-labs/coreth/warp/validators"
+	"github.com/ethereum/go-ethereum/trie"
 
 	// Force-load tracer engine to trigger registration
 	//
@@ -258,9 +257,9 @@ type VM struct {
 	ethConfig   ethconfig.Config
 
 	// pointers to eth constructs
-	eth        *eth.Ethereum
-	txPool     *txpool.TxPool
-	blockChain *core.BlockChain
+	eth        Backend
+	txPool     TxPool
+	blockChain BlockChain
 	miner      *miner.Miner
 
 	// [db] is the VM's current database managed by ChainState
@@ -689,7 +688,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if err != nil {
 		return err
 	}
-	vm.eth, err = eth.New(
+	eth, err := eth.New(
 		node,
 		&vm.ethConfig,
 		vm.createConsensusCallbacks(),
@@ -702,6 +701,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if err != nil {
 		return err
 	}
+	vm.eth = &ethBackender{eth}
 	vm.eth.SetEtherbase(constants.BlackholeAddr)
 	vm.txPool = vm.eth.TxPool()
 	vm.blockChain = vm.eth.BlockChain()
@@ -819,7 +819,9 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 func (vm *VM) createConsensusCallbacks() dummy.ConsensusCallbacks {
 	return dummy.ConsensusCallbacks{
 		OnFinalizeAndAssemble: vm.onFinalizeAndAssemble,
-		OnExtraStateChange:    vm.onExtraStateChange,
+		OnExtraStateChange: func(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
+			return vm.onExtraStateChange(block, state)
+		},
 	}
 }
 
@@ -977,7 +979,7 @@ func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, 
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, state StateDB) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
@@ -1260,7 +1262,7 @@ func (vm *VM) setAppRequestHandlers() {
 		},
 	)
 	networkHandler := newNetworkHandler(
-		vm.blockChain,
+		nil, // XXX: don't care about state sync server for now (was vm.blockChain)
 		vm.chaindb,
 		evmTrieDB,
 		vm.atomicTrie.TrieDB(),
@@ -1273,7 +1275,8 @@ func (vm *VM) setAppRequestHandlers() {
 // setCrossChainAppRequestHandler sets the request handlers for the VM to serve cross chain
 // requests.
 func (vm *VM) setCrossChainAppRequestHandler() {
-	crossChainRequestHandler := message.NewCrossChainHandler(vm.eth.APIBackend, message.CrossChainCodec)
+	// XXX: don't care about cross chain for now
+	crossChainRequestHandler := message.NewCrossChainHandler(nil, message.CrossChainCodec)
 	vm.Network.SetCrossChainRequestHandler(crossChainRequestHandler)
 }
 
@@ -1644,7 +1647,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state StateDB, rules params.Rules) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1922,7 +1925,7 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 
 // currentRules returns the chain rules for the current block.
 func (vm *VM) currentRules() params.Rules {
-	header := vm.eth.APIBackend.CurrentHeader()
+	header := vm.blockChain.CurrentHeader()
 	return vm.chainConfig.Rules(header.Number, header.Time)
 }
 
@@ -1954,7 +1957,7 @@ func (vm *VM) startContinuousProfiler() {
 
 func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
 	// Get the base fee to use
-	baseFee, err := vm.eth.APIBackend.EstimateBaseFee(ctx)
+	baseFee, err := vm.eth.EstimateBaseFee(ctx)
 	if err != nil {
 		return nil, err
 	}

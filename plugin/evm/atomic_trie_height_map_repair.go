@@ -11,8 +11,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 const (
