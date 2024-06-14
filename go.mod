@@ -13,7 +13,6 @@ require (
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
-	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.2
@@ -70,6 +69,7 @@ require (
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127 // indirect
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
+	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -139,6 +139,6 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/darioush/go-ethereum v1.13.8-coreth-001.0.20240614002909-63388325b08f
+replace github.com/ethereum/go-ethereum => github.com/darioush/go-ethereum v1.13.8-coreth-002
 
 // replace github.com/ethereum/go-ethereum => ../go-ethereum
