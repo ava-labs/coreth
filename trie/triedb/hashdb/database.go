@@ -108,8 +108,9 @@ func (c *Config) New(diskdb ethdb.Database, resolver database.ChildResolver) dat
 }
 
 func (c *Config) WithRefCounting() *Config {
-	c.RefCounting = true
-	return c
+	copy := *c
+	copy.RefCounting = true
+	return &copy
 }
 
 // Defaults is the default setting for database if it's not specified.
