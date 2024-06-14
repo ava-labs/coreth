@@ -57,7 +57,8 @@ type (
 // modifications needed for this VM.
 type StateDB struct {
 	*gethstate.StateDB
-	db Database
+	db         Database
+	accessList types.AccessList
 }
 
 // New creates a new state from a given trie.
@@ -102,13 +103,18 @@ func (s *StateDB) AddLog(addr common.Address, topics []common.Hash, data []byte,
 }
 
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	s.accessList = list
 	s.StateDB.Prepare(rules.AsGeth(), sender, coinbase, dst, precompiles, list)
 }
 
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {
-	return &StateDB{StateDB: s.StateDB.Copy()}
+	return &StateDB{
+		StateDB:    s.StateDB.Copy(),
+		db:         s.db,
+		accessList: s.accessList, // TODO: This is a shallow copy. Is this okay?
+	}
 }
 
 func (s *StateDB) Database() Database {
@@ -127,4 +133,13 @@ func (s *StateDB) GetState(addr common.Address, key common.Hash) common.Hash {
 func (s *StateDB) SetState(addr common.Address, key common.Hash, value common.Hash) {
 	gethstate.NormalizeStateKey(&key)
 	s.StateDB.SetState(addr, key, value)
+}
+
+// Warning: Test Only
+func (s *StateDB) SetAccessList(list types.AccessList) {
+	s.accessList = list
+}
+
+func (s *StateDB) AccessList() types.AccessList {
+	return s.accessList
 }
