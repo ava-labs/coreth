@@ -49,7 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var _ BlockChain = (*blockChain)(nil)
@@ -101,9 +100,7 @@ type blockChain struct {
 	chainmu sync.RWMutex
 
 	db            ethdb.Database
-	triedb        *trie.Database
-	state         state.Database
-	stateManager  TrieWriter
+	state         committableStateDB
 	senderCacher  *core.TxSenderCacher
 	hc            *core.HeaderChain
 	blockCache    *lru.Cache[common.Hash, *types.Block]     // Cache for the most recent entire blocks
@@ -127,7 +124,7 @@ type blockChain struct {
 
 func NewBlockChain(
 	chaindb ethdb.Database,
-	triedb *trie.Database,
+	committable committableStateDB,
 	cacheConfig *core.CacheConfig,
 	genesis *core.Genesis,
 	engine consensus.Engine,
@@ -144,15 +141,15 @@ func NewBlockChain(
 	// Note: In go-ethereum, the code rewinds the chain on an incompatible config upgrade.
 	// We don't do this and expect the node operator to always update their node's configuration
 	// before network upgrades take effect.
-	config, _, err := core.SetupGenesisBlock(
-		chaindb, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible,
+	config, _, err := core.SetupGenesisBlockWithCommitable(
+		chaindb, committable, genesis, lastAcceptedHash, skipChainConfigCheckCompatible,
 	)
 	if err != nil {
 		return nil, err
 	}
 	bc := &blockChain{
 		db:            chaindb,
-		triedb:        triedb,
+		state:         committable,
 		config:        config,
 		cacheConfig:   cacheConfig,
 		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
@@ -161,7 +158,6 @@ func NewBlockChain(
 		vmConfig:      vmConfig,
 		senderCacher:  core.NewTxSenderCacher(runtime.NumCPU()),
 	}
-	bc.state = state.NewDatabaseWithNodeDB(chaindb, triedb)
 	bc.validator = core.NewBlockValidator(config, bc, engine)
 	bc.processor = core.NewStateProcessor(config, bc, engine)
 
@@ -173,9 +169,6 @@ func NewBlockChain(
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-
-	// Create the state manager
-	bc.stateManager = NewStateManager(bc.triedb)
 
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
@@ -194,22 +187,8 @@ func NewBlockChain(
 func (bc *blockChain) Stop() {
 	bc.senderCacher.Shutdown()
 	bc.scope.Close()
-
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		// Ensure that the in-memory trie nodes are journaled to disk properly.
-		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
-			log.Info("Failed to journal in-memory trie nodes", "err", err)
-		}
-	}
-	log.Info("Shutting down state manager")
-	start := time.Now()
-	if err := bc.stateManager.Shutdown(); err != nil {
-		log.Error("Failed to Shutdown state manager", "err", err)
-	}
-	log.Info("State manager shut down", "t", time.Since(start))
-	// Close the trie database, release all the held resources as the last step.
-	if err := bc.triedb.Close(); err != nil {
-		log.Error("Failed to close trie database", "err", err)
+	if err := bc.state.Close(bc.CurrentBlock().Root); err != nil {
+		log.Error("Failed to close state database", "err", err)
 	}
 }
 
@@ -403,14 +382,6 @@ func (bc *blockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
-	// Note: if InsertTrie must be the last step in verification that can return an error.
-	// This allows [stateManager] to assume that if it inserts a trie without returning an
-	// error then the block has passed verification and either AcceptTrie/RejectTrie will
-	// eventually be called on [root] unless a fatal error occurs. It does not assume that
-	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
-	if err := bc.stateManager.InsertTrie(block); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -483,7 +454,7 @@ func (bc *blockChain) Accept(block *types.Block) error {
 func (bc *blockChain) accept(next *types.Block) error {
 	start := time.Now()
 
-	if err := bc.stateManager.AcceptTrie(next); err != nil {
+	if err := bc.state.Commit(next.Root(), false); err != nil {
 		return fmt.Errorf("unable to accept trie: %w", err)
 	}
 
@@ -512,11 +483,6 @@ func (bc *blockChain) accept(next *types.Block) error {
 func (bc *blockChain) Reject(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
-
-	// Reject Trie
-	if err := bc.stateManager.RejectTrie(block); err != nil {
-		return fmt.Errorf("unable to reject trie: %w", err)
-	}
 
 	// Remove the block since its data is no longer needed
 	batch := bc.db.NewBatch()
