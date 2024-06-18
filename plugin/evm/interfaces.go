@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/v2/chain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -27,7 +28,6 @@ type BlockChain interface {
 	GetBlockByNumber(uint64) *types.Block
 	InitializeSnapshots()
 	HasBlock(common.Hash, uint64) bool
-	GetBlock(common.Hash, uint64) *types.Block
 	DrainAcceptorQueue()
 	HasState(common.Hash) bool
 	State() (StateDB, error)
@@ -80,9 +80,7 @@ type TxPool interface {
 	GasTip() *big.Int
 }
 
-type Backend interface {
-	BlockChain() BlockChain
-	TxPool() TxPool
+type backend interface {
 	Miner() *miner.Miner
 	EstimateBaseFee(context.Context) (*big.Int, error)
 	Start()
@@ -90,6 +88,11 @@ type Backend interface {
 	SetEtherbase(common.Address)
 	ResetToStateSyncedBlock(*types.Block) error
 	APIs() []rpc.API
+}
+type Backend interface {
+	backend
+	BlockChain() BlockChain
+	TxPool() TxPool
 }
 
 type ethBackender struct {
@@ -129,4 +132,34 @@ func (e *ethBackender) ResetToStateSyncedBlock(block *types.Block) error {
 
 func (e *ethBackender) APIs() []rpc.API {
 	return nil // deliberately turn off the APIs
+}
+
+type v2Backend interface {
+	backend
+	BlockChain() chain.BlockChain
+	TxPool() chain.TxPool
+}
+
+type v2Backender struct {
+	v2Backend
+}
+
+func (v *v2Backender) BlockChain() BlockChain {
+	return &v2BlockChainer{v.v2Backend.BlockChain()}
+}
+
+func (v *v2Backender) TxPool() TxPool {
+	return v.v2Backend.TxPool()
+}
+
+type v2BlockChainer struct {
+	chain.BlockChain
+}
+
+func (v *v2BlockChainer) State() (StateDB, error) {
+	return v.BlockChain.State()
+}
+
+func (v *v2BlockChainer) StateAt(root common.Hash) (StateDB, error) {
+	return v.BlockChain.StateAt(root)
 }
