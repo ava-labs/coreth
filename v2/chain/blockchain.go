@@ -92,6 +92,11 @@ var (
 	errInvalidNewChain         = errors.New("invalid new chain")
 )
 
+const (
+	blockCacheLimit    = 256
+	receiptsCacheLimit = 32
+)
+
 type blockChain struct {
 	chainmu sync.RWMutex
 
@@ -128,6 +133,7 @@ func NewBlockChain(
 	engine consensus.Engine,
 	vmConfig vm.Config,
 	lastAcceptedHash common.Hash,
+	skipChainConfigCheckCompatible bool,
 ) (*blockChain, error) {
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified
@@ -138,18 +144,22 @@ func NewBlockChain(
 	// Note: In go-ethereum, the code rewinds the chain on an incompatible config upgrade.
 	// We don't do this and expect the node operator to always update their node's configuration
 	// before network upgrades take effect.
-	config, _, err := core.SetupGenesisBlock(chaindb, triedb, genesis, lastAcceptedHash, false)
+	config, _, err := core.SetupGenesisBlock(
+		chaindb, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible,
+	)
 	if err != nil {
 		return nil, err
 	}
 	bc := &blockChain{
-		db:           chaindb,
-		triedb:       triedb,
-		config:       config,
-		cacheConfig:  cacheConfig,
-		engine:       engine,
-		vmConfig:     vmConfig,
-		senderCacher: core.NewTxSenderCacher(runtime.NumCPU()),
+		db:            chaindb,
+		triedb:        triedb,
+		config:        config,
+		cacheConfig:   cacheConfig,
+		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		engine:        engine,
+		vmConfig:      vmConfig,
+		senderCacher:  core.NewTxSenderCacher(runtime.NumCPU()),
 	}
 	bc.state = state.NewDatabaseWithNodeDB(chaindb, triedb)
 	bc.validator = core.NewBlockValidator(config, bc, engine)
@@ -647,8 +657,16 @@ func (bc *blockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState is necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	// return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
-	return fmt.Errorf("reprocessState not implemented: %x", lastAcceptedHash)
+	return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
+}
+
+func (bc *blockChain) reprocessState(current *types.Block, reexec uint64) error {
+	// If the state is already available, skip re-processing.
+	if bc.HasState(current.Root()) {
+		log.Info("Skipping state reprocessing", "root", current.Root())
+		return nil
+	}
+	return fmt.Errorf("reprocessState not implemented: %x", bc.lastAccepted.Hash())
 }
 
 func (bc *blockChain) loadGenesisState() error {

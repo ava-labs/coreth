@@ -78,6 +78,7 @@ func (vm *VM) createBackendV2(lastAcceptedHash common.Hash) (Backend, error) {
 		engine,
 		vmConfig,
 		lastAcceptedHash,
+		vm.config.SkipUpgradeCheck,
 	)
 	if err != nil {
 		return nil, err
