@@ -28,12 +28,10 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/metrics"
 	corethPrometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
-	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -678,30 +676,11 @@ func (vm *VM) initializeMetrics() error {
 }
 
 func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
-	nodecfg := &node.Config{
-		CorethVersion:         Version,
-		KeyStoreDir:           vm.config.KeystoreDirectory,
-		ExternalSigner:        vm.config.KeystoreExternalSigner,
-		InsecureUnlockAllowed: vm.config.KeystoreInsecureUnlockAllowed,
-	}
-	node, err := node.New(nodecfg)
+	eth, err := vm.createBackend(lastAcceptedHash)
 	if err != nil {
 		return err
 	}
-	eth, err := eth.New(
-		node,
-		&vm.ethConfig,
-		vm.createConsensusCallbacks(),
-		&EthPushGossiper{vm: vm},
-		vm.chaindb,
-		vm.config.EthBackendSettings(),
-		lastAcceptedHash,
-		&vm.clock,
-	)
-	if err != nil {
-		return err
-	}
-	vm.eth = &ethBackender{eth}
+	vm.eth = eth
 	vm.eth.SetEtherbase(constants.BlackholeAddr)
 	vm.txPool = vm.eth.TxPool()
 	vm.blockChain = vm.eth.BlockChain()
