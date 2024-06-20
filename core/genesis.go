@@ -192,7 +192,7 @@ func SetupGenesisBlockWithCommitable(
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		log.Info("Writing genesis to database")
-		block, err := genesis.commit(db, committable)
+		block, err := genesis.commit(db, committable, true)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -209,8 +209,10 @@ func SetupGenesisBlockWithCommitable(
 		if hash != stored {
 			return genesis.Config, common.Hash{}, &GenesisMismatchError{stored, hash}
 		}
-		_, err := genesis.commit(db, committable)
-		return genesis.Config, common.Hash{}, err
+		_, err := genesis.commit(db, committable, false)
+		if err != nil {
+			return genesis.Config, common.Hash{}, err
+		}
 	}
 	// Check whether the genesis block is already written.
 	hash := genesis.ToBlock().Hash()
@@ -370,10 +372,10 @@ func (g *Genesis) toBlock(db ethdb.Database, committable commitableStateDB) *typ
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block, error) {
 	committable := AsCommittable(db, triedb)
-	return g.commit(db, committable)
+	return g.commit(db, committable, true)
 }
 
-func (g *Genesis) commit(db ethdb.Database, committable commitableStateDB) (*types.Block, error) {
+func (g *Genesis) commit(db ethdb.Database, committable commitableStateDB, writeChainConfig bool) (*types.Block, error) {
 	block := g.toBlock(db, committable)
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
@@ -390,7 +392,9 @@ func (g *Genesis) commit(db ethdb.Database, committable commitableStateDB) (*typ
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
-	rawdb.WriteChainConfig(db, block.Hash(), config)
+	if writeChainConfig {
+		rawdb.WriteChainConfig(db, block.Hash(), config)
+	}
 	return block, nil
 }
 
