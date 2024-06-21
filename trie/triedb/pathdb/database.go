@@ -274,6 +274,12 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
+
+	layer := db.tree.get(root)
+	if _, ok := layer.(*diskLayer); ok {
+		log.Warn("Reject commit operation on disk layer")
+		return nil
+	}
 	return db.tree.cap(root, db.config.CommitLag)
 }
 
