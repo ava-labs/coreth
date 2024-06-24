@@ -43,13 +43,13 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var _ BlockChain = (*blockChain)(nil)
@@ -618,7 +618,7 @@ func (bc *blockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState is necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	reprocessBlocks := uint64(128)
+	reprocessBlocks := uint64(2048) // XXX: just testing
 	if err := bc.reprocessState(bc.lastAccepted, reprocessBlocks); err != nil {
 		return fmt.Errorf("failed to reprocess state for last accepted block: %w", err)
 	}
@@ -655,6 +655,7 @@ func (bc *blockChain) reprocessState(current *types.Block, reexec uint64) error 
 			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
 		}
 		current = parent
+		log.Info("searching for historical state", "block", current.NumberU64(), "origin", origin, "root", current.Root())
 		_, err = bc.state.OpenTrie(current.Root())
 		if err == nil {
 			break
