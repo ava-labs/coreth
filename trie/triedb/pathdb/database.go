@@ -219,8 +219,9 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// 	}
 	// }
 	bottom := db.tree.bottom().root
+	stateID := db.tree.bottom().stateID()
 	layers := db.tree.len()
-	log.Warn("Path-based state scheme is an experimental feature", "bottom", bottom, "layers", layers)
+	log.Warn("Path-based state scheme is an experimental feature", "bottom", bottom, "stateID", stateID, "layers", layers)
 	return db
 }
 
