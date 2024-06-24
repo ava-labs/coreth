@@ -340,9 +340,6 @@ type VM struct {
 	atomicTxPullGossiper  gossip.Gossiper
 }
 
-// Codec implements the secp256k1fx interface
-func (vm *VM) Codec() codec.Manager { return vm.codec }
-
 // CodecRegistry implements the secp256k1fx interface
 func (vm *VM) CodecRegistry() codec.Registry { return vm.baseCodec }
 
