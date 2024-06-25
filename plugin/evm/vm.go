@@ -103,6 +103,7 @@ var (
 	_ block.BuildBlockWithContextChainVM = &VM{}
 	_ block.StateSyncableVM              = &VM{}
 	_ statesyncclient.EthBlockParser     = &VM{}
+	_ secp256k1fx.VM                     = &VM{}
 )
 
 const (
