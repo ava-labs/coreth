@@ -81,7 +81,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
-	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
@@ -583,7 +582,7 @@ func (vm *VM) Initialize(
 		}
 	}
 
-	vm.VM, err = atx.NewVM(vm.ctx, vm, vm.codec, &vm.clock, vm.chainConfig, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.VM, err = atx.NewVM(vm.ctx, vm, vm.codec, &vm.clock, vm.chainConfig, vm.sdkMetrics, defaultMempoolSize)
 	if err != nil {
 		return err
 	}
@@ -1281,105 +1280,6 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 		return ids.ID{}, ids.ShortID{}, err
 	}
 	return chainID, addr, nil
-}
-
-// verifyTxAtTip verifies that [tx] is valid to be issued on top of the currently preferred block
-func (vm *VM) verifyTxAtTip(tx *Tx) error {
-	if txByteLen := len(tx.SignedBytes()); txByteLen > targetAtomicTxsSize {
-		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", txByteLen, targetAtomicTxsSize)
-	}
-	gasUsed, err := tx.GasUsed(true)
-	if err != nil {
-		return err
-	}
-	if new(big.Int).SetUint64(gasUsed).Cmp(params.AtomicGasLimit) > 0 {
-		return fmt.Errorf("tx gas usage (%d) exceeds atomic gas limit (%d)", gasUsed, params.AtomicGasLimit.Uint64())
-	}
-
-	// Note: we fetch the current block and then the state at that block instead of the current state directly
-	// since we need the header of the current block below.
-	preferredBlock := vm.blockChain.CurrentBlock()
-	preferredState, err := vm.blockChain.StateAt(preferredBlock.Root)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve block state at tip while verifying atomic tx: %w", err)
-	}
-	rules := vm.currentRules()
-	parentHeader := preferredBlock
-	var nextBaseFee *big.Int
-	timestamp := uint64(vm.clock.Time().Unix())
-	if vm.chainConfig.IsApricotPhase3(timestamp) {
-		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
-		if err != nil {
-			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
-			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
-		}
-	}
-
-	// We don’t need to revert the state here in case verifyTx errors, because
-	// [preferredState] is thrown away either way.
-	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
-}
-
-// verifyTx verifies that [tx] is valid to be issued into a block with parent block [parentHash]
-// and validated at [state] using [rules] as the current rule set.
-// Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
-// for reverting to the correct snapshot after calling this function. If this function is called with a
-// throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
-	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
-	if err != nil {
-		return fmt.Errorf("failed to get parent block: %w", err)
-	}
-	parent, ok := parentIntf.(*Block)
-	if !ok {
-		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
-	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(vm.VM, tx, parent.ID(), baseFee, rules); err != nil {
-		return err
-	}
-	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
-}
-
-// verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
-// using [rules] as the current rule set.
-func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
-	// Ensure that the parent was verified and inserted correctly.
-	if !vm.blockChain.HasBlock(parentHash, height-1) {
-		return errRejectedParent
-	}
-
-	ancestorID := ids.ID(parentHash)
-	// If the ancestor is unknown, then the parent failed verification when
-	// it was called.
-	// If the ancestor is rejected, then this block shouldn't be inserted
-	// into the canonical chain because the parent will be missing.
-	ancestorInf, err := vm.GetBlockInternal(context.TODO(), ancestorID)
-	if err != nil {
-		return errRejectedParent
-	}
-	if blkStatus := ancestorInf.Status(); blkStatus == choices.Unknown || blkStatus == choices.Rejected {
-		return errRejectedParent
-	}
-	ancestor, ok := ancestorInf.(*Block)
-	if !ok {
-		return fmt.Errorf("expected parent block %s, to be *Block but is %T", ancestor.ID(), ancestorInf)
-	}
-
-	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
-	// a processing ancestor block.
-	inputs := set.Set[ids.ID]{}
-	for _, atomicTx := range txs {
-		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.SemanticVerify(vm.VM, atomicTx, ancestor.ID(), baseFee, rules); err != nil {
-			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
-		}
-		txInputs := utx.InputUTXOs()
-		if inputs.Overlaps(txInputs) {
-			return errConflictingAtomicInputs
-		}
-		inputs.Union(txInputs)
-	}
-	return nil
 }
 
 func (vm *VM) GetBlockAndAtomicTxs(blkID ids.ID) ([]*Tx, choices.Status, ids.ID, error) {

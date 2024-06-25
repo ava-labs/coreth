@@ -27,6 +27,7 @@ type StateDB interface {
 
 type BlockChain interface {
 	State() (StateDB, error)
+	StateAt(root common.Hash) (StateDB, error)
 	CurrentHeader() *types.Header
 	HasBlock(common.Hash, uint64) bool
 }

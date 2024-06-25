@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -86,7 +87,6 @@ func NewVM(
 	chainConfig *params.ChainConfig,
 	sdkMetrics prometheus.Registerer,
 	mempoolSize int,
-	verify func(*Tx) error,
 ) (*VM, error) {
 	vm := &VM{
 		ctx:         ctx,
@@ -108,7 +108,7 @@ func NewVM(
 
 	// TODO: read size from settings
 	var err error
-	vm.mempool, err = NewMempool(ctx, sdkMetrics, mempoolSize, verify)
+	vm.mempool, err = NewMempool(ctx, sdkMetrics, mempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -720,4 +720,41 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 		inputs.Union(txInputs)
 	}
 	return nil
+}
+
+// verifyTxAtTip verifies that [tx] is valid to be issued on top of the currently preferred block
+func (vm *VM) verifyTxAtTip(tx *Tx) error {
+	if txByteLen := len(tx.SignedBytes()); txByteLen > targetAtomicTxsSize {
+		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", txByteLen, targetAtomicTxsSize)
+	}
+	gasUsed, err := tx.GasUsed(true)
+	if err != nil {
+		return err
+	}
+	if new(big.Int).SetUint64(gasUsed).Cmp(params.AtomicGasLimit) > 0 {
+		return fmt.Errorf("tx gas usage (%d) exceeds atomic gas limit (%d)", gasUsed, params.AtomicGasLimit.Uint64())
+	}
+
+	// Note: we fetch the current block and then the state at that block instead of the current state directly
+	// since we need the header of the current block below.
+	preferredBlock := vm.blockChain.CurrentHeader()
+	preferredState, err := vm.blockChain.StateAt(preferredBlock.Root)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve block state at tip while verifying atomic tx: %w", err)
+	}
+	rules := vm.currentRules()
+	parentHeader := preferredBlock
+	var nextBaseFee *big.Int
+	timestamp := uint64(vm.clock.Time().Unix())
+	if vm.chainConfig.IsApricotPhase3(timestamp) {
+		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+		if err != nil {
+			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
+			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
+		}
+	}
+
+	// We don’t need to revert the state here in case verifyTx errors, because
+	// [preferredState] is thrown away either way.
+	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
 }
