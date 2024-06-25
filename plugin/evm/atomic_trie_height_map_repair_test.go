@@ -53,7 +53,7 @@ func (test testAtomicTrieRepairHeightMap) run(t *testing.T) {
 
 	heightMap := make(map[uint64]common.Hash)
 	for height := uint64(1); height <= test.lastAccepted; height++ {
-		atomicRequests := testDataImportTx().mustAtomicOps()
+		atomicRequests := mustAtomicOps(testDataImportTx())
 		if test.skipAtomicTxs(height) {
 			atomicRequests = nil
 		}
