@@ -7,10 +7,12 @@ import (
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
+	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
@@ -44,6 +46,7 @@ type VM struct {
 	ctx          *snow.Context
 	bootstrapped bool
 	codec        codec.Manager
+	baseCodec    codec.Registry
 	clock        *mockable.Clock
 	blockChain   BlockChain
 	chainConfig  *params.ChainConfig
@@ -67,6 +70,12 @@ func NewVM(ctx *snow.Context, bVM BlockGetter, codec codec.Manager, clock *mocka
 			Size: secpCacheSize,
 		},
 	}
+	// The Codec explicitly registers the types it requires from the secp256k1fx
+	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
+	// interface. The fx will register all of its types, which can be safely
+	// ignored by the VM's codec.
+	vm.baseCodec = linearcodec.NewDefault()
+
 	return vm, vm.fx.Initialize(bVM)
 }
 
@@ -352,3 +361,12 @@ func mergeAtomicOpsToMap(output map[ids.ID]*atomic.Requests, chainID ids.ID, req
 		output[chainID] = requests
 	}
 }
+
+// CodecRegistry implements the secp256k1fx interface
+func (vm *VM) CodecRegistry() codec.Registry { return vm.baseCodec }
+
+// Clock implements the secp256k1fx interface
+func (vm *VM) Clock() *mockable.Clock { return vm.clock }
+
+// Logger implements the secp256k1fx interface
+func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }

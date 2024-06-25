@@ -70,7 +70,6 @@ import (
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
 	"github.com/ava-labs/avalanchego/codec"
-	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -80,7 +79,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
-	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -289,10 +287,9 @@ type VM struct {
 
 	builder *blockBuilder
 
-	baseCodec codec.Registry
-	codec     codec.Manager
-	clock     mockable.Clock
-	mempool   *Mempool
+	codec   codec.Manager
+	clock   mockable.Clock
+	mempool *Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -350,18 +347,6 @@ var (
 var (
 	CalculateDynamicFee = atx.CalculateDynamicFee
 )
-
-// Codec implements the secp256k1fx interface
-func (vm *VM) Codec() codec.Manager { return vm.codec }
-
-// CodecRegistry implements the secp256k1fx interface
-func (vm *VM) CodecRegistry() codec.Registry { return vm.baseCodec }
-
-// Clock implements the secp256k1fx interface
-func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
-
-// Logger implements the secp256k1fx interface
-func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
 /*
  ******************************************************************************
@@ -646,12 +631,6 @@ func (vm *VM) Initialize(
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
-
-	// The Codec explicitly registers the types it requires from the secp256k1fx
-	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
-	// interface. The fx will register all of its types, which can be safely
-	// ignored by the VM's codec.
-	vm.baseCodec = linearcodec.NewDefault()
 
 	vm.VM, err = atx.NewVM(vm.ctx, vm, vm.codec, &vm.clock, &atxChain{vm.blockChain}, vm.chainConfig)
 	if err != nil {
