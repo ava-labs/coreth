@@ -630,14 +630,6 @@ func (vm *VM) OnExtraStateChange(block *types.Block, state StateDB) (*big.Int, *
 				return nil, nil, err
 			}
 		}
-		// Update the atomic backend with [txs] from this block.
-		//
-		// Note: The atomic trie canonically contains the duplicate operations
-		// from any bonus blocks.
-		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	// If there are no transactions, we can return early.

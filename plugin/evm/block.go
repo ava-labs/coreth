@@ -363,14 +363,14 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 	}
 
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if err != nil || !writes {
-		// if an error occurred inserting the block into the chain
-		// or if we are not pinning to memory, unpin the atomic trie
-		// changes from memory (if they were pinned).
-		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
-			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
-		}
+	if err != nil {
+		return err
 	}
+
+	if !writes {
+		return nil
+	}
+	_, err = b.vm.atomicBackend.InsertTxs(b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.ethBlock.ParentHash(), b.atomicTxs)
 	return err
 }
 
