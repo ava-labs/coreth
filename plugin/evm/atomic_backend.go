@@ -15,12 +15,15 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/plugin/atx"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 var _ AtomicBackend = &atomicBackend{}
+
+var mergeAtomicOps = atx.MergeAtomicOps
 
 // AtomicBackend abstracts the verification and processing
 // of atomic transactions

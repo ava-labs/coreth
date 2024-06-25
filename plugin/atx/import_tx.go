@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -178,7 +177,7 @@ func (utx *UnsignedImportTx) Burned(assetID ids.ID) (uint64, error) {
 func (utx *UnsignedImportTx) SemanticVerify(
 	vm *VM,
 	stx *Tx,
-	parent *Block,
+	parent ids.ID,
 	baseFee *big.Int,
 	rules params.Rules,
 ) error {
@@ -274,8 +273,8 @@ func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 	return utx.SourceChain, &atomic.Requests{RemoveRequests: utxoIDs}, nil
 }
 
-// newImportTx returns a new ImportTx
-func (vm *VM) newImportTx(
+// NewImportTx returns a new ImportTx
+func (vm *VM) NewImportTx(
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
 	baseFee *big.Int, // fee to use post-AP3
@@ -291,11 +290,11 @@ func (vm *VM) newImportTx(
 		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
 	}
 
-	return vm.newImportTxWithUTXOs(chainID, to, baseFee, kc, atomicUTXOs)
+	return vm.NewImportTxWithUTXOs(chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 // newImportTx returns a new ImportTx
-func (vm *VM) newImportTxWithUTXOs(
+func (vm *VM) NewImportTxWithUTXOs(
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
 	baseFee *big.Int, // fee to use post-AP3
@@ -428,7 +427,7 @@ func (vm *VM) newImportTxWithUTXOs(
 
 // EVMStateTransfer performs the state transfer to increase the balances of
 // accounts accordingly with the imported EVMOutputs
-func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error {
+func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
 	for _, to := range utx.Outs {
 		if to.AssetID == ctx.AVAXAssetID {
 			log.Debug("crosschain", "src", utx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", "AVAX")

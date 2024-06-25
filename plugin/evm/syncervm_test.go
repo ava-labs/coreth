@@ -302,12 +302,12 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		switch i {
 		case 0:
 			// spend the UTXOs from shared memory
-			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			importTx, err = serverVM.NewImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			require.NoError(err)
 			require.NoError(serverVM.mempool.AddLocalTx(importTx))
 		case 1:
 			// export some of the imported UTXOs to test exportTx is properly synced
-			exportTx, err = serverVM.newExportTx(
+			exportTx, err = serverVM.NewExportTx(
 				serverVM.ctx.AVAXAssetID,
 				importAmount/2,
 				serverVM.ctx.XChainID,
@@ -335,8 +335,8 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	require.NoError(serverVM.db.Commit())
 
 	serverSharedMemories := newSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
-	serverSharedMemories.assertOpsApplied(t, importTx.mustAtomicOps())
-	serverSharedMemories.assertOpsApplied(t, exportTx.mustAtomicOps())
+	serverSharedMemories.assertOpsApplied(t, mustAtomicOps(importTx))
+	serverSharedMemories.assertOpsApplied(t, mustAtomicOps(exportTx))
 
 	// make some accounts
 	trieDB := trie.NewDatabase(serverVM.chaindb, nil)
@@ -560,7 +560,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	syncerSharedMemories := newSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
 
 	for _, tx := range includedAtomicTxs {
-		syncerSharedMemories.assertOpsApplied(t, tx.mustAtomicOps())
+		syncerSharedMemories.assertOpsApplied(t, mustAtomicOps(tx))
 	}
 
 	// Generate blocks after we have entered normal consensus as well

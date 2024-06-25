@@ -219,7 +219,7 @@ func (service *AvaxAPI) Import(_ *http.Request, args *ImportArgs, response *api.
 		baseFee = args.BaseFee.ToInt()
 	}
 
-	tx, err := service.vm.newImportTx(chainID, args.To, baseFee, privKeys)
+	tx, err := service.vm.NewImportTx(chainID, args.To, baseFee, privKeys)
 	if err != nil {
 		return err
 	}
@@ -322,7 +322,7 @@ func (service *AvaxAPI) Export(_ *http.Request, args *ExportArgs, response *api.
 	}
 
 	// Create the transaction
-	tx, err := service.vm.newExportTx(
+	tx, err := service.vm.NewExportTx(
 		assetID,             // AssetID
 		uint64(args.Amount), // Amount
 		chainID,             // ID of the chain to send the funds to
