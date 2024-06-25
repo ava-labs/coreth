@@ -8,6 +8,8 @@ import (
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
+	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
@@ -63,6 +65,13 @@ type VM struct {
 	secpCache secp256k1.RecoverCache
 
 	mempool IMempool
+
+	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
+	// - txID to accepted atomic tx
+	// - block height to list of atomic txs accepted on block at that height
+	atomicTxRepository AtomicTxRepository
+	// [atomicBackend] abstracts verification and processing of atomic transactions
+	atomicBackend AtomicBackend
 }
 
 func NewVM(
@@ -105,7 +114,32 @@ func NewVM(
 	return vm, vm.fx.Initialize(vm)
 }
 
-func (vm *VM) Mempool() IMempool { return vm.mempool }
+func (vm *VM) Initialize(
+	db *versiondb.Database,
+	lastAcceptedHeight uint64,
+	lastAcceptedHash common.Hash,
+	bonusBlockHeights map[uint64]ids.ID,
+	commitInterval uint64,
+) error {
+	var err error
+	// initialize atomic repository
+	vm.atomicTxRepository, err = NewAtomicTxRepository(db, vm.codec, lastAcceptedHeight)
+	if err != nil {
+		return fmt.Errorf("failed to create atomic repository: %w", err)
+	}
+	vm.atomicBackend, err = NewAtomicBackend(
+		db, vm.ctx.SharedMemory, bonusBlockHeights,
+		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
+		commitInterval,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create atomic backend: %w", err)
+	}
+	return nil
+}
+
+func (vm *VM) AtomicBackend() AtomicBackend { return vm.atomicBackend }
+func (vm *VM) Mempool() IMempool            { return vm.mempool }
 
 // GetAtomicUTXOs returns the utxos that at least one of the provided addresses is
 // referenced in.
@@ -396,3 +430,22 @@ func (vm *VM) Clock() *mockable.Clock { return vm.clock }
 
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
+
+// GetAtomicTx returns the requested transaction, status, and height.
+// If the status is Unknown, then the returned transaction will be nil.
+func (vm *VM) GetAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
+	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
+		return tx, Accepted, height, nil
+	} else if err != database.ErrNotFound {
+		return nil, Unknown, 0, err
+	}
+	tx, dropped, found := vm.Mempool().GetTx(txID)
+	switch {
+	case found && dropped:
+		return tx, Dropped, 0, nil
+	case found:
+		return tx, Processing, 0, nil
+	default:
+		return nil, Unknown, 0, nil
+	}
+}

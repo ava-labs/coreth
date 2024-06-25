@@ -229,7 +229,7 @@ func (service *AvaxAPI) Import(_ *http.Request, args *ImportArgs, response *api.
 	if err := service.vm.Mempool().AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{tx})
+	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{Tx: tx})
 	return nil
 }
 
@@ -339,7 +339,7 @@ func (service *AvaxAPI) Export(_ *http.Request, args *ExportArgs, response *api.
 	if err := service.vm.Mempool().AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{tx})
+	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{Tx: tx})
 	return nil
 }
 
@@ -449,13 +449,13 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	if err := service.vm.Mempool().AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{tx})
+	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{Tx: tx})
 	return nil
 }
 
 // GetAtomicTxStatusReply defines the GetAtomicTxStatus replies returned from the API
 type GetAtomicTxStatusReply struct {
-	Status      Status       `json:"status"`
+	Status      atx.Status   `json:"status"`
 	BlockHeight *json.Uint64 `json:"blockHeight,omitempty"`
 }
 
@@ -470,16 +470,16 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
 
-	_, status, height, _ := service.vm.getAtomicTx(args.TxID)
+	_, status, height, _ := service.vm.GetAtomicTx(args.TxID)
 
 	reply.Status = status
-	if status == Accepted {
+	if status == atx.Accepted {
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
 		lastAccepted := service.vm.blockChain.LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
-			reply.Status = Processing
+			reply.Status = atx.Processing
 			return nil
 		}
 
@@ -505,12 +505,12 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
 
-	tx, status, height, err := service.vm.getAtomicTx(args.TxID)
+	tx, status, height, err := service.vm.GetAtomicTx(args.TxID)
 	if err != nil {
 		return err
 	}
 
-	if status == Unknown {
+	if status == atx.Unknown {
 		return fmt.Errorf("could not find tx %s", args.TxID)
 	}
 
@@ -520,7 +520,7 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 	}
 	reply.Tx = txBytes
 	reply.Encoding = args.Encoding
-	if status == Accepted {
+	if status == atx.Accepted {
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.

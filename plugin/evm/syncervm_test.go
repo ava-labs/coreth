@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/db"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -499,7 +500,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if test.expectedErr != nil {
 		require.ErrorIs(err, test.expectedErr)
 		// Note we re-open the database here to avoid a closed error when the test is for a shutdown VM.
-		chaindb := Database{prefixdb.NewNested(ethDBPrefix, syncerVM.db)}
+		chaindb := db.Database{Database: prefixdb.NewNested(ethDBPrefix, syncerVM.db)}
 		assertSyncPerformedHeights(t, chaindb, map[uint64]struct{}{})
 		return
 	}
@@ -680,4 +681,12 @@ func assertSyncPerformedHeights(t *testing.T, db ethdb.Iteratee, expected map[ui
 	}
 	require.NoError(t, it.Error())
 	require.Equal(t, expected, found)
+}
+
+func mustAtomicOps(tx *Tx) map[ids.ID]*atomic.Requests {
+	id, reqs, err := tx.AtomicOps()
+	if err != nil {
+		panic(err)
+	}
+	return map[ids.ID]*atomic.Requests{id: reqs}
 }

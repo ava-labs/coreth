@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"encoding/binary"
@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/plugin/atx"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -23,7 +22,11 @@ import (
 
 var _ AtomicBackend = &atomicBackend{}
 
-var mergeAtomicOps = atx.MergeAtomicOps
+var (
+	// Prefixes for atomic trie
+	atomicTrieDBPrefix     = []byte("atomicTrieDB")
+	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
+)
 
 // AtomicBackend abstracts the verification and processing
 // of atomic transactions

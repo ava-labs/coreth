@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/rpc"
+	"github.com/ava-labs/coreth/plugin/atx"
 )
 
 // Interface compliance
@@ -25,7 +26,7 @@ var _ Client = (*client)(nil)
 // Client interface for interacting with EVM [chain]
 type Client interface {
 	IssueTx(ctx context.Context, txBytes []byte, options ...rpc.Option) (ids.ID, error)
-	GetAtomicTxStatus(ctx context.Context, txID ids.ID, options ...rpc.Option) (Status, error)
+	GetAtomicTxStatus(ctx context.Context, txID ids.ID, options ...rpc.Option) (atx.Status, error)
 	GetAtomicTx(ctx context.Context, txID ids.ID, options ...rpc.Option) ([]byte, error)
 	GetAtomicUTXOs(ctx context.Context, addrs []ids.ShortID, sourceChain string, limit uint32, startAddress ids.ShortID, startUTXOID ids.ID, options ...rpc.Option) ([][]byte, ids.ShortID, ids.ID, error)
 	ExportKey(ctx context.Context, userPass api.UserPass, addr common.Address, options ...rpc.Option) (*secp256k1.PrivateKey, string, error)
@@ -75,7 +76,7 @@ func (c *client) IssueTx(ctx context.Context, txBytes []byte, options ...rpc.Opt
 }
 
 // GetAtomicTxStatus returns the status of [txID]
-func (c *client) GetAtomicTxStatus(ctx context.Context, txID ids.ID, options ...rpc.Option) (Status, error) {
+func (c *client) GetAtomicTxStatus(ctx context.Context, txID ids.ID, options ...rpc.Option) (atx.Status, error) {
 	res := &GetAtomicTxStatusReply{}
 	err := c.requester.SendRequest(ctx, "avax.getAtomicTxStatus", &api.JSONTxID{
 		TxID: txID,

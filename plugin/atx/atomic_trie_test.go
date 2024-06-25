@@ -1,11 +1,10 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"encoding/binary"
-	"math/rand"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,17 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/codec"
-	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/plugin/atx"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -38,84 +33,6 @@ func mustAtomicOps(tx *Tx) map[ids.ID]*atomic.Requests {
 	return map[ids.ID]*atomic.Requests{id: reqs}
 }
 
-func testTxCodec() codec.Manager {
-	codec := codec.NewDefaultManager()
-	c := linearcodec.NewDefault()
-
-	errs := wrappers.Errs{}
-	errs.Add(
-		c.RegisterType(&atx.TestUnsignedTx{}),
-		c.RegisterType(&atomic.Element{}),
-		c.RegisterType(&atomic.Requests{}),
-		codec.RegisterCodec(codecVersion, c),
-	)
-
-	if errs.Errored() {
-		panic(errs.Err)
-	}
-	return codec
-}
-
-var blockChainID = ids.GenerateTestID()
-
-func testDataImportTx() *Tx {
-	return &Tx{
-		UnsignedAtomicTx: &atx.TestUnsignedTx{
-			IDV:                         ids.GenerateTestID(),
-			AcceptRequestsBlockchainIDV: blockChainID,
-			AcceptRequestsV: &atomic.Requests{
-				RemoveRequests: [][]byte{
-					utils.RandomBytes(32),
-					utils.RandomBytes(32),
-				},
-			},
-		},
-	}
-}
-
-func testDataExportTx() *Tx {
-	return &Tx{
-		UnsignedAtomicTx: &atx.TestUnsignedTx{
-			IDV:                         ids.GenerateTestID(),
-			AcceptRequestsBlockchainIDV: blockChainID,
-			AcceptRequestsV: &atomic.Requests{
-				PutRequests: []*atomic.Element{
-					{
-						Key:   utils.RandomBytes(16),
-						Value: utils.RandomBytes(24),
-						Traits: [][]byte{
-							utils.RandomBytes(32),
-							utils.RandomBytes(32),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func newTestTx() *Tx {
-	txType := rand.Intn(2)
-	switch txType {
-	case 0:
-		return testDataImportTx()
-	case 1:
-		return testDataExportTx()
-	default:
-		panic("rng generated unexpected value for tx type")
-	}
-}
-
-func newTestTxs(numTxs int) []*Tx {
-	txs := make([]*Tx, 0, numTxs)
-	for i := 0; i < numTxs; i++ {
-		txs = append(txs, newTestTx())
-	}
-
-	return txs
-}
-
-// indexAtomicTxs updates [tr] with entries in [atomicOps] at height by creating
 // a new snapshot, calculating a new root, and calling InsertTrie followed
 // by AcceptTrie on the new root.
 func indexAtomicTxs(tr AtomicTrie, height uint64, atomicOps map[ids.ID]*atomic.Requests) error {
@@ -221,7 +138,7 @@ func TestAtomicTrieInitialize(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			db := versiondb.New(memdb.New())
 			codec := testTxCodec()
-			repo, err := NewAtomicTxRepository(db, codec, test.lastAcceptedHeight, nil)
+			repo, err := NewAtomicTxRepository(db, codec, test.lastAcceptedHeight)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -310,7 +227,7 @@ func TestIndexerInitializesOnlyOnce(t *testing.T) {
 	lastAcceptedHeight := uint64(25)
 	db := versiondb.New(memdb.New())
 	codec := testTxCodec()
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(t, err)
 	operationsMap := make(map[uint64]map[ids.ID]*atomic.Requests)
 	writeTxs(t, repo, 1, lastAcceptedHeight+1, constTxsPerHeight(2), nil, operationsMap)
@@ -343,7 +260,7 @@ func TestIndexerInitializesOnlyOnce(t *testing.T) {
 
 func newTestAtomicTrie(t *testing.T) AtomicTrie {
 	db := versiondb.New(memdb.New())
-	repo, err := NewAtomicTxRepository(db, testTxCodec(), 0, nil)
+	repo, err := NewAtomicTxRepository(db, testTxCodec(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +338,7 @@ func TestAtomicTrieDoesNotSkipBonusBlocks(t *testing.T) {
 	expectedCommitHeight := uint64(100)
 	db := versiondb.New(memdb.New())
 	codec := testTxCodec()
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -609,7 +526,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			db := versiondb.New(memdb.New())
 			codec := testTxCodec()
-			repo, err := NewAtomicTxRepository(db, codec, test.lastAcceptedHeight, nil)
+			repo, err := NewAtomicTxRepository(db, codec, test.lastAcceptedHeight)
 			assert.NoError(t, err)
 			operationsMap := make(map[uint64]map[ids.ID]*atomic.Requests)
 			writeTxs(t, repo, 1, test.lastAcceptedHeight+1, constTxsPerHeight(2), nil, operationsMap)
@@ -680,7 +597,7 @@ func BenchmarkAtomicTrieInit(b *testing.B) {
 
 	lastAcceptedHeight := uint64(25000)
 	// add 25000 * 3 = 75000 transactions
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
@@ -715,7 +632,7 @@ func BenchmarkAtomicTrieIterate(b *testing.B) {
 
 	lastAcceptedHeight := uint64(25_000)
 	// add 25000 * 3 = 75000 transactions
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
@@ -792,7 +709,7 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 	sharedMemory := testSharedMemory()
 
 	lastAcceptedHeight := blocks
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(b, err)
 
 	backend, err := NewAtomicBackend(db, sharedMemory, nil, repo, 0, common.Hash{}, 5000)

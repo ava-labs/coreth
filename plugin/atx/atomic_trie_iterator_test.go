@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"testing"
@@ -16,6 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	testCChainID = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
+)
+
 func testSharedMemory() atomic.SharedMemory {
 	m := atomic.NewMemory(memdb.New())
 	return m.NewSharedMemory(testCChainID)
@@ -25,7 +29,7 @@ func TestIteratorCanIterate(t *testing.T) {
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
 	codec := testTxCodec()
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(t, err)
 
 	// create state with multiple transactions
@@ -65,7 +69,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
 	codec := testTxCodec()
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight, nil)
+	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	require.NoError(err)
 
 	// create state with multiple transactions

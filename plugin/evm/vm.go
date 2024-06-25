@@ -85,6 +85,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	pluginDb "github.com/ava-labs/coreth/plugin/db"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 
@@ -167,10 +168,6 @@ var (
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	// Prefixes for atomic trie
-	atomicTrieDBPrefix     = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
 )
 
 var (
@@ -276,14 +273,9 @@ type VM struct {
 
 	syntacticBlockValidator BlockValidator
 
-	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
-	// - txID to accepted atomic tx
-	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository AtomicTxRepository
+	atomicBackend atx.AtomicBackend
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
-	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend AtomicBackend
+	atomicTrie atx.AtomicTrie
 
 	builder *blockBuilder
 
@@ -421,7 +413,7 @@ func (vm *VM) Initialize(
 	vm.shutdownChan = make(chan struct{}, 1)
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, db)})
+	vm.chaindb = rawdb.NewDatabase(pluginDb.Database{Database: prefixdb.NewNested(ethDBPrefix, db)})
 	vm.db = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
@@ -594,6 +586,8 @@ func (vm *VM) Initialize(
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
+	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
+
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights map[uint64]ids.ID
@@ -605,30 +599,18 @@ func (vm *VM) Initialize(
 		}
 	}
 
-	// initialize atomic repository
-	vm.atomicTxRepository, err = NewAtomicTxRepository(
-		vm.db, vm.codec, lastAcceptedHeight,
-		vm.getAtomicTxFromPreApricot5BlockByHeight,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create atomic repository: %w", err)
-	}
-	vm.atomicBackend, err = NewAtomicBackend(
-		vm.db, vm.ctx.SharedMemory, bonusBlockHeights,
-		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
-		vm.config.CommitInterval,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create atomic backend: %w", err)
-	}
-	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
-
-	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
-
 	vm.VM, err = atx.NewVM(vm.ctx, vm, vm.codec, &vm.clock, &atxChain{vm.blockChain}, vm.chainConfig, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return err
 	}
+	if err := vm.VM.Initialize(
+		vm.db, lastAcceptedHeight, lastAcceptedHash,
+		bonusBlockHeights, vm.config.CommitInterval,
+	); err != nil {
+		return err
+	}
+	vm.atomicBackend = vm.VM.AtomicBackend()
+	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	vm.initializeStateSyncServer()
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
@@ -1485,25 +1467,6 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
  *********************************** Helpers **********************************
  ******************************************************************************
  */
-
-// getAtomicTx returns the requested transaction, status, and height.
-// If the status is Unknown, then the returned transaction will be nil.
-func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
-	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
-		return tx, Accepted, height, nil
-	} else if err != database.ErrNotFound {
-		return nil, Unknown, 0, err
-	}
-	tx, dropped, found := vm.Mempool().GetTx(txID)
-	switch {
-	case found && dropped:
-		return tx, Dropped, 0, nil
-	case found:
-		return tx, Processing, 0, nil
-	default:
-		return nil, Unknown, 0, nil
-	}
-}
 
 // ParseAddress takes in an address and produces the ID of the chain it's for
 // the ID of the address

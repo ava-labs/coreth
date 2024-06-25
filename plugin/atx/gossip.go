@@ -1,9 +1,6 @@
 package atx
 
 import (
-	"fmt"
-
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 )
@@ -32,19 +29,4 @@ type GossipAtomicTx struct {
 
 func (tx *GossipAtomicTx) GossipID() ids.ID {
 	return tx.Tx.ID()
-}
-
-// [ExtractAtomicTx] extracts a singular atomic transaction from [atomicTxBytes]
-// and returns a slice of atomic transactions for compatibility with the type returned post
-// ApricotPhase5.
-// Note: this function assumes [atomicTxBytes] is non-empty.
-func ExtractAtomicTx(atomicTxBytes []byte, codec codec.Manager) (*Tx, error) {
-	atomicTx := new(Tx)
-	if _, err := codec.Unmarshal(atomicTxBytes, atomicTx); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal atomic transaction (pre-AP5): %w", err)
-	}
-	if err := atomicTx.Sign(codec, nil); err != nil {
-		return nil, fmt.Errorf("failed to initialize singleton atomic tx due to: %w", err)
-	}
-	return atomicTx, nil
 }

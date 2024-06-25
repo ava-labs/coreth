@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/plugin/atx"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
@@ -161,6 +162,80 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 		t.Fatalf("Failed to decode genesis bytes: %s", err)
 	}
 	return genesisBytes
+}
+
+type sharedMemories struct {
+	thisChain   atomic.SharedMemory
+	peerChain   atomic.SharedMemory
+	thisChainID ids.ID
+	peerChainID ids.ID
+}
+
+func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.Requests) error {
+	for _, reqs := range ops {
+		puts := make(map[ids.ID]*atomic.Requests)
+		puts[s.thisChainID] = &atomic.Requests{}
+		for _, key := range reqs.RemoveRequests {
+			val := []byte{0x1}
+			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
+		}
+		if err := s.peerChain.Apply(puts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+	t.Helper()
+	for _, reqs := range ops {
+		// should be able to get put requests
+		for _, elem := range reqs.PutRequests {
+			val, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
+			if err != nil {
+				t.Fatalf("error finding puts in peerChainMemory: %s", err)
+			}
+			assert.Equal(t, elem.Value, val[0])
+		}
+
+		// should not be able to get remove requests
+		for _, key := range reqs.RemoveRequests {
+			_, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
+			assert.EqualError(t, err, "not found")
+		}
+	}
+}
+
+func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+	t.Helper()
+	for _, reqs := range ops {
+		// should not be able to get put requests
+		for _, elem := range reqs.PutRequests {
+			_, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
+			assert.EqualError(t, err, "not found")
+		}
+
+		// should be able to get remove requests (these were previously added as puts on peerChain)
+		for _, key := range reqs.RemoveRequests {
+			val, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
+			assert.NoError(t, err)
+			assert.Equal(t, []byte{0x1}, val[0])
+		}
+	}
+}
+
+func newSharedMemories(atomicMemory *atomic.Memory, thisChainID, peerChainID ids.ID) *sharedMemories {
+	return &sharedMemories{
+		thisChain:   atomicMemory.NewSharedMemory(thisChainID),
+		peerChain:   atomicMemory.NewSharedMemory(peerChainID),
+		thisChainID: thisChainID,
+		peerChainID: peerChainID,
+	}
+}
+
+func testSharedMemory() atomic.SharedMemory {
+	m := atomic.NewMemory(memdb.New())
+	return m.NewSharedMemory(testCChainID)
 }
 
 func NewContext() *snow.Context {
@@ -809,15 +884,15 @@ func TestIssueAtomicTxs(t *testing.T) {
 	}
 
 	// Check that both atomic transactions were indexed as expected.
-	indexedImportTx, status, height, err := vm.getAtomicTx(importTx.ID())
+	indexedImportTx, status, height, err := vm.GetAtomicTx(importTx.ID())
 	assert.NoError(t, err)
-	assert.Equal(t, Accepted, status)
+	assert.Equal(t, atx.Accepted, status)
 	assert.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
 	assert.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
 
-	indexedExportTx, status, height, err := vm.getAtomicTx(exportTx.ID())
+	indexedExportTx, status, height, err := vm.GetAtomicTx(exportTx.ID())
 	assert.NoError(t, err)
-	assert.Equal(t, Accepted, status)
+	assert.Equal(t, atx.Accepted, status)
 	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
 	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
@@ -1741,7 +1816,17 @@ func TestBonusBlocksTxs(t *testing.T) {
 	}
 
 	// Make [blk] a bonus block.
-	vm.atomicBackend.(*atomicBackend).bonusBlocks = map[uint64]ids.ID{blk.Height(): blk.ID()}
+	err = vm.VM.Initialize(
+		vm.db,
+		vm.LastAcceptedBlock().Height(),
+		common.Hash(vm.LastAcceptedBlock().ID()),
+		map[uint64]ids.ID{blk.Height(): blk.ID()},
+		vm.config.CommitInterval,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm.atomicBackend = vm.VM.AtomicBackend()
 
 	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
 	if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*atomic.Requests{vm.ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}); err != nil {
@@ -3252,7 +3337,7 @@ func TestReissueAtomicTx(t *testing.T) {
 	}
 
 	// Check that [importTx] has been indexed correctly after [blkB] is accepted.
-	_, height, err := vm.atomicTxRepository.GetByTxID(importTx.ID())
+	_, _, height, err := vm.GetAtomicTx(importTx.ID())
 	if err != nil {
 		t.Fatal(err)
 	} else if height != blkB.Height() {

@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"encoding/binary"
@@ -69,7 +69,6 @@ type atomicTxRepository struct {
 
 func NewAtomicTxRepository(
 	db *versiondb.Database, codec codec.Manager, lastAcceptedHeight uint64,
-	getAtomicTxFromBlockByHeight func(height uint64) (*Tx, error),
 ) (*atomicTxRepository, error) {
 	repo := &atomicTxRepository{
 		acceptedAtomicTxDB:         prefixdb.New(atomicTxIDDBPrefix, db),

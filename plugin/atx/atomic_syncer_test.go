@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"bytes"
@@ -27,6 +27,7 @@ import (
 )
 
 const commitInterval = 1024
+const defaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
 
 type atomicSyncTestCheckpoint struct {
 	expectedNumLeavesSynced int64       // expected number of leaves to have synced at this checkpoint
@@ -50,7 +51,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *trie.Database, targetHeight ui
 	)
 
 	clientDB := versiondb.New(memdb.New())
-	repo, err := NewAtomicTxRepository(clientDB, message.Codec, 0, nil)
+	repo, err := NewAtomicTxRepository(clientDB, message.Codec, 0)
 	if err != nil {
 		t.Fatal("could not initialize atomix tx repository", err)
 	}
