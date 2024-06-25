@@ -622,10 +622,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = NewAtomicTxRepository(
-		vm.db, vm.codec, lastAcceptedHeight,
-		vm.getAtomicTxFromPreApricot5BlockByHeight,
-	)
+	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.db, vm.codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
