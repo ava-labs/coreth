@@ -93,6 +93,7 @@ type layer interface {
 
 // Config contains the settings for database.
 type Config struct {
+	CommitLag      int    // Number of blocks to keep difflayers ahead of the disk layer
 	StateHistory   uint64 // Number of recent blocks to maintain state history for
 	CleanCacheSize int    // Maximum memory allowance (in bytes) for caching clean nodes
 	DirtyCacheSize int    // Maximum memory allowance (in bytes) for caching dirty nodes
@@ -217,7 +218,10 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// 		log.Crit("Failed to disable database", "err", err) // impossible to happen
 	// 	}
 	// }
-	log.Warn("Path-based state scheme is an experimental feature")
+	bottom := db.tree.bottom().root
+	stateID := db.tree.bottom().stateID()
+	layers := db.tree.len()
+	log.Warn("Path-based state scheme is an experimental feature", "bottom", bottom, "stateID", stateID, "layers", layers)
 	return db
 }
 
@@ -273,7 +277,13 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
-	return db.tree.cap(root, 0)
+
+	layer := db.tree.get(root)
+	if _, ok := layer.(*diskLayer); ok {
+		log.Warn("Reject commit operation on disk layer")
+		return nil
+	}
+	return db.tree.cap(root, db.config.CommitLag)
 }
 
 // Disable deactivates the database and invalidates all available state layers
