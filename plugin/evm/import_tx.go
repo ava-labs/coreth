@@ -257,7 +257,7 @@ func (utx *UnsignedImportTx) SemanticVerify(
 		}
 	}
 
-	return vm.conflicts(utx.InputUTXOs(), parent)
+	return vm.conflicts(utx.InputUTXOs(), parent.ID())
 }
 
 // AtomicOps returns imported inputs spent on this transaction

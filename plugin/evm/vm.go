@@ -1513,22 +1513,24 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
  ******************************************************************************
  */
 
+func (vm *VM) GetBlockAndAtomicTxs(blkID ids.ID) ([]*Tx, choices.Status, ids.ID, error) {
+	blkIntf, err := vm.GetBlockInternal(context.TODO(), blkID)
+	if err != nil {
+		return nil, choices.Unknown, ids.ID{}, err
+	}
+	blk, ok := blkIntf.(*Block)
+	if !ok {
+		return nil, choices.Unknown, ids.ID{}, fmt.Errorf("block %s had unexpected type %T", blk.ID(), blkIntf)
+	}
+	return blk.atomicTxs, blk.Status(), blk.Parent(), nil
+}
+
 // conflicts returns an error if [inputs] conflicts with any of the atomic inputs contained in [ancestor]
 // or any of its ancestor blocks going back to the last accepted block in its ancestry. If [ancestor] is
 // accepted, then nil will be returned immediately.
 // If the ancestry of [ancestor] cannot be fetched, then [errRejectedParent] may be returned.
-func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestor *Block) error {
-	for ancestor.Status() != choices.Accepted {
-		// If any of the atomic transactions in the ancestor conflict with [inputs]
-		// return an error.
-		for _, atomicTx := range ancestor.atomicTxs {
-			if inputs.Overlaps(atomicTx.InputUTXOs()) {
-				return errConflictingAtomicInputs
-			}
-		}
-
-		// Move up the chain.
-		nextAncestorID := ancestor.Parent()
+func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestorID ids.ID) error {
+	for {
 		// If the ancestor is unknown, then the parent failed
 		// verification when it was called.
 		// If the ancestor is rejected, then this block shouldn't be
@@ -1536,21 +1538,29 @@ func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestor *Block) error {
 		// will be missing.
 		// If the ancestor is processing, then the block may have
 		// been verified.
-		nextAncestorIntf, err := vm.GetBlockInternal(context.TODO(), nextAncestorID)
+		txs, status, parentID, err := vm.GetBlockAndAtomicTxs(ancestorID)
 		if err != nil {
 			return errRejectedParent
 		}
-
-		if blkStatus := nextAncestorIntf.Status(); blkStatus == choices.Unknown || blkStatus == choices.Rejected {
+		if status == choices.Unknown || status == choices.Rejected {
 			return errRejectedParent
 		}
-		nextAncestor, ok := nextAncestorIntf.(*Block)
-		if !ok {
-			return fmt.Errorf("ancestor block %s had unexpected type %T", nextAncestor.ID(), nextAncestorIntf)
-		}
-		ancestor = nextAncestor
-	}
 
+		if status == choices.Accepted {
+			break
+		}
+
+		// If any of the atomic transactions in the ancestor conflict with [inputs]
+		// return an error.
+		for _, atomicTx := range txs {
+			if inputs.Overlaps(atomicTx.InputUTXOs()) {
+				return errConflictingAtomicInputs
+			}
+		}
+
+		// Move up the chain.
+		ancestorID = parentID
+	}
 	return nil
 }
 
