@@ -1957,14 +1957,6 @@ func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
 	return baseFee, nil
 }
 
-func (vm *VM) getAtomicTxFromPreApricot5BlockByHeight(height uint64) (*Tx, error) {
-	blk := vm.blockChain.GetBlockByNumber(height)
-	if blk == nil {
-		return nil, nil
-	}
-	return ExtractAtomicTx(blk.ExtData(), vm.codec)
-}
-
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the
 // last accepted block hash and height by reading directly from [vm.chaindb] instead of relying
 // on [chain].
