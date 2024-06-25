@@ -343,6 +343,11 @@ type (
 )
 
 var (
+	EVMOutputGas = atx.EVMOutputGas
+	EVMInputGas  = atx.EVMInputGas
+)
+
+var (
 	CalculateDynamicFee = atx.CalculateDynamicFee
 )
 
