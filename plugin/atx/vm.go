@@ -76,7 +76,7 @@ func NewVM(ctx *snow.Context, bVM BlockGetter, codec codec.Manager, clock *mocka
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
 
-	return vm, vm.fx.Initialize(bVM)
+	return vm, vm.fx.Initialize(vm)
 }
 
 type Block struct{}
