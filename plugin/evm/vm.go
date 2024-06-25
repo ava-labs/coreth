@@ -109,8 +109,7 @@ var (
 	// 1 nAVAX and the smallest denomination on the C-Chain 1 wei. Where 1 nAVAX = 1 gWei.
 	// This is only required for AVAX because the denomination of 1 AVAX is 9 decimal
 	// places on the X and P chains, but is 18 decimal places within the EVM.
-	x2cRate       = big.NewInt(x2cRateInt64)
-	x2cRateMinus1 = big.NewInt(x2cRateMinus1Int64)
+	x2cRate = big.NewInt(x2cRateInt64)
 )
 
 const (
@@ -130,8 +129,6 @@ const (
 	ethMetricsPrefix        = "eth"
 	sdkMetricsPrefix        = "sdk"
 	chainStateMetricsPrefix = "chain_state"
-
-	targetAtomicTxsSize = 40 * units.KiB
 
 	// p2p app protocols
 	ethTxGossipProtocol    = 0x0
