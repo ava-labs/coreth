@@ -583,6 +583,11 @@ func (vm *VM) Initialize(
 		}
 	}
 
+	vm.VM, err = atx.NewVM(vm.ctx, vm, vm.codec, &vm.clock, vm.chainConfig, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	if err != nil {
+		return err
+	}
+
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
@@ -598,13 +603,8 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("failed to read mainnet bonus blocks: %w", err)
 		}
 	}
-
-	vm.VM, err = atx.NewVM(vm.ctx, vm, vm.codec, &vm.clock, &atxChain{vm.blockChain}, vm.chainConfig, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
-	if err != nil {
-		return err
-	}
 	if err := vm.VM.Initialize(
-		vm.db, lastAcceptedHeight, lastAcceptedHash,
+		vm.db, &atxChain{vm.blockChain}, lastAcceptedHeight, lastAcceptedHash,
 		bonusBlockHeights, vm.config.CommitInterval,
 	); err != nil {
 		return err
@@ -775,223 +775,12 @@ func (vm *VM) createConsensusCallbacks() dummy.ConsensusCallbacks {
 	}
 }
 
-func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	for {
-		tx, exists := vm.Mempool().NextTx()
-		if !exists {
-			break
-		}
-		// Take a snapshot of [state] before calling verifyTx so that if the transaction fails verification
-		// we can revert to [snapshot].
-		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
-		// once.
-		snapshot := state.Snapshot()
-		rules := vm.chainConfig.Rules(header.Number, header.Time)
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
-			// Discard the transaction from the mempool on failed verification.
-			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
-			vm.Mempool().DiscardCurrentTx(tx.ID())
-			state.RevertToSnapshot(snapshot)
-			continue
-		}
-
-		atomicTxBytes, err := vm.codec.Marshal(codecVersion, tx)
-		if err != nil {
-			// Discard the transaction from the mempool and error if the transaction
-			// cannot be marshalled. This should never happen.
-			log.Debug("discarding tx due to unmarshal err", "txID", tx.ID(), "err", err)
-			vm.Mempool().DiscardCurrentTx(tx.ID())
-			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
-		}
-		var contribution, gasUsed *big.Int
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err = tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-		}
-		return atomicTxBytes, contribution, gasUsed, nil
-	}
-
-	if len(txs) == 0 {
-		// this could happen due to the async logic of geth tx pool
-		return nil, nil, nil, errEmptyBlock
-	}
-
-	return nil, nil, nil, nil
-}
-
-// assumes that we are in at least Apricot Phase 5.
-func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	var (
-		batchAtomicTxs    []*Tx
-		batchAtomicUTXOs  set.Set[ids.ID]
-		batchContribution *big.Int = new(big.Int).Set(common.Big0)
-		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
-		size              int
-	)
-
-	for {
-		tx, exists := vm.Mempool().NextTx()
-		if !exists {
-			break
-		}
-
-		// Ensure that adding [tx] to the block will not exceed the block size soft limit.
-		txSize := len(tx.SignedBytes())
-		if size+txSize > targetAtomicTxsSize {
-			vm.Mempool().CancelCurrentTx(tx.ID())
-			break
-		}
-
-		var (
-			txGasUsed, txContribution *big.Int
-			err                       error
-		)
-
-		// Note: we do not need to check if we are in at least ApricotPhase4 here because
-		// we assume that this function will only be called when the block is in at least
-		// ApricotPhase5.
-		txContribution, txGasUsed, err = tx.BlockFeeContribution(true, vm.ctx.AVAXAssetID, header.BaseFee)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		// ensure [gasUsed] + [batchGasUsed] doesnt exceed the [atomicGasLimit]
-		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); totalGasUsed.Cmp(params.AtomicGasLimit) > 0 {
-			// Send [tx] back to the mempool's tx heap.
-			vm.Mempool().CancelCurrentTx(tx.ID())
-			break
-		}
-
-		if batchAtomicUTXOs.Overlaps(tx.InputUTXOs()) {
-			// Discard the transaction from the mempool since it will fail verification
-			// after this block has been accepted.
-			// Note: if the proposed block is not accepted, the transaction may still be
-			// valid, but we discard it early here based on the assumption that the proposed
-			// block will most likely be accepted.
-			// Discard the transaction from the mempool on failed verification.
-			log.Debug("discarding tx due to overlapping input utxos", "txID", tx.ID())
-			vm.Mempool().DiscardCurrentTx(tx.ID())
-			continue
-		}
-
-		snapshot := state.Snapshot()
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
-			// Discard the transaction from the mempool and reset the state to [snapshot]
-			// if it fails verification here.
-			// Note: prior to this point, we have not modified [state] so there is no need to
-			// revert to a snapshot if we discard the transaction prior to this point.
-			log.Debug("discarding tx from mempool due to failed verification", "txID", tx.ID(), "err", err)
-			vm.Mempool().DiscardCurrentTx(tx.ID())
-			state.RevertToSnapshot(snapshot)
-			continue
-		}
-
-		batchAtomicTxs = append(batchAtomicTxs, tx)
-		batchAtomicUTXOs.Union(tx.InputUTXOs())
-		// Add the [txGasUsed] to the [batchGasUsed] when the [tx] has passed verification
-		batchGasUsed.Add(batchGasUsed, txGasUsed)
-		batchContribution.Add(batchContribution, txContribution)
-		size += txSize
-	}
-
-	// If there is a non-zero number of transactions, marshal them and return the byte slice
-	// for the block's extra data along with the contribution and gas used.
-	if len(batchAtomicTxs) > 0 {
-		atomicTxBytes, err := vm.codec.Marshal(codecVersion, batchAtomicTxs)
-		if err != nil {
-			// If we fail to marshal the batch of atomic transactions for any reason,
-			// discard the entire set of current transactions.
-			log.Debug("discarding txs due to error marshaling atomic transactions", "err", err)
-			vm.Mempool().DiscardCurrentTxs()
-			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
-		}
-		return atomicTxBytes, batchContribution, batchGasUsed, nil
-	}
-
-	// If there are no regular transactions and there were also no atomic transactions to be included,
-	// then the block is empty and should be considered invalid.
-	if len(txs) == 0 {
-		// this could happen due to the async logic of geth tx pool
-		return nil, nil, nil, errEmptyBlock
-	}
-
-	// If there are no atomic transactions, but there is a non-zero number of regular transactions, then
-	// we return a nil slice with no contribution from the atomic transactions and a nil error.
-	return nil, nil, nil, nil
-}
-
 func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	if !vm.chainConfig.IsApricotPhase5(header.Time) {
-		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
-	}
-	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
+	return vm.VM.OnFinalizeAndAssemble(header, state, txs)
 }
 
 func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
-	var (
-		batchContribution *big.Int = big.NewInt(0)
-		batchGasUsed      *big.Int = big.NewInt(0)
-		header                     = block.Header()
-		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
-	)
-
-	txs, err := ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, vm.codec)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
-	if vm.atomicBackend != nil {
-		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
-			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
-		} else {
-			// Verify [txs] do not conflict with themselves or ancestor blocks.
-			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules); err != nil {
-				return nil, nil, err
-			}
-		}
-		// Update the atomic backend with [txs] from this block.
-		//
-		// Note: The atomic trie canonically contains the duplicate operations
-		// from any bonus blocks.
-		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// If there are no transactions, we can return early.
-	if len(txs) == 0 {
-		return nil, nil, nil
-	}
-
-	for _, tx := range txs {
-		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
-			return nil, nil, err
-		}
-		// If ApricotPhase4 is enabled, calculate the block fee contribution
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			batchContribution.Add(batchContribution, contribution)
-			batchGasUsed.Add(batchGasUsed, gasUsed)
-		}
-
-		// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
-		// atomic gas limit.
-		if rules.IsApricotPhase5 {
-			// Ensure that [tx] does not push [block] above the atomic gas limit.
-			if batchGasUsed.Cmp(params.AtomicGasLimit) == 1 {
-				return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), params.AtomicGasLimit)
-			}
-		}
-	}
-	return batchContribution, batchGasUsed, nil
+	return vm.VM.OnExtraStateChange(block, state)
 }
 
 func (vm *VM) SetState(_ context.Context, state snow.State) error {

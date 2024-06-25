@@ -1818,6 +1818,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	// Make [blk] a bonus block.
 	err = vm.VM.Initialize(
 		vm.db,
+		&atxChain{vm.blockChain},
 		vm.LastAcceptedBlock().Height(),
 		common.Hash(vm.LastAcceptedBlock().ID()),
 		map[uint64]ids.ID{blk.Height(): blk.ID()},

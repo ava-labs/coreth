@@ -20,11 +20,15 @@ type StateDB interface {
 
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
+
+	Snapshot() int
+	RevertToSnapshot(int)
 }
 
 type BlockChain interface {
 	State() (StateDB, error)
 	CurrentHeader() *types.Header
+	HasBlock(common.Hash, uint64) bool
 }
 
 type BlockGetter interface {
