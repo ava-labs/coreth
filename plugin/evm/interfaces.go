@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/atx"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/v2/chain"
 	"github.com/ethereum/go-ethereum/common"
@@ -162,4 +163,13 @@ func (v *v2BlockChainer) State() (StateDB, error) {
 
 func (v *v2BlockChainer) StateAt(root common.Hash) (StateDB, error) {
 	return v.BlockChain.StateAt(root)
+}
+
+type atxChain struct {
+	BlockChain
+}
+
+func (a *atxChain) State() (atx.StateDB, error) {
+	state, err := a.BlockChain.State()
+	return state, err
 }

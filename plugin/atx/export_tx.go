@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"context"
@@ -176,7 +176,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 func (utx *UnsignedExportTx) SemanticVerify(
 	vm *VM,
 	stx *Tx,
-	_ *Block,
+	_ ids.ID,
 	baseFee *big.Int,
 	rules params.Rules,
 ) error {
@@ -275,8 +275,8 @@ func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 	return utx.DestinationChain, &atomic.Requests{PutRequests: elems}, nil
 }
 
-// newExportTx returns a new ExportTx
-func (vm *VM) newExportTx(
+// NewExportTx returns a new ExportTx
+func (vm *VM) NewExportTx(
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export
 	chainID ids.ID, // Chain to send the UTXOs to

@@ -25,7 +25,7 @@ import (
 
 const testCommitInterval = 100
 
-func (tx *Tx) mustAtomicOps() map[ids.ID]*atomic.Requests {
+func mustAtomicOps(tx *Tx) map[ids.ID]*atomic.Requests {
 	id, reqs, err := tx.AtomicOps()
 	if err != nil {
 		panic(err)
@@ -281,7 +281,7 @@ func TestIndexerWriteAndRead(t *testing.T) {
 
 	// process 305 blocks so that we get three commits (100, 200, 300)
 	for height := uint64(1); height <= testCommitInterval*3+5; /*=305*/ height++ {
-		atomicRequests := testDataImportTx().mustAtomicOps()
+		atomicRequests := mustAtomicOps(testDataImportTx())
 		err := indexAtomicTxs(atomicTrie, height, atomicRequests)
 		assert.NoError(t, err)
 		if height%testCommitInterval == 0 {
@@ -370,7 +370,7 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 	// operations to index
 	ops := make([]map[ids.ID]*atomic.Requests, 0)
 	for i := 0; i <= testCommitInterval; i++ {
-		ops = append(ops, testDataImportTx().mustAtomicOps())
+		ops = append(ops, mustAtomicOps(testDataImportTx()))
 	}
 
 	// without nils
