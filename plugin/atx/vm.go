@@ -383,7 +383,7 @@ func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestorID ids.ID) error {
 		// will be missing.
 		// If the ancestor is processing, then the block may have
 		// been verified.
-		txs, status, parentID, err := vm.blockGetter.GetBlockAndAtomicTxs(ancestorID)
+		_, txs, status, parentID, err := vm.blockGetter.GetBlockAndAtomicTxs(ancestorID)
 		if err != nil {
 			return errRejectedParent
 		}
@@ -697,7 +697,7 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
 	ancestorID := ids.ID(parentHash)
-	_, blkStatus, _, err := vm.blockGetter.GetBlockAndAtomicTxs(ancestorID)
+	_, _, blkStatus, _, err := vm.blockGetter.GetBlockAndAtomicTxs(ancestorID)
 	if err != nil {
 		return errRejectedParent
 	}
@@ -757,4 +757,30 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 	// We don’t need to revert the state here in case verifyTx errors, because
 	// [preferredState] is thrown away either way.
 	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, rules)
+}
+
+// VerifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
+// are not present in shared memory.
+func (vm *VM) VerifyUTXOsPresent(blockHash common.Hash, blockNumber uint64, txs []*Tx) error {
+	if vm.atomicBackend.IsBonus(blockNumber, blockHash) {
+		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
+		return nil
+	}
+
+	if !vm.bootstrapped {
+		return nil
+	}
+
+	// verify UTXOs named in import txs are present in shared memory.
+	for _, atomicTx := range txs {
+		utx := atomicTx.UnsignedAtomicTx
+		chainID, requests, err := utx.AtomicOps()
+		if err != nil {
+			return err
+		}
+		if _, err := vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
+			return fmt.Errorf("%w: %s", ErrMissingUTXOs, err)
+		}
+	}
+	return nil
 }

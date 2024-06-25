@@ -33,5 +33,5 @@ type BlockChain interface {
 }
 
 type BlockGetter interface {
-	GetBlockAndAtomicTxs(ids.ID) ([]*Tx, choices.Status, ids.ID, error)
+	GetBlockAndAtomicTxs(ids.ID) (uint64, []*Tx, choices.Status, ids.ID, error)
 }

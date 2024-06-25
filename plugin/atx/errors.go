@@ -35,4 +35,5 @@ var (
 	ErrInsufficientAtomicTxFee        = errInsufficientAtomicTxFee
 	ErrTooManyAtomicTx                = errTooManyAtomicTx
 	ErrConflictingAtomicTx            = errConflictingAtomicTx
+	ErrMissingUTXOs                   = errors.New("missing UTXOs")
 )

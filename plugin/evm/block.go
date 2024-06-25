@@ -32,10 +32,6 @@ var (
 	_ block.WithVerifyContext = (*Block)(nil)
 )
 
-var (
-	errMissingUTXOs = errors.New("missing UTXOs")
-)
-
 // readMainnetBonusBlocks returns maps of bonus block numbers to block IDs.
 // Note bonus blocks are indexed in the atomic trie.
 func readMainnetBonusBlocks() (map[uint64]ids.ID, error) {
@@ -339,7 +335,7 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 	}
 
 	// verify UTXOs named in import txs are present in shared memory.
-	if err := b.verifyUTXOsPresent(); err != nil {
+	if err := b.vm.VerifyUTXOsPresent(common.Hash(b.ID()), b.Height(), b.atomicTxs); err != nil {
 		return err
 	}
 
@@ -405,33 +401,6 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 	}
 	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {
 		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, headerPredicateResultsBytes, predicateResultsBytes)
-	}
-	return nil
-}
-
-// verifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
-// are not present in shared memory.
-func (b *Block) verifyUTXOsPresent() error {
-	blockHash := common.Hash(b.ID())
-	if b.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
-		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
-		return nil
-	}
-
-	if !b.vm.bootstrapped {
-		return nil
-	}
-
-	// verify UTXOs named in import txs are present in shared memory.
-	for _, atomicTx := range b.atomicTxs {
-		utx := atomicTx.UnsignedAtomicTx
-		chainID, requests, err := utx.AtomicOps()
-		if err != nil {
-			return err
-		}
-		if _, err := b.vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
-			return fmt.Errorf("%w: %s", errMissingUTXOs, err)
-		}
 	}
 	return nil
 }

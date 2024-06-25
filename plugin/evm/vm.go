@@ -1285,16 +1285,16 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	return chainID, addr, nil
 }
 
-func (vm *VM) GetBlockAndAtomicTxs(blkID ids.ID) ([]*Tx, choices.Status, ids.ID, error) {
+func (vm *VM) GetBlockAndAtomicTxs(blkID ids.ID) (uint64, []*Tx, choices.Status, ids.ID, error) {
 	blkIntf, err := vm.GetBlockInternal(context.TODO(), blkID)
 	if err != nil {
-		return nil, choices.Unknown, ids.ID{}, err
+		return 0, nil, choices.Unknown, ids.ID{}, err
 	}
 	blk, ok := blkIntf.(*Block)
 	if !ok {
-		return nil, choices.Unknown, ids.ID{}, fmt.Errorf("block %s had unexpected type %T", blk.ID(), blkIntf)
+		return 0, nil, choices.Unknown, ids.ID{}, fmt.Errorf("block %s had unexpected type %T", blk.ID(), blkIntf)
 	}
-	return blk.atomicTxs, blk.Status(), blk.Parent(), nil
+	return blk.Height(), blk.atomicTxs, blk.Status(), blk.Parent(), nil
 }
 
 // currentRules returns the chain rules for the current block.
