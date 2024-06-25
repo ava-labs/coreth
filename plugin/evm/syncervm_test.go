@@ -289,9 +289,10 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	g.Config.ChainID = params.AvalancheLocalChainID
 	genesisBytes, err := json.Marshal(g)
 	require.NoError(err)
+	config := fmt.Sprintf(`{"commit-interval":%d}`, test.syncableInterval)
 
 	_, serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
-		t, true, string(genesisBytes), "", "", alloc,
+		t, true, string(genesisBytes), config, "", alloc,
 	)
 	t.Cleanup(func() {
 		log.Info("Shutting down server VM")
@@ -333,12 +334,11 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		}
 	}, nil)
 
-	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
-	// creates a commit at the height [syncableInterval]. This is necessary to support
+	// Create a commit at the height [syncableInterval]. This is necessary to support
 	// fetching a state summary.
-	serverAtomicTrie := serverVM.atomicTrie.(*atomicTrie)
-	serverAtomicTrie.commitInterval = test.syncableInterval
-	require.NoError(serverAtomicTrie.commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
+	serverAtomicTrie := serverVM.atomicTrie
+	_, err = serverAtomicTrie.AcceptTrie(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot())
+	require.NoError(err)
 	require.NoError(serverVM.db.Commit())
 
 	serverSharedMemories := newSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
