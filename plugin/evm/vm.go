@@ -332,6 +332,9 @@ type (
 var (
 	EVMOutputGas = atx.EVMOutputGas
 	EVMInputGas  = atx.EVMInputGas
+	Accepted     = atx.Accepted
+	Dropped      = atx.Dropped
+	Unknown      = atx.Unknown
 )
 
 var (
