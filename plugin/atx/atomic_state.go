@@ -4,10 +4,7 @@
 package atx
 
 import (
-	"fmt"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -23,9 +20,9 @@ var _ AtomicState = &atomicState{}
 type AtomicState interface {
 	// Root of the atomic trie after applying the state change.
 	Root() common.Hash
-	// Accept applies the state change to VM's persistent storage
-	// Changes are persisted atomically along with the provided [commitBatch].
-	Accept(commitBatch database.Batch, requests map[ids.ID]*atomic.Requests) error
+	// Accept applies the state change to the VM's commit batch, and outputs
+	// atomic ops to the requests map.
+	Accept(requests map[ids.ID]*atomic.Requests) error
 	// Reject frees memory associated with the state change.
 	Reject() error
 }
@@ -46,11 +43,18 @@ func (a *atomicState) Root() common.Hash {
 }
 
 // Accept applies the state change to VM's persistent storage.
-func (a *atomicState) Accept(commitBatch database.Batch, requests map[ids.ID]*atomic.Requests) error {
-	// Add the new requests to the batch to be accepted
-	for chainID, requests := range requests {
-		mergeAtomicOpsToMap(a.atomicOps, chainID, requests)
+func (a *atomicState) Accept(requests map[ids.ID]*atomic.Requests) error {
+	// If this is a bonus block, write [commitBatch] without applying atomic ops
+	// to shared memory.
+	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
+		log.Info("skipping atomic tx acceptance on bonus block", "block", a.blockHash)
+	} else {
+		// Add the new requests to the batch to be accepted
+		for chainID, reqs := range a.atomicOps {
+			mergeAtomicOpsToMap(requests, chainID, reqs)
+		}
 	}
+
 	// Update the atomic tx repository. Note it is necessary to invoke
 	// the correct method taking bonus blocks into consideration.
 	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
@@ -72,23 +76,7 @@ func (a *atomicState) Accept(commitBatch database.Batch, requests map[ids.ID]*at
 	a.backend.lastAcceptedHash = a.blockHash
 	delete(a.backend.verifiedRoots, a.blockHash)
 
-	// get changes from the atomic trie and repository in a batch
-	// to be committed atomically with [commitBatch] and shared memory.
-	atomicChangesBatch, err := a.backend.db.CommitBatch()
-	if err != nil {
-		return fmt.Errorf("could not create commit batch in atomicState accept: %w", err)
-	}
-
-	// If this is a bonus block, write [commitBatch] without applying atomic ops
-	// to shared memory.
-	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
-		log.Info("skipping atomic tx acceptance on bonus block", "block", a.blockHash)
-		return atomic.WriteAll(commitBatch, atomicChangesBatch)
-	}
-
-	// Otherwise, atomically commit pending changes in the version db with
-	// atomic ops to shared memory.
-	return a.backend.sharedMemory.Apply(a.atomicOps, commitBatch, atomicChangesBatch)
+	return nil
 }
 
 // Reject frees memory associated with the state change.
