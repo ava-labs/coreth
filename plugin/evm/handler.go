@@ -11,13 +11,14 @@ import (
 
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/atx"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 // GossipHandler handles incoming gossip messages
 type GossipHandler struct {
 	vm            *VM
-	atomicMempool *Mempool
+	atomicMempool atx.IMempool
 	txPool        *txpool.TxPool
 	stats         GossipStats
 }
@@ -25,7 +26,7 @@ type GossipHandler struct {
 func NewGossipHandler(vm *VM, stats GossipStats) *GossipHandler {
 	return &GossipHandler{
 		vm:            vm,
-		atomicMempool: vm.mempool,
+		atomicMempool: vm.Mempool(),
 		txPool:        vm.txPool,
 		stats:         stats,
 	}
@@ -80,7 +81,7 @@ func (h *GossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGo
 	h.vm.ctx.Lock.RLock()
 	defer h.vm.ctx.Lock.RUnlock()
 
-	if err := h.vm.mempool.AddTx(&tx); err != nil {
+	if err := h.vm.Mempool().AddTx(&tx); err != nil {
 		log.Trace(
 			"AppGossip provided invalid transaction",
 			"peerID", nodeID,

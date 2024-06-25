@@ -32,4 +32,7 @@ var (
 	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
 	errInvalidHeaderPredicateResults  = errors.New("invalid header predicate results")
 	ErrConflictingAtomicInputs        = errConflictingAtomicInputs
+	ErrInsufficientAtomicTxFee        = errInsufficientAtomicTxFee
+	ErrTooManyAtomicTx                = errTooManyAtomicTx
+	ErrConflictingAtomicTx            = errConflictingAtomicTx
 )

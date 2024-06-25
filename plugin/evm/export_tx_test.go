@@ -78,7 +78,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 
-	if err := vm.mempool.AddLocalTx(importTx); err != nil {
+	if err := vm.Mempool().AddLocalTx(importTx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -390,7 +390,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.mempool.AddLocalTx(tx); err != nil {
+			if err := vm.Mempool().AddLocalTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1745,7 +1745,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.mempool.AddLocalTx(tx); err != nil {
+			if err := vm.Mempool().AddLocalTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1934,7 +1934,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.mempool.AddTx(tx); err != nil {
+			if err := vm.Mempool().AddTx(tx); err != nil {
 				t.Fatal(err)
 			}
 

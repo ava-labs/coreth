@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -40,6 +41,12 @@ const (
 	codecVersion    = uint16(0)
 	maxUTXOsToFetch = 1024
 	secpCacheSize   = 1024
+
+	// TODO: take gossip constants as config
+	txGossipBloomMinTargetElements       = 8 * 1024
+	txGossipBloomTargetFalsePositiveRate = 0.01
+	txGossipBloomResetFalsePositiveRate  = 0.05
+	txGossipBloomChurnMultiplier         = 3
 )
 
 type VM struct {
@@ -54,9 +61,21 @@ type VM struct {
 
 	fx        secp256k1fx.Fx
 	secpCache secp256k1.RecoverCache
+
+	mempool IMempool
 }
 
-func NewVM(ctx *snow.Context, bVM BlockGetter, codec codec.Manager, clock *mockable.Clock, chain BlockChain, chainConfig *params.ChainConfig) (*VM, error) {
+func NewVM(
+	ctx *snow.Context,
+	bVM BlockGetter,
+	codec codec.Manager,
+	clock *mockable.Clock,
+	chain BlockChain,
+	chainConfig *params.ChainConfig,
+	sdkMetrics prometheus.Registerer,
+	mempoolSize int,
+	verify func(*Tx) error,
+) (*VM, error) {
 	vm := &VM{
 		ctx:         ctx,
 		codec:       codec,
@@ -76,10 +95,17 @@ func NewVM(ctx *snow.Context, bVM BlockGetter, codec codec.Manager, clock *mocka
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
 
+	// TODO: read size from settings
+	var err error
+	vm.mempool, err = NewMempool(ctx, sdkMetrics, mempoolSize, verify)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize mempool: %w", err)
+	}
+
 	return vm, vm.fx.Initialize(vm)
 }
 
-type Block struct{}
+func (vm *VM) Mempool() IMempool { return vm.mempool }
 
 // GetAtomicUTXOs returns the utxos that at least one of the provided addresses is
 // referenced in.

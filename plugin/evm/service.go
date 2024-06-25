@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/atx"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
@@ -225,10 +226,10 @@ func (service *AvaxAPI) Import(_ *http.Request, args *ImportArgs, response *api.
 	}
 
 	response.TxID = tx.ID()
-	if err := service.vm.mempool.AddLocalTx(tx); err != nil {
+	if err := service.vm.Mempool().AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&GossipAtomicTx{tx})
+	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{tx})
 	return nil
 }
 
@@ -335,10 +336,10 @@ func (service *AvaxAPI) Export(_ *http.Request, args *ExportArgs, response *api.
 	}
 
 	response.TxID = tx.ID()
-	if err := service.vm.mempool.AddLocalTx(tx); err != nil {
+	if err := service.vm.Mempool().AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&GossipAtomicTx{tx})
+	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{tx})
 	return nil
 }
 
@@ -445,10 +446,10 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
 
-	if err := service.vm.mempool.AddLocalTx(tx); err != nil {
+	if err := service.vm.Mempool().AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&GossipAtomicTx{tx})
+	service.vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{tx})
 	return nil
 }
 

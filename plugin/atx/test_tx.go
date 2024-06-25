@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"math/big"
@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/atx"
 )
 
 type TestUnsignedTx struct {
@@ -66,12 +65,12 @@ func (t *TestUnsignedTx) SignedBytes() []byte { return t.SignedBytesV }
 func (t *TestUnsignedTx) InputUTXOs() set.Set[ids.ID] { return t.InputUTXOsV }
 
 // SemanticVerify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) SemanticVerify(vm *atx.VM, stx *Tx, parent ids.ID, baseFee *big.Int, rules params.Rules) error {
+func (t *TestUnsignedTx) SemanticVerify(vm *VM, stx *Tx, parent ids.ID, baseFee *big.Int, rules params.Rules) error {
 	return t.SemanticVerifyV
 }
 
 // EVMStateTransfer implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) EVMStateTransfer(ctx *snow.Context, state atx.StateDB) error {
+func (t *TestUnsignedTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
 	return t.EVMStateTransferV
 }
 

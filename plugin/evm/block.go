@@ -169,7 +169,7 @@ func (b *Block) Accept(context.Context) error {
 
 	for _, tx := range b.atomicTxs {
 		// Remove the accepted transaction from the mempool
-		vm.mempool.RemoveTx(tx)
+		vm.Mempool().RemoveTx(tx)
 	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
@@ -235,8 +235,8 @@ func (b *Block) Reject(context.Context) error {
 	b.status = choices.Rejected
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
-		b.vm.mempool.RemoveTx(tx)
-		if err := b.vm.mempool.AddTx(tx); err != nil {
+		b.vm.Mempool().RemoveTx(tx)
+		if err := b.vm.Mempool().AddTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
