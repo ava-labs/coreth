@@ -136,7 +136,7 @@ func (vm *VM) newBlockImpl(b *Block) atx.BlockWithVerifyContext {
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
 func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(ethBlock.Time())
-	atomicTxs, err := ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, vm.codec)
+	atomicTxs, err := atx.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, vm.codec)
 	if err != nil {
 		return nil, err
 	}

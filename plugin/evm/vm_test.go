@@ -171,21 +171,6 @@ type sharedMemories struct {
 	peerChainID ids.ID
 }
 
-func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.Requests) error {
-	for _, reqs := range ops {
-		puts := make(map[ids.ID]*atomic.Requests)
-		puts[s.thisChainID] = &atomic.Requests{}
-		for _, key := range reqs.RemoveRequests {
-			val := []byte{0x1}
-			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
-		}
-		if err := s.peerChain.Apply(puts); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
 	t.Helper()
 	for _, reqs := range ops {
@@ -202,24 +187,6 @@ func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 		for _, key := range reqs.RemoveRequests {
 			_, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
 			assert.EqualError(t, err, "not found")
-		}
-	}
-}
-
-func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
-	t.Helper()
-	for _, reqs := range ops {
-		// should not be able to get put requests
-		for _, elem := range reqs.PutRequests {
-			_, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			assert.EqualError(t, err, "not found")
-		}
-
-		// should be able to get remove requests (these were previously added as puts on peerChain)
-		for _, key := range reqs.RemoveRequests {
-			val, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
-			assert.NoError(t, err)
-			assert.Equal(t, []byte{0x1}, val[0])
 		}
 	}
 }
@@ -1197,8 +1164,8 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, errConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", errConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atx.ErrConflictingAtomicInputs) {
+		t.Fatalf("Expected to fail with err: %s, but found err: %s", atx.ErrConflictingAtomicInputs, err)
 	}
 
 	if !rules.IsApricotPhase5 {
@@ -1233,8 +1200,8 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, errConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", errConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atx.ErrConflictingAtomicInputs) {
+		t.Fatalf("Expected to fail with err: %s, but found err: %s", atx.ErrConflictingAtomicInputs, err)
 	}
 }
 
@@ -1324,8 +1291,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.Mempool().AddLocalTx(reissuanceTx1); !errors.Is(err, errConflictingAtomicTx) {
-				t.Fatalf("Expected to fail with err: %s, but found err: %s", errConflictingAtomicTx, err)
+			if err := vm.Mempool().AddLocalTx(reissuanceTx1); !errors.Is(err, atx.ErrConflictingAtomicTx) {
+				t.Fatalf("Expected to fail with err: %s, but found err: %s", atx.ErrConflictingAtomicTx, err)
 			}
 
 			assert.True(t, vm.Mempool().Has(importTx1.ID()))

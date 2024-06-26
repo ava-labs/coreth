@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/coreth/plugin/atx"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -52,7 +53,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// try to add a conflicting tx
 			err = vm.Mempool().AddLocalTx(conflictingTx)
-			assert.ErrorIs(err, errConflictingAtomicTx)
+			assert.ErrorIs(err, atx.ErrConflictingAtomicTx)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
@@ -104,7 +105,7 @@ func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	// shortcut to simulated almost filled mempool
 	mempool.SetMaxSize(0)
 
-	assert.ErrorIs(mempool.AddTx(tx), errTooManyAtomicTx)
+	assert.ErrorIs(mempool.AddTx(tx), atx.ErrTooManyAtomicTx)
 	assert.False(mempool.Has(tx.ID()))
 
 	// shortcut to simulated empty mempool
@@ -142,7 +143,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.ErrorIs(mempool.AddTx(tx2), errInsufficientAtomicTxFee)
+	assert.ErrorIs(mempool.AddTx(tx2), atx.ErrInsufficientAtomicTxFee)
 	assert.True(mempool.Has(tx1.ID()))
 	assert.False(mempool.Has(tx2.ID()))
 
