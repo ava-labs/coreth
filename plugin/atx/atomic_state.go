@@ -21,8 +21,8 @@ type AtomicState interface {
 	// Root of the atomic trie after applying the state change.
 	Root() common.Hash
 	// Accept applies the state change to the VM's commit batch, and outputs
-	// atomic ops to the requests map.
-	Accept(requests map[ids.ID]*atomic.Requests) error
+	// atomic ops to the shared memory writer.
+	Accept(writer SharedMemoryWriter) error
 	// Reject frees memory associated with the state change.
 	Reject() error
 }
@@ -43,7 +43,7 @@ func (a *atomicState) Root() common.Hash {
 }
 
 // Accept applies the state change to VM's persistent storage.
-func (a *atomicState) Accept(requests map[ids.ID]*atomic.Requests) error {
+func (a *atomicState) Accept(writer SharedMemoryWriter) error {
 	// If this is a bonus block, write [commitBatch] without applying atomic ops
 	// to shared memory.
 	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
@@ -51,7 +51,7 @@ func (a *atomicState) Accept(requests map[ids.ID]*atomic.Requests) error {
 	} else {
 		// Add the new requests to the batch to be accepted
 		for chainID, reqs := range a.atomicOps {
-			mergeAtomicOpsToMap(requests, chainID, reqs)
+			writer.AddSharedMemoryRequests(chainID, reqs)
 		}
 	}
 
