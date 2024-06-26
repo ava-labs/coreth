@@ -84,6 +84,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	pluginDb "github.com/ava-labs/coreth/plugin/db"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -97,6 +98,7 @@ var (
 	_ block.BuildBlockWithContextChainVM = &VM{}
 	_ block.StateSyncableVM              = &VM{}
 	_ statesyncclient.EthBlockParser     = &VM{}
+	_ secp256k1fx.VM                     = &VM{}
 )
 
 const (
