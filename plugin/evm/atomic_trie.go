@@ -38,7 +38,6 @@ var (
 	_                            AtomicTrie = &atomicTrie{}
 	lastCommittedKey                        = []byte("atomicTrieLastCommittedBlock")
 	appliedSharedMemoryCursorKey            = []byte("atomicTrieLastAppliedToSharedMemory")
-	heightMapRepairKey                      = []byte("atomicTrieHeightMapRepair")
 )
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
@@ -85,10 +84,6 @@ type AtomicTrie interface {
 
 	// RejectTrie dereferences root from the trieDB, freeing memory.
 	RejectTrie(root common.Hash) error
-
-	// RepairHeightMap repairs the height map of the atomic trie by iterating
-	// over all leaves in the trie and committing the trie at every commit interval.
-	RepairHeightMap(to uint64) (bool, error)
 }
 
 // AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie
