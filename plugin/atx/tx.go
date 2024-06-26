@@ -287,5 +287,3 @@ func mergeAtomicOps(txs []*Tx) (map[ids.ID]*atomic.Requests, error) {
 	}
 	return output, nil
 }
-
-var MergeAtomicOps = mergeAtomicOps
