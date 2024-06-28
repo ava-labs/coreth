@@ -829,6 +829,9 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxPool, ethTxGossipMetrics,
 		ethTxPushGossiper, vm.ethTxPullGossiper, vm.ethTxGossipHandler,
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize eth tx gossip: %w", err)
+	}
 	vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 
 	atomicTxGossipMarshaller := atx.GossipAtomicTxMarshaller{}
@@ -841,6 +844,9 @@ func (vm *VM) initBlockBuilding() error {
 		vm.VM.Mempool(), atomicTxGossipMetrics,
 		vm.VM.AtomicTxPushGossiper, vm.VM.AtomicTxPullGossiper, vm.VM.AtomicTxGossipHandler,
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip: %w", err)
+	}
 	return nil
 }
 
