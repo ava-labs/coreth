@@ -19,7 +19,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
-	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -78,7 +77,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/avalanchego/utils/formatting/address"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
@@ -172,7 +170,6 @@ var (
 	errEmptyBlock                     = errors.New("empty block")
 	errUnsupportedFXs                 = errors.New("unsupported feature extensions")
 	errInvalidBlock                   = errors.New("invalid block")
-	errInvalidAddr                    = errors.New("invalid hex address")
 	errAssetIDMismatch                = errors.New("asset IDs in the input don't match the utxo")
 	errNoImportInputs                 = errors.New("tx has no imported inputs")
 	errInputsNotSortedUnique          = errors.New("inputs not sorted and unique")
@@ -298,13 +295,10 @@ type VM struct {
 	warpBackend warp.Backend
 
 	// Initialize only sets these if nil so they can be overridden in tests
-	p2pSender             commonEng.AppSender
-	ethTxGossipHandler    p2p.Handler
-	ethTxPushGossiper     avalancheUtils.Atomic[*gossip.PushGossiper[*GossipEthTx]]
-	ethTxPullGossiper     gossip.Gossiper
-	atomicTxGossipHandler p2p.Handler
-	atomicTxPushGossiper  *gossip.PushGossiper[*atx.GossipAtomicTx]
-	atomicTxPullGossiper  gossip.Gossiper
+	p2pSender          commonEng.AppSender
+	ethTxGossipHandler p2p.Handler
+	ethTxPushGossiper  avalancheUtils.Atomic[*gossip.PushGossiper[*GossipEthTx]]
+	ethTxPullGossiper  gossip.Gossiper
 
 	*atx.VM
 }
@@ -809,8 +803,13 @@ func (vm *VM) initBlockBuilding() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
 
+	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
+	gossipStats := NewGossipStats()
+	vm.builder = vm.NewBlockBuilder(vm.toEngine)
+	vm.builder.awaitSubmittedTxs()
+	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
+
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
 	ethTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -824,156 +823,24 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxPool.Subscribe(ctx)
 		vm.shutdownWg.Done()
 	}()
+	ethTxPushGossiper := vm.ethTxPushGossiper.Get()
+	ethTxPushGossiper, vm.ethTxPullGossiper, vm.ethTxGossipHandler, err = InitGossip(
+		ctx, vm, ethTxGossipProtocol, ethTxGossipMarshaller,
+		ethTxPool, ethTxGossipMetrics,
+		ethTxPushGossiper, vm.ethTxPullGossiper, vm.ethTxGossipHandler,
+	)
+	vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 
 	atomicTxGossipMarshaller := atx.GossipAtomicTxMarshaller{}
-	atomicTxGossipClient := vm.Network.NewClient(atomicTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
 	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
 	}
-
-	pushGossipParams := gossip.BranchingFactor{
-		StakePercentage: vm.config.PushGossipPercentStake,
-		Validators:      vm.config.PushGossipNumValidators,
-		Peers:           vm.config.PushGossipNumPeers,
-	}
-	pushRegossipParams := gossip.BranchingFactor{
-		Validators: vm.config.PushRegossipNumValidators,
-		Peers:      vm.config.PushRegossipNumPeers,
-	}
-
-	ethTxPushGossiper := vm.ethTxPushGossiper.Get()
-	if ethTxPushGossiper == nil {
-		ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
-			ethTxGossipMarshaller,
-			ethTxPool,
-			vm.validators,
-			ethTxGossipClient,
-			ethTxGossipMetrics,
-			pushGossipParams,
-			pushRegossipParams,
-			pushGossipDiscardedElements,
-			txGossipTargetMessageSize,
-			vm.config.RegossipFrequency.Duration,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
-		}
-		vm.ethTxPushGossiper.Set(ethTxPushGossiper)
-	}
-
-	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atx.GossipAtomicTx](
-			atomicTxGossipMarshaller,
-			vm.Mempool(),
-			vm.validators,
-			atomicTxGossipClient,
-			atomicTxGossipMetrics,
-			pushGossipParams,
-			pushRegossipParams,
-			pushGossipDiscardedElements,
-			txGossipTargetMessageSize,
-			vm.config.RegossipFrequency.Duration,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
-		}
-	}
-
-	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	gossipStats := NewGossipStats()
-	vm.builder = vm.NewBlockBuilder(vm.toEngine)
-	vm.builder.awaitSubmittedTxs()
-	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
-
-	if vm.ethTxGossipHandler == nil {
-		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
-			vm.ctx.Log,
-			ethTxGossipMarshaller,
-			ethTxPool,
-			ethTxGossipMetrics,
-			txGossipTargetMessageSize,
-			txGossipThrottlingPeriod,
-			txGossipThrottlingLimit,
-			vm.validators,
-		)
-	}
-
-	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
-		return err
-	}
-
-	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler = newTxGossipHandler[*atx.GossipAtomicTx](
-			vm.ctx.Log,
-			atomicTxGossipMarshaller,
-			vm.Mempool(),
-			atomicTxGossipMetrics,
-			txGossipTargetMessageSize,
-			txGossipThrottlingPeriod,
-			txGossipThrottlingLimit,
-			vm.validators,
-		)
-	}
-
-	if err := vm.Network.AddHandler(atomicTxGossipProtocol, vm.atomicTxGossipHandler); err != nil {
-		return err
-	}
-
-	if vm.ethTxPullGossiper == nil {
-		ethTxPullGossiper := gossip.NewPullGossiper[*GossipEthTx](
-			vm.ctx.Log,
-			ethTxGossipMarshaller,
-			ethTxPool,
-			ethTxGossipClient,
-			ethTxGossipMetrics,
-			txGossipPollSize,
-		)
-
-		vm.ethTxPullGossiper = gossip.ValidatorGossiper{
-			Gossiper:   ethTxPullGossiper,
-			NodeID:     vm.ctx.NodeID,
-			Validators: vm.validators,
-		}
-	}
-
-	vm.shutdownWg.Add(2)
-	go func() {
-		gossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-
-	if vm.atomicTxPullGossiper == nil {
-		atomicTxPullGossiper := gossip.NewPullGossiper[*atx.GossipAtomicTx](
-			vm.ctx.Log,
-			atomicTxGossipMarshaller,
-			vm.Mempool(),
-			atomicTxGossipClient,
-			atomicTxGossipMetrics,
-			txGossipPollSize,
-		)
-
-		vm.atomicTxPullGossiper = &gossip.ValidatorGossiper{
-			Gossiper:   atomicTxPullGossiper,
-			NodeID:     vm.ctx.NodeID,
-			Validators: vm.validators,
-		}
-	}
-
-	vm.shutdownWg.Add(2)
-	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-	go func() {
-		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-
+	vm.VM.AtomicTxPushGossiper, vm.VM.AtomicTxPullGossiper, vm.VM.AtomicTxGossipHandler, err = InitGossip(
+		ctx, vm, atomicTxGossipProtocol, atomicTxGossipMarshaller,
+		vm.VM.Mempool(), atomicTxGossipMetrics,
+		vm.VM.AtomicTxPushGossiper, vm.VM.AtomicTxPullGossiper, vm.VM.AtomicTxGossipHandler,
+	)
 	return nil
 }
 
@@ -1187,7 +1054,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		return nil, fmt.Errorf("failed to get primary alias for chain due to %w", err)
 	}
 	apis := make(map[string]http.Handler)
-	avaxAPI, err := newHandler("avax", &AvaxAPI{vm})
+	avaxAPI, err := newHandler("avax", &atx.AvaxAPI{VM: vm.VM})
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
 	}
@@ -1247,32 +1114,6 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
  *********************************** Helpers **********************************
  ******************************************************************************
  */
-
-// ParseAddress takes in an address and produces the ID of the chain it's for
-// the ID of the address
-func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
-	chainIDAlias, hrp, addrBytes, err := address.Parse(addrStr)
-	if err != nil {
-		return ids.ID{}, ids.ShortID{}, err
-	}
-
-	chainID, err := vm.ctx.BCLookup.Lookup(chainIDAlias)
-	if err != nil {
-		return ids.ID{}, ids.ShortID{}, err
-	}
-
-	expectedHRP := avalanchegoConstants.GetHRP(vm.ctx.NetworkID)
-	if hrp != expectedHRP {
-		return ids.ID{}, ids.ShortID{}, fmt.Errorf("expected hrp %q but got %q",
-			expectedHRP, hrp)
-	}
-
-	addr, err := ids.ToShortID(addrBytes)
-	if err != nil {
-		return ids.ID{}, ids.ShortID{}, err
-	}
-	return chainID, addr, nil
-}
 
 func (vm *VM) GetBlockAndAtomicTxs(blkID ids.ID) (uint64, []*Tx, choices.Status, ids.ID, error) {
 	blkIntf, err := vm.GetBlockInternal(context.TODO(), blkID)

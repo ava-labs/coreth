@@ -11,9 +11,13 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/choices"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
+	"github.com/ava-labs/avalanchego/utils/formatting/address"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -77,6 +81,10 @@ type VM struct {
 	atomicTxRepository AtomicTxRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
 	atomicBackend AtomicBackend
+
+	AtomicTxGossipHandler p2p.Handler
+	AtomicTxPushGossiper  *gossip.PushGossiper[*GossipAtomicTx]
+	AtomicTxPullGossiper  gossip.Gossiper
 }
 
 func NewVM(
@@ -775,4 +783,46 @@ func (vm *VM) VerifyUTXOsPresent(blockHash common.Hash, blockNumber uint64, txs 
 		}
 	}
 	return nil
+}
+
+// FormatLocalAddress takes in a raw address and produces the formatted address
+func (vm *VM) FormatLocalAddress(addr ids.ShortID) (string, error) {
+	return vm.FormatAddress(vm.ctx.ChainID, addr)
+}
+
+// FormatAddress takes in a chainID and a raw address and produces the formatted
+// address
+func (vm *VM) FormatAddress(chainID ids.ID, addr ids.ShortID) (string, error) {
+	chainIDAlias, err := vm.ctx.BCLookup.PrimaryAlias(chainID)
+	if err != nil {
+		return "", err
+	}
+	hrp := constants.GetHRP(vm.ctx.NetworkID)
+	return address.Format(chainIDAlias, hrp, addr.Bytes())
+}
+
+// ParseAddress takes in an address and produces the ID of the chain it's for
+// the ID of the address
+func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
+	chainIDAlias, hrp, addrBytes, err := address.Parse(addrStr)
+	if err != nil {
+		return ids.ID{}, ids.ShortID{}, err
+	}
+
+	chainID, err := vm.ctx.BCLookup.Lookup(chainIDAlias)
+	if err != nil {
+		return ids.ID{}, ids.ShortID{}, err
+	}
+
+	expectedHRP := constants.GetHRP(vm.ctx.NetworkID)
+	if hrp != expectedHRP {
+		return ids.ID{}, ids.ShortID{}, fmt.Errorf("expected hrp %q but got %q",
+			expectedHRP, hrp)
+	}
+
+	addr, err := ids.ToShortID(addrBytes)
+	if err != nil {
+		return ids.ID{}, ids.ShortID{}, err
+	}
+	return chainID, addr, nil
 }

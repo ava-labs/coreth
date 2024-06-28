@@ -56,9 +56,7 @@ func TestEthTxGossip(t *testing.T) {
 		SentAppResponse: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender:             responseSender,
-		atomicTxGossipHandler: &p2p.NoOpHandler{},
-		atomicTxPullGossiper:  &gossip.NoOpGossiper{},
+		p2pSender: responseSender,
 	}
 
 	require.NoError(vm.Initialize(
@@ -320,9 +318,8 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	}
 
 	vm := &VM{
-		p2pSender:            sender,
-		ethTxPullGossiper:    gossip.NoOpGossiper{},
-		atomicTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:         sender,
+		ethTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	pk, err := secp256k1.NewPrivateKey()
@@ -380,9 +377,8 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 
 	sender := &common.SenderTest{}
 	vm := &VM{
-		p2pSender:            sender,
-		ethTxPullGossiper:    gossip.NoOpGossiper{},
-		atomicTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:         sender,
+		ethTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	pk, err := secp256k1.NewPrivateKey()
@@ -460,9 +456,8 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender:            sender,
-		ethTxPullGossiper:    gossip.NoOpGossiper{},
-		atomicTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:         sender,
+		ethTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	require.NoError(vm.Initialize(
@@ -496,7 +491,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	tx, err := vm.NewImportTxWithUTXOs(vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.Mempool().AddLocalTx(tx))
-	vm.atomicTxPushGossiper.Add(&atx.GossipAtomicTx{Tx: tx})
+	vm.AtomicTxPushGossiper.Add(&atx.GossipAtomicTx{Tx: tx})
 
 	gossipedBytes := <-sender.SentAppGossip
 	require.Equal(byte(atomicTxGossipProtocol), gossipedBytes[0])
@@ -536,9 +531,8 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	sender := &common.SenderTest{}
 	vm := &VM{
-		p2pSender:            sender,
-		ethTxPullGossiper:    gossip.NoOpGossiper{},
-		atomicTxPullGossiper: gossip.NoOpGossiper{},
+		p2pSender:         sender,
+		ethTxPullGossiper: gossip.NoOpGossiper{},
 	}
 
 	require.NoError(vm.Initialize(

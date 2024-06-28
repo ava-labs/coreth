@@ -30,6 +30,7 @@ type BlockChain interface {
 	StateAt(root common.Hash) (StateDB, error)
 	CurrentHeader() *types.Header
 	HasBlock(common.Hash, uint64) bool
+	LastAcceptedBlock() *types.Block
 }
 
 type BlockGetter interface {
