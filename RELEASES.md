@@ -1,6 +1,6 @@
 # Release Notes
 
-## [v0.13.6](https://github.com/ava-labs/coreth/releases/tag/v0.13.5)
+## [v0.13.6](https://github.com/ava-labs/coreth/releases/tag/v0.13.6)
 - rpc: truncate call error data logs
 - logging: remove path prefix (up to coreth@version/) from logged file names.
 - cleanup: removes pre-Durango scripts
