@@ -72,7 +72,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
-	assert.True(vm.mempool.has(tx.ID()))
+	assert.True(vm.Mempool().Has(tx.ID()))
 
 	vm.ctx.Lock.Unlock()
 
@@ -102,7 +102,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
-	assert.False(vm.mempool.has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
+	assert.False(vm.Mempool().Has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
 }
 
 // show that txs already marked as invalid are not re-requested on gossiping
@@ -116,7 +116,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
-	mempool := vm.mempool
+	mempool := vm.Mempool()
 
 	var (
 		txGossiped     int
@@ -146,7 +146,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	mempool.DiscardCurrentTx(txID)
 
 	// Check the mempool does not contain the discarded transaction
-	assert.False(mempool.has(txID))
+	assert.False(mempool.Has(txID))
 
 	// Gossip the transaction to the VM and ensure that it is not added to the mempool
 	// and is not re-gossipped.
@@ -168,7 +168,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert.Zero(txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 
-	assert.False(mempool.has(txID))
+	assert.False(mempool.Has(txID))
 
 	// Gossip the transaction that conflicts with the originally
 	// discarded tx and ensure it is accepted into the mempool and gossipped
@@ -192,6 +192,6 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert.Equal(1, txGossiped, "conflicting tx should have been gossiped")
 	txGossipedLock.Unlock()
 
-	assert.False(mempool.has(txID))
-	assert.True(mempool.has(conflictingTx.ID()))
+	assert.False(mempool.Has(txID))
+	assert.True(mempool.Has(conflictingTx.ID()))
 }

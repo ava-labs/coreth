@@ -5,6 +5,7 @@ package evm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -35,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/db"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -144,7 +146,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		context.Background(),
 		vmSetup.syncerVM.ctx,
 		vmSetup.syncerDB,
-		[]byte(genesisJSONLatest),
+		vmSetup.genesisBytes,
 		nil,
 		[]byte(stateSyncDisabledConfigJSON),
 		vmSetup.syncerVM.toEngine,
@@ -207,7 +209,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		context.Background(),
 		vmSetup.syncerVM.ctx,
 		vmSetup.syncerDB,
-		[]byte(genesisJSONLatest),
+		vmSetup.genesisBytes,
 		nil,
 		[]byte(configJSON),
 		vmSetup.syncerVM.toEngine,
@@ -281,9 +283,17 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		alloc        = map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		}
+		g core.Genesis
 	)
+	err := json.Unmarshal([]byte(genesisJSONLatest), &g)
+	require.NoError(err)
+	g.Config.ChainID = params.AvalancheLocalChainID
+	genesisBytes, err := json.Marshal(g)
+	require.NoError(err)
+	config := fmt.Sprintf(`{"commit-interval":%d}`, test.syncableInterval)
+
 	_, serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
-		t, true, "", "", "", alloc,
+		t, true, string(genesisBytes), config, "", alloc,
 	)
 	t.Cleanup(func() {
 		log.Info("Shutting down server VM")
@@ -291,7 +301,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	})
 	var (
 		importTx, exportTx *Tx
-		err                error
 	)
 	generateAndAcceptBlocks(t, serverVM, numBlocks, func(i int, gen *core.BlockGen) {
 		b, err := predicate.NewResults().Bytes()
@@ -302,12 +311,12 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		switch i {
 		case 0:
 			// spend the UTXOs from shared memory
-			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			importTx, err = serverVM.NewImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			require.NoError(err)
-			require.NoError(serverVM.mempool.AddLocalTx(importTx))
+			require.NoError(serverVM.Mempool().AddLocalTx(importTx))
 		case 1:
 			// export some of the imported UTXOs to test exportTx is properly synced
-			exportTx, err = serverVM.newExportTx(
+			exportTx, err = serverVM.NewExportTx(
 				serverVM.ctx.AVAXAssetID,
 				importAmount/2,
 				serverVM.ctx.XChainID,
@@ -316,7 +325,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 				[]*secp256k1.PrivateKey{testKeys[0]},
 			)
 			require.NoError(err)
-			require.NoError(serverVM.mempool.AddLocalTx(exportTx))
+			require.NoError(serverVM.Mempool().AddLocalTx(exportTx))
 		default: // Generate simple transfer transactions.
 			pk := testKeys[0].ToECDSA()
 			tx := types.NewTransaction(gen.TxNonce(testEthAddrs[0]), testEthAddrs[1], common.Big1, params.TxGas, initialBaseFee, nil)
@@ -326,17 +335,16 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		}
 	}, nil)
 
-	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
-	// creates a commit at the height [syncableInterval]. This is necessary to support
+	// Create a commit at the height [syncableInterval]. This is necessary to support
 	// fetching a state summary.
-	serverAtomicTrie := serverVM.atomicTrie.(*atomicTrie)
-	serverAtomicTrie.commitInterval = test.syncableInterval
-	require.NoError(serverAtomicTrie.commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
+	serverAtomicTrie := serverVM.atomicTrie
+	_, err = serverAtomicTrie.AcceptTrie(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot())
+	require.NoError(err)
 	require.NoError(serverVM.db.Commit())
 
 	serverSharedMemories := newSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
-	serverSharedMemories.assertOpsApplied(t, importTx.mustAtomicOps())
-	serverSharedMemories.assertOpsApplied(t, exportTx.mustAtomicOps())
+	serverSharedMemories.assertOpsApplied(t, mustAtomicOps(importTx))
+	serverSharedMemories.assertOpsApplied(t, mustAtomicOps(exportTx))
 
 	// make some accounts
 	trieDB := trie.NewDatabase(serverVM.chaindb, nil)
@@ -358,9 +366,12 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	serverVM.StateSyncServer.(*stateSyncServer).syncableInterval = test.syncableInterval
 
 	// initialise [syncerVM] with blank genesis state
-	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d}`, test.stateSyncMinBlocks, 4)
+	stateSyncEnabledJSON := fmt.Sprintf(
+		`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d, "commit-interval": %d}`,
+		test.stateSyncMinBlocks, 4, test.syncableInterval,
+	)
 	syncerEngineChan, syncerVM, syncerDB, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
-		t, false, "", stateSyncEnabledJSON, "", alloc,
+		t, false, string(genesisBytes), stateSyncEnabledJSON, "", alloc,
 	)
 	shutdownOnceSyncerVM := &shutdownOnceVM{VM: syncerVM}
 	t.Cleanup(func() {
@@ -370,9 +381,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	enabled, err := syncerVM.StateSyncEnabled(context.Background())
 	require.NoError(err)
 	require.True(enabled)
-
-	// override [syncerVM]'s commit interval so the atomic trie works correctly.
-	syncerVM.atomicTrie.(*atomicTrie).commitInterval = test.syncableInterval
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	serverAppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
@@ -416,6 +424,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		syncerEngineChan:     syncerEngineChan,
 		syncerAtomicMemory:   syncerAtomicMemory,
 		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
+		genesisBytes:         genesisBytes,
 	}
 }
 
@@ -433,6 +442,7 @@ type syncVMSetup struct {
 	syncerEngineChan     <-chan commonEng.Message
 	syncerAtomicMemory   *atomic.Memory
 	shutdownOnceSyncerVM *shutdownOnceVM
+	genesisBytes         []byte
 }
 
 type shutdownOnceVM struct {
@@ -490,7 +500,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if test.expectedErr != nil {
 		require.ErrorIs(err, test.expectedErr)
 		// Note we re-open the database here to avoid a closed error when the test is for a shutdown VM.
-		chaindb := Database{prefixdb.NewNested(ethDBPrefix, syncerVM.db)}
+		chaindb := db.Database{Database: prefixdb.NewNested(ethDBPrefix, syncerVM.db)}
 		assertSyncPerformedHeights(t, chaindb, map[uint64]struct{}{})
 		return
 	}
@@ -560,7 +570,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	syncerSharedMemories := newSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
 
 	for _, tx := range includedAtomicTxs {
-		syncerSharedMemories.assertOpsApplied(t, tx.mustAtomicOps())
+		syncerSharedMemories.assertOpsApplied(t, mustAtomicOps(tx))
 	}
 
 	// Generate blocks after we have entered normal consensus as well
@@ -671,4 +681,12 @@ func assertSyncPerformedHeights(t *testing.T, db ethdb.Iteratee, expected map[ui
 	}
 	require.NoError(t, it.Error())
 	require.Equal(t, expected, found)
+}
+
+func mustAtomicOps(tx *Tx) map[ids.ID]*atomic.Requests {
+	id, reqs, err := tx.AtomicOps()
+	if err != nil {
+		panic(err)
+	}
+	return map[ids.ID]*atomic.Requests{id: reqs}
 }

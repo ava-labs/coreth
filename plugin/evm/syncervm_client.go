@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/atx"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -53,7 +54,7 @@ type stateSyncClientConfig struct {
 	metadataDB      database.Database
 	acceptedBlockDB database.Database
 	db              *versiondb.Database
-	atomicBackend   AtomicBackend
+	atomicBackend   atx.AtomicBackend
 
 	client syncclient.Client
 
