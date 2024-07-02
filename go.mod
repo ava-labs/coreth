@@ -3,8 +3,8 @@ module github.com/ava-labs/coreth
 go 1.21.11
 
 require (
-	github.com/VictoriaMetrics/fastcache v1.10.0
-	github.com/ava-labs/avalanchego v1.11.0-rc.2.0.20240219215607-a7d29eb6dda7
+	github.com/VictoriaMetrics/fastcache v1.12.1
+	github.com/ava-labs/avalanchego v1.11.9-0.20240702183053-d198b0b3aa8a
 	github.com/cespare/cp v0.1.0
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
@@ -45,7 +45,7 @@ require (
 	golang.org/x/sys v0.18.0
 	golang.org/x/text v0.14.0
 	golang.org/x/time v0.3.0
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.34.2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
@@ -75,7 +75,7 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/google/renameio/v2 v2.0.0 // indirect
