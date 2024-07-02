@@ -19,9 +19,10 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
@@ -509,9 +510,12 @@ func TestHandleInvalidMessages(t *testing.T) {
 
 	nodeID := ids.GenerateTestNodeID()
 	requestID := uint32(1)
-	sender := testAppSender{}
-
-	p2pNetwork, err := p2p.NewNetwork(logging.NoLog{}, nil, prometheus.NewRegistry(), "")
+	sender := &common.SenderTest{
+		SendAppErrorF: func(context.Context, ids.NodeID, uint32, int32, string) error {
+			return nil
+		},
+	}
+	p2pNetwork, err := p2p.NewNetwork(logging.NoLog{}, sender, prometheus.NewRegistry(), "")
 	require.NoError(t, err)
 	clientNetwork := NewNetwork(p2pNetwork, sender, codecManager, crossChainCodecManager, ids.EmptyNodeID, 1, 1)
 	clientNetwork.SetGossipHandler(message.NoopMempoolGossipHandler{})
