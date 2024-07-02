@@ -1057,7 +1057,7 @@ func (t *testSDKHandler) AppGossip(ctx context.Context, nodeID ids.NodeID, gossi
 	panic("implement me")
 }
 
-func (t *testSDKHandler) AppRequest(ctx context.Context, nodeID ids.NodeID, deadline time.Time, requestBytes []byte) ([]byte, error) {
+func (t *testSDKHandler) AppRequest(ctx context.Context, nodeID ids.NodeID, deadline time.Time, requestBytes []byte) ([]byte, *common.AppError) {
 	t.appRequested = true
 	return nil, nil
 }
