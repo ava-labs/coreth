@@ -31,7 +31,6 @@ var (
 		TriePrefetcherParallelism: 4,
 		Pruning:                   false, // Archive mode
 		SnapshotLimit:             256,
-		AcceptorQueueLimit:        64,
 	}
 
 	pruningConfig = &CacheConfig{
@@ -42,7 +41,6 @@ var (
 		Pruning:                   true, // Enable pruning
 		CommitInterval:            4096,
 		SnapshotLimit:             256,
-		AcceptorQueueLimit:        64,
 	}
 )
 
@@ -91,7 +89,6 @@ func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
 				TriePrefetcherParallelism: 4,
 				Pruning:                   false, // Archive mode
 				SnapshotLimit:             0,     // Disable snapshots
-				AcceptorQueueLimit:        64,
 			},
 			gspec,
 			lastAcceptedHash,
@@ -127,7 +124,6 @@ func TestPruningBlockChainSnapsDisabled(t *testing.T) {
 				Pruning:                   true, // Enable pruning
 				CommitInterval:            4096,
 				SnapshotLimit:             0, // Disable snapshots
-				AcceptorQueueLimit:        64,
 			},
 			gspec,
 			lastAcceptedHash,
@@ -177,7 +173,6 @@ func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
 				Pruning:                   true, // Enable pruning
 				CommitInterval:            4096,
 				SnapshotLimit:             0, // Disable snapshots
-				AcceptorQueueLimit:        64,
 			},
 			gspec,
 			lastAcceptedHash,
@@ -213,7 +208,6 @@ func TestEnableSnapshots(t *testing.T) {
 				Pruning:                   true, // Enable pruning
 				CommitInterval:            4096,
 				SnapshotLimit:             snapLimit,
-				AcceptorQueueLimit:        64,
 			},
 			gspec,
 			lastAcceptedHash,
@@ -337,7 +331,6 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 			t.Fatal(err)
 		}
 	}
-	blockchain.DrainAcceptorQueue()
 
 	lastAcceptedHash := blockchain.LastConsensusAcceptedBlock().Hash()
 	blockchain.Stop()
@@ -368,7 +361,6 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 			SnapshotLimit:                   256,
 			PopulateMissingTries:            &startHeight, // Starting point for re-populating.
 			PopulateMissingTriesParallelism: parallelism,
-			AcceptorQueueLimit:              64,
 		},
 		gspec,
 		lastAcceptedHash,
@@ -392,7 +384,7 @@ func TestRepopulateMissingTries(t *testing.T) {
 	}
 }
 
-func TestUngracefulAsyncShutdown(t *testing.T) {
+func TestUngracefulShutdown(t *testing.T) {
 	var (
 		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 			blockchain, err := createBlockChain(db, &CacheConfig{
@@ -404,7 +396,6 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 				CommitInterval:            4096,
 				SnapshotLimit:             256,
 				SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-				AcceptorQueueLimit:        1000, // ensure channel doesn't block
 			}, gspec, lastAcceptedHash)
 			if err != nil {
 				return nil, err
@@ -442,50 +433,26 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Insert three blocks into the chain and accept only the first block.
+	// Insert and accept three blocks into the chain.
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatal(err)
 	}
 
-	foundTxs := []common.Hash{}
-	missingTxs := []common.Hash{}
-	for i, block := range chain {
+	allTxs := []common.Hash{}
+	for _, block := range chain {
 		if err := blockchain.Accept(block); err != nil {
 			t.Fatal(err)
 		}
-
-		if i == 3 {
-			// At height 3, kill the async accepted block processor to force an
-			// ungraceful recovery
-			blockchain.stopAcceptor()
-			blockchain.acceptorQueue = nil
-		}
-
-		if i <= 3 {
-			// If <= height 3, all txs should be accessible on lookup
-			for _, tx := range block.Transactions() {
-				foundTxs = append(foundTxs, tx.Hash())
-			}
-		} else {
-			// If > 3, all txs should be accessible on lookup
-			for _, tx := range block.Transactions() {
-				missingTxs = append(missingTxs, tx.Hash())
-			}
+		for _, tx := range block.Transactions() {
+			allTxs = append(allTxs, tx.Hash())
 		}
 	}
 
-	// After inserting all blocks, we should confirm that txs added after the
-	// async worker shutdown cannot be found.
-	for _, tx := range foundTxs {
+	// After accepting the blocks, all txs should be queryable.
+	for _, tx := range allTxs {
 		txLookup := blockchain.GetTransactionLookup(tx)
 		if txLookup == nil {
 			t.Fatalf("missing transaction: %v", tx)
-		}
-	}
-	for _, tx := range missingTxs {
-		txLookup := blockchain.GetTransactionLookup(tx)
-		if txLookup != nil {
-			t.Fatalf("transaction should be missing: %v", tx)
 		}
 	}
 
@@ -516,15 +483,13 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 	}
 
 	_, newChain, restartedChain := checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
-
-	allTxs := append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
 		if bc.snaps == nil {
 			t.Fatal("snapshot initialization failed")
 		}
 
-		// We should confirm all transactions can now be queried
+		// All transactions should still be queryable after a restart.
 		for _, tx := range allTxs {
 			txLookup := bc.GetTransactionLookup(tx)
 			if txLookup == nil {
@@ -572,7 +537,6 @@ func TestTransactionIndices(t *testing.T) {
 		CommitInterval:            4096,
 		SnapshotLimit:             256,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:        64,
 	}
 
 	// Init block chain and check all needed indices has been indexed.
@@ -587,7 +551,6 @@ func TestTransactionIndices(t *testing.T) {
 		err := chain.Accept(block)
 		require.NoError(err)
 	}
-	chain.DrainAcceptorQueue()
 
 	lastAcceptedBlock := blocks[len(blocks)-1]
 	require.Equal(lastAcceptedBlock.Hash(), chain.CurrentHeader().Hash())
@@ -622,7 +585,6 @@ func TestTransactionIndices(t *testing.T) {
 			lastAcceptedBlock = newBlks[0]
 			err = chain.Accept(lastAcceptedBlock) // Accept the block to trigger indices updater.
 			require.NoError(err)
-			chain.DrainAcceptorQueue()
 
 			tail = getTail(l, lastAcceptedBlock.NumberU64())
 			// check if indices are updated correctly
@@ -683,7 +645,6 @@ func TestTransactionSkipIndexing(t *testing.T) {
 		CommitInterval:            4096,
 		SnapshotLimit:             256,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:        64,
 		SkipTxIndexing:            true,
 	}
 
@@ -861,7 +822,6 @@ func TestTxLookupBlockChain(t *testing.T) {
 		CommitInterval:            4096,
 		SnapshotLimit:             256,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:        64,   // ensure channel doesn't block
 		TxLookupLimit:             5,
 	}
 	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
@@ -884,7 +844,6 @@ func TestTxLookupSkipIndexingBlockChain(t *testing.T) {
 		CommitInterval:            4096,
 		SnapshotLimit:             256,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:        64,   // ensure channel doesn't block
 		TxLookupLimit:             5,
 		SkipTxIndexing:            true,
 	}
@@ -1322,7 +1281,6 @@ func createAndInsertChain(db ethdb.Database, cacheConfig *CacheConfig, gspec *Ge
 		if err != nil {
 			return nil, err
 		}
-		chain.DrainAcceptorQueue()
 		if accepted != nil {
 			accepted(block)
 		}
