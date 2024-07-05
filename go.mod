@@ -2,8 +2,6 @@ module github.com/ava-labs/coreth
 
 go 1.21.12
 
-toolchain go1.22.2
-
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
 	github.com/ava-labs/avalanchego v1.11.10-status-removal
