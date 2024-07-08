@@ -29,14 +29,15 @@ func (f BlockClient) GetAcceptedBlock(ctx context.Context, blockID ids.ID) (snow
 // returned.
 func MakeBlockClient(blkIDs ...ids.ID) BlockClient {
 	return func(_ context.Context, blkID ids.ID) (snowman.Block, error) {
-		if slices.Contains(blkIDs, blkID) {
-			return &snowmantest.Block{
-				Decidable: snowtest.Decidable{
-					IDV:    blkID,
-					Status: snowtest.Accepted,
-				},
-			}, nil
+		if !slices.Contains(blkIDs, blkID) {
+			return nil, database.ErrNotFound
 		}
-		return nil, database.ErrNotFound
+
+		return &snowmantest.Block{
+			Decidable: snowtest.Decidable{
+				IDV:    blkID,
+				Status: snowtest.Accepted,
+			},
+		}, nil
 	}
 }
