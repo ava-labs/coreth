@@ -82,13 +82,15 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 			sigRequested := time.Now()
 			a.stats.IncSignatureRequested()
 			signature, err := a.client.GetSignature(signatureFetchCtx, nodeID, unsignedMessage)
-			a.stats.UpdateSignatureDuration(time.Since(sigRequested))
+			duration := time.Since(sigRequested)
+			a.stats.UpdateSignatureDuration(duration)
 			if err != nil {
 				log.Debug("Failed to fetch warp signature",
 					"nodeID", nodeID,
 					"index", i,
 					"err", err,
 					"msgID", unsignedMessage.ID(),
+					"duration", duration,
 				)
 				a.stats.IncSignatureErrored()
 				signatureFetchResultChan <- nil
@@ -99,6 +101,7 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 				"nodeID", nodeID,
 				"msgID", unsignedMessage.ID(),
 				"index", i,
+				"duration", duration,
 			)
 
 			if !bls.Verify(validator.PublicKey, signature, unsignedMessage.Bytes()) {
@@ -106,6 +109,7 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 					"nodeID", nodeID,
 					"index", i,
 					"msgID", unsignedMessage.ID(),
+					"duration", duration,
 				)
 				a.stats.IncSignatureErrored()
 				signatureFetchResultChan <- nil
