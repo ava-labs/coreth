@@ -6,6 +6,7 @@ package aggregator
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 
@@ -36,6 +37,7 @@ type Aggregator struct {
 	validators  []*avalancheWarp.Validator
 	totalWeight uint64
 	client      SignatureGetter
+	stats       *aggregatorStats
 }
 
 // New returns a signature aggregator that will attempt to aggregate signatures from [validators].
@@ -44,12 +46,19 @@ func New(client SignatureGetter, validators []*avalancheWarp.Validator, totalWei
 		client:      client,
 		validators:  validators,
 		totalWeight: totalWeight,
+		stats:       newStats(),
 	}
 }
 
 // Returns an aggregate signature over [unsignedMessage].
 // The returned signature's weight exceeds the threshold given by [quorumNum].
 func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *avalancheWarp.UnsignedMessage, quorumNum uint64) (*AggregateSignatureResult, error) {
+	a.stats.IncAggregateRequested()
+	start := time.Now()
+	defer func() {
+		a.stats.UpdateAggregateDuration(time.Since(start))
+	}()
+
 	// Create a child context to cancel signature fetching if we reach signature threshold.
 	signatureFetchCtx, signatureFetchCancel := context.WithCancel(ctx)
 	defer signatureFetchCancel()
@@ -70,7 +79,10 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 				"msgID", unsignedMessage.ID(),
 			)
 
+			sigRequested := time.Now()
+			a.stats.IncSignatureRequested()
 			signature, err := a.client.GetSignature(signatureFetchCtx, nodeID, unsignedMessage)
+			a.stats.UpdateSignatureDuration(time.Since(sigRequested))
 			if err != nil {
 				log.Debug("Failed to fetch warp signature",
 					"nodeID", nodeID,
@@ -78,6 +90,7 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 					"err", err,
 					"msgID", unsignedMessage.ID(),
 				)
+				a.stats.IncSignatureErrored()
 				signatureFetchResultChan <- nil
 				return
 			}
@@ -94,6 +107,7 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 					"index", i,
 					"msgID", unsignedMessage.ID(),
 				)
+				a.stats.IncSignatureErrored()
 				signatureFetchResultChan <- nil
 				return
 			}
@@ -144,12 +158,14 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 
 	// If I failed to fetch sufficient signature stake, return an error
 	if !signaturesPassedThreshold {
+		a.stats.IncAggregateErrored()
 		return nil, avalancheWarp.ErrInsufficientWeight
 	}
 
 	// Otherwise, return the aggregate signature
 	aggregateSignature, err := bls.AggregateSignatures(signatures)
 	if err != nil {
+		a.stats.IncAggregateErrored()
 		return nil, fmt.Errorf("failed to aggregate BLS signatures: %w", err)
 	}
 
@@ -160,6 +176,7 @@ func (a *Aggregator) AggregateSignatures(ctx context.Context, unsignedMessage *a
 
 	msg, err := avalancheWarp.NewMessage(unsignedMessage, warpSignature)
 	if err != nil {
+		a.stats.IncAggregateErrored()
 		return nil, fmt.Errorf("failed to construct warp message: %w", err)
 	}
 
