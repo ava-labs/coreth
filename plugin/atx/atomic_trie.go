@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"fmt"
@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/db"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/triedb/hashdb"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -151,7 +152,7 @@ func newAtomicTrie(
 	}
 
 	trieDB := trie.NewDatabase(
-		rawdb.NewDatabase(Database{atomicTrieDB}),
+		rawdb.NewDatabase(db.Database{Database: atomicTrieDB}),
 		&trie.Config{
 			HashDB: &hashdb.Config{
 				CleanCacheSize: 64 * units.MiB, // Allocate 64MB of memory for clean cache

@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/atx"
 
 	"github.com/ava-labs/avalanchego/snow"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -28,7 +29,7 @@ type blockBuilder struct {
 	chainConfig *params.ChainConfig
 
 	txPool  *txpool.TxPool
-	mempool *Mempool
+	mempool atx.IMempool
 
 	shutdownChan <-chan struct{}
 	shutdownWg   *sync.WaitGroup
@@ -56,7 +57,7 @@ func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message) *bl
 		ctx:                  vm.ctx,
 		chainConfig:          vm.chainConfig,
 		txPool:               vm.txPool,
-		mempool:              vm.mempool,
+		mempool:              vm.Mempool(),
 		shutdownChan:         vm.shutdownChan,
 		shutdownWg:           &vm.shutdownWg,
 		notifyBuildBlockChan: notifyBuildBlockChan,
@@ -155,7 +156,7 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 			case <-txSubmitChan:
 				log.Trace("New tx detected, trying to generate a block")
 				b.signalTxsReady()
-			case <-b.mempool.Pending:
+			case <-b.mempool.Pending():
 				log.Trace("New atomic Tx detected, trying to generate a block")
 				b.signalTxsReady()
 			case <-b.shutdownChan:

@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"errors"
@@ -50,6 +50,30 @@ func newMempoolMetrics() *mempoolMetrics {
 	}
 }
 
+type IMempool interface {
+	AddTx(tx *Tx) error
+	AddLocalTx(tx *Tx) error
+	ForceAddTx(tx *Tx) error
+	NextTx() (*Tx, bool)
+	Has(txID ids.ID) bool
+	GetTx(txID ids.ID) (*Tx, bool, bool)
+	RemoveTx(tx *Tx)
+
+	IssueCurrentTxs()
+	CancelCurrentTx(txID ids.ID)
+	CancelCurrentTxs()
+	DiscardCurrentTx(txID ids.ID)
+	DiscardCurrentTxs()
+
+	SetMaxSize(int)
+	Pending() chan struct{}
+	Len() int
+
+	Add(tx *GossipAtomicTx) error
+	GetFilter() ([]byte, []byte)
+	Iterate(f func(tx *GossipAtomicTx) bool)
+}
+
 // Mempool is a simple mempool for atomic transactions
 type Mempool struct {
 	lock sync.RWMutex
@@ -66,7 +90,7 @@ type Mempool struct {
 	discardedTxs *cache.LRU[ids.ID, *Tx]
 	// Pending is a channel of length one, which the mempool ensures has an item on
 	// it as long as there is an unissued transaction remaining in [txs]
-	Pending chan struct{}
+	pending chan struct{}
 	// txHeap is a sorted record of all txs in the mempool by [gasPrice]
 	// NOTE: [txHeap] ONLY contains pending txs
 	txHeap *txHeap
@@ -92,7 +116,7 @@ func NewMempool(ctx *snow.Context, registerer prometheus.Registerer, maxSize int
 		issuedTxs:    make(map[ids.ID]*Tx),
 		discardedTxs: &cache.LRU[ids.ID, *Tx]{Size: discardedTxsCacheSize},
 		currentTxs:   make(map[ids.ID]*Tx),
-		Pending:      make(chan struct{}, 1),
+		pending:      make(chan struct{}, 1),
 		txHeap:       newTxHeap(maxSize),
 		maxSize:      maxSize,
 		utxoSpenders: make(map[ids.ID]*Tx),
@@ -592,7 +616,18 @@ func (m *Mempool) RemoveTx(tx *Tx) {
 // addPending makes sure that an item is in the Pending channel.
 func (m *Mempool) addPending() {
 	select {
-	case m.Pending <- struct{}{}:
+	case m.pending <- struct{}{}:
 	default:
 	}
+}
+
+func (m *Mempool) SetMaxSize(maxSize int) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.maxSize = maxSize
+}
+
+func (m *Mempool) Pending() chan struct{} {
+	return m.pending
 }

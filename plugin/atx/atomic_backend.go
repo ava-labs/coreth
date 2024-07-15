@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atx
 
 import (
 	"encoding/binary"
@@ -21,6 +21,12 @@ import (
 )
 
 var _ AtomicBackend = &atomicBackend{}
+
+var (
+	// Prefixes for atomic trie
+	atomicTrieDBPrefix     = []byte("atomicTrieDB")
+	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
+)
 
 // AtomicBackend abstracts the verification and processing
 // of atomic transactions
