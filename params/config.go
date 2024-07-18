@@ -116,6 +116,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhase1Config = &ChainConfig{
@@ -143,6 +144,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhase2Config = &ChainConfig{
@@ -170,6 +172,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhase3Config = &ChainConfig{
@@ -197,6 +200,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhase4Config = &ChainConfig{
@@ -224,6 +228,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhase5Config = &ChainConfig{
@@ -251,6 +256,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhasePre6Config = &ChainConfig{
@@ -278,6 +284,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhase6Config = &ChainConfig{
@@ -305,6 +312,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestApricotPhasePost6Config = &ChainConfig{
@@ -332,6 +340,7 @@ var (
 		BanffBlockTimestamp:             nil,
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestBanffChainConfig = &ChainConfig{
@@ -359,6 +368,7 @@ var (
 		BanffBlockTimestamp:             utils.NewUint64(0),
 		CortinaBlockTimestamp:           nil,
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestCortinaChainConfig = &ChainConfig{
@@ -386,6 +396,7 @@ var (
 		BanffBlockTimestamp:             utils.NewUint64(0),
 		CortinaBlockTimestamp:           utils.NewUint64(0),
 		DurangoBlockTimestamp:           nil,
+		EUpgradeTime:                    nil,
 	}
 
 	TestDurangoChainConfig = &ChainConfig{
@@ -412,6 +423,36 @@ var (
 		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
 		BanffBlockTimestamp:             utils.NewUint64(0),
 		CortinaBlockTimestamp:           utils.NewUint64(0),
+		DurangoBlockTimestamp:           utils.NewUint64(0),
+		EUpgradeTime:                    nil,
+	}
+
+	TestEUpgradeChainConfig = &ChainConfig{
+		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
+		ChainID:                         big.NewInt(1),
+		HomesteadBlock:                  big.NewInt(0),
+		DAOForkBlock:                    nil,
+		DAOForkSupport:                  false,
+		EIP150Block:                     big.NewInt(0),
+		EIP155Block:                     big.NewInt(0),
+		EIP158Block:                     big.NewInt(0),
+		ByzantiumBlock:                  big.NewInt(0),
+		ConstantinopleBlock:             big.NewInt(0),
+		PetersburgBlock:                 big.NewInt(0),
+		IstanbulBlock:                   big.NewInt(0),
+		MuirGlacierBlock:                big.NewInt(0),
+		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
+		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
+		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
+		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
+		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
+		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
+		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
+		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
+		BanffBlockTimestamp:             utils.NewUint64(0),
+		CortinaBlockTimestamp:           utils.NewUint64(0),
+		DurangoBlockTimestamp:           utils.NewUint64(0),
+		EUpgradeTime:                    utils.NewUint64(0),
 	}
 
 	TestRules = TestChainConfig.Rules(new(big.Int), 0)
@@ -442,6 +483,7 @@ func getChainConfig(networkID uint32, chainID *big.Int) *ChainConfig {
 		BanffBlockTimestamp:             getUpgradeTime(networkID, version.BanffTimes),
 		CortinaBlockTimestamp:           getUpgradeTime(networkID, version.CortinaTimes),
 		DurangoBlockTimestamp:           getUpgradeTime(networkID, version.DurangoTimes),
+		EUpgradeTime:                    getUpgradeTime(networkID, version.EUpgradeTimes),
 	}
 }
 
