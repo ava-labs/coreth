@@ -89,6 +89,7 @@ var (
 		BanffBlockTimestamp:             utils.NewUint64(0),
 		CortinaBlockTimestamp:           utils.NewUint64(0),
 		DurangoBlockTimestamp:           utils.NewUint64(0),
+		EUpgradeTime:                    utils.NewUint64(0),
 	}
 
 	TestLaunchConfig = &ChainConfig{
