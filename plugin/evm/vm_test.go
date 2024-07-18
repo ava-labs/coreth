@@ -292,7 +292,7 @@ func GenesisVM(t *testing.T,
 }
 
 // GenesisVMWithClock creates a VM instance as GenesisVM does, but also allows
-// controlling the vm's clock.
+// setting the vm's time before [Initialize] is called.
 func GenesisVMWithClock(
 	t *testing.T,
 	finishBootstrapping bool,
