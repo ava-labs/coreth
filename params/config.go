@@ -65,395 +65,317 @@ var (
 	AvalancheLocalChainConfig = getChainConfig(constants.LocalID, AvalancheLocalChainID)
 
 	TestChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
-		BanffBlockTimestamp:             utils.NewUint64(0),
-		CortinaBlockTimestamp:           utils.NewUint64(0),
-		DurangoBlockTimestamp:           utils.NewUint64(0),
-		EUpgradeTime:                    utils.NewUint64(0),
+		AvalancheContext:      AvalancheContext{utils.TestSnowContext()},
+		ChainID:               big.NewInt(1),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     utils.NewUint64(0),
+		ApricotPhase2Time:     utils.NewUint64(0),
+		ApricotPhase3Time:     utils.NewUint64(0),
+		ApricotPhase4Time:     utils.NewUint64(0),
+		ApricotPhase5Time:     utils.NewUint64(0),
+		ApricotPhasePre6Time:  utils.NewUint64(0),
+		ApricotPhase6Time:     utils.NewUint64(0),
+		ApricotPhasePost6Time: utils.NewUint64(0),
+		BanffTime:             utils.NewUint64(0),
+		CortinaTime:           utils.NewUint64(0),
+		DurangoTime:           utils.NewUint64(0),
+		EUpgradeTime:          utils.NewUint64(0),
 	}
 
 	TestLaunchConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     nil,
-		ApricotPhase2BlockTimestamp:     nil,
-		ApricotPhase3BlockTimestamp:     nil,
-		ApricotPhase4BlockTimestamp:     nil,
-		ApricotPhase5BlockTimestamp:     nil,
-		ApricotPhasePre6BlockTimestamp:  nil,
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
 	}
 
 	TestApricotPhase1Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     nil,
-		ApricotPhase3BlockTimestamp:     nil,
-		ApricotPhase4BlockTimestamp:     nil,
-		ApricotPhase5BlockTimestamp:     nil,
-		ApricotPhasePre6BlockTimestamp:  nil,
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		ApricotPhase1Time:   utils.NewUint64(0),
 	}
 
 	TestApricotPhase2Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     nil,
-		ApricotPhase4BlockTimestamp:     nil,
-		ApricotPhase5BlockTimestamp:     nil,
-		ApricotPhasePre6BlockTimestamp:  nil,
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		ApricotPhase1Time:   utils.NewUint64(0),
+		ApricotPhase2Time:   utils.NewUint64(0),
 	}
 
 	TestApricotPhase3Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     nil,
-		ApricotPhase5BlockTimestamp:     nil,
-		ApricotPhasePre6BlockTimestamp:  nil,
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		ApricotPhase1Time:   utils.NewUint64(0),
+		ApricotPhase2Time:   utils.NewUint64(0),
+		ApricotPhase3Time:   utils.NewUint64(0),
 	}
 
 	TestApricotPhase4Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     nil,
-		ApricotPhasePre6BlockTimestamp:  nil,
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		ApricotPhase1Time:   utils.NewUint64(0),
+		ApricotPhase2Time:   utils.NewUint64(0),
+		ApricotPhase3Time:   utils.NewUint64(0),
+		ApricotPhase4Time:   utils.NewUint64(0),
 	}
 
 	TestApricotPhase5Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  nil,
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		ApricotPhase1Time:   utils.NewUint64(0),
+		ApricotPhase2Time:   utils.NewUint64(0),
+		ApricotPhase3Time:   utils.NewUint64(0),
+		ApricotPhase4Time:   utils.NewUint64(0),
+		ApricotPhase5Time:   utils.NewUint64(0),
 	}
 
 	TestApricotPhasePre6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     nil,
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:     AvalancheContext{utils.TestSnowContext()},
+		ChainID:              big.NewInt(1),
+		HomesteadBlock:       big.NewInt(0),
+		DAOForkBlock:         nil,
+		DAOForkSupport:       false,
+		EIP150Block:          big.NewInt(0),
+		EIP155Block:          big.NewInt(0),
+		EIP158Block:          big.NewInt(0),
+		ByzantiumBlock:       big.NewInt(0),
+		ConstantinopleBlock:  big.NewInt(0),
+		PetersburgBlock:      big.NewInt(0),
+		IstanbulBlock:        big.NewInt(0),
+		MuirGlacierBlock:     big.NewInt(0),
+		ApricotPhase1Time:    utils.NewUint64(0),
+		ApricotPhase2Time:    utils.NewUint64(0),
+		ApricotPhase3Time:    utils.NewUint64(0),
+		ApricotPhase4Time:    utils.NewUint64(0),
+		ApricotPhase5Time:    utils.NewUint64(0),
+		ApricotPhasePre6Time: utils.NewUint64(0),
 	}
 
 	TestApricotPhase6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: nil,
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:     AvalancheContext{utils.TestSnowContext()},
+		ChainID:              big.NewInt(1),
+		HomesteadBlock:       big.NewInt(0),
+		DAOForkBlock:         nil,
+		DAOForkSupport:       false,
+		EIP150Block:          big.NewInt(0),
+		EIP155Block:          big.NewInt(0),
+		EIP158Block:          big.NewInt(0),
+		ByzantiumBlock:       big.NewInt(0),
+		ConstantinopleBlock:  big.NewInt(0),
+		PetersburgBlock:      big.NewInt(0),
+		IstanbulBlock:        big.NewInt(0),
+		MuirGlacierBlock:     big.NewInt(0),
+		ApricotPhase1Time:    utils.NewUint64(0),
+		ApricotPhase2Time:    utils.NewUint64(0),
+		ApricotPhase3Time:    utils.NewUint64(0),
+		ApricotPhase4Time:    utils.NewUint64(0),
+		ApricotPhase5Time:    utils.NewUint64(0),
+		ApricotPhasePre6Time: utils.NewUint64(0),
+		ApricotPhase6Time:    utils.NewUint64(0),
 	}
 
 	TestApricotPhasePost6Config = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
-		BanffBlockTimestamp:             nil,
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:      AvalancheContext{utils.TestSnowContext()},
+		ChainID:               big.NewInt(1),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     utils.NewUint64(0),
+		ApricotPhase2Time:     utils.NewUint64(0),
+		ApricotPhase3Time:     utils.NewUint64(0),
+		ApricotPhase4Time:     utils.NewUint64(0),
+		ApricotPhase5Time:     utils.NewUint64(0),
+		ApricotPhasePre6Time:  utils.NewUint64(0),
+		ApricotPhase6Time:     utils.NewUint64(0),
+		ApricotPhasePost6Time: utils.NewUint64(0),
 	}
 
 	TestBanffChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
-		BanffBlockTimestamp:             utils.NewUint64(0),
-		CortinaBlockTimestamp:           nil,
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:      AvalancheContext{utils.TestSnowContext()},
+		ChainID:               big.NewInt(1),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     utils.NewUint64(0),
+		ApricotPhase2Time:     utils.NewUint64(0),
+		ApricotPhase3Time:     utils.NewUint64(0),
+		ApricotPhase4Time:     utils.NewUint64(0),
+		ApricotPhase5Time:     utils.NewUint64(0),
+		ApricotPhasePre6Time:  utils.NewUint64(0),
+		ApricotPhase6Time:     utils.NewUint64(0),
+		ApricotPhasePost6Time: utils.NewUint64(0),
+		BanffTime:             utils.NewUint64(0),
 	}
 
 	TestCortinaChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
-		BanffBlockTimestamp:             utils.NewUint64(0),
-		CortinaBlockTimestamp:           utils.NewUint64(0),
-		DurangoBlockTimestamp:           nil,
-		EUpgradeTime:                    nil,
+		AvalancheContext:      AvalancheContext{utils.TestSnowContext()},
+		ChainID:               big.NewInt(1),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     utils.NewUint64(0),
+		ApricotPhase2Time:     utils.NewUint64(0),
+		ApricotPhase3Time:     utils.NewUint64(0),
+		ApricotPhase4Time:     utils.NewUint64(0),
+		ApricotPhase5Time:     utils.NewUint64(0),
+		ApricotPhasePre6Time:  utils.NewUint64(0),
+		ApricotPhase6Time:     utils.NewUint64(0),
+		ApricotPhasePost6Time: utils.NewUint64(0),
+		BanffTime:             utils.NewUint64(0),
+		CortinaTime:           utils.NewUint64(0),
 	}
 
 	TestDurangoChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
-		BanffBlockTimestamp:             utils.NewUint64(0),
-		CortinaBlockTimestamp:           utils.NewUint64(0),
-		DurangoBlockTimestamp:           utils.NewUint64(0),
-		EUpgradeTime:                    nil,
+		AvalancheContext:      AvalancheContext{utils.TestSnowContext()},
+		ChainID:               big.NewInt(1),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     utils.NewUint64(0),
+		ApricotPhase2Time:     utils.NewUint64(0),
+		ApricotPhase3Time:     utils.NewUint64(0),
+		ApricotPhase4Time:     utils.NewUint64(0),
+		ApricotPhase5Time:     utils.NewUint64(0),
+		ApricotPhasePre6Time:  utils.NewUint64(0),
+		ApricotPhase6Time:     utils.NewUint64(0),
+		ApricotPhasePost6Time: utils.NewUint64(0),
+		BanffTime:             utils.NewUint64(0),
+		CortinaTime:           utils.NewUint64(0),
+		DurangoTime:           utils.NewUint64(0),
 	}
 
 	TestEUpgradeChainConfig = &ChainConfig{
-		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},
-		ChainID:                         big.NewInt(1),
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    nil,
-		DAOForkSupport:                  false,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
-		ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
-		ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
-		BanffBlockTimestamp:             utils.NewUint64(0),
-		CortinaBlockTimestamp:           utils.NewUint64(0),
-		DurangoBlockTimestamp:           utils.NewUint64(0),
-		EUpgradeTime:                    utils.NewUint64(0),
+		AvalancheContext:      AvalancheContext{utils.TestSnowContext()},
+		ChainID:               big.NewInt(1),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     utils.NewUint64(0),
+		ApricotPhase2Time:     utils.NewUint64(0),
+		ApricotPhase3Time:     utils.NewUint64(0),
+		ApricotPhase4Time:     utils.NewUint64(0),
+		ApricotPhase5Time:     utils.NewUint64(0),
+		ApricotPhasePre6Time:  utils.NewUint64(0),
+		ApricotPhase6Time:     utils.NewUint64(0),
+		ApricotPhasePost6Time: utils.NewUint64(0),
+		BanffTime:             utils.NewUint64(0),
+		CortinaTime:           utils.NewUint64(0),
+		DurangoTime:           utils.NewUint64(0),
+		EUpgradeTime:          utils.NewUint64(0),
 	}
 
 	TestRules = TestChainConfig.Rules(new(big.Int), 0)
@@ -461,30 +383,30 @@ var (
 
 func getChainConfig(networkID uint32, chainID *big.Int) *ChainConfig {
 	return &ChainConfig{
-		ChainID:                         chainID,
-		HomesteadBlock:                  big.NewInt(0),
-		DAOForkBlock:                    big.NewInt(0),
-		DAOForkSupport:                  true,
-		EIP150Block:                     big.NewInt(0),
-		EIP155Block:                     big.NewInt(0),
-		EIP158Block:                     big.NewInt(0),
-		ByzantiumBlock:                  big.NewInt(0),
-		ConstantinopleBlock:             big.NewInt(0),
-		PetersburgBlock:                 big.NewInt(0),
-		IstanbulBlock:                   big.NewInt(0),
-		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase1Times),
-		ApricotPhase2BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase2Times),
-		ApricotPhase3BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase3Times),
-		ApricotPhase4BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase4Times),
-		ApricotPhase5BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase5Times),
-		ApricotPhasePre6BlockTimestamp:  getUpgradeTime(networkID, version.ApricotPhasePre6Times),
-		ApricotPhase6BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase6Times),
-		ApricotPhasePost6BlockTimestamp: getUpgradeTime(networkID, version.ApricotPhasePost6Times),
-		BanffBlockTimestamp:             getUpgradeTime(networkID, version.BanffTimes),
-		CortinaBlockTimestamp:           getUpgradeTime(networkID, version.CortinaTimes),
-		DurangoBlockTimestamp:           getUpgradeTime(networkID, version.DurangoTimes),
-		EUpgradeTime:                    getUpgradeTime(networkID, version.EUpgradeTimes),
+		ChainID:               chainID,
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          big.NewInt(0),
+		DAOForkSupport:        true,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		ApricotPhase1Time:     getUpgradeTime(networkID, version.ApricotPhase1Times),
+		ApricotPhase2Time:     getUpgradeTime(networkID, version.ApricotPhase2Times),
+		ApricotPhase3Time:     getUpgradeTime(networkID, version.ApricotPhase3Times),
+		ApricotPhase4Time:     getUpgradeTime(networkID, version.ApricotPhase4Times),
+		ApricotPhase5Time:     getUpgradeTime(networkID, version.ApricotPhase5Times),
+		ApricotPhasePre6Time:  getUpgradeTime(networkID, version.ApricotPhasePre6Times),
+		ApricotPhase6Time:     getUpgradeTime(networkID, version.ApricotPhase6Times),
+		ApricotPhasePost6Time: getUpgradeTime(networkID, version.ApricotPhasePost6Times),
+		BanffTime:             getUpgradeTime(networkID, version.BanffTimes),
+		CortinaTime:           getUpgradeTime(networkID, version.CortinaTimes),
+		DurangoTime:           getUpgradeTime(networkID, version.DurangoTimes),
+		EUpgradeTime:          getUpgradeTime(networkID, version.EUpgradeTimes),
 	}
 }
 
@@ -515,30 +437,30 @@ type ChainConfig struct {
 	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 
 	// Avalanche Network Upgrades
-	ApricotPhase1BlockTimestamp *uint64 `json:"apricotPhase1BlockTimestamp,omitempty"` // Apricot Phase 1 Block Timestamp (nil = no fork, 0 = already activated)
+	ApricotPhase1Time *uint64 `json:"apricotPhase1BlockTimestamp,omitempty"` // Apricot Phase 1 Block Timestamp (nil = no fork, 0 = already activated)
 	// Apricot Phase 2 Block Timestamp (nil = no fork, 0 = already activated)
 	// Apricot Phase 2 includes a modified version of the Berlin Hard Fork from Ethereum
-	ApricotPhase2BlockTimestamp *uint64 `json:"apricotPhase2BlockTimestamp,omitempty"`
+	ApricotPhase2Time *uint64 `json:"apricotPhase2BlockTimestamp,omitempty"`
 	// Apricot Phase 3 introduces dynamic fees and a modified version of the London Hard Fork from Ethereum (nil = no fork, 0 = already activated)
-	ApricotPhase3BlockTimestamp *uint64 `json:"apricotPhase3BlockTimestamp,omitempty"`
+	ApricotPhase3Time *uint64 `json:"apricotPhase3BlockTimestamp,omitempty"`
 	// Apricot Phase 4 introduces the notion of a block fee to the dynamic fee algorithm (nil = no fork, 0 = already activated)
-	ApricotPhase4BlockTimestamp *uint64 `json:"apricotPhase4BlockTimestamp,omitempty"`
+	ApricotPhase4Time *uint64 `json:"apricotPhase4BlockTimestamp,omitempty"`
 	// Apricot Phase 5 introduces a batch of atomic transactions with a maximum atomic gas limit per block. (nil = no fork, 0 = already activated)
-	ApricotPhase5BlockTimestamp *uint64 `json:"apricotPhase5BlockTimestamp,omitempty"`
+	ApricotPhase5Time *uint64 `json:"apricotPhase5BlockTimestamp,omitempty"`
 	// Apricot Phase Pre-6 deprecates the NativeAssetCall precompile (soft). (nil = no fork, 0 = already activated)
-	ApricotPhasePre6BlockTimestamp *uint64 `json:"apricotPhasePre6BlockTimestamp,omitempty"`
+	ApricotPhasePre6Time *uint64 `json:"apricotPhasePre6BlockTimestamp,omitempty"`
 	// Apricot Phase 6 deprecates the NativeAssetBalance and NativeAssetCall precompiles. (nil = no fork, 0 = already activated)
-	ApricotPhase6BlockTimestamp *uint64 `json:"apricotPhase6BlockTimestamp,omitempty"`
+	ApricotPhase6Time *uint64 `json:"apricotPhase6BlockTimestamp,omitempty"`
 	// Apricot Phase Post-6 deprecates the NativeAssetCall precompile (soft). (nil = no fork, 0 = already activated)
-	ApricotPhasePost6BlockTimestamp *uint64 `json:"apricotPhasePost6BlockTimestamp,omitempty"`
+	ApricotPhasePost6Time *uint64 `json:"apricotPhasePost6BlockTimestamp,omitempty"`
 	// Banff restricts import/export transactions to AVAX. (nil = no fork, 0 = already activated)
-	BanffBlockTimestamp *uint64 `json:"banffBlockTimestamp,omitempty"`
+	BanffTime *uint64 `json:"banffBlockTimestamp,omitempty"`
 	// Cortina increases the block gas limit to 15M. (nil = no fork, 0 = already activated)
-	CortinaBlockTimestamp *uint64 `json:"cortinaBlockTimestamp,omitempty"`
+	CortinaTime *uint64 `json:"cortinaBlockTimestamp,omitempty"`
 	// Durango activates the Shanghai Execution Spec Upgrade from Ethereum (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md#included-eips)
 	// and Avalanche Warp Messaging. (nil = no fork, 0 = already activated)
 	// Note: EIP-4895 is excluded since withdrawals are not relevant to the Avalanche C-Chain or Subnets running the EVM.
-	DurangoBlockTimestamp *uint64 `json:"durangoBlockTimestamp,omitempty"`
+	DurangoTime *uint64 `json:"durangoBlockTimestamp,omitempty"`
 	// EUpgrade on the Avalanche network. (nil = no fork, 0 = already activated)
 	// It activates Cancun (TODO) and modifies the min base fee (TODO).
 	EUpgradeTime *uint64 `json:"eUpgradeTime,omitempty"`
@@ -582,17 +504,17 @@ func (c *ChainConfig) Description() string {
 	banner += "\n"
 
 	banner += "Mandatory Avalanche Upgrades (timestamp based):\n"
-	banner += fmt.Sprintf(" - Apricot Phase 1 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.3.0)\n", ptrToString(c.ApricotPhase1BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase 2 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.4.0)\n", ptrToString(c.ApricotPhase2BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase 3 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.5.0)\n", ptrToString(c.ApricotPhase3BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase 4 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.6.0)\n", ptrToString(c.ApricotPhase4BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase 5 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.7.0)\n", ptrToString(c.ApricotPhase5BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase P6 Timestamp        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", ptrToString(c.ApricotPhasePre6BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase 6 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", ptrToString(c.ApricotPhase6BlockTimestamp))
-	banner += fmt.Sprintf(" - Apricot Phase Post-6 Timestamp:   @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0\n", ptrToString(c.ApricotPhasePost6BlockTimestamp))
-	banner += fmt.Sprintf(" - Banff Timestamp:                  @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.9.0)\n", ptrToString(c.BanffBlockTimestamp))
-	banner += fmt.Sprintf(" - Cortina Timestamp:                @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.10.0)\n", ptrToString(c.CortinaBlockTimestamp))
-	banner += fmt.Sprintf(" - Durango Timestamp:                @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.11.0)\n", ptrToString(c.DurangoBlockTimestamp))
+	banner += fmt.Sprintf(" - Apricot Phase 1 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.3.0)\n", ptrToString(c.ApricotPhase1Time))
+	banner += fmt.Sprintf(" - Apricot Phase 2 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.4.0)\n", ptrToString(c.ApricotPhase2Time))
+	banner += fmt.Sprintf(" - Apricot Phase 3 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.5.0)\n", ptrToString(c.ApricotPhase3Time))
+	banner += fmt.Sprintf(" - Apricot Phase 4 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.6.0)\n", ptrToString(c.ApricotPhase4Time))
+	banner += fmt.Sprintf(" - Apricot Phase 5 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.7.0)\n", ptrToString(c.ApricotPhase5Time))
+	banner += fmt.Sprintf(" - Apricot Phase P6 Timestamp        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", ptrToString(c.ApricotPhasePre6Time))
+	banner += fmt.Sprintf(" - Apricot Phase 6 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0)\n", ptrToString(c.ApricotPhase6Time))
+	banner += fmt.Sprintf(" - Apricot Phase Post-6 Timestamp:   @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.8.0\n", ptrToString(c.ApricotPhasePost6Time))
+	banner += fmt.Sprintf(" - Banff Timestamp:                  @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.9.0)\n", ptrToString(c.BanffTime))
+	banner += fmt.Sprintf(" - Cortina Timestamp:                @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.10.0)\n", ptrToString(c.CortinaTime))
+	banner += fmt.Sprintf(" - Durango Timestamp:                @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.11.0)\n", ptrToString(c.DurangoTime))
 	banner += fmt.Sprintf(" - EUpgrade Timestamp:               @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.12.0)\n", ptrToString(c.EUpgradeTime))
 	banner += "\n"
 
@@ -662,67 +584,67 @@ func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
 // IsApricotPhase1 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 1 upgrade time.
 func (c *ChainConfig) IsApricotPhase1(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhase1BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhase1Time, time)
 }
 
 // IsApricotPhase2 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 2 upgrade time.
 func (c *ChainConfig) IsApricotPhase2(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhase2BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhase2Time, time)
 }
 
 // IsApricotPhase3 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 3 upgrade time.
 func (c *ChainConfig) IsApricotPhase3(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhase3BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhase3Time, time)
 }
 
 // IsApricotPhase4 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 4 upgrade time.
 func (c *ChainConfig) IsApricotPhase4(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhase4BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhase4Time, time)
 }
 
 // IsApricotPhase5 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 5 upgrade time.
 func (c *ChainConfig) IsApricotPhase5(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhase5BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhase5Time, time)
 }
 
 // IsApricotPhasePre6 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase Pre 6 upgrade time.
 func (c *ChainConfig) IsApricotPhasePre6(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhasePre6BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhasePre6Time, time)
 }
 
 // IsApricotPhase6 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 6 upgrade time.
 func (c *ChainConfig) IsApricotPhase6(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhase6BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhase6Time, time)
 }
 
 // IsApricotPhasePost6 returns whether [time] represents a block
 // with a timestamp after the Apricot Phase 6 Post upgrade time.
 func (c *ChainConfig) IsApricotPhasePost6(time uint64) bool {
-	return utils.IsTimestampForked(c.ApricotPhasePost6BlockTimestamp, time)
+	return utils.IsTimestampForked(c.ApricotPhasePost6Time, time)
 }
 
 // IsBanff returns whether [time] represents a block
 // with a timestamp after the Banff upgrade time.
 func (c *ChainConfig) IsBanff(time uint64) bool {
-	return utils.IsTimestampForked(c.BanffBlockTimestamp, time)
+	return utils.IsTimestampForked(c.BanffTime, time)
 }
 
 // IsCortina returns whether [time] represents a block
 // with a timestamp after the Cortina upgrade time.
 func (c *ChainConfig) IsCortina(time uint64) bool {
-	return utils.IsTimestampForked(c.CortinaBlockTimestamp, time)
+	return utils.IsTimestampForked(c.CortinaTime, time)
 }
 
 // IsDurango returns whether [time] represents a block
 // with a timestamp after the Durango upgrade time.
 func (c *ChainConfig) IsDurango(time uint64) bool {
-	return utils.IsTimestampForked(c.DurangoBlockTimestamp, time)
+	return utils.IsTimestampForked(c.DurangoTime, time)
 }
 
 // IsEUpgrade returns whether [time] represents a block
@@ -928,38 +850,38 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, height *big.Int, time
 	if isForkBlockIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, height) {
 		return newBlockCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhase1BlockTimestamp, newcfg.ApricotPhase1BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhase1 fork block timestamp", c.ApricotPhase1BlockTimestamp, newcfg.ApricotPhase1BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhase1Time, newcfg.ApricotPhase1Time, time) {
+		return newTimestampCompatError("ApricotPhase1 fork block timestamp", c.ApricotPhase1Time, newcfg.ApricotPhase1Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhase2BlockTimestamp, newcfg.ApricotPhase2BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhase2 fork block timestamp", c.ApricotPhase2BlockTimestamp, newcfg.ApricotPhase2BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhase2Time, newcfg.ApricotPhase2Time, time) {
+		return newTimestampCompatError("ApricotPhase2 fork block timestamp", c.ApricotPhase2Time, newcfg.ApricotPhase2Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhase3BlockTimestamp, newcfg.ApricotPhase3BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhase3 fork block timestamp", c.ApricotPhase3BlockTimestamp, newcfg.ApricotPhase3BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhase3Time, newcfg.ApricotPhase3Time, time) {
+		return newTimestampCompatError("ApricotPhase3 fork block timestamp", c.ApricotPhase3Time, newcfg.ApricotPhase3Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhase4BlockTimestamp, newcfg.ApricotPhase4BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhase4 fork block timestamp", c.ApricotPhase4BlockTimestamp, newcfg.ApricotPhase4BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhase4Time, newcfg.ApricotPhase4Time, time) {
+		return newTimestampCompatError("ApricotPhase4 fork block timestamp", c.ApricotPhase4Time, newcfg.ApricotPhase4Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhase5BlockTimestamp, newcfg.ApricotPhase5BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhase5 fork block timestamp", c.ApricotPhase5BlockTimestamp, newcfg.ApricotPhase5BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhase5Time, newcfg.ApricotPhase5Time, time) {
+		return newTimestampCompatError("ApricotPhase5 fork block timestamp", c.ApricotPhase5Time, newcfg.ApricotPhase5Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhasePre6BlockTimestamp, newcfg.ApricotPhasePre6BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhasePre6 fork block timestamp", c.ApricotPhasePre6BlockTimestamp, newcfg.ApricotPhasePre6BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhasePre6Time, newcfg.ApricotPhasePre6Time, time) {
+		return newTimestampCompatError("ApricotPhasePre6 fork block timestamp", c.ApricotPhasePre6Time, newcfg.ApricotPhasePre6Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhase6BlockTimestamp, newcfg.ApricotPhase6BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhase6 fork block timestamp", c.ApricotPhase6BlockTimestamp, newcfg.ApricotPhase6BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhase6Time, newcfg.ApricotPhase6Time, time) {
+		return newTimestampCompatError("ApricotPhase6 fork block timestamp", c.ApricotPhase6Time, newcfg.ApricotPhase6Time)
 	}
-	if isForkTimestampIncompatible(c.ApricotPhasePost6BlockTimestamp, newcfg.ApricotPhasePost6BlockTimestamp, time) {
-		return newTimestampCompatError("ApricotPhasePost6 fork block timestamp", c.ApricotPhasePost6BlockTimestamp, newcfg.ApricotPhasePost6BlockTimestamp)
+	if isForkTimestampIncompatible(c.ApricotPhasePost6Time, newcfg.ApricotPhasePost6Time, time) {
+		return newTimestampCompatError("ApricotPhasePost6 fork block timestamp", c.ApricotPhasePost6Time, newcfg.ApricotPhasePost6Time)
 	}
-	if isForkTimestampIncompatible(c.BanffBlockTimestamp, newcfg.BanffBlockTimestamp, time) {
-		return newTimestampCompatError("Banff fork block timestamp", c.BanffBlockTimestamp, newcfg.BanffBlockTimestamp)
+	if isForkTimestampIncompatible(c.BanffTime, newcfg.BanffTime, time) {
+		return newTimestampCompatError("Banff fork block timestamp", c.BanffTime, newcfg.BanffTime)
 	}
-	if isForkTimestampIncompatible(c.CortinaBlockTimestamp, newcfg.CortinaBlockTimestamp, time) {
-		return newTimestampCompatError("Cortina fork block timestamp", c.CortinaBlockTimestamp, newcfg.CortinaBlockTimestamp)
+	if isForkTimestampIncompatible(c.CortinaTime, newcfg.CortinaTime, time) {
+		return newTimestampCompatError("Cortina fork block timestamp", c.CortinaTime, newcfg.CortinaTime)
 	}
-	if isForkTimestampIncompatible(c.DurangoBlockTimestamp, newcfg.DurangoBlockTimestamp, time) {
-		return newTimestampCompatError("Durango fork block timestamp", c.DurangoBlockTimestamp, newcfg.DurangoBlockTimestamp)
+	if isForkTimestampIncompatible(c.DurangoTime, newcfg.DurangoTime, time) {
+		return newTimestampCompatError("Durango fork block timestamp", c.DurangoTime, newcfg.DurangoTime)
 	}
 	if isForkTimestampIncompatible(c.EUpgradeTime, newcfg.EUpgradeTime, time) {
 		return newTimestampCompatError("EUpgrade fork block timestamp", c.EUpgradeTime, newcfg.EUpgradeTime)
