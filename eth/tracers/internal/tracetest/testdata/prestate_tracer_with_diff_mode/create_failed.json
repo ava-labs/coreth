@@ -56,9 +56,9 @@
       "arrowGlacierBlock": 13773000,
       "grayGlacierBlock": 15050000,
       "terminalTotalDifficultyPassed": true,
-      "apricotPhase1BlockTimestamp": 0,
-      "apricotPhase2BlockTimestamp": 0,
-      "apricotPhase3BlockTimestamp": 0
+      "apricotPhase1Time": 0,
+      "apricotPhase2Time": 0,
+      "apricotPhase3Time": 0
     }
   },
   "context": {

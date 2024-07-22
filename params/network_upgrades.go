@@ -5,18 +5,18 @@ package params
 
 func (c *ChainConfig) forkOrder() []fork {
 	return []fork{
-		{name: "apricotPhase1BlockTimestamp", timestamp: c.ApricotPhase1BlockTimestamp},
-		{name: "apricotPhase2BlockTimestamp", timestamp: c.ApricotPhase2BlockTimestamp},
-		{name: "apricotPhase3BlockTimestamp", timestamp: c.ApricotPhase3BlockTimestamp},
-		{name: "apricotPhase4BlockTimestamp", timestamp: c.ApricotPhase4BlockTimestamp},
-		{name: "apricotPhase5BlockTimestamp", timestamp: c.ApricotPhase5BlockTimestamp},
-		{name: "apricotPhasePre6BlockTimestamp", timestamp: c.ApricotPhasePre6BlockTimestamp},
-		{name: "apricotPhase6BlockTimestamp", timestamp: c.ApricotPhase6BlockTimestamp},
-		{name: "apricotPhasePost6BlockTimestamp", timestamp: c.ApricotPhasePost6BlockTimestamp},
-		{name: "banffBlockTimestamp", timestamp: c.BanffBlockTimestamp},
-		{name: "cortinaBlockTimestamp", timestamp: c.CortinaBlockTimestamp},
-		{name: "durangoBlockTimestamp", timestamp: c.DurangoBlockTimestamp},
-		{name: "eUpgradeTime", timestamp: c.EUpgradeTime},
+		{name: "apricotPhase1Time", time: c.ApricotPhase1Time},
+		{name: "apricotPhase2Time", time: c.ApricotPhase2Time},
+		{name: "apricotPhase3Time", time: c.ApricotPhase3Time},
+		{name: "apricotPhase4Time", time: c.ApricotPhase4Time},
+		{name: "apricotPhase5Time", time: c.ApricotPhase5Time},
+		{name: "apricotPhasePre6Time", time: c.ApricotPhasePre6Time},
+		{name: "apricotPhase6Time", time: c.ApricotPhase6Time},
+		{name: "apricotPhasePost6Time", time: c.ApricotPhasePost6Time},
+		{name: "banffTime", time: c.BanffTime},
+		{name: "cortinaTime", time: c.CortinaTime},
+		{name: "durangoTime", time: c.DurangoTime},
+		{name: "eUpgradeTime", time: c.EUpgradeTime},
 	}
 }
 

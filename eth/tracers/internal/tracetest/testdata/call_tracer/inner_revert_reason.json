@@ -34,9 +34,9 @@
       "muirGlacierBlock": 0,
       "berlinBlock": 0,
       "londonBlock": 0,
-      "apricotPhase1BlockTimestamp": 0,
-      "apricotPhase2BlockTimestamp": 0,
-      "apricotPhase3BlockTimestamp": 0
+      "apricotPhase1Time": 0,
+      "apricotPhase2Time": 0,
+      "apricotPhase3Time": 0
     }
   },
   "context": {

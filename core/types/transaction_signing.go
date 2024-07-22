@@ -76,10 +76,10 @@ func LatestSigner(config *params.ChainConfig) Signer {
 		if config.CancunTime != nil {
 			return NewCancunSigner(config.ChainID)
 		}
-		if config.ApricotPhase3BlockTimestamp != nil {
+		if config.ApricotPhase3Time != nil {
 			return NewLondonSigner(config.ChainID)
 		}
-		if config.ApricotPhase2BlockTimestamp != nil {
+		if config.ApricotPhase2Time != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
 		if config.EIP155Block != nil {

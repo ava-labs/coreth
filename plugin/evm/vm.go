@@ -357,7 +357,7 @@ func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
 // implements SnowmanPlusPlusVM interface
 func (vm *VM) GetActivationTime() time.Time {
-	return utils.Uint64ToTime(vm.chainConfig.ApricotPhase4BlockTimestamp)
+	return utils.Uint64ToTime(vm.chainConfig.ApricotPhase4Time)
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -462,9 +462,9 @@ func (vm *VM) Initialize(
 		g.Config = &config
 	}
 	// If the Durango is activated, activate the Warp Precompile at the same time
-	if g.Config.DurangoBlockTimestamp != nil {
+	if g.Config.DurangoTime != nil {
 		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpPrecompile.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
+			Config: warpPrecompile.NewDefaultConfig(g.Config.DurangoTime),
 		})
 	}
 	// Set the Avalanche Context on the ChainConfig

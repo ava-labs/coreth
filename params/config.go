@@ -437,30 +437,30 @@ type ChainConfig struct {
 	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 
 	// Avalanche Network Upgrades
-	ApricotPhase1Time *uint64 `json:"apricotPhase1BlockTimestamp,omitempty"` // Apricot Phase 1 Block Timestamp (nil = no fork, 0 = already activated)
+	ApricotPhase1Time *uint64 `json:"apricotPhase1Time,omitempty"` // Apricot Phase 1 Block Timestamp (nil = no fork, 0 = already activated)
 	// Apricot Phase 2 Block Timestamp (nil = no fork, 0 = already activated)
 	// Apricot Phase 2 includes a modified version of the Berlin Hard Fork from Ethereum
-	ApricotPhase2Time *uint64 `json:"apricotPhase2BlockTimestamp,omitempty"`
+	ApricotPhase2Time *uint64 `json:"apricotPhase2Time,omitempty"`
 	// Apricot Phase 3 introduces dynamic fees and a modified version of the London Hard Fork from Ethereum (nil = no fork, 0 = already activated)
-	ApricotPhase3Time *uint64 `json:"apricotPhase3BlockTimestamp,omitempty"`
+	ApricotPhase3Time *uint64 `json:"apricotPhase3Time,omitempty"`
 	// Apricot Phase 4 introduces the notion of a block fee to the dynamic fee algorithm (nil = no fork, 0 = already activated)
-	ApricotPhase4Time *uint64 `json:"apricotPhase4BlockTimestamp,omitempty"`
+	ApricotPhase4Time *uint64 `json:"apricotPhase4Time,omitempty"`
 	// Apricot Phase 5 introduces a batch of atomic transactions with a maximum atomic gas limit per block. (nil = no fork, 0 = already activated)
-	ApricotPhase5Time *uint64 `json:"apricotPhase5BlockTimestamp,omitempty"`
+	ApricotPhase5Time *uint64 `json:"apricotPhase5Time,omitempty"`
 	// Apricot Phase Pre-6 deprecates the NativeAssetCall precompile (soft). (nil = no fork, 0 = already activated)
-	ApricotPhasePre6Time *uint64 `json:"apricotPhasePre6BlockTimestamp,omitempty"`
+	ApricotPhasePre6Time *uint64 `json:"apricotPhasePre6Time,omitempty"`
 	// Apricot Phase 6 deprecates the NativeAssetBalance and NativeAssetCall precompiles. (nil = no fork, 0 = already activated)
-	ApricotPhase6Time *uint64 `json:"apricotPhase6BlockTimestamp,omitempty"`
+	ApricotPhase6Time *uint64 `json:"apricotPhase6Time,omitempty"`
 	// Apricot Phase Post-6 deprecates the NativeAssetCall precompile (soft). (nil = no fork, 0 = already activated)
-	ApricotPhasePost6Time *uint64 `json:"apricotPhasePost6BlockTimestamp,omitempty"`
+	ApricotPhasePost6Time *uint64 `json:"apricotPhasePost6Time,omitempty"`
 	// Banff restricts import/export transactions to AVAX. (nil = no fork, 0 = already activated)
-	BanffTime *uint64 `json:"banffBlockTimestamp,omitempty"`
+	BanffTime *uint64 `json:"banffTime,omitempty"`
 	// Cortina increases the block gas limit to 15M. (nil = no fork, 0 = already activated)
-	CortinaTime *uint64 `json:"cortinaBlockTimestamp,omitempty"`
+	CortinaTime *uint64 `json:"cortinaTime,omitempty"`
 	// Durango activates the Shanghai Execution Spec Upgrade from Ethereum (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md#included-eips)
 	// and Avalanche Warp Messaging. (nil = no fork, 0 = already activated)
 	// Note: EIP-4895 is excluded since withdrawals are not relevant to the Avalanche C-Chain or Subnets running the EVM.
-	DurangoTime *uint64 `json:"durangoBlockTimestamp,omitempty"`
+	DurangoTime *uint64 `json:"durangoTime,omitempty"`
 	// EUpgrade on the Avalanche network. (nil = no fork, 0 = already activated)
 	// It activates Cancun (TODO) and modifies the min base fee (TODO).
 	EUpgradeTime *uint64 `json:"eUpgradeTime,omitempty"`
@@ -716,10 +716,10 @@ func (c *ChainConfig) Verify() error {
 }
 
 type fork struct {
-	name      string
-	block     *big.Int // some go-ethereum forks use block numbers
-	timestamp *uint64  // Avalanche forks use timestamps
-	optional  bool     // if true, the fork may be nil and next fork is still allowed
+	name     string
+	block    *big.Int // some go-ethereum forks use block numbers
+	time     *uint64  // Avalanche forks use timestamps
+	optional bool     // if true, the fork may be nil and next fork is still allowed
 }
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
@@ -736,7 +736,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "petersburgBlock", block: c.PetersburgBlock},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
-		{name: "cancunTime", timestamp: c.CancunTime},
+		{name: "cancunTime", time: c.CancunTime},
 	}
 
 	// Check that forks are enabled in order
@@ -770,34 +770,34 @@ func checkForks(forks []fork, blockFork bool) error {
 		if lastFork.name != "" {
 			switch {
 			// Non-optional forks must all be present in the chain config up to the last defined fork
-			case lastFork.block == nil && lastFork.timestamp == nil && (cur.block != nil || cur.timestamp != nil):
+			case lastFork.block == nil && lastFork.time == nil && (cur.block != nil || cur.time != nil):
 				if cur.block != nil {
 					return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at block %v",
 						lastFork.name, cur.name, cur.block)
 				} else {
 					return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at timestamp %v",
-						lastFork.name, cur.name, cur.timestamp)
+						lastFork.name, cur.name, cur.time)
 				}
 
 			// Fork (whether defined by block or timestamp) must follow the fork definition sequence
-			case (lastFork.block != nil && cur.block != nil) || (lastFork.timestamp != nil && cur.timestamp != nil):
+			case (lastFork.block != nil && cur.block != nil) || (lastFork.time != nil && cur.time != nil):
 				if lastFork.block != nil && lastFork.block.Cmp(cur.block) > 0 {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at block %v, but %v enabled at block %v",
 						lastFork.name, lastFork.block, cur.name, cur.block)
-				} else if lastFork.timestamp != nil && *lastFork.timestamp > *cur.timestamp {
+				} else if lastFork.time != nil && *lastFork.time > *cur.time {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at timestamp %v, but %v enabled at timestamp %v",
-						lastFork.name, lastFork.timestamp, cur.name, cur.timestamp)
+						lastFork.name, lastFork.time, cur.name, cur.time)
 				}
 
 				// Timestamp based forks can follow block based ones, but not the other way around
-				if lastFork.timestamp != nil && cur.block != nil {
+				if lastFork.time != nil && cur.block != nil {
 					return fmt.Errorf("unsupported fork ordering: %v used timestamp ordering, but %v reverted to block ordering",
 						lastFork.name, cur.name)
 				}
 			}
 		}
 		// If it was optional and not set, then ignore it
-		if !cur.optional || (cur.block != nil || cur.timestamp != nil) {
+		if !cur.optional || (cur.block != nil || cur.time != nil) {
 			lastFork = cur
 		}
 	}

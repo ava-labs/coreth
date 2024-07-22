@@ -1061,44 +1061,44 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 
 	// Apply network upgrades (after Berlin) to the copy.
 	// Note in coreth, ApricotPhase2 is the "equivalent" to Berlin.
-	if timestamp := override.ApricotPhase2BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase2BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhase2Time; timestamp != nil {
+		copy.ApricotPhase2Time = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase3BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase3BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhase3Time; timestamp != nil {
+		copy.ApricotPhase3Time = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase4BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase4BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhase4Time; timestamp != nil {
+		copy.ApricotPhase4Time = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase5BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase5BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhase5Time; timestamp != nil {
+		copy.ApricotPhase5Time = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePre6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePre6BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhasePre6Time; timestamp != nil {
+		copy.ApricotPhasePre6Time = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase6BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhase6Time; timestamp != nil {
+		copy.ApricotPhase6Time = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePost6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePost6BlockTimestamp = timestamp
+	if timestamp := override.ApricotPhasePost6Time; timestamp != nil {
+		copy.ApricotPhasePost6Time = timestamp
 		canon = false
 	}
-	if timestamp := override.BanffBlockTimestamp; timestamp != nil {
-		copy.BanffBlockTimestamp = timestamp
+	if timestamp := override.BanffTime; timestamp != nil {
+		copy.BanffTime = timestamp
 		canon = false
 	}
-	if timestamp := override.CortinaBlockTimestamp; timestamp != nil {
-		copy.CortinaBlockTimestamp = timestamp
+	if timestamp := override.CortinaTime; timestamp != nil {
+		copy.CortinaTime = timestamp
 		canon = false
 	}
-	if timestamp := override.DurangoBlockTimestamp; timestamp != nil {
-		copy.DurangoBlockTimestamp = timestamp
+	if timestamp := override.DurangoTime; timestamp != nil {
+		copy.DurangoTime = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {
