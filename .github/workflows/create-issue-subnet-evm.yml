@@ -1,0 +1,50 @@
+name: Sync PRs between Repos
+
+on:
+  pull_request:
+  # TODO: remove those after testimg
+    types:
+      - opened
+      - closed
+      - synchronize
+      - reopened
+    # TODO: uncomment this after testimg
+    # branches:
+    #   - 'master'
+    paths-ignore:
+      - '.github/**'
+      - '**.md'
+
+env:
+  TARGET_REPO: https://github.com/ava-labs/subnet-evm.git
+  SOURCE_BRANCH: master
+  TARGET_BRANCH: master
+
+jobs:
+  sync_pr:
+    # TODO: uncomment after testing
+    # if: github.event.pull_request.merged == true
+    if: |
+     !contains(github.event.pull_request.labels.*.name, 'do not sync')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create Issue in Repo Subnet-EVM
+      run: |
+        CORETH_PR_TITLE="${{ github.event.pull_request.title }}"
+        CORETH_PR_URL="${{ github.event.pull_request.html_url }}"
+        CORETH_PR_BODY="${{ github.event.pull_request.body }}"
+
+        ISSUE_BODY="This issue has been automatically created to track a synchronization request between Coreth and Subnet-EVM repositories. The corresponding PR in Coreth has changes that need to be mirrored in Subnet-EVM.\n\n\
+        **Details of the Coreth PR:**\n\n\
+        Title: $CORETH_PR_TITLE\n\n\
+        URL: $CORETH_PR_URL\n\n\
+        Description:\n$CORETH_PR_BODY\n\n\
+        Please review the changes and apply them to Subnet-EVM as necessary. Once the changes have been applied and tested, this issue can be closed."
+
+        gh issue create \
+          --repo ava-labs/subnet-evm \
+          --title "Sync Coreth PR (${{ github.event.pull_request.title }})" \
+          --body "$ISSUE_BODY" \
+          --label "coreth-sync,automated" \
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
