@@ -485,7 +485,7 @@ func getChainConfig(networkID uint32, chainID *big.Int) *ChainConfig {
 		BanffBlockTimestamp:             utils.TimeToNewUint64(agoUpgrade.BanffTime),
 		CortinaBlockTimestamp:           utils.TimeToNewUint64(agoUpgrade.CortinaTime),
 		DurangoBlockTimestamp:           utils.TimeToNewUint64(agoUpgrade.DurangoTime),
-		EUpgradeTime:                    utils.TimeToNewUint64(agoUpgrade.EtnaUpgradeTime),
+		EUpgradeTime:                    utils.TimeToNewUint64(agoUpgrade.EtnaTime),
 	}
 }
 
