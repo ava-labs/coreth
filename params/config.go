@@ -32,8 +32,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
-	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/utils"
@@ -473,18 +473,18 @@ func getChainConfig(networkID uint32, chainID *big.Int) *ChainConfig {
 		PetersburgBlock:                 big.NewInt(0),
 		IstanbulBlock:                   big.NewInt(0),
 		MuirGlacierBlock:                big.NewInt(0),
-		ApricotPhase1BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase1Times),
-		ApricotPhase2BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase2Times),
-		ApricotPhase3BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase3Times),
-		ApricotPhase4BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase4Times),
-		ApricotPhase5BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase5Times),
-		ApricotPhasePre6BlockTimestamp:  getUpgradeTime(networkID, version.ApricotPhasePre6Times),
-		ApricotPhase6BlockTimestamp:     getUpgradeTime(networkID, version.ApricotPhase6Times),
-		ApricotPhasePost6BlockTimestamp: getUpgradeTime(networkID, version.ApricotPhasePost6Times),
-		BanffBlockTimestamp:             getUpgradeTime(networkID, version.BanffTimes),
-		CortinaBlockTimestamp:           getUpgradeTime(networkID, version.CortinaTimes),
-		DurangoBlockTimestamp:           getUpgradeTime(networkID, version.DurangoTimes),
-		EUpgradeTime:                    getUpgradeTime(networkID, version.EUpgradeTimes),
+		ApricotPhase1BlockTimestamp:     getUpgradeTime(networkID, upgrade.ApricotPhase1Times),
+		ApricotPhase2BlockTimestamp:     getUpgradeTime(networkID, upgrade.ApricotPhase2Times),
+		ApricotPhase3BlockTimestamp:     getUpgradeTime(networkID, upgrade.ApricotPhase3Times),
+		ApricotPhase4BlockTimestamp:     getUpgradeTime(networkID, upgrade.ApricotPhase4Times),
+		ApricotPhase5BlockTimestamp:     getUpgradeTime(networkID, upgrade.ApricotPhase5Times),
+		ApricotPhasePre6BlockTimestamp:  getUpgradeTime(networkID, upgrade.ApricotPhasePre6Times),
+		ApricotPhase6BlockTimestamp:     getUpgradeTime(networkID, upgrade.ApricotPhase6Times),
+		ApricotPhasePost6BlockTimestamp: getUpgradeTime(networkID, upgrade.ApricotPhasePost6Times),
+		BanffBlockTimestamp:             getUpgradeTime(networkID, upgrade.BanffTimes),
+		CortinaBlockTimestamp:           getUpgradeTime(networkID, upgrade.CortinaTimes),
+		DurangoBlockTimestamp:           getUpgradeTime(networkID, upgrade.DurangoTimes),
+		EUpgradeTime:                    getUpgradeTime(networkID, upgrade.EUpgradeTimes),
 	}
 }
 
