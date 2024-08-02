@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/gballet/go-verkle"
+	"github.com/etheruem/go-verkle"
 	"github.com/holiman/uint256"
 )
 
