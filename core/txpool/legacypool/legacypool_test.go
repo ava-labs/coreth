@@ -64,8 +64,8 @@ var (
 func init() {
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
-	eip1559Config.ApricotPhase2BlockTimestamp = utils.NewUint64(0)
-	eip1559Config.ApricotPhase3BlockTimestamp = utils.NewUint64(0)
+	eip1559Config.ApricotPhase2Time = utils.NewUint64(0)
+	eip1559Config.ApricotPhase3Time = utils.NewUint64(0)
 }
 
 type testBlockChain struct {

@@ -67,7 +67,7 @@ func TestSetupGenesis(t *testing.T) {
 
 func testSetupGenesis(t *testing.T, scheme string) {
 	apricotPhase1Config := *params.TestApricotPhase1Config
-	apricotPhase1Config.ApricotPhase1BlockTimestamp = utils.NewUint64(100)
+	apricotPhase1Config.ApricotPhase1Time = utils.NewUint64(100)
 	var (
 		customghash = common.HexToHash("0x1099a11e9e454bd3ef31d688cf21936671966407bc330f051d754b5ce401e7ed")
 		customg     = Genesis{
@@ -80,7 +80,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 	)
 
 	rollbackApricotPhase1Config := apricotPhase1Config
-	rollbackApricotPhase1Config.ApricotPhase1BlockTimestamp = utils.NewUint64(90)
+	rollbackApricotPhase1Config.ApricotPhase1Time = utils.NewUint64(90)
 	oldcustomg.Config = &rollbackApricotPhase1Config
 	tests := []struct {
 		name       string
@@ -220,16 +220,16 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 	require.Greater(block.Time, bc.lastAccepted.Time())
 
 	activatedGenesis := customg
-	apricotPhase2Timestamp := utils.NewUint64(51)
+	apricotPhase2Time := utils.NewUint64(51)
 	updatedApricotPhase2Config := *params.TestApricotPhase1Config
-	updatedApricotPhase2Config.ApricotPhase2BlockTimestamp = apricotPhase2Timestamp
+	updatedApricotPhase2Config.ApricotPhase2Time = apricotPhase2Time
 
 	activatedGenesis.Config = &updatedApricotPhase2Config
 
 	// assert block is after the activation block
-	require.Greater(block.Time, *apricotPhase2Timestamp)
+	require.Greater(block.Time, *apricotPhase2Time)
 	// assert last accepted block is before the activation block
-	require.Less(bc.lastAccepted.Time(), *apricotPhase2Timestamp)
+	require.Less(bc.lastAccepted.Time(), *apricotPhase2Time)
 
 	// This should not return any error since the last accepted block is before the activation block.
 	config, _, err := setupGenesisBlock(db, trie.NewDatabase(db, nil), &activatedGenesis, bc.lastAccepted.Hash())

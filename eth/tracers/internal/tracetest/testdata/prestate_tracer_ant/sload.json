@@ -33,8 +33,8 @@
       "petersburgBlock": 0,
       "istanbulBlock": 0,
       "muirGlacierBlock": 0,
-      "apricotPhase1BlockTimestamp": 0,
-      "apricotPhase2BlockTimestamp": 0
+      "apricotPhase1Time": 0,
+      "apricotPhase2Time": 0
     },
     "difficulty": "3757315409",
     "extraData": "0x566961425443",

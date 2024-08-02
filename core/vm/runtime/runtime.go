@@ -67,22 +67,22 @@ type Config struct {
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:                     big.NewInt(1),
-			HomesteadBlock:              new(big.Int),
-			DAOForkBlock:                new(big.Int),
-			DAOForkSupport:              false,
-			EIP150Block:                 new(big.Int),
-			EIP155Block:                 new(big.Int),
-			EIP158Block:                 new(big.Int),
-			ByzantiumBlock:              new(big.Int),
-			ConstantinopleBlock:         new(big.Int),
-			PetersburgBlock:             new(big.Int),
-			IstanbulBlock:               new(big.Int),
-			MuirGlacierBlock:            new(big.Int),
-			ApricotPhase1BlockTimestamp: new(uint64),
-			ApricotPhase2BlockTimestamp: new(uint64),
-			ApricotPhase3BlockTimestamp: new(uint64),
-			ApricotPhase4BlockTimestamp: new(uint64),
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      new(big.Int),
+			DAOForkBlock:        new(big.Int),
+			DAOForkSupport:      false,
+			EIP150Block:         new(big.Int),
+			EIP155Block:         new(big.Int),
+			EIP158Block:         new(big.Int),
+			ByzantiumBlock:      new(big.Int),
+			ConstantinopleBlock: new(big.Int),
+			PetersburgBlock:     new(big.Int),
+			IstanbulBlock:       new(big.Int),
+			MuirGlacierBlock:    new(big.Int),
+			ApricotPhase1Time:   new(uint64),
+			ApricotPhase2Time:   new(uint64),
+			ApricotPhase3Time:   new(uint64),
+			ApricotPhase4Time:   new(uint64),
 		}
 	}
 

@@ -1769,13 +1769,13 @@ func (pool *LegacyPool) demoteUnexecutables() {
 }
 
 func (pool *LegacyPool) startPeriodicFeeUpdate() {
-	if pool.chainconfig.ApricotPhase3BlockTimestamp == nil {
+	if pool.chainconfig.ApricotPhase3Time == nil {
 		return
 	}
 
 	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
 	// when starting up in ApricotPhase3 before the base fee is updated.
-	if time.Now().After(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp)) {
+	if time.Now().After(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3Time)) {
 		pool.updateBaseFee()
 	}
 
@@ -1788,7 +1788,7 @@ func (pool *LegacyPool) periodicBaseFeeUpdate() {
 
 	// Sleep until its time to start the periodic base fee update or the tx pool is shutting down
 	select {
-	case <-time.After(time.Until(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp))):
+	case <-time.After(time.Until(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3Time))):
 	case <-pool.generalShutdownChan:
 		return // Return early if shutting down
 	}
