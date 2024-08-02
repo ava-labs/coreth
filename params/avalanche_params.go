@@ -13,8 +13,8 @@ import (
 const (
 	// MinGasPrice is the number of nAVAX required per gas unit for a
 	// transaction to be valid, measured in wei
-	LaunchMinGasPrice        int64 = 470_000_000_000
-	ApricotPhase1MinGasPrice int64 = 225_000_000_000
+	LaunchMinGasPrice        int64 = 470 * GWei
+	ApricotPhase1MinGasPrice int64 = 225 * GWei
 
 	AvalancheAtomicTxFee = units.MilliAvax
 
