@@ -15,7 +15,6 @@ require (
 	github.com/fjl/memsize v0.0.2
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
-	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.2
