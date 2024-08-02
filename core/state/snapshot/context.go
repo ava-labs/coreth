@@ -29,10 +29,9 @@ package snapshot
 import (
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"

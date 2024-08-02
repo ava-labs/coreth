@@ -6,9 +6,9 @@ package evm
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slog"
 
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/ids"
