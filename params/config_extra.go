@@ -129,3 +129,15 @@ func getUpgradeTime(networkID uint32, upgradeTimes map[uint32]time.Time) *uint64
 	// genesis.
 	return utils.NewUint64(0)
 }
+
+// SetEthUpgrades enables Etheruem network upgrades using the same time as
+// the Avalanche network upgrade that enables them.
+//
+// TODO: Prior to Cancun, Avalanche upgrades are referenced inline in the
+// code in place of their Ethereum counterparts. The original Ethereum names
+// should be restored for maintainability.
+func (c *ChainConfig) SetEthUpgrades() {
+	if c.EUpgradeTime != nil {
+		c.CancunTime = utils.NewUint64(*c.EUpgradeTime)
+	}
+}
