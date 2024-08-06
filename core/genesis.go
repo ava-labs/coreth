@@ -321,7 +321,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *trie.Database) *types.Block
 		head.Difficulty = params.GenesisDifficulty
 	}
 	if conf := g.Config; conf != nil {
-		num := new(big.Int).SetUint64(g.Number)
+		// num := new(big.Int).SetUint64(g.Number)
 		if conf.IsApricotPhase3(g.Timestamp) {
 			if g.BaseFee != nil {
 				head.BaseFee = g.BaseFee
@@ -329,21 +329,21 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *trie.Database) *types.Block
 				head.BaseFee = new(big.Int).SetInt64(params.ApricotPhase3InitialBaseFee)
 			}
 		}
-		if conf.IsCancun(num, g.Timestamp) {
-			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
-			// the zero hash. This is because the genesis block does not have a parent
-			// by definition.
-			head.ParentBeaconRoot = new(common.Hash)
-			// EIP-4844 fields
-			head.ExcessBlobGas = g.ExcessBlobGas
-			head.BlobGasUsed = g.BlobGasUsed
-			if head.ExcessBlobGas == nil {
-				head.ExcessBlobGas = new(uint64)
-			}
-			if head.BlobGasUsed == nil {
-				head.BlobGasUsed = new(uint64)
-			}
-		}
+		//if conf.IsCancun(num, g.Timestamp) {
+		//	// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
+		//	// the zero hash. This is because the genesis block does not have a parent
+		//	// by definition.
+		//	head.ParentBeaconRoot = new(common.Hash)
+		//	// EIP-4844 fields
+		//	head.ExcessBlobGas = g.ExcessBlobGas
+		//	head.BlobGasUsed = g.BlobGasUsed
+		//	if head.ExcessBlobGas == nil {
+		//		head.ExcessBlobGas = new(uint64)
+		//	}
+		//	if head.BlobGasUsed == nil {
+		//		head.BlobGasUsed = new(uint64)
+		//	}
+		//}
 	}
 
 	statedb.Commit(0, false, false)
