@@ -46,7 +46,7 @@ const (
 	//
 	// Keeping extra tries around at tip enables clients to query data from
 	// recent trie roots.
-	tipBufferSize = 32
+	tipBufferSize = 1320
 
 	// flushWindow is the distance to the [commitInterval] when we start
 	// optimistically flushing trie nodes to disk (only applicable in [pruning]

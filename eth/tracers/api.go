@@ -73,7 +73,7 @@ const (
 	// maximumPendingTraceStates is the maximum number of states allowed waiting
 	// for tracing. The creation of trace state will be paused if the unused
 	// trace states exceed this limit.
-	maximumPendingTraceStates = 128
+	maximumPendingTraceStates = 1320
 )
 
 var errTxNotFound = errors.New("transaction not found")
