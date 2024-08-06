@@ -28,6 +28,6 @@ func TestSnowContext() *snow.Context {
 		BCLookup:       ids.NewAliaser(),
 		Metrics:        metrics.NewMultiGatherer(),
 		ChainDataDir:   "",
-		ValidatorState: &validatorstest.TestState{},
+		ValidatorState: &validatorstest.State{},
 	}
 }
