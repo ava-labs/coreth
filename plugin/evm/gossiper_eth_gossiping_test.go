@@ -120,7 +120,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	assert.False(txRequested, "tx should not be requested")
 
 	// wait for transaction to be re-gossiped
-	attemptAwait(t, &wg, 5*time.Hour)
+	attemptAwait(t, &wg, 5*time.Second)
 }
 
 func attemptAwait(t *testing.T, wg *sync.WaitGroup, delay time.Duration) {
