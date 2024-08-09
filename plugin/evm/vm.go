@@ -449,15 +449,23 @@ func (vm *VM) Initialize(
 
 	var extDataHashes map[common.Hash]common.Hash
 	// Set the chain config for mainnet/fuji chain IDs
-	switch {
-	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
+	switch chainCtx.NetworkID {
+	case avalanchegoConstants.MainnetID:
 		config := *params.AvalancheMainnetChainConfig
 		g.Config = &config
 		extDataHashes = mainnetExtDataHashes
-	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
+	case avalanchegoConstants.FujiID:
 		config := *params.AvalancheFujiChainConfig
 		g.Config = &config
 		extDataHashes = fujiExtDataHashes
+	case avalanchegoConstants.LocalID:
+		config := *params.AvalancheLocalChainConfig
+		g.Config = &config
+	default:
+		// TODO: This overrides the chain config in the given genesis (in genesisBytes)
+		// Do we want to do this?
+		config := params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(g.Config.ChainID))
+		g.Config = config
 	}
 	// If the Durango is activated, activate the Warp Precompile at the same time
 	if g.Config.DurangoBlockTimestamp != nil {
@@ -465,6 +473,9 @@ func (vm *VM) Initialize(
 			Config: warpPrecompile.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
 		})
 	}
+
+	js, _ := g.Config.MarshalJSON()
+	log.Warn("Chain config", "config", js)
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
 		SnowCtx: chainCtx,
