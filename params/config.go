@@ -59,10 +59,10 @@ var (
 	AvalancheMainnetChainConfig = GetChainConfig(upgrade.GetConfig(constants.MainnetID), AvalancheMainnetChainID)
 
 	// AvalancheFujiChainConfig is the configuration for the Fuji Test Network
-	AvalancheFujiChainConfig = GetChainConfig(upgrade.GetConfig(constants.FujiID), AvalancheMainnetChainID)
+	AvalancheFujiChainConfig = GetChainConfig(upgrade.GetConfig(constants.FujiID), AvalancheFujiChainID)
 
 	// AvalancheLocalChainConfig is the configuration for the Avalanche Local Network
-	AvalancheLocalChainConfig = GetChainConfig(upgrade.GetConfig(constants.LocalID), AvalancheMainnetChainID)
+	AvalancheLocalChainConfig = GetChainConfig(upgrade.GetConfig(constants.LocalID), AvalancheLocalChainID)
 
 	TestChainConfig = &ChainConfig{
 		AvalancheContext:                AvalancheContext{utils.TestSnowContext()},

@@ -474,8 +474,6 @@ func (vm *VM) Initialize(
 		})
 	}
 
-	js, _ := g.Config.MarshalJSON()
-	log.Warn("Chain config", "config", js)
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
 		SnowCtx: chainCtx,
