@@ -464,8 +464,8 @@ func (vm *VM) Initialize(
 	default:
 		// TODO: This overrides the chain config in the given genesis (in genesisBytes)
 		// Do we want to do this?
-		config := params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(g.Config.ChainID))
-		g.Config = config
+		// config := params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(g.Config.ChainID))
+		// g.Config = config
 	}
 	// If the Durango is activated, activate the Warp Precompile at the same time
 	if g.Config.DurangoBlockTimestamp != nil {
