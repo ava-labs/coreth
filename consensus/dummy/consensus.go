@@ -89,6 +89,13 @@ func NewFakerWithMode(cb ConsensusCallbacks, mode Mode) *DummyEngine {
 	}
 }
 
+func NewFakerWithModeAndClock(mode Mode, clock *mockable.Clock) *DummyEngine {
+	return &DummyEngine{
+		clock:         clock,
+		consensusMode: mode,
+	}
+}
+
 func NewCoinbaseFaker() *DummyEngine {
 	return &DummyEngine{
 		clock:         &mockable.Clock{},

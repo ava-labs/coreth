@@ -581,8 +581,8 @@ func (c *ChainConfig) Description() string {
 	}
 
 	banner += "Hard forks (timestamp based):\n"
-	banner += fmt.Sprintf(" - Cancun Timestamp:                 @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.12.0)\n", ptrToString(c.CancunTime))
-	banner += "\n"
+	banner += fmt.Sprintf(" - Cancun Timestamp:              @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.12.0)\n", ptrToString(c.CancunTime)) /// XXX: should we link the ethereum execution spec here instead
+	banner += fmt.Sprintf(" - Verkle Timestamp:              @%-10v", ptrToString(c.VerkleTime))
 
 	banner += "Mandatory Avalanche Upgrades (timestamp based):\n"
 	banner += fmt.Sprintf(" - Apricot Phase 1 Timestamp:        @%-10v (https://github.com/ava-labs/avalanchego/releases/tag/v1.3.0)\n", ptrToString(c.ApricotPhase1BlockTimestamp))
@@ -1085,6 +1085,13 @@ func ptrToString(val *uint64) string {
 	return fmt.Sprintf("%d", *val)
 }
 
+type EthRules struct {
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
+	IsCancun                                                bool
+	IsVerkle                                                bool
+}
+
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
 // that do not have or require information about the block.
 //
@@ -1125,16 +1132,19 @@ func (c *ChainConfig) rules(num *big.Int, timestamp uint64) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID:          new(big.Int).Set(chainID),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
-		IsCancun:         c.IsCancun(num, timestamp),
+		ChainID: new(big.Int).Set(chainID),
+		EthRules: EthRules{
+			IsHomestead:      c.IsHomestead(num),
+			IsEIP150:         c.IsEIP150(num),
+			IsEIP155:         c.IsEIP155(num),
+			IsEIP158:         c.IsEIP158(num),
+			IsByzantium:      c.IsByzantium(num),
+			IsConstantinople: c.IsConstantinople(num),
+			IsPetersburg:     c.IsPetersburg(num),
+			IsIstanbul:       c.IsIstanbul(num),
+			IsCancun:         c.IsCancun(num, timestamp),
+			IsVerkle:         c.IsVerkle(num, timestamp),
+		},
 	}
 }
 
