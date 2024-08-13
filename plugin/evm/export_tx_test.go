@@ -239,7 +239,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 					Nonce:   0,
 				},
 			},
-			avaxBalance: uint256.NewInt(uint64(avaxAmount) * x2cRateUint64),
+			avaxBalance: uint256.NewInt(avaxAmount * x2cRateUint64),
 			balances: map[ids.ID]*big.Int{
 				customAssetID: big.NewInt(0),
 			},
