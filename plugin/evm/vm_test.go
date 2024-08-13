@@ -112,9 +112,9 @@ var (
 		return &cpy
 	}
 
-	activateEUpgrade = func(cfg *params.ChainConfig, eUpgradeTime uint64) *params.ChainConfig {
+	activateEtna = func(cfg *params.ChainConfig, etnaTime uint64) *params.ChainConfig {
 		cpy := *cfg
-		cpy.EUpgradeTime = &eUpgradeTime
+		cpy.EtnaTime = &etnaTime
 		return &cpy
 	}
 
@@ -130,8 +130,8 @@ var (
 	genesisJSONBanff             = genesisJSON(params.TestBanffChainConfig)
 	genesisJSONCortina           = genesisJSON(params.TestCortinaChainConfig)
 	genesisJSONDurango           = genesisJSON(params.TestDurangoChainConfig)
-	genesisJSONEUpgrade          = genesisJSON(params.TestEUpgradeChainConfig)
-	genesisJSONLatest            = genesisJSONEUpgrade
+	genesisJSONEtna              = genesisJSON(params.TestEtnaChainConfig)
+	genesisJSONLatest            = genesisJSONEtna
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
@@ -306,7 +306,6 @@ func GenesisVMWithClock(
 	*enginetest.Sender,
 ) {
 	vm := &VM{clock: clock}
-	vm.p2pSender = &enginetest.SenderStub{}
 	ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
 	appSender := &enginetest.Sender{T: t}
 	appSender.CantSendAppGossip = true
@@ -3984,13 +3983,13 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 }
 
-func TestMinFeeSetAtEUpgrade(t *testing.T) {
+func TestMinFeeSetAtEtna(t *testing.T) {
 	require := require.New(t)
 	now := time.Now()
-	eUpgradeTime := uint64(now.Add(1 * time.Second).Unix())
+	etnaTime := uint64(now.Add(1 * time.Second).Unix())
 
 	genesis := genesisJSON(
-		activateEUpgrade(params.TestEUpgradeChainConfig, eUpgradeTime),
+		activateEtna(params.TestEtnaChainConfig, etnaTime),
 	)
 	clock := mockable.Clock{}
 	clock.Set(now)
@@ -4000,7 +3999,7 @@ func TestMinFeeSetAtEUpgrade(t *testing.T) {
 	require.Equal(params.ApricotPhase4MinBaseFee, initial.Int64())
 
 	require.Eventually(
-		func() bool { return params.EUpgradeMinBaseFee == vm.txPool.MinFee().Int64() },
+		func() bool { return params.EtnaMinBaseFee == vm.txPool.MinFee().Int64() },
 		5*time.Second,
 		1*time.Second,
 	)
