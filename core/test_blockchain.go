@@ -145,7 +145,6 @@ func checkBlockChainState(
 			t.Fatalf("Failed to accept block %s:%d due to %s", block.Hash().Hex(), block.NumberU64(), err)
 		}
 	}
-	newBlockChain.DrainAcceptorQueue()
 
 	newLastAcceptedBlock := newBlockChain.LastConsensusAcceptedBlock()
 	if newLastAcceptedBlock.Hash() != lastAcceptedBlock.Hash() {
@@ -228,7 +227,6 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {
@@ -345,7 +343,6 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 	if err := blockchain.Accept(chain1[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	if blockchain.snaps != nil {
 		// Snap layer count should be 1 fewer
@@ -377,7 +374,6 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 		if err := blockchain.Accept(chain1[i]); err != nil {
 			t.Fatal(err)
 		}
-		blockchain.DrainAcceptorQueue()
 
 		if blockchain.snaps != nil {
 			// Snap layer count should decrease by 1 per Accept
@@ -488,7 +484,6 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, gs
 	if err := blockchain.Accept(chain2[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	for i := 0; i < len(chain1); i++ {
 		if err := blockchain.Reject(chain1[i]); err != nil {
@@ -624,7 +619,6 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, gspec 
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	lastAcceptedBlock = blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock = chain[0]
@@ -744,7 +738,6 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec
 			t.Fatal(err)
 		}
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// Insert the forked chain [chain2] which starts at the 10th
 	// block in [chain1] ie. a block that is still in processing.
@@ -761,7 +754,6 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec
 	if err := blockchain.Accept(chain1[5]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 	for _, block := range chain3 {
 		if err := blockchain.Reject(block); err != nil {
 			t.Fatal(err)
@@ -773,14 +765,12 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec
 			t.Fatal(err)
 		}
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// Accept the first block in [chain2] and reject the
 	// subsequent blocks in [chain1] which would then be rejected.
 	if err := blockchain.Accept(chain2[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	for _, block := range chain1[10:] {
 		if err := blockchain.Reject(block); err != nil {
@@ -856,7 +846,6 @@ func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, gspec *Genesis
 			t.Fatal(err)
 		}
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// Nothing to assert about the state
 	checkState := func(sdb *state.StateDB) error {
@@ -934,7 +923,6 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, gspec *Genes
 	if err := blockchain.Accept(chain[2]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// Nothing to assert about the state
 	checkState := func(sdb *state.StateDB) error {
@@ -1049,7 +1037,6 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err := blockchain.Accept(chain1[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	for _, block := range chain2 {
 		if err := blockchain.Reject(block); err != nil {
@@ -1063,7 +1050,6 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err := blockchain.Accept(chain1[1]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := chain1[1]
@@ -1077,7 +1063,6 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err := blockchain.Accept(chain1[2]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {
@@ -1216,7 +1201,6 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err := blockchain.Accept(chain1[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	for _, block := range chain2 {
 		if err := blockchain.Reject(block); err != nil {
@@ -1230,7 +1214,6 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err := blockchain.Accept(chain1[1]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	lastAcceptedBlock := blockchain.LastConsensusAcceptedBlock()
 	expectedLastAcceptedBlock := chain1[1]
@@ -1244,7 +1227,6 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err := blockchain.Accept(chain1[2]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {
@@ -1432,7 +1414,6 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, g
 	if err := blockchain.Accept(chain[0]); err != nil {
 		t.Fatal(err)
 	}
-	blockchain.DrainAcceptorQueue()
 
 	// check the state of the last accepted block
 	checkState := func(sdb *state.StateDB) error {

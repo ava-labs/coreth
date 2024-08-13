@@ -159,7 +159,6 @@ func (b *SimulatedBackend) Commit(accept bool) common.Hash {
 		if err := b.blockchain.Accept(b.acceptedBlock); err != nil {
 			panic(err)
 		}
-		b.blockchain.DrainAcceptorQueue()
 	}
 	blockHash := b.acceptedBlock.Hash()
 
