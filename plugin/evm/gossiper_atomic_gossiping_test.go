@@ -16,7 +16,7 @@ import (
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 
-	"github.com/ava-labs/subnet-evm/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 // show that a txID discovered from gossip is requested to the same node only if
