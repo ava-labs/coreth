@@ -1014,7 +1014,7 @@ func TestSignTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expect := `{"type":"0x2","chainId":"0x1","nonce":"0x0","to":"0x703c4b2bd70c169f5717101caee543299fc946c7","gas":"0x5208","gasPrice":null,"maxPriorityFeePerGas":"0x0","maxFeePerGas":"0xba43b7400","value":"0x1","input":"0x","accessList":[],"v":"0x0","r":"0xa7bbf5672b6f78e934bd380aad0b2626d5337e96c12f1e755fa5522ba7a314bd","s":"0x4d661f8c7b850b7dc3ce1c8c7b443a4434a22fe3ad14cc463205e0259546f0c8","yParity":"0x0","hash":"0x0333d97cbdababb6af7cc55a6f64d47711b8e18a93d7343657508a454407a82c"}`
+	expect := `{"type":"0x2","chainId":"0x1","nonce":"0x0","to":"0x703c4b2bd70c169f5717101caee543299fc946c7","gas":"0x5208","gasPrice":null,"maxPriorityFeePerGas":"0x0","maxFeePerGas":"0x68c6171400","value":"0x1","input":"0x","accessList":[],"v":"0x1","r":"0x83cf4820cfd50fdd240fea74eaf7227e2e3919507cc567c885a6e6bf27543567","s":"0x899543bbe903a76b705e03cfba217e5cb91fc7204309170c0e91f34988d5fb2","yParity":"0x1","hash":"0x09572232b67f69faab343c5b417c8964b15263c5abbbcdb1ebf7f5eda8ed3a63"}`
 	if !bytes.Equal(tx, []byte(expect)) {
 		t.Errorf("result mismatch. Have:\n%s\nWant:\n%s\n", tx, expect)
 	}

@@ -49,8 +49,8 @@ func TestWithBlockGasLimitOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve head block: %v", err)
 	}
-	if head.GasLimit() != 12_345_678 {
-		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), 12_345_678)
+	if head.GasLimit() != params.CortinaGasLimit {
+		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), params.CortinaGasLimit)
 	}
 }
 

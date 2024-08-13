@@ -742,15 +742,15 @@ func TestTinyTrie(t *testing.T) {
 	_, accounts := makeAccounts(5)
 	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
-	if exp, root := common.HexToHash("8c6a85a4d9fda98feff88450299e574e5378e32391f75a055d470ac0653f1005"), trie.Hash(); exp != root {
+	if exp, root := common.HexToHash("dfb9311ba769a2bdb9d4126d0ae49046f9551063c738d10b9021343fb6550b3f"), trie.Hash(); exp != root {
 		t.Errorf("1: got %x, exp %x", root, exp)
 	}
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
-	if exp, root := common.HexToHash("ec63b967e98a5720e7f720482151963982890d82c9093c0d486b7eb8883a66b1"), trie.Hash(); exp != root {
+	if exp, root := common.HexToHash("21d0f2f4c72fed985d1196993a784d36321a44085bbe60990cb65b7bc478f52b"), trie.Hash(); exp != root {
 		t.Errorf("2: got %x, exp %x", root, exp)
 	}
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
-	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
+	if exp, root := common.HexToHash("e71f7f0bbcd0daf37bc03a3389408eced206e796ed6d76186387847e2193ac4e"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
 	checktr := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
@@ -774,7 +774,7 @@ func TestCommitAfterHash(t *testing.T) {
 	trie.Hash()
 	trie.Commit(false)
 	root := trie.Hash()
-	exp := common.HexToHash("72f9d3f3fe1e1dd7b8936442e7642aef76371472d94319900790053c493f3fe6")
+	exp := common.HexToHash("6dcf62a0c1575866467426b55e3acab075312b38c6b112457c3cd23ab9b94fc1")
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -890,9 +890,9 @@ func TestCommitSequence(t *testing.T) {
 		count           int
 		expWriteSeqHash []byte
 	}{
-		{20, common.FromHex("330b0afae2853d96b9f015791fbe0fb7f239bf65f335f16dfc04b76c7536276d")},
-		{200, common.FromHex("5162b3735c06b5d606b043a3ee8adbdbbb408543f4966bca9dcc63da82684eeb")},
-		{2000, common.FromHex("4574cd8e6b17f3fe8ad89140d1d0bf4f1bd7a87a8ac3fb623b33550544c77635")},
+		{20, common.FromHex("2e4ec8744409f17d6a3fe1540282e3ba0cf434b3a11974a2a033e3caa476a83c")},
+		{200, common.FromHex("f7abb2c93e89e7e68696d855fa8982cb454190dcd7e4e7f4c7d60fd5c9f465f3")},
+		{2000, common.FromHex("226f735a06e25b5306216d52ce0652ba9df17341bb0d1ae8be5484d691e8fe5c")},
 	} {
 		addresses, accounts := makeAccounts(tc.count)
 		// This spongeDb is used to check the sequence of disk-db-writes

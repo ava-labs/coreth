@@ -29,6 +29,7 @@ import (
 )
 
 //go:generate go run github.com/fjl/gencodec -type Account -field-override accountMarshaling -out gen_account.go
+//go:generate go run github.com/fjl/gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
 
 // Account represents an Ethereum account and its attached data.
 // This type is used to specify accounts in the genesis block state, and
@@ -96,4 +97,12 @@ type GenesisAccount struct {
 	MCBalance  GenesisMultiCoinBalance     `json:"mcbalance,omitempty"`
 	Nonce      uint64                      `json:"nonce,omitempty"`
 	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
+}
+
+type genesisAccountMarshaling struct {
+	Code       hexutil.Bytes
+	Balance    *math.HexOrDecimal256
+	Nonce      math.HexOrDecimal64
+	Storage    map[storageJSON]storageJSON
+	PrivateKey hexutil.Bytes
 }

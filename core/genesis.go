@@ -52,6 +52,12 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+// Deprecated: use types.GenesisAccount instead.
+type GenesisAccount = types.Account
+
+// Deprecated: use types.GenesisAlloc instead.
+type GenesisAlloc = types.GenesisAlloc
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {

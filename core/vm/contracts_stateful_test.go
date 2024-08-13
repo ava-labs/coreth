@@ -266,7 +266,7 @@ func TestStatefulPrecompile(t *testing.T) {
 				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
 				expectedBalance := big.NewInt(50)
-				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
+				assert.Equal(t, u256Hundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
 				assert.Equal(t, expectedBalance, user1AssetBalance, "user 1 asset balance")
 				assert.Equal(t, expectedBalance, user2AssetBalance, "user 2 asset balance")
@@ -300,9 +300,9 @@ func TestStatefulPrecompile(t *testing.T) {
 				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 				expectedBalance := big.NewInt(50)
 
-				assert.Equal(t, big.NewInt(51), user1Balance, "user 1 balance")
+				assert.Equal(t, uint256.NewInt(51), user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
-				assert.Equal(t, big.NewInt(49), nativeAssetCallAddrBalance, "native asset call addr balance")
+				assert.Equal(t, uint256.NewInt(49), nativeAssetCallAddrBalance, "native asset call addr balance")
 				assert.Equal(t, expectedBalance, user1AssetBalance, "user 1 asset balance")
 				assert.Equal(t, expectedBalance, user2AssetBalance, "user 2 asset balance")
 			},
