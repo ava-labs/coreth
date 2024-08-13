@@ -374,10 +374,10 @@ func TestInternals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			state := tests.MakePreState(rawdb.NewMemoryDatabase(),
 				types.GenesisAlloc{
-					to: types.Account{
+					to: types.GenesisAccount{
 						Code: tc.code,
 					},
-					origin: types.Account{
+					origin: types.GenesisAccount{
 						Balance: big.NewInt(500000000000000),
 					},
 				}, false, rawdb.HashScheme)

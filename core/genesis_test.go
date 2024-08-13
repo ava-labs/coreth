@@ -73,7 +73,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		customghash = common.HexToHash("0x1099a11e9e454bd3ef31d688cf21936671966407bc330f051d754b5ce401e7ed")
 		customg     = Genesis{
 			Config: &apricotPhase1Config,
-			Alloc: GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			},
 		}

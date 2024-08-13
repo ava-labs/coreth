@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -1042,11 +1043,11 @@ func TestMultiCoinOperations(t *testing.T) {
 	addr := common.Address{1}
 	assetID := common.Hash{2}
 
-	s.state.GetOrNewStateObject(addr)
+	s.state.getOrNewStateObject(addr)
 	root, _ := s.state.Commit(0, false, false)
 	s.state, _ = NewWithSnapshot(root, s.state.db, s.state.snap)
 
-	s.state.AddBalance(addr, new(big.Int))
+	s.state.AddBalance(addr, new(uint256.Int))
 
 	balance := s.state.GetBalanceMultiCoin(addr, assetID)
 	if balance.Cmp(big.NewInt(0)) != 0 {
@@ -1079,15 +1080,15 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	var stateDB *StateDB
 	assertBalances := func(regular, multicoin1, multicoin2 int64) {
 		balance := stateDB.GetBalance(addr)
-		if balance.Cmp(big.NewInt(regular)) != 0 {
+		if balance.Cmp(uint256.NewInt(uint64(regular))) != 0 {
 			t.Fatal("incorrect non-multicoin balance")
 		}
-		balance = stateDB.GetBalanceMultiCoin(addr, assetID1)
-		if balance.Cmp(big.NewInt(multicoin1)) != 0 {
+		balanceBig := stateDB.GetBalanceMultiCoin(addr, assetID1)
+		if balanceBig.Cmp(big.NewInt(multicoin1)) != 0 {
 			t.Fatal("incorrect multicoin1 balance")
 		}
-		balance = stateDB.GetBalanceMultiCoin(addr, assetID2)
-		if balance.Cmp(big.NewInt(multicoin2)) != 0 {
+		balanceBig = stateDB.GetBalanceMultiCoin(addr, assetID2)
+		if balanceBig.Cmp(big.NewInt(multicoin2)) != 0 {
 			t.Fatal("incorrect multicoin2 balance")
 		}
 	}
@@ -1096,7 +1097,7 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	stateDB, _ = New(root, sdb, snapTree)
 	assertBalances(0, 0, 0)
 
-	stateDB.AddBalance(addr, big.NewInt(10))
+	stateDB.AddBalance(addr, uint256.NewInt(10))
 	assertBalances(10, 0, 0)
 
 	// Commit and get the new root
@@ -1122,7 +1123,7 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	// Do one more add, including the regular balance which is now in the
 	// collapsed snapshot
 	stateDB, _ = New(root, sdb, snapTree)
-	stateDB.AddBalance(addr, big.NewInt(1))
+	stateDB.AddBalance(addr, uint256.NewInt(1))
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
 	root, _ = stateDB.Commit(0, false, false)
 	stateDB, _ = New(root, sdb, snapTree)

@@ -204,7 +204,7 @@ func setupPoolWithConfig(t *testing.T, config *params.ChainConfig, fundedAddress
 
 	gspec := &core.Genesis{
 		Config: config,
-		Alloc:  types.GenesisAlloc{fundedAddress: core.GenesisAccount{Balance: big.NewInt(1000000000000000000)}},
+		Alloc:  types.GenesisAlloc{fundedAddress: types.GenesisAccount{Balance: big.NewInt(1000000000000000000)}},
 	}
 	chain, err := core.NewBlockChain(diskdb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	require.NoError(t, err)

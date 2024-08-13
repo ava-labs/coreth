@@ -347,7 +347,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 }
 
 // This allows the user transfer balance of a specified coinId in addition to a normal Call().
-func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, coinID common.Hash, value2 *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int, coinID common.Hash, value2 *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, vmerrs.ErrDepth
@@ -385,7 +385,7 @@ func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte
 	// Capture the tracer start/end events in debug mode
 	debug := evm.Config.Tracer != nil
 	if debug && evm.depth == 0 {
-		evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
+		evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value.ToBig())
 		defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
 			evm.Config.Tracer.CaptureEnd(ret, startGas-gas, err)
 		}(gas, time.Now())
@@ -747,7 +747,7 @@ func (evm *EVM) NativeAssetCall(caller common.Address, input []byte, suppliedGas
 
 	// Send [assetAmount] of [assetID] to [to] address
 	evm.Context.TransferMultiCoin(evm.StateDB, caller, to, assetID, assetAmount)
-	ret, remainingGas, err = evm.Call(AccountRef(caller), to, callData, remainingGas, new(big.Int))
+	ret, remainingGas, err = evm.Call(AccountRef(caller), to, callData, remainingGas, new(uint256.Int))
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally

@@ -29,6 +29,7 @@ package state
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 	"time"
 
@@ -470,7 +471,7 @@ func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalanceMultiCoin(coinID, amount, s.db)
 	}
@@ -478,14 +479,14 @@ func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalanceMultiCoin(coinID, amount, s.db)
 	}
 }
 
 func (s *StateDB) SetBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalanceMultiCoin(coinID, amount, s.db)
 	}

@@ -720,14 +720,6 @@ func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, vmerrs.ErrWriteProtection
 	}
-	var bigVal = big0
-	//TODO: use uint256.Int instead of converting with toBig()
-	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
-	// but it would make more sense to extend the usage of uint256.Int
-	if !value.IsZero() {
-		gas += params.CallStipend
-		bigVal = value.ToBig()
-	}
 
 	var bigVal2 = big0
 	//TODO: use uint256.Int instead of converting with toBig()
@@ -737,7 +729,7 @@ func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		bigVal2 = value2.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.CallExpert(scope.Contract, toAddr, args, gas, bigVal, coinID, bigVal2)
+	ret, returnGas, err := interpreter.evm.CallExpert(scope.Contract, toAddr, args, gas, &value, coinID, bigVal2)
 	if err != nil {
 		temp.Clear()
 	} else {

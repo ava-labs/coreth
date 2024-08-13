@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/holiman/uint256"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/subnet-evm/consensus/dummy"
@@ -40,6 +41,7 @@ import (
 	"github.com/ava-labs/subnet-evm/plugin/evm/message"
 	"github.com/ava-labs/subnet-evm/triedb"
 	"github.com/ava-labs/subnet-evm/triedb/hashdb"
+	"github.com/ava-labs/subnet-evm/utils"
 
 	warpPrecompile "github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	"github.com/ava-labs/subnet-evm/rpc"
@@ -106,8 +108,8 @@ var (
 )
 
 const (
-	x2cRateInt64       int64 = 1_000_000_000
-	x2cRateMinus1Int64 int64 = x2cRateInt64 - 1
+	x2cRateUint64       uint64 = 1_000_000_000
+	x2cRateMinus1Uint64 uint64 = x2cRateUint64 - 1
 )
 
 var (
@@ -115,8 +117,8 @@ var (
 	// 1 nAVAX and the smallest denomination on the C-Chain 1 wei. Where 1 nAVAX = 1 gWei.
 	// This is only required for AVAX because the denomination of 1 AVAX is 9 decimal
 	// places on the X and P chains, but is 18 decimal places within the EVM.
-	x2cRate       = big.NewInt(x2cRateInt64)
-	x2cRateMinus1 = big.NewInt(x2cRateMinus1Int64)
+	x2cRate       = uint256.NewInt(x2cRateUint64)
+	x2cRateMinus1 = uint256.NewInt(x2cRateMinus1Uint64)
 )
 
 const (
@@ -680,15 +682,15 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if err != nil {
 		return err
 	}
+	callbacks := vm.createConsensusCallbacks()
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
-		vm.createConsensusCallbacks(),
 		&EthPushGossiper{vm: vm},
 		vm.chaindb,
 		vm.config.EthBackendSettings(),
 		lastAcceptedHash,
-		dummy.NewFakerWithClock(&vm.clock),
+		dummy.NewFakerWithClock(callbacks, &vm.clock),
 		&vm.clock,
 	)
 	if err != nil {
@@ -1793,7 +1795,7 @@ func (vm *VM) GetSpendableFunds(
 		if assetID == vm.ctx.AVAXAssetID {
 			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
 			// denomination of AVAX that can be exported.
-			balance = new(big.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
+			balance = new(uint256.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
 		} else {
 			balance = state.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
 		}
@@ -1880,7 +1882,7 @@ func (vm *VM) GetSpendableAVAXWithFee(
 		addr := GetEthAddress(key)
 		// Since the asset is AVAX, we divide by the x2cRate to convert back to
 		// the correct denomination of AVAX that can be exported.
-		balance := new(big.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
+		balance := new(uint256.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
 		// If the balance for [addr] is insufficient to cover the additional cost
 		// of adding an input to the transaction, skip adding the input altogether
 		if balance <= additionalFee {

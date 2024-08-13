@@ -72,10 +72,10 @@ func (h storageJSON) MarshalText() ([]byte, error) {
 }
 
 // GenesisAlloc specifies the initial state of a genesis block.
-type GenesisAlloc map[common.Address]Account
+type GenesisAlloc map[common.Address]GenesisAccount
 
 func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
-	m := make(map[common.UnprefixedAddress]Account)
+	m := make(map[common.UnprefixedAddress]GenesisAccount)
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
@@ -84,4 +84,16 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 		(*ga)[common.Address(addr)] = a
 	}
 	return nil
+}
+
+type GenesisMultiCoinBalance map[common.Hash]*big.Int
+
+// GenesisAccount is an account in the state of the genesis block.
+type GenesisAccount struct {
+	Code       []byte                      `json:"code,omitempty"`
+	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance    *big.Int                    `json:"balance" gencodec:"required"`
+	MCBalance  GenesisMultiCoinBalance     `json:"mcbalance,omitempty"`
+	Nonce      uint64                      `json:"nonce,omitempty"`
+	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
 }

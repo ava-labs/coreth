@@ -62,7 +62,7 @@ type AtomicTrie interface {
 	LastCommitted() (common.Hash, uint64)
 
 	// TrieDB returns the underlying trie database
-	TrieDB() *trie.Database
+	TrieDB() *triedb.Database
 
 	// Root returns hash if it exists at specified height
 	// if trie was not committed at provided height, it returns
@@ -118,7 +118,7 @@ type AtomicTrieIterator interface {
 type atomicTrie struct {
 	commitInterval      uint64            // commit interval, same as commitHeightInterval by default
 	metadataDB          database.Database // Underlying database containing the atomic trie metadata
-	trieDB              *trie.Database    // Trie database
+	trieDB              *triedb.Database  // Trie database
 	lastCommittedRoot   common.Hash       // trie root of the most recent commit
 	lastCommittedHeight uint64            // index height of the most recent commit
 	lastAcceptedRoot    common.Hash       // most recent trie root passed to accept trie or the root of the atomic trie on intialization.
@@ -283,7 +283,7 @@ func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (AtomicTrieIterat
 	return NewAtomicTrieIterator(iter, a.codec), iter.Err
 }
 
-func (a *atomicTrie) TrieDB() *trie.Database {
+func (a *atomicTrie) TrieDB() *triedb.Database {
 	return a.trieDB
 }
 

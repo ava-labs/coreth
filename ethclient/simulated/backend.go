@@ -90,9 +90,8 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 
 	ethConf := ethconfig.DefaultConfig
 	ethConf.Genesis = &core.Genesis{
-		Config:   &chainConfig,
-		GasLimit: chainConfig.FeeConfig.GasLimit.Uint64(),
-		Alloc:    alloc,
+		Config: &chainConfig,
+		Alloc:  alloc,
 	}
 	ethConf.AllowUnfinalizedQueries = true
 	ethConf.Miner.Etherbase = constants.BlackholeAddr

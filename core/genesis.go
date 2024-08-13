@@ -63,7 +63,7 @@ type Genesis struct {
 	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   common.Address      `json:"coinbase"`
-	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Alloc      types.GenesisAlloc  `json:"alloc"      gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -75,33 +75,7 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 }
 
-// GenesisAlloc specifies the initial state that is part of the genesis block.
-type GenesisAlloc map[common.Address]GenesisAccount
-
-func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
-	m := make(map[common.UnprefixedAddress]GenesisAccount)
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	*ga = make(GenesisAlloc)
-	for addr, a := range m {
-		(*ga)[common.Address(addr)] = a
-	}
-	return nil
-}
-
-type GenesisMultiCoinBalance map[common.Hash]*big.Int
-
 // GenesisAccount is an account in the state of the genesis block.
-type GenesisAccount struct {
-	Code       []byte                      `json:"code,omitempty"`
-	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	MCBalance  GenesisMultiCoinBalance     `json:"mcbalance,omitempty"`
-	Nonce      uint64                      `json:"nonce,omitempty"`
-	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
-}
-
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
 	Nonce         math.HexOrDecimal64
@@ -112,7 +86,7 @@ type genesisSpecMarshaling struct {
 	Number        math.HexOrDecimal64
 	Difficulty    *math.HexOrDecimal256
 	BaseFee       *math.HexOrDecimal256
-	Alloc         map[common.UnprefixedAddress]GenesisAccount
+	Alloc         map[common.UnprefixedAddress]types.GenesisAccount
 	ExcessBlobGas *math.HexOrDecimal64
 	BlobGasUsed   *math.HexOrDecimal64
 }
@@ -365,7 +339,7 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := Genesis{
 		Config:  params.TestChainConfig,
-		Alloc:   GenesisAlloc{addr: {Balance: balance}},
+		Alloc:   types.GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 	}
 	return g.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))

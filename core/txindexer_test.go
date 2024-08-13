@@ -45,7 +45,7 @@ func TestTransactionIndices(t *testing.T) {
 		funds   = big.NewInt(10000000000000)
 		gspec   = &Genesis{
 			Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-			Alloc:  GenesisAlloc{addr1: {Balance: funds}},
+			Alloc:  types.GenesisAlloc{addr1: {Balance: funds}},
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
@@ -106,7 +106,7 @@ func TestTransactionIndices(t *testing.T) {
 	}
 	for i, l := range limits {
 		t.Run(fmt.Sprintf("test-%d, limit: %d", i+1, l), func(t *testing.T) {
-			conf.TransactionHistory = l
+			conf.TxLookupLimit = l
 
 			chain, err := createBlockChain(chainDB, conf, gspec, lastAcceptedBlock.Hash())
 			require.NoError(err)
@@ -156,7 +156,7 @@ func TestTransactionSkipIndexing(t *testing.T) {
 		funds   = big.NewInt(10000000000000)
 		gspec   = &Genesis{
 			Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-			Alloc:  GenesisAlloc{addr1: {Balance: funds}},
+			Alloc:  types.GenesisAlloc{addr1: {Balance: funds}},
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
@@ -198,19 +198,19 @@ func TestTransactionSkipIndexing(t *testing.T) {
 	chain.Stop()
 
 	// test2: specify lookuplimit with tx index skipping enabled. Blocks should not be indexed but tail should be updated.
-	conf.TransactionHistory = 2
+	conf.TxLookupLimit = 2
 	chainDB = rawdb.NewMemoryDatabase()
 	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks, common.Hash{},
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
-			tail := bNumber - conf.TransactionHistory + 1
+			tail := bNumber - conf.TxLookupLimit + 1
 			checkTxIndicesHelper(t, &tail, bNumber+1, bNumber+1, bNumber, chainDB, false) // check all indices has been skipped
 		})
 	require.NoError(err)
 	chain.Stop()
 
 	// test3: tx index skipping and unindexer disabled. Blocks should be indexed and tail should be updated.
-	conf.TransactionHistory = 0
+	conf.TxLookupLimit = 0
 	conf.SkipTxIndexing = false
 	chainDB = rawdb.NewMemoryDatabase()
 	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks, common.Hash{},
@@ -223,12 +223,12 @@ func TestTransactionSkipIndexing(t *testing.T) {
 
 	// now change tx index skipping to true and check that the indices are skipped for the last block
 	// and old indices are removed up to the tail, but [tail, current) indices are still there.
-	conf.TransactionHistory = 2
+	conf.TxLookupLimit = 2
 	conf.SkipTxIndexing = true
 	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks2[0:1], chain.CurrentHeader().Hash(),
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
-			tail := bNumber - conf.TransactionHistory + 1
+			tail := bNumber - conf.TxLookupLimit + 1
 			checkTxIndicesHelper(t, &tail, tail, bNumber-1, bNumber, chainDB, false)
 		})
 	require.NoError(err)

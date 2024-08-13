@@ -1132,19 +1132,16 @@ func (c *ChainConfig) rules(num *big.Int, timestamp uint64) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID: new(big.Int).Set(chainID),
-		EthRules: EthRules{
-			IsHomestead:      c.IsHomestead(num),
-			IsEIP150:         c.IsEIP150(num),
-			IsEIP155:         c.IsEIP155(num),
-			IsEIP158:         c.IsEIP158(num),
-			IsByzantium:      c.IsByzantium(num),
-			IsConstantinople: c.IsConstantinople(num),
-			IsPetersburg:     c.IsPetersburg(num),
-			IsIstanbul:       c.IsIstanbul(num),
-			IsCancun:         c.IsCancun(num, timestamp),
-			IsVerkle:         c.IsVerkle(num, timestamp),
-		},
+		ChainID:          new(big.Int).Set(chainID),
+		IsHomestead:      c.IsHomestead(num),
+		IsEIP150:         c.IsEIP150(num),
+		IsEIP155:         c.IsEIP155(num),
+		IsEIP158:         c.IsEIP158(num),
+		IsByzantium:      c.IsByzantium(num),
+		IsConstantinople: c.IsConstantinople(num),
+		IsPetersburg:     c.IsPetersburg(num),
+		IsIstanbul:       c.IsIstanbul(num),
+		IsCancun:         c.IsCancun(num, timestamp),
 	}
 }
 

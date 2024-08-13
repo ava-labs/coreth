@@ -125,7 +125,6 @@ func roundUpCacheSize(input int, allocSize int) int {
 func New(
 	stack *node.Node,
 	config *Config,
-	cb dummy.ConsensusCallbacks,
 	gossiper PushGossiper,
 	chainDb ethdb.Database,
 	settings Settings,
