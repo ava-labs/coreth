@@ -98,7 +98,7 @@ func (n *NetworkUpgrades) forkOrder() []fork {
 		{name: "banffBlockTimestamp", timestamp: n.BanffBlockTimestamp},
 		{name: "cortinaBlockTimestamp", timestamp: n.CortinaBlockTimestamp},
 		{name: "durangoBlockTimestamp", timestamp: n.DurangoBlockTimestamp},
-		{name: "etnaTime", timestamp: n.EtnaTimestamp},
+		{name: "etnaTimestamp", timestamp: n.EtnaTimestamp},
 	}
 }
 
