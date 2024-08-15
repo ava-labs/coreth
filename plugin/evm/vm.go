@@ -502,10 +502,6 @@ func (vm *VM) Initialize(
 
 	g.Config.SetEthUpgrades()
 
-	for _, line := range strings.Split(g.Config.Description(), "\n") {
-		log.Info(line)
-	}
-
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
 	vm.ethConfig.NetworkId = vm.chainID.Uint64()
