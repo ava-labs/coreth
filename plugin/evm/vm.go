@@ -450,7 +450,6 @@ func (vm *VM) Initialize(
 
 	var extDataHashes map[common.Hash]common.Hash
 	var chainID *big.Int
-	// params.GetChainConfig(chainCtx.NetworkUpgrades)
 	// Set the chain config for mainnet/fuji chain IDs
 	switch chainCtx.NetworkID {
 	case avalanchegoConstants.MainnetID:
