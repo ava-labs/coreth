@@ -15,6 +15,8 @@ jobs:
         name: Sync Subnet EVM Branch
         runs-on: ubuntu-20.04
         steps:
+          - uses: actions/checkout@v4
+
           - uses: actions/setup-go@v5
             with:
               go-version: "~1.21.12"
@@ -25,3 +27,7 @@ jobs:
               git remote add -f subnet-evm git@github.com:ava-labs/subnet-evm.git
               git remote -v # Verify the new remote was added
         
+          - name: Fetch Remote Branch (${{ github.events.inputs.remoteBranch }})
+            run: |
+              git fetch ${{ github.events.inputs.remoteBranch }}
+              git branch -a # Verify the new branch was fetched
