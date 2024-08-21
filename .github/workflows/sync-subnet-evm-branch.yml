@@ -24,7 +24,7 @@ jobs:
 
           - name: Add Remote
             run: |
-              git remote add -f subnet-evm git@github.com:ava-labs/subnet-evm.git
+              git remote add -f subnet-evm ava-labs/subnet-evm
               git remote -v # Verify the new remote was added
         
           - name: Fetch Remote Branch (${{ github.events.inputs.remoteBranch }})
