@@ -48,6 +48,7 @@ jobs:
           git checkout -- .github/workflows
 
       - name: Create Pull Request
+        id: create_pr
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "Sync subnet-evm to ${{ steps.fetch_remote_branch.outputs.result }}"
@@ -58,7 +59,7 @@ jobs:
           draft: true
 
       - name: PR Outputs
-        if: ${{ steps.cpr.outputs.pull-request-number }}
+        if: ${{ steps.create_pr.outputs.pull-request-number }}
         run: |
-          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
-          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
+          echo "Pull Request Number - ${{ steps.create_pr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.create_pr.outputs.pull-request-url }}"
