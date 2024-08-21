@@ -29,8 +29,8 @@ jobs:
         run: |
           git fetch subnet-evm ${{ github.event.inputs.remoteBranch }}
           git fetch subnet-evm coreth-diff-script
-          result=$(git rev-parse --short=8 subnet-evm/coreth-test-0)
-          echo "result=${result}" >> $GITHUB_OUTPUT
+          result=$(git rev-parse --short=8 subnet-evm/${{ github.event.inputs.remoteBranch }})
+          echo result="${result}" >> "${GITHUB_OUTPUT}"
 
       # TODO: Remove this step when the script is checked in
       - name: Checkout script
@@ -42,6 +42,7 @@ jobs:
           ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.event.inputs.remoteBranch }}
 
       # TODO: Should this step be removed?
+      # TODO: Using a single branch to iterate for now (avoid maing noise in notifications)
       - name: Restore .github/workflows
         run: |
           git checkout -- .github/workflows
@@ -50,7 +51,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "Sync subnet-evm to ${{ steps.fetch_remote_branch.outputs.result }}"
-          branch: sync-subnet-evm-${{ steps.fetch_remote_branch.outputs.result }}
+          branch: auto-sync-subnet-evm
           title: "Sync Subnet EVM to ${{ steps.fetch_remote_branch.outputs.result }}"
           body: |
             This PR was created automatically by a GitHub Action.
