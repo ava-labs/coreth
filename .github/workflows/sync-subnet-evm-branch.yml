@@ -42,11 +42,11 @@ jobs:
           ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.event.inputs.remoteBranch }}
 
       # TODO: Should this step be removed?
-      # TODO: Using a single branch to iterate for now (avoid maing noise in notifications)
       - name: Restore .github/workflows
         run: |
           git checkout -- .github/workflows
 
+      # TODO: Using a single branch to iterate for now (avoid maing noise in notifications)
       - name: Create Pull Request
         id: create_pr
         uses: peter-evans/create-pull-request@v6
