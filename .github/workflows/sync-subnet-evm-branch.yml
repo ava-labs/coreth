@@ -1,5 +1,8 @@
 name: "Sync Subnet EVM Branch" 
 on:
+  push:
+    branches:
+      - sync-subnet-evm-branch # Hack to trigger workflow
   workflow_dispatch:
       inputs:
         remoteBranch:
