@@ -8,49 +8,49 @@ on:
             default: "coreth-test-0"
 
 jobs:
-   sync_branch:
-     name: Sync Subnet EVM Branch
-     runs-on: ubuntu-20.04
-     steps:
-       - uses: actions/checkout@v4
+  sync_branch:
+    name: Sync Subnet EVM Branch
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
 
-       - uses: actions/setup-go@v5
-         with:
-           go-version: "~1.21.12"
-           check-latest: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "~1.21.12"
+          check-latest: true
 
-       - name: Add Remote
-         run: |
-           git remote add subnet-evm https://github.com/ava-labs/subnet-evm
-     
-       # TODO: Replace test branch with actual (eg, coreth)
-       - name: Fetch Remote Branch (${{ github.event.inputs.remoteBranch }})
-         id: fetch_remote_branch
-         run: |
-           git fetch subnet-evm ${{ github.event.inputs.remoteBranch }}
-           git fetch subnet-evm coreth-diff-script
-           git rev-parse --short=8 subnet-evm/coreth-test-0 >> $GITHUB_OUTPUT
+      - name: Add Remote
+        run: |
+          git remote add subnet-evm https://github.com/ava-labs/subnet-evm
+    
+      # TODO: Replace test branch with actual (eg, coreth)
+      - name: Fetch Remote Branch (${{ github.event.inputs.remoteBranch }})
+        id: fetch_remote_branch
+        run: |
+          git fetch subnet-evm ${{ github.event.inputs.remoteBranch }}
+          git fetch subnet-evm coreth-diff-script
+          git rev-parse --short=8 subnet-evm/coreth-test-0 >> $GITHUB_OUTPUT
 
-       # TODO: Remove this step when the script is checked in
-       - name: Checkout script
-         run: |
-           git checkout subnet-evm/coreth-diff-script -- ./scripts/apply_diff_and_rename.sh
+      # TODO: Remove this step when the script is checked in
+      - name: Checkout script
+        run: |
+          git checkout subnet-evm/coreth-diff-script -- ./scripts/apply_diff_and_rename.sh
 
-       - name: Apply diff
-         run: |
-           ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.event.inputs.remoteBranch }}
+      - name: Apply diff
+        run: |
+          ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.event.inputs.remoteBranch }}
 
-       # TODO: Should this step be removed?
-       - name: Restore .github/workflows
-         run: |
-           git checkout -- .github/workflows
+      # TODO: Should this step be removed?
+      - name: Restore .github/workflows
+        run: |
+          git checkout -- .github/workflows
 
-       - name: Create Pull Request
-         uses: peter-evans/create-pull-request@v6
-         with:
-           commit-message: "Sync subnet-evm to ${{ steps.fetch_remote_branch.outputs.result }}"
-           branch: sync-subnet-evm-${{ steps.fetch_remote_branch.outputs.result }}
-           title: "Sync Subnet EVM to ${{ steps.fetch_remote_branch.outputs.result }}"
-           body: |
-             This PR was created automatically by a GitHub Action.
-           draft: true
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Sync subnet-evm to ${{ steps.fetch_remote_branch.outputs.result }}"
+          branch: sync-subnet-evm-${{ steps.fetch_remote_branch.outputs.result }}
+          title: "Sync Subnet EVM to ${{ steps.fetch_remote_branch.outputs.result }}"
+          body: |
+            This PR was created automatically by a GitHub Action.
+          draft: true
