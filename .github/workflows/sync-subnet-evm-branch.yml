@@ -1,13 +1,11 @@
 name: "Sync Subnet EVM Branch" 
 on:
-  push:
-    branches:
-      - sync-subnet-evm-branch # Hack to trigger workflow
   workflow_dispatch:
       inputs:
         remoteBranch:
             description: "Subnet EVM Branch"
             required: true
+            default: "coreth-test-0"
 
 jobs:
     sync_branch:
@@ -27,9 +25,9 @@ jobs:
         
           # TODO: Can use default when we remove the push trigger hack
           # TODO: Replace test branch with actual (eg, coreth)
-          - name: Fetch Remote Branch (${{ github.events.inputs.remoteBranch || 'coreth-test-0' }})
+          - name: Fetch Remote Branch (${{ github.event.inputs.remoteBranch }})
             run: |
-              git fetch subnet-evm ${{ github.events.inputs.remoteBranch || 'coreth-test-0' }}
+              git fetch subnet-evm ${{ github.event.inputs.remoteBranch }}
               git fetch subnet-evm coreth-diff-script
               git branch -a # Verify the new branch was fetched
 
@@ -40,7 +38,7 @@ jobs:
 
           - name: Apply diff
             run: |
-              ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.events.inputs.remoteBranch || 'coreth-test-0' }}
+              ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.event.inputs.remoteBranch }}
 
           # TODO: Should this step be removed?
           - name: Restore .github/workflows
