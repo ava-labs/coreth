@@ -42,6 +42,11 @@ jobs:
             run: |
               ./scripts/apply_diff_and_rename.sh subnet-evm/${{ github.events.inputs.remoteBranch || 'coreth-test-0' }}
 
+          # TODO: Should this step be removed?
+          - name: Restore .github/workflows
+            run: |
+              git checkout -- .github/workflows
+
           # TODO: Add subnet-evm commit hash
           - name: Create Pull Request
             uses: peter-evans/create-pull-request@v6
