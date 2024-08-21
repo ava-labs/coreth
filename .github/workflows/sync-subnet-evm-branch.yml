@@ -56,3 +56,9 @@ jobs:
           body: |
             This PR was created automatically by a GitHub Action.
           draft: true
+
+      - name: PR Outputs
+        if: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
