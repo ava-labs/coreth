@@ -29,7 +29,8 @@ jobs:
         run: |
           git fetch subnet-evm ${{ github.event.inputs.remoteBranch }}
           git fetch subnet-evm coreth-diff-script
-          git rev-parse --short=8 subnet-evm/coreth-test-0 >> $GITHUB_OUTPUT
+          result=$(git rev-parse --short=8 subnet-evm/coreth-test-0)
+          echo "result=${result}" >> $GITHUB_OUTPUT
 
       # TODO: Remove this step when the script is checked in
       - name: Checkout script
