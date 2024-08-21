@@ -24,13 +24,12 @@ jobs:
           - name: Add Remote
             run: |
               git remote add -f subnet-evm https://github.com/ava-labs/subnet-evm
-              git remote -v # Verify the new remote was added
         
           # TODO: Can use default when we remove the push trigger hack
           # TODO: Replace test branch with actual (eg, coreth)
           - name: Fetch Remote Branch (${{ github.events.inputs.remoteBranch || 'coreth-test-0' }})
             run: |
-              git fetch ${{ github.events.inputs.remoteBranch || 'coreth-test-0' }}
+              git fetch subnet-evm ${{ github.events.inputs.remoteBranch || 'coreth-test-0' }}
               git branch -a # Verify the new branch was fetched
 
           - name: Apply diff
