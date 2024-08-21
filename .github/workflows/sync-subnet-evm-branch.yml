@@ -30,7 +30,13 @@ jobs:
           - name: Fetch Remote Branch (${{ github.events.inputs.remoteBranch || 'coreth-test-0' }})
             run: |
               git fetch subnet-evm ${{ github.events.inputs.remoteBranch || 'coreth-test-0' }}
+              git fetch subnet-evm coreth-diff-script
               git branch -a # Verify the new branch was fetched
+
+          # TODO: Remove this step when the script is checked in
+          - name: Checkout script
+            run: |
+              git checkout subnet-evm/coreth-diff-script -- ./scripts/apply_diff_and_rename.sh
 
           - name: Apply diff
             run: |
