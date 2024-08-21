@@ -23,7 +23,7 @@ jobs:
 
           - name: Add Remote
             run: |
-              git remote add -f subnet-evm https://github.com/ava-labs/subnet-evm
+              git remote add subnet-evm https://github.com/ava-labs/subnet-evm
         
           # TODO: Can use default when we remove the push trigger hack
           # TODO: Replace test branch with actual (eg, coreth)
