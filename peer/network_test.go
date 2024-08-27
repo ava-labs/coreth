@@ -737,12 +737,6 @@ type testGossipHandler struct {
 	nodeID   ids.NodeID
 }
 
-func (t *testGossipHandler) HandleAtomicTx(nodeID ids.NodeID, msg message.AtomicTxGossip) error {
-	t.received = true
-	t.nodeID = nodeID
-	return nil
-}
-
 func (t *testGossipHandler) HandleEthTxs(nodeID ids.NodeID, msg message.EthTxsGossip) error {
 	t.received = true
 	t.nodeID = nodeID

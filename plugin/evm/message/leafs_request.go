@@ -9,65 +9,31 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const MaxCodeHashesPerRequest = 5
 
 var _ Request = LeafsRequest{}
 
-// NodeType outlines the trie that a leaf node belongs to
-// handlers.LeafsRequestHandler uses this information to determine
-// which of the two tries (state/atomic) to fetch the information from
-type NodeType uint8
-
-const (
-	// StateTrieNode represents a leaf node that belongs to the coreth State trie
-	StateTrieNode NodeType = iota + 1
-	// AtomicTrieNode represents a leaf node that belongs to the coreth evm.AtomicTrie
-	AtomicTrieNode
-)
-
-func (nt NodeType) String() string {
-	switch nt {
-	case StateTrieNode:
-		return "StateTrie"
-	case AtomicTrieNode:
-		return "AtomicTrie"
-	default:
-		return "Unknown"
-	}
-}
-
 // LeafsRequest is a request to receive trie leaves at specified Root within Start and End byte range
 // Limit outlines maximum number of leaves to returns starting at Start
-// NodeType outlines which trie to read from state/atomic.
 type LeafsRequest struct {
-	Root     common.Hash `serialize:"true"`
-	Account  common.Hash `serialize:"true"`
-	Start    []byte      `serialize:"true"`
-	End      []byte      `serialize:"true"`
-	Limit    uint16      `serialize:"true"`
-	NodeType NodeType    `serialize:"true"`
+	Root    common.Hash `serialize:"true"`
+	Account common.Hash `serialize:"true"`
+	Start   []byte      `serialize:"true"`
+	End     []byte      `serialize:"true"`
+	Limit   uint16      `serialize:"true"`
 }
 
 func (l LeafsRequest) String() string {
 	return fmt.Sprintf(
-		"LeafsRequest(Root=%s, Account=%s, Start=%s, End=%s, Limit=%d, NodeType=%s)",
-		l.Root, l.Account, common.Bytes2Hex(l.Start), common.Bytes2Hex(l.End), l.Limit, l.NodeType,
+		"LeafsRequest(Root=%s, Account=%s, Start=%s, End %s, Limit=%d)",
+		l.Root, l.Account, common.Bytes2Hex(l.Start), common.Bytes2Hex(l.End), l.Limit,
 	)
 }
 
 func (l LeafsRequest) Handle(ctx context.Context, nodeID ids.NodeID, requestID uint32, handler RequestHandler) ([]byte, error) {
-	switch l.NodeType {
-	case StateTrieNode:
-		return handler.HandleStateTrieLeafsRequest(ctx, nodeID, requestID, l)
-	case AtomicTrieNode:
-		return handler.HandleAtomicTrieLeafsRequest(ctx, nodeID, requestID, l)
-	}
-
-	log.Debug("node type is not recognised, dropping request", "nodeID", nodeID, "requestID", requestID, "nodeType", l.NodeType)
-	return nil, nil
+	return handler.HandleStateTrieLeafsRequest(ctx, nodeID, requestID, l)
 }
 
 // LeafsResponse is a response to a LeafsRequest

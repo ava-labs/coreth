@@ -27,8 +27,7 @@ type blockBuilder struct {
 	ctx         *snow.Context
 	chainConfig *params.ChainConfig
 
-	txPool  *txpool.TxPool
-	mempool *Mempool
+	txPool *txpool.TxPool
 
 	shutdownChan <-chan struct{}
 	shutdownWg   *sync.WaitGroup
@@ -56,7 +55,6 @@ func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message) *bl
 		ctx:                  vm.ctx,
 		chainConfig:          vm.chainConfig,
 		txPool:               vm.txPool,
-		mempool:              vm.mempool,
 		shutdownChan:         vm.shutdownChan,
 		shutdownWg:           &vm.shutdownWg,
 		notifyBuildBlockChan: notifyBuildBlockChan,
@@ -101,7 +99,7 @@ func (b *blockBuilder) handleGenerateBlock() {
 // into a block.
 func (b *blockBuilder) needToBuild() bool {
 	size := b.txPool.PendingSize(true)
-	return size > 0 || b.mempool.Len() > 0
+	return size > 0
 }
 
 // markBuilding adds a PendingTxs message to the toEngine channel.
@@ -154,9 +152,6 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 			select {
 			case <-txSubmitChan:
 				log.Trace("New tx detected, trying to generate a block")
-				b.signalTxsReady()
-			case <-b.mempool.Pending:
-				log.Trace("New atomic Tx detected, trying to generate a block")
 				b.signalTxsReady()
 			case <-b.shutdownChan:
 				b.buildBlockTimer.Stop()

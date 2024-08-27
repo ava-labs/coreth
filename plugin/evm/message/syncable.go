@@ -22,7 +22,6 @@ type SyncSummary struct {
 	BlockNumber uint64      `serialize:"true"`
 	BlockHash   common.Hash `serialize:"true"`
 	BlockRoot   common.Hash `serialize:"true"`
-	AtomicRoot  common.Hash `serialize:"true"`
 
 	summaryID  ids.ID
 	bytes      []byte
@@ -47,12 +46,11 @@ func NewSyncSummaryFromBytes(summaryBytes []byte, acceptImpl func(SyncSummary) (
 	return summary, nil
 }
 
-func NewSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (SyncSummary, error) {
+func NewSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash) (SyncSummary, error) {
 	summary := SyncSummary{
 		BlockNumber: blockNumber,
 		BlockHash:   blockHash,
 		BlockRoot:   blockRoot,
-		AtomicRoot:  atomicRoot,
 	}
 	bytes, err := Codec.Marshal(Version, &summary)
 	if err != nil {
@@ -82,7 +80,7 @@ func (s SyncSummary) ID() ids.ID {
 }
 
 func (s SyncSummary) String() string {
-	return fmt.Sprintf("SyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", s.BlockHash, s.BlockNumber, s.BlockRoot, s.AtomicRoot)
+	return fmt.Sprintf("SyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s)", s.BlockHash, s.BlockNumber, s.BlockRoot)
 }
 
 func (s SyncSummary) Accept(context.Context) (block.StateSyncMode, error) {

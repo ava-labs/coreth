@@ -432,11 +432,10 @@ func TestGetLeafs(t *testing.T) {
 	}{
 		"full response for small (single request) trie": {
 			request: message.LeafsRequest{
-				Root:     smallTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  smallTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -457,11 +456,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"too many leaves in response": {
 			request: message.LeafsRequest{
-				Root:     smallTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit / 2,
-				NodeType: message.StateTrieNode,
+				Root:  smallTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit / 2,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				modifiedRequest := request
@@ -480,11 +478,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"partial response to request for entire trie (full leaf limit)": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -505,11 +502,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"partial response to request for middle range of trie (full leaf limit)": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    largeTrieKeys[1000],
-				End:      largeTrieKeys[99000],
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: largeTrieKeys[1000],
+				End:   largeTrieKeys[99000],
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -530,11 +526,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"full response from near end of trie to end of trie (less than leaf limit)": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    largeTrieKeys[len(largeTrieKeys)-30], // Set start 30 keys from the end of the large trie
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: largeTrieKeys[len(largeTrieKeys)-30], // Set start 30 keys from the end of the large trie
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -554,11 +549,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"full response for intermediate range of trie (less than leaf limit)": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    largeTrieKeys[1000], // Set the range for 1000 leafs in an intermediate range of the trie
-				End:      largeTrieKeys[1099], // (inclusive range)
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: largeTrieKeys[1000], // Set the range for 1000 leafs in an intermediate range of the trie
+				End:   largeTrieKeys[1099], // (inclusive range)
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -579,11 +573,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"removed first key in response": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -610,11 +603,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"removed first key in response and replaced proof": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -640,11 +632,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"removed last key in response": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -671,11 +662,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"removed key from middle of response": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -703,11 +693,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"corrupted value in middle of response": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -734,11 +723,10 @@ func TestGetLeafs(t *testing.T) {
 		},
 		"all proof keys removed from response": {
 			request: message.LeafsRequest{
-				Root:     largeTrieRoot,
-				Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-				End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-				Limit:    leafsLimit,
-				NodeType: message.StateTrieNode,
+				Root:  largeTrieRoot,
+				Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+				End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+				Limit: leafsLimit,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -810,11 +798,10 @@ func TestGetLeafsRetries(t *testing.T) {
 	})
 
 	request := message.LeafsRequest{
-		Root:     root,
-		Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
-		End:      bytes.Repeat([]byte{0xff}, common.HashLength),
-		Limit:    1024,
-		NodeType: message.StateTrieNode,
+		Root:  root,
+		Start: bytes.Repeat([]byte{0x00}, common.HashLength),
+		End:   bytes.Repeat([]byte{0xff}, common.HashLength),
+		Limit: 1024,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

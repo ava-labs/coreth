@@ -12,21 +12,18 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 type stateSyncServerConfig struct {
-	Chain      *core.BlockChain
-	AtomicTrie AtomicTrie
+	Chain *core.BlockChain
 
 	// SyncableInterval is the interval at which blocks are eligible to provide syncable block summaries.
 	SyncableInterval uint64
 }
 
 type stateSyncServer struct {
-	chain      *core.BlockChain
-	atomicTrie AtomicTrie
+	chain *core.BlockChain
 
 	syncableInterval uint64
 }
@@ -39,22 +36,12 @@ type StateSyncServer interface {
 func NewStateSyncServer(config *stateSyncServerConfig) StateSyncServer {
 	return &stateSyncServer{
 		chain:            config.Chain,
-		atomicTrie:       config.AtomicTrie,
 		syncableInterval: config.SyncableInterval,
 	}
 }
 
 // stateSummaryAtHeight returns the SyncSummary at [height] if valid and available.
 func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (message.SyncSummary, error) {
-	atomicRoot, err := server.atomicTrie.Root(height)
-	if err != nil {
-		return message.SyncSummary{}, fmt.Errorf("error getting atomic trie root for height (%d): %w", height, err)
-	}
-
-	if (atomicRoot == common.Hash{}) {
-		return message.SyncSummary{}, fmt.Errorf("atomic trie root not found for height (%d)", height)
-	}
-
 	blk := server.chain.GetBlockByNumber(height)
 	if blk == nil {
 		return message.SyncSummary{}, fmt.Errorf("block not found for height (%d)", height)
@@ -64,7 +51,7 @@ func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (message.Sync
 		return message.SyncSummary{}, fmt.Errorf("block root does not exist for height (%d), root (%s)", height, blk.Root())
 	}
 
-	summary, err := message.NewSyncSummary(blk.Hash(), height, blk.Root(), atomicRoot)
+	summary, err := message.NewSyncSummary(blk.Hash(), height, blk.Root())
 	if err != nil {
 		return message.SyncSummary{}, fmt.Errorf("failed to construct syncable block at height %d: %w", height, err)
 	}
