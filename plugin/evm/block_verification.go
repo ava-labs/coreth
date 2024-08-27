@@ -29,10 +29,8 @@ type blockValidator struct {
 	extDataHashes map[common.Hash]common.Hash
 }
 
-func NewBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockValidator {
-	return &blockValidator{
-		extDataHashes: extDataHashes,
-	}
+func NewBlockValidator() BlockValidator {
+	return &blockValidator{}
 }
 
 func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {

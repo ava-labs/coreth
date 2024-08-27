@@ -394,16 +394,13 @@ func (vm *VM) Initialize(
 		return err
 	}
 
-	var extDataHashes map[common.Hash]common.Hash
 	var chainID *big.Int
 	// Set the chain config for mainnet/fuji chain IDs
 	switch chainCtx.NetworkID {
 	case avalanchegoConstants.MainnetID:
 		chainID = params.AvalancheMainnetChainID
-		extDataHashes = mainnetExtDataHashes
 	case avalanchegoConstants.FujiID:
 		chainID = params.AvalancheFujiChainID
-		extDataHashes = fujiExtDataHashes
 	case avalanchegoConstants.LocalID:
 		chainID = params.AvalancheLocalChainID
 	default:
@@ -427,7 +424,7 @@ func (vm *VM) Initialize(
 	g.Config.AvalancheContext = params.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
-	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
+	vm.syntacticBlockValidator = NewBlockValidator()
 
 	// Ensure that non-standard commit interval is not allowed for production networks
 	if avalanchegoConstants.ProductionNetworkIDs.Contains(chainCtx.NetworkID) {
@@ -438,11 +435,6 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("cannot start non-local network with syncable interval %d", vm.config.StateSyncCommitInterval)
 		}
 	}
-
-	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
-	// config, free fuji)
-	fujiExtDataHashes = nil
-	mainnetExtDataHashes = nil
 
 	vm.chainID = g.Config.ChainID
 
