@@ -28,7 +28,6 @@ type Client interface {
 
 // Client implementation for interacting with EVM [chain]
 type client struct {
-	requester      rpc.EndpointRequester
 	adminRequester rpc.EndpointRequester
 }
 

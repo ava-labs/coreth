@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/ava-labs/avalanchego/api"
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -23,15 +22,9 @@ import (
 const (
 	GenesisTestAddr = "0x751a0b96e1042bee789452ecb20253fba40dbe85"
 	GenesisTestKey  = "0xabd71b35d559563fea757f0f5edbde286fb8c043105b15abb7cd57189306d7d1"
-
-	// Max number of addresses that can be passed in as argument to GetUTXOs
-	maxGetUTXOsAddrs = 1024
 )
 
 var (
-	errNoAddresses       = errors.New("no addresses provided")
-	errNoSourceChain     = errors.New("no source chain provided")
-	errNilTxID           = errors.New("nil transaction ID")
 	errMissingPrivateKey = errors.New("argument 'privateKey' not given")
 
 	initialBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
@@ -66,17 +59,6 @@ func (api *SnowmanAPI) IssueBlock(ctx context.Context) error {
 
 // AvaxAPI offers Avalanche network related API methods
 type AvaxAPI struct{ vm *VM }
-
-// parseAssetID parses an assetID string into an ID
-func (service *AvaxAPI) parseAssetID(assetID string) (ids.ID, error) {
-	if assetID == "" {
-		return ids.ID{}, fmt.Errorf("assetID is required")
-	} else if assetID == "AVAX" {
-		return service.vm.ctx.AVAXAssetID, nil
-	} else {
-		return ids.FromString(assetID)
-	}
-}
 
 type VersionReply struct {
 	Version string `json:"version"`

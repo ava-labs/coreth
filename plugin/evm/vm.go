@@ -105,20 +105,6 @@ var (
 )
 
 const (
-	x2cRateInt64       int64 = 1_000_000_000
-	x2cRateMinus1Int64 int64 = x2cRateInt64 - 1
-)
-
-var (
-	// x2cRate is the conversion rate between the smallest denomination on the X-Chain
-	// 1 nAVAX and the smallest denomination on the C-Chain 1 wei. Where 1 nAVAX = 1 gWei.
-	// This is only required for AVAX because the denomination of 1 AVAX is 9 decimal
-	// places on the X and P chains, but is 18 decimal places within the EVM.
-	x2cRate       = big.NewInt(x2cRateInt64)
-	x2cRateMinus1 = big.NewInt(x2cRateMinus1Int64)
-)
-
-const (
 	// Max time from current time allowed for blocks, before they're considered future blocks
 	// and fail verification
 	maxFutureBlockTime = 10 * time.Second
@@ -137,8 +123,6 @@ const (
 	ethMetricsPrefix        = "eth"
 	sdkMetricsPrefix        = "sdk"
 	chainStateMetricsPrefix = "chain_state"
-
-	targetAtomicTxsSize = 40 * units.KiB
 
 	// p2p app protocols
 	ethTxGossipProtocol    = 0x0
@@ -174,10 +158,6 @@ var (
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	// Prefixes for atomic trie
-	atomicTrieDBPrefix     = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
 )
 
 var (
@@ -185,29 +165,11 @@ var (
 	errUnsupportedFXs                 = errors.New("unsupported feature extensions")
 	errInvalidBlock                   = errors.New("invalid block")
 	errInvalidAddr                    = errors.New("invalid hex address")
-	errInsufficientAtomicTxFee        = errors.New("atomic tx fee too low for atomic mempool")
-	errAssetIDMismatch                = errors.New("asset IDs in the input don't match the utxo")
-	errNoImportInputs                 = errors.New("tx has no imported inputs")
-	errInputsNotSortedUnique          = errors.New("inputs not sorted and unique")
-	errPublicKeySignatureMismatch     = errors.New("signature doesn't match public key")
-	errWrongChainID                   = errors.New("tx has wrong chain ID")
-	errInsufficientFunds              = errors.New("insufficient funds")
-	errNoExportOutputs                = errors.New("tx has no export outputs")
-	errOutputsNotSorted               = errors.New("tx outputs not sorted")
-	errOutputsNotSortedUnique         = errors.New("outputs not sorted and unique")
-	errOverflowExport                 = errors.New("overflow when computing export amount + txFee")
 	errInvalidNonce                   = errors.New("invalid nonce")
-	errConflictingAtomicInputs        = errors.New("invalid block due to conflicting atomic inputs")
 	errUnclesUnsupported              = errors.New("uncles unsupported")
-	errRejectedParent                 = errors.New("rejected parent")
-	errInsufficientFundsForFee        = errors.New("insufficient AVAX funds to pay transaction fee")
-	errNoEVMOutputs                   = errors.New("tx has no EVM outputs")
 	errNilBaseFeeApricotPhase3        = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilExtDataGasUsedApricotPhase4 = errors.New("nil extDataGasUsed is invalid after apricotPhase4")
 	errNilBlockGasCostApricotPhase4   = errors.New("nil blockGasCost is invalid after apricotPhase4")
-	errConflictingAtomicTx            = errors.New("conflicting atomic tx present")
-	errTooManyAtomicTx                = errors.New("too many atomic tx")
-	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
 	errInvalidHeaderPredicateResults  = errors.New("invalid header predicate results")
 )
 
@@ -1272,12 +1234,6 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 	return state.GetNonce(address), nil
 }
 
-// currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() params.Rules {
-	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.chainConfig.Rules(header.Number, header.Time)
-}
-
 func (vm *VM) startContinuousProfiler() {
 	// If the profiler directory is empty, return immediately
 	// without creating or starting a continuous profiler.
@@ -1302,23 +1258,6 @@ func (vm *VM) startContinuousProfiler() {
 	}()
 	// Wait for shutdownChan to be closed
 	<-vm.shutdownChan
-}
-
-func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
-	// Get the base fee to use
-	baseFee, err := vm.eth.APIBackend.EstimateBaseFee(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if baseFee == nil {
-		baseFee = initialBaseFee
-	} else {
-		// give some breathing room
-		baseFee.Mul(baseFee, big.NewInt(11))
-		baseFee.Div(baseFee, big.NewInt(10))
-	}
-
-	return baseFee, nil
 }
 
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the

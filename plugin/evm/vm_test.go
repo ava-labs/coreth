@@ -129,16 +129,6 @@ var (
 	genesisJSONLatest            = genesisJSONEtna
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
-
-	apricotRulesPhase0 = params.Rules{}
-	apricotRulesPhase1 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true}}
-	apricotRulesPhase2 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true}}
-	apricotRulesPhase3 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true}}
-	apricotRulesPhase4 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true}}
-	apricotRulesPhase5 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true}}
-	apricotRulesPhase6 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true}}
-	banffRules         = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true}}
-	// cortinaRules    = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true, IsCortina: true}}
 )
 
 func init() {
