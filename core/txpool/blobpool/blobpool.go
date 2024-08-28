@@ -840,7 +840,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	if p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
 	}
-	_, baseFee, err := dummy.EstimateNextBaseFee(
+	_, baseFeeBig, err := dummy.EstimateNextBaseFee(
 		p.chain.Config(),
 		p.head,
 		uint64(time.Now().Unix()),
@@ -852,7 +852,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
 		// basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), newHead))
-		basefee = uint256.MustFromBig(baseFee)
+		basefee = uint256.MustFromBig(baseFeeBig)
 		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
 	if newHead.ExcessBlobGas != nil {

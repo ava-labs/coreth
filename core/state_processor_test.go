@@ -111,8 +111,8 @@ func TestStateProcessorErrors(t *testing.T) {
 			gspec = &Genesis{
 				Config:    config,
 				Timestamp: uint64(upgrade.InitiallyActiveTime.Unix()),
-				Alloc: GenesisAlloc{
-					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+				Alloc: types.GenesisAlloc{
+					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.GenesisAccount{
 						Balance: big.NewInt(4000000000000000000), // 4 ether
 						Nonce:   0,
 					},
