@@ -18,7 +18,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/upgrade"
-	"github.com/ava-labs/avalanchego/utils"
 	avagoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -34,6 +33,7 @@ import (
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
@@ -72,7 +72,7 @@ func TestSendWarpMessage(t *testing.T) {
 	logsSub := vm.eth.APIBackend.SubscribeAcceptedLogsEvent(acceptedLogsChan)
 	defer logsSub.Unsubscribe()
 
-	payloadData := utils.RandomBytes(100)
+	payloadData := avagoUtils.RandomBytes(100)
 
 	warpSendMessageInput, err := warp.PackSendWarpMessage(payloadData)
 	require.NoError(err)
@@ -408,6 +408,30 @@ func TestReceiveWarpMessage(t *testing.T) {
 		require.NoError(vm.Shutdown(context.Background()))
 	}()
 
+	// enable warp at the default genesis time
+	enableTime := upgrade.InitiallyActiveTime
+	enableConfig := warp.NewDefaultConfig(utils.TimeToNewUint64(enableTime))
+
+	// disable warp so we can re-enable it with RequirePrimaryNetworkSigners
+	disableTime := upgrade.InitiallyActiveTime.Add(10 * time.Second)
+	disableConfig := warp.NewDisableConfig(utils.TimeToNewUint64(disableTime))
+
+	// re-enable warp with RequirePrimaryNetworkSigners
+	reEnableTime := disableTime.Add(10 * time.Second)
+	reEnableConfig := warp.NewConfig(
+		utils.TimeToNewUint64(reEnableTime),
+		0,    // QuorumNumerator
+		true, // RequirePrimaryNetworkSigners
+	)
+
+	vm.chainConfig.UpgradeConfig = params.UpgradeConfig{
+		PrecompileUpgrades: []params.PrecompileUpgrade{
+			{Config: enableConfig},
+			{Config: disableConfig},
+			{Config: reEnableConfig},
+		},
+	}
+
 	type test struct {
 		name          string
 		sourceChainID ids.ID
@@ -439,30 +463,29 @@ func TestReceiveWarpMessage(t *testing.T) {
 			useSigners:    signersSubnet,
 			blockTime:     upgrade.InitiallyActiveTime.Add(2 * blockGap),
 		},
-		// TODO: Re-enable these tests after implementing upgrade bytes for coreth.
 		// Note here we disable warp and re-enable it with RequirePrimaryNetworkSigners
 		// by using reEnableTime.
-		// {
-		// 	name:          "subnet message should be signed by subnet with RequirePrimaryNetworkSigners (unimpacted)",
-		// 	sourceChainID: vm.ctx.ChainID,
-		// 	msgFrom:       fromSubnet,
-		// 	useSigners:    signersSubnet,
-		// 	blockTime:     reEnableTime,
-		// },
-		// {
-		// 	name:          "P-Chain message should be signed by subnet with RequirePrimaryNetworkSigners (unimpacted)",
-		// 	sourceChainID: constants.PlatformChainID,
-		// 	msgFrom:       fromPrimary,
-		// 	useSigners:    signersSubnet,
-		// 	blockTime:     reEnableTime.Add(blockGap),
-		// },
-		// {
-		// 	name:          "C-Chain message should be signed by primary with RequirePrimaryNetworkSigners (impacted)",
-		// 	sourceChainID: testCChainID,
-		// 	msgFrom:       fromPrimary,
-		// 	useSigners:    signersPrimary,
-		// 	blockTime:     reEnableTime.Add(2 * blockGap),
-		// },
+		{
+			name:          "subnet message should be signed by subnet with RequirePrimaryNetworkSigners (unimpacted)",
+			sourceChainID: vm.ctx.ChainID,
+			msgFrom:       fromSubnet,
+			useSigners:    signersSubnet,
+			blockTime:     reEnableTime,
+		},
+		{
+			name:          "P-Chain message should be signed by subnet with RequirePrimaryNetworkSigners (unimpacted)",
+			sourceChainID: constants.PlatformChainID,
+			msgFrom:       fromPrimary,
+			useSigners:    signersSubnet,
+			blockTime:     reEnableTime.Add(blockGap),
+		},
+		{
+			name:          "C-Chain message should be signed by primary with RequirePrimaryNetworkSigners (impacted)",
+			sourceChainID: testCChainID,
+			msgFrom:       fromPrimary,
+			useSigners:    signersPrimary,
+			blockTime:     reEnableTime.Add(2 * blockGap),
+		},
 	}
 	// Note each test corresponds to a block, the tests must be ordered by block
 	// time and cannot, eg be run in parallel or a separate golang test.
