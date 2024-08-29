@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	syncclient "github.com/ava-labs/coreth/sync/client"
+	syncclient "github.com/ava-labs/subnet-evm/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
