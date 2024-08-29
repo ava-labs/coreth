@@ -44,4 +44,12 @@ else
   fi
 fi
 
-find "${REPO_ROOT}" -name "*.sh" -type f -print0 | xargs -0 "${SHELLCHECK}" "${@}"
+IGNORED_CONDITIONS=()
+for file in ${IGNORED_FILES}; do
+  if [[ -n "${IGNORED_CONDITIONS-}" ]]; then
+    IGNORED_CONDITIONS+=(-o)
+  fi
+  IGNORED_CONDITIONS+=(-path "${REPO_ROOT}/${file}" -prune)
+done
+
+find "${REPO_ROOT}" \( "${IGNORED_CONDITIONS[@]}" \) -o -type f -name "*.sh" -print0 | xargs -0 "${SHELLCHECK}" "${@}"
