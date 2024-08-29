@@ -1,6 +1,7 @@
 TestClientCancelWebsocket
 TestExpDecaySampleNanosecondRegression
 TestGolangBindings
+TestMempoolAtmTxsAppGossipHandlingDiscardedTx
 TestMempoolEthTxsAppGossipHandling
 TestResumeSyncAccountsTrieInterrupted
 TestResyncNewRootAfterDeletes
