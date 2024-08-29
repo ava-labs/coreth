@@ -1,7 +1,7 @@
 # ============= Compilation Stage ================
 FROM golang:1.21.12-bullseye AS builder
 
-ARG AVALANCHE_VERSION
+ARG github.com/ava-labs/coreth
 
 RUN mkdir -p $GOPATH/src/github.com/ava-labs
 WORKDIR $GOPATH/src/github.com/ava-labs
