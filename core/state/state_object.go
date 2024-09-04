@@ -445,7 +445,6 @@ func (s *stateObject) SetBalance(amount *uint256.Int) {
 	s.setBalance(amount)
 }
 
-// XXX: should we switch to uint256.Int for multicoin?
 // AddBalanceMultiCoin adds amount of coinID to s's balance.
 // It is used to add multicoin funds to the destination account of a transfer.
 func (s *stateObject) AddBalanceMultiCoin(coinID common.Hash, amount *big.Int, db Database) {

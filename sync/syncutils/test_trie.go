@@ -6,7 +6,6 @@ package syncutils
 import (
 	cryptoRand "crypto/rand"
 	"encoding/binary"
-	"math/big"
 	"math/rand"
 	"testing"
 
@@ -150,8 +149,8 @@ func FillAccounts(
 	onAccount func(*testing.T, int, types.StateAccount) types.StateAccount,
 ) (common.Hash, map[*keystore.Key]*types.StateAccount) {
 	var (
-		minBalance  = uint256.MustFromBig(big.NewInt(3000000000000000000))
-		randBalance = uint256.MustFromBig(big.NewInt(1000000000000000000))
+		minBalance  = uint256.NewInt(3000000000000000000)
+		randBalance = uint256.NewInt(1000000000000000000)
 		maxNonce    = 10
 		accounts    = make(map[*keystore.Key]*types.StateAccount, numAccounts)
 	)
