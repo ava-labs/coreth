@@ -19,6 +19,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
+	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/holiman/uint256"
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,13 +44,12 @@ import (
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
 
-	warpPrecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
+	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/handlers"
-	warpValidators "github.com/ava-labs/coreth/warp/validators"
 
 	// Force-load tracer engine to trigger registration
 	//
@@ -449,31 +449,42 @@ func (vm *VM) Initialize(
 	}
 
 	var extDataHashes map[common.Hash]common.Hash
+	var chainID *big.Int
 	// Set the chain config for mainnet/fuji chain IDs
-	switch {
-	case g.Config.ChainID.Cmp(params.AvalancheMainnetChainID) == 0:
-		config := *params.AvalancheMainnetChainConfig
-		g.Config = &config
+	switch chainCtx.NetworkID {
+	case avalanchegoConstants.MainnetID:
+		chainID = params.AvalancheMainnetChainID
 		extDataHashes = mainnetExtDataHashes
-	case g.Config.ChainID.Cmp(params.AvalancheFujiChainID) == 0:
-		config := *params.AvalancheFujiChainConfig
-		g.Config = &config
+	case avalanchegoConstants.FujiID:
+		chainID = params.AvalancheFujiChainID
 		extDataHashes = fujiExtDataHashes
+	case avalanchegoConstants.LocalID:
+		chainID = params.AvalancheLocalChainID
+	default:
+		chainID = g.Config.ChainID
 	}
+
+	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
+	// normally it should not be empty, but some tests may not set it
+	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
+		g.Config = params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(chainID))
+	}
+
 	// If the Durango is activated, activate the Warp Precompile at the same time
 	if g.Config.DurangoBlockTimestamp != nil {
 		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpPrecompile.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
+			Config: warpcontract.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
 		})
 	}
+
 	// Set the Avalanche Context on the ChainConfig
 	g.Config.AvalancheContext = params.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
 
-	// Ensure that non-standard commit interval is only allowed for the local network
-	if g.Config.ChainID.Cmp(params.AvalancheLocalChainID) != 0 {
+	// Ensure that non-standard commit interval is not allowed for production networks
+	if avalanchegoConstants.ProductionNetworkIDs.Contains(chainCtx.NetworkID) {
 		if vm.config.CommitInterval != defaultCommitInterval {
 			return fmt.Errorf("cannot start non-local network with commit interval %d", vm.config.CommitInterval)
 		}
@@ -585,7 +596,7 @@ func (vm *VM) Initialize(
 	}
 	vm.validators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.networkCodec = message.Codec
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, message.CrossChainCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests, vm.config.MaxOutboundActiveCrossChainRequests)
+	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// Initialize warp backend
@@ -620,7 +631,7 @@ func (vm *VM) Initialize(
 	var (
 		bonusBlockHeights map[uint64]ids.ID
 	)
-	if vm.chainID.Cmp(params.AvalancheMainnetChainID) == 0 {
+	if vm.ctx.NetworkID == avalanchegoConstants.MainnetID {
 		bonusBlockHeights, err = readMainnetBonusBlocks()
 		if err != nil {
 			return fmt.Errorf("failed to read mainnet bonus blocks: %w", err)
@@ -713,7 +724,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // TODO: remove this after Etna is activated
 func (vm *VM) setMinFeeAtEtna() {
 	now := vm.clock.Time()
-	if vm.chainConfig.EtnaTime == nil {
+	if vm.chainConfig.EtnaTimestamp == nil {
 		// If Etna is not set, set the min fee according to the latest upgrade
 		vm.txPool.SetMinFee(big.NewInt(params.ApricotPhase4MinBaseFee))
 		return
@@ -728,7 +739,7 @@ func (vm *VM) setMinFeeAtEtna() {
 	go func() {
 		defer vm.shutdownWg.Done()
 
-		wait := utils.Uint64ToTime(vm.chainConfig.EtnaTime).Sub(now)
+		wait := utils.Uint64ToTime(vm.chainConfig.EtnaTimestamp).Sub(now)
 		t := time.NewTimer(wait)
 		select {
 		case <-t.C: // Wait for Etna to be activated
@@ -805,7 +816,6 @@ func (vm *VM) initializeHandlers() {
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
 	vm.setAppRequestHandlers()
-	vm.setCrossChainAppRequestHandler()
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
@@ -1103,7 +1113,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(ethTxGossipProtocol, p2p.WithValidatorSampling(vm.validators))
+	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.validators))
 	ethTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -1192,7 +1202,7 @@ func (vm *VM) initBlockBuilding() error {
 		)
 	}
 
-	if err := vm.Network.AddHandler(ethTxGossipProtocol, vm.ethTxGossipHandler); err != nil {
+	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, vm.ethTxGossipHandler); err != nil {
 		return err
 	}
 
@@ -1293,13 +1303,6 @@ func (vm *VM) setAppRequestHandlers() {
 		vm.networkCodec,
 	)
 	vm.Network.SetRequestHandler(networkHandler)
-}
-
-// setCrossChainAppRequestHandler sets the request handlers for the VM to serve cross chain
-// requests.
-func (vm *VM) setCrossChainAppRequestHandler() {
-	crossChainRequestHandler := message.NewCrossChainHandler(vm.eth.APIBackend, message.CrossChainCodec)
-	vm.Network.SetCrossChainRequestHandler(crossChainRequestHandler)
 }
 
 // Shutdown implements the snowman.ChainVM interface
@@ -1526,8 +1529,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}
 
 	if vm.config.WarpAPIEnabled {
-		validatorsState := warpValidators.NewState(vm.ctx)
-		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx.NetworkID, vm.ctx.SubnetID, vm.ctx.ChainID, validatorsState, vm.warpBackend, vm.client)); err != nil {
+		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx.NetworkID, vm.ctx.SubnetID, vm.ctx.ChainID, vm.ctx.ValidatorState, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)); err != nil {
 			return nil, err
 		}
 		enabledAPIs = append(enabledAPIs, "warp")
@@ -1941,6 +1943,18 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 func (vm *VM) currentRules() params.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
 	return vm.chainConfig.Rules(header.Number, header.Time)
+}
+
+// requirePrimaryNetworkSigners returns true if warp messages from the primary
+// network must be signed by the primary network validators.
+// This is necessary when the subnet is not validating the primary network.
+func (vm *VM) requirePrimaryNetworkSigners() bool {
+	switch c := vm.currentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
+	case *warpcontract.Config:
+		return c.RequirePrimaryNetworkSigners
+	default: // includes nil due to non-presence
+		return false
+	}
 }
 
 func (vm *VM) startContinuousProfiler() {

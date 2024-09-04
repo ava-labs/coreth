@@ -91,8 +91,8 @@ type genesisSpecMarshaling struct {
 	GasUsed       math.HexOrDecimal64
 	Number        math.HexOrDecimal64
 	Difficulty    *math.HexOrDecimal256
+	Alloc         map[common.UnprefixedAddress]types.Account
 	BaseFee       *math.HexOrDecimal256
-	Alloc         map[common.UnprefixedAddress]types.GenesisAccount
 	ExcessBlobGas *math.HexOrDecimal64
 	BlobGasUsed   *math.HexOrDecimal64
 }

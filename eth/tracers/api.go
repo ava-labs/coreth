@@ -1101,12 +1101,16 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		copy.DurangoBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.EtnaTime; timestamp != nil {
-		copy.EtnaTime = timestamp
+	if timestamp := override.EtnaTimestamp; timestamp != nil {
+		copy.EtnaTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {
 		copy.CancunTime = timestamp
+		canon = false
+	}
+	if timestamp := override.VerkleTime; timestamp != nil {
+		copy.VerkleTime = timestamp
 		canon = false
 	}
 
