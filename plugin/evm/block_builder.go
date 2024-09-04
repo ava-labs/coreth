@@ -104,7 +104,7 @@ func (b *blockBuilder) needToBuild() bool {
 	size := b.txPool.PendingSize(txpool.PendingFilter{
 		MinTip: uint256.MustFromBig(b.txPool.GasTip()),
 	})
-	return size > 0
+	return size > 0 || b.mempool.Len() > 0
 }
 
 // markBuilding adds a PendingTxs message to the toEngine channel.
