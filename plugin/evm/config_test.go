@@ -80,14 +80,14 @@ func TestUnmarshalConfig(t *testing.T) {
 		{
 			"empty tx lookup limit",
 			[]byte(`{}`),
-			Config{TxLookupLimit: 0},
+			Config{TransactionHistory: 0},
 			false,
 		},
 		{
 			"zero tx lookup limit",
 			[]byte(`{"tx-lookup-limit": 0}`),
 			func() Config {
-				return Config{TxLookupLimit: 0}
+				return Config{TransactionHistory: 0}
 			}(),
 			false,
 		},
@@ -95,7 +95,7 @@ func TestUnmarshalConfig(t *testing.T) {
 			"1 tx lookup limit",
 			[]byte(`{"tx-lookup-limit": 1}`),
 			func() Config {
-				return Config{TxLookupLimit: 1}
+				return Config{TransactionHistory: 1}
 			}(),
 			false,
 		},
