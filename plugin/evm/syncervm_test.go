@@ -513,7 +513,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	}
 
 	// tail should be the last block synced
-	if syncerVM.ethConfig.TxLookupLimit != 0 {
+	if syncerVM.ethConfig.TransactionHistory != 0 {
 		tail := lastSyncedBlock.NumberU64()
 
 		core.CheckTxIndices(t, &tail, tail, syncerVM.chaindb, true)
@@ -541,8 +541,8 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		}
 	},
 		func(block *types.Block) {
-			if syncerVM.ethConfig.TxLookupLimit != 0 {
-				tail := block.NumberU64() - syncerVM.ethConfig.TxLookupLimit + 1
+			if syncerVM.ethConfig.TransactionHistory != 0 {
+				tail := block.NumberU64() - syncerVM.ethConfig.TransactionHistory + 1
 				// tail should be the minimum last synced block, since we skipped it to the last block
 				if tail < lastSyncedBlock.NumberU64() {
 					tail = lastSyncedBlock.NumberU64()
@@ -583,8 +583,8 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		}
 	},
 		func(block *types.Block) {
-			if syncerVM.ethConfig.TxLookupLimit != 0 {
-				tail := block.NumberU64() - syncerVM.ethConfig.TxLookupLimit + 1
+			if syncerVM.ethConfig.TransactionHistory != 0 {
+				tail := block.NumberU64() - syncerVM.ethConfig.TransactionHistory + 1
 				// tail should be the minimum last synced block, since we skipped it to the last block
 				if tail < lastSyncedBlock.NumberU64() {
 					tail = lastSyncedBlock.NumberU64()
