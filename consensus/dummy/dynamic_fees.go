@@ -172,7 +172,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		// that has elapsed between the parent and this block.
 		if roll > rollupWindow {
 			// Note: roll/rollupWindow must be greater than 1 since we've checked that roll > rollupWindow
-			baseFeeDelta = baseFeeDelta.Mul(baseFeeDelta, new(big.Int).SetUint64(roll/rollupWindow))
+			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(roll/rollupWindow))
 		}
 		baseFee.Sub(baseFee, baseFeeDelta)
 	}
