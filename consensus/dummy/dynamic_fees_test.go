@@ -578,8 +578,7 @@ func TestCalcBaseFeeRegression(t *testing.T) {
 		Extra:   make([]byte, params.DynamicFeeExtraDataSize),
 	}
 
-	require.Equal(t, int64(1), common.Big1.Int64())
 	_, _, err := CalcBaseFee(params.TestChainConfig, parentHeader, timestamp)
 	require.NoError(t, err)
-	require.Equal(t, int64(1), common.Big1.Int64())
+	require.Equalf(t, 0, common.Big1.Cmp(big.NewInt(1)), "big1 should be 1, got %s", common.Big1)
 }
