@@ -415,11 +415,6 @@ func gasCallExpert(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 		transfersValue          = !stack.Back(2).IsZero()
 		multiCoinTransfersValue = !stack.Back(4).IsZero()
 	)
-	defer func() {
-		if transfersValue {
-			evm.callGasTemp -= params.CallStipend
-		}
-	}()
 	log.Info("gasCallExpert", "transfersValue", transfersValue, "multiCoinTransfersValue", multiCoinTransfersValue, "blockNumber", evm.Context.BlockNumber)
 	return gasCall(evm, contract, stack, mem, memorySize)
 }
@@ -466,11 +461,6 @@ func gasCallExpertAP1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		multiCoinTransfersValue = !stack.Back(4).IsZero()
 		address                 = common.Address(stack.Back(1).Bytes20())
 	)
-	defer func() {
-		if transfersValue {
-			evm.callGasTemp -= params.CallStipend
-		}
-	}()
 	log.Info("gasCallExpertAP1", "transfersValue", transfersValue, "multiCoinTransfersValue", multiCoinTransfersValue, "blockNumber", evm.Context.BlockNumber)
 	if evm.chainRules.IsEIP158 {
 		if (transfersValue || multiCoinTransfersValue) && evm.StateDB.Empty(address) {
