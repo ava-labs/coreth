@@ -8,7 +8,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"math/big"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -35,9 +34,9 @@ func fundAddressByGenesis(addrs []common.Address) (string, error) {
 		Difficulty: common.Big0,
 		GasLimit:   uint64(5000000),
 	}
-	funds := make(map[common.Address]core.GenesisAccount)
+	funds := make(map[common.Address]types.GenesisAccount)
 	for _, addr := range addrs {
-		funds[addr] = core.GenesisAccount{
+		funds[addr] = types.GenesisAccount{
 			Balance: balance,
 		}
 	}
@@ -74,9 +73,6 @@ func getValidEthTxs(key *ecdsa.PrivateKey, count int, gasPrice *big.Int) []*type
 // show that a geth tx discovered from gossip is requested to the same node that
 // gossiped it
 func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
-	if os.Getenv("RUN_FLAKY_TESTS") != "true" {
-		t.Skip("FLAKY")
-	}
 	assert := assert.New(t)
 
 	key, err := crypto.GenerateKey()
