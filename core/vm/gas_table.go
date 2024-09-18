@@ -33,6 +33,7 @@ import (
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -411,13 +412,15 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 
 func gasCallExpert(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
-		transfersValue = !stack.Back(2).IsZero()
+		transfersValue          = !stack.Back(2).IsZero()
+		multiCoinTransfersValue = !stack.Back(4).IsZero()
 	)
 	defer func() {
 		if transfersValue {
 			evm.callGasTemp -= params.CallStipend
 		}
 	}()
+	log.Info("gasCallExpert", "transfersValue", transfersValue, "multiCoinTransfersValue", multiCoinTransfersValue, "blockNumber", evm.Context.BlockNumber)
 	return gasCall(evm, contract, stack, mem, memorySize)
 }
 
@@ -468,6 +471,7 @@ func gasCallExpertAP1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 			evm.callGasTemp -= params.CallStipend
 		}
 	}()
+	log.Info("gasCallExpertAP1", "transfersValue", transfersValue, "multiCoinTransfersValue", multiCoinTransfersValue, "blockNumber", evm.Context.BlockNumber)
 	if evm.chainRules.IsEIP158 {
 		if (transfersValue || multiCoinTransfersValue) && evm.StateDB.Empty(address) {
 			gas += params.CallNewAccountGas
