@@ -729,6 +729,9 @@ func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		bigVal2 = value2.ToBig()
 	}
 
+	if !value.IsZero() {
+		gas += params.CallStipend
+	}
 	ret, returnGas, err := interpreter.evm.CallExpert(scope.Contract, toAddr, args, gas, &value, coinID, bigVal2)
 	if err != nil {
 		temp.Clear()
