@@ -1764,7 +1764,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	if err := bc.validator.ValidateState(current, statedb, receipts, usedGas); err != nil {
 		return common.Hash{}, fmt.Errorf("failed to validate state while re-processing block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
-	log.Info("Processed block", "block", current.Hash(), "number", current.NumberU64())
+	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
 	// If snapshots are enabled, call CommitWithSnaps to explicitly create a snapshot
