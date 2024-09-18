@@ -402,7 +402,7 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 		parentRoot = types.EmptyRootHash
 		err        error
 	)
-	if blockHeight > 0 {
+	if blockHeight > 1 {
 		parentRoot, err = a.getAtomicRootAt(parentHash)
 	}
 	if err != nil {
