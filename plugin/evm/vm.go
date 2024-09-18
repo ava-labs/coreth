@@ -692,6 +692,10 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if err != nil {
 		return err
 	}
+
+	/// XXX
+	vm.ethConfig.SnapshotDelayInit = true
+
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -1091,7 +1095,7 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 		}
 		// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
 		// Note calling this function has no effect if snapshots are already initialized.
-		vm.blockChain.InitializeSnapshots()
+		// vm.blockChain.InitializeSnapshots()
 
 		log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
 		go func() {
