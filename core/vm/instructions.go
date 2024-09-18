@@ -29,6 +29,7 @@ package vm
 import (
 	"errors"
 	"math"
+	"math/big"
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/vmerrs"
@@ -704,24 +705,14 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 // Note: opCallExpert was de-activated in ApricotPhase2.
 func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	stack := scope.Stack
-	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
-	// We can use this as a temporary value
+	// Re-arrange the stack to match expected order in opCall
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
-	// Pop other call parameters.
-	addr, value, cid, value2, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	addr, value, cid, value2 := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	coinID := common.BigToHash(cid.ToBig())
-	// Get the arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
-
-	// Note: this code fails to check that value2 is zero, which was a bug when CALLEX was active.
-	// The CALLEX opcode was de-activated in ApricotPhase2 resolving this issue.
-	if interpreter.readOnly && !value.IsZero() {
-		return nil, vmerrs.ErrWriteProtection
-	}
 
 	var bigVal2 = big0
+
 	//TODO: use uint256.Int instead of converting with toBig()
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
 	// but it would make more sense to extend the usage of uint256.Int
@@ -729,11 +720,16 @@ func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		bigVal2 = value2.ToBig()
 	}
 
-	if !value.IsZero() {
-		gas += params.CallStipend
+	evm := interpreter.evm
+	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, scope.Contract.Address(), toAddr, coinID, bigVal2) {
+		maxUint256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil)
+		value = *uint256.MustFromBig(maxUint256) // Guarantee the Call will revert with not enough balance
 	}
 
-	evm := interpreter.evm
+	stack.push(&value)
+	stack.push(&addr)
+	stack.push(&temp)
+
 	transfer := evm.Context.Transfer
 	defer func() { evm.Context.Transfer = transfer }()
 
@@ -744,30 +740,9 @@ func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		evm.Context.TransferMultiCoin(db, from, to, coinID, bigVal2)
 	}
 
-	var (
-		ret       []byte
-		returnGas uint64
-		err       error
-	)
-	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, scope.Contract.Address(), toAddr, coinID, bigVal2) {
-		ret, returnGas, err = nil, gas, vmerrs.ErrInsufficientBalance
-	} else {
-		ret, returnGas, err = evm.Call(scope.Contract, toAddr, args, gas, &value)
-	}
-	if err != nil {
-		temp.Clear()
-	} else {
-		temp.SetOne()
-	}
-	stack.push(&temp)
-	if err == nil || err == vmerrs.ErrExecutionReverted {
-		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	}
-	scope.Contract.Gas += returnGas
-
-	interpreter.returnData = ret
-	return ret, nil
+	return opCall(pc, interpreter, scope)
 }
+
 func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
 	stack := scope.Stack
