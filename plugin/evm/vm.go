@@ -1094,7 +1094,14 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 		vm.blockChain.InitializeSnapshots()
 
 		log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
-		go vm.blockChain.Reprocess(1)
+		go func() {
+			err := vm.blockChain.Reprocess(1)
+			if err != nil {
+				log.Error("failed to reprocess blockchain", "error", err)
+			} else {
+				log.Info("finished reprocessing blockchain")
+			}
+		}()
 
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
