@@ -732,7 +732,28 @@ func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	ret, returnGas, err := interpreter.evm.CallExpert(scope.Contract, toAddr, args, gas, &value, coinID, bigVal2)
+
+	evm := interpreter.evm
+	transfer := evm.Context.Transfer
+	defer func() { evm.Context.Transfer = transfer }()
+
+	evm.Context.Transfer = func(db StateDB, from, to common.Address, amount *uint256.Int) {
+		// Restore the original function after this is called once
+		defer func() { evm.Context.Transfer = transfer }()
+		transfer(db, from, to, amount)
+		evm.Context.TransferMultiCoin(db, from, to, coinID, bigVal2)
+	}
+
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, scope.Contract.Address(), toAddr, coinID, bigVal2) {
+		ret, returnGas, err = nil, gas, vmerrs.ErrInsufficientBalance
+	} else {
+		ret, returnGas, err = evm.Call(scope.Contract, toAddr, args, gas, &value)
+	}
 	if err != nil {
 		temp.Clear()
 	} else {

@@ -345,24 +345,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	return ret, gas, err
 }
 
-// This allows the user transfer balance of a specified coinId in addition to a normal Call().
-func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int, coinID common.Hash, value2 *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	transfer := evm.Context.Transfer
-	defer func() { evm.Context.Transfer = transfer }()
-
-	evm.Context.Transfer = func(db StateDB, from, to common.Address, amount *uint256.Int) {
-		// Restore the original function after this is called once
-		defer func() { evm.Context.Transfer = transfer }()
-		transfer(db, from, to, amount)
-		evm.Context.TransferMultiCoin(db, from, to, coinID, value2)
-	}
-
-	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, caller.Address(), addr, coinID, value2) {
-		return nil, gas, vmerrs.ErrInsufficientBalance
-	}
-	return evm.Call(caller, addr, input, gas, value)
-}
-
 // CallCode executes the contract associated with the addr with the given input
 // as parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
