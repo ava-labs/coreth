@@ -29,7 +29,6 @@ package vm
 import (
 	"math/big"
 	"sync/atomic"
-	"time"
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/constants"
@@ -348,80 +347,25 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 // This allows the user transfer balance of a specified coinId in addition to a normal Call().
 func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int, coinID common.Hash, value2 *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	// Fail if we're trying to execute above the call depth limit
-	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, vmerrs.ErrDepth
-	}
+	canTransfer := evm.Context.CanTransfer
+	transfer := evm.Context.Transfer
+	defer func() {
+		evm.Context.Transfer = transfer
+		evm.Context.CanTransfer = canTransfer
+	}()
 
-	// Fail if we're trying to transfer more than the available balance
-	// Note: it is not possible for a negative value to be passed in here due to the fact
-	// that [value] will be popped from the stack and decoded to a *big.Int, which will
-	// always yield a positive result.
-	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, gas, vmerrs.ErrInsufficientBalance
-	}
-
-	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, caller.Address(), addr, coinID, value2) {
-		return nil, gas, vmerrs.ErrInsufficientBalance
-	}
-
-	snapshot := evm.StateDB.Snapshot()
-	//p, isPrecompile := evm.precompile(addr)
-
-	if !evm.StateDB.Exist(addr) {
-		//if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
-		//	// Calling a non existing account, don't do anything, but ping the tracer
-		//	if evm.Config.Debug && evm.depth == 0 {
-		//		evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
-		//		evm.Config.Tracer.CaptureEnd(ret, 0, 0, nil)
-		//	}
-		//	return nil, gas, nil
-		//}
-		evm.StateDB.CreateAccount(addr)
-	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
-	evm.Context.TransferMultiCoin(evm.StateDB, caller.Address(), addr, coinID, value2)
-
-	// Capture the tracer start/end events in debug mode
-	debug := evm.Config.Tracer != nil
-	if debug && evm.depth == 0 {
-		evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value.ToBig())
-		defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
-			evm.Config.Tracer.CaptureEnd(ret, startGas-gas, err)
-		}(gas, time.Now())
-	}
-
-	//if isPrecompile {
-	//	ret, gas, err = RunPrecompiledContract(p, input, gas)
-	//} else {
-	// Initialise a new contract and set the code that is to be used by the EVM.
-	// The contract is a scoped environment for this execution context only.
-	code := evm.StateDB.GetCode(addr)
-	if len(code) == 0 {
-		ret, err = nil, nil // gas is unchanged
-	} else {
-		addrCopy := addr
-		// If the account has no code, we can abort here
-		// The depth-check is already done, and precompiles handled above
-		contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
-		ret, err = evm.interpreter.Run(contract, input, false)
-		gas = contract.Gas
-	}
-	//}
-	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally
-	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
-			gas = 0
+	evm.Context.CanTransfer = func(db StateDB, from common.Address, amount *uint256.Int) bool {
+		if ok := canTransfer(db, from, amount); !ok {
+			return false
 		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
+		return evm.Context.CanTransferMC(db, from, addr, coinID, value2)
 	}
-	return ret, gas, err
+	evm.Context.Transfer = func(db StateDB, from, to common.Address, amount *uint256.Int) {
+		transfer(db, from, to, amount)
+		evm.Context.TransferMultiCoin(db, from, to, coinID, value2)
+	}
+
+	return evm.Call(caller, addr, input, gas, value)
 }
 
 // CallCode executes the contract associated with the addr with the given input
