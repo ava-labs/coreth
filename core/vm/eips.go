@@ -172,7 +172,6 @@ func enableAP1(jt *JumpTable) {
 }
 
 func enableAP2(jt *JumpTable) {
-	jt[BALANCEMC] = &operation{execute: opUndefined, maxStack: maxStack(0, 0)}
 }
 
 // enable3198 applies EIP-3198 (BASEFEE Opcode)
