@@ -347,23 +347,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 // This allows the user transfer balance of a specified coinId in addition to a normal Call().
 func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int, coinID common.Hash, value2 *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	canTransfer := evm.Context.CanTransfer
 	transfer := evm.Context.Transfer
-	defer func() {
-		// Restore the original functions, in case Call does not call CanTransfer or
-		// Transfer, for example in an early return.
-		evm.Context.CanTransfer = canTransfer
-		evm.Context.Transfer = transfer
-	}()
+	defer func() { evm.Context.Transfer = transfer }()
 
-	evm.Context.CanTransfer = func(db StateDB, from common.Address, amount *uint256.Int) bool {
-		// Restore the original function after this is called once
-		defer func() { evm.Context.CanTransfer = canTransfer }()
-		if ok := canTransfer(db, from, amount); !ok {
-			return false
-		}
-		return evm.Context.CanTransferMC(db, from, addr, coinID, value2)
-	}
 	evm.Context.Transfer = func(db StateDB, from, to common.Address, amount *uint256.Int) {
 		// Restore the original function after this is called once
 		defer func() { evm.Context.Transfer = transfer }()
@@ -371,6 +357,9 @@ func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte
 		evm.Context.TransferMultiCoin(db, from, to, coinID, value2)
 	}
 
+	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, caller.Address(), addr, coinID, value2) {
+		return nil, gas, vmerrs.ErrInsufficientBalance
+	}
 	return evm.Call(caller, addr, input, gas, value)
 }
 
