@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/types"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -397,7 +398,13 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 // changes or abort them and free memory.
 func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error) {
 	// access the atomic trie at the parent block
-	parentRoot, err := a.getAtomicRootAt(parentHash)
+	var (
+		parentRoot = types.EmptyRootHash
+		err        error
+	)
+	if blockHeight > 0 {
+		parentRoot, err = a.getAtomicRootAt(parentHash)
+	}
 	if err != nil {
 		return common.Hash{}, err
 	}
