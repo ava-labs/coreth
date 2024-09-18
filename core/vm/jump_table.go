@@ -1056,7 +1056,7 @@ func newFrontierInstructionSet() JumpTable {
 		CALLEX: {
 			execute:     opCallExpert,
 			constantGas: params.CallGasFrontier,
-			dynamicGas:  gasCall,
+			dynamicGas:  gasCallExpert,
 			minStack:    minStack(9, 1),
 			maxStack:    maxStack(9, 1),
 			memorySize:  memoryCallExpert,

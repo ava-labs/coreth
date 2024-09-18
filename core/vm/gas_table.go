@@ -409,6 +409,18 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	return gas, nil
 }
 
+func gasCallExpert(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		transfersValue = !stack.Back(2).IsZero()
+	)
+	defer func() {
+		if transfersValue {
+			evm.callGasTemp -= params.CallStipend
+		}
+	}()
+	return gasCall(evm, contract, stack, mem, memorySize)
+}
+
 func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		gas            uint64
@@ -451,6 +463,11 @@ func gasCallExpertAP1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		multiCoinTransfersValue = !stack.Back(4).IsZero()
 		address                 = common.Address(stack.Back(1).Bytes20())
 	)
+	defer func() {
+		if transfersValue {
+			evm.callGasTemp -= params.CallStipend
+		}
+	}()
 	if evm.chainRules.IsEIP158 {
 		if (transfersValue || multiCoinTransfersValue) && evm.StateDB.Empty(address) {
 			gas += params.CallNewAccountGas
