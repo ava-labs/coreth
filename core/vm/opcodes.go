@@ -219,7 +219,6 @@ const (
 
 const (
 	BALANCEMC = 0xcd
-	CALLEX    = 0xcf
 )
 
 // 0xf0 range - closures.
@@ -401,7 +400,6 @@ var opCodeToString = [256]string{
 	// 0xf0 range - closures.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
-	CALLEX:       "CALLEX",
 	RETURN:       "RETURN",
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
@@ -565,7 +563,6 @@ var stringToOp = map[string]OpCode{
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
-	"CALLEX":         CALLEX,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,
