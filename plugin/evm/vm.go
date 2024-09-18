@@ -664,13 +664,7 @@ func (vm *VM) Initialize(
 	}
 
 	vm.initializeHandlers()
-	if err := vm.initializeStateSyncClient(lastAcceptedHeight); err != nil {
-		return err
-	}
-
-	log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
-	go vm.blockChain.Reprocess(1)
-	return nil
+	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
 func (vm *VM) initializeMetrics() error {
@@ -1098,6 +1092,10 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 		// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
 		// Note calling this function has no effect if snapshots are already initialized.
 		vm.blockChain.InitializeSnapshots()
+
+		log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
+		go vm.blockChain.Reprocess(1)
+
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:
 		// Initialize goroutines related to block building once we enter normal operation as there is no need to handle mempool gossip before this point.
