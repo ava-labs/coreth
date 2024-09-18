@@ -350,17 +350,23 @@ func (evm *EVM) CallExpert(caller ContractRef, addr common.Address, input []byte
 	canTransfer := evm.Context.CanTransfer
 	transfer := evm.Context.Transfer
 	defer func() {
-		evm.Context.Transfer = transfer
+		// Restore the original functions, in case Call does not call CanTransfer or
+		// Transfer, for example in an early return.
 		evm.Context.CanTransfer = canTransfer
+		evm.Context.Transfer = transfer
 	}()
 
 	evm.Context.CanTransfer = func(db StateDB, from common.Address, amount *uint256.Int) bool {
+		// Restore the original function after this is called once
+		defer func() { evm.Context.CanTransfer = canTransfer }()
 		if ok := canTransfer(db, from, amount); !ok {
 			return false
 		}
 		return evm.Context.CanTransferMC(db, from, addr, coinID, value2)
 	}
 	evm.Context.Transfer = func(db StateDB, from, to common.Address, amount *uint256.Int) {
+		// Restore the original function after this is called once
+		defer func() { evm.Context.Transfer = transfer }()
 		transfer(db, from, to, amount)
 		evm.Context.TransferMultiCoin(db, from, to, coinID, value2)
 	}
