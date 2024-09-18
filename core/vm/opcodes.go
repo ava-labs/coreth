@@ -217,10 +217,6 @@ const (
 	LOG4
 )
 
-const (
-	BALANCEMC = 0xcd
-)
-
 // 0xf0 range - closures.
 const (
 	CREATE       OpCode = 0xf0
@@ -273,7 +269,6 @@ var opCodeToString = [256]string{
 	// 0x30 range - closure state.
 	ADDRESS:        "ADDRESS",
 	BALANCE:        "BALANCE",
-	BALANCEMC:      "BALANCEMC",
 	ORIGIN:         "ORIGIN",
 	CALLER:         "CALLER",
 	CALLVALUE:      "CALLVALUE",
@@ -447,7 +442,6 @@ var stringToOp = map[string]OpCode{
 	"KECCAK256":      KECCAK256,
 	"ADDRESS":        ADDRESS,
 	"BALANCE":        BALANCE,
-	"BALANCEMC":      BALANCEMC,
 	"ORIGIN":         ORIGIN,
 	"CALLER":         CALLER,
 	"CALLVALUE":      CALLVALUE,
