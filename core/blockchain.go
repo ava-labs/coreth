@@ -1839,6 +1839,24 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
+	return bc.reprocessStateImpl(origin, current, reexec, acceptorTip)
+}
+
+func (bc *BlockChain) Reprocess(from uint64) error {
+	// Prevent other stuff from happening while we reprocess
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	block := bc.GetBlockByNumber(from)
+	if block == nil {
+		return fmt.Errorf("failed to get block for reprocessing at %d", from)
+	}
+	origin := bc.CurrentBlock().Number.Uint64()
+	return bc.reprocessStateImpl(origin, block, 10000, common.Hash{})
+}
+
+func (bc *BlockChain) reprocessStateImpl(origin uint64, current *types.Block, reexec uint64, acceptorTip common.Hash) error {
+	var err error
 	for i := 0; i < int(reexec); i++ {
 		// TODO: handle canceled context
 

@@ -664,7 +664,13 @@ func (vm *VM) Initialize(
 	}
 
 	vm.initializeHandlers()
-	return vm.initializeStateSyncClient(lastAcceptedHeight)
+	if err := vm.initializeStateSyncClient(lastAcceptedHeight); err != nil {
+		return err
+	}
+
+	log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
+	go vm.blockChain.Reprocess(1)
+	return nil
 }
 
 func (vm *VM) initializeMetrics() error {
