@@ -414,15 +414,6 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetCommittedState(hash)
-	}
-	return common.Hash{}
-}
-
-// GetCommittedStateAP1 retrieves a value from the given account's committed storage trie.
-func (s *StateDB) GetCommittedStateAP1(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
 		NormalizeStateKey(&hash)
 		return stateObject.GetCommittedState(hash)
 	}

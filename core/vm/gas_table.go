@@ -257,7 +257,7 @@ func gasSStoreAP1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if current == value { // noop (1)
 		return params.SloadGasEIP2200, nil
 	}
-	original := evm.StateDB.GetCommittedStateAP1(contract.Address(), x.Bytes32())
+	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			return params.SstoreSetGasEIP2200, nil
@@ -423,45 +423,6 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		gas += params.CallNewAccountGas
 	}
 	if transfersValue {
-		gas += params.CallValueTransferGas
-	}
-	memoryGas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return 0, err
-	}
-	var overflow bool
-	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return 0, vmerrs.ErrGasUintOverflow
-	}
-
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
-	if err != nil {
-		return 0, err
-	}
-	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, vmerrs.ErrGasUintOverflow
-	}
-	return gas, nil
-}
-
-func gasCallExpertAP1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	var (
-		gas                     uint64
-		transfersValue          = !stack.Back(2).IsZero()
-		multiCoinTransfersValue = !stack.Back(4).IsZero()
-		address                 = common.Address(stack.Back(1).Bytes20())
-	)
-	if evm.chainRules.IsEIP158 {
-		if (transfersValue || multiCoinTransfersValue) && evm.StateDB.Empty(address) {
-			gas += params.CallNewAccountGas
-		}
-	} else if !evm.StateDB.Exist(address) {
-		gas += params.CallNewAccountGas
-	}
-	if transfersValue {
-		gas += params.CallValueTransferGas
-	}
-	if multiCoinTransfersValue {
 		gas += params.CallValueTransferGas
 	}
 	memoryGas, err := memoryGasCost(mem, memorySize)
