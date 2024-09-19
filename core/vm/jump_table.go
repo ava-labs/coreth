@@ -62,7 +62,6 @@ var (
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
-	apricotPhase1InstructionSet    = newApricotPhase1InstructionSet()
 	apricotPhase2InstructionSet    = newBerlinInstructionSet()
 	apricotPhase3InstructionSet    = newLondonInstructionSet()
 	durangoInstructionSet          = newShanghaiInstructionSet()
@@ -131,7 +130,7 @@ func newLondonInstructionSet() JumpTable {
 // constantinople, istanbul, petersburg and berlin instructions.
 // Additionally, it enable AP1.
 func newBerlinInstructionSet() JumpTable {
-	instructionSet := newApricotPhase1InstructionSet()
+	instructionSet := newIstanbulInstructionSet()
 	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
 	return validate(instructionSet)
 }

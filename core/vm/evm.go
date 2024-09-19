@@ -198,6 +198,8 @@ type EVM struct {
 	callGasTemp uint64
 }
 
+var StateDbHook = func(_ params.Rules, x StateDB) StateDB { return x }
+
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
@@ -220,6 +222,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time),
 	}
+	evm.StateDB = StateDbHook(evm.chainRules, evm.StateDB)
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
 }

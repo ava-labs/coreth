@@ -35,9 +35,7 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 		return newLondonInstructionSet(), nil
 	case rules.IsApricotPhase2:
 		return newBerlinInstructionSet(), nil
-	case rules.IsApricotPhase1:
-		return newApricotPhase1InstructionSet(), nil
-	case rules.IsIstanbul:
+	case rules.IsApricotPhase1, rules.IsIstanbul:
 		return newIstanbulInstructionSet(), nil
 	case rules.IsConstantinople:
 		return newConstantinopleInstructionSet(), nil
