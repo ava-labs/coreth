@@ -96,6 +96,11 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.ExcessBlobGas != nil {
 		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
 	}
+
+	// XXX: Temporary (must be set if after Durango, but this works for now)
+	random := new(common.Hash)
+	random.SetBytes(header.Difficulty.Bytes())
+
 	return vm.BlockContext{
 		CanTransfer:       CanTransfer,
 		CanTransferMC:     CanTransferMC,
