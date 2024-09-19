@@ -125,7 +125,6 @@ func newApricotPhase2InstructionSet() JumpTable {
 	instructionSet := newApricotPhase1InstructionSet()
 
 	enable2929(&instructionSet)
-	enableAP2(&instructionSet)
 
 	return validate(instructionSet)
 }

@@ -171,9 +171,6 @@ func enableAP1(jt *JumpTable) {
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructAP1
 }
 
-func enableAP2(jt *JumpTable) {
-}
-
 // enable3198 applies EIP-3198 (BASEFEE Opcode)
 // - Adds an opcode that returns the current block's base fee.
 func enable3198(jt *JumpTable) {
