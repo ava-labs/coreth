@@ -163,14 +163,6 @@ func enable2929(jt *JumpTable) {
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
 
-// enableAP1 disables gas refunds for SSTORE and SELFDESTRUCT. It is very
-// similar to EIP-3298: Removal of Refunds [DRAFT]
-// (https://eips.ethereum.org/EIPS/eip-3298).
-func enableAP1(jt *JumpTable) {
-	jt[SSTORE].dynamicGas = gasSStoreAP1
-	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructAP1
-}
-
 // enable3198 applies EIP-3198 (BASEFEE Opcode)
 // - Adds an opcode that returns the current block's base fee.
 func enable3198(jt *JumpTable) {

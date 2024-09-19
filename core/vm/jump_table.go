@@ -63,9 +63,9 @@ var (
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
 	apricotPhase1InstructionSet    = newApricotPhase1InstructionSet()
-	apricotPhase2InstructionSet    = newApricotPhase2InstructionSet()
-	apricotPhase3InstructionSet    = newApricotPhase3InstructionSet()
-	durangoInstructionSet          = newDurangoInstructionSet()
+	apricotPhase2InstructionSet    = newBerlinInstructionSet()
+	apricotPhase3InstructionSet    = newLondonInstructionSet()
+	durangoInstructionSet          = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 )
 
@@ -91,7 +91,7 @@ func validate(jt JumpTable) JumpTable {
 }
 
 func newCancunInstructionSet() JumpTable {
-	instructionSet := newDurangoInstructionSet()
+	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
 	enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
 	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
@@ -100,48 +100,44 @@ func newCancunInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-// newDurangoInstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg, apricotPhase1, 2, and 3, durango instructions.
-func newDurangoInstructionSet() JumpTable {
-	instructionSet := newApricotPhase3InstructionSet()
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
 
 	return validate(instructionSet)
 }
 
-// newApricotPhase3InstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg, apricotPhase1, 2, and 3 instructions.
-func newApricotPhase3InstructionSet() JumpTable {
-	instructionSet := newApricotPhase2InstructionSet()
+func newMergeInstructionSet() JumpTable {
+	instructionSet := newLondonInstructionSet()
+	instructionSet[PREVRANDAO] = &operation{
+		execute:     opRandom,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	return validate(instructionSet)
+}
+
+// newLondonInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul, petersburg, berlin and london instructions.
+func newLondonInstructionSet() JumpTable {
+	instructionSet := newBerlinInstructionSet()
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return validate(instructionSet)
 }
 
-// newApricotPhase2InstructionSet returns the frontier,
-// homestead, byzantium, constantinople petersburg,
-// istanbul, and apricotPhase1 instructions.
-func newApricotPhase2InstructionSet() JumpTable {
+// newBerlinInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul, petersburg and berlin instructions.
+// Additionally, it enable AP1.
+func newBerlinInstructionSet() JumpTable {
 	instructionSet := newApricotPhase1InstructionSet()
-
-	enable2929(&instructionSet)
-
+	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
 	return validate(instructionSet)
 }
 
-// newApricotPhase1InstructionSet returns the frontier,
-// homestead, byzantium, constantinople petersburg,
-// and istanbul instructions.
-func newApricotPhase1InstructionSet() JumpTable {
-	instructionSet := newIstanbulInstructionSet()
-
-	enableAP1(&instructionSet)
-
-	return validate(instructionSet)
-}
-
-// newIstanbulInstructionSet returns the frontier,
-// homestead, byzantium, constantinople and petersburg instructions.
+// newIstanbulInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul and petersburg instructions.
 func newIstanbulInstructionSet() JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
 
