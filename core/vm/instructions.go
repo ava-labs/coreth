@@ -27,9 +27,7 @@
 package vm
 
 import (
-	"errors"
 	"math"
-	"math/big"
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/vmerrs"
@@ -275,17 +273,6 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
 	slot.Set(interpreter.evm.StateDB.GetBalance(address))
-	return nil, nil
-}
-
-func opBalanceMultiCoin(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	addr, cid := scope.Stack.pop(), scope.Stack.pop()
-	res, err := uint256.FromBig(interpreter.evm.StateDB.GetBalanceMultiCoin(
-		common.BigToAddress(addr.ToBig()), common.BigToHash(cid.ToBig())))
-	if err {
-		return nil, errors.New("balance overflow")
-	}
-	scope.Stack.push(res)
 	return nil, nil
 }
 
@@ -700,47 +687,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 	interpreter.returnData = ret
 	return ret, nil
-}
-
-// Note: opCallExpert was de-activated in ApricotPhase2.
-func opCallExpert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	stack := scope.Stack
-	// Re-arrange the stack to match expected order in opCall
-	temp := stack.pop()
-	addr, value, cid, value2 := stack.pop(), stack.pop(), stack.pop(), stack.pop()
-	toAddr := common.Address(addr.Bytes20())
-	coinID := common.BigToHash(cid.ToBig())
-
-	var bigVal2 = big0
-
-	//TODO: use uint256.Int instead of converting with toBig()
-	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
-	// but it would make more sense to extend the usage of uint256.Int
-	if !value2.IsZero() {
-		bigVal2 = value2.ToBig()
-	}
-
-	evm := interpreter.evm
-	if value2.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, scope.Contract.Address(), toAddr, coinID, bigVal2) {
-		maxUint256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil)
-		value = *uint256.MustFromBig(maxUint256) // Guarantee the Call will revert with not enough balance
-	}
-
-	stack.push(&value)
-	stack.push(&addr)
-	stack.push(&temp)
-
-	transfer := evm.Context.Transfer
-	defer func() { evm.Context.Transfer = transfer }()
-
-	evm.Context.Transfer = func(db StateDB, from, to common.Address, amount *uint256.Int) {
-		// Restore the original function after this is called once
-		defer func() { evm.Context.Transfer = transfer }()
-		transfer(db, from, to, amount)
-		evm.Context.TransferMultiCoin(db, from, to, coinID, bigVal2)
-	}
-
-	return opCall(pc, interpreter, scope)
 }
 
 func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
