@@ -81,7 +81,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	case evm.chainRules.IsApricotPhase2:
 		table = &apricotPhase2InstructionSet
 	case evm.chainRules.IsApricotPhase1:
-		table = &apricotPhase1InstructionSet
+		table = &istanbulInstructionSet
 	case evm.chainRules.IsIstanbul:
 		table = &istanbulInstructionSet
 	case evm.chainRules.IsConstantinople:

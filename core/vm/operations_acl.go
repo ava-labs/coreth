@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-func makeGasSStoreFunc() gasFunc {
+func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		// If we fail the minimum gas availability invariant, fail (0)
 		if contract.Gas <= params.SstoreSentryGasEIP2200 {
@@ -67,16 +67,39 @@ func makeGasSStoreFunc() gasFunc {
 			//		return params.SloadGasEIP2200, nil
 			return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
 		}
-		original := evm.StateDB.GetCommittedStateAP1(contract.Address(), x.Bytes32())
+		original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
 				return cost + params.SstoreSetGasEIP2200, nil
+			}
+			if value == (common.Hash{}) { // delete slot (2.1.2b)
+				evm.StateDB.AddRefund(clearingRefund)
 			}
 			// EIP-2200 original clause:
 			//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
 			return cost + (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929), nil // write existing slot (2.1.2)
 		}
-
+		if original != (common.Hash{}) {
+			if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+				evm.StateDB.SubRefund(clearingRefund)
+			} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+				evm.StateDB.AddRefund(clearingRefund)
+			}
+		}
+		if original == value {
+			if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+				// EIP 2200 Original clause:
+				//evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
+				evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929)
+			} else { // reset to original existing slot (2.2.2.2)
+				// EIP 2200 Original clause:
+				//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
+				// - SSTORE_RESET_GAS redefined as (5000 - COLD_SLOAD_COST)
+				// - SLOAD_GAS redefined as WARM_STORAGE_READ_COST
+				// Final: (5000 - COLD_SLOAD_COST) - WARM_STORAGE_READ_COST
+				evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929)
+			}
+		}
 		// EIP-2200 original clause:
 		//return params.SloadGasEIP2200, nil // dirty update (2.2)
 		return cost + params.WarmStorageReadCostEIP2929, nil // dirty update (2.2)
@@ -189,9 +212,10 @@ var (
 	gasDelegateCallEIP2929 = makeCallVariantGasCallEIP2929(gasDelegateCall)
 	gasStaticCallEIP2929   = makeCallVariantGasCallEIP2929(gasStaticCall)
 	gasCallCodeEIP2929     = makeCallVariantGasCallEIP2929(gasCallCode)
-	gasSelfdestructEIP2929 = makeSelfdestructGasFn(false) // Note: refunds were never enabled on Avalanche
+	gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
 	// gasSelfdestructEIP3529 implements the changes in EIP-3529 (no refunds)
 	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
+
 	// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
 	//
 	// When calling SSTORE, check if the (address, storage_key) pair is in accessed_storage_keys.
@@ -204,7 +228,11 @@ var (
 	//
 	//The other parameters defined in EIP 2200 are unchanged.
 	// see gasSStoreEIP2200(...) in core/vm/gas_table.go for more info about how EIP 2200 is specified
-	gasSStoreEIP2929 = makeGasSStoreFunc()
+	gasSStoreEIP2929 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP2200)
+
+	// gasSStoreEIP3529 implements gas cost for SSTORE according to EIP-3529
+	// Replace `SSTORE_CLEARS_SCHEDULE` with `SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST` (4,800)
+	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
 )
 
 // makeSelfdestructGasFn can create the selfdestruct dynamic gas function for EIP-2929 and EIP-3529

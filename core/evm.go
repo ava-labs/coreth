@@ -31,13 +31,33 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
+
+func init() {
+	vm.StateDbHook = func(rules params.Rules, db vm.StateDB) vm.StateDB {
+		if rules.IsApricotPhase1 {
+			return &StateDbAP1{db}
+		}
+		return db
+	}
+}
+
+type StateDbAP1 struct {
+	vm.StateDB
+}
+
+func (s *StateDbAP1) GetCommittedState(addr common.Address, key common.Hash) common.Hash {
+	state.NormalizeStateKey(&key)
+	return s.StateDB.GetCommittedState(addr, key)
+}
 
 // ChainContext supports retrieving headers and consensus parameters from the
 // current blockchain to be used during transaction processing.
@@ -96,6 +116,11 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.ExcessBlobGas != nil {
 		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
 	}
+
+	// XXX: Temporary (must be set if after Durango, but this works for now)
+	random := new(common.Hash)
+	random.SetBytes(header.Difficulty.Bytes())
+
 	return vm.BlockContext{
 		CanTransfer:       CanTransfer,
 		CanTransferMC:     CanTransferMC,

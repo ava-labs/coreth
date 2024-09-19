@@ -419,16 +419,6 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 	return common.Hash{}
 }
 
-// GetCommittedStateAP1 retrieves a value from the given account's committed storage trie.
-func (s *StateDB) GetCommittedStateAP1(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		NormalizeStateKey(&hash)
-		return stateObject.GetCommittedState(hash)
-	}
-	return common.Hash{}
-}
-
 // Database retrieves the low level database supporting the lower level trie ops.
 func (s *StateDB) Database() Database {
 	return s.db

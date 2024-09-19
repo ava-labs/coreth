@@ -62,10 +62,9 @@ var (
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
-	apricotPhase1InstructionSet    = newApricotPhase1InstructionSet()
-	apricotPhase2InstructionSet    = newApricotPhase2InstructionSet()
-	apricotPhase3InstructionSet    = newApricotPhase3InstructionSet()
-	durangoInstructionSet          = newDurangoInstructionSet()
+	apricotPhase2InstructionSet    = newBerlinInstructionSet()
+	apricotPhase3InstructionSet    = newLondonInstructionSet()
+	durangoInstructionSet          = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 )
 
@@ -91,7 +90,7 @@ func validate(jt JumpTable) JumpTable {
 }
 
 func newCancunInstructionSet() JumpTable {
-	instructionSet := newDurangoInstructionSet()
+	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
 	enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
 	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
@@ -100,49 +99,44 @@ func newCancunInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-// newDurangoInstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg, apricotPhase1, 2, and 3, durango instructions.
-func newDurangoInstructionSet() JumpTable {
-	instructionSet := newApricotPhase3InstructionSet()
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
 
 	return validate(instructionSet)
 }
 
-// newApricotPhase3InstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg, apricotPhase1, 2, and 3 instructions.
-func newApricotPhase3InstructionSet() JumpTable {
-	instructionSet := newApricotPhase2InstructionSet()
+func newMergeInstructionSet() JumpTable {
+	instructionSet := newLondonInstructionSet()
+	instructionSet[PREVRANDAO] = &operation{
+		execute:     opRandom,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	return validate(instructionSet)
+}
+
+// newLondonInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul, petersburg, berlin and london instructions.
+func newLondonInstructionSet() JumpTable {
+	instructionSet := newBerlinInstructionSet()
+	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return validate(instructionSet)
 }
 
-// newApricotPhase2InstructionSet returns the frontier,
-// homestead, byzantium, constantinople petersburg,
-// istanbul, and apricotPhase1 instructions.
-func newApricotPhase2InstructionSet() JumpTable {
-	instructionSet := newApricotPhase1InstructionSet()
-
-	enable2929(&instructionSet)
-	enableAP2(&instructionSet)
-
-	return validate(instructionSet)
-}
-
-// newApricotPhase1InstructionSet returns the frontier,
-// homestead, byzantium, constantinople petersburg,
-// and istanbul instructions.
-func newApricotPhase1InstructionSet() JumpTable {
+// newBerlinInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul, petersburg and berlin instructions.
+func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
-
-	enableAP1(&instructionSet)
-
+	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
 	return validate(instructionSet)
 }
 
-// newIstanbulInstructionSet returns the frontier,
-// homestead, byzantium, constantinople and petersburg instructions.
+// newIstanbulInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul and petersburg instructions.
 func newIstanbulInstructionSet() JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
 
@@ -243,7 +237,6 @@ func newTangerineWhistleInstructionSet() JumpTable {
 	instructionSet[SLOAD].constantGas = params.SloadGasEIP150
 	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBaseEIP150
 	instructionSet[CALL].constantGas = params.CallGasEIP150
-	instructionSet[CALLEX].constantGas = params.CallGasEIP150
 	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
 	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
 	return validate(instructionSet)
@@ -425,12 +418,6 @@ func newFrontierInstructionSet() JumpTable {
 			constantGas: params.BalanceGasFrontier,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
-		},
-		BALANCEMC: {
-			execute:     opBalanceMultiCoin,
-			constantGas: params.BalanceGasFrontier,
-			minStack:    minStack(2, 1),
-			maxStack:    maxStack(2, 1),
 		},
 		ORIGIN: {
 			execute:     opOrigin,
@@ -1052,14 +1039,6 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
 			memorySize:  memoryCall,
-		},
-		CALLEX: {
-			execute:     opCallExpert,
-			constantGas: params.CallGasFrontier,
-			dynamicGas:  gasCall,
-			minStack:    minStack(9, 1),
-			maxStack:    maxStack(9, 1),
-			memorySize:  memoryCallExpert,
 		},
 		CALLCODE: {
 			execute:     opCallCode,
