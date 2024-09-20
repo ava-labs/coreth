@@ -231,7 +231,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	evm.TxContext = txCtx
-	evm.StateDB = statedb
+	evm.StateDB = StateDbHook(evm.chainRules, statedb)
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
