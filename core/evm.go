@@ -55,7 +55,6 @@ type StateDbAP1 struct {
 }
 
 func (s *StateDbAP1) GetCommittedState(addr common.Address, key common.Hash) common.Hash {
-	log.Info("GetCommittedState (ap1)", "addr", addr, "key", key)
 	state.NormalizeStateKey(&key)
 	return s.StateDB.GetCommittedState(addr, key)
 }
