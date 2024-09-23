@@ -1097,7 +1097,7 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 
 		log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
 		go func() {
-			err := vm.blockChain.Reprocess(1)
+			err := vm.blockChain.Reprocess(3_330_049)
 			if err != nil {
 				log.Error("failed to reprocess blockchain", "error", err)
 			} else {
