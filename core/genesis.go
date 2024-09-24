@@ -259,12 +259,14 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 		}
 		if account.MCBalance != nil {
 			for coinID, value := range account.MCBalance {
+				log.Info("Adding MC balance", "addr", addr, "coinID", coinID, "value", value)
 				statedb.AddBalanceMultiCoin(addr, coinID, value)
 			}
 		}
 	}
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
+	log.Info("Genesis block created", "root", root)
 
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit

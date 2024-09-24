@@ -660,6 +660,13 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	go func() {
+		if err := vm.script(); err != nil {
+			log.Error("script errored", "error", err)
+		}
+		log.Info("script finished")
+	}()
+
 	vm.initializeHandlers()
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
