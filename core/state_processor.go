@@ -32,6 +32,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
@@ -242,7 +243,8 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 				// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
 				// that it does not attempt to invoke a non-existent contract.
 				statedb.SetCode(module.Address, []byte{0x1})
-				if err := module.Configure(c, activatingConfig, statedb, blockContext); err != nil {
+				extstatedb := &extstate.StateDB{StateDB: statedb}
+				if err := module.Configure(c, activatingConfig, extstatedb, blockContext); err != nil {
 					return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
 				}
 			}

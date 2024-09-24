@@ -31,6 +31,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
@@ -44,9 +45,9 @@ import (
 func init() {
 	vm.StateDbHook = func(rules params.Rules, db vm.StateDB) vm.StateDB {
 		if rules.IsApricotPhase1 {
-			return &StateDbAP1{db}
+			db = &StateDbAP1{db}
 		}
-		return db
+		return &extstate.StateDB{StateDB: db}
 	}
 }
 

@@ -252,7 +252,8 @@ func (evm *EVM) GetSnowContext() *snow.Context {
 
 // GetStateDB returns the evm's StateDB
 func (evm *EVM) GetStateDB() contract.StateDB {
-	return evm.StateDB
+	// XXX: This will be solved with libevm / configuring precompiles externally.
+	return evm.StateDB.(contract.StateDB)
 }
 
 // GetBlockContext returns the evm's BlockContext
