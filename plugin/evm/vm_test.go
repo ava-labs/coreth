@@ -138,21 +138,14 @@ var (
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
-	withRulesExtra = func(e params.RulesExtra) params.Rules {
-		r := params.Rules{}
-		*params.GetRulesExtra(r) = e
-		return r
-	}
-
-	apricotRulesPhase0 = withRulesExtra(params.RulesExtra{})
-	apricotRulesPhase1 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true}})
-	apricotRulesPhase2 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true}})
-	apricotRulesPhase3 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true}})
-	apricotRulesPhase4 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true}})
-	apricotRulesPhase5 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true}})
-	apricotRulesPhase6 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true}})
-	banffRules         = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true}})
-	// cortinaRules    = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true, IsCortina: true}})
+	apricotRulesPhase0 = params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase1 = params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase2 = params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase3 = params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase4 = params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase5 = params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase6 = params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0)
+	banffRules         = params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
 )
 
 func init() {

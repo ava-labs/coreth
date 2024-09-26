@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -22,9 +23,9 @@ import (
 
 type StateDB = vm.StateDB
 
-type withMulticoin struct {
+type withMulticoin interface {
 	vm.StateDB
-	GetBalanceMultiCoin func(common.Address, common.Hash) *big.Int
+	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
 }
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
@@ -61,6 +62,9 @@ func TestStatefulPrecompile(t *testing.T) {
 		Time:        0,
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
+		Header: &gethtypes.Header{
+			Number: big.NewInt(0),
+		},
 	}
 
 	type statefulContractTest struct {

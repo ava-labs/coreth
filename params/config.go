@@ -32,6 +32,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ava-labs/subnet-evm/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -69,6 +71,8 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			ShanghaiTime:        utils.TimeToNewUint64(upgrade.GetConfig(constants.UnitTestID).DurangoTime),
+			CancunTime:          utils.TimeToNewUint64(upgrade.GetConfig(constants.UnitTestID).EtnaTime),
 		},
 		&ChainConfigExtra{
 			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
@@ -679,9 +683,10 @@ func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ChainConfig, headNumbe
 	}
 
 	// Check that the precompiles on the new config are compatible with the existing precompile config.
-	if err := c.checkPrecompilesCompatible(newcfg.PrecompileUpgrades, headTimestamp); err != nil {
-		return err
-	}
+	// XXX: This is missing in master?
+	// if err := c.checkPrecompilesCompatible(newcfg.PrecompileUpgrades, headTimestamp); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

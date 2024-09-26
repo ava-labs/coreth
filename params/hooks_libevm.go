@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/libevm"
 	gethparams "github.com/ethereum/go-ethereum/params"
+	"golang.org/x/exp/maps"
 )
 
 var PredicateParser = func(extra []byte) (PredicateResults, error) {
@@ -60,6 +61,22 @@ var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledC
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetCallAddr:    &nativeasset.DeprecatedContract{},
+}
+
+func (r RulesExtra) ExtraPrecompiles() []common.Address {
+	var precompiles map[common.Address]contract.StatefulPrecompiledContract
+	switch {
+	case r.IsBanff:
+		precompiles = PrecompiledContractsBanff
+	case r.IsApricotPhase6:
+		precompiles = PrecompiledContractsApricotPhase6
+	case r.IsApricotPhasePre6:
+		precompiles = PrecompiledContractsApricotPhasePre6
+	case r.IsApricotPhase2:
+		precompiles = PrecompiledContractsApricotPhase2
+	}
+
+	return maps.Keys(precompiles)
 }
 
 // precompileOverrideBuiltin specifies precompiles that were activated prior to the

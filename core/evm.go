@@ -32,6 +32,8 @@ import (
 
 	"github.com/ava-labs/subnet-evm/consensus"
 	"github.com/ava-labs/subnet-evm/consensus/misc/eip4844"
+	"github.com/ava-labs/subnet-evm/core/extstate"
+	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/predicate"
@@ -41,6 +43,47 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
+
+var _ vm.Hooks = hooks{}
+
+type hooks struct{}
+
+func (hooks) OverrideNewEVMArgs(args *vm.NewEVMArgs) *vm.NewEVMArgs {
+	rules := args.ChainConfig.Rules(args.BlockContext.BlockNumber, args.BlockContext.Random != nil, args.BlockContext.Time)
+	args.StateDB = wrapStateDB(rules, args.StateDB)
+
+	if params.GetRulesExtra(rules).IsDurango {
+		args.BlockContext.Random = new(common.Hash)
+		args.BlockContext.Random.SetBytes(args.BlockContext.Difficulty.Bytes())
+	}
+
+	return args
+}
+
+func (hooks) OverrideEVMResetArgs(args *vm.EVMResetArgs) *vm.EVMResetArgs {
+	args.StateDB = wrapStateDB(args.Rules, args.StateDB)
+	return args
+}
+
+func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
+	if params.GetRulesExtra(rules).IsApricotPhase1 {
+		db = &StateDbAP1{db.(extstate.VmStateDB)}
+	}
+	return &extstate.StateDB{VmStateDB: db.(extstate.VmStateDB)}
+}
+
+func init() {
+	vm.RegisterHooks(hooks{})
+}
+
+type StateDbAP1 struct {
+	extstate.VmStateDB
+}
+
+func (s *StateDbAP1) GetCommittedState(addr common.Address, key common.Hash) common.Hash {
+	state.NormalizeStateKey(&key)
+	return s.VmStateDB.GetCommittedState(addr, key)
+}
 
 // ChainContext supports retrieving headers and consensus parameters from the
 // current blockchain to be used during transaction processing.
@@ -107,13 +150,6 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
 	}
 
-	// Durango enables the Shanghai upgrade of eth, which takes place after the
-	// Merge upgrade.
-	isDurango := params.GetExtra(chain.Config()).IsDurango(header.Time)
-	if isDurango {
-		random = new(common.Hash)
-		random.SetBytes(header.Difficulty.Bytes())
-	}
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
