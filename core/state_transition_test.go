@@ -183,7 +183,9 @@ func TestNativeAssetContractCall(t *testing.T) {
 
 	for name, stTest := range tests {
 		t.Run(name, func(t *testing.T) {
-			stTest.config.SetEthUpgrades()
+			cpy := *stTest.config
+			cpy.SetEthUpgrades()
+			stTest.config = &cpy
 			executeStateTransitionTest(t, stTest)
 		})
 	}
