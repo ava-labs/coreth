@@ -28,6 +28,9 @@
 package miner
 
 import (
+	"math/big"
+	"time"
+
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
@@ -36,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -47,17 +51,39 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase                    common.Address `toml:",omitempty"` // Public address for block mining rewards
-	TestOnlyAllowDuplicateBlocks bool           // Allow mining of duplicate blocks (used in tests only)
+	Etherbase common.Address `toml:",omitempty"` // Public address for block mining rewards
+	ExtraData hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor  uint64         // Target gas floor for mined blocks.
+	GasCeil   uint64         // Target gas ceiling for mined blocks.
+	GasPrice  *big.Int       // Minimum gas price for mining a transaction
+	Recommit  time.Duration  // The time interval for miner to re-create mining work.
+
+	NewPayloadTimeout            time.Duration // The maximum time allowance for creating a new payload
+	TestOnlyAllowDuplicateBlocks bool          // Allow mining of duplicate blocks (used in tests only)
+}
+
+// DefaultConfig contains default settings for miner.
+var DefaultConfig = Config{
+	GasCeil:  30000000,
+	GasPrice: big.NewInt(params.GWei),
+
+	// The default recommit time is chosen as two seconds since
+	// consensus-layer usually will wait a half slot of time(6s)
+	// for payload generation. It should be enough for Geth to
+	// run 3 rounds.
+	Recommit:          2 * time.Second,
+	NewPayloadTimeout: 2 * time.Second,
 }
 
 type Miner struct {
 	worker *worker
+	clock  *mockable.Clock
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, clock *mockable.Clock) *Miner {
 	return &Miner{
-		worker: newWorker(config, chainConfig, engine, eth, mux, clock),
+		worker: newWorker(config, chainConfig, engine, eth, mux, true),
+		clock:  clock,
 	}
 }
 
@@ -66,7 +92,14 @@ func (miner *Miner) SetEtherbase(addr common.Address) {
 }
 
 func (miner *Miner) GenerateBlock(predicateContext *precompileconfig.PredicateContext) (*types.Block, error) {
-	return miner.worker.commitNewWork(predicateContext)
+	result := miner.worker.generateWork(&generateParams{
+		predicateContext: predicateContext,
+		timestamp:        miner.clock.Unix(),
+		parentHash:       miner.worker.chain.CurrentBlock().Hash(),
+		coinbase:         miner.worker.etherbase(),
+		beaconRoot:       &common.Hash{},
+	})
+	return result.block, result.err
 }
 
 // SubscribePendingLogs starts delivering logs from pending transactions

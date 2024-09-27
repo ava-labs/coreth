@@ -19,21 +19,25 @@ package miner
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus"
+	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -41,6 +45,10 @@ import (
 )
 
 const (
+	// Leaves 256 KBs for other sections of the block (limit is 2MB).
+	// This should suffice for atomic txs, proposervm header, and serialization overhead.
+	targetTxsSize = 1792 * units.KiB
+
 	// resultQueueSize is the size of channel listening to sealing result.
 	resultQueueSize = 10
 
@@ -94,6 +102,11 @@ type environment struct {
 	receipts []*types.Receipt
 	sidecars []*types.BlobTxSidecar
 	blobs    int
+
+	parent           *types.Header
+	predicateContext *precompileconfig.PredicateContext
+	predicateResults *predicate.Results
+	size             uint64
 }
 
 // copy creates a deep copy of environment.
@@ -105,6 +118,11 @@ func (env *environment) copy() *environment {
 		coinbase: env.coinbase,
 		header:   types.CopyHeader(env.header),
 		receipts: copyReceipts(env.receipts),
+
+		parent:           types.CopyHeader(env.parent),
+		predicateContext: env.predicateContext,
+		predicateResults: predicate.NewResultsFromMap(maps.Clone(env.predicateResults.Results)),
+		size:             env.size,
 	}
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
@@ -232,9 +250,6 @@ type worker struct {
 	// payload in proof-of-stake stage.
 	recommit time.Duration
 
-	// External functions
-	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
-
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
@@ -242,7 +257,7 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, init bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -250,7 +265,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		eth:                eth,
 		chain:              eth.BlockChain(),
 		mux:                mux,
-		isLocalBlock:       isLocalBlock,
 		coinbase:           config.Etherbase,
 		extra:              config.ExtraData,
 		tip:                uint256.MustFromBig(config.GasPrice),
@@ -320,7 +334,7 @@ func (w *worker) etherbase() common.Address {
 func (w *worker) setGasCeil(ceil uint64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.config.GasCeil = ceil
+	// w.config.GasCeil = ceil
 }
 
 // setExtra sets the content used to initialize the block extra field.
@@ -471,7 +485,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case <-timer.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
+			if w.isRunning() /* && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) */ {
 				// Short circuit if no new transaction arrives.
 				if w.newTxs.Load() == 0 {
 					timer.Reset(recommit)
@@ -577,9 +591,9 @@ func (w *worker) mainLoop() {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
-				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(nil, time.Now().Unix())
-				}
+				// if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
+				// 	w.commitWork(nil, time.Now().Unix())
+				// }
 			}
 			w.newTxs.Add(int32(len(ev.Txs)))
 
@@ -657,7 +671,7 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			// Short circuit when receiving duplicate result caused by resubmitting.
-			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
+			if !w.config.TestOnlyAllowDuplicateBlocks && w.chain.HasBlock(block.Hash(), block.NumberU64()) {
 				continue
 			}
 			var (
@@ -698,11 +712,11 @@ func (w *worker) resultLoop() {
 				logs = append(logs, receipt.Logs...)
 			}
 			// Commit block and state to database.
-			_, err := w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
-			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
-				continue
-			}
+			// _, err := w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
+			// if err != nil {
+			// 	log.Error("Failed writing block to chain", "err", err)
+			// 	continue
+			// }
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -716,14 +730,14 @@ func (w *worker) resultLoop() {
 }
 
 // makeEnv creates a new environment for the sealing block.
-func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address) (*environment, error) {
+func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, predicateContext *precompileconfig.PredicateContext) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
 	state, err := w.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
 	}
-	state.StartPrefetcher("miner")
+	state.StartPrefetcher("miner", w.eth.BlockChain().CacheConfig().TriePrefetcherParallelism)
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
@@ -731,6 +745,10 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		state:    state,
 		coinbase: coinbase,
 		header:   header,
+
+		parent:           parent,
+		predicateContext: predicateContext,
+		predicateResults: predicate.NewResults(),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -793,13 +811,30 @@ func (w *worker) commitBlobTransaction(env *environment, tx *types.Transaction) 
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
 func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
-		snap = env.state.Snapshot()
-		gp   = env.gasPool.Gas()
+		snap         = env.state.Snapshot()
+		gp           = env.gasPool.Gas()
+		blockContext vm.BlockContext
+		rules        = w.chainConfig.Rules(env.header.Number, env.header.Time)
 	)
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+
+	if rules.IsDurango {
+		results, err := core.CheckPredicates(rules, env.predicateContext, tx)
+		if err != nil {
+			log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
+			return nil, err
+		}
+		env.predicateResults.SetTxResults(tx.Hash(), results)
+
+		blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &env.coinbase, env.predicateResults)
+	} else {
+		blockContext = core.NewEVMBlockContext(env.header, w.chain, &env.coinbase)
+	}
+
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, blockContext, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
+		env.predicateResults.DeleteTxResults(tx.Hash())
 	}
 	return receipt, err
 }
@@ -871,6 +906,13 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 			txs.Pop()
 			continue
 		}
+		// Abort transaction if it won't fit in the block and continue to search for a smaller
+		// transction that will fit.
+		if totalTxsSize := env.size + tx.Size(); totalTxsSize > targetTxsSize {
+			log.Trace("Skipping transaction that would exceed target size", "hash", tx.Hash(), "totalTxsSize", totalTxsSize, "txSize", tx.Size())
+			txs.Pop()
+			continue
+		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
@@ -925,14 +967,17 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp   uint64            // The timestamp for sealing task
-	forceTime   bool              // Flag whether the given timestamp is immutable or not
-	parentHash  common.Hash       // Parent block hash, empty means the latest chain head
-	coinbase    common.Address    // The fee recipient address for including transaction
-	random      common.Hash       // The randomness generated by beacon chain, empty before the merge
-	withdrawals types.Withdrawals // List of withdrawals to include in block.
-	beaconRoot  *common.Hash      // The beacon root (cancun field).
-	noTxs       bool              // Flag whether an empty block without any transaction is expected
+	timestamp  uint64         // The timestamp for sealing task
+	forceTime  bool           // Flag whether the given timestamp is immutable or not
+	parentHash common.Hash    // Parent block hash, empty means the latest chain head
+	coinbase   common.Address // The fee recipient address for including transaction
+	random     common.Hash    // The randomness generated by beacon chain, empty before the merge
+	// withdrawals types.Withdrawals // List of withdrawals to include in block.
+	beaconRoot *common.Hash // The beacon root (cancun field).
+	noTxs      bool         // Flag whether an empty block without any transaction is expected
+
+	// avalanche
+	predicateContext *precompileconfig.PredicateContext
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -958,13 +1003,23 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		if genParams.forceTime {
 			return nil, fmt.Errorf("invalid timestamp, parent %d given %d", parent.Time, timestamp)
 		}
-		timestamp = parent.Time + 1
+		timestamp = parent.Time
+	}
+	var gasLimit uint64
+	if w.chainConfig.IsCortina(timestamp) {
+		gasLimit = params.CortinaGasLimit
+	} else if w.chainConfig.IsApricotPhase1(timestamp) {
+		gasLimit = params.ApricotPhase1GasLimit
+	} else {
+		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the ceiling and floor were set to the same value
+		// such that the gas limit converged to it. Since this is hardbaked now, we remove the ability to configure it.
+		gasLimit = core.CalcGasLimit(parent.GasUsed, parent.GasLimit, params.ApricotPhase1GasLimit, params.ApricotPhase1GasLimit)
 	}
 	// Construct the sealing block header.
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent.GasLimit, w.config.GasCeil),
+		GasLimit:   gasLimit,
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
@@ -976,12 +1031,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
 	}
-	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(w.chainConfig, parent)
-		if !w.chainConfig.IsLondon(parent.Number) {
-			parentGasLimit := parent.GasLimit * w.chainConfig.ElasticityMultiplier()
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
+	// Set BaseFee and Extra data field if we are post ApricotPhase3
+	if w.chainConfig.IsApricotPhase3(timestamp) {
+		var err error
+		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 		}
 	}
 	// Apply EIP-4844, EIP-4788.
@@ -1005,7 +1060,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
-	env, err := w.makeEnv(parent, header, genParams.coinbase)
+	env, err := w.makeEnv(parent, header, genParams.coinbase, genParams.predicateContext)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1014,6 +1069,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
+	}
+	// Configure any upgrades that should go into effect during this block.
+	err = core.ApplyUpgrades(w.chainConfig, &parent.Time, types.NewBlockWithHeader(header), env.state)
+	if err != nil {
+		log.Error("failed to configure precompiles mining new block", "parent", parent.Hash(), "number", header.Number, "timestamp", header.Time, "err", err)
+		return nil, err
 	}
 	return env, nil
 }
@@ -1096,7 +1157,17 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
-	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, nil, work.receipts, params.withdrawals)
+	rules := w.chainConfig.Rules(work.header.Number, work.header.Time)
+	env := work
+	if rules.IsDurango {
+		predicateResultsBytes, err := env.predicateResults.Bytes()
+		if err != nil {
+			return &newPayloadResult{err: fmt.Errorf("failed to marshal predicate results: %w", err)}
+		}
+		env.header.Extra = append(env.header.Extra, predicateResultsBytes...)
+	}
+
+	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.parent, work.state, work.txs, nil, work.receipts /*, params.withdrawals*/)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -1185,7 +1256,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
 		// Withdrawals are set to nil here, because this is only called in PoW.
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, nil, env.receipts, nil)
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.parent, env.state, env.txs, nil, env.receipts)
 		if err != nil {
 			return err
 		}
@@ -1229,8 +1300,7 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 // isTTDReached returns the indicator if the given block has reached the total
 // terminal difficulty for The Merge transition.
 func (w *worker) isTTDReached(header *types.Header) bool {
-	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
-	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
+	return true
 }
 
 // adjustResubmitInterval adjusts the resubmit interval.
@@ -1256,7 +1326,14 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
+		var minerFee *big.Int
+		if baseFee := block.BaseFee(); baseFee != nil {
+			// Note in coreth the coinbase payment is (baseFee + effectiveGasTip) * gasUsed
+			minerFee = new(big.Int).Add(baseFee, tx.EffectiveGasTipValue(baseFee))
+		} else {
+			// Prior to activation of EIP-1559, the coinbase payment was gasPrice * gasUsed
+			minerFee = tx.GasPrice()
+		}
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return feesWei

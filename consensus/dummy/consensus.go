@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -494,5 +495,21 @@ func (*DummyEngine) CalcDifficulty(chain consensus.ChainHeaderReader, time uint6
 }
 
 func (*DummyEngine) Close() error {
+	return nil
+}
+
+func (*DummyEngine) SealHash(header *types.Header) common.Hash {
+	return header.Hash()
+}
+
+func (d *DummyEngine) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	header := block.Header()
+	go func() {
+		select {
+		case results <- block:
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", d.SealHash(header))
+		}
+	}()
 	return nil
 }
