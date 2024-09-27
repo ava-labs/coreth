@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/libevm"
 	gethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 )
 
@@ -63,7 +64,7 @@ var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledC
 	nativeasset.NativeAssetCallAddr:    &nativeasset.DeprecatedContract{},
 }
 
-func (r RulesExtra) ExtraPrecompiles() []common.Address {
+func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
 	var precompiles map[common.Address]contract.StatefulPrecompiledContract
 	switch {
 	case r.IsBanff:
@@ -76,7 +77,10 @@ func (r RulesExtra) ExtraPrecompiles() []common.Address {
 		precompiles = PrecompiledContractsApricotPhase2
 	}
 
-	return maps.Keys(precompiles)
+	var addresses []common.Address
+	addresses = append(addresses, maps.Keys(precompiles)...)
+	addresses = append(addresses, existing...)
+	return addresses
 }
 
 // precompileOverrideBuiltin specifies precompiles that were activated prior to the
@@ -139,7 +143,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 	if p, ok := r.precompileOverrideBuiltin(addr); ok {
 		return p, true
 	}
-	if _, ok := r.ActivePrecompiles[addr]; !ok {
+	if _, ok := r.Precompiles[addr]; !ok {
 		return nil, false
 	}
 	module, ok := modules.GetPrecompileModuleByAddress(addr)
@@ -211,7 +215,7 @@ func (a accessableState) NativeAssetCall(caller common.Address, input []byte, su
 	stateDB.SubBalanceMultiCoin(caller, assetID, assetAmount)
 	stateDB.AddBalanceMultiCoin(to, assetID, assetAmount)
 
-	ret, remainingGas, err = a.env.Call(caller, to, callData, remainingGas)
+	ret, remainingGas, err = a.env.Call(to, callData, remainingGas, new(uint256.Int), vm.WithUNSAFECallerAddressProxying())
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally

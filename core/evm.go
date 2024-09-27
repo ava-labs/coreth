@@ -60,8 +60,8 @@ func (hooks) OverrideNewEVMArgs(args *vm.NewEVMArgs) *vm.NewEVMArgs {
 	return args
 }
 
-func (hooks) OverrideEVMResetArgs(args *vm.EVMResetArgs) *vm.EVMResetArgs {
-	args.StateDB = wrapStateDB(args.Rules, args.StateDB)
+func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm.EVMResetArgs {
+	args.StateDB = wrapStateDB(rules, args.StateDB)
 	return args
 }
 

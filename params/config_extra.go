@@ -229,7 +229,7 @@ func (r *RulesExtra) IsPrecompileEnabled(addr common.Address) bool {
 	if r == nil {
 		return false
 	}
-	_, ok := r.ActivePrecompiles[addr]
+	_, ok := r.Precompiles[addr]
 	return ok
 }
 

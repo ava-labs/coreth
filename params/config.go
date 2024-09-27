@@ -757,11 +757,11 @@ type RulesExtra struct {
 	// Rules for Avalanche releases
 	AvalancheRules
 
-	// ActivePrecompiles maps addresses to stateful precompiled contracts that are enabled
+	// Precompiles maps addresses to stateful precompiled contracts that are enabled
 	// for this rule set.
 	// Note: none of these addresses should conflict with the address space used by
 	// any existing precompiles.
-	ActivePrecompiles map[common.Address]precompileconfig.Config
+	Precompiles map[common.Address]precompileconfig.Config
 	// Predicaters maps addresses to stateful precompile Predicaters
 	// that are enabled for this rule set.
 	Predicaters map[common.Address]precompileconfig.Predicater
