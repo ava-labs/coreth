@@ -424,6 +424,8 @@ func TestReceiveWarpMessage(t *testing.T) {
 		true, // RequirePrimaryNetworkSigners
 	)
 
+	// Stop the miner to change the upgrade config to avoid a data race
+	vm.miner.Stop()
 	vm.chainConfig.UpgradeConfig = params.UpgradeConfig{
 		PrecompileUpgrades: []params.PrecompileUpgrade{
 			{Config: enableConfig},
@@ -431,6 +433,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 			{Config: reEnableConfig},
 		},
 	}
+	vm.miner.Start()
 
 	type test struct {
 		name          string

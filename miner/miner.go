@@ -107,3 +107,15 @@ func (miner *Miner) GenerateBlock(predicateContext *precompileconfig.PredicateCo
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
+
+func (miner *Miner) Stop() {
+	miner.worker.stop()
+}
+
+func (miner *Miner) Start() {
+	miner.worker.start()
+}
+
+func (miner *Miner) Close() {
+	miner.worker.close()
+}

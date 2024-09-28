@@ -87,9 +87,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	rand.Seed(1)
 	// Hack: registering metrics uses global variables, so we need to disable metrics here so that we can initialize the VM twice.
 	metrics.Enabled = false
-	defer func() {
+	t.Cleanup(func() {
 		metrics.Enabled = true
-	}()
+	})
 
 	var lock sync.Mutex
 	reqCount := 0
@@ -154,12 +154,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-
-	defer func() {
-		if err := syncDisabledVM.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, syncDisabledVM.Shutdown(context.Background()))
+	})
 
 	if height := syncDisabledVM.LastAcceptedBlockInternal().Height(); height != 0 {
 		t.Fatalf("Unexpected last accepted height: %d", height)
@@ -217,6 +214,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		require.NoError(t, syncReEnabledVM.Shutdown(context.Background()))
+	})
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	vmSetup.serverAppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
