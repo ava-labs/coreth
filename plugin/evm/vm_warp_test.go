@@ -13,6 +13,7 @@ import (
 	_ "embed"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/snow/validators"
@@ -402,7 +403,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 
 func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
-	issuer, vm, _, _, _ := GenesisVM(t, true, genesisJSONDurango, "", "")
+	issuer, vm, _, _, _ := GenesisVM(t, false, genesisJSONDurango, "", "")
 
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
@@ -425,7 +426,6 @@ func TestReceiveWarpMessage(t *testing.T) {
 	)
 
 	// Stop the miner to change the upgrade config to avoid a data race
-	vm.miner.Stop()
 	vm.chainConfig.UpgradeConfig = params.UpgradeConfig{
 		PrecompileUpgrades: []params.PrecompileUpgrade{
 			{Config: enableConfig},
@@ -433,7 +433,9 @@ func TestReceiveWarpMessage(t *testing.T) {
 			{Config: reEnableConfig},
 		},
 	}
-	vm.miner.Start()
+	// Bootstrapping after changing the upgrade config to avoid a data race in the miner
+	require.NoError(vm.SetState(context.Background(), snow.Bootstrapping))
+	require.NoError(vm.SetState(context.Background(), snow.NormalOp))
 
 	type test struct {
 		name          string

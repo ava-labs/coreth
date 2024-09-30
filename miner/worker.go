@@ -388,7 +388,7 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
-	w.running.Store(true)
+	// w.running.Store(true)
 	w.startCh <- struct{}{}
 }
 

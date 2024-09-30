@@ -82,7 +82,7 @@ type Miner struct {
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, clock *mockable.Clock) *Miner {
 	return &Miner{
-		worker: newWorker(config, chainConfig, engine, eth, mux, true),
+		worker: newWorker(config, chainConfig, engine, eth, mux, false),
 		clock:  clock,
 	}
 }
