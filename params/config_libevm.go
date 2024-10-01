@@ -13,14 +13,14 @@ import (
 )
 
 func do_init() any {
-	getter = gethparams.RegisterExtras(gethparams.Extras[*ChainConfigExtra, RulesExtra]{
+	extras = gethparams.RegisterExtras(gethparams.Extras[*ChainConfigExtra, RulesExtra]{
 		ReuseJSONRoot: true, // Reuse the root JSON input when unmarshalling the extra payload.
 		NewRules:      constructRulesExtra,
 	})
 	return nil
 }
 
-var getter gethparams.ExtraPayloads[*ChainConfigExtra, RulesExtra]
+var extras gethparams.ExtraPayloads[*ChainConfigExtra, RulesExtra]
 
 // constructRulesExtra acts as an adjunct to the [params.ChainConfig.Rules]
 // method. Its primary purpose is to construct the extra payload for the
@@ -55,10 +55,10 @@ func constructRulesExtra(c *gethparams.ChainConfig, r *gethparams.Rules, cEx *Ch
 
 // FromChainConfig returns the extra payload carried by the ChainConfig.
 func FromChainConfig(c *gethparams.ChainConfig) *ChainConfigExtra {
-	return getter.FromChainConfig(c)
+	return extras.FromChainConfig(c)
 }
 
 // FromRules returns the extra payload carried by the Rules.
 func FromRules(r *gethparams.Rules) RulesExtra {
-	return getter.FromRules(r)
+	return extras.FromRules(r)
 }
