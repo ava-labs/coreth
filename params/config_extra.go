@@ -18,7 +18,7 @@ import (
 const (
 	maxJSONLen = 64 * 1024 * 1024 // 64MB
 
-	// XXX: Value to pass to geth's Rules by default where the appropriate
+	// TODO: Value to pass to geth's Rules by default where the appropriate
 	// context is not available in the avalanche code. (similar to context.TODO())
 	IsMergeTODO = true
 )
@@ -91,7 +91,7 @@ type ChainConfigWithUpgradesJSON struct {
 // ChainConfig struct.
 func (cu ChainConfigWithUpgradesJSON) MarshalJSON() ([]byte, error) {
 	// embed the ChainConfig struct into the response
-	chainConfigJSON, err := json.Marshal(&cu.ChainConfig) // XXX: Marshal should be defined on value receiver?
+	chainConfigJSON, err := json.Marshal(&cu.ChainConfig)
 	if err != nil {
 		return nil, err
 	}

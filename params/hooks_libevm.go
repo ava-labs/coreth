@@ -25,12 +25,6 @@ var PredicateParser = func(extra []byte) (PredicateResults, error) {
 	return nil, nil
 }
 
-func (r RulesExtra) JumpTable() interface{} {
-	// XXX: This does not account for the any possible differences in EIP-3529
-	// Do not merge without verifying.
-	return nil
-}
-
 func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
 	// IsProhibited
 	if ac.Self == constants.BlackholeAddr || modules.ReservedAddress(ac.Self) {
@@ -38,6 +32,10 @@ func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, sta
 	}
 
 	return gas, nil
+}
+
+func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
+	return nil
 }
 
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -117,15 +115,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen, because predicates are parsed in NewEVMBlockContext.
 		}
-		// XXX: this should be moved to the precompiles
-		var state libevm.StateReader
-		if env.ReadOnly() {
-			state = env.ReadOnlyState()
-		} else {
-			state = env.StateDB()
-		}
 		accessableState := accessableState{
-			StateReader: state,
 			env:         env,
 			chainConfig: GetRulesExtra(env.Rules()).chainConfig,
 			blockContext: &BlockContext{
@@ -155,15 +145,20 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 }
 
 type accessableState struct {
-	libevm.StateReader
 	env          vm.PrecompileEnvironment
 	chainConfig  *gethparams.ChainConfig
 	blockContext *BlockContext
 }
 
 func (a accessableState) GetStateDB() contract.StateDB {
-	// XXX: Whoa, this is a hack
-	return a.StateReader.(contract.StateDB)
+	// XXX: this should be moved to the precompiles
+	var state libevm.StateReader
+	if a.env.ReadOnly() {
+		state = a.env.ReadOnlyState()
+	} else {
+		state = a.env.StateDB()
+	}
+	return state.(contract.StateDB)
 }
 
 func (a accessableState) GetBlockContext() contract.BlockContext {

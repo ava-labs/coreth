@@ -332,7 +332,8 @@ func (st *StateTransition) buyGas() error {
 	return nil
 }
 
-// XXX: Probably should be its own hook
+// TODO: Probably can be removed -- extremely unlikely someone has private keys
+// to known hashes.
 // IsProhibited returns true if [addr] is in the prohibited list of addresses which should
 // not be allowed as an EOA or newly created contract address.
 func IsProhibited(addr common.Address) bool {

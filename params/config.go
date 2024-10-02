@@ -768,6 +768,4 @@ type RulesExtra struct {
 	// AccepterPrecompiles map addresses to stateful precompile accepter functions
 	// that are enabled for this rule set.
 	AccepterPrecompiles map[common.Address]precompileconfig.Accepter
-
-	gethparams.NOOPHooks // XXX: Embedded to ensure that Rules implements params.RulesHooks
 }

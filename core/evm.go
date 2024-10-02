@@ -93,8 +93,6 @@ type ChainContext interface {
 
 	// GetHeader returns the header corresponding to the hash/number argument pair.
 	GetHeader(common.Hash, uint64) *types.Header
-
-	Config() *params.ChainConfig
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
