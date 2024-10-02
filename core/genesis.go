@@ -191,8 +191,7 @@ func SetupGenesisBlock(
 		log.Info("skipping verifying activated network upgrades on chain config")
 	} else {
 		compatErr := storedcfg.CheckCompatible(newcfg, height, timestamp)
-		log.Info("Checking chain config compatibility", "compatErr", compatErr, "newcfg", newcfg, "storedcfg", storedcfg, "height", height, "timestamp", timestamp)
-		if compatErr != nil && ((timestamp != 0 && compatErr.RewindToTime != 0) || (height != 0)) {
+		if compatErr != nil && ((height != 0 && compatErr.RewindToBlock != 0) || (timestamp != 0 && compatErr.RewindToTime != 0)) {
 			return newcfg, stored, compatErr
 		}
 	}
