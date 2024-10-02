@@ -69,8 +69,9 @@ func (utx *UnsignedExportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedExportTx) Verify(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules_ params.Rules,
 ) error {
+	rules := params.GetRulesExtra(rules_)
 	switch {
 	case utx == nil:
 		return errNilTx
@@ -180,9 +181,10 @@ func (utx *UnsignedExportTx) SemanticVerify(
 	stx *Tx,
 	_ *Block,
 	baseFee *big.Int,
-	rules params.Rules,
+	rules_ params.Rules,
 ) error {
-	if err := utx.Verify(vm.ctx, rules); err != nil {
+	rules := params.GetRulesExtra(rules_)
+	if err := utx.Verify(vm.ctx, rules_); err != nil {
 		return err
 	}
 
@@ -315,7 +317,7 @@ func (vm *VM) newExportTx(
 		avaxNeeded = amount
 	}
 
-	rules := vm.currentRules()
+	rules := params.GetRulesExtra(vm.currentRules())
 	switch {
 	case rules.IsApricotPhase3:
 		utx := &UnsignedExportTx{

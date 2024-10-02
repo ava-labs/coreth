@@ -95,7 +95,7 @@ var (
 		json.Unmarshal([]byte(allocStr), &g.Alloc)
 		// After Durango, an additional account is funded in tests to use
 		// with warp messages.
-		if cfg.IsDurango(0) {
+		if params.GetExtra(cfg).IsDurango(0) {
 			addr := common.HexToAddress("0x99b9DEA54C48Dfea6aA9A4Ca4623633EE04ddbB5")
 			balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
 			g.Alloc[addr] = types.GenesisAccount{Balance: balance}
@@ -117,7 +117,7 @@ var (
 
 	activateEtna = func(cfg *params.ChainConfig, etnaTime uint64) *params.ChainConfig {
 		cpy := *cfg
-		cpy.EtnaTimestamp = &etnaTime
+		params.GetExtra(&cpy).EtnaTimestamp = &etnaTime
 		return &cpy
 	}
 
@@ -138,15 +138,21 @@ var (
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
-	apricotRulesPhase0 = params.Rules{}
-	apricotRulesPhase1 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true}}
-	apricotRulesPhase2 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true}}
-	apricotRulesPhase3 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true}}
-	apricotRulesPhase4 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true}}
-	apricotRulesPhase5 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true}}
-	apricotRulesPhase6 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true}}
-	banffRules         = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true}}
-	// cortinaRules    = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true, IsCortina: true}}
+	withRulesExtra = func(e params.RulesExtra) params.Rules {
+		r := params.Rules{}
+		*params.GetRulesExtra(r) = e
+		return r
+	}
+
+	apricotRulesPhase0 = withRulesExtra(params.RulesExtra{})
+	apricotRulesPhase1 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true}})
+	apricotRulesPhase2 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true}})
+	apricotRulesPhase3 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true}})
+	apricotRulesPhase4 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true}})
+	apricotRulesPhase5 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true}})
+	apricotRulesPhase6 = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true}})
+	banffRules         = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true}})
+	// cortinaRules    = withRulesExtra(params.RulesExtra{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true, IsCortina: true}})
 )
 
 func init() {
@@ -940,7 +946,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 
 	validEthBlock := validBlock.(*chain.BlockWrapper).Block.(*Block).ethBlock
 
-	rules := vm.currentRules()
+	rules := params.GetRulesExtra(vm.currentRules())
 	var extraData []byte
 	switch {
 	case rules.IsApricotPhase5:
@@ -3812,7 +3818,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}
 	require.NoError(t, json.Unmarshal([]byte(genesisJSONApricotPhase1), genesisWithUpgrade))
-	genesisWithUpgrade.Config.ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
+	params.GetExtra(genesisWithUpgrade.Config).ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 

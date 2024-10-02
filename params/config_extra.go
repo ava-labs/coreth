@@ -18,6 +18,9 @@ import (
 const (
 	maxJSONLen = 64 * 1024 * 1024 // 64MB
 
+	// XXX: Value to pass to geth's Rules by default where the appropriate
+	// context is not available in the avalanche code. (similar to context.TODO())
+	IsMergeTODO = true
 )
 
 // UpgradeConfig includes the following configs that may be specified in upgradeBytes:
@@ -39,12 +42,13 @@ type AvalancheContext struct {
 // TODO: Prior to Cancun, Avalanche upgrades are referenced inline in the
 // code in place of their Ethereum counterparts. The original Ethereum names
 // should be restored for maintainability.
-func (c *ChainConfig) SetEthUpgrades() {
-	if c.DurangoBlockTimestamp != nil {
-		c.ShanghaiTime = utils.NewUint64(*c.DurangoBlockTimestamp)
+func SetEthUpgrades(c *ChainConfig) {
+	extra := GetExtra(c)
+	if extra.DurangoBlockTimestamp != nil {
+		c.ShanghaiTime = utils.NewUint64(*extra.DurangoBlockTimestamp)
 	}
-	if c.EtnaTimestamp != nil {
-		c.CancunTime = utils.NewUint64(*c.EtnaTimestamp)
+	if extra.EtnaTimestamp != nil {
+		c.CancunTime = utils.NewUint64(*extra.EtnaTimestamp)
 	}
 }
 
@@ -53,26 +57,26 @@ func (c *ChainConfig) SetEthUpgrades() {
 // This is a custom unmarshaler to handle the Precompiles field.
 // Precompiles was presented as an inline object in the JSON.
 // This custom unmarshaler ensures backwards compatibility with the old format.
-func (c *ChainConfig) UnmarshalJSON(data []byte) error {
-	// Alias ChainConfig to avoid recursion
-	type _ChainConfig ChainConfig
-	tmp := _ChainConfig{}
+func (c *ChainConfigExtra) UnmarshalJSON(data []byte) error {
+	// Alias ChainConfigExtra to avoid recursion
+	type _ChainConfigExtra ChainConfigExtra
+	tmp := _ChainConfigExtra{}
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
 
 	// At this point we have populated all fields except PrecompileUpgrade
-	*c = ChainConfig(tmp)
+	*c = ChainConfigExtra(tmp)
 
 	return nil
 }
 
 // MarshalJSON returns the JSON encoding of c.
 // This is a custom marshaler to handle the Precompiles field.
-func (c ChainConfig) MarshalJSON() ([]byte, error) {
-	// Alias ChainConfig to avoid recursion
-	type _ChainConfig ChainConfig
-	return json.Marshal(_ChainConfig(c))
+func (c *ChainConfigExtra) MarshalJSON() ([]byte, error) {
+	// Alias ChainConfigExtra to avoid recursion
+	type _ChainConfigExtra ChainConfigExtra
+	return json.Marshal(_ChainConfigExtra(*c))
 }
 
 type ChainConfigWithUpgradesJSON struct {
@@ -87,7 +91,7 @@ type ChainConfigWithUpgradesJSON struct {
 // ChainConfig struct.
 func (cu ChainConfigWithUpgradesJSON) MarshalJSON() ([]byte, error) {
 	// embed the ChainConfig struct into the response
-	chainConfigJSON, err := json.Marshal(cu.ChainConfig)
+	chainConfigJSON, err := json.Marshal(&cu.ChainConfig) // XXX: Marshal should be defined on value receiver?
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +139,7 @@ func (cu *ChainConfigWithUpgradesJSON) UnmarshalJSON(input []byte) error {
 }
 
 // Verify verifies chain config and returns error
-func (c *ChainConfig) Verify() error {
+func (c *ChainConfigExtra) Verify() error {
 	// Verify the precompile upgrades are internally consistent given the existing chainConfig.
 	if err := c.verifyPrecompileUpgrades(); err != nil {
 		return fmt.Errorf("invalid precompile upgrades: %w", err)
@@ -145,7 +149,7 @@ func (c *ChainConfig) Verify() error {
 }
 
 // IsPrecompileEnabled returns whether precompile with [address] is enabled at [timestamp].
-func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint64) bool {
+func (c *ChainConfigExtra) IsPrecompileEnabled(address common.Address, timestamp uint64) bool {
 	config := c.getActivePrecompileConfig(address, timestamp)
 	return config != nil && !config.IsDisabled()
 }
@@ -153,29 +157,33 @@ func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint
 // ToWithUpgradesJSON converts the ChainConfig to ChainConfigWithUpgradesJSON with upgrades explicitly displayed.
 // ChainConfig does not include upgrades in its JSON output.
 // This is a workaround for showing upgrades in the JSON output.
-func (c *ChainConfig) ToWithUpgradesJSON() *ChainConfigWithUpgradesJSON {
+func ToWithUpgradesJSON(c *ChainConfig) *ChainConfigWithUpgradesJSON {
 	return &ChainConfigWithUpgradesJSON{
 		ChainConfig:   *c,
-		UpgradeConfig: c.UpgradeConfig,
+		UpgradeConfig: GetExtra(c).UpgradeConfig,
 	}
 }
 
 func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
-	c := &ChainConfig{
-		ChainID:             chainID,
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		NetworkUpgrades:     getNetworkUpgrades(agoUpgrade),
-	}
+	c := WithExtra(
+		&ChainConfig{
+			ChainID:             chainID,
+			HomesteadBlock:      big.NewInt(0),
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+		},
+		&ChainConfigExtra{
+			NetworkUpgrades: getNetworkUpgrades(agoUpgrade),
+		},
+	)
 	if AvalancheFujiChainID.Cmp(c.ChainID) == 0 {
 		c.BerlinBlock = big.NewInt(184985) // https://testnet.snowtrace.io/block/184985?chainid=43113, AP2 activation block
 		c.LondonBlock = big.NewInt(805078) // https://testnet.snowtrace.io/block/805078?chainid=43113, AP3 activation block
@@ -187,27 +195,40 @@ func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
 		// to the initially active time. This is likely to correspond to an intended block
 		// number of 0 as well.
 		initiallyActive := uint64(upgrade.InitiallyActiveTime.Unix())
-		if c.ApricotPhase2BlockTimestamp != nil && *c.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
+		extra := GetExtra(c)
+		if extra.ApricotPhase2BlockTimestamp != nil && *extra.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
 			c.BerlinBlock = big.NewInt(0)
 		}
-		if c.ApricotPhase3BlockTimestamp != nil && *c.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
+		if extra.ApricotPhase3BlockTimestamp != nil && *extra.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
 			c.LondonBlock = big.NewInt(0)
 		}
 	}
 	return c
 }
 
-func (r *Rules) PredicatersExist() bool {
+func (r *RulesExtra) PredicatersExist() bool {
+	// Methods on *RulesExtra handle nil receiver so params.Rules is an initialized struct.
+	if r == nil {
+		return false
+	}
 	return len(r.Predicaters) > 0
 }
 
-func (r *Rules) PredicaterExists(addr common.Address) bool {
+func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
+	// Methods on *RulesExtra handle nil receiver so params.Rules is an initialized struct.
+	if r == nil {
+		return false
+	}
 	_, PredicaterExists := r.Predicaters[addr]
 	return PredicaterExists
 }
 
 // IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
-func (r *Rules) IsPrecompileEnabled(addr common.Address) bool {
+func (r *RulesExtra) IsPrecompileEnabled(addr common.Address) bool {
+	// Methods on *RulesExtra handle nil receiver so params.Rules is an initialized struct.
+	if r == nil {
+		return false
+	}
 	_, ok := r.ActivePrecompiles[addr]
 	return ok
 }
@@ -231,4 +252,19 @@ func IsForkTransition(fork *uint64, parent *uint64, current uint64) bool {
 	}
 	currentForked := isTimestampForked(fork, current)
 	return !parentForked && currentForked
+}
+
+func WithExtra(c *ChainConfig, extra *ChainConfigExtra) *ChainConfig {
+	// XXX: Hack to initialize the ChainConfigExtra pointer in the ChainConfig.
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		panic(err)
+	}
+	var newCfg ChainConfig
+	if err := json.Unmarshal(jsonBytes, &newCfg); err != nil {
+		panic(err)
+	}
+
+	*GetExtra(&newCfg) = *extra
+	return &newCfg
 }

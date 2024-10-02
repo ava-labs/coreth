@@ -37,8 +37,8 @@ import (
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
+	"github.com/ava-labs/subnet-evm/core"
 	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ava-labs/subnet-evm/core/vm"
 	"github.com/ava-labs/subnet-evm/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -404,8 +404,8 @@ func TestTransactNativeAssetCall(t *testing.T) {
 	nativeCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
 	assert.Nil(err)
 	// verify transformations
-	assert.Equal(vm.NativeAssetCallAddr, *nativeCallTx.To())
-	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := vm.UnpackNativeAssetCallInput(nativeCallTx.Data())
+	assert.Equal(core.NativeAssetCallAddr, *nativeCallTx.To())
+	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := core.UnpackNativeAssetCallInput(nativeCallTx.Data())
 	assert.Nil(err)
 	assert.NotEmpty(unpackedData)
 	assert.Equal(unpackedData, normalCallTx.Data())

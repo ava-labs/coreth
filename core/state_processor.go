@@ -34,11 +34,11 @@ import (
 	"github.com/ava-labs/subnet-evm/consensus"
 	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ava-labs/subnet-evm/core/vm"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/modules"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -213,8 +213,9 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 	// This ensures that the order we call Configure for each precompile is consistent.
 	// This ensures even if precompiles read/write state other than their own they will observe
 	// an identical global state in a deterministic order when they are configured.
+	extra := params.GetExtra(c)
 	for _, module := range modules.RegisteredModules() {
-		for _, activatingConfig := range c.GetActivatingPrecompileConfigs(module.Address, parentTimestamp, blockTimestamp, c.PrecompileUpgrades) {
+		for _, activatingConfig := range extra.GetActivatingPrecompileConfigs(module.Address, parentTimestamp, blockTimestamp, extra.PrecompileUpgrades) {
 			// If this transition activates the upgrade, configure the stateful precompile.
 			// (or deconfigure it if it is being disabled.)
 			if activatingConfig.IsDisabled() {
@@ -242,7 +243,7 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 				// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
 				// that it does not attempt to invoke a non-existent contract.
 				statedb.SetCode(module.Address, []byte{0x1})
-				if err := module.Configure(c, activatingConfig, statedb, blockContext); err != nil {
+				if err := module.Configure(params.GetExtra(c), activatingConfig, statedb, blockContext); err != nil {
 					return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
 				}
 			}

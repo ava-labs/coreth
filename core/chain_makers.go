@@ -36,10 +36,10 @@ import (
 	"github.com/ava-labs/subnet-evm/core/rawdb"
 	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ava-labs/subnet-evm/core/vm"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/triedb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/holiman/uint256"
 )
@@ -146,7 +146,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 // instruction will panic during execution if it attempts to access a block number outside
 // of the range created by GenerateChain.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	b.addTx(nil, vm.Config{}, tx)
+	b.addTx(&BlockChain{chainConfig: params.TestChainConfig}, vm.Config{}, tx)
 }
 
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
@@ -164,7 +164,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 // been set, the block's coinbase is set to the zero address.
 // The evm interpreter can be customized with the provided vm config.
 func (b *BlockGen) AddTxWithVMConfig(tx *types.Transaction, config vm.Config) {
-	b.addTx(nil, config, tx)
+	b.addTx(&BlockChain{chainConfig: params.TestChainConfig}, config, tx)
 }
 
 // GetBalance returns the balance of the given address at the generated block.
@@ -374,9 +374,9 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
 
 	var gasLimit uint64
-	if cm.config.IsCortina(time) {
+	if params.GetExtra(cm.config).IsCortina(time) {
 		gasLimit = params.CortinaGasLimit
-	} else if cm.config.IsApricotPhase1(time) {
+	} else if params.GetExtra(cm.config).IsApricotPhase1(time) {
 		gasLimit = params.ApricotPhase1GasLimit
 	} else {
 		gasLimit = CalcGasLimit(parent.GasUsed(), parent.GasLimit(), parent.GasLimit(), parent.GasLimit())
@@ -391,7 +391,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
 	}
-	if cm.config.IsApricotPhase3(time) {
+	if params.GetExtra(cm.config).IsApricotPhase3(time) {
 		var err error
 		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(cm.config, parent.Header(), time)
 		if err != nil {

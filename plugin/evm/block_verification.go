@@ -37,7 +37,8 @@ func NewBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockValidator
 	}
 }
 
-func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
+func (v blockValidator) SyntacticVerify(b *Block, rules_ params.Rules) error {
+	rules := params.GetRulesExtra(rules_)
 	if b == nil || b.ethBlock == nil {
 		return errInvalidBlock
 	}
@@ -262,7 +263,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	}
 
 	// Verify the existence / non-existence of excessBlobGas
-	cancun := rules.IsCancun
+	cancun := rules_.IsCancun
 	if !cancun && ethHeader.ExcessBlobGas != nil {
 		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", *ethHeader.ExcessBlobGas)
 	}

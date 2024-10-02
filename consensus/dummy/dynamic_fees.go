@@ -43,10 +43,10 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	var (
-		isApricotPhase3 = config.IsApricotPhase3(parent.Time)
-		isApricotPhase4 = config.IsApricotPhase4(parent.Time)
-		isApricotPhase5 = config.IsApricotPhase5(parent.Time)
-		isEtna          = config.IsEtna(parent.Time)
+		isApricotPhase3 = params.GetExtra(config).IsApricotPhase3(parent.Time)
+		isApricotPhase4 = params.GetExtra(config).IsApricotPhase4(parent.Time)
+		isApricotPhase5 = params.GetExtra(config).IsApricotPhase5(parent.Time)
+		isEtna          = params.GetExtra(config).IsEtna(parent.Time)
 	)
 	if !isApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
 		initialSlice := make([]byte, params.DynamicFeeExtraDataSize)
@@ -332,7 +332,7 @@ func calcBlockGasCost(
 //
 // This function will return nil for all return values prior to Apricot Phase 4.
 func MinRequiredTip(config *params.ChainConfig, header *types.Header) (*big.Int, error) {
-	if !config.IsApricotPhase4(header.Time) {
+	if !params.GetExtra(config).IsApricotPhase4(header.Time) {
 		return nil, nil
 	}
 	if header.BaseFee == nil {

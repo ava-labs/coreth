@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package vm
+package nativeasset_test
 
 import (
 	"math/big"
@@ -9,27 +9,22 @@ import (
 
 	"github.com/ava-labs/subnet-evm/core/rawdb"
 	"github.com/ava-labs/subnet-evm/core/state"
+	. "github.com/ava-labs/subnet-evm/nativeasset"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+
+	_ "github.com/ava-labs/subnet-evm/core"
 )
 
-func TestPrecompiledContractSpendsGas(t *testing.T) {
-	unwrapped := &sha256hash{}
+type StateDB = vm.StateDB
 
-	input := []byte{'J', 'E', 'T', 'S'}
-	requiredGas := unwrapped.RequiredGas(input)
-	_, remainingGas, err := RunPrecompiledContract(unwrapped, input, requiredGas)
-	if err != nil {
-		t.Fatalf("Unexpectedly failed to run precompiled contract: %s", err)
-	}
-
-	if remainingGas != 0 {
-		t.Fatalf("Found more remaining gas than expected: %d", remainingGas)
-	}
+type withMulticoin struct {
+	vm.StateDB
+	GetBalanceMultiCoin func(common.Address, common.Hash) *big.Int
 }
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
@@ -38,21 +33,10 @@ func CanTransfer(db StateDB, addr common.Address, amount *uint256.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
-func CanTransferMC(db StateDB, addr common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
-	log.Info("CanTransferMC", "address", addr, "to", to, "coinID", coinID, "amount", amount)
-	return db.GetBalanceMultiCoin(addr, coinID).Cmp(amount) >= 0
-}
-
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db StateDB, sender, recipient common.Address, amount *uint256.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-}
-
-// Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func TransferMultiCoin(db StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
-	db.SubBalanceMultiCoin(sender, coinID, amount)
-	db.AddBalanceMultiCoin(recipient, coinID, amount)
 }
 
 func TestPackNativeAssetCallInput(t *testing.T) {
@@ -72,13 +56,11 @@ func TestPackNativeAssetCallInput(t *testing.T) {
 }
 
 func TestStatefulPrecompile(t *testing.T) {
-	vmCtx := BlockContext{
-		BlockNumber:       big.NewInt(0),
-		Time:              0,
-		CanTransfer:       CanTransfer,
-		CanTransferMC:     CanTransferMC,
-		Transfer:          Transfer,
-		TransferMultiCoin: TransferMultiCoin,
+	vmCtx := vm.BlockContext{
+		BlockNumber: big.NewInt(0),
+		Time:        0,
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
 	}
 
 	type statefulContractTest struct {
@@ -99,7 +81,6 @@ func TestStatefulPrecompile(t *testing.T) {
 	userAddr2 := common.BytesToAddress([]byte("user2"))
 	assetID := common.BytesToHash([]byte("ScoobyCoin"))
 	zeroBytes := make([]byte, 32)
-	big0.FillBytes(zeroBytes)
 	big0 := uint256.NewInt(0)
 	bigHundred := big.NewInt(100)
 	u256Hundred := uint256.NewInt(100)
@@ -262,8 +243,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
 
 				expectedBalance := big.NewInt(50)
 				assert.Equal(t, u256Hundred, user1Balance, "user 1 balance")
@@ -296,8 +277,8 @@ func TestStatefulPrecompile(t *testing.T) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
 				nativeAssetCallAddrBalance := stateDB.GetBalance(NativeAssetCallAddr)
-				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
 				expectedBalance := big.NewInt(50)
 
 				assert.Equal(t, uint256.NewInt(51), user1Balance, "user 1 balance")
@@ -330,8 +311,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -362,8 +343,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, big.NewInt(50), user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -415,8 +396,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -457,7 +438,7 @@ func TestStatefulPrecompile(t *testing.T) {
 				return statedb
 			},
 			from:                 userAddr1,
-			precompileAddr:       genesisContractAddr,
+			precompileAddr:       GenesisContractAddr,
 			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
 			value:                big0,
 			gasInput:             params.AssetCallApricot + params.CallNewAccountGas,
@@ -471,8 +452,8 @@ func TestStatefulPrecompile(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			stateDB := test.setupStateDB()
 			// Create EVM with BlockNumber and Time initialized to 0 to enable Apricot Rules.
-			evm := NewEVM(vmCtx, TxContext{}, stateDB, params.TestApricotPhase5Config, Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
-			ret, gasRemaining, err := evm.Call(AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
+			evm := vm.NewEVM(vmCtx, vm.TxContext{}, stateDB, params.TestApricotPhase5Config, vm.Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
+			ret, gasRemaining, err := evm.Call(vm.AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
 			// Place gas remaining check before error check, so that it is not skipped when there is an error
 			assert.Equal(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining")
 

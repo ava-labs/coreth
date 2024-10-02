@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package vm
+package nativeasset
 
 import (
 	"fmt"
@@ -20,14 +20,21 @@ import (
 // BLS12-381 Curve Operations added to the set of precompiled contracts
 
 var (
-	genesisContractAddr    = common.HexToAddress("0x0100000000000000000000000000000000000000")
+	GenesisContractAddr    = common.HexToAddress("0x0100000000000000000000000000000000000000")
 	NativeAssetBalanceAddr = common.HexToAddress("0x0100000000000000000000000000000000000001")
 	NativeAssetCallAddr    = common.HexToAddress("0x0100000000000000000000000000000000000002")
 )
 
+type (
+	// Export previously unexported types
+	NativeAssetBalance = nativeAssetBalance
+	NativeAssetCall    = nativeAssetCall
+	DeprecatedContract = deprecatedContract
+)
+
 // nativeAssetBalance is a precompiled contract used to retrieve the native asset balance
 type nativeAssetBalance struct {
-	gasCost uint64
+	GasCost uint64
 }
 
 // PackNativeAssetBalanceInput packs the arguments into the required input data for a transaction to be passed into
@@ -53,10 +60,10 @@ func UnpackNativeAssetBalanceInput(input []byte) (common.Address, common.Hash, e
 // Run implements StatefulPrecompiledContract
 func (b *nativeAssetBalance) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes)
-	if suppliedGas < b.gasCost {
+	if suppliedGas < b.GasCost {
 		return nil, 0, vmerrs.ErrOutOfGas
 	}
-	remainingGas = suppliedGas - b.gasCost
+	remainingGas = suppliedGas - b.GasCost
 
 	address, assetID, err := UnpackNativeAssetBalanceInput(input)
 	if err != nil {
@@ -73,7 +80,7 @@ func (b *nativeAssetBalance) Run(accessibleState contract.AccessibleState, calle
 // nativeAssetCall atomically transfers a native asset to a recipient address as well as calling that
 // address
 type nativeAssetCall struct {
-	gasCost uint64
+	GasCost uint64
 }
 
 // PackNativeAssetCallInput packs the arguments into the required input data for a transaction to be passed into
@@ -103,7 +110,7 @@ func UnpackNativeAssetCallInput(input []byte) (common.Address, common.Hash, *big
 // Run implements StatefulPrecompiledContract
 func (c *nativeAssetCall) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes, assetAmount 32 bytes, callData variable length bytes)
-	return accessibleState.NativeAssetCall(caller, input, suppliedGas, c.gasCost, readOnly)
+	return accessibleState.NativeAssetCall(caller, input, suppliedGas, c.GasCost, readOnly)
 }
 
 type deprecatedContract struct{}

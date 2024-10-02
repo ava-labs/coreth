@@ -45,11 +45,11 @@ import (
 	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/core/txpool"
 	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ava-labs/subnet-evm/core/vm"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ava-labs/subnet-evm/predicate"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
@@ -147,9 +147,9 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	var gasLimit uint64
-	if w.chainConfig.IsCortina(timestamp) {
+	if params.GetExtra(w.chainConfig).IsCortina(timestamp) {
 		gasLimit = params.CortinaGasLimit
-	} else if w.chainConfig.IsApricotPhase1(timestamp) {
+	} else if params.GetExtra(w.chainConfig).IsApricotPhase1(timestamp) {
 		gasLimit = params.ApricotPhase1GasLimit
 	} else {
 		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the ceiling and floor were set to the same value
@@ -165,7 +165,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	// Set BaseFee and Extra data field if we are post ApricotPhase3
-	if w.chainConfig.IsApricotPhase3(timestamp) {
+	if params.GetExtra(w.chainConfig).IsApricotPhase3(timestamp) {
 		var err error
 		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
 		if err != nil {
@@ -276,7 +276,7 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 		header:           header,
 		tcount:           0,
 		gasPool:          new(core.GasPool).AddGas(header.GasLimit),
-		rules:            w.chainConfig.Rules(header.Number, header.Time),
+		rules:            w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time),
 		predicateContext: predicateContext,
 		predicateResults: predicate.NewResults(),
 		start:            tstart,
@@ -328,7 +328,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 		blockContext vm.BlockContext
 	)
 
-	if env.rules.IsDurango {
+	if params.GetRulesExtra(env.rules).IsDurango {
 		results, err := core.CheckPredicates(env.rules, env.predicateContext, tx)
 		if err != nil {
 			log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
@@ -336,7 +336,11 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 		}
 		env.predicateResults.SetTxResults(tx.Hash(), results)
 
-		blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &coinbase, env.predicateResults)
+		predicateResultsBytes, err := env.predicateResults.Bytes()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal predicate results: %w", err)
+		}
+		blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &coinbase, predicateResultsBytes)
 	} else {
 		blockContext = core.NewEVMBlockContext(env.header, w.chain, &coinbase)
 	}
@@ -458,7 +462,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 func (w *worker) commit(env *environment) (*types.Block, error) {
-	if env.rules.IsDurango {
+	if params.GetRulesExtra(env.rules).IsDurango {
 		predicateResultsBytes, err := env.predicateResults.Bytes()
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal predicate results: %w", err)
