@@ -7,18 +7,18 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/subnet-evm/core/rawdb"
-	"github.com/ava-labs/subnet-evm/core/state"
-	. "github.com/ava-labs/subnet-evm/nativeasset"
-	"github.com/ava-labs/subnet-evm/params"
-	"github.com/ava-labs/subnet-evm/vmerrs"
+	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
+	. "github.com/ava-labs/coreth/nativeasset"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 
-	_ "github.com/ava-labs/subnet-evm/core"
+	_ "github.com/ava-labs/coreth/core"
 )
 
 type StateDB = vm.StateDB

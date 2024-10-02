@@ -27,8 +27,8 @@
 package tests
 
 import (
-	"github.com/ava-labs/subnet-evm/core"
-	"github.com/ava-labs/subnet-evm/params"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
 )
 
 type withChainConfig struct {
