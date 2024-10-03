@@ -399,10 +399,14 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error) {
 	// access the atomic trie at the parent block
 	var (
-		parentRoot = types.EmptyRootHash
-		err        error
+		parentRoot   = types.EmptyRootHash
+		parentHeight = blockHeight - 1
+		err          error
 	)
-	if blockHeight > 1 {
+	_, lastCommitted := a.atomicTrie.LastCommitted()
+	if blockHeight > 1 && blockHeight < lastCommitted && parentHeight%defaultCommitInterval == 0 {
+		parentRoot, err = a.atomicTrie.Root(parentHeight)
+	} else if blockHeight > 1 {
 		parentRoot, err = a.getAtomicRootAt(parentHash)
 	}
 	if err != nil {
