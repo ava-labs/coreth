@@ -171,7 +171,11 @@ func SetupGenesisBlock(
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
-	storedcfg.SetEthUpgrades()
+	var networkID uint32
+	if newcfg.SnowCtx != nil {
+		networkID = newcfg.SnowCtx.NetworkID
+	}
+	storedcfg.SetEthUpgrades(networkID)
 	storedData, _ := json.Marshal(storedcfg)
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.

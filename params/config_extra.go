@@ -40,11 +40,11 @@ type AvalancheContext struct {
 // TODO: Prior to Cancun, Avalanche upgrades are referenced inline in the
 // code in place of their Ethereum counterparts. The original Ethereum names
 // should be restored for maintainability.
-func (c *ChainConfig) SetEthUpgrades() {
-	if c.SnowCtx != nil && c.SnowCtx.NetworkID == constants.TestnetID {
+func (c *ChainConfig) SetEthUpgrades(networkID uint32) {
+	if networkID == constants.TestnetID {
 		c.BerlinBlock = big.NewInt(184985) // https://testnet.snowtrace.io/block/184985?chainid=43113, AP2 activation block
 		c.LondonBlock = big.NewInt(805078) // https://testnet.snowtrace.io/block/805078?chainid=43113, AP3 activation block
-	} else if c.SnowCtx != nil && c.SnowCtx.NetworkID == constants.MainnetID {
+	} else if networkID == constants.MainnetID {
 		c.BerlinBlock = big.NewInt(1640340) // https://snowtrace.io/block/1640340?chainid=43114, AP2 activation block
 		c.LondonBlock = big.NewInt(3308552) // https://snowtrace.io/block/3308552?chainid=43114, AP3 activation block
 	} else {

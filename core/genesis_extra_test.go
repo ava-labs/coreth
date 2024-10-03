@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
@@ -45,11 +44,6 @@ import (
 func TestGenesisEthUpgrades(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	preEthUpgrades := &params.ChainConfig{
-		AvalancheContext: params.AvalancheContext{
-			// This UT intentionally uses MainnetID to verify a code path only
-			// triggered by MainnetID/TestnetID
-			SnowCtx: &snow.Context{NetworkID: constants.MainnetID},
-		},
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      false,
@@ -90,7 +84,9 @@ func TestGenesisEthUpgrades(t *testing.T) {
 
 	// We should still be able to re-initialize
 	config = *preEthUpgrades
-	config.SetEthUpgrades() // New versions will set additional fields eg, LondonBlock
+	// This UT intentionally uses MainnetID to trigger a case only triggerred for
+	// Mainnet/Testnet. Note new versions will set additional fields, eg BerlinBlock.
+	config.SetEthUpgrades(constants.MainnetID)
 	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
 }
