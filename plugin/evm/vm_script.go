@@ -8,8 +8,8 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/sync/errgroup"
 )
 
 func (vm *VM) script() error {
@@ -22,6 +22,7 @@ func (vm *VM) script() error {
 	cacheConfig.SnapshotLimit = 0
 
 	progress := make(chan *types.Block, 1)
+	errChan := make(chan error, 1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -55,8 +56,8 @@ func (vm *VM) script() error {
 		)
 	}()
 
-	work := func(from, to uint64) func() error {
-		return func() error {
+	work := func(from, to uint64) func() {
+		return func() {
 			chain, err := core.NewBlockChain(
 				vm.chaindb,
 				&cacheConfig,
@@ -66,26 +67,39 @@ func (vm *VM) script() error {
 				vm.blockChain.LastAcceptedBlock().Hash(),
 				false)
 			if err != nil {
-				return fmt.Errorf("failed to create new blockchain: %w", err)
+				errChan <- fmt.Errorf("failed to create new blockchain: %w", err)
+				return
 			}
 			if err := chain.Reprocess(from, to, progress); err != nil {
-				return fmt.Errorf("failed to reprocess blockchain: %w", err)
+				errChan <- fmt.Errorf("failed to reprocess blockchain: %w", err)
+				return
 			}
 			chain.Stop()
-			return nil
 		}
 	}
 
-	var eg errgroup.Group
+	numWorkers := 2
+	stride := uint64(4096 * 100)
+
+	var err error
+	workers := utils.NewBoundedWorkers(numWorkers)
 	for i := 0; i < 2; i++ {
-		from, to := uint64(i)*4096+1, uint64(i+1)*4096
-		eg.Go(work(from, to))
+		select {
+		case err = <-errChan:
+			break
+		default:
+		}
+
+		from, to := uint64(i)*stride+1, uint64(i+1)*stride
+		workers.Execute(work(from, to))
 	}
-	if err := eg.Wait(); err != nil {
-		return err
-	}
+	workers.Wait()
 	close(progress)
 	wg.Wait()
+	if err != nil {
+		log.Error("failed to reprocess blockchain", "err", err)
+		return err
+	}
 
 	return errors.New("intentionally stopping VM from initializing")
 }
