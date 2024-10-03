@@ -298,6 +298,10 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
+func (bc *BlockChain) GetCacheConfig() *CacheConfig {
+	return bc.cacheConfig
+}
+
 // TrieDB retrieves the low level trie database used for data storage.
 func (bc *BlockChain) TrieDB() *triedb.Database {
 	return bc.triedb

@@ -660,6 +660,10 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	if err := vm.script(); err != nil {
+		return err
+	}
+
 	vm.initializeHandlers()
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
@@ -689,9 +693,6 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if err != nil {
 		return err
 	}
-
-	/// XXX
-	vm.ethConfig.SnapshotDelayInit = true
 
 	callbacks := vm.createConsensusCallbacks()
 	vm.eth, err = eth.New(
@@ -1094,16 +1095,6 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 		// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
 		// Note calling this function has no effect if snapshots are already initialized.
 		// vm.blockChain.InitializeSnapshots()
-
-		log.Warn("REPROCESSING BLOCKCHAIN, NOT FOR PRODUCTION")
-		go func() {
-			err := vm.blockChain.Reprocess(1)
-			if err != nil {
-				log.Error("failed to reprocess blockchain", "error", err)
-			} else {
-				log.Info("finished reprocessing blockchain")
-			}
-		}()
 
 		return vm.fx.Bootstrapping()
 	case snow.NormalOp:

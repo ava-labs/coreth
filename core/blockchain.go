@@ -1764,10 +1764,10 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
-	return bc.reprocessStateImpl(origin, current, reexec, acceptorTip)
+	return bc.reprocessStateImpl(origin, current, reexec, acceptorTip, nil)
 }
 
-func (bc *BlockChain) Reprocess(from uint64) error {
+func (bc *BlockChain) Reprocess(from, to uint64, progress chan<- *types.Block) error {
 	// Prevent other stuff from happening while we reprocess
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
@@ -1776,11 +1776,10 @@ func (bc *BlockChain) Reprocess(from uint64) error {
 	if block == nil {
 		return fmt.Errorf("failed to get block for reprocessing at %d", from)
 	}
-	origin := bc.CurrentBlock().Number.Uint64()
-	return bc.reprocessStateImpl(origin, block, 10000, common.Hash{})
+	return bc.reprocessStateImpl(to, block, 10000, common.Hash{}, progress)
 }
 
-func (bc *BlockChain) reprocessStateImpl(origin uint64, current *types.Block, reexec uint64, acceptorTip common.Hash) error {
+func (bc *BlockChain) reprocessStateImpl(origin uint64, current *types.Block, reexec uint64, acceptorTip common.Hash, progress chan<- *types.Block) error {
 	var err error
 	for i := 0; i < int(reexec); i++ {
 		// TODO: handle canceled context
@@ -1871,6 +1870,10 @@ func (bc *BlockChain) reprocessStateImpl(origin uint64, current *types.Block, re
 			if err := bc.writeBlockAcceptedIndices(current); err != nil {
 				return fmt.Errorf("%w: failed to process accepted block indices", err)
 			}
+		}
+
+		if progress != nil {
+			progress <- current
 		}
 	}
 
