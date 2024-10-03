@@ -88,12 +88,22 @@ func (vm *VM) script() error {
 	startAt := uint64(0)
 	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
 
+	if env := os.Getenv("BLOCK_REPROCESS_WORKERS"); env != "" {
+		parsed, err := strconv.Atoi(env)
+		if err != nil {
+			return err
+		}
+		numWorkers = parsed
+	}
 	if env := os.Getenv("BLOCK_REPROCESS_START"); env != "" {
 		parsed, err := strconv.Atoi(env)
 		if err != nil {
 			return err
 		}
-		startAt = uint64(parsed)
+		if uint64(parsed)%stride != 0 {
+			return fmt.Errorf("start block must be a multiple of %d", stride)
+		}
+		startAt = uint64(parsed) / stride
 	}
 	if env := os.Getenv("BLOCK_REPROCESS_END"); env != "" {
 		parsed, err := strconv.Atoi(env)
@@ -120,6 +130,12 @@ func (vm *VM) script() error {
 		workers.Execute(work(from, to))
 	}
 	workers.Wait()
+	// Check error at the end to ensure all workers have finished
+	select {
+	case err = <-errChan:
+	default:
+	}
+
 	close(progress)
 	wg.Wait()
 	if err != nil {
