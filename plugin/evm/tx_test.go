@@ -110,7 +110,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	var baseFee *big.Int
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
 	switch {
-	case rules.IsApricotPhase3:
+	case params.GetRulesExtra(rules).IsApricotPhase3:
 		baseFee = initialBaseFee
 	}
 

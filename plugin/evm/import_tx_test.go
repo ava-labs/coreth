@@ -443,7 +443,7 @@ func TestNewImportTx(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		rules := vm.currentRules()
+		rules := params.GetRulesExtra(vm.currentRules())
 		switch {
 		case rules.IsApricotPhase3:
 			actualCost, err := importTx.GasUsed(rules.IsApricotPhase5)
