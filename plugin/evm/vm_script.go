@@ -77,7 +77,7 @@ func (vm *VM) script() error {
 
 	var eg errgroup.Group
 	for i := 0; i < 2; i++ {
-		from, to := uint64(i)*4096, uint64(i+1)*4096
+		from, to := uint64(i)*4096+1, uint64(i+1)*4096
 		eg.Go(work(from, to))
 	}
 	if err := eg.Wait(); err != nil {
