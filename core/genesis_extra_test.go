@@ -31,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
@@ -43,7 +45,11 @@ import (
 func TestGenesisEthUpgrades(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	preEthUpgrades := &params.ChainConfig{
-		ChainID:             big.NewInt(43114), // Specifically refers to mainnet for this UT
+		AvalancheContext: params.AvalancheContext{
+			// This UT intentionally uses MainnetID to verify a code path only
+			// triggered by MainnetID/TestnetID
+			SnowCtx: &snow.Context{NetworkID: constants.MainnetID},
+		},
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      false,
