@@ -3,6 +3,8 @@ package evm
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -85,6 +87,25 @@ func (vm *VM) script() error {
 	workers := utils.NewBoundedWorkers(numWorkers)
 	startAt := uint64(0)
 	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
+
+	if env := os.Getenv("BLOCK_REPROCESS_START"); env != "" {
+		parsed, err := strconv.Atoi(env)
+		if err != nil {
+			return err
+		}
+		startAt = uint64(parsed)
+	}
+	if env := os.Getenv("BLOCK_REPROCESS_END"); env != "" {
+		parsed, err := strconv.Atoi(env)
+		if err != nil {
+			return err
+		}
+		if upTo > uint64(parsed) {
+			upTo = uint64(parsed)
+		}
+	}
+	log.Warn("REPROCESSING BLOCKCHAIN -- NOT FOR PRODUCTION", "start", startAt, "end", upTo)
+
 	for i := startAt; i*stride+1 < upTo; i++ {
 		select {
 		case err = <-errChan:
