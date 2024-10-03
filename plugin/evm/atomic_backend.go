@@ -6,6 +6,7 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -79,6 +80,7 @@ type atomicBackend struct {
 	repo       AtomicTxRepository
 	atomicTrie AtomicTrie
 
+	lock             sync.RWMutex
 	lastAcceptedHash common.Hash
 	verifiedRoots    map[common.Hash]AtomicState
 }
@@ -397,6 +399,9 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 // the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
 // changes or abort them and free memory.
 func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	// access the atomic trie at the parent block
 	var (
 		parentRoot   = types.EmptyRootHash
