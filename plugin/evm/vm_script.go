@@ -81,13 +81,6 @@ func (vm *VM) script() error {
 	}
 
 	numWorkers := 8
-	stride := uint64(4096 * 100)
-
-	var err error
-	workers := utils.NewBoundedWorkers(numWorkers)
-	startAt := uint64(0)
-	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
-
 	if env := os.Getenv("BLOCK_REPROCESS_WORKERS"); env != "" {
 		parsed, err := strconv.Atoi(env)
 		if err != nil {
@@ -95,6 +88,13 @@ func (vm *VM) script() error {
 		}
 		numWorkers = parsed
 	}
+
+	var err error
+	stride := uint64(4096 * 100)
+	workers := utils.NewBoundedWorkers(numWorkers)
+	startAt := uint64(0)
+	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
+
 	if env := os.Getenv("BLOCK_REPROCESS_START"); env != "" {
 		parsed, err := strconv.Atoi(env)
 		if err != nil {
