@@ -78,19 +78,24 @@ func (vm *VM) script() error {
 		}
 	}
 
-	numWorkers := 2
+	numWorkers := 8
 	stride := uint64(4096 * 100)
 
 	var err error
 	workers := utils.NewBoundedWorkers(numWorkers)
-	for i := 0; i < 2; i++ {
+	startAt := uint64(0)
+	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
+	for i := startAt; i*stride+1 < upTo; i++ {
 		select {
 		case err = <-errChan:
 			break
 		default:
 		}
 
-		from, to := uint64(i)*stride+1, uint64(i+1)*stride
+		from, to := i*stride+1, (i+1)*stride
+		if to > upTo {
+			to = upTo
+		}
 		workers.Execute(work(from, to))
 	}
 	workers.Wait()
