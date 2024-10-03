@@ -496,7 +496,7 @@ func (vm *VM) Initialize(
 
 	vm.chainID = g.Config.ChainID
 
-	g.Config.SetEthUpgrades()
+	g.Config.SetEthUpgrades(g.Config.SnowCtx.NetworkID)
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
