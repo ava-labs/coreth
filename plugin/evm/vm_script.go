@@ -69,10 +69,12 @@ func (vm *VM) script() error {
 				vm.blockChain.LastAcceptedBlock().Hash(),
 				false)
 			if err != nil {
+				log.Error("[REPROCESS FAILED] failed to create new blockchain", "err", err)
 				errChan <- fmt.Errorf("failed to create new blockchain: %w", err)
 				return
 			}
 			if err := chain.Reprocess(from, to, progress); err != nil {
+				log.Error("[REPROCESS FAILED] to reprocess blockchain", "err", err)
 				errChan <- fmt.Errorf("failed to reprocess blockchain: %w", err)
 				return
 			}
@@ -114,7 +116,7 @@ func (vm *VM) script() error {
 			upTo = uint64(parsed)
 		}
 	}
-	log.Warn("REPROCESSING BLOCKCHAIN -- NOT FOR PRODUCTION", "start", startAt, "end", upTo)
+	log.Warn("REPROCESSING BLOCKCHAIN -- NOT FOR PRODUCTION", "start", startAt, "end", upTo, "numWorkers", numWorkers)
 
 	for i := startAt; i*stride+1 < upTo; i++ {
 		select {
