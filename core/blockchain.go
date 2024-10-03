@@ -1820,7 +1820,7 @@ func (bc *BlockChain) reprocessStateImpl(origin uint64, current *types.Block, re
 		// TODO: handle canceled context
 
 		// Print progress logs if long enough time elapsed
-		if time.Since(logged) > 8*time.Second {
+		if time.Since(logged) > 8*time.Second && progress == nil {
 			log.Info("Regenerating historical state", "block", current.NumberU64()+1, "target", origin, "remaining", origin-current.NumberU64(), "elapsed", time.Since(start))
 			logged = time.Now()
 		}
