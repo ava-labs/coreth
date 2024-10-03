@@ -35,6 +35,7 @@ func (vm *VM) script() error {
 			update        = 5 * time.Second
 		)
 		for range progress {
+			processed++
 			if time.Since(last) > update {
 				last = time.Now()
 				log.Info(
