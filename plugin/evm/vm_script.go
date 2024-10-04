@@ -60,6 +60,12 @@ func (vm *VM) script() error {
 
 	work := func(from, to uint64) func() {
 		return func() {
+			doneFile := fmt.Sprintf("reprocess-%d.done", to)
+			if _, err := os.Stat(doneFile); err == nil {
+				log.Info("skipping reprocess", "from", from, "to", to)
+				return
+			}
+
 			chain, err := core.NewBlockChain(
 				vm.chaindb,
 				&cacheConfig,
@@ -79,6 +85,12 @@ func (vm *VM) script() error {
 				return
 			}
 			chain.Stop()
+
+			if err := os.WriteFile(doneFile, []byte{}, 0644); err != nil {
+				log.Error("[REPROCESS FAILED] failed to write done file", "err", err)
+				errChan <- fmt.Errorf("failed to write done file: %w", err)
+				return
+			}
 		}
 	}
 
