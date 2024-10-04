@@ -660,6 +660,10 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	if err := vm.traceBlock(); err != nil {
+		return err
+	}
+
 	vm.initializeHandlers()
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
