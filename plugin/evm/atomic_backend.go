@@ -6,6 +6,7 @@ package evm
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -15,6 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/types"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -78,6 +80,7 @@ type atomicBackend struct {
 	repo       AtomicTxRepository
 	atomicTrie AtomicTrie
 
+	lock             sync.RWMutex
 	lastAcceptedHash common.Hash
 	verifiedRoots    map[common.Hash]AtomicState
 }
@@ -396,8 +399,21 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 // the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
 // changes or abort them and free memory.
 func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	// access the atomic trie at the parent block
-	parentRoot, err := a.getAtomicRootAt(parentHash)
+	var (
+		parentRoot   = types.EmptyRootHash
+		parentHeight = blockHeight - 1
+		err          error
+	)
+	_, lastCommitted := a.atomicTrie.LastCommitted()
+	if blockHeight > 1 && blockHeight < lastCommitted && parentHeight%defaultCommitInterval == 0 {
+		parentRoot, err = a.atomicTrie.Root(parentHeight)
+	} else if blockHeight > 1 {
+		parentRoot, err = a.getAtomicRootAt(parentHash)
+	}
 	if err != nil {
 		return common.Hash{}, err
 	}
