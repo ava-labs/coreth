@@ -32,9 +32,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
@@ -51,9 +51,9 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 	switch {
 	case config.IsCancun(blockNumber, blockTime):
 		return NewCancunSigner(config.ChainID)
-	case config.IsApricotPhase3(blockTime):
+	case config.IsLondon(blockNumber):
 		return NewLondonSigner(config.ChainID)
-	case config.IsApricotPhase2(blockTime):
+	case config.IsBerlin(blockNumber):
 		return NewEIP2930Signer(config.ChainID)
 	case config.IsEIP155(blockNumber):
 		return NewEIP155Signer(config.ChainID)
@@ -76,10 +76,10 @@ func LatestSigner(config *params.ChainConfig) Signer {
 		if config.CancunTime != nil {
 			return NewCancunSigner(config.ChainID)
 		}
-		if config.ApricotPhase3BlockTimestamp != nil {
+		if config.LondonBlock != nil {
 			return NewLondonSigner(config.ChainID)
 		}
-		if config.ApricotPhase2BlockTimestamp != nil {
+		if config.BerlinBlock != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
 		if config.EIP155Block != nil {

@@ -27,17 +27,63 @@
 package core
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ethereum/go-ethereum/common"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
+
+var _ vm.Hooks = hooks{}
+
+type hooks struct{}
+
+func (hooks) OverrideNewEVMArgs(args *vm.NewEVMArgs) *vm.NewEVMArgs {
+	rules := args.ChainConfig.Rules(args.BlockContext.BlockNumber, args.BlockContext.Random != nil, args.BlockContext.Time)
+	args.StateDB = wrapStateDB(rules, args.StateDB)
+
+	if params.GetRulesExtra(rules).IsDurango {
+		args.BlockContext.Random = new(common.Hash)
+		args.BlockContext.Random.SetBytes(args.BlockContext.Difficulty.Bytes())
+	}
+
+	return args
+}
+
+func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm.EVMResetArgs {
+	args.StateDB = wrapStateDB(rules, args.StateDB)
+	return args
+}
+
+func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
+	if params.GetRulesExtra(rules).IsApricotPhase1 {
+		db = &StateDbAP1{db.(extstate.VmStateDB)}
+	}
+	return &extstate.StateDB{VmStateDB: db.(extstate.VmStateDB)}
+}
+
+func init() {
+	vm.RegisterHooks(hooks{})
+}
+
+type StateDbAP1 struct {
+	extstate.VmStateDB
+}
+
+func (s *StateDbAP1) GetCommittedState(addr common.Address, key common.Hash) common.Hash {
+	state.NormalizeStateKey(&key)
+	return s.VmStateDB.GetCommittedState(addr, key)
+}
 
 // ChainContext supports retrieving headers and consensus parameters from the
 // current blockchain to be used during transaction processing.
@@ -58,7 +104,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	// Prior to Durango, the VM enforces the extra data is smaller than or
 	// equal to this size. After Durango, the VM pre-verifies the extra
 	// data past the dynamic fee rollup window is valid.
-	predicateResults, err := predicate.ParseResults(predicateBytes)
+	_, err := predicate.ParseResults(predicateBytes)
 	if err != nil {
 		log.Error("failed to parse predicate results creating new block context", "err", err, "extra", header.Extra)
 		// As mentioned above, we pre-verify the extra data to ensure this never happens.
@@ -66,22 +112,27 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		// as defense in depth.
 		return newEVMBlockContext(header, chain, author, nil)
 	}
-	return newEVMBlockContext(header, chain, author, predicateResults)
+	return newEVMBlockContext(header, chain, author, header.Extra)
 }
 
 // NewEVMBlockContextWithPredicateResults creates a new context for use in the EVM with an override for the predicate results that is not present
 // in header.Extra.
 // This function is used to create a BlockContext when the header Extra data is not fully formed yet and it's more efficient to pass in predicateResults
 // directly rather than re-encode the latest results when executing each individaul transaction.
-func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) vm.BlockContext {
-	return newEVMBlockContext(header, chain, author, predicateResults)
+func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateBytes []byte) vm.BlockContext {
+	extra := bytes.Clone(header.Extra)
+	if len(predicateBytes) > 0 {
+		extra = predicate.SetPredicateResultBytes(extra, predicateBytes)
+	}
+	return newEVMBlockContext(header, chain, author, extra)
 }
 
-func newEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) vm.BlockContext {
+func newEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, extra []byte) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
 		blobBaseFee *big.Int
+		random      *common.Hash
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -96,20 +147,24 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.ExcessBlobGas != nil {
 		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
 	}
+
 	return vm.BlockContext{
-		CanTransfer:       CanTransfer,
-		CanTransferMC:     CanTransferMC,
-		Transfer:          Transfer,
-		TransferMultiCoin: TransferMultiCoin,
-		GetHash:           GetHashFn(header, chain),
-		PredicateResults:  predicateResults,
-		Coinbase:          beneficiary,
-		BlockNumber:       new(big.Int).Set(header.Number),
-		Time:              header.Time,
-		Difficulty:        new(big.Int).Set(header.Difficulty),
-		BaseFee:           baseFee,
-		BlobBaseFee:       blobBaseFee,
-		GasLimit:          header.GasLimit,
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     GetHashFn(header, chain),
+		Coinbase:    beneficiary,
+		BlockNumber: new(big.Int).Set(header.Number),
+		Time:        header.Time,
+		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     baseFee,
+		BlobBaseFee: blobBaseFee,
+		GasLimit:    header.GasLimit,
+		Random:      random,
+		Header: &gethtypes.Header{
+			Number: new(big.Int).Set(header.Number),
+			Time:   header.Time,
+			Extra:  extra,
+		},
 	}
 }
 
@@ -171,18 +226,8 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
-func CanTransferMC(db vm.StateDB, addr common.Address, to common.Address, coinID common.Hash, amount *big.Int) bool {
-	return db.GetBalanceMultiCoin(addr, coinID).Cmp(amount) >= 0
-}
-
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-}
-
-// Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func TransferMultiCoin(db vm.StateDB, sender, recipient common.Address, coinID common.Hash, amount *big.Int) {
-	db.SubBalanceMultiCoin(sender, coinID, amount)
-	db.AddBalanceMultiCoin(recipient, coinID, amount)
 }

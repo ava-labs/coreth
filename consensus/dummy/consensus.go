@@ -119,11 +119,11 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
-	if config.IsCortina(header.Time) {
+	if params.GetExtra(config).IsCortina(header.Time) {
 		if header.GasLimit != params.CortinaGasLimit {
 			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", params.CortinaGasLimit, header.GasLimit)
 		}
-	} else if config.IsApricotPhase1(header.Time) {
+	} else if params.GetExtra(config).IsApricotPhase1(header.Time) {
 		if header.GasLimit != params.ApricotPhase1GasLimit {
 			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", params.ApricotPhase1GasLimit, header.GasLimit)
 		}
@@ -140,7 +140,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 		}
 	}
 
-	if !config.IsApricotPhase3(header.Time) {
+	if !params.GetExtra(config).IsApricotPhase3(header.Time) {
 		// Verify BaseFee is not present before AP3
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
@@ -167,7 +167,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 	}
 
 	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
-	if !config.IsApricotPhase4(header.Time) {
+	if !params.GetExtra(config).IsApricotPhase4(header.Time) {
 		if header.BlockGasCost != nil {
 			return fmt.Errorf("invalid blockGasCost before fork: have %d, want <nil>", header.BlockGasCost)
 		}
@@ -179,7 +179,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 
 	// Enforce BlockGasCost constraints
 	blockGasCostStep := ApricotPhase4BlockGasCostStep
-	if config.IsApricotPhase5(header.Time) {
+	if params.GetExtra(config).IsApricotPhase5(header.Time) {
 		blockGasCostStep = ApricotPhase5BlockGasCostStep
 	}
 	expectedBlockGasCost := calcBlockGasCost(
@@ -218,11 +218,11 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		return errUnclesUnsupported
 	}
 	switch {
-	case config.IsDurango(header.Time):
+	case params.GetExtra(config).IsDurango(header.Time):
 		if len(header.Extra) < params.DynamicFeeExtraDataSize {
 			return fmt.Errorf("expected extra-data field length >= %d, found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
 		}
-	case config.IsApricotPhase3(header.Time):
+	case params.GetExtra(config).IsApricotPhase3(header.Time):
 		if len(header.Extra) != params.DynamicFeeExtraDataSize {
 			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
 		}
@@ -392,7 +392,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 			return err
 		}
 	}
-	if chain.Config().IsApricotPhase4(block.Time()) {
+	if params.GetExtra(chain.Config()).IsApricotPhase4(block.Time()) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
@@ -404,7 +404,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
 		}
 		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(block.Time()) {
+		if params.GetExtra(chain.Config()).IsApricotPhase5(block.Time()) {
 			blockGasCostStep = ApricotPhase5BlockGasCostStep
 		}
 		// Calculate the expected blockGasCost for this block.
@@ -450,13 +450,13 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
-	if chain.Config().IsApricotPhase4(header.Time) {
+	if params.GetExtra(chain.Config()).IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
 			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
 		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(header.Time) {
+		if params.GetExtra(chain.Config()).IsApricotPhase5(header.Time) {
 			blockGasCostStep = ApricotPhase5BlockGasCostStep
 		}
 		// Calculate the required block gas cost for this block.
@@ -485,7 +485,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	// Header seems complete, assemble into a block and return
 	return types.NewBlockWithExtData(
 		header, txs, uncles, receipts, trie.NewStackTrie(nil),
-		extraData, chain.Config().IsApricotPhase1(header.Time),
+		extraData, params.GetExtra(chain.Config()).IsApricotPhase1(header.Time),
 	), nil
 }
 
