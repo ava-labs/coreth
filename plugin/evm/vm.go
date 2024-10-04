@@ -660,6 +660,10 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	if err := vm.traceBlock(); err != nil {
+		return err
+	}
+
 	if err := vm.script(); err != nil {
 		return err
 	}
