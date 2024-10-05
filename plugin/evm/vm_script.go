@@ -58,8 +58,19 @@ func (vm *VM) script() error {
 		)
 	}()
 
+	stride := uint64(4096 * 10)
+	bigStride := stride * 10
+
 	work := func(from, to uint64) func() {
 		return func() {
+			if to%stride == 0 {
+				roundUpToNearest := (to + bigStride - 1) / bigStride * bigStride
+				doneFile := fmt.Sprintf("reprocess-%d.done", roundUpToNearest)
+				if _, err := os.Stat(doneFile); err == nil {
+					log.Info("skipping reprocess based on big stride", "from", from, "to", to)
+					return
+				}
+			}
 			doneFile := fmt.Sprintf("reprocess-%d.done", to)
 			if _, err := os.Stat(doneFile); err == nil {
 				log.Info("skipping reprocess", "from", from, "to", to)
@@ -104,7 +115,6 @@ func (vm *VM) script() error {
 	}
 
 	var err error
-	stride := uint64(4096 * 100)
 	workers := utils.NewBoundedWorkers(numWorkers)
 	startAt := uint64(0)
 	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
@@ -114,8 +124,8 @@ func (vm *VM) script() error {
 		if err != nil {
 			return err
 		}
-		if uint64(parsed)%stride != 0 {
-			return fmt.Errorf("start block must be a multiple of %d", stride)
+		if uint64(parsed)%bigStride != 0 {
+			return fmt.Errorf("start block must be a multiple of %d", bigStride)
 		}
 		startAt = uint64(parsed) / stride
 	}
@@ -123,6 +133,9 @@ func (vm *VM) script() error {
 		parsed, err := strconv.Atoi(env)
 		if err != nil {
 			return err
+		}
+		if uint64(parsed)%bigStride != 0 {
+			return fmt.Errorf("end block must be a multiple of %d", bigStride)
 		}
 		if upTo > uint64(parsed) {
 			upTo = uint64(parsed)
