@@ -1125,8 +1125,8 @@ func (bc *BlockChain) newTip(block *types.Block) bool {
 // canonical chain.
 // writeBlockAndSetHead expects to be the last verification step during InsertBlock
 // since it creates a reference that will only be cleaned up by Accept/Reject.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
-	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
+	if err := bc.writeBlockWithState(block, parentRoot, receipts, state); err != nil {
 		return err
 	}
 
@@ -1143,7 +1143,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but it expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, state *state.StateDB) error {
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(hash->number map, header, body, receipts)
@@ -1157,13 +1157,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// Commit all cached state changes into underlying memory database.
-	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
-	// are stored by block hash.
-	if bc.snaps != nil {
-		bc.snaps.WithBlockHashes(block.Hash(), block.ParentHash())
-	}
 	var err error
-	_, err = state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), true)
+	_, err = bc.commitWithSnap(block, parentRoot, state, true)
 	if err != nil {
 		return err
 	}
@@ -1366,7 +1361,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// will be cleaned up in Accept/Reject so we need to ensure an error cannot occur
 	// later in verification, since that would cause the referenced root to never be dereferenced.
 	wstart := time.Now()
-	if err := bc.writeBlockAndSetHead(block, receipts, logs, statedb); err != nil {
+	if err := bc.writeBlockAndSetHead(block, parent.Root, receipts, logs, statedb); err != nil {
 		return err
 	}
 	// Update the metrics touched during block commit
@@ -1691,12 +1686,30 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
+	return bc.commitWithSnap(current, parentRoot, statedb, false)
+}
+
+func (bc *BlockChain) commitWithSnap(
+	current *types.Block, parentRoot common.Hash, statedb *state.StateDB, referenceRoot bool,
+) (common.Hash, error) {
 	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
 	// are stored by block hash.
 	if bc.snaps != nil {
 		bc.snaps.WithBlockHashes(current.Hash(), current.ParentHash())
 	}
-	return statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), false)
+	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), referenceRoot)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	// Upstream does not perform a snapshot update if the root is the same as the
+	// parent root, however here the snapshots are based on the block hash, so
+	// this update is necessary.
+	if bc.snaps != nil && root == parentRoot {
+		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil); err != nil {
+			return common.Hash{}, err
+		}
+	}
+	return root, nil
 }
 
 // initSnapshot instantiates a Snapshot instance and adds it to [bc]
