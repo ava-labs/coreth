@@ -1239,7 +1239,7 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
-	return s.commit(block, deleteEmptyObjects, common.Hash{}, common.Hash{}, referenceRoot)
+	return s.commit(block, deleteEmptyObjects, referenceRoot)
 }
 
 // Once the state is committed, tries cached in stateDB (including account
@@ -1249,7 +1249,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bo
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
+func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
