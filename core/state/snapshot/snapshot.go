@@ -199,6 +199,11 @@ type Tree struct {
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
+
+	// XXX: The following fields are to help with integrating the modified snapshot
+	// with the upstream statedb.
+	parentBlockHash *common.Hash
+	blockHash       *common.Hash
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -321,9 +326,34 @@ func (t *Tree) Snapshots(blockHash common.Hash, limits int, nodisk bool) []Snaps
 	return ret
 }
 
+func (t *Tree) WithBlockHashes(blockHash, parentBlockHash common.Hash) {
+	t.blockHash = &blockHash
+	t.parentBlockHash = &parentBlockHash
+}
+
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
-func (t *Tree) Update(blockHash, blockRoot, parentBlockHash common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
+func (t *Tree) Update(
+	blockRoot common.Hash,
+	parentRoot common.Hash,
+	destructs map[common.Hash]struct{},
+	accounts map[common.Hash][]byte,
+	storage map[common.Hash]map[common.Hash][]byte,
+) error {
+	blockHash := *t.blockHash
+	parentBlockHash := *t.parentBlockHash
+
+	// Clear the block hashes, they must be set each time
+	t.blockHash, t.parentBlockHash = nil, nil
+	return t.UpdateWithBlockHashes(blockHash, blockRoot, parentBlockHash, destructs, accounts, storage)
+}
+
+func (t *Tree) UpdateWithBlockHashes(
+	blockHash, blockRoot, parentBlockHash common.Hash,
+	destructs map[common.Hash]struct{},
+	accounts map[common.Hash][]byte,
+	storage map[common.Hash]map[common.Hash][]byte,
+) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -379,6 +409,10 @@ func (t *Tree) verifyIntegrity(base *diskLayer, waitBuild bool) error {
 	log.Info("Verified snapshot integrity", "root", base.root, "elapsed", time.Since(start))
 	t.verified = true
 	return nil
+}
+
+func (t *Tree) Cap(root common.Hash, layers int) error {
+	return nil // No-op for now
 }
 
 // Flatten flattens the snapshot for [blockHash] into its parent. if its
@@ -823,7 +857,11 @@ func (t *Tree) AccountIterator(root common.Hash, seek common.Hash, force bool) (
 // account. The iterator will be move to the specific start position. When [force]
 // is true, a new account iterator is created without acquiring the [snapTree]
 // lock and without confirming that the snapshot on the disk layer is fully generated.
-func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash, force bool) (StorageIterator, error) {
+func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	return t.StorageIteratorWithForce(root, account, seek, false)
+}
+
+func (t *Tree) StorageIteratorWithForce(root common.Hash, account common.Hash, seek common.Hash, force bool) (StorageIterator, error) {
 	if !force {
 		ok, err := t.generating()
 		if err != nil {
@@ -854,7 +892,7 @@ func (t *Tree) verify(root common.Hash, force bool) error {
 	defer acctIt.Release()
 
 	got, err := generateTrieRoot(nil, "", acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
-		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{}, force)
+		storageIt, err := t.StorageIteratorWithForce(root, accountHash, common.Hash{}, force)
 		if err != nil {
 			return common.Hash{}, err
 		}

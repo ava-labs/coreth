@@ -30,6 +30,7 @@ package state
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 	"sort"
 	"time"
 
@@ -58,6 +59,19 @@ type revision struct {
 	journalIndex int
 }
 
+type snapshotTree interface {
+	Snapshot(root common.Hash) snapshot.Snapshot
+	Update(
+		blockRoot common.Hash,
+		parentRoot common.Hash,
+		destructs map[common.Hash]struct{},
+		accounts map[common.Hash][]byte,
+		storage map[common.Hash]map[common.Hash][]byte,
+	) error
+	StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (snapshot.StorageIterator, error)
+	Cap(root common.Hash, layers int) error
+}
+
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -74,6 +88,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
+	snaps      snapshotTree      // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
 
 	// originalRoot is the pre-state root, before any changes were made.
@@ -151,19 +166,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	var snap snapshot.Snapshot
-	if snaps != nil {
-		snap = snaps.Snapshot(root)
-	}
-	return NewWithSnapshot(root, db, snap)
-}
-
-// NewWithSnapshot creates a new state from a given trie with the specified [snap]
-// If [snap] doesn't have the same root as [root], then NewWithSnapshot will return
-// an error. If snap is nil, then no snapshot will be used and CommitWithSnapshot
-// cannot be called on the returned StateDB.
-func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps snapshotTree) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -172,6 +175,7 @@ func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*St
 		db:                   db,
 		trie:                 tr,
 		originalRoot:         root,
+		snaps:                snaps,
 		accounts:             make(map[common.Hash][]byte),
 		storages:             make(map[common.Hash]map[common.Hash][]byte),
 		accountsOrigin:       make(map[common.Address][]byte),
@@ -187,11 +191,16 @@ func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*St
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
-	if snap != nil {
-		if snap.Root() != root {
-			return nil, fmt.Errorf("cannot create new statedb for root: %s, using snapshot with mismatched root: %s", root, snap.Root().Hex())
+	if sdb.snaps != nil {
+		// XXX: Make sure we treat incoming `nil` ptrs as `nil` values, not an
+		// interface to a nil ptr
+		v := reflect.ValueOf(sdb.snaps)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			sdb.snaps = nil
 		}
-		sdb.snap = snap
+	}
+	if sdb.snaps != nil {
+		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
 }
@@ -230,9 +239,6 @@ func (s *StateDB) Error() error {
 	return s.dbErr
 }
 
-// AddLog adds a log with the specified parameters to the statedb
-// Note: blockNumber is a required argument because StateDB does not
-// know the current block number.
 func (s *StateDB) AddLog(log *types.Log) {
 	s.journal.append(addLogChange{txhash: s.thash})
 
@@ -787,7 +793,8 @@ func (s *StateDB) Copy() *StateDB {
 		// to the snapshot tree, we need to copy that as well. Otherwise, any
 		// block mined by ourselves will cause gaps in the tree, and force the
 		// miner to operate trie-backed only.
-		snap: s.snap,
+		snaps: s.snaps,
+		snap:  s.snap,
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -1027,7 +1034,10 @@ func (s *StateDB) clearJournalAndRefund() {
 // storage iteration and constructs trie node deletion markers by creating
 // stack trie with iterated slots.
 func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (bool, common.StorageSize, map[common.Hash][]byte, *trienode.NodeSet, error) {
-	iter, _ := s.snap.StorageIterator(addrHash, common.Hash{})
+	iter, err := s.snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
+	if err != nil {
+		return false, 0, nil, nil, err
+	}
 	defer iter.Release()
 
 	var (
@@ -1229,13 +1239,19 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
-	return s.commit(block, deleteEmptyObjects, nil, common.Hash{}, common.Hash{}, referenceRoot)
+	return s.commit(block, deleteEmptyObjects, common.Hash{}, common.Hash{}, referenceRoot)
 }
 
 // CommitWithSnap writes the state to the underlying in-memory trie database and
 // generates a snapshot layer for the newly committed state.
-func (s *StateDB) CommitWithSnap(block uint64, deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
-	return s.commit(block, deleteEmptyObjects, snaps, blockHash, parentHash, referenceRoot)
+func (s *StateDB) CommitWithSnap(block uint64, deleteEmptyObjects bool, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
+	type withBlockHashes interface {
+		WithBlockHashes(blockHash, parentHash common.Hash)
+	}
+	if s.snaps != nil {
+		s.snaps.(withBlockHashes).WithBlockHashes(blockHash, parentHash)
+	}
+	return s.commit(block, deleteEmptyObjects, blockHash, parentHash, referenceRoot)
 }
 
 // Once the state is committed, tries cached in stateDB (including account
@@ -1245,7 +1261,7 @@ func (s *StateDB) CommitWithSnap(block uint64, deleteEmptyObjects bool, snaps *s
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.Tree, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
+func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1331,13 +1347,21 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
-	if snaps != nil {
+	if s.snap != nil {
 		start := time.Now()
-		if s.snap == nil {
-			log.Error(fmt.Sprintf("cannot commit with snaps without a pre-existing snap layer, parentHash: %s, blockHash: %s", parentHash, blockHash))
-		}
-		if err := snaps.Update(blockHash, root, parentHash, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages); err != nil {
-			log.Warn("Failed to update snapshot tree", "to", root, "err", err)
+		// Only update if there's a state transition (skip empty Clique blocks)
+		// XXX: restore this condition (remove true)
+		if parent := s.snap.Root(); parent != root || true {
+			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages); err != nil {
+				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
+			}
+			// Keep 128 diff layers in the memory, persistent layer is 129th.
+			// - head layer is paired with HEAD state
+			// - head-1 layer is paired with HEAD-1 state
+			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
+			if err := s.snaps.Cap(root, 128); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+			}
 		}
 		if metrics.EnabledExpensive {
 			s.SnapshotCommits += time.Since(start)
@@ -1384,15 +1408,15 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 // Prepare handles the preparatory steps for executing a state transition with.
 // This method must be invoked before state transition.
 //
-// Berlin fork (aka ApricotPhase2):
+// Berlin fork:
 // - Add sender to access list (2929)
 // - Add destination to access list (2929)
 // - Add precompiles to access list (2929)
 // - Add the contents of the optional tx access list (2930)
 //
 // Potential EIPs:
-// - Reset access list (Berlin/ApricotPhase2)
-// - Add coinbase to access list (EIP-3651/Durango)
+// - Reset access list (Berlin)
+// - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
