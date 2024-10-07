@@ -1242,18 +1242,6 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bo
 	return s.commit(block, deleteEmptyObjects, common.Hash{}, common.Hash{}, referenceRoot)
 }
 
-// CommitWithSnap writes the state to the underlying in-memory trie database and
-// generates a snapshot layer for the newly committed state.
-func (s *StateDB) CommitWithSnap(block uint64, deleteEmptyObjects bool, blockHash, parentHash common.Hash, referenceRoot bool) (common.Hash, error) {
-	type withBlockHashes interface {
-		WithBlockHashes(blockHash, parentHash common.Hash)
-	}
-	if s.snaps != nil {
-		s.snaps.(withBlockHashes).WithBlockHashes(blockHash, parentHash)
-	}
-	return s.commit(block, deleteEmptyObjects, blockHash, parentHash, referenceRoot)
-}
-
 // Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
 // must be created with new root and updated database for accessing post-

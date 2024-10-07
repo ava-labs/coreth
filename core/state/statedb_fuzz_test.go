@@ -233,7 +233,10 @@ func (test *stateTest) run() bool {
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}
-		nroot, err := state.CommitWithSnap(0, true, common.Hash{}, common.Hash{}, false) // call commit at the block boundary
+		if snaps != nil {
+			snaps.WithBlockHashes(common.Hash{}, common.Hash{})
+		}
+		nroot, err := state.Commit(0, true, false) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}

@@ -1157,10 +1157,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// Commit all cached state changes into underlying memory database.
-	// If snapshots are enabled, call CommitWithSnaps to explicitly create a snapshot
-	// diff layer for the block.
+	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
+	// are stored by block hash.
+	if bc.snaps != nil {
+		bc.snaps.WithBlockHashes(block.Hash(), block.ParentHash())
+	}
 	var err error
-	_, err = state.CommitWithSnap(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), block.Hash(), block.ParentHash(), true)
+	_, err = state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), true)
 	if err != nil {
 		return err
 	}
@@ -1688,9 +1691,12 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
-	// If snapshots are enabled, call CommitWithSnaps to explicitly create a snapshot
-	// diff layer for the block.
-	return statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), current.Hash(), current.ParentHash(), false)
+	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
+	// are stored by block hash.
+	if bc.snaps != nil {
+		bc.snaps.WithBlockHashes(current.Hash(), current.ParentHash())
+	}
+	return statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), false)
 }
 
 // initSnapshot instantiates a Snapshot instance and adds it to [bc]
