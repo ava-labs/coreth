@@ -177,10 +177,11 @@ type CacheConfig struct {
 // triedbConfig derives the configures for trie database.
 func (c *CacheConfig) triedbConfig() *triedb.Config {
 	config := &triedb.Config{Preimages: c.Preimages}
-	if c.StateScheme == rawdb.HashScheme {
+	if c.StateScheme == rawdb.HashScheme || c.StateScheme == "" {
 		config.HashDB = &hashdb.Config{
 			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:    trieCleanCacheStatsNamespace,
+			ReferenceRoot:  true, // Automatically reference root nodes when an update is made
 		}
 	}
 	if c.StateScheme == rawdb.PathScheme {
@@ -1158,7 +1159,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 
 	// Commit all cached state changes into underlying memory database.
 	var err error
-	_, err = bc.commitWithSnap(block, parentRoot, state, true)
+	_, err = bc.commitWithSnap(block, parentRoot, state)
 	if err != nil {
 		return err
 	}
@@ -1686,18 +1687,18 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
-	return bc.commitWithSnap(current, parentRoot, statedb, false)
+	return bc.commitWithSnap(current, parentRoot, statedb)
 }
 
 func (bc *BlockChain) commitWithSnap(
-	current *types.Block, parentRoot common.Hash, statedb *state.StateDB, referenceRoot bool,
+	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
 	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
 	// are stored by block hash.
 	if bc.snaps != nil {
 		bc.snaps.WithBlockHashes(current.Hash(), current.ParentHash())
 	}
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), referenceRoot)
+	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1850,7 +1851,6 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
-			triedb.Reference(root, common.Hash{})
 			if previousRoot != (common.Hash{}) {
 				triedb.Dereference(previousRoot)
 			}

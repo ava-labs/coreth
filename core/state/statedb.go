@@ -1245,7 +1245,7 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bool) (common.Hash, error) {
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1361,14 +1361,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, referenceRoot bo
 	if root != origin {
 		start := time.Now()
 		set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
-		if referenceRoot {
-			if err := s.db.TrieDB().UpdateAndReferenceRoot(root, origin, block, nodes, set); err != nil {
-				return common.Hash{}, err
-			}
-		} else {
-			if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
-				return common.Hash{}, err
-			}
+		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
+			return common.Hash{}, err
 		}
 		s.originalRoot = root
 		if metrics.EnabledExpensive {

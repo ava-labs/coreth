@@ -236,7 +236,7 @@ func (test *stateTest) run() bool {
 		if snaps != nil {
 			snaps.WithBlockHashes(common.Hash{}, common.Hash{})
 		}
-		nroot, err := state.Commit(0, true, false) // call commit at the block boundary
+		nroot, err := state.Commit(0, true) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}
