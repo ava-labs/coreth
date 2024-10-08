@@ -268,20 +268,6 @@ func (s *StateDB) Logs() []*types.Log {
 	return logs
 }
 
-// GetLogData returns the underlying topics and data from each log included in the StateDB
-// Test helper function.
-func (s *StateDB) GetLogData() ([][]common.Hash, [][]byte) {
-	var logData [][]byte
-	var topics [][]common.Hash
-	for _, lgs := range s.logs {
-		for _, log := range lgs {
-			topics = append(topics, log.Topics)
-			logData = append(logData, common.CopyBytes(log.Data))
-		}
-	}
-	return topics, logData
-}
-
 // AddPreimage records a SHA3 preimage seen by the VM.
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := s.preimages[hash]; !ok {
@@ -696,6 +682,10 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 
 func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
+}
+
+func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
+	return s.getOrNewStateObject(addr)
 }
 
 // getOrNewStateObject retrieves a state object or create a new state object if nil.
