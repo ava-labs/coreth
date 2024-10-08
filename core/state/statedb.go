@@ -38,13 +38,13 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/trie/triestate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/holiman/uint256"
 )
 
@@ -635,26 +635,20 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	var data *types.StateAccount
 	if s.snap != nil {
 		start := time.Now()
-		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
+		acc, err := s.snap.AccountRLP(crypto.HashData(s.hasher, addr.Bytes()))
 		if metrics.EnabledExpensive {
 			s.SnapshotAccountReads += time.Since(start)
 		}
 		if err == nil {
-			if acc == nil {
+			if len(acc) == 0 {
 				return nil
 			}
-			data = &types.StateAccount{
-				Nonce:       acc.Nonce,
-				Balance:     acc.Balance,
-				CodeHash:    acc.CodeHash,
-				IsMultiCoin: acc.IsMultiCoin,
-				Root:        common.BytesToHash(acc.Root),
-			}
-			if len(data.CodeHash) == 0 {
-				data.CodeHash = types.EmptyCodeHash.Bytes()
-			}
-			if data.Root == (common.Hash{}) {
-				data.Root = types.EmptyRootHash
+			// XXX: This is temporary until using the upstream statedb.
+			// Otherwise we must set IsMultiCoin based on
+			data, err = types.FullAccount(acc)
+			if err != nil {
+				s.setError(fmt.Errorf("getDeletedStateObject (%x) error: %w", addr.Bytes(), err))
+				return nil
 			}
 		}
 	}

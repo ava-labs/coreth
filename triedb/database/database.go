@@ -18,15 +18,11 @@ package database
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	gethdatabase "github.com/ethereum/go-ethereum/triedb/database"
 )
 
 // Reader wraps the Node method of a backing trie reader.
-type Reader interface {
-	// Node retrieves the trie node blob with the provided trie identifier,
-	// node path and the corresponding node hash. No error will be returned
-	// if the node is not found.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
-}
+type Reader = gethdatabase.Reader
 
 // PreimageStore wraps the methods of a backing store for reading and writing
 // trie node preimages.

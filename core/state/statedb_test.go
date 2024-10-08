@@ -43,14 +43,14 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
 
@@ -1174,12 +1174,16 @@ func TestGenerateMultiCoinAccounts(t *testing.T) {
 
 	// Get latest snapshot and make sure it has the correct account and storage
 	snap := snaps.Snapshot(root)
-	snapAccount, err := snap.Account(addrHash)
+	snapAccount, err := snap.AccountRLP(addrHash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !snapAccount.IsMultiCoin {
-		t.Fatalf("Expected SnapAccount to return IsMultiCoin: true, found: %v", snapAccount.IsMultiCoin)
+	account := new(types.StateAccount)
+	if err := rlp.DecodeBytes(snapAccount, account); err != nil {
+		t.Fatal(err)
+	}
+	if !types.IsMultiCoin(account) {
+		t.Fatalf("Expected SnapAccount to return IsMultiCoin: true, found: %v", types.IsMultiCoin(account))
 	}
 
 	NormalizeCoinID(&assetID)
