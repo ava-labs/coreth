@@ -2,173 +2,30 @@ package evm
 
 import (
 	"errors"
-	"fmt"
-	"os"
-	"strconv"
-	"sync"
-	"time"
 
-	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 func (vm *VM) script() error {
 	vm.blockChain.Stop()
 
-	vmConfig := vm.blockChain.GetVMConfig()
-	cacheConfig := *vm.blockChain.GetCacheConfig()
-	// Disable snapshotting
-	cacheConfig.SnapshotDelayInit = true
-	cacheConfig.SnapshotLimit = 0
-
-	progress := make(chan *types.Block, 1)
-	errChan := make(chan error, 1)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var (
-			processed     uint64
-			lastProcessed uint64
-			start         = time.Now()
-			last          = start
-			update        = 5 * time.Second
-		)
-		for range progress {
-			processed++
-			if time.Since(last) > update {
-				last = time.Now()
-				log.Info(
-					"reprocessing",
-					"processed", processed,
-					"new", processed-lastProcessed,
-					"blocks/s", float64(processed-lastProcessed)/update.Seconds(),
-				)
-				lastProcessed = processed
-			}
+	var parent *types.Block
+	for i := uint64(1); i < vm.blockChain.LastAcceptedBlock().NumberU64(); i++ {
+		block := vm.blockChain.GetBlockByNumber(i)
+		if parent == nil {
+			parent = vm.blockChain.GetBlock(block.ParentHash(), i-1)
 		}
-		log.Info(
-			"reprocessing finished",
-			"processed", processed,
-			"duration", time.Since(start),
-			"blocks/s", float64(processed)/time.Since(start).Seconds(),
-		)
-	}()
 
-	stride := uint64(4096 * 10)
-	bigStride := stride * 10
-
-	work := func(from, to uint64) func() {
-		return func() {
-			if to%stride == 0 {
-				roundUpToNearest := (to + bigStride - 1) / bigStride * bigStride
-				doneFile := fmt.Sprintf("reprocess-%d.done", roundUpToNearest)
-				if _, err := os.Stat(doneFile); err == nil {
-					log.Info("skipping reprocess based on big stride", "from", from, "to", to)
-					return
-				}
-			}
-			doneFile := fmt.Sprintf("reprocess-%d.done", to)
-			if _, err := os.Stat(doneFile); err == nil {
-				log.Info("skipping reprocess", "from", from, "to", to)
-				return
-			}
-
-			chain, err := core.NewBlockChain(
-				vm.chaindb,
-				&cacheConfig,
-				vm.ethConfig.Genesis,
-				vm.blockChain.Engine(),
-				*vmConfig,
-				vm.blockChain.LastAcceptedBlock().Hash(),
-				false)
-			if err != nil {
-				log.Error("[REPROCESS FAILED] failed to create new blockchain", "err", err)
-				errChan <- fmt.Errorf("failed to create new blockchain: %w", err)
-				return
-			}
-			if err := chain.Reprocess(from, to, progress); err != nil {
-				log.Error("[REPROCESS FAILED] to reprocess blockchain", "err", err)
-				errChan <- fmt.Errorf("failed to reprocess blockchain: %w", err)
-				return
-			}
-			chain.Stop()
-
-			if err := os.WriteFile(doneFile, []byte{}, 0644); err != nil {
-				log.Error("[REPROCESS FAILED] failed to write done file", "err", err)
-				errChan <- fmt.Errorf("failed to write done file: %w", err)
-				return
-			}
+		if parent.Root() == block.Root() {
+			log.Warn("Block has the same root as parent", "block", block.NumberU64(), "root", block.Root(), "parent", parent.Root())
 		}
+		if i%100_000 == 0 {
+			log.Info("Processed block", "block", i)
+		}
+
+		parent = block
 	}
 
-	numWorkers := 8
-	if env := os.Getenv("BLOCK_REPROCESS_WORKERS"); env != "" {
-		parsed, err := strconv.Atoi(env)
-		if err != nil {
-			return err
-		}
-		numWorkers = parsed
-	}
-
-	var err error
-	workers := utils.NewBoundedWorkers(numWorkers)
-	startAt := uint64(0)
-	upTo := vm.blockChain.LastAcceptedBlock().NumberU64()
-
-	if env := os.Getenv("BLOCK_REPROCESS_START"); env != "" {
-		parsed, err := strconv.Atoi(env)
-		if err != nil {
-			return err
-		}
-		if uint64(parsed)%bigStride != 0 {
-			return fmt.Errorf("start block must be a multiple of %d", bigStride)
-		}
-		startAt = uint64(parsed) / stride
-	}
-	if env := os.Getenv("BLOCK_REPROCESS_END"); env != "" {
-		parsed, err := strconv.Atoi(env)
-		if err != nil {
-			return err
-		}
-		if uint64(parsed)%bigStride != 0 {
-			return fmt.Errorf("end block must be a multiple of %d", bigStride)
-		}
-		if upTo > uint64(parsed) {
-			upTo = uint64(parsed)
-		}
-	}
-	log.Warn("REPROCESSING BLOCKCHAIN -- NOT FOR PRODUCTION", "start", startAt, "end", upTo, "numWorkers", numWorkers)
-
-	for i := startAt; i*stride+1 < upTo; i++ {
-		select {
-		case err = <-errChan:
-			break
-		default:
-		}
-
-		from, to := i*stride+1, (i+1)*stride
-		if to > upTo {
-			to = upTo
-		}
-		workers.Execute(work(from, to))
-	}
-	workers.Wait()
-	// Check error at the end to ensure all workers have finished
-	select {
-	case err = <-errChan:
-	default:
-	}
-
-	close(progress)
-	wg.Wait()
-	if err != nil {
-		log.Error("failed to reprocess blockchain", "err", err)
-		return err
-	}
-
-	return errors.New("intentionally stopping VM from initializing")
+	return errors.New("intentionally stopping vm")
 }
