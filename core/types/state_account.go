@@ -51,12 +51,3 @@ var IsMultiCoinPayloads = ethtypes.RegisterExtras[isMultiCoin]()
 func IsMultiCoin(a *StateAccount) bool {
 	return bool(IsMultiCoinPayloads.FromStateAccount(a))
 }
-
-func EnableMultiCoin(a *StateAccount) {
-	IsMultiCoinPayloads.SetOnStateAccount(a, true)
-}
-
-// XXX: Should be removed once we use the upstream statedb
-func DisableMultiCoin(a *StateAccount) {
-	IsMultiCoinPayloads.SetOnStateAccount(a, false)
-}
