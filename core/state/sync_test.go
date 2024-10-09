@@ -21,12 +21,12 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 

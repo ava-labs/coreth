@@ -43,6 +43,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
+	gethhashdb "github.com/ethereum/go-ethereum/triedb/hashdb"
 )
 
 const (
@@ -83,9 +85,7 @@ var (
 
 // ChildResolver defines the required method to decode the provided
 // trie node and iterate the children on top.
-type ChildResolver interface {
-	ForEach(node []byte, onChild func(common.Hash))
-}
+type ChildResolver = gethhashdb.ChildResolver
 
 type cache interface {
 	HasGet([]byte, []byte) ([]byte, bool)
@@ -100,6 +100,10 @@ type Config struct {
 	CleanCacheSize int    // Maximum memory allowance (in bytes) for caching clean nodes
 	StatsPrefix    string // Prefix for cache stats (disabled if empty)
 	ReferenceRoot  bool   // Whether to reference the root node on update
+}
+
+func (c *Config) New(diskdb ethdb.Database, resolver ChildResolver) database.HashBackend {
+	return New(diskdb, c, resolver)
 }
 
 // Defaults is the default setting for database if it's not specified.
@@ -726,7 +730,7 @@ func (db *Database) Scheme() string {
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (*reader, error) {
+func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}

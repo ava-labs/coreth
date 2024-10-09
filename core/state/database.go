@@ -32,7 +32,6 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -41,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 const (

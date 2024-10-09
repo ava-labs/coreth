@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/common"
@@ -51,6 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
