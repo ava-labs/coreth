@@ -31,7 +31,7 @@ import (
 )
 
 type (
-	// XXX: Handling IsMultiCoint / extras in dump
+	// XXX: Handling IsMultiCoin / extras in dump
 	DumpConfig    = ethstate.DumpConfig
 	DumpCollector = ethstate.DumpCollector
 	DumpAccount   = ethstate.DumpAccount
