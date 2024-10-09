@@ -1054,7 +1054,7 @@ func TestMultiCoinOperations(t *testing.T) {
 		t.Fatal("expected zero multicoin balance")
 	}
 
-	s.state.SetBalanceMultiCoin(addr, assetID, big.NewInt(10))
+	s.state.AddBalanceMultiCoin(addr, assetID, big.NewInt(10))
 	s.state.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
 	s.state.AddBalanceMultiCoin(addr, assetID, big.NewInt(3))
 
@@ -1150,7 +1150,7 @@ func TestGenerateMultiCoinAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stateDB.SetBalanceMultiCoin(addr, assetID, assetBalance)
+	stateDB.AddBalanceMultiCoin(addr, assetID, assetBalance)
 	root, err := stateDB.Commit(0, false)
 	if err != nil {
 		t.Fatal(err)

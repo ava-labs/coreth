@@ -449,13 +449,12 @@ func (s *stateObject) SetBalance(amount *uint256.Int) {
 // It is used to add multicoin funds to the destination account of a transfer.
 func (s *stateObject) AddBalanceMultiCoin(coinID common.Hash, amount *big.Int, db Database) {
 	if amount.Sign() == 0 {
-		if s.empty() {
-			s.touch()
-		}
-
+		s.AddBalance(new(uint256.Int)) // used to cause touch
 		return
 	}
-	s.SetBalanceMultiCoin(coinID, new(big.Int).Add(s.BalanceMultiCoin(coinID, db), amount), db)
+	s.EnableMultiCoin()
+	NormalizeCoinID(&coinID)
+	s.SetState(coinID, common.BigToHash(new(big.Int).Add(s.BalanceMultiCoin(coinID, db), amount)))
 }
 
 // SubBalanceMultiCoin removes amount of coinID from s's balance.
@@ -464,13 +463,9 @@ func (s *stateObject) SubBalanceMultiCoin(coinID common.Hash, amount *big.Int, d
 	if amount.Sign() == 0 {
 		return
 	}
-	s.SetBalanceMultiCoin(coinID, new(big.Int).Sub(s.BalanceMultiCoin(coinID, db), amount), db)
-}
-
-func (s *stateObject) SetBalanceMultiCoin(coinID common.Hash, amount *big.Int, db Database) {
 	s.EnableMultiCoin()
 	NormalizeCoinID(&coinID)
-	s.SetState(coinID, common.BigToHash(amount))
+	s.SetState(coinID, common.BigToHash(new(big.Int).Sub(s.BalanceMultiCoin(coinID, db), amount)))
 }
 
 func (s *stateObject) setBalance(amount *uint256.Int) {

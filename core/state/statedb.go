@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ethereum/go-ethereum/common"
+	gethstate "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -84,6 +85,7 @@ type snapshotTree interface {
 // must be created with new root and updated database for accessing post-
 // commit states.
 type StateDB struct {
+	*gethstate.StateDB
 	db         Database
 	prefetcher *triePrefetcher
 	trie       Trie
@@ -167,11 +169,24 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps snapshotTree) (*StateDB, error) {
+	if snaps != nil {
+		// XXX: Make sure we treat incoming `nil` ptrs as `nil` values, not an
+		// interface to a nil ptr
+		v := reflect.ValueOf(snaps)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			snaps = nil
+		}
+	}
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
 	}
+	// stateDB, err := gethstate.New(root, db, snaps)
+	// if err != nil {
+	// 	return nil, err
+	// }
 	sdb := &StateDB{
+		// StateDB:              stateDB,
 		db:                   db,
 		trie:                 tr,
 		originalRoot:         root,
@@ -190,14 +205,6 @@ func New(root common.Hash, db Database, snaps snapshotTree) (*StateDB, error) {
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
-	}
-	if sdb.snaps != nil {
-		// XXX: Make sure we treat incoming `nil` ptrs as `nil` values, not an
-		// interface to a nil ptr
-		v := reflect.ValueOf(sdb.snaps)
-		if v.Kind() == reflect.Ptr && v.IsNil() {
-			sdb.snaps = nil
-		}
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
@@ -327,7 +334,8 @@ func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
 func (s *StateDB) GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.BalanceMultiCoin(coinID, s.db)
+		NormalizeCoinID(&coinID)
+		return stateObject.GetState(coinID).Big()
 	}
 	return new(big.Int).Set(common.Big0)
 }
@@ -453,13 +461,6 @@ func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalanceMultiCoin(coinID, amount, s.db)
-	}
-}
-
-func (s *StateDB) SetBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetBalanceMultiCoin(coinID, amount, s.db)
 	}
 }
 
