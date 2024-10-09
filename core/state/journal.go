@@ -27,6 +27,7 @@
 package state
 
 import (
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -226,7 +227,8 @@ func (ch balanceChange) dirtied() *common.Address {
 }
 
 func (ch multiCoinEnable) revert(s *StateDB) {
-	s.getStateObject(*ch.account).data.IsMultiCoin = false
+	// XXX: This should be removed once the libevm staedb is in use
+	types.DisableMultiCoin(&s.getStateObject(*ch.account).data)
 }
 
 func (ch multiCoinEnable) dirtied() *common.Address {

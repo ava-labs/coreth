@@ -35,10 +35,10 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
 
@@ -104,7 +104,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes()) && !s.data.IsMultiCoin
+	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes()) && !types.IsMultiCoin(&s.data)
 }
 
 // newObject creates a state object.
@@ -478,7 +478,7 @@ func (s *stateObject) setBalance(amount *uint256.Int) {
 }
 
 func (s *stateObject) enableMultiCoin() {
-	s.data.IsMultiCoin = true
+	types.EnableMultiCoin(&s.data)
 }
 
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
@@ -602,7 +602,7 @@ func (s *stateObject) BalanceMultiCoin(coinID common.Hash, db Database) *big.Int
 }
 
 func (s *stateObject) EnableMultiCoin() bool {
-	if s.data.IsMultiCoin {
+	if types.IsMultiCoin(&s.data) {
 		return false
 	}
 	s.db.journal.append(multiCoinEnable{

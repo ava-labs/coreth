@@ -32,11 +32,11 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // DumpConfig is a set of options to control what portions of the state will be
@@ -156,7 +156,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				Nonce:       data.Nonce,
 				Root:        data.Root[:],
 				CodeHash:    data.CodeHash,
-				IsMultiCoin: data.IsMultiCoin,
+				IsMultiCoin: types.IsMultiCoin(&data),
 				AddressHash: it.Key,
 			}
 			address   *common.Address

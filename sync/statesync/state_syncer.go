@@ -10,9 +10,9 @@ import (
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
 	"golang.org/x/sync/errgroup"
 )
 

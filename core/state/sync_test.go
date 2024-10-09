@@ -21,12 +21,12 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
@@ -76,7 +76,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		}
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(0, false, false)
+	root, _ := state.Commit(0, false)
 
 	// Return the generated state
 	return db, sdb, nodeDb, root, accounts
