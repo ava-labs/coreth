@@ -84,7 +84,7 @@ func TestGenesisEthUpgrades(t *testing.T) {
 
 	// We should still be able to re-initialize
 	config = *preEthUpgrades
-	config.SetEthUpgrades() // New versions will set additional fields eg, LondonBlock
+	params.SetEthUpgrades(&config) // New versions will set additional fields eg, LondonBlock
 	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
 }
