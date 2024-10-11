@@ -28,7 +28,6 @@ package params
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -48,8 +47,6 @@ var (
 	AvalancheFujiChainID = big.NewInt(43113)
 	// AvalancheLocalChainID ...
 	AvalancheLocalChainID = big.NewInt(43112)
-
-	errNonGenesisForkByHeight = errors.New("coreth only supports forking by height at the genesis block")
 )
 
 var (
@@ -631,9 +628,6 @@ func (c *ChainConfigExtra) CheckConfigForkOrder() error {
 func checkForks(forks []fork, blockFork bool) error {
 	lastFork := fork{}
 	for _, cur := range forks {
-		if blockFork && cur.block != nil && common.Big0.Cmp(cur.block) != 0 {
-			return errNonGenesisForkByHeight
-		}
 		if lastFork.name != "" {
 			switch {
 			// Non-optional forks must all be present in the chain config up to the last defined fork
