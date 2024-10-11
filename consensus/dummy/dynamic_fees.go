@@ -43,10 +43,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	var (
-		isApricotPhase3 = params.GetExtra(config).IsApricotPhase3(parent.Time)
-		isApricotPhase4 = params.GetExtra(config).IsApricotPhase4(parent.Time)
-		isApricotPhase5 = params.GetExtra(config).IsApricotPhase5(parent.Time)
-		isEtna          = params.GetExtra(config).IsEtna(parent.Time)
+		configExtra     = params.GetExtra(config)
+		isApricotPhase3 = configExtra.IsApricotPhase3(parent.Time)
+		isApricotPhase4 = configExtra.IsApricotPhase4(parent.Time)
+		isApricotPhase5 = configExtra.IsApricotPhase5(parent.Time)
+		isEtna          = configExtra.IsEtna(parent.Time)
 	)
 	if !isApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
 		initialSlice := make([]byte, params.DynamicFeeExtraDataSize)

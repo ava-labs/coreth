@@ -467,14 +467,15 @@ func (vm *VM) Initialize(
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
-	if params.GetExtra(g.Config).DurangoBlockTimestamp != nil {
-		params.GetExtra(g.Config).PrecompileUpgrades = append(params.GetExtra(g.Config).PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpcontract.NewDefaultConfig(params.GetExtra(g.Config).DurangoBlockTimestamp),
+	configExtra := params.GetExtra(g.Config)
+	if configExtra.DurangoBlockTimestamp != nil {
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, params.PrecompileUpgrade{
+			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
 		})
 	}
 
 	// Set the Avalanche Context on the ChainConfig
-	params.GetExtra(g.Config).AvalancheContext = params.AvalancheContext{
+	configExtra.AvalancheContext = params.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
@@ -565,7 +566,7 @@ func (vm *VM) Initialize(
 		},
 	}
 
-	if err := params.GetExtra(vm.chainConfig).Verify(); err != nil {
+	if err := configExtra.Verify(); err != nil {
 		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
@@ -719,12 +720,13 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 
 // TODO: remove this after Etna is activated
 func (vm *VM) setMinFeeAtEtna() {
+	configExtra := params.GetExtra(vm.chainConfig)
 	now := vm.clock.Time()
-	if params.GetExtra(vm.chainConfig).EtnaTimestamp == nil {
+	if configExtra.EtnaTimestamp == nil {
 		// If Etna is not set, set the min fee according to the latest upgrade
 		vm.txPool.SetMinFee(big.NewInt(params.ApricotPhase4MinBaseFee))
 		return
-	} else if params.GetExtra(vm.chainConfig).IsEtna(uint64(now.Unix())) {
+	} else if configExtra.IsEtna(uint64(now.Unix())) {
 		// If Etna is activated, set the min fee to the Etna min fee
 		vm.txPool.SetMinFee(big.NewInt(params.EtnaMinBaseFee))
 		return
@@ -735,7 +737,7 @@ func (vm *VM) setMinFeeAtEtna() {
 	go func() {
 		defer vm.shutdownWg.Done()
 
-		wait := utils.Uint64ToTime(params.GetExtra(vm.chainConfig).EtnaTimestamp).Sub(now)
+		wait := utils.Uint64ToTime(configExtra.EtnaTimestamp).Sub(now)
 		t := time.NewTimer(wait)
 		select {
 		case <-t.C: // Wait for Etna to be activated
