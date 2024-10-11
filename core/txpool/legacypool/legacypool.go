@@ -1370,7 +1370,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil {
-			if params.GetExtra(pool.chainconfig).IsApricotPhase3(reset.newHead.Time) {
+			if pool.chainconfig.IsLondon(reset.newHead.Number) {
 				if err := pool.updateBaseFeeAt(reset.newHead); err != nil {
 					log.Error("error at updating base fee in tx pool", "error", err)
 				}
