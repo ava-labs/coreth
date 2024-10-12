@@ -21,10 +21,6 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-var PredicateParser = func(extra []byte) (PredicateResults, error) {
-	return nil, nil
-}
-
 func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
 	// IsProhibited
 	if ac.Self == constants.BlackholeAddr || modules.ReservedAddress(ac.Self) {
@@ -111,17 +107,17 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen
 		}
-		predicateResults, err := PredicateParser(header.Extra)
-		if err != nil {
-			panic(err) // Should never happen, because predicates are parsed in NewEVMBlockContext.
+		var predicateResultsBytes []byte
+		if len(header.Extra) >= DynamicFeeExtraDataSize {
+			predicateResultsBytes = header.Extra[DynamicFeeExtraDataSize:]
 		}
 		accessableState := accessableState{
 			env:         env,
 			chainConfig: GetRulesExtra(env.Rules()).chainConfig,
 			blockContext: &BlockContext{
-				number:           env.BlockNumber(),
-				time:             env.BlockTime(),
-				predicateResults: predicateResults,
+				number:                env.BlockNumber(),
+				time:                  env.BlockTime(),
+				predicateResultsBytes: predicateResultsBytes,
 			},
 		}
 		return contract.Run(accessableState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
@@ -227,21 +223,17 @@ func (a accessableState) NativeAssetCall(caller common.Address, input []byte, su
 	return ret, remainingGas, err
 }
 
-type PredicateResults interface {
-	GetPredicateResults(txHash common.Hash, address common.Address) []byte
-}
-
 type BlockContext struct {
-	number           *big.Int
-	time             uint64
-	predicateResults PredicateResults
+	number                *big.Int
+	time                  uint64
+	predicateResultsBytes []byte
 }
 
-func NewBlockContext(number *big.Int, time uint64, predicateResults PredicateResults) *BlockContext {
+func NewBlockContext(number *big.Int, time uint64, predicateResultsBytes []byte) *BlockContext {
 	return &BlockContext{
-		number:           number,
-		time:             time,
-		predicateResults: predicateResults,
+		number:                number,
+		time:                  time,
+		predicateResultsBytes: predicateResultsBytes,
 	}
 }
 
@@ -253,9 +245,6 @@ func (b *BlockContext) Timestamp() uint64 {
 	return b.time
 }
 
-func (b *BlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
-	if b.predicateResults == nil {
-		return nil
-	}
-	return b.predicateResults.GetPredicateResults(txHash, address)
+func (b *BlockContext) GetPredicateResultsBytes() []byte {
+	return b.predicateResultsBytes
 }

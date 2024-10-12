@@ -10,16 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func init() {
-	params.PredicateParser = func(extra []byte) (params.PredicateResults, error) {
-		predicateBytes, ok := GetPredicateResultBytes(extra)
-		if !ok {
-			return nil, nil
-		}
-		return ParseResults(predicateBytes)
-	}
-}
-
 // EndByte is used as a delimiter for the bytes packed into a precompile predicate.
 // Precompile predicates are encoded in the Access List of transactions in the access tuples
 // which means that its length must be a multiple of 32 (common.HashLength).
