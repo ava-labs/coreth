@@ -13,6 +13,23 @@ linters:
   disable-all: true
   enable:
     - goimports
+    - govet
+    - ineffassign
+    - misspell
+    - unconvert
+    - typecheck
+    - unused
+    # - staticcheck
+    - bidichk
+    - durationcheck
+    - copyloopvar
+    - whitespace
+    # - revive # only certain checks enabled
+    - durationcheck
+    - gocheckcompilerdirectives
+    - reassign
+    - mirror
+    - tenv
     - gosimple
     - govet
     - ineffassign
