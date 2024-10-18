@@ -373,7 +373,7 @@ func ToWithUpgradesJSON(c *ChainConfig) *ChainConfigWithUpgradesJSON {
 }
 
 func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
-	c := WithExtra(
+	return WithExtra(
 		&ChainConfig{
 			ChainID:             chainID,
 			HomesteadBlock:      big.NewInt(0),
@@ -392,7 +392,6 @@ func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
 			NetworkUpgrades: getNetworkUpgrades(agoUpgrade),
 		},
 	)
-	return c
 }
 
 func ptrToString(val *uint64) string {
