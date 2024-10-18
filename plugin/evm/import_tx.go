@@ -62,8 +62,9 @@ func (utx *UnsignedImportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedImportTx) Verify(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules_ params.Rules,
 ) error {
+	rules := params.GetRulesExtra(rules_)
 	switch {
 	case utx == nil:
 		return errNilTx
@@ -181,9 +182,10 @@ func (utx *UnsignedImportTx) SemanticVerify(
 	stx *Tx,
 	parent *Block,
 	baseFee *big.Int,
-	rules params.Rules,
+	rules_ params.Rules,
 ) error {
-	if err := utx.Verify(vm.ctx, rules); err != nil {
+	rules := params.GetRulesExtra(rules_)
+	if err := utx.Verify(vm.ctx, rules_); err != nil {
 		return err
 	}
 
@@ -348,7 +350,7 @@ func (vm *VM) newImportTxWithUTXOs(
 		})
 	}
 
-	rules := vm.currentRules()
+	rules := params.GetRulesExtra(vm.currentRules())
 
 	var (
 		txFeeWithoutChange uint64

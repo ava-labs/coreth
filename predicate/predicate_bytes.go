@@ -62,3 +62,7 @@ func GetPredicateResultBytes(extraData []byte) ([]byte, bool) {
 	}
 	return extraData[params.DynamicFeeExtraDataSize:], true
 }
+
+func SetPredicateResultBytes(extraData []byte, predicateResults []byte) []byte {
+	return append(extraData[:params.DynamicFeeExtraDataSize], predicateResults...)
+}
