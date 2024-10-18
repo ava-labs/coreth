@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/libevm"
-	gethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 )
@@ -112,8 +111,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			predicateResultsBytes = header.Extra[DynamicFeeExtraDataSize:]
 		}
 		accessableState := accessableState{
-			env:         env,
-			chainConfig: GetRulesExtra(env.Rules()).chainConfig,
+			env: env,
 			blockContext: &BlockContext{
 				number:                env.BlockNumber(),
 				time:                  env.BlockTime(),
@@ -142,7 +140,6 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 
 type accessableState struct {
 	env          vm.PrecompileEnvironment
-	chainConfig  *gethparams.ChainConfig
 	blockContext *BlockContext
 }
 
@@ -162,12 +159,11 @@ func (a accessableState) GetBlockContext() contract.BlockContext {
 }
 
 func (a accessableState) GetChainConfig() precompileconfig.ChainConfig {
-	extra := GetExtra(a.chainConfig)
-	return extra
+	return GetExtra(a.env.ChainConfig())
 }
 
 func (a accessableState) GetSnowContext() *snow.Context {
-	return GetExtra(a.chainConfig).SnowCtx
+	return GetExtra(a.env.ChainConfig()).SnowCtx
 }
 
 func (a accessableState) NativeAssetCall(caller common.Address, input []byte, suppliedGas uint64, gasCost uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {

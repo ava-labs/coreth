@@ -6,7 +6,6 @@ package params
 import (
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ethereum/go-ethereum/common"
-	gethparams "github.com/ethereum/go-ethereum/params"
 )
 
 func GetRulesExtra(r Rules) *RulesExtra {
@@ -14,9 +13,6 @@ func GetRulesExtra(r Rules) *RulesExtra {
 }
 
 type RulesExtra struct {
-	chainConfig *ChainConfig
-	gethrules   gethparams.Rules
-
 	// Rules for Avalanche releases
 	AvalancheRules
 

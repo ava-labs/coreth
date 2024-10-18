@@ -33,8 +33,6 @@ func constructRulesExtra(c *gethparams.ChainConfig, r *gethparams.Rules, cEx *Ch
 		return rules
 	}
 	rules.AvalancheRules = cEx.GetAvalancheRules(timestamp)
-	rules.chainConfig = c
-	rules.gethrules = *r
 
 	// Initialize the stateful precompiles that should be enabled at [blockTimestamp].
 	rules.Precompiles = make(map[common.Address]precompileconfig.Config)
