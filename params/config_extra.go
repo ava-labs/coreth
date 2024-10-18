@@ -73,12 +73,12 @@ func SetEthUpgrades(c *ChainConfig) {
 }
 
 func GetExtra(c *ChainConfig) *ChainConfigExtra {
-	extra := FromChainConfig(c)
-	if extra == nil {
-		extra = &ChainConfigExtra{}
-		extras.SetOnChainConfig(c, extra)
+	ex := extras.FromChainConfig(c)
+	if ex == nil {
+		ex = &ChainConfigExtra{}
+		extras.SetOnChainConfig(c, ex)
 	}
-	return extra
+	return ex
 }
 
 func Copy(c *ChainConfig) ChainConfig {

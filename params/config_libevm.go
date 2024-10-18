@@ -54,13 +54,3 @@ func constructRulesExtra(c *gethparams.ChainConfig, r *gethparams.Rules, cEx *Ch
 
 	return rules
 }
-
-// FromChainConfig returns the extra payload carried by the ChainConfig.
-func FromChainConfig(c *gethparams.ChainConfig) *ChainConfigExtra {
-	return extras.FromChainConfig(c)
-}
-
-// FromRules returns the extra payload carried by the Rules.
-func FromRules(r *gethparams.Rules) RulesExtra {
-	return extras.FromRules(r)
-}

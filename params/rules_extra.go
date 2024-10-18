@@ -10,8 +10,7 @@ import (
 )
 
 func GetRulesExtra(r Rules) *RulesExtra {
-	extra := FromRules(&r)
-	return &extra
+	return extras.PointerFromRules(&r)
 }
 
 type RulesExtra struct {
