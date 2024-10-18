@@ -6,18 +6,13 @@ package params
 import (
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ethereum/go-ethereum/common"
-	gethparams "github.com/ethereum/go-ethereum/params"
 )
 
 func GetRulesExtra(r Rules) *RulesExtra {
-	extra := FromRules(&r)
-	return &extra
+	return extras.PointerFromRules(&r)
 }
 
 type RulesExtra struct {
-	chainConfig *ChainConfig
-	gethrules   gethparams.Rules
-
 	// Rules for Avalanche releases
 	AvalancheRules
 
@@ -39,8 +34,8 @@ func (r *RulesExtra) PredicatersExist() bool {
 }
 
 func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
-	_, PredicaterExists := r.Predicaters[addr]
-	return PredicaterExists
+	_, ok := r.Predicaters[addr]
+	return ok
 }
 
 // IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.

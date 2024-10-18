@@ -45,9 +45,10 @@ var (
 	AvalancheLocalChainID = big.NewInt(43112)
 )
 
-var (
-	_ = do_init() // XXX: is (temporarily) here because type registration must proceed the call to .Rules()
+// Guarantees extras initialisation before a call to [ChainConfig.Rules].
+var _ = libevmInit()
 
+var (
 	TestChainConfig = WithExtra(
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
