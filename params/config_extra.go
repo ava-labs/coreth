@@ -87,6 +87,7 @@ func Copy(c *ChainConfig) ChainConfig {
 	return *WithExtra(&cpy, &extraCpy)
 }
 
+// WithExtra sets the extra payload on `c` and returns the modified argument.
 func WithExtra(c *ChainConfig, extra *ChainConfigExtra) *ChainConfig {
 	extras.SetOnChainConfig(c, extra)
 	return c
