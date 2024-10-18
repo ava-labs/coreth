@@ -56,27 +56,29 @@ func SetEthUpgrades(c *ChainConfig) {
 		// number of 0 as well.
 		initiallyActive := uint64(upgrade.InitiallyActiveTime.Unix())
 		extra := GetExtra(c)
-		if extra != nil && extra.ApricotPhase2BlockTimestamp != nil && *extra.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
+		if extra.ApricotPhase2BlockTimestamp != nil && *extra.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
 			c.BerlinBlock = big.NewInt(0)
 		}
-		if extra != nil && extra.ApricotPhase3BlockTimestamp != nil && *extra.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
+		if extra.ApricotPhase3BlockTimestamp != nil && *extra.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
 			c.LondonBlock = big.NewInt(0)
 		}
 	}
 	extra := GetExtra(c)
-	if extra != nil && extra.DurangoBlockTimestamp != nil {
+	if extra.DurangoBlockTimestamp != nil {
 		c.ShanghaiTime = utils.NewUint64(*extra.DurangoBlockTimestamp)
 	}
-	if extra != nil && extra.EtnaTimestamp != nil {
+	if extra.EtnaTimestamp != nil {
 		c.CancunTime = utils.NewUint64(*extra.EtnaTimestamp)
 	}
 }
 
 func GetExtra(c *ChainConfig) *ChainConfigExtra {
-	if extra := FromChainConfig(c); extra != nil {
-		return extra
+	extra := FromChainConfig(c)
+	if extra == nil {
+		extra = &ChainConfigExtra{}
+		extras.SetOnChainConfig(c, extra)
 	}
-	return &ChainConfigExtra{}
+	return extra
 }
 
 func Copy(c *ChainConfig) ChainConfig {
