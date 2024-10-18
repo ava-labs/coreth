@@ -38,8 +38,8 @@ func (r *RulesExtra) PredicatersExist() bool {
 }
 
 func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
-	_, PredicaterExists := r.Predicaters[addr]
-	return PredicaterExists
+	_, ok := r.Predicaters[addr]
+	return ok
 }
 
 // IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
