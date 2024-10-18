@@ -12,7 +12,9 @@ import (
 	gethparams "github.com/ethereum/go-ethereum/params"
 )
 
-func do_init() any {
+// libevmInit would ideally be a regular init() function, but it MUST be run
+// before any calls to [ChainConfig.Rules]. See `config.go` for its call site.
+func libevmInit() any {
 	extras = gethparams.RegisterExtras(gethparams.Extras[*ChainConfigExtra, RulesExtra]{
 		ReuseJSONRoot: true, // Reuse the root JSON input when unmarshalling the extra payload.
 		NewRules:      constructRulesExtra,
