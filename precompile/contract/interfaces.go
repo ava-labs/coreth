@@ -71,9 +71,7 @@ type ConfigurationBlockContext interface {
 
 type BlockContext interface {
 	ConfigurationBlockContext
-	// GetPredicateResults returns an byte array result of verifying the predicates
-	// of the given block.
-	GetPredicateResultsBytes() []byte
+	Extra() []byte // Exta returns the Extra field of the block header
 }
 
 type Configurator interface {

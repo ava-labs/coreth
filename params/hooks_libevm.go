@@ -106,16 +106,12 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen
 		}
-		var predicateResultsBytes []byte
-		if len(header.Extra) >= DynamicFeeExtraDataSize {
-			predicateResultsBytes = header.Extra[DynamicFeeExtraDataSize:]
-		}
 		accessableState := accessableState{
 			env: env,
 			blockContext: &BlockContext{
-				number:                env.BlockNumber(),
-				time:                  env.BlockTime(),
-				predicateResultsBytes: predicateResultsBytes,
+				number: env.BlockNumber(),
+				time:   env.BlockTime(),
+				extra:  header.Extra,
 			},
 		}
 		return contract.Run(accessableState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
@@ -220,16 +216,16 @@ func (a accessableState) NativeAssetCall(caller common.Address, input []byte, su
 }
 
 type BlockContext struct {
-	number                *big.Int
-	time                  uint64
-	predicateResultsBytes []byte
+	number *big.Int
+	time   uint64
+	extra  []byte
 }
 
-func NewBlockContext(number *big.Int, time uint64, predicateResultsBytes []byte) *BlockContext {
+func NewBlockContext(number *big.Int, time uint64, extra []byte) *BlockContext {
 	return &BlockContext{
-		number:                number,
-		time:                  time,
-		predicateResultsBytes: predicateResultsBytes,
+		number: number,
+		time:   time,
+		extra:  extra,
 	}
 }
 
@@ -241,6 +237,6 @@ func (b *BlockContext) Timestamp() uint64 {
 	return b.time
 }
 
-func (b *BlockContext) GetPredicateResultsBytes() []byte {
-	return b.predicateResultsBytes
+func (b *BlockContext) Extra() []byte {
+	return b.extra
 }
