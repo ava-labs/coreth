@@ -53,14 +53,13 @@ func TestUnpackInvalidPredicate(t *testing.T) {
 func TestPredicateResultsBytes(t *testing.T) {
 	require := require.New(t)
 	dataTooShort := utils.RandomBytes(params.DynamicFeeExtraDataSize - 1)
-	_, ok := GetPredicateResultBytes(dataTooShort)
-	require.False(ok)
+	resultBytes := GetPredicateResultBytes(dataTooShort)
+	require.Empty(resultBytes)
 
 	preDurangoData := utils.RandomBytes(params.DynamicFeeExtraDataSize)
-	_, ok = GetPredicateResultBytes(preDurangoData)
-	require.False(ok)
+	resultBytes = GetPredicateResultBytes(preDurangoData)
+	require.Empty(resultBytes)
 	postDurangoData := utils.RandomBytes(params.DynamicFeeExtraDataSize + 2)
-	resultBytes, ok := GetPredicateResultBytes(postDurangoData)
-	require.True(ok)
+	resultBytes = GetPredicateResultBytes(postDurangoData)
 	require.Equal(resultBytes, postDurangoData[params.DynamicFeeExtraDataSize:])
 }

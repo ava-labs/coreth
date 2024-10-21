@@ -51,18 +51,23 @@ func UnpackPredicate(paddedPredicate []byte) ([]byte, error) {
 	return trimmedPredicateBytes[:len(trimmedPredicateBytes)-1], nil
 }
 
-// GetPredicateResultBytes returns the predicate result bytes from the extra data and
-// true iff the predicate results bytes have non-zero length.
-func GetPredicateResultBytes(extraData []byte) ([]byte, bool) {
-	// Prior to Durango, the VM enforces the extra data is smaller than or equal to this size.
-	// After Durango, the VM pre-verifies the extra data past the dynamic fee rollup window is
-	// valid.
+// GetPredicateResultBytes returns the predicate result bytes from extraData. If
+// extraData is too short to include predicate results, it returns nil.
+func GetPredicateResultBytes(extraData []byte) []byte {
+	// Prior to Durango, the VM enforces the extra data is smaller than or equal
+	// to this size.
 	if len(extraData) <= params.DynamicFeeExtraDataSize {
-		return nil, false
+		return nil
 	}
-	return extraData[params.DynamicFeeExtraDataSize:], true
+	// After Durango, the extra data past the dynamic fee rollup window represents
+	// predicate results.
+	return extraData[params.DynamicFeeExtraDataSize:]
 }
 
+// SetPredicateResultBytes sets the predicate results in the extraData in the
+// block header. This is used to set the predicate results in a block header
+// without modifying the initial portion of the extra data (dynamic fee window
+// rollup).
 func SetPredicateResultBytes(extraData []byte, predicateResults []byte) []byte {
 	return append(extraData[:params.DynamicFeeExtraDataSize], predicateResults...)
 }

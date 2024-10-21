@@ -965,11 +965,9 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil {
 		originalTime := block.Time()
 		config.BlockOverrides.Apply(&vmctx)
-		// Note the ignored return is a boolean indicating whether or not
-		// len(predicateBytes) > 0. This is not used here.
-		predicateBytes, _ := predicate.GetPredicateResultBytes(vmctx.Header.Extra)
 		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
 		// Should be applied before the state overrides.
+		predicateBytes := predicate.GetPredicateResultBytes(vmctx.Header.Extra)
 		blockContext := params.NewBlockContext(vmctx.BlockNumber, vmctx.Time, predicateBytes)
 		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, blockContext, statedb)
 		if err != nil {

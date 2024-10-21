@@ -95,8 +95,8 @@ type ChainContext interface {
 
 // NewEVMBlockContext creates a new context for use in the EVM.
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
-	predicateBytes, ok := predicate.GetPredicateResultBytes(header.Extra)
-	if !ok {
+	predicateBytes := predicate.GetPredicateResultBytes(header.Extra)
+	if len(predicateBytes) == 0 {
 		return newEVMBlockContext(header, chain, author, nil)
 	}
 	// Prior to Durango, the VM enforces the extra data is smaller than or
