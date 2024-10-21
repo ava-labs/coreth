@@ -44,18 +44,18 @@ func (m *MockBlockContext) EXPECT() *MockBlockContextMockRecorder {
 	return m.recorder
 }
 
-// GetPredicateResultsBytes mocks base method.
-func (m *MockBlockContext) GetPredicateResultsBytes() []byte {
+// Extra mocks base method.
+func (m *MockBlockContext) Extra() []byte {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPredicateResultsBytes")
+	ret := m.ctrl.Call(m, "Extra")
 	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
-// GetPredicateResultsBytes indicates an expected call of GetPredicateResultsBytes.
-func (mr *MockBlockContextMockRecorder) GetPredicateResultsBytes() *gomock.Call {
+// Extra indicates an expected call of Extra.
+func (mr *MockBlockContextMockRecorder) Extra() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPredicateResultsBytes", reflect.TypeOf((*MockBlockContext)(nil).GetPredicateResultsBytes))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Extra", reflect.TypeOf((*MockBlockContext)(nil).Extra))
 }
 
 // Number mocks base method.
