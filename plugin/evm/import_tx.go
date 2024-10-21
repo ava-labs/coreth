@@ -62,9 +62,9 @@ func (utx *UnsignedImportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedImportTx) Verify(
 	ctx *snow.Context,
-	rules_ params.Rules,
+	rules params.Rules,
 ) error {
-	rules := params.GetRulesExtra(rules_)
+	rulesExtra := params.GetRulesExtra(rules)
 	switch {
 	case utx == nil:
 		return errNilTx
@@ -74,12 +74,12 @@ func (utx *UnsignedImportTx) Verify(
 		return errWrongNetworkID
 	case ctx.ChainID != utx.BlockchainID:
 		return errWrongBlockchainID
-	case rules.IsApricotPhase3 && len(utx.Outs) == 0:
+	case rulesExtra.IsApricotPhase3 && len(utx.Outs) == 0:
 		return errNoEVMOutputs
 	}
 
 	// Make sure that the tx has a valid peer chain ID
-	if rules.IsApricotPhase5 {
+	if rulesExtra.IsApricotPhase5 {
 		// Note that SameSubnet verifies that [tx.SourceChain] isn't this
 		// chain's ID
 		if err := verify.SameSubnet(context.TODO(), ctx, utx.SourceChain); err != nil {
@@ -95,7 +95,7 @@ func (utx *UnsignedImportTx) Verify(
 		if err := out.Verify(); err != nil {
 			return fmt.Errorf("EVM Output failed verification: %w", err)
 		}
-		if rules.IsBanff && out.AssetID != ctx.AVAXAssetID {
+		if rulesExtra.IsBanff && out.AssetID != ctx.AVAXAssetID {
 			return errImportNonAVAXOutputBanff
 		}
 	}
@@ -104,7 +104,7 @@ func (utx *UnsignedImportTx) Verify(
 		if err := in.Verify(); err != nil {
 			return fmt.Errorf("atomic input failed verification: %w", err)
 		}
-		if rules.IsBanff && in.AssetID() != ctx.AVAXAssetID {
+		if rulesExtra.IsBanff && in.AssetID() != ctx.AVAXAssetID {
 			return errImportNonAVAXInputBanff
 		}
 	}
@@ -112,11 +112,11 @@ func (utx *UnsignedImportTx) Verify(
 		return errInputsNotSortedUnique
 	}
 
-	if rules.IsApricotPhase2 {
+	if rulesExtra.IsApricotPhase2 {
 		if !utils.IsSortedAndUnique(utx.Outs) {
 			return errOutputsNotSortedUnique
 		}
-	} else if rules.IsApricotPhase1 {
+	} else if rulesExtra.IsApricotPhase1 {
 		if !slices.IsSortedFunc(utx.Outs, EVMOutput.Compare) {
 			return errOutputsNotSorted
 		}
@@ -182,10 +182,10 @@ func (utx *UnsignedImportTx) SemanticVerify(
 	stx *Tx,
 	parent *Block,
 	baseFee *big.Int,
-	rules_ params.Rules,
+	rules params.Rules,
 ) error {
-	rules := params.GetRulesExtra(rules_)
-	if err := utx.Verify(vm.ctx, rules_); err != nil {
+	rulesExtra := params.GetRulesExtra(rules)
+	if err := utx.Verify(vm.ctx, rules); err != nil {
 		return err
 	}
 
@@ -193,8 +193,8 @@ func (utx *UnsignedImportTx) SemanticVerify(
 	fc := avax.NewFlowChecker()
 	switch {
 	// Apply dynamic fees to import transactions as of Apricot Phase 3
-	case rules.IsApricotPhase3:
-		gasUsed, err := stx.GasUsed(rules.IsApricotPhase5)
+	case rulesExtra.IsApricotPhase3:
+		gasUsed, err := stx.GasUsed(rulesExtra.IsApricotPhase5)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (utx *UnsignedImportTx) SemanticVerify(
 		fc.Produce(vm.ctx.AVAXAssetID, txFee)
 
 	// Apply fees to import transactions as of Apricot Phase 2
-	case rules.IsApricotPhase2:
+	case rulesExtra.IsApricotPhase2:
 		fc.Produce(vm.ctx.AVAXAssetID, params.AvalancheAtomicTxFee)
 	}
 	for _, out := range utx.Outs {

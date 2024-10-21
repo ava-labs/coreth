@@ -44,7 +44,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var _ vm.Hooks = hooks{}
+func init() {
+	vm.RegisterHooks(hooks{})
+}
 
 type hooks struct{}
 
@@ -70,10 +72,6 @@ func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
 		db = &StateDbAP1{db.(extstate.VmStateDB)}
 	}
 	return &extstate.StateDB{VmStateDB: db.(extstate.VmStateDB)}
-}
-
-func init() {
-	vm.RegisterHooks(hooks{})
 }
 
 type StateDbAP1 struct {

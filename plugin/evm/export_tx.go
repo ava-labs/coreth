@@ -69,9 +69,9 @@ func (utx *UnsignedExportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedExportTx) Verify(
 	ctx *snow.Context,
-	rules_ params.Rules,
+	rules params.Rules,
 ) error {
-	rules := params.GetRulesExtra(rules_)
+	rulesExtra := params.GetRulesExtra(rules)
 	switch {
 	case utx == nil:
 		return errNilTx
@@ -84,7 +84,7 @@ func (utx *UnsignedExportTx) Verify(
 	}
 
 	// Make sure that the tx has a valid peer chain ID
-	if rules.IsApricotPhase5 {
+	if rulesExtra.IsApricotPhase5 {
 		// Note that SameSubnet verifies that [tx.DestinationChain] isn't this
 		// chain's ID
 		if err := verify.SameSubnet(context.TODO(), ctx, utx.DestinationChain); err != nil {
@@ -100,7 +100,7 @@ func (utx *UnsignedExportTx) Verify(
 		if err := in.Verify(); err != nil {
 			return err
 		}
-		if rules.IsBanff && in.AssetID != ctx.AVAXAssetID {
+		if rulesExtra.IsBanff && in.AssetID != ctx.AVAXAssetID {
 			return errExportNonAVAXInputBanff
 		}
 	}
@@ -113,14 +113,14 @@ func (utx *UnsignedExportTx) Verify(
 		if assetID != ctx.AVAXAssetID && utx.DestinationChain == constants.PlatformChainID {
 			return errWrongChainID
 		}
-		if rules.IsBanff && assetID != ctx.AVAXAssetID {
+		if rulesExtra.IsBanff && assetID != ctx.AVAXAssetID {
 			return errExportNonAVAXOutputBanff
 		}
 	}
 	if !avax.IsSortedTransferableOutputs(utx.ExportedOutputs, Codec) {
 		return errOutputsNotSorted
 	}
-	if rules.IsApricotPhase1 && !utils.IsSortedAndUnique(utx.Ins) {
+	if rulesExtra.IsApricotPhase1 && !utils.IsSortedAndUnique(utx.Ins) {
 		return errInputsNotSortedUnique
 	}
 
@@ -181,10 +181,10 @@ func (utx *UnsignedExportTx) SemanticVerify(
 	stx *Tx,
 	_ *Block,
 	baseFee *big.Int,
-	rules_ params.Rules,
+	rules params.Rules,
 ) error {
-	rules := params.GetRulesExtra(rules_)
-	if err := utx.Verify(vm.ctx, rules_); err != nil {
+	rulesExtra := params.GetRulesExtra(rules)
+	if err := utx.Verify(vm.ctx, rules); err != nil {
 		return err
 	}
 
@@ -192,8 +192,8 @@ func (utx *UnsignedExportTx) SemanticVerify(
 	fc := avax.NewFlowChecker()
 	switch {
 	// Apply dynamic fees to export transactions as of Apricot Phase 3
-	case rules.IsApricotPhase3:
-		gasUsed, err := stx.GasUsed(rules.IsApricotPhase5)
+	case rulesExtra.IsApricotPhase3:
+		gasUsed, err := stx.GasUsed(rulesExtra.IsApricotPhase5)
 		if err != nil {
 			return err
 		}

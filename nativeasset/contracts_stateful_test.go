@@ -18,6 +18,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 
+	// Force import core to register the VM hooks.
+	// This allows testing the precompiles by exercising the EVM.
 	_ "github.com/ava-labs/coreth/core"
 )
 

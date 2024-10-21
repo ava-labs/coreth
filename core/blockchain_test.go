@@ -310,11 +310,8 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000)
 	gspec := &Genesis{
-		Config: params.WithExtra(
-			&params.ChainConfig{HomesteadBlock: new(big.Int)},
-			&params.ChainConfigExtra{},
-		),
-		Alloc: types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
 	blockchain, err := createBlockChain(chainDB, pruningConfig, gspec, common.Hash{})

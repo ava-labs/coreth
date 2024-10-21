@@ -25,15 +25,8 @@ var (
 	NativeAssetCallAddr    = common.HexToAddress("0x0100000000000000000000000000000000000002")
 )
 
-type (
-	// Export previously unexported types
-	NativeAssetBalance = nativeAssetBalance
-	NativeAssetCall    = nativeAssetCall
-	DeprecatedContract = deprecatedContract
-)
-
-// nativeAssetBalance is a precompiled contract used to retrieve the native asset balance
-type nativeAssetBalance struct {
+// NativeAssetBalance is a precompiled contract used to retrieve the native asset balance
+type NativeAssetBalance struct {
 	GasCost uint64
 }
 
@@ -58,7 +51,7 @@ func UnpackNativeAssetBalanceInput(input []byte) (common.Address, common.Hash, e
 }
 
 // Run implements StatefulPrecompiledContract
-func (b *nativeAssetBalance) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (b *NativeAssetBalance) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes)
 	if suppliedGas < b.GasCost {
 		return nil, 0, vmerrs.ErrOutOfGas
@@ -77,9 +70,9 @@ func (b *nativeAssetBalance) Run(accessibleState contract.AccessibleState, calle
 	return common.LeftPadBytes(res.Bytes(), 32), remainingGas, nil
 }
 
-// nativeAssetCall atomically transfers a native asset to a recipient address as well as calling that
+// NativeAssetCall atomically transfers a native asset to a recipient address as well as calling that
 // address
-type nativeAssetCall struct {
+type NativeAssetCall struct {
 	GasCost uint64
 }
 
@@ -108,13 +101,13 @@ func UnpackNativeAssetCallInput(input []byte) (common.Address, common.Hash, *big
 }
 
 // Run implements StatefulPrecompiledContract
-func (c *nativeAssetCall) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes, assetAmount 32 bytes, callData variable length bytes)
 	return accessibleState.NativeAssetCall(caller, input, suppliedGas, c.GasCost, readOnly)
 }
 
-type deprecatedContract struct{}
+type DeprecatedContract struct{}
 
-func (*deprecatedContract) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (*DeprecatedContract) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	return nil, suppliedGas, vmerrs.ErrExecutionReverted
 }
