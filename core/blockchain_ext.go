@@ -61,28 +61,10 @@ import (
 )
 
 var (
-	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", nil)
-	accountHashTimer         = metrics.NewRegisteredCounter("chain/account/hashes", nil)
-	accountUpdateTimer       = metrics.NewRegisteredCounter("chain/account/updates", nil)
-	accountCommitTimer       = metrics.NewRegisteredCounter("chain/account/commits", nil)
-	storageReadTimer         = metrics.NewRegisteredCounter("chain/storage/reads", nil)
-	storageHashTimer         = metrics.NewRegisteredCounter("chain/storage/hashes", nil)
-	storageUpdateTimer       = metrics.NewRegisteredCounter("chain/storage/updates", nil)
-	storageCommitTimer       = metrics.NewRegisteredCounter("chain/storage/commits", nil)
-	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", nil)
-
-	triedbCommitTimer = metrics.NewRegisteredCounter("chain/triedb/commits", nil)
-
-	blockInsertTimer            = metrics.NewRegisteredCounter("chain/block/inserts", nil)
 	blockInsertCount            = metrics.NewRegisteredCounter("chain/block/inserts/count", nil)
 	blockContentValidationTimer = metrics.NewRegisteredCounter("chain/block/validations/content", nil)
 	blockStateInitTimer         = metrics.NewRegisteredCounter("chain/block/inits/state", nil)
-	blockExecutionTimer         = metrics.NewRegisteredCounter("chain/block/executions", nil)
 	blockTrieOpsTimer           = metrics.NewRegisteredCounter("chain/block/trie", nil)
-	blockValidationTimer        = metrics.NewRegisteredCounter("chain/block/validations/state", nil)
-	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", nil)
 
 	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", nil)
 	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", nil)
@@ -102,45 +84,10 @@ var (
 
 	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
 	errCacheConfigNotSpecified = errors.New("must specify cache config")
-	errInvalidOldChain         = errors.New("invalid old chain")
-	errInvalidNewChain         = errors.New("invalid new chain")
 )
 
 const (
-	bodyCacheLimit     = 256
-	blockCacheLimit    = 256
-	receiptsCacheLimit = 32
-	txLookupCacheLimit = 1024
-	badBlockLimit      = 10
-
-	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
-	//
-	// Changelog:
-	//
-	// - Version 4
-	//   The following incompatible database changes were added:
-	//   * the `BlockNumber`, `TxHash`, `TxIndex`, `BlockHash` and `Index` fields of log are deleted
-	//   * the `Bloom` field of receipt is deleted
-	//   * the `BlockIndex` and `TxIndex` fields of txlookup are deleted
-	// - Version 5
-	//  The following incompatible database changes were added:
-	//    * the `TxHash`, `GasCost`, and `ContractAddress` fields are no longer stored for a receipt
-	//    * the `TxHash`, `GasCost`, and `ContractAddress` fields are computed by looking up the
-	//      receipts' corresponding block
-	// - Version 6
-	//  The following incompatible database changes were added:
-	//    * Transaction lookup information stores the corresponding block number instead of block hash
-	// - Version 7
-	//  The following incompatible database changes were added:
-	//    * Use freezer as the ancient database to maintain all ancient data
-	// - Version 8
-	//  The following incompatible database changes were added:
-	//    * New scheme for contract code in order to separate the codes and trie nodes
-	BlockChainVersion uint64 = 8
-
-	// statsReportLimit is the time limit during import and export after which we
-	// always print out progress. This avoids the user wondering what's going on.
-	statsReportLimit = 8 * time.Second
+	badBlockLimit = 10
 
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
@@ -194,6 +141,27 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 	return config
 }
 
+func (c *CacheConfig) cacheConfig() *cacheConfig {
+	return &cacheConfig{
+		TrieCleanLimit:      c.TrieCleanLimit,
+		TrieCleanNoPrefetch: defaultCacheConfig.TrieCleanNoPrefetch,
+		TrieDirtyLimit:      c.TrieDirtyLimit,
+		TrieDirtyDisabled:   defaultCacheConfig.TrieDirtyDisabled,
+		TrieTimeLimit:       defaultCacheConfig.TrieTimeLimit,
+
+		// XXX: blockChain shouldn't initialize snapshot while block processing
+		// is still handled in BlockChain. Otherwise both may try to initialize snapshots.
+		SnapshotLimit: 0,
+
+		Preimages:    c.Preimages,
+		StateHistory: c.StateHistory,
+		StateScheme:  c.StateScheme,
+
+		SnapshotNoBuild: c.SnapshotNoBuild,
+		SnapshotWait:    c.SnapshotWait,
+	}
+}
+
 // DefaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var DefaultCacheConfig = &CacheConfig{
@@ -206,6 +174,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
+	SnapshotWait:              true,
 	StateScheme:               rawdb.HashScheme,
 }
 
@@ -215,13 +184,6 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
 	return &config
-}
-
-// txLookup is wrapper over transaction lookup along with the corresponding
-// transaction object.
-type txLookup struct {
-	lookup      *rawdb.LegacyTxLookupEntry
-	transaction *types.Transaction
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -239,17 +201,17 @@ type txLookup struct {
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
+	*blockChain
+
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db           ethdb.Database   // Low level persistent database to store final content in
 	snaps        *snapshot.Tree   // Snapshot tree for fast trie leaf access
 	triedb       *triedb.Database // The database handler for maintaining trie nodes.
-	stateCache   state.Database   // State database to reuse between imports (contains state cache)
 	txIndexer    *txIndexer       // Transaction indexer, might be nil if not enabled
 	stateManager TrieWriter
 
-	hc                *HeaderChain
 	rmLogsFeed        event.Feed
 	chainFeed         event.Feed
 	chainSideFeed     event.Feed
@@ -266,11 +228,7 @@ type BlockChain struct {
 	// Readers don't need to take it, they can just read the database.
 	chainmu sync.RWMutex
 
-	currentBlock atomic.Pointer[types.Header] // Current head of the block chain
-
-	bodyCache     *lru.Cache[common.Hash, *types.Body]      // Cache for the most recent block bodies
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt] // Cache for the most recent receipts per block
-	blockCache    *lru.Cache[common.Hash, *types.Block]     // Cache for the most recent entire blocks
 	txLookupCache *lru.Cache[common.Hash, txLookup]         // Cache for the most recent transaction lookup data.
 	badBlocks     *lru.Cache[common.Hash, *badBlock]        // Cache for bad blocks
 
@@ -282,8 +240,6 @@ type BlockChain struct {
 	vmConfig  vm.Config
 
 	lastAccepted *types.Block // Prevents reorgs past this height
-
-	senderCacher *TxSenderCacher
 
 	// [acceptorQueue] is a processing queue for the Acceptor. This is
 	// different than [chainAcceptedFeed], which is sent an event after an accepted
@@ -365,32 +321,35 @@ func NewBlockChain(
 		cacheConfig:       cacheConfig,
 		db:                db,
 		triedb:            triedb,
-		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:        lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache:     lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
 		badBlocks:         lru.NewCache[common.Hash, *badBlock](badBlockLimit),
 		engine:            engine,
 		vmConfig:          vmConfig,
-		senderCacher:      NewTxSenderCacher(runtime.NumCPU()),
 		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
-	bc.hc, err = NewHeaderChain(db, chainConfig, cacheConfig, engine)
+	headHash := rawdb.ReadHeadBlockHash(db)
+	headHeaderHash := rawdb.ReadHeadHeaderHash(db)
+
+	bc.blockChain, err = newBlockChain(db, triedb, cacheConfig.cacheConfig(), genesis, nil, engine, vmConfig, nil, nil)
 	if err != nil {
 		return nil, err
 	}
+	// Preserving current behavior for head block
+	rawdb.WriteHeadBlockHash(db, headHash)
+	rawdb.WriteHeadHeaderHash(db, headHeaderHash)
+
+	bc.hc.InitializeAcceptedNumberCache(cacheConfig.AcceptedCacheSize)
+
+	bc.validator = NewBlockValidator(chainConfig, bc.blockChain, engine)
+	bc.processor = NewStateProcessor(chainConfig, bc.blockChain, engine)
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
-
-	bc.currentBlock.Store(nil)
 
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
@@ -779,10 +738,9 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	// If the block is on a side chain or an unknown one, force other heads onto it too
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
-	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-
-	rawdb.WriteHeadBlockHash(batch, block.Hash())
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
@@ -903,7 +861,10 @@ func (bc *BlockChain) ValidateCanonicalChain() error {
 // OBS! It is generally recommended to use the Stop method!
 // This method has been exposed to allow tests to stop the blockchain while simulating
 // a crash.
-func (bc *BlockChain) stopWithoutSaving() {
+func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
+	if stopInner {
+		bc.blockChain.stopWithoutSaving()
+	}
 	if !bc.stopping.CompareAndSwap(false, true) {
 		return
 	}
@@ -936,7 +897,15 @@ func (bc *BlockChain) stopWithoutSaving() {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
-	bc.stopWithoutSaving()
+	if _, err := bc.db.Has([]byte{}); err == nil {
+		// This prevents us from stopping the blockchain if the database is already
+		// closed.
+		bc.blockChain.Stop()
+	} else {
+		bc.blockChain.stopWithoutSaving()
+	}
+
+	bc.stopWithoutSaving(false)
 
 	// Ensure that the entirety of the state snapshot is journaled to disk.
 	if bc.snaps != nil {
@@ -1334,21 +1303,21 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	vtime := time.Since(vstart)
 
 	// Update the metrics touched during block processing and validation
-	accountReadTimer.Inc(statedb.AccountReads.Milliseconds())                  // Account reads are complete(in processing)
-	storageReadTimer.Inc(statedb.StorageReads.Milliseconds())                  // Storage reads are complete(in processing)
-	snapshotAccountReadTimer.Inc(statedb.SnapshotAccountReads.Milliseconds())  // Account reads are complete(in processing)
-	snapshotStorageReadTimer.Inc(statedb.SnapshotStorageReads.Milliseconds())  // Storage reads are complete(in processing)
-	accountUpdateTimer.Inc(statedb.AccountUpdates.Milliseconds())              // Account updates are complete(in validation)
-	storageUpdateTimer.Inc(statedb.StorageUpdates.Milliseconds())              // Storage updates are complete(in validation)
-	accountHashTimer.Inc(statedb.AccountHashes.Milliseconds())                 // Account hashes are complete(in validation)
-	storageHashTimer.Inc(statedb.StorageHashes.Milliseconds())                 // Storage hashes are complete(in validation)
-	triehash := statedb.AccountHashes + statedb.StorageHashes                  // The time spent on tries hashing
-	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates              // The time spent on tries update
-	trieRead := statedb.SnapshotAccountReads + statedb.AccountReads            // The time spent on account read
-	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads            // The time spent on storage read
-	blockExecutionTimer.Inc((ptime - trieRead).Milliseconds())                 // The time spent on EVM processing
-	blockValidationTimer.Inc((vtime - (triehash + trieUpdate)).Milliseconds()) // The time spent on block validation
-	blockTrieOpsTimer.Inc((triehash + trieUpdate + trieRead).Milliseconds())   // The time spent on trie operations
+	accountReadTimer.Update(statedb.AccountReads)                            // Account reads are complete(in processing)
+	storageReadTimer.Update(statedb.StorageReads)                            // Storage reads are complete(in processing)
+	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads)            // Account reads are complete(in processing)
+	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads)            // Storage reads are complete(in processing)
+	accountUpdateTimer.Update(statedb.AccountUpdates)                        // Account updates are complete(in validation)
+	storageUpdateTimer.Update(statedb.StorageUpdates)                        // Storage updates are complete(in validation)
+	accountHashTimer.Update(statedb.AccountHashes)                           // Account hashes are complete(in validation)
+	storageHashTimer.Update(statedb.StorageHashes)                           // Storage hashes are complete(in validation)
+	triehash := statedb.AccountHashes + statedb.StorageHashes                // The time spent on tries hashing
+	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates            // The time spent on tries update
+	trieRead := statedb.SnapshotAccountReads + statedb.AccountReads          // The time spent on account read
+	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads          // The time spent on storage read
+	blockExecutionTimer.Update((ptime - trieRead))                           // The time spent on EVM processing
+	blockValidationTimer.Update((vtime - (triehash + trieUpdate)))           // The time spent on block validation
+	blockTrieOpsTimer.Inc((triehash + trieUpdate + trieRead).Milliseconds()) // The time spent on trie operations
 
 	// If [writes] are disabled, skip [writeBlockWithState] so that we do not write the block
 	// or the state trie to disk.
@@ -1366,12 +1335,12 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		return err
 	}
 	// Update the metrics touched during block commit
-	accountCommitTimer.Inc(statedb.AccountCommits.Milliseconds())   // Account commits are complete, we can mark them
-	storageCommitTimer.Inc(statedb.StorageCommits.Milliseconds())   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Inc(statedb.SnapshotCommits.Milliseconds()) // Snapshot commits are complete, we can mark them
-	triedbCommitTimer.Inc(statedb.TrieDBCommits.Milliseconds())     // Trie database commits are complete, we can mark them
-	blockWriteTimer.Inc((time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits).Milliseconds())
-	blockInsertTimer.Inc(time.Since(start).Milliseconds())
+	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
+	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
+	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+	triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
+	blockWriteTimer.Update((time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits))
+	blockInsertTimer.Update(time.Since(start))
 
 	log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 		"parentHash", block.ParentHash(),
