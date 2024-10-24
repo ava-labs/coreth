@@ -770,9 +770,6 @@ func (bc *BlockChain) ValidateCanonicalChain() error {
 // This method has been exposed to allow tests to stop the blockchain while simulating
 // a crash.
 func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
-	if stopInner {
-		bc.blockChain.stopWithoutSaving()
-	}
 	if !bc.stopping.CompareAndSwap(false, true) {
 		return
 	}
@@ -798,6 +795,10 @@ func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
 	// Waiting for background processes to complete
 	log.Info("Waiting for background processes to complete")
 	bc.wg.Wait()
+
+	if stopInner {
+		bc.blockChain.stopWithoutSaving()
+	}
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
