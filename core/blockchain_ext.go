@@ -31,7 +31,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"runtime"
 	"strings"
@@ -680,50 +679,6 @@ func (bc *BlockChain) loadGenesisState() error {
 	return nil
 }
 
-// Export writes the active chain to the given writer.
-func (bc *BlockChain) Export(w io.Writer) error {
-	return bc.ExportN(w, uint64(0), bc.CurrentBlock().Number.Uint64())
-}
-
-// ExportN writes a subset of the active chain to the given writer.
-func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
-	return bc.ExportCallback(func(block *types.Block) error {
-		return block.EncodeRLP(w)
-	}, first, last)
-}
-
-// ExportCallback invokes [callback] for every block from [first] to [last] in order.
-func (bc *BlockChain) ExportCallback(callback func(block *types.Block) error, first uint64, last uint64) error {
-	if first > last {
-		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
-	}
-	log.Info("Exporting batch of blocks", "count", last-first+1)
-
-	var (
-		parentHash common.Hash
-		start      = time.Now()
-		reported   = time.Now()
-	)
-	for nr := first; nr <= last; nr++ {
-		block := bc.GetBlockByNumber(nr)
-		if block == nil {
-			return fmt.Errorf("export failed on #%d: not found", nr)
-		}
-		if nr > first && block.ParentHash() != parentHash {
-			return errors.New("export failed: chain reorg during export")
-		}
-		parentHash = block.Hash()
-		if err := callback(block); err != nil {
-			return err
-		}
-		if time.Since(reported) >= statsReportLimit {
-			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
-			reported = time.Now()
-		}
-	}
-	return nil
-}
-
 // writeHeadBlock injects a new head block into the current block chain. This method
 // assumes that the block is indeed a true head. It will also reset the head
 // header to this very same block if they are older or if they are on a different side chain.
@@ -1068,88 +1023,6 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
-// writeCanonicalBlockWithLogs writes the new head [block] and emits events
-// for the new head block.
-func (bc *BlockChain) writeCanonicalBlockWithLogs(block *types.Block, logs []*types.Log) {
-	bc.writeHeadBlock(block)
-	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
-	if len(logs) > 0 {
-		bc.logsFeed.Send(logs)
-	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
-}
-
-// newTip returns a boolean indicating if the block should be appended to
-// the canonical chain.
-func (bc *BlockChain) newTip(block *types.Block) bool {
-	return block.ParentHash() == bc.CurrentBlock().Hash()
-}
-
-// writeBlockAndSetHead persists the block and associated state to the database
-// and optimistically updates the canonical chain if [block] extends the current
-// canonical chain.
-// writeBlockAndSetHead expects to be the last verification step during InsertBlock
-// since it creates a reference that will only be cleaned up by Accept/Reject.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
-	if err := bc.writeBlockWithState(block, parentRoot, receipts, state); err != nil {
-		return err
-	}
-
-	// If [block] represents a new tip of the canonical chain, we optimistically add it before
-	// setPreference is called. Otherwise, we consider it a side chain block.
-	if bc.newTip(block) {
-		bc.writeCanonicalBlockWithLogs(block, logs)
-	} else {
-		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
-	}
-
-	return nil
-}
-
-// writeBlockWithState writes the block and all associated state to the database,
-// but it expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, state *state.StateDB) error {
-	// Irrelevant of the canonical status, write the block itself to the database.
-	//
-	// Note all the components of block(hash->number map, header, body, receipts)
-	// should be written atomically. BlockBatch is used for containing all components.
-	blockBatch := bc.db.NewBatch()
-	rawdb.WriteBlock(blockBatch, block)
-	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, state.Preimages())
-	if err := blockBatch.Write(); err != nil {
-		log.Crit("Failed to write block into disk", "err", err)
-	}
-
-	// Commit all cached state changes into underlying memory database.
-	var err error
-	_, err = bc.commitWithSnap(block, parentRoot, state)
-	if err != nil {
-		return err
-	}
-	// If node is running in path mode, skip explicit gc operation
-	// which is unnecessary in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		return nil
-	}
-
-	// Note: if InsertTrie must be the last step in verification that can return an error.
-	// This allows [stateManager] to assume that if it inserts a trie without returning an
-	// error then the block has passed verification and either AcceptTrie/RejectTrie will
-	// eventually be called on [root] unless a fatal error occurs. It does not assume that
-	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
-	if err := bc.stateManager.InsertTrie(block); err != nil {
-		if bc.snaps != nil {
-			discardErr := bc.snaps.Discard(block.Hash())
-			if discardErr != nil {
-				log.Debug("failed to discard snapshot after being unable to insert block trie", "block", block.Hash(), "root", block.Root())
-			}
-		}
-		return err
-	}
-	return nil
-}
-
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
@@ -1161,9 +1034,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}
-
-	bc.blockProcFeed.Send(true)
-	defer bc.blockProcFeed.Send(false)
 
 	// Do a sanity check that the provided chain is actually ordered and linked.
 	for i := 1; i < len(chain); i++ {
