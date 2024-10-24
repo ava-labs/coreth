@@ -892,6 +892,8 @@ func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
+	bc.stopWithoutSaving(false)
+
 	if _, err := bc.db.Has([]byte{}); err == nil {
 		// This prevents us from stopping the blockchain if the database is already
 		// closed.
@@ -899,8 +901,6 @@ func (bc *BlockChain) Stop() {
 	} else {
 		bc.blockChain.stopWithoutSaving()
 	}
-
-	bc.stopWithoutSaving(false)
 
 	// Ensure that the entirety of the state snapshot is journaled to disk.
 	if bc.snaps != nil {
@@ -1914,8 +1914,6 @@ func (bc *BlockChain) gatherBlockRootsAboveLastAccepted() map[common.Hash]struct
 
 	return blockRoots
 }
-
-// TODO: split extras to blockchain_extra.go
 
 // ResetToStateSyncedBlock reinitializes the state of the blockchain
 // to the trie represented by [block.Root()] after updating
