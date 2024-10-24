@@ -2161,6 +2161,13 @@ func (bc *blockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		}
 	}
 
+	// If the commonBlock is less than the last accepted height, we return an error
+	// because performing a reorg would mean removing an accepted block from the
+	// canonical chain.
+	if final := bc.CurrentFinalBlock(); final != nil && commonBlock.NumberU64() < final.Number.Uint64() {
+		return fmt.Errorf("cannot orphan finalized block at height: %d to common block at height: %d", final.Number.Uint64(), commonBlock.NumberU64())
+	}
+
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
 		logFn := log.Info

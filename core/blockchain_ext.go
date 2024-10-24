@@ -611,7 +611,9 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
 	if lastAcceptedHash == (common.Hash{}) {
-		return bc.loadGenesisState()
+		bc.lastAccepted = bc.genesisBlock
+		bc.SetFinalized(bc.genesisBlock.Header())
+		return bc.ResetWithGenesisBlock(bc.genesisBlock)
 	}
 
 	// Restore the last known head block
@@ -644,6 +646,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	if bc.lastAccepted == nil {
 		return fmt.Errorf("could not load last accepted block")
 	}
+	bc.SetFinalized(bc.lastAccepted.Header())
 
 	// This ensures that the head block is updated to the last accepted block on startup
 	if err := bc.setPreference(bc.lastAccepted); err != nil {
@@ -654,45 +657,6 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
 	return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
-}
-
-func (bc *BlockChain) loadGenesisState() error {
-	// Prepare the genesis block and reinitialise the chain
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, bc.genesisBlock)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write genesis block", "err", err)
-	}
-	bc.writeHeadBlock(bc.genesisBlock)
-
-	// Last update all in-memory chain markers
-	bc.lastAccepted = bc.genesisBlock
-	bc.currentBlock.Store(bc.genesisBlock.Header())
-	bc.hc.SetGenesis(bc.genesisBlock.Header())
-	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
-	return nil
-}
-
-// writeHeadBlock injects a new head block into the current block chain. This method
-// assumes that the block is indeed a true head. It will also reset the head
-// header to this very same block if they are older or if they are on a different side chain.
-//
-// Note, this function assumes that the `mu` mutex is held!
-func (bc *BlockChain) writeHeadBlock(block *types.Block) {
-	// If the block is on a side chain or an unknown one, force other heads onto it too
-	// Add the block to the canonical chain number scheme and mark as the head
-	batch := bc.db.NewBatch()
-	rawdb.WriteHeadHeaderHash(batch, block.Hash())
-	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-	rawdb.WriteHeadBlockHash(batch, block.Hash())
-
-	// Flush the whole batch into the disk, exit the node if failed
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to update chain indexes and markers", "err", err)
-	}
-	// Update all in-memory chain markers in the last step
-	bc.hc.SetCurrentHeader(block.Header())
-	bc.currentBlock.Store(block.Header())
 }
 
 // ValidateCanonicalChain confirms a canonical chain is well-formed.
@@ -902,18 +866,8 @@ func (bc *BlockChain) setPreference(block *types.Block) error {
 	}
 
 	log.Debug("Setting preference", "number", block.Number(), "hash", block.Hash())
-
-	// writeKnownBlock updates the head block and will handle any reorg side
-	// effects automatically.
-	if err := bc.writeKnownBlock(block); err != nil {
-		return fmt.Errorf("unable to invoke writeKnownBlock: %w", err)
-	}
-
-	// Send a ChainHeadEvent if we end up altering
-	// the head block. Many internal aysnc processes rely on
-	// receiving these events (i.e. the TxPool).
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
-	return nil
+	_, err := bc.blockChain.SetCanonical(block)
+	return err
 }
 
 // LastConsensusAcceptedBlock returns the last block to be marked as accepted. It may or
@@ -968,6 +922,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
+	bc.SetFinalized(block.Header())
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
@@ -999,19 +954,6 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 	// Remove the block from the block cache (ignore return value of whether it was in the cache)
 	_ = bc.blockCache.Remove(block.Hash())
 
-	return nil
-}
-
-// writeKnownBlock updates the head block flag with a known block
-// and introduces chain reorg if necessary.
-func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
-	current := bc.CurrentBlock()
-	if block.ParentHash() != current.Hash() {
-		if err := bc.reorg(current, block); err != nil {
-			return err
-		}
-	}
-	bc.writeHeadBlock(block)
 	return nil
 }
 
@@ -1089,11 +1031,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 			return err
 		}
 	}
-	// If node is running in path mode, skip explicit gc operation
-	// which is unnecessary in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		return nil
-	}
 
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
@@ -1145,160 +1082,6 @@ func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*
 		logs[i] = receiptLogs
 	}
 	return logs
-}
-
-// collectLogs collects the logs that were generated or removed during
-// the processing of a block. These logs are later announced as deleted or reborn.
-func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
-	unflattenedLogs := bc.collectUnflattenedLogs(b, removed)
-	return types.FlattenLogs(unflattenedLogs)
-}
-
-// reorg takes two blocks, an old chain and a new chain and will reconstruct the
-// blocks and inserts them to be part of the new canonical chain and accumulates
-// potential missing transactions and post an event about them.
-func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
-	var (
-		newChain    types.Blocks
-		oldChain    types.Blocks
-		commonBlock *types.Block
-	)
-	oldBlock := bc.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
-	if oldBlock == nil {
-		return errors.New("current head block missing")
-	}
-	newBlock := newHead
-
-	// Reduce the longer chain to the same number as the shorter one
-	if oldBlock.NumberU64() > newBlock.NumberU64() {
-		// Old chain is longer, gather all transactions and logs as deleted ones
-		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
-			oldChain = append(oldChain, oldBlock)
-		}
-	} else {
-		// New chain is longer, stash all blocks away for subsequent insertion
-		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1) {
-			newChain = append(newChain, newBlock)
-		}
-	}
-	if oldBlock == nil {
-		return errInvalidOldChain
-	}
-	if newBlock == nil {
-		return errInvalidNewChain
-	}
-	// Both sides of the reorg are at the same number, reduce both until the common
-	// ancestor is found
-	for {
-		// If the common ancestor was found, bail out
-		if oldBlock.Hash() == newBlock.Hash() {
-			commonBlock = oldBlock
-			break
-		}
-		// Remove an old block as well as stash away a new block
-		oldChain = append(oldChain, oldBlock)
-		newChain = append(newChain, newBlock)
-
-		// Step back with both chains
-		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1)
-		if oldBlock == nil {
-			return errInvalidOldChain
-		}
-		newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
-		if newBlock == nil {
-			return errInvalidNewChain
-		}
-	}
-
-	// If the commonBlock is less than the last accepted height, we return an error
-	// because performing a reorg would mean removing an accepted block from the
-	// canonical chain.
-	if commonBlock.NumberU64() < bc.lastAccepted.NumberU64() {
-		return fmt.Errorf("cannot orphan finalized block at height: %d to common block at height: %d", bc.lastAccepted.NumberU64(), commonBlock.NumberU64())
-	}
-
-	// Ensure the user sees large reorgs
-	if len(oldChain) > 0 && len(newChain) > 0 {
-		logFn := log.Info
-		msg := "Resetting chain preference"
-		if len(oldChain) > 63 {
-			msg = "Large chain preference change detected"
-			logFn = log.Warn
-		}
-		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
-			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
-	} else {
-		log.Debug("Preference change (rewind to ancestor) occurred", "oldnum", oldHead.Number, "oldhash", oldHead.Hash(), "newnum", newHead.Number(), "newhash", newHead.Hash())
-	}
-	// Reset the tx lookup cache in case to clear stale txlookups.
-	// This is done before writing any new chain data to avoid the
-	// weird scenario that canonical chain is changed while the
-	// stale lookups are still cached.
-	bc.txLookupCache.Purge()
-
-	// Insert the new chain(except the head block(reverse order)),
-	// taking care of the proper incremental order.
-	for i := len(newChain) - 1; i >= 1; i-- {
-		// Insert the block in the canonical way, re-writing history
-		bc.writeHeadBlock(newChain[i])
-	}
-
-	// Delete any canonical number assignments above the new head
-	indexesBatch := bc.db.NewBatch()
-
-	// Use the height of [newHead] to determine which canonical hashes to remove
-	// in case the new chain is shorter than the old chain, in which case
-	// there may be hashes set on the canonical chain that were invalidated
-	// but not yet overwritten by the re-org.
-	for i := newHead.NumberU64() + 1; ; i++ {
-		hash := rawdb.ReadCanonicalHash(bc.db, i)
-		if hash == (common.Hash{}) {
-			break
-		}
-		rawdb.DeleteCanonicalHash(indexesBatch, i)
-	}
-	if err := indexesBatch.Write(); err != nil {
-		log.Crit("Failed to delete useless indexes", "err", err)
-	}
-
-	// Send out events for logs from the old canon chain, and 'reborn'
-	// logs from the new canon chain. The number of logs can be very
-	// high, so the events are sent in batches of size around 512.
-
-	// Deleted logs + blocks:
-	var deletedLogs []*types.Log
-	for i := len(oldChain) - 1; i >= 0; i-- {
-		// Also send event for blocks removed from the canon chain.
-		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
-
-		// Collect deleted logs for notification
-		if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
-			deletedLogs = append(deletedLogs, logs...)
-		}
-		if len(deletedLogs) > 512 {
-			bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
-			deletedLogs = nil
-		}
-	}
-	if len(deletedLogs) > 0 {
-		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
-	}
-
-	// New logs:
-	var rebirthLogs []*types.Log
-	for i := len(newChain) - 1; i >= 1; i-- {
-		if logs := bc.collectLogs(newChain[i], false); len(logs) > 0 {
-			rebirthLogs = append(rebirthLogs, logs...)
-		}
-		if len(rebirthLogs) > 512 {
-			bc.logsFeed.Send(rebirthLogs)
-			rebirthLogs = nil
-		}
-	}
-	if len(rebirthLogs) > 0 {
-		bc.logsFeed.Send(rebirthLogs)
-	}
-	return nil
 }
 
 type badBlock struct {
@@ -1378,66 +1161,22 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 // reprocessBlock reprocesses a previously accepted block. This is often used
 // to regenerate previously pruned state tries.
 func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) (common.Hash, error) {
-	// Retrieve the parent block and its state to execute block
-	var (
-		statedb    *state.StateDB
-		err        error
-		parentRoot = parent.Root()
-	)
-	// We don't simply use [NewWithSnapshot] here because it doesn't return an
-	// error if [bc.snaps != nil] and [bc.snaps.Snapshot(parentRoot) == nil].
-	if bc.snaps == nil {
-		statedb, err = state.New(parentRoot, bc.stateCache, nil)
-	} else {
-		snap := bc.snaps.Snapshot(parentRoot)
-		if snap == nil {
-			return common.Hash{}, fmt.Errorf("failed to get snapshot for parent root: %s", parentRoot)
-		}
-		statedb, err = state.New(parentRoot, bc.stateCache, bc.snaps)
-	}
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("could not fetch state for (%s: %d): %v", parent.Hash().Hex(), parent.NumberU64(), err)
-	}
-
-	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
-	defer func() {
-		statedb.StopPrefetcher()
-	}()
-
-	// Process previously stored block
-	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
-	}
-
-	// Validate the state using the default validator
-	if err := bc.validator.ValidateState(current, statedb, receipts, usedGas); err != nil {
-		return common.Hash{}, fmt.Errorf("failed to validate state while re-processing block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
-	}
-	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
-
-	// Commit all cached state changes into underlying memory database.
-	return bc.commitWithSnap(current, parentRoot, statedb)
-}
-
-func (bc *BlockChain) commitWithSnap(
-	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
-) (common.Hash, error) {
 	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
 	// are stored by block hash.
 	if bc.snaps != nil {
 		bc.snaps.WithBlockHashes(current.Hash(), current.ParentHash())
 	}
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
-	if err != nil {
+	if _, err := bc.blockChain.insertChain([]*types.Block{current}, true); err != nil {
 		return common.Hash{}, err
 	}
+	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
+
+	root := current.Root()
 	// Upstream does not perform a snapshot update if the root is the same as the
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
-	if bc.snaps != nil && root == parentRoot {
-		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil); err != nil {
+	if bc.snaps != nil && root == parent.Root() {
+		if err := bc.snaps.Update(root, parent.Root(), nil, nil, nil); err != nil {
 			return common.Hash{}, err
 		}
 	}
@@ -1810,6 +1549,7 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 
 	// Update all in-memory chain markers
 	bc.lastAccepted = block
+	bc.SetFinalized(block.Header())
 	bc.acceptorTip = block
 	bc.currentBlock.Store(block.Header())
 	bc.hc.SetCurrentHeader(block.Header())
