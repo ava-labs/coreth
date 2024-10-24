@@ -257,11 +257,6 @@ type BlockChain struct {
 	// [wg] is used to wait for the async blockchain processes to finish on shutdown.
 	wg sync.WaitGroup
 
-	// quit channel is used to listen for when the blockchain is shut down to close
-	// async processes.
-	// WaitGroups are used to ensure that async processes have finished during shutdown.
-	quit chan struct{}
-
 	// [acceptorTip] is the last block processed by the acceptor. This is
 	// returned as the LastAcceptedBlock() to ensure clients get only fully
 	// processed blocks. This may be equal to [lastAccepted].
@@ -321,7 +316,6 @@ func NewBlockChain(
 		engine:            engine,
 		vmConfig:          vmConfig,
 		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
-		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
 
@@ -823,8 +817,6 @@ func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
 		bc.txIndexer.close()
 	}
 
-	log.Info("Closing quit channel")
-	close(bc.quit)
 	// Wait for accepted feed to process all remaining items
 	log.Info("Stopping Acceptor")
 	start := time.Now()
