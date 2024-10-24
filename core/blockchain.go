@@ -145,6 +145,11 @@ type cacheConfig struct {
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+
+	// ADDED
+	SnapshotVerify          bool // Whether to verify the snapshot on startup
+	SnapshotDelayInit       bool // Whether to delay the snapshot initialization
+	TrieRefCountingDisabled bool // Whether to disable trie node reference counting (i.e., it will be handled externally)
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -422,25 +427,8 @@ func newBlockChain(db ethdb.Database, triedb *triedb.Database, cacheConfig *cach
 	}
 
 	// Load any existing snapshot, regenerating it if loading failed
-	if bc.cacheConfig.SnapshotLimit > 0 {
-		// If the chain was rewound past the snapshot persistent layer (causing
-		// a recovery block number to be persisted to disk), check if we're still
-		// in recovery mode and in that case, don't invalidate the snapshot on a
-		// head mismatch.
-		// var recover bool
-
-		head := bc.CurrentBlock()
-		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer >= head.Number.Uint64() {
-			log.Warn("Enabling snapshot recovery", "chainhead", head.Number, "diskbase", *layer)
-			// recover = true
-		}
-		snapconfig := snapshot.Config{
-			CacheSize: bc.cacheConfig.SnapshotLimit,
-			// Recovery:   recover,
-			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
-			AsyncBuild: !bc.cacheConfig.SnapshotWait,
-		}
-		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Hash(), head.Root)
+	if !bc.cacheConfig.SnapshotDelayInit {
+		bc.initSnapshot(bc.CurrentBlock())
 	}
 
 	// Start future block processor.
@@ -922,7 +910,7 @@ func (bc *blockChain) writeHeadBlock(block *types.Block) {
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-	rawdb.WriteTxLookupEntriesByBlock(batch, block)
+	// rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
 	// Flush the whole batch into the disk, exit the node if failed
@@ -1364,7 +1352,7 @@ func (bc *blockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.triedb.Scheme() == rawdb.PathScheme || bc.cacheConfig.TrieRefCountingDisabled {
 		return nil
 	}
 	// If we're running an archive node, always flush
@@ -1534,6 +1522,12 @@ func (bc *blockChain) InsertChain(chain types.Blocks) (int, error) {
 	return bc.insertChain(chain, true)
 }
 
+type InsertOption int
+
+const (
+	NoWrites InsertOption = iota
+)
+
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
@@ -1542,7 +1536,7 @@ func (bc *blockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *blockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
+func (bc *blockChain) insertChain(chain types.Blocks, setHead bool, opts ...InsertOption) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
@@ -1793,9 +1787,18 @@ func (bc *blockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// Write the block to the chain and get the status.
 		var (
-			wstart = time.Now()
-			status WriteStatus
+			wstart     = time.Now()
+			status     WriteStatus
+			skipWrites = false
 		)
+		for _, opt := range opts {
+			if opt == NoWrites {
+				skipWrites = true
+			}
+		}
+		if skipWrites {
+			continue
+		}
 		if !setHead {
 			// Don't set the head, only insert the block
 			err = bc.writeBlockWithState(block, receipts, statedb)
