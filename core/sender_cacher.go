@@ -32,6 +32,9 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 )
 
+// SenderCacher is a concurrent transaction sender recoverer and cacher.
+var SenderCacher *TxSenderCacher
+
 // txSenderCacherRequest is a request for recovering transaction senders with a
 // specific signature scheme and caching it into the transactions themselves.
 //
@@ -112,6 +115,21 @@ func (cacher *TxSenderCacher) Recover(signer types.Signer, txs []*types.Transact
 			inc:    tasks,
 		}
 	}
+}
+
+// RecoverFromBlocks recovers the senders from a batch of blocks and caches them
+// back into the same data structures. There is no validation being done, nor
+// any reaction to invalid signatures. That is up to calling code later.
+func (cacher *TxSenderCacher) RecoverFromBlocks(signer types.Signer, blocks []*types.Block) {
+	count := 0
+	for _, block := range blocks {
+		count += len(block.Transactions())
+	}
+	txs := make([]*types.Transaction, 0, count)
+	for _, block := range blocks {
+		txs = append(txs, block.Transactions()...)
+	}
+	cacher.Recover(signer, txs)
 }
 
 // Shutdown stops the threads started by newTxSenderCacher

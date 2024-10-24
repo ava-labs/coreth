@@ -253,7 +253,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// Pull the plug on the database, simulating a hard crash
 	db := chain.db
 	db.Close()
-	chain.stopWithoutSaving()
+	chain.stopWithoutSaving(true)
 	chain.triedb.Close()
 
 	// Start a new blockchain back up and see where the repair leads us
@@ -384,7 +384,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 
 	// Simulate the blockchain crash.
 	tmp.triedb.Close()
-	tmp.stopWithoutSaving()
+	tmp.stopWithoutSaving(true)
 
 	newchain, err = NewBlockChain(snaptest.db, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
 	if err != nil {

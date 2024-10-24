@@ -299,6 +299,26 @@ func (eng *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *
 	return eng.verifyHeader(chain, header, parent, false)
 }
 
+func (eng *DummyEngine) VerifyHeaders(
+	chain consensus.ChainHeaderReader, headers []*types.Header,
+) (chan<- struct{}, <-chan error) {
+	abort := make(chan struct{})
+	results := make(chan error, len(headers))
+
+	go func() {
+		for _, header := range headers {
+			err := eng.VerifyHeader(chain, header) // XXX: Use provided parent for performance
+
+			select {
+			case <-abort:
+				return
+			case results <- err:
+			}
+		}
+	}()
+	return abort, results
+}
+
 func (*DummyEngine) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	if len(block.Uncles()) > 0 {
 		return errUnclesUnsupported

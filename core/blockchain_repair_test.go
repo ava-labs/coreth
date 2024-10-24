@@ -605,7 +605,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	// Pull the plug on the database, simulating a hard crash
 	chain.triedb.Close()
 	db.Close()
-	chain.stopWithoutSaving()
+	chain.stopWithoutSaving(true)
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{

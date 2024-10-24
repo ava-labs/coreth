@@ -48,8 +48,17 @@ var (
 	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
 
+	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
+	headFastBlockKey = []byte("LastFast")
+
+	// headFinalizedBlockKey tracks the latest known finalized block hash.
+	headFinalizedBlockKey = []byte("LastFinalized")
+
 	// persistentStateIDKey tracks the id of latest stored state(for path-based only).
 	persistentStateIDKey = []byte("LastStateID")
+
+	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
+	lastPivotKey = []byte("LastPivot")
 
 	// snapshotRootKey tracks the hash of the last snapshot.
 	snapshotRootKey = []byte("SnapshotRoot")
@@ -60,11 +69,17 @@ var (
 	// snapshotGeneratorKey tracks the snapshot generation marker across restarts.
 	snapshotGeneratorKey = []byte("SnapshotGenerator")
 
+	// snapshotRecoveryKey tracks the snapshot recovery marker across restarts.
+	snapshotRecoveryKey = []byte("SnapshotRecovery")
+
 	// trieJournalKey tracks the in-memory trie node layers across restarts.
 	trieJournalKey = []byte("TrieJournal")
 
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
+
+	// badBlockKey tracks the list of bad blocks seen by local
+	badBlockKey = []byte("InvalidBlock")
 
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
@@ -84,6 +99,7 @@ var (
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
+	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
@@ -149,6 +165,11 @@ func headerKeyPrefix(number uint64) []byte {
 // headerKey = headerPrefix + num (uint64 big endian) + hash
 func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
+func headerTDKey(number uint64, hash common.Hash) []byte {
+	return append(headerKey(number, hash), headerTDSuffix...)
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
