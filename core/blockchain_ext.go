@@ -216,7 +216,6 @@ type BlockChain struct {
 	logsAcceptedFeed  event.Feed
 	txAcceptedFeed    event.Feed
 	scope             event.SubscriptionScope
-	genesisBlock      *types.Block
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -227,11 +226,6 @@ type BlockChain struct {
 	badBlocks     *lru.Cache[common.Hash, *badBlock]        // Cache for bad blocks
 
 	stopping atomic.Bool // false if chain is running, true when stopped
-
-	engine    consensus.Engine
-	validator Validator // Block and state validator interface
-	processor Processor // Block transaction processor interface
-	vmConfig  vm.Config
 
 	lastAccepted *types.Block // Prevents reorgs past this height
 
@@ -313,8 +307,6 @@ func NewBlockChain(
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		txLookupCache:     lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
 		badBlocks:         lru.NewCache[common.Hash, *badBlock](badBlockLimit),
-		engine:            engine,
-		vmConfig:          vmConfig,
 		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
@@ -331,13 +323,6 @@ func NewBlockChain(
 	rawdb.WriteHeadHeaderHash(db, headHeaderHash)
 
 	bc.hc.InitializeAcceptedNumberCache(cacheConfig.AcceptedCacheSize)
-
-	bc.validator = NewBlockValidator(chainConfig, bc.blockChain, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc.blockChain, engine)
-	bc.genesisBlock = bc.GetBlockByNumber(0)
-	if bc.genesisBlock == nil {
-		return nil, ErrNoGenesis
-	}
 
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
@@ -611,9 +596,9 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
 	if lastAcceptedHash == (common.Hash{}) {
-		bc.lastAccepted = bc.genesisBlock
-		bc.SetFinalized(bc.genesisBlock.Header())
-		return bc.ResetWithGenesisBlock(bc.genesisBlock)
+		bc.lastAccepted = bc.Genesis()
+		bc.SetFinalized(bc.Genesis().Header())
+		return bc.ResetWithGenesisBlock(bc.Genesis())
 	}
 
 	// Restore the last known head block
@@ -668,7 +653,7 @@ func (bc *BlockChain) ValidateCanonicalChain() error {
 	i := 0
 	log.Info("Beginning to validate canonical chain", "startBlock", current.Number)
 
-	for current.Hash() != bc.genesisBlock.Hash() {
+	for current.Hash() != bc.Genesis().Hash() {
 		blkByHash := bc.GetBlockByHash(current.Hash())
 		if blkByHash == nil {
 			return fmt.Errorf("couldn't find block by hash %s at height %d", current.Hash().String(), current.Number)
