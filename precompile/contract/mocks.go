@@ -17,6 +17,7 @@ import (
 	precompileconfig "github.com/ava-labs/coreth/precompile/precompileconfig"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
+	vm "github.com/ethereum/go-ethereum/core/vm"
 	uint256 "github.com/holiman/uint256"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -109,6 +110,27 @@ func (m *MockAccessibleState) EXPECT() *MockAccessibleStateMockRecorder {
 	return m.recorder
 }
 
+// Call mocks base method.
+func (m *MockAccessibleState) Call(arg0 common.Address, arg1 []byte, arg2 uint64, arg3 *uint256.Int, arg4 ...vm.CallOption) ([]byte, uint64, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1, arg2, arg3}
+	for _, a := range arg4 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Call", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(uint64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Call indicates an expected call of Call.
+func (mr *MockAccessibleStateMockRecorder) Call(arg0, arg1, arg2, arg3 any, arg4 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1, arg2, arg3}, arg4...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockAccessibleState)(nil).Call), varargs...)
+}
+
 // GetBlockContext mocks base method.
 func (m *MockAccessibleState) GetBlockContext() BlockContext {
 	m.ctrl.T.Helper()
@@ -163,22 +185,6 @@ func (m *MockAccessibleState) GetStateDB() StateDB {
 func (mr *MockAccessibleStateMockRecorder) GetStateDB() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateDB", reflect.TypeOf((*MockAccessibleState)(nil).GetStateDB))
-}
-
-// NativeAssetCall mocks base method.
-func (m *MockAccessibleState) NativeAssetCall(arg0 common.Address, arg1 []byte, arg2, arg3 uint64, arg4 bool) ([]byte, uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NativeAssetCall", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(uint64)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// NativeAssetCall indicates an expected call of NativeAssetCall.
-func (mr *MockAccessibleStateMockRecorder) NativeAssetCall(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NativeAssetCall", reflect.TypeOf((*MockAccessibleState)(nil).NativeAssetCall), arg0, arg1, arg2, arg3, arg4)
 }
 
 // MockStateDB is a mock of StateDB interface.

@@ -36,7 +36,7 @@ func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -48,7 +48,7 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
@@ -166,57 +166,8 @@ func (a accessableState) GetSnowContext() *snow.Context {
 	return GetExtra(a.env.ChainConfig()).SnowCtx
 }
 
-func (a accessableState) NativeAssetCall(caller common.Address, input []byte, suppliedGas uint64, gasCost uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	if suppliedGas < gasCost {
-		return nil, 0, vmerrs.ErrOutOfGas
-	}
-	remainingGas = suppliedGas - gasCost
-
-	if readOnly {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
-	}
-
-	to, assetID, assetAmount, callData, err := nativeasset.UnpackNativeAssetCallInput(input)
-	if err != nil {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
-	}
-
-	stateDB := a.GetStateDB()
-	// Note: it is not possible for a negative assetAmount to be passed in here due to the fact that decoding a
-	// byte slice into a *big.Int type will always return a positive value.
-	if assetAmount.Sign() != 0 && stateDB.GetBalanceMultiCoin(caller, assetID).Cmp(assetAmount) < 0 {
-		return nil, remainingGas, vmerrs.ErrInsufficientBalance
-	}
-
-	snapshot := stateDB.Snapshot()
-
-	if !stateDB.Exist(to) {
-		if remainingGas < CallNewAccountGas {
-			return nil, 0, vmerrs.ErrOutOfGas
-		}
-		remainingGas -= CallNewAccountGas
-		stateDB.CreateAccount(to)
-	}
-
-	// Send [assetAmount] of [assetID] to [to] address
-	stateDB.SubBalanceMultiCoin(caller, assetID, assetAmount)
-	stateDB.AddBalanceMultiCoin(to, assetID, assetAmount)
-
-	ret, remainingGas, err = a.env.Call(to, callData, remainingGas, new(uint256.Int), vm.WithUNSAFECallerAddressProxying())
-
-	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally
-	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil {
-		stateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
-			remainingGas = 0
-		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
-	}
-	return ret, remainingGas, err
+func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...vm.CallOption) (ret []byte, gasRemaining uint64, _ error) {
+	return a.env.Call(addr, input, gas, value)
 }
 
 type BlockContext struct {
