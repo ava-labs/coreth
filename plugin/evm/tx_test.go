@@ -60,7 +60,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func(t *testing.T) UnsignedAtomicTx
-	rules       params.Rules
+	rules       params.RulesExtra
 	expectedErr string
 }
 
@@ -110,7 +110,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	var baseFee *big.Int
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
 	switch {
-	case params.GetRulesExtra(rules).IsApricotPhase3:
+	case rules.IsApricotPhase3:
 		baseFee = initialBaseFee
 	}
 

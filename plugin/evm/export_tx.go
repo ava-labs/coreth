@@ -69,9 +69,8 @@ func (utx *UnsignedExportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedExportTx) Verify(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules params.RulesExtra,
 ) error {
-	rulesExtra := params.GetRulesExtra(rules)
 	switch {
 	case utx == nil:
 		return errNilTx
@@ -84,7 +83,7 @@ func (utx *UnsignedExportTx) Verify(
 	}
 
 	// Make sure that the tx has a valid peer chain ID
-	if rulesExtra.IsApricotPhase5 {
+	if rules.IsApricotPhase5 {
 		// Note that SameSubnet verifies that [tx.DestinationChain] isn't this
 		// chain's ID
 		if err := verify.SameSubnet(context.TODO(), ctx, utx.DestinationChain); err != nil {
@@ -100,7 +99,7 @@ func (utx *UnsignedExportTx) Verify(
 		if err := in.Verify(); err != nil {
 			return err
 		}
-		if rulesExtra.IsBanff && in.AssetID != ctx.AVAXAssetID {
+		if rules.IsBanff && in.AssetID != ctx.AVAXAssetID {
 			return errExportNonAVAXInputBanff
 		}
 	}
@@ -113,14 +112,14 @@ func (utx *UnsignedExportTx) Verify(
 		if assetID != ctx.AVAXAssetID && utx.DestinationChain == constants.PlatformChainID {
 			return errWrongChainID
 		}
-		if rulesExtra.IsBanff && assetID != ctx.AVAXAssetID {
+		if rules.IsBanff && assetID != ctx.AVAXAssetID {
 			return errExportNonAVAXOutputBanff
 		}
 	}
 	if !avax.IsSortedTransferableOutputs(utx.ExportedOutputs, Codec) {
 		return errOutputsNotSorted
 	}
-	if rulesExtra.IsApricotPhase1 && !utils.IsSortedAndUnique(utx.Ins) {
+	if rules.IsApricotPhase1 && !utils.IsSortedAndUnique(utx.Ins) {
 		return errInputsNotSortedUnique
 	}
 
@@ -181,9 +180,8 @@ func (utx *UnsignedExportTx) SemanticVerify(
 	stx *Tx,
 	_ *Block,
 	baseFee *big.Int,
-	rules params.Rules,
+	rules params.RulesExtra,
 ) error {
-	rulesExtra := params.GetRulesExtra(rules)
 	if err := utx.Verify(vm.ctx, rules); err != nil {
 		return err
 	}
@@ -192,8 +190,8 @@ func (utx *UnsignedExportTx) SemanticVerify(
 	fc := avax.NewFlowChecker()
 	switch {
 	// Apply dynamic fees to export transactions as of Apricot Phase 3
-	case rulesExtra.IsApricotPhase3:
-		gasUsed, err := stx.GasUsed(rulesExtra.IsApricotPhase5)
+	case rules.IsApricotPhase3:
+		gasUsed, err := stx.GasUsed(rules.IsApricotPhase5)
 		if err != nil {
 			return err
 		}
@@ -317,7 +315,7 @@ func (vm *VM) newExportTx(
 		avaxNeeded = amount
 	}
 
-	rules := params.GetRulesExtra(vm.currentRules())
+	rules := vm.currentRules()
 	switch {
 	case rules.IsApricotPhase3:
 		utx := &UnsignedExportTx{
