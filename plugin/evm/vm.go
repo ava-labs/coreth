@@ -249,12 +249,11 @@ type VM struct {
 
 	config Config
 
-	chainID          *big.Int
-	networkID        uint64
-	genesisHash      common.Hash
-	chainConfig      *params.ChainConfig
-	chainConfigExtra *params.ChainConfigExtra
-	ethConfig        ethconfig.Config
+	chainID     *big.Int
+	networkID   uint64
+	genesisHash common.Hash
+	chainConfig *params.ChainConfig
+	ethConfig   ethconfig.Config
 
 	// pointers to eth constructs
 	eth        *eth.Ethereum
@@ -356,7 +355,7 @@ func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
 // implements SnowmanPlusPlusVM interface
 func (vm *VM) GetActivationTime() time.Time {
-	return utils.Uint64ToTime(vm.chainConfigExtra.ApricotPhase4BlockTimestamp)
+	return utils.Uint64ToTime(vm.chainConfigExtra().ApricotPhase4BlockTimestamp)
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -560,7 +559,6 @@ func (vm *VM) Initialize(
 	}
 
 	vm.chainConfig = g.Config
-	vm.chainConfigExtra = params.GetExtra(vm.chainConfig)
 	vm.networkID = vm.ethConfig.NetworkId
 	vm.secpCache = secp256k1.RecoverCache{
 		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
@@ -723,11 +721,11 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // TODO: remove this after Etna is activated
 func (vm *VM) setMinFeeAtEtna() {
 	now := vm.clock.Time()
-	if vm.chainConfigExtra.EtnaTimestamp == nil {
+	if vm.chainConfigExtra().EtnaTimestamp == nil {
 		// If Etna is not set, set the min fee according to the latest upgrade
 		vm.txPool.SetMinFee(big.NewInt(params.ApricotPhase4MinBaseFee))
 		return
-	} else if vm.chainConfigExtra.IsEtna(uint64(now.Unix())) {
+	} else if vm.chainConfigExtra().IsEtna(uint64(now.Unix())) {
 		// If Etna is activated, set the min fee to the Etna min fee
 		vm.txPool.SetMinFee(big.NewInt(params.EtnaMinBaseFee))
 		return
@@ -738,7 +736,7 @@ func (vm *VM) setMinFeeAtEtna() {
 	go func() {
 		defer vm.shutdownWg.Done()
 
-		wait := utils.Uint64ToTime(vm.chainConfigExtra.EtnaTimestamp).Sub(now)
+		wait := utils.Uint64ToTime(vm.chainConfigExtra().EtnaTimestamp).Sub(now)
 		t := time.NewTimer(wait)
 		select {
 		case <-t.C: // Wait for Etna to be activated
@@ -1007,7 +1005,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 }
 
 func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	if !vm.chainConfigExtra.IsApricotPhase5(header.Time) {
+	if !vm.chainConfigExtra().IsApricotPhase5(header.Time) {
 		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
 	}
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
@@ -1682,7 +1680,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	if vm.chainConfigExtra.IsApricotPhase3(timestamp) {
+	if vm.chainConfigExtra().IsApricotPhase3(timestamp) {
 		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
@@ -1946,6 +1944,10 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 		return 0, err
 	}
 	return state.GetNonce(address), nil
+}
+
+func (vm *VM) chainConfigExtra() *params.ChainConfigExtra {
+	return params.GetExtra(vm.chainConfig)
 }
 
 // currentRules returns the chain rules for the current block.
