@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
@@ -115,12 +116,13 @@ func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller c
 
 	to, assetID, assetAmount, callData, err := UnpackNativeAssetCallInput(input)
 	if err != nil {
+		log.Debug("unpacking native asset call input failed", "err", err)
 		return nil, remainingGas, vmerrs.ErrExecutionReverted
 	}
 
 	stateDB := accessibleState.GetStateDB()
 	// Note: it is not possible for a negative assetAmount to be passed in here due to the fact that decoding a
-	// byte slice into a *big.Int type will always return a positive value.
+	// byte slice into a *big.Int type will always return a positive value, as documented on [big.Int.SetBytes].
 	if assetAmount.Sign() != 0 && stateDB.GetBalanceMultiCoin(caller, assetID).Cmp(assetAmount) < 0 {
 		return nil, remainingGas, vmerrs.ErrInsufficientBalance
 	}
