@@ -31,7 +31,8 @@ type StateDB struct {
 }
 
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rules, list)
+	rulesExtra := params.GetRulesExtra(rules)
+	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rulesExtra, list)
 	s.VmStateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
 }
 

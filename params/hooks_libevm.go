@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -106,16 +107,19 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen
 		}
-		var predicateResultsBytes []byte
-		if len(header.Extra) >= DynamicFeeExtraDataSize {
-			predicateResultsBytes = header.Extra[DynamicFeeExtraDataSize:]
+		var predicateResults *predicate.Results
+		if predicateResultsBytes := GetPredicateResultBytes(header.Extra); len(predicateResultsBytes) > 0 {
+			predicateResults, err = predicate.ParseResults(predicateResultsBytes)
+			if err != nil {
+				panic(err) // Should never happen, as results are already validated in block validation
+			}
 		}
 		accessableState := accessableState{
 			env: env,
 			blockContext: &BlockContext{
-				number:                env.BlockNumber(),
-				time:                  env.BlockTime(),
-				predicateResultsBytes: predicateResultsBytes,
+				number:           env.BlockNumber(),
+				time:             env.BlockTime(),
+				predicateResults: predicateResults,
 			},
 		}
 		return contract.Run(accessableState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
@@ -171,16 +175,16 @@ func (a accessableState) Call(addr common.Address, input []byte, gas uint64, val
 }
 
 type BlockContext struct {
-	number                *big.Int
-	time                  uint64
-	predicateResultsBytes []byte
+	number           *big.Int
+	time             uint64
+	predicateResults *predicate.Results
 }
 
-func NewBlockContext(number *big.Int, time uint64, predicateResultsBytes []byte) *BlockContext {
+func NewBlockContext(number *big.Int, time uint64, predicateResults *predicate.Results) *BlockContext {
 	return &BlockContext{
-		number:                number,
-		time:                  time,
-		predicateResultsBytes: predicateResultsBytes,
+		number:           number,
+		time:             time,
+		predicateResults: predicateResults,
 	}
 }
 
@@ -192,6 +196,6 @@ func (b *BlockContext) Timestamp() uint64 {
 	return b.time
 }
 
-func (b *BlockContext) GetPredicateResultsBytes() []byte {
-	return b.predicateResultsBytes
+func (b *BlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
+	return b.predicateResults.GetPredicateResults(txHash, precompileAddress)
 }
