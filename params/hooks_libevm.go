@@ -116,7 +116,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		}
 		accessableState := accessableState{
 			env: env,
-			blockContext: &BlockContext{
+			blockContext: &precompileBlockContext{
 				number:           env.BlockNumber(),
 				time:             env.BlockTime(),
 				predicateResults: predicateResults,
@@ -144,7 +144,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 
 type accessableState struct {
 	env          vm.PrecompileEnvironment
-	blockContext *BlockContext
+	blockContext *precompileBlockContext
 }
 
 func (a accessableState) GetStateDB() contract.StateDB {
@@ -174,28 +174,23 @@ func (a accessableState) Call(addr common.Address, input []byte, gas uint64, val
 	return a.env.Call(addr, input, gas, value)
 }
 
-type BlockContext struct {
+type precompileBlockContext struct {
 	number           *big.Int
 	time             uint64
 	predicateResults *predicate.Results
 }
 
-func NewBlockContext(number *big.Int, time uint64, predicateResults *predicate.Results) *BlockContext {
-	return &BlockContext{
-		number:           number,
-		time:             time,
-		predicateResults: predicateResults,
-	}
-}
-
-func (b *BlockContext) Number() *big.Int {
+func (b *precompileBlockContext) Number() *big.Int {
 	return b.number
 }
 
-func (b *BlockContext) Timestamp() uint64 {
+func (b *precompileBlockContext) Timestamp() uint64 {
 	return b.time
 }
 
-func (b *BlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
+func (b *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
+	if b.predicateResults == nil {
+		return nil
+	}
 	return b.predicateResults.GetPredicateResults(txHash, precompileAddress)
 }
