@@ -180,17 +180,17 @@ type precompileBlockContext struct {
 	predicateResults *predicate.Results
 }
 
-func (b *precompileBlockContext) Number() *big.Int {
-	return b.number
+func (p *precompileBlockContext) Number() *big.Int {
+	return p.number
 }
 
-func (b *precompileBlockContext) Timestamp() uint64 {
-	return b.time
+func (p *precompileBlockContext) Timestamp() uint64 {
+	return p.time
 }
 
-func (b *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
-	if b.predicateResults == nil {
+func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
+	if p.predicateResults == nil {
 		return nil
 	}
-	return b.predicateResults.GetPredicateResults(txHash, precompileAddress)
+	return p.predicateResults.GetPredicateResults(txHash, precompileAddress)
 }
