@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -967,9 +966,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		config.BlockOverrides.Apply(&vmctx)
 		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
 		// Should be applied before the state overrides.
-		predicateBytes := predicate.GetPredicateResultBytes(vmctx.Header.Extra)
-		blockContext := params.NewBlockContext(vmctx.BlockNumber, vmctx.Time, predicateBytes)
-		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, blockContext, statedb)
+		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, block, statedb)
 		if err != nil {
 			return nil, err
 		}
