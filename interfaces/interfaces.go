@@ -33,7 +33,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/libevm"
+	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 )
 
