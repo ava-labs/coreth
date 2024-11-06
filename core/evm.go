@@ -104,7 +104,7 @@ type ChainContext interface {
 
 // NewEVMBlockContext creates a new context for use in the EVM.
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
-	predicateBytes := params.GetPredicateResultBytes(header.Extra)
+	predicateBytes := predicate.GetPredicateResultBytes(header.Extra)
 	if len(predicateBytes) == 0 {
 		return newEVMBlockContext(header, chain, author, nil)
 	}
@@ -129,7 +129,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateBytes []byte) vm.BlockContext {
 	extra := bytes.Clone(header.Extra)
 	if len(predicateBytes) > 0 {
-		extra = params.SetPredicateResultBytes(extra, predicateBytes)
+		extra = predicate.SetPredicateResultBytes(extra, predicateBytes)
 	}
 	return newEVMBlockContext(header, chain, author, extra)
 }
