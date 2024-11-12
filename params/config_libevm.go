@@ -8,8 +8,8 @@ import (
 
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ethereum/go-ethereum/common"
-	gethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/common"
+	gethparams "github.com/ava-labs/libevm/params"
 )
 
 func do_init() any {
