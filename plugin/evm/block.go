@@ -119,7 +119,7 @@ type Block struct {
 
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
 func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
-	isApricotPhase5 := params.GetExtra(vm.chainConfig).IsApricotPhase5(ethBlock.Time())
+	isApricotPhase5 := vm.chainConfigExtra().IsApricotPhase5(ethBlock.Time())
 	atomicTxs, err := ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, vm.codec)
 	if err != nil {
 		return nil, err
@@ -388,8 +388,8 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 		return fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
 	extraData := b.ethBlock.Extra()
-	headerPredicateResultsBytes, ok := predicate.GetPredicateResultBytes(extraData)
-	if !ok {
+	headerPredicateResultsBytes := predicate.GetPredicateResultBytes(extraData)
+	if len(headerPredicateResultsBytes) == 0 {
 		return fmt.Errorf("failed to find predicate results in extra data: %x", extraData)
 	}
 	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {

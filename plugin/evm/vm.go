@@ -355,7 +355,7 @@ func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
 // implements SnowmanPlusPlusVM interface
 func (vm *VM) GetActivationTime() time.Time {
-	return utils.Uint64ToTime(params.GetExtra(vm.chainConfig).ApricotPhase4BlockTimestamp)
+	return utils.Uint64ToTime(vm.chainConfigExtra().ApricotPhase4BlockTimestamp)
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -467,14 +467,15 @@ func (vm *VM) Initialize(
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
-	if params.GetExtra(g.Config).DurangoBlockTimestamp != nil {
-		params.GetExtra(g.Config).PrecompileUpgrades = append(params.GetExtra(g.Config).PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpcontract.NewDefaultConfig(params.GetExtra(g.Config).DurangoBlockTimestamp),
+	configExtra := params.GetExtra(g.Config)
+	if configExtra.DurangoBlockTimestamp != nil {
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, params.PrecompileUpgrade{
+			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
 		})
 	}
 
 	// Set the Avalanche Context on the ChainConfig
-	params.GetExtra(g.Config).AvalancheContext = params.AvalancheContext{
+	configExtra.AvalancheContext = params.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
@@ -565,7 +566,7 @@ func (vm *VM) Initialize(
 		},
 	}
 
-	if err := params.GetExtra(vm.chainConfig).Verify(); err != nil {
+	if err := configExtra.Verify(); err != nil {
 		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
@@ -720,11 +721,11 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // TODO: remove this after Etna is activated
 func (vm *VM) setMinFeeAtEtna() {
 	now := vm.clock.Time()
-	if params.GetExtra(vm.chainConfig).EtnaTimestamp == nil {
+	if vm.chainConfigExtra().EtnaTimestamp == nil {
 		// If Etna is not set, set the min fee according to the latest upgrade
 		vm.txPool.SetMinFee(big.NewInt(params.ApricotPhase4MinBaseFee))
 		return
-	} else if params.GetExtra(vm.chainConfig).IsEtna(uint64(now.Unix())) {
+	} else if vm.chainConfigExtra().IsEtna(uint64(now.Unix())) {
 		// If Etna is activated, set the min fee to the Etna min fee
 		vm.txPool.SetMinFee(big.NewInt(params.EtnaMinBaseFee))
 		return
@@ -735,7 +736,7 @@ func (vm *VM) setMinFeeAtEtna() {
 	go func() {
 		defer vm.shutdownWg.Done()
 
-		wait := utils.Uint64ToTime(params.GetExtra(vm.chainConfig).EtnaTimestamp).Sub(now)
+		wait := utils.Uint64ToTime(vm.chainConfigExtra().EtnaTimestamp).Sub(now)
 		t := time.NewTimer(wait)
 		select {
 		case <-t.C: // Wait for Etna to be activated
@@ -865,9 +866,9 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules_ := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rules := params.GetRulesExtra(rules_)
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules_); err != nil {
+		rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra := params.GetRulesExtra(rules)
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, *rulesExtra); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
 			vm.mempool.DiscardCurrentTx(tx.ID())
@@ -884,8 +885,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err = tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
+		if rulesExtra.IsApricotPhase4 {
+			contribution, gasUsed, err = tx.BlockFeeContribution(rulesExtra.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -909,6 +910,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
 		rules                      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra                 = *params.GetRulesExtra(rules)
 		size              int
 	)
 
@@ -957,7 +959,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		}
 
 		snapshot := state.Snapshot()
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rulesExtra); err != nil {
 			// Discard the transaction from the mempool and reset the state to [snapshot]
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
@@ -1003,7 +1005,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 }
 
 func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	if !params.GetExtra(vm.chainConfig).IsApricotPhase5(header.Time) {
+	if !vm.chainConfigExtra().IsApricotPhase5(header.Time) {
 		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
 	}
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
@@ -1014,11 +1016,11 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules_                     = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rules                      = params.GetRulesExtra(rules_)
+		rules                      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra                 = *params.GetRulesExtra(rules)
 	)
 
-	txs, err := ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, vm.codec)
+	txs, err := ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, vm.codec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1029,7 +1031,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
-			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules_); err != nil {
+			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rulesExtra); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -1053,8 +1055,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 			return nil, nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
+		if rulesExtra.IsApricotPhase4 {
+			contribution, gasUsed, err := tx.BlockFeeContribution(rulesExtra.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1065,7 +1067,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 
 		// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
 		// atomic gas limit.
-		if rules.IsApricotPhase5 {
+		if rulesExtra.IsApricotPhase5 {
 			// Ensure that [tx] does not push [block] above the atomic gas limit.
 			if batchGasUsed.Cmp(params.AtomicGasLimit) == 1 {
 				return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), params.AtomicGasLimit)
@@ -1678,7 +1680,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	if params.GetExtra(vm.chainConfig).IsApricotPhase3(timestamp) {
+	if vm.chainConfigExtra().IsApricotPhase3(timestamp) {
 		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
@@ -1696,7 +1698,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.RulesExtra) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1713,7 +1715,7 @@ func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
-func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
+func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.RulesExtra) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
 		return errRejectedParent
@@ -1944,17 +1946,22 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 	return state.GetNonce(address), nil
 }
 
+func (vm *VM) chainConfigExtra() *params.ChainConfigExtra {
+	return params.GetExtra(vm.chainConfig)
+}
+
 // currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() params.Rules {
+func (vm *VM) currentRules() params.RulesExtra {
 	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+	rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+	return *params.GetRulesExtra(rules)
 }
 
 // requirePrimaryNetworkSigners returns true if warp messages from the primary
 // network must be signed by the primary network validators.
 // This is necessary when the subnet is not validating the primary network.
 func (vm *VM) requirePrimaryNetworkSigners() bool {
-	switch c := params.GetRulesExtra(vm.currentRules()).Precompiles[warpcontract.ContractAddress].(type) {
+	switch c := vm.currentRules().Precompiles[warpcontract.ContractAddress].(type) {
 	case *warpcontract.Config:
 		return c.RequirePrimaryNetworkSigners
 	default: // includes nil due to non-presence

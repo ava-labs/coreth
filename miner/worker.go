@@ -147,9 +147,10 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	var gasLimit uint64
-	if params.GetExtra(w.chainConfig).IsCortina(timestamp) {
+	chainExtra := params.GetExtra(w.chainConfig)
+	if chainExtra.IsCortina(timestamp) {
 		gasLimit = params.CortinaGasLimit
-	} else if params.GetExtra(w.chainConfig).IsApricotPhase1(timestamp) {
+	} else if chainExtra.IsApricotPhase1(timestamp) {
 		gasLimit = params.ApricotPhase1GasLimit
 	} else {
 		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the ceiling and floor were set to the same value
@@ -165,7 +166,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	// Set BaseFee and Extra data field if we are post ApricotPhase3
-	if params.GetExtra(w.chainConfig).IsApricotPhase3(timestamp) {
+	if chainExtra.IsApricotPhase3(timestamp) {
 		var err error
 		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
 		if err != nil {
@@ -293,6 +294,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, coin
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
+	env.size += tx.Size()
 	return receipt.Logs, nil
 }
 

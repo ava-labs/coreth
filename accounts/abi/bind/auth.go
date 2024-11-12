@@ -33,10 +33,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/accounts/external"
-	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/accounts"
+	"github.com/ava-labs/libevm/accounts/external"
+	"github.com/ava-labs/libevm/accounts/keystore"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/log"

@@ -31,9 +31,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/accounts/external"
-	"github.com/ava-labs/coreth/accounts/keystore"
+	"github.com/ava-labs/libevm/accounts"
+	"github.com/ava-labs/libevm/accounts/external"
+	"github.com/ava-labs/libevm/accounts/keystore"
 	"github.com/ava-labs/libevm/log"
 )
 

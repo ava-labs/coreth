@@ -49,8 +49,6 @@ import (
 )
 
 const (
-	// storageDeleteLimit denotes the highest permissible memory allocation
-	// employed for contract storage deletion.
 	storageDeleteLimit = 512 * 1024 * 1024
 )
 

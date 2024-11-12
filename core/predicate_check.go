@@ -30,14 +30,15 @@ func CheckPredicates(rules params.Rules, predicateContext *precompileconfig.Pred
 		return nil, fmt.Errorf("%w for predicate verification (%d) < intrinsic gas (%d)", ErrIntrinsicGas, tx.Gas(), intrinsicGas)
 	}
 
+	rulesExtra := params.GetRulesExtra(rules)
 	predicateResults := make(map[common.Address][]byte)
 	// Short circuit early if there are no precompile predicates to verify
-	if !params.GetRulesExtra(rules).PredicatersExist() {
+	if !rulesExtra.PredicatersExist() {
 		return predicateResults, nil
 	}
 
 	// Prepare the predicate storage slots from the transaction's access list
-	predicateArguments := predicate.PreparePredicateStorageSlots(rules, tx.AccessList())
+	predicateArguments := predicate.PreparePredicateStorageSlots(rulesExtra, tx.AccessList())
 
 	// If there are no predicates to verify, return early and skip requiring the proposervm block
 	// context to be populated.

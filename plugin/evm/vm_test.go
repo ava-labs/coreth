@@ -64,7 +64,6 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
 )
 
 var (
@@ -138,14 +137,14 @@ var (
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
-	apricotRulesPhase0 = params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0)
-	apricotRulesPhase1 = params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0)
-	apricotRulesPhase2 = params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0)
-	apricotRulesPhase3 = params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0)
-	apricotRulesPhase4 = params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0)
-	apricotRulesPhase5 = params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0)
-	apricotRulesPhase6 = params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0)
-	banffRules         = params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
+	apricotRulesPhase0 = *params.GetRulesExtra(params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase1 = *params.GetRulesExtra(params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase2 = *params.GetRulesExtra(params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase3 = *params.GetRulesExtra(params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase4 = *params.GetRulesExtra(params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase5 = *params.GetRulesExtra(params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase6 = *params.GetRulesExtra(params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	banffRules         = *params.GetRulesExtra(params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
 )
 
 func init() {
@@ -939,7 +938,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 
 	validEthBlock := validBlock.(*chain.BlockWrapper).Block.(*Block).ethBlock
 
-	rules := params.GetRulesExtra(vm.currentRules())
+	rules := vm.currentRules()
 	var extraData []byte
 	switch {
 	case rules.IsApricotPhase5:
@@ -1382,7 +1381,7 @@ func TestSetPreferenceRace(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	key, err := accountKeystore.NewKey(rand.Reader)
+	key, err := utils.NewKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3595,7 +3594,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		testShortIDAddrs[1]: importAmount,
 		testShortIDAddrs[2]: importAmount,
 	})
-	conflictKey, err := accountKeystore.NewKey(rand.Reader)
+	conflictKey, err := utils.NewKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}

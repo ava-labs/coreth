@@ -38,23 +38,34 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
-	gethtypes "github.com/ava-labs/libevm/core/types"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/holiman/uint256"
 )
 
-var _ vm.Hooks = hooks{}
+func init() {
+	vm.RegisterHooks(hooks{})
+}
 
 type hooks struct{}
 
+// OverrideNewEVMArgs is a hook that is called back when a new EVM is created.
+// It allows for the modification of the EVM arguments before the EVM is created.
+// Specifically, we set Random to be the same as Difficulty since Shanghai.
+// This allows using the same jump table as upstream.
+// Then we set Difficulty to nil as it is post Merge in upstream.
+// Additionally we wrap the StateDB with the appropriate StateDB wrapper,
+// which is used in coreth to process historical pre-AP1 blocks with the
+// GetCommittedState method as it was historically.
 func (hooks) OverrideNewEVMArgs(args *vm.NewEVMArgs) *vm.NewEVMArgs {
-	rules := args.ChainConfig.Rules(args.BlockContext.BlockNumber, args.BlockContext.Random != nil, args.BlockContext.Time)
+	rules := args.ChainConfig.Rules(args.BlockContext.BlockNumber, params.IsMergeTODO, args.BlockContext.Time)
 	args.StateDB = wrapStateDB(rules, args.StateDB)
 
-	if params.GetRulesExtra(rules).IsDurango {
+	if rules.IsShanghai {
 		args.BlockContext.Random = new(common.Hash)
 		args.BlockContext.Random.SetBytes(args.BlockContext.Difficulty.Bytes())
+		args.BlockContext.Difficulty = nil
 	}
 
 	return args
@@ -70,10 +81,6 @@ func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
 		db = &StateDbAP1{db.(extstate.VmStateDB)}
 	}
 	return &extstate.StateDB{VmStateDB: db.(extstate.VmStateDB)}
-}
-
-func init() {
-	vm.RegisterHooks(hooks{})
 }
 
 type StateDbAP1 struct {
@@ -97,8 +104,8 @@ type ChainContext interface {
 
 // NewEVMBlockContext creates a new context for use in the EVM.
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
-	predicateBytes, ok := predicate.GetPredicateResultBytes(header.Extra)
-	if !ok {
+	predicateBytes := predicate.GetPredicateResultBytes(header.Extra)
+	if len(predicateBytes) == 0 {
 		return newEVMBlockContext(header, chain, author, nil)
 	}
 	// Prior to Durango, the VM enforces the extra data is smaller than or
@@ -132,7 +139,6 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		beneficiary common.Address
 		baseFee     *big.Int
 		blobBaseFee *big.Int
-		random      *common.Hash
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -159,8 +165,7 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BaseFee:     baseFee,
 		BlobBaseFee: blobBaseFee,
 		GasLimit:    header.GasLimit,
-		Random:      random,
-		Header: &gethtypes.Header{
+		Header: &ethtypes.Header{
 			Number: new(big.Int).Set(header.Number),
 			Time:   header.Time,
 			Extra:  extra,

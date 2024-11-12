@@ -13,29 +13,29 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ava-labs/libevm/common"
-	gethtypes "github.com/ava-labs/libevm/core/types"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 
+	// Force import core to register the VM hooks.
+	// This allows testing the precompiles by exercising the EVM.
 	_ "github.com/ava-labs/coreth/core"
 )
 
-type StateDB = vm.StateDB
-
-type withMulticoin interface {
+type stateDB interface {
 	vm.StateDB
 	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
 }
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
-func CanTransfer(db StateDB, addr common.Address, amount *uint256.Int) bool {
+func CanTransfer(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func Transfer(db StateDB, sender, recipient common.Address, amount *uint256.Int) {
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 }
@@ -62,13 +62,13 @@ func TestStatefulPrecompile(t *testing.T) {
 		Time:        0,
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
-		Header: &gethtypes.Header{
+		Header: &ethtypes.Header{
 			Number: big.NewInt(0),
 		},
 	}
 
 	type statefulContractTest struct {
-		setupStateDB         func() StateDB
+		setupStateDB         func() stateDB
 		from                 common.Address
 		precompileAddr       common.Address
 		input                []byte
@@ -78,7 +78,7 @@ func TestStatefulPrecompile(t *testing.T) {
 		expectedErr          error
 		expectedResult       []byte
 		name                 string
-		stateDBCheck         func(*testing.T, StateDB)
+		stateDBCheck         func(*testing.T, stateDB)
 	}
 
 	userAddr1 := common.BytesToAddress([]byte("user1"))
@@ -96,7 +96,7 @@ func TestStatefulPrecompile(t *testing.T) {
 
 	tests := []statefulContractTest{
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -120,7 +120,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset balance: uninitialized multicoin balance returns 0",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -146,7 +146,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset balance: initialized multicoin balance returns 0",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -171,7 +171,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset balance: returns correct non-zero multicoin balance",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -189,7 +189,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset balance: invalid input data reverts",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -207,7 +207,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset balance: insufficient gas errors",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -225,7 +225,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset balance: non-zero value with insufficient funds reverts before running pre-compile",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -244,11 +244,11 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          nil,
 			expectedResult:       nil,
 			name:                 "native asset call: multicoin transfer",
-			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+			stateDBCheck: func(t *testing.T, stateDB stateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
 				expectedBalance := big.NewInt(50)
 				assert.Equal(t, u256Hundred, user1Balance, "user 1 balance")
@@ -258,7 +258,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			},
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -277,12 +277,12 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          nil,
 			expectedResult:       nil,
 			name:                 "native asset call: multicoin transfer with non-zero value",
-			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+			stateDBCheck: func(t *testing.T, stateDB stateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
 				nativeAssetCallAddrBalance := stateDB.GetBalance(NativeAssetCallAddr)
-				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 				expectedBalance := big.NewInt(50)
 
 				assert.Equal(t, uint256.NewInt(51), user1Balance, "user 1 balance")
@@ -293,7 +293,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			},
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -312,11 +312,11 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          vmerrs.ErrInsufficientBalance,
 			expectedResult:       nil,
 			name:                 "native asset call: insufficient multicoin funds",
-			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+			stateDBCheck: func(t *testing.T, stateDB stateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -325,7 +325,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			},
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -344,11 +344,11 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          vmerrs.ErrInsufficientBalance,
 			expectedResult:       nil,
 			name:                 "native asset call: insufficient funds",
-			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+			stateDBCheck: func(t *testing.T, stateDB stateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, big.NewInt(50), user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -357,7 +357,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			},
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -378,7 +378,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset call: insufficient gas for native asset call",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -397,11 +397,11 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          vmerrs.ErrOutOfGas,
 			expectedResult:       nil,
 			name:                 "native asset call: insufficient gas to create new account",
-			stateDBCheck: func(t *testing.T, stateDB StateDB) {
+			stateDBCheck: func(t *testing.T, stateDB stateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				user1AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := stateDB.(withMulticoin).GetBalanceMultiCoin(userAddr2, assetID)
+				user1AssetBalance := stateDB.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := stateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -410,7 +410,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			},
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -431,7 +431,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			name:                 "native asset call: invalid input",
 		},
 		{
-			setupStateDB: func() StateDB {
+			setupStateDB: func() stateDB {
 				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)

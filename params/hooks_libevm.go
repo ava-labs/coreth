@@ -7,30 +7,19 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/vmerrs"
+	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
-	gethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 )
 
-var PredicateParser = func(extra []byte) (PredicateResults, error) {
-	return nil, nil
-}
-
 func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
-	// IsProhibited
-	if ac.Self == constants.BlackholeAddr || modules.ReservedAddress(ac.Self) {
-		return gas, vmerrs.ErrAddrProhibited
-	}
-
 	return gas, nil
 }
 
@@ -41,7 +30,7 @@ func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -53,7 +42,7 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
@@ -111,14 +100,16 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen
 		}
-		predicateResults, err := PredicateParser(header.Extra)
-		if err != nil {
-			panic(err) // Should never happen, because predicates are parsed in NewEVMBlockContext.
+		var predicateResults *predicate.Results
+		if predicateResultsBytes := predicate.GetPredicateResultBytes(header.Extra); len(predicateResultsBytes) > 0 {
+			predicateResults, err = predicate.ParseResults(predicateResultsBytes)
+			if err != nil {
+				panic(err) // Should never happen, as results are already validated in block validation
+			}
 		}
 		accessableState := accessableState{
-			env:         env,
-			chainConfig: GetRulesExtra(env.Rules()).chainConfig,
-			blockContext: &BlockContext{
+			env: env,
+			blockContext: &precompileBlockContext{
 				number:           env.BlockNumber(),
 				time:             env.BlockTime(),
 				predicateResults: predicateResults,
@@ -146,8 +137,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 
 type accessableState struct {
 	env          vm.PrecompileEnvironment
-	chainConfig  *gethparams.ChainConfig
-	blockContext *BlockContext
+	blockContext *precompileBlockContext
 }
 
 func (a accessableState) GetStateDB() contract.StateDB {
@@ -166,96 +156,34 @@ func (a accessableState) GetBlockContext() contract.BlockContext {
 }
 
 func (a accessableState) GetChainConfig() precompileconfig.ChainConfig {
-	extra := GetExtra(a.chainConfig)
-	return extra
+	return GetExtra(a.env.ChainConfig())
 }
 
 func (a accessableState) GetSnowContext() *snow.Context {
-	return GetExtra(a.chainConfig).SnowCtx
+	return GetExtra(a.env.ChainConfig()).SnowCtx
 }
 
-func (a accessableState) NativeAssetCall(caller common.Address, input []byte, suppliedGas uint64, gasCost uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	if suppliedGas < gasCost {
-		return nil, 0, vmerrs.ErrOutOfGas
-	}
-	remainingGas = suppliedGas - gasCost
-
-	if readOnly {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
-	}
-
-	to, assetID, assetAmount, callData, err := nativeasset.UnpackNativeAssetCallInput(input)
-	if err != nil {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
-	}
-
-	stateDB := a.GetStateDB()
-	// Note: it is not possible for a negative assetAmount to be passed in here due to the fact that decoding a
-	// byte slice into a *big.Int type will always return a positive value.
-	if assetAmount.Sign() != 0 && stateDB.GetBalanceMultiCoin(caller, assetID).Cmp(assetAmount) < 0 {
-		return nil, remainingGas, vmerrs.ErrInsufficientBalance
-	}
-
-	snapshot := stateDB.Snapshot()
-
-	if !stateDB.Exist(to) {
-		if remainingGas < CallNewAccountGas {
-			return nil, 0, vmerrs.ErrOutOfGas
-		}
-		remainingGas -= CallNewAccountGas
-		stateDB.CreateAccount(to)
-	}
-
-	// Send [assetAmount] of [assetID] to [to] address
-	stateDB.SubBalanceMultiCoin(caller, assetID, assetAmount)
-	stateDB.AddBalanceMultiCoin(to, assetID, assetAmount)
-
-	ret, remainingGas, err = a.env.Call(to, callData, remainingGas, new(uint256.Int), vm.WithUNSAFECallerAddressProxying())
-
-	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally
-	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil {
-		stateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
-			remainingGas = 0
-		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
-	}
-	return ret, remainingGas, err
+func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...vm.CallOption) (ret []byte, gasRemaining uint64, _ error) {
+	return a.env.Call(addr, input, gas, value)
 }
 
-type PredicateResults interface {
-	GetPredicateResults(txHash common.Hash, address common.Address) []byte
-}
-
-type BlockContext struct {
+type precompileBlockContext struct {
 	number           *big.Int
 	time             uint64
-	predicateResults PredicateResults
+	predicateResults *predicate.Results
 }
 
-func NewBlockContext(number *big.Int, time uint64, predicateResults PredicateResults) *BlockContext {
-	return &BlockContext{
-		number:           number,
-		time:             time,
-		predicateResults: predicateResults,
-	}
+func (p *precompileBlockContext) Number() *big.Int {
+	return p.number
 }
 
-func (b *BlockContext) Number() *big.Int {
-	return b.number
+func (p *precompileBlockContext) Timestamp() uint64 {
+	return p.time
 }
 
-func (b *BlockContext) Timestamp() uint64 {
-	return b.time
-}
-
-func (b *BlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
-	if b.predicateResults == nil {
+func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
+	if p.predicateResults == nil {
 		return nil
 	}
-	return b.predicateResults.GetPredicateResults(txHash, address)
+	return p.predicateResults.GetPredicateResults(txHash, precompileAddress)
 }

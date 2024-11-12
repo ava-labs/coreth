@@ -45,7 +45,6 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/event"
@@ -65,8 +64,8 @@ var (
 func init() {
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
-	params.GetExtra(eip1559Config).ApricotPhase2BlockTimestamp = utils.NewUint64(0)
-	params.GetExtra(eip1559Config).ApricotPhase3BlockTimestamp = utils.NewUint64(0)
+	eip1559Config.BerlinBlock = common.Big0
+	eip1559Config.LondonBlock = common.Big0
 }
 
 type testBlockChain struct {

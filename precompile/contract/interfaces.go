@@ -10,11 +10,12 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
-	gethtypes "github.com/ava-labs/libevm/core/types"
+	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 	"github.com/holiman/uint256"
 )
 
-type Log = gethtypes.Log
+type Log = ethtypes.Log
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
 type StatefulPrecompiledContract interface {
@@ -60,7 +61,7 @@ type AccessibleState interface {
 	GetBlockContext() BlockContext
 	GetSnowContext() *snow.Context
 	GetChainConfig() precompileconfig.ChainConfig
-	NativeAssetCall(caller common.Address, input []byte, suppliedGas uint64, gasCost uint64, readOnly bool) (ret []byte, remainingGas uint64, err error)
+	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...vm.CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
 // ConfigurationBlockContext defines the interface required to configure a precompile.
@@ -71,8 +72,8 @@ type ConfigurationBlockContext interface {
 
 type BlockContext interface {
 	ConfigurationBlockContext
-	// GetResults returns an arbitrary byte array result of verifying the predicates
-	// of the given transaction, precompile address pair.
+	// GetPredicateResults returns a the result of verifying the predicates of the
+	// given transaction, precompile address pair as a byte array.
 	GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte
 }
 

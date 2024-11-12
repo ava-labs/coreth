@@ -35,7 +35,6 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 )
@@ -263,28 +262,22 @@ type backendMock struct {
 
 func newBackendMock() *backendMock {
 	var cancunTime uint64 = 600
-	config := params.WithExtra(
-		&params.ChainConfig{
-			ChainID:             big.NewInt(42),
-			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      true,
-			EIP150Block:         big.NewInt(0),
-			EIP155Block:         big.NewInt(0),
-			EIP158Block:         big.NewInt(0),
-			ByzantiumBlock:      big.NewInt(0),
-			ConstantinopleBlock: big.NewInt(0),
-			PetersburgBlock:     big.NewInt(0),
-			IstanbulBlock:       big.NewInt(0),
-			MuirGlacierBlock:    big.NewInt(0),
-			CancunTime:          &cancunTime,
-		},
-		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
-				ApricotPhase3BlockTimestamp: utils.NewUint64(100),
-			},
-		},
-	)
+	config := &params.ChainConfig{
+		ChainID:             big.NewInt(42),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		LondonBlock:         big.NewInt(1100),
+		CancunTime:          &cancunTime,
+	}
 	return &backendMock{
 		current: &types.Header{
 			Difficulty: big.NewInt(10000000000),
@@ -301,9 +294,11 @@ func newBackendMock() *backendMock {
 
 func (b *backendMock) setFork(fork string) error {
 	if fork == "legacy" {
-		b.current.Time = uint64(90) // Before ApricotPhase3BlockTimestamp
+		b.current.Number = big.NewInt(900)
+		b.current.Time = 555
 	} else if fork == "london" {
-		b.current.Time = uint64(110) // After ApricotPhase3BlockTimestamp
+		b.current.Number = big.NewInt(1100)
+		b.current.Time = 555
 	} else if fork == "cancun" {
 		b.current.Number = big.NewInt(1100)
 		b.current.Time = 700

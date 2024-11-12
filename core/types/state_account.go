@@ -27,26 +27,26 @@
 package types
 
 import (
-	gethtypes "github.com/ava-labs/libevm/core/types"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 )
 
 type (
 	// Import these types from the go-ethereum package
-	StateAccount = gethtypes.StateAccount
-	SlimAccount  = gethtypes.SlimAccount
+	StateAccount = ethtypes.StateAccount
+	SlimAccount  = ethtypes.SlimAccount
 )
 
 var (
 	// Import these functions from the go-ethereum package
-	NewEmptyStateAccount = gethtypes.NewEmptyStateAccount
-	SlimAccountRLP       = gethtypes.SlimAccountRLP
-	FullAccount          = gethtypes.FullAccount
-	FullAccountRLP       = gethtypes.FullAccountRLP
+	NewEmptyStateAccount = ethtypes.NewEmptyStateAccount
+	SlimAccountRLP       = ethtypes.SlimAccountRLP
+	FullAccount          = ethtypes.FullAccount
+	FullAccountRLP       = ethtypes.FullAccountRLP
 )
 
 type isMultiCoin bool
 
-var isMultiCoinPayloads = gethtypes.RegisterExtras[isMultiCoin]()
+var isMultiCoinPayloads = ethtypes.RegisterExtras[isMultiCoin]()
 
 func IsMultiCoin(a *StateAccount) bool {
 	return bool(isMultiCoinPayloads.FromStateAccount(a))

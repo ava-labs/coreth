@@ -31,7 +31,7 @@ jobs:
           token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
-          go-version: "~1.21.12"
+          go-version: "~1.22.8"
           check-latest: true
       - name: change avalanchego dep
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -39,7 +39,7 @@ jobs:
           go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
           go mod tidy
           go clean -modcache # avoid conflicts with the golangci-lint-action cache
-      - run: ./scripts/lint_allowed_geth_imports.sh
+      - run: ./scripts/lint_allowed_eth_imports.sh
         shell: bash
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
@@ -73,7 +73,7 @@ jobs:
           token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
-          go-version: "~1.21.12"
+          go-version: "~1.22.8"
           check-latest: true
       - name: change avalanchego dep
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -112,7 +112,7 @@ jobs:
           token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
-          go-version: "~1.21.12"
+          go-version: "~1.22.8"
           check-latest: true
       - name: Run e2e tests
         run: E2E_SERIAL=1 ./scripts/tests.e2e.sh
