@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
 )
 
@@ -102,8 +103,8 @@ type Config struct {
 	ReadOnly       bool   // Flag whether the database is opened in read only mode.
 }
 
-func (c *Config) New(diskdb ethdb.Database) database.PathBackend {
-	return New(diskdb, c)
+func (c Config) BackendConstructor(diskdb ethdb.Database, _ *triedb.Config) triedb.BackendOverride {
+	return New(diskdb, &c)
 }
 
 // sanitize checks the provided user configurations and changes anything that's

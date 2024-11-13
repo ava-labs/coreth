@@ -192,7 +192,7 @@ func (test *stateTest) run() bool {
 			storageList = append(storageList, copy2DSet(states.Storages))
 		}
 		disk      = rawdb.NewMemoryDatabase()
-		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
+		tdb       = triedb.NewDatabase(disk, &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor})
 		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)

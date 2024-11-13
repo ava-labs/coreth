@@ -219,8 +219,8 @@ func (g *Genesis) trieConfig() *triedb.Config {
 		return nil
 	}
 	return &triedb.Config{
-		PathDB:   pathdb.Defaults,
-		IsVerkle: true,
+		DBOverride: pathdb.Defaults.BackendConstructor,
+		IsVerkle:   true,
 	}
 }
 

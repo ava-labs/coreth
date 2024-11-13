@@ -154,9 +154,9 @@ func newAtomicTrie(
 	trieDB := triedb.NewDatabase(
 		rawdb.NewDatabase(Database{atomicTrieDB}),
 		&triedb.Config{
-			HashDB: &hashdb.Config{
+			DBOverride: hashdb.Config{
 				CleanCacheSize: 64 * units.MiB, // Allocate 64MB of memory for clean cache
-			},
+			}.BackendConstructor,
 		},
 	)
 

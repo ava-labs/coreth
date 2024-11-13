@@ -43,9 +43,9 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	// Create an empty state
 	config := &triedb.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		config.DBOverride = pathdb.Defaults.BackendConstructor
 	} else {
-		config.HashDB = hashdb.Defaults
+		config.DBOverride = hashdb.Defaults.BackendConstructor
 	}
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := triedb.NewDatabase(db, config)

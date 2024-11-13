@@ -176,9 +176,9 @@ func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = &pathdb.Config{} // disable caching
+		config.DBOverride = pathdb.Config{}.BackendConstructor // disable caching
 	} else {
-		config.HashDB = &hashdb.Config{} // disable caching
+		config.DBOverride = hashdb.Config{}.BackendConstructor // disable caching
 	}
 	triedb := triedb.NewDatabase(diskdb, config)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(types.EmptyRootHash), triedb)
