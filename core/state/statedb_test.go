@@ -1101,7 +1101,6 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	assertBalances(10, 0, 0)
 
 	// Commit and get the new root
-	snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
 	root, _ = stateDB.Commit(0, false)
 	assertBalances(10, 0, 0)
 
@@ -1109,7 +1108,6 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	// commit it to the tree.
 	stateDB, _ = New(root, sdb, snapTree)
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(10))
-	snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
 	root, _ = stateDB.Commit(0, false)
 	assertBalances(10, 10, 0)
 
@@ -1118,7 +1116,6 @@ func TestMultiCoinSnapshot(t *testing.T) {
 		stateDB, _ = New(root, sdb, snapTree)
 		stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
 		stateDB.AddBalanceMultiCoin(addr, assetID2, big.NewInt(2))
-		snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
 		root, _ = stateDB.Commit(0, false)
 	}
 	assertBalances(10, 266, 512)
@@ -1128,7 +1125,6 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	stateDB, _ = New(root, sdb, snapTree)
 	stateDB.AddBalance(addr, uint256.NewInt(1))
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
-	snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
 	root, _ = stateDB.Commit(0, false)
 	stateDB, _ = New(root, sdb, snapTree)
 	assertBalances(11, 267, 512)
@@ -1294,7 +1290,6 @@ func TestResetObject(t *testing.T) {
 	state.CreateAccount(addr)
 	state.SetBalance(addr, uint256.NewInt(2))
 	state.SetState(addr, slotB, common.BytesToHash([]byte{0x2}))
-	snaps.WithBlockHashes(common.Hash{}, common.Hash{})
 	root, _ := state.Commit(0, true)
 
 	// Ensure the original account is wiped properly
@@ -1326,7 +1321,6 @@ func TestDeleteStorage(t *testing.T) {
 		value := common.Hash(uint256.NewInt(uint64(10 * i)).Bytes32())
 		state.SetState(addr, slot, value)
 	}
-	snaps.WithBlockHashes(common.Hash{}, common.Hash{})
 	root, _ := state.Commit(0, true)
 	// Init phase done, create two states, one with snap and one without
 	fastState, _ := New(root, db, snaps)

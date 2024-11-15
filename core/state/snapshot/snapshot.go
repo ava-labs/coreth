@@ -117,6 +117,11 @@ var (
 	ErrNotConstructed = errors.New("snapshot is not constructed")
 )
 
+type Opt struct {
+	BlockHash  common.Hash
+	ParentHash common.Hash
+}
+
 // Snapshot represents the functionality supported by a snapshot storage layer.
 type Snapshot interface {
 	// Root returns the root hash for which this snapshot was made.
@@ -199,11 +204,6 @@ type Tree struct {
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
-
-	// XXX: The following fields are to help with integrating the modified snapshot
-	// with the upstream statedb.
-	parentBlockHash *common.Hash
-	blockHash       *common.Hash
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -326,11 +326,6 @@ func (t *Tree) Snapshots(blockHash common.Hash, limits int, nodisk bool) []Snaps
 	return ret
 }
 
-func (t *Tree) WithBlockHashes(blockHash, parentBlockHash common.Hash) {
-	t.blockHash = &blockHash
-	t.parentBlockHash = &parentBlockHash
-}
-
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 func (t *Tree) Update(
@@ -339,12 +334,14 @@ func (t *Tree) Update(
 	destructs map[common.Hash]struct{},
 	accounts map[common.Hash][]byte,
 	storage map[common.Hash]map[common.Hash][]byte,
+	opts ...Opt,
 ) error {
-	blockHash := *t.blockHash
-	parentBlockHash := *t.parentBlockHash
+	var blockHash, parentBlockHash common.Hash
+	if len(opts) > 0 {
+		blockHash = opts[0].BlockHash
+		parentBlockHash = opts[0].ParentHash
+	}
 
-	// Clear the block hashes, they must be set each time
-	t.blockHash, t.parentBlockHash = nil, nil
 	return t.UpdateWithBlockHashes(blockHash, blockRoot, parentBlockHash, destructs, accounts, storage)
 }
 

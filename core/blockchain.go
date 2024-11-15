@@ -1693,12 +1693,11 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) commitWithSnap(
 	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
-	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
-	// are stored by block hash.
-	if bc.snaps != nil {
-		bc.snaps.WithBlockHashes(current.Hash(), current.ParentHash())
+	opt := snapshot.Opt{
+		BlockHash:  current.Hash(),
+		ParentHash: current.ParentHash(),
 	}
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
+	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), opt)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1706,7 +1705,7 @@ func (bc *BlockChain) commitWithSnap(
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
 	if bc.snaps != nil && root == parentRoot {
-		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil); err != nil {
+		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil, opt); err != nil {
 			return common.Hash{}, err
 		}
 	}
