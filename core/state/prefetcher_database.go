@@ -69,6 +69,7 @@ func (p *prefetcherDatabase) Close() {
 type prefetcher interface {
 	PrefetchAccount(address common.Address)
 	PrefetchStorage(address common.Address, key []byte)
+	Wait()
 }
 
 type withPrefetcherDefaults struct {
@@ -83,7 +84,6 @@ func (t withPrefetcherDefaults) PrefetchAccount(address common.Address) {
 
 	_, _ = t.GetAccount(address)
 }
-
 func (t withPrefetcherDefaults) PrefetchStorage(address common.Address, key []byte) {
 	if p, ok := t.Trie.(prefetcher); ok {
 		p.PrefetchStorage(address, key)
@@ -91,6 +91,12 @@ func (t withPrefetcherDefaults) PrefetchStorage(address common.Address, key []by
 	}
 
 	_, _ = t.GetStorage(address, key)
+}
+
+func (t withPrefetcherDefaults) Wait() {
+	if p, ok := t.Trie.(prefetcher); ok {
+		p.Wait()
+	}
 }
 
 var _ prefetcher = (*prefetcherTrie)(nil)

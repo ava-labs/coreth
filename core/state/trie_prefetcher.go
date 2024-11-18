@@ -310,12 +310,7 @@ func (sf *subfetcher) abort() {
 	}
 	<-sf.term
 
-	type waiter interface {
-		Wait()
-	}
-	if trie, ok := sf.trie.(waiter); ok {
-		trie.Wait()
-	}
+	withPrefetcherDefaults{sf.trie}.Wait()
 }
 
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
