@@ -12,12 +12,21 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ForPrefetchingOnly returns a new database that is only suitable for prefetching
-// operations. It will not be safe to use for any other operations.
-// Close must be called on the returned database when it is no longer needed
-// to wait on all spawned goroutines.
-func (*cachingDB) ForPrefetchingOnly(db Database, maxConcurrency int) Database {
-	return newPrefetcherDatabase(db, maxConcurrency)
+type withPrefetcherDB interface {
+	PrefetcherDB() Database
+}
+
+type withPrefetcher struct {
+	Database
+	maxConcurrency int
+}
+
+func (db *withPrefetcher) PrefetcherDB() Database {
+	return newPrefetcherDatabase(db.Database, db.maxConcurrency)
+}
+
+func WithPrefetcher(db Database, maxConcurrency int) Database {
+	return &withPrefetcher{db, maxConcurrency}
 }
 
 type prefetcherDatabase struct {
@@ -29,9 +38,8 @@ type prefetcherDatabase struct {
 
 func newPrefetcherDatabase(db Database, maxConcurrency int) *prefetcherDatabase {
 	return &prefetcherDatabase{
-		Database:       db,
-		maxConcurrency: maxConcurrency,
-		workers:        utils.NewBoundedWorkers(maxConcurrency),
+		Database: db,
+		workers:  utils.NewBoundedWorkers(maxConcurrency),
 	}
 }
 

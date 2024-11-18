@@ -62,6 +62,9 @@ type triePrefetcher struct {
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
+	if pdb, ok := db.(withPrefetcherDB); ok {
+		db = pdb.PrefetcherDB()
+	}
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,

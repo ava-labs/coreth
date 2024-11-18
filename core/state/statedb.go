@@ -204,20 +204,13 @@ func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*St
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, maxConcurrency int) {
+func (s *StateDB) StartPrefetcher(namespace string) {
 	if s.prefetcher != nil {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
 	if s.snap != nil {
-		db := s.db
-		type prefetchingDB interface {
-			ForPrefetchingOnly(db Database, maxConcurrency int) Database
-		}
-		if p, ok := db.(prefetchingDB); ok {
-			db = p.ForPrefetchingOnly(db, maxConcurrency)
-		}
-		s.prefetcher = newTriePrefetcher(db, s.originalRoot, namespace)
+		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
 	}
 }
 
