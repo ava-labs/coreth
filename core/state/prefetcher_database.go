@@ -6,7 +6,6 @@ package state
 import (
 	"sync"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -38,8 +37,9 @@ type prefetcherDatabase struct {
 
 func newPrefetcherDatabase(db Database, maxConcurrency int) *prefetcherDatabase {
 	return &prefetcherDatabase{
-		Database: db,
-		workers:  utils.NewBoundedWorkers(maxConcurrency),
+		Database:       db,
+		maxConcurrency: maxConcurrency,
+		workers:        utils.NewBoundedWorkers(maxConcurrency),
 	}
 }
 
@@ -65,6 +65,35 @@ func (p *prefetcherDatabase) CopyTrie(t Trie) Trie {
 func (p *prefetcherDatabase) Close() {
 	p.workers.Wait()
 }
+
+type prefetcher interface {
+	PrefetchAccount(address common.Address)
+	PrefetchStorage(address common.Address, key []byte)
+}
+
+type withPrefetcherDefaults struct {
+	Trie
+}
+
+func (t withPrefetcherDefaults) PrefetchAccount(address common.Address) {
+	if p, ok := t.Trie.(prefetcher); ok {
+		p.PrefetchAccount(address)
+		return
+	}
+
+	_, _ = t.GetAccount(address)
+}
+
+func (t withPrefetcherDefaults) PrefetchStorage(address common.Address, key []byte) {
+	if p, ok := t.Trie.(prefetcher); ok {
+		p.PrefetchStorage(address, key)
+		return
+	}
+
+	_, _ = t.GetStorage(address, key)
+}
+
+var _ prefetcher = (*prefetcherTrie)(nil)
 
 type prefetcherTrie struct {
 	p *prefetcherDatabase
@@ -108,7 +137,7 @@ func (p *prefetcherTrie) putCopy(copy Trie) {
 	}
 }
 
-func (p *prefetcherTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
+func (p *prefetcherTrie) PrefetchAccount(address common.Address) {
 	p.wg.Add(1)
 	f := func() {
 		defer p.wg.Done()
@@ -121,10 +150,9 @@ func (p *prefetcherTrie) GetAccount(address common.Address) (*types.StateAccount
 		p.putCopy(tr)
 	}
 	p.p.workers.Execute(f)
-	return nil, nil // Note this result is never used by the prefetcher
 }
 
-func (p *prefetcherTrie) GetStorage(address common.Address, key []byte) ([]byte, error) {
+func (p *prefetcherTrie) PrefetchStorage(address common.Address, key []byte) {
 	p.wg.Add(1)
 	f := func() {
 		defer p.wg.Done()
@@ -137,5 +165,4 @@ func (p *prefetcherTrie) GetStorage(address common.Address, key []byte) ([]byte,
 		p.putCopy(tr)
 	}
 	p.p.workers.Execute(f)
-	return nil, nil // Note this result is never used by the prefetcher
 }
