@@ -229,7 +229,7 @@ type subfetcher struct {
 	owner common.Hash    // Owner of the trie, usually account hash
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
-	trie  PrefetcherTrie // Trie being populated with nodes
+	trie  Trie           // Trie being populated with nodes
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
@@ -305,7 +305,7 @@ func (sf *subfetcher) abort() {
 	}
 	<-sf.term
 
-	sf.trie.Wait()
+	sf.db.WaitTrie(sf.trie)
 }
 
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
@@ -321,7 +321,7 @@ func (sf *subfetcher) loop() {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return
 		}
-		sf.trie = sf.db.NewPrefetcherTrie(trie)
+		sf.trie = trie
 	} else {
 		// The trie argument can be nil as verkle doesn't support prefetching
 		// yet. TODO FIX IT(rjl493456442), otherwise code will panic here.
@@ -330,7 +330,7 @@ func (sf *subfetcher) loop() {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return
 		}
-		sf.trie = sf.db.NewPrefetcherTrie(trie)
+		sf.trie = trie
 	}
 	// Trie opened successfully, keep prefetching items
 	for {
@@ -362,9 +362,9 @@ func (sf *subfetcher) loop() {
 						sf.dups++
 					} else {
 						if len(task) == common.AddressLength {
-							sf.trie.PrefetchAccount(common.BytesToAddress(task))
+							sf.db.PrefetchAccount(sf.trie, common.BytesToAddress(task))
 						} else {
-							sf.trie.PrefetchStorage(sf.addr, task)
+							sf.db.PrefetchStorage(sf.trie, sf.addr, task)
 						}
 						sf.seen[string(task)] = struct{}{}
 					}
