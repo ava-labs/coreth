@@ -45,7 +45,7 @@ var (
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
-	db       Database               // Database to fetch trie nodes through
+	db       PrefetcherDB           // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
@@ -62,12 +62,14 @@ type triePrefetcher struct {
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
-	if pdb, ok := db.(withPrefetcherDB); ok {
-		db = pdb.PrefetcherDB()
+	var pdb PrefetcherDB
+	pdb = withPrefetcherDefaults{db}
+	if db, ok := db.(withPrefetcherDB); ok {
+		pdb = db.PrefetcherDB()
 	}
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
-		db:       db,
+		db:       pdb,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
 
@@ -87,14 +89,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 // close iterates over all the subfetchers, aborts any that were left spinning
 // and reports the stats to the metrics subsystem.
 func (p *triePrefetcher) close() {
-	defer func() {
-		type closer interface {
-			Close()
-		}
-		if closer, ok := p.db.(closer); ok {
-			closer.Close()
-		}
-	}()
+	defer p.db.Close()
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to do multiple times
 
@@ -229,7 +224,7 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	db    Database       // Database to load trie nodes through
+	db    PrefetcherDB   // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
 	owner common.Hash    // Owner of the trie, usually account hash
 	root  common.Hash    // Root hash of the trie to prefetch
@@ -251,7 +246,7 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(db PrefetcherDB, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
 		db:    db,
 		state: state,
@@ -310,7 +305,7 @@ func (sf *subfetcher) abort() {
 	}
 	<-sf.term
 
-	withPrefetcherDefaults{sf.trie}.Wait()
+	sf.db.WaitTrie(sf.trie)
 }
 
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
@@ -366,11 +361,10 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						tr := withPrefetcherDefaults{sf.trie}
 						if len(task) == common.AddressLength {
-							tr.PrefetchAccount(common.BytesToAddress(task))
+							sf.db.PrefetchAccount(sf.trie, common.BytesToAddress(task))
 						} else {
-							tr.PrefetchStorage(sf.addr, task)
+							sf.db.PrefetchStorage(sf.trie, sf.addr, task)
 						}
 						sf.seen[string(task)] = struct{}{}
 					}

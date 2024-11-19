@@ -12,7 +12,7 @@ import (
 )
 
 type withPrefetcherDB interface {
-	PrefetcherDB() Database
+	PrefetcherDB() PrefetcherDB
 }
 
 type withPrefetcher struct {
@@ -20,13 +20,28 @@ type withPrefetcher struct {
 	maxConcurrency int
 }
 
-func (db *withPrefetcher) PrefetcherDB() Database {
+func (db *withPrefetcher) PrefetcherDB() PrefetcherDB {
 	return newPrefetcherDatabase(db.Database, db.maxConcurrency)
 }
 
 func WithPrefetcher(db Database, maxConcurrency int) Database {
 	return &withPrefetcher{db, maxConcurrency}
 }
+
+type withPrefetcherDefaults struct {
+	Database
+}
+
+func (withPrefetcherDefaults) PrefetchAccount(t Trie, address common.Address) {
+	_, _ = t.GetAccount(address)
+}
+
+func (withPrefetcherDefaults) PrefetchStorage(t Trie, address common.Address, key []byte) {
+	_, _ = t.GetStorage(address, key)
+}
+
+func (withPrefetcherDefaults) WaitTrie(Trie) {}
+func (withPrefetcherDefaults) Close()        {}
 
 type prefetcherDatabase struct {
 	Database
@@ -44,13 +59,13 @@ func newPrefetcherDatabase(db Database, maxConcurrency int) *prefetcherDatabase 
 }
 
 func (p *prefetcherDatabase) OpenTrie(root common.Hash) (Trie, error) {
-	t, err := p.Database.OpenTrie(root)
-	return newPrefetcherTrie(p, t), err
+	trie, err := p.Database.OpenTrie(root)
+	return newPrefetcherTrie(p, trie), err
 }
 
 func (p *prefetcherDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error) {
-	t, err := p.Database.OpenStorageTrie(stateRoot, address, root, trie)
-	return newPrefetcherTrie(p, t), err
+	storageTrie, err := p.Database.OpenStorageTrie(stateRoot, address, root, trie)
+	return newPrefetcherTrie(p, storageTrie), err
 }
 
 func (p *prefetcherDatabase) CopyTrie(t Trie) Trie {
@@ -62,44 +77,34 @@ func (p *prefetcherDatabase) CopyTrie(t Trie) Trie {
 	}
 }
 
+func (*prefetcherDatabase) PrefetchAccount(t Trie, address common.Address) {
+	t.(*prefetcherTrie).PrefetchAccount(address)
+}
+
+func (*prefetcherDatabase) PrefetchStorage(t Trie, address common.Address, key []byte) {
+	t.(*prefetcherTrie).PrefetchStorage(address, key)
+}
+
+func (*prefetcherDatabase) WaitTrie(t Trie) {
+	t.(*prefetcherTrie).Wait()
+}
+
 func (p *prefetcherDatabase) Close() {
 	p.workers.Wait()
 }
 
-type prefetcher interface {
-	PrefetchAccount(address common.Address)
-	PrefetchStorage(address common.Address, key []byte)
-	Wait()
+type PrefetcherDB interface {
+	// From Database
+	OpenTrie(root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
+	CopyTrie(t Trie) Trie
+
+	// Additional methods
+	PrefetchAccount(t Trie, address common.Address)
+	PrefetchStorage(t Trie, address common.Address, key []byte)
+	WaitTrie(t Trie)
+	Close()
 }
-
-type withPrefetcherDefaults struct {
-	Trie
-}
-
-func (t withPrefetcherDefaults) PrefetchAccount(address common.Address) {
-	if p, ok := t.Trie.(prefetcher); ok {
-		p.PrefetchAccount(address)
-		return
-	}
-
-	_, _ = t.GetAccount(address)
-}
-func (t withPrefetcherDefaults) PrefetchStorage(address common.Address, key []byte) {
-	if p, ok := t.Trie.(prefetcher); ok {
-		p.PrefetchStorage(address, key)
-		return
-	}
-
-	_, _ = t.GetStorage(address, key)
-}
-
-func (t withPrefetcherDefaults) Wait() {
-	if p, ok := t.Trie.(prefetcher); ok {
-		p.Wait()
-	}
-}
-
-var _ prefetcher = (*prefetcherTrie)(nil)
 
 type prefetcherTrie struct {
 	p *prefetcherDatabase
