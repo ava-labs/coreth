@@ -11,6 +11,27 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// PrefetcherDB is an interface that extends Database with additional methods
+// used in trie_prefetcher.  This includes specific methods for prefetching
+// accounts and storage slots, (which may be non-blocking and/or parallelized)
+// and a methods to wait for pending prefetches.
+type PrefetcherDB interface {
+	// From Database
+	OpenTrie(root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
+	CopyTrie(t Trie) Trie
+
+	// Additional methods
+	PrefetchAccount(t Trie, address common.Address)
+	PrefetchStorage(t Trie, address common.Address, key []byte)
+	WaitTrie(t Trie)
+	Close()
+}
+
+// withPrefetcher is an optional interface that a Database can implement to
+// signal PrefetcherDB() should be called to get a Database for use in
+// trie_prefetcher.  Each call to PrefetcherDB() should return a new
+// PrefetcherDB instance.
 type withPrefetcherDB interface {
 	PrefetcherDB() PrefetcherDB
 }
@@ -28,6 +49,9 @@ func WithPrefetcher(db Database, maxConcurrency int) Database {
 	return &withPrefetcher{db, maxConcurrency}
 }
 
+// withPrefetcherDefaults extends Database and implements PrefetcherDB by adding
+// default implementations for PrefetchAccount and PrefetchStorage that read the
+// account and storage slot from the trie.
 type withPrefetcherDefaults struct {
 	Database
 }
@@ -77,33 +101,23 @@ func (p *prefetcherDatabase) CopyTrie(t Trie) Trie {
 	}
 }
 
+// PrefetchAccount should only be called on a trie returned from OpenTrie or OpenStorageTrie
 func (*prefetcherDatabase) PrefetchAccount(t Trie, address common.Address) {
 	t.(*prefetcherTrie).PrefetchAccount(address)
 }
 
+// PrefetchStorage should only be called on a trie returned from OpenTrie or OpenStorageTrie
 func (*prefetcherDatabase) PrefetchStorage(t Trie, address common.Address, key []byte) {
 	t.(*prefetcherTrie).PrefetchStorage(address, key)
 }
 
+// WaitTrie should only be called on a trie returned from OpenTrie or OpenStorageTrie
 func (*prefetcherDatabase) WaitTrie(t Trie) {
 	t.(*prefetcherTrie).Wait()
 }
 
 func (p *prefetcherDatabase) Close() {
 	p.workers.Wait()
-}
-
-type PrefetcherDB interface {
-	// From Database
-	OpenTrie(root common.Hash) (Trie, error)
-	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
-	CopyTrie(t Trie) Trie
-
-	// Additional methods
-	PrefetchAccount(t Trie, address common.Address)
-	PrefetchStorage(t Trie, address common.Address, key []byte)
-	WaitTrie(t Trie)
-	Close()
 }
 
 type prefetcherTrie struct {
@@ -116,6 +130,11 @@ type prefetcherTrie struct {
 	wg     sync.WaitGroup
 }
 
+// newPrefetcherTrie returns a new prefetcherTrie that wraps the given trie.
+// prefetcherTrie prefetches accounts and storage slots in parallel, using
+// bounded workers from the prefetcherDatabase.  As Trie is not safe for
+// concurrent access, each prefetch operation uses a copy. The copy is kept in
+// a buffered channel for reuse.
 func newPrefetcherTrie(p *prefetcherDatabase, t Trie) *prefetcherTrie {
 	prefetcher := &prefetcherTrie{
 		p:      p,
@@ -130,6 +149,8 @@ func (p *prefetcherTrie) Wait() {
 	p.wg.Wait()
 }
 
+// getCopy returns a copy of the trie. The copy is taken from the copies channel
+// if available, otherwise a new copy is created.
 func (p *prefetcherTrie) getCopy() Trie {
 	select {
 	case copy := <-p.copies:
@@ -141,6 +162,8 @@ func (p *prefetcherTrie) getCopy() Trie {
 	}
 }
 
+// putCopy keeps the copy for future use.  If the buffer is full, the copy is
+// discarded.
 func (p *prefetcherTrie) putCopy(copy Trie) {
 	select {
 	case p.copies <- copy:
