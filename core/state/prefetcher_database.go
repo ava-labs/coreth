@@ -14,7 +14,7 @@ import (
 // PrefetcherDB is an interface that extends Database with additional methods
 // used in trie_prefetcher.  This includes specific methods for prefetching
 // accounts and storage slots, (which may be non-blocking and/or parallelized)
-// and a methods to wait for pending prefetches.
+// and methods to wait for pending prefetches.
 type PrefetcherDB interface {
 	// From Database
 	OpenTrie(root common.Hash) (Trie, error)
