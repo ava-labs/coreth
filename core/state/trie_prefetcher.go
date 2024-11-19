@@ -304,8 +304,6 @@ func (sf *subfetcher) abort() {
 		close(sf.stop)
 	}
 	<-sf.term
-
-	sf.db.WaitTrie(sf.trie)
 }
 
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
@@ -332,6 +330,29 @@ func (sf *subfetcher) loop() {
 		}
 		sf.trie = trie
 	}
+	handleTask := func(task []byte) {
+		if _, ok := sf.seen[string(task)]; ok {
+			sf.dups++
+		} else {
+			if len(task) == common.AddressLength {
+				sf.db.PrefetchAccount(sf.trie, common.BytesToAddress(task))
+			} else {
+				sf.db.PrefetchStorage(sf.trie, sf.addr, task)
+			}
+			sf.seen[string(task)] = struct{}{}
+		}
+	}
+	defer func() {
+		if sf.db.CanPrefetchDuringShutdown() {
+			for _, task := range sf.tasks {
+				handleTask(task)
+			}
+			sf.tasks = nil
+		}
+
+		sf.db.WaitTrie(sf.trie)
+	}()
+
 	// Trie opened successfully, keep prefetching items
 	for {
 		select {
@@ -358,16 +379,7 @@ func (sf *subfetcher) loop() {
 
 				default:
 					// No termination request yet, prefetch the next entry
-					if _, ok := sf.seen[string(task)]; ok {
-						sf.dups++
-					} else {
-						if len(task) == common.AddressLength {
-							sf.db.PrefetchAccount(sf.trie, common.BytesToAddress(task))
-						} else {
-							sf.db.PrefetchStorage(sf.trie, sf.addr, task)
-						}
-						sf.seen[string(task)] = struct{}{}
-					}
+					handleTask(task)
 				}
 			}
 

@@ -24,6 +24,7 @@ type PrefetcherDB interface {
 	// Additional methods
 	PrefetchAccount(t Trie, address common.Address)
 	PrefetchStorage(t Trie, address common.Address, key []byte)
+	CanPrefetchDuringShutdown() bool
 	WaitTrie(t Trie)
 	Close()
 }
@@ -64,8 +65,9 @@ func (withPrefetcherDefaults) PrefetchStorage(t Trie, address common.Address, ke
 	_, _ = t.GetStorage(address, key)
 }
 
-func (withPrefetcherDefaults) WaitTrie(Trie) {}
-func (withPrefetcherDefaults) Close()        {}
+func (withPrefetcherDefaults) CanPrefetchDuringShutdown() bool { return false }
+func (withPrefetcherDefaults) WaitTrie(Trie)                   {}
+func (withPrefetcherDefaults) Close()                          {}
 
 type prefetcherDatabase struct {
 	Database
@@ -118,6 +120,10 @@ func (*prefetcherDatabase) WaitTrie(t Trie) {
 
 func (p *prefetcherDatabase) Close() {
 	p.workers.Wait()
+}
+
+func (p *prefetcherDatabase) CanPrefetchDuringShutdown() bool {
+	return true
 }
 
 type prefetcherTrie struct {
