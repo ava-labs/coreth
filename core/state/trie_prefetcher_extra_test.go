@@ -26,8 +26,9 @@ import (
 
 const namespace = "chain"
 
-// Write a test to add 100m kvs to a leveldb so that we can test the prefetcher
-// performance.
+// BenchmarkPrefetcherDatabase first add TEST_DB_KVS key-value pairs to a trie
+// stored in leveldb, then runs benchmarks for updating the trie with different
+// numbers of updates and different prefetcher configuration.
 
 func BenchmarkPrefetcherDatabase(b *testing.B) {
 	require := require.New(b)
@@ -139,13 +140,12 @@ func BenchmarkPrefetcherDatabase(b *testing.B) {
 					meter := metrics.GetOrRegisterMeter(triePrefetchMetricsPrefix+namespace+"/storage/"+metric, nil)
 					return meter.Snapshot().Count()
 				}
-				startLoads, startDups := getMetric("load"), getMetric("dup")
+				startLoads := getMetric("load")
 				for i := 0; i < b.N; i++ {
 					_ = addBlock(db, snaps, updates, prefetchers)
 				}
 				require.NoError(levelDB.Close())
 				b.ReportMetric(float64(getMetric("load")-startLoads)/float64(b.N), "loads")
-				b.ReportMetric(float64(getMetric("dup")-startDups)/float64(b.N), "dups")
 			})
 		}
 	}
