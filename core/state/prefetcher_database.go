@@ -58,11 +58,17 @@ type withPrefetcherDefaults struct {
 }
 
 func (withPrefetcherDefaults) PrefetchAccount(t Trie, address common.Address) {
-	_, _ = t.GetAccount(address)
+	_, err := t.GetAccount(address)
+	if err != nil {
+		log.Error("GetAccount failed in prefetcher", "err", err)
+	}
 }
 
 func (withPrefetcherDefaults) PrefetchStorage(t Trie, address common.Address, key []byte) {
-	_, _ = t.GetStorage(address, key)
+	_, err := t.GetStorage(address, key)
+	if err != nil {
+		log.Error("GetStorage failed in prefetcher", "err", err)
+	}
 }
 
 func (withPrefetcherDefaults) CanPrefetchDuringShutdown() bool { return false }
