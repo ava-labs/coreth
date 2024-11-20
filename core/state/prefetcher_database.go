@@ -22,8 +22,8 @@ type PrefetcherDB interface {
 	CopyTrie(t Trie) Trie
 
 	// Additional methods
-	PrefetchAccount(t Trie, address common.Address)
-	PrefetchStorage(t Trie, address common.Address, key []byte)
+	PrefetchAccount(t Trie, address common.Address) error
+	PrefetchStorage(t Trie, address common.Address, key []byte) error
 	CanPrefetchDuringShutdown() bool
 	WaitTrie(t Trie)
 	Close()
@@ -57,12 +57,14 @@ type withPrefetcherDefaults struct {
 	Database
 }
 
-func (withPrefetcherDefaults) PrefetchAccount(t Trie, address common.Address) {
-	_, _ = t.GetAccount(address)
+func (withPrefetcherDefaults) PrefetchAccount(t Trie, address common.Address) error {
+	_, err := t.GetAccount(address)
+	return err
 }
 
-func (withPrefetcherDefaults) PrefetchStorage(t Trie, address common.Address, key []byte) {
-	_, _ = t.GetStorage(address, key)
+func (withPrefetcherDefaults) PrefetchStorage(t Trie, address common.Address, key []byte) error {
+	_, err := t.GetStorage(address, key)
+	return err
 }
 
 func (withPrefetcherDefaults) CanPrefetchDuringShutdown() bool { return false }
@@ -104,13 +106,15 @@ func (p *prefetcherDatabase) CopyTrie(t Trie) Trie {
 }
 
 // PrefetchAccount should only be called on a trie returned from OpenTrie or OpenStorageTrie
-func (*prefetcherDatabase) PrefetchAccount(t Trie, address common.Address) {
+func (*prefetcherDatabase) PrefetchAccount(t Trie, address common.Address) error {
 	t.(*prefetcherTrie).PrefetchAccount(address)
+	return nil
 }
 
 // PrefetchStorage should only be called on a trie returned from OpenTrie or OpenStorageTrie
-func (*prefetcherDatabase) PrefetchStorage(t Trie, address common.Address, key []byte) {
+func (*prefetcherDatabase) PrefetchStorage(t Trie, address common.Address, key []byte) error {
 	t.(*prefetcherTrie).PrefetchStorage(address, key)
+	return nil
 }
 
 // WaitTrie should only be called on a trie returned from OpenTrie or OpenStorageTrie
