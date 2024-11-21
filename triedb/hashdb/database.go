@@ -104,7 +104,7 @@ type Config struct {
 	ReferenceRoot  bool   // Whether to reference the root node on update
 }
 
-func (c Config) BackendConstructor(diskdb ethdb.Database, config *triedb.Config) triedb.BackendOverride {
+func (c Config) BackendConstructor(diskdb ethdb.Database, config *triedb.Config) triedb.DBOverride {
 	var resolver ChildResolver
 	if config.IsVerkle {
 		// TODO define verkle resolver
