@@ -192,7 +192,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	}
 	// Verify the snapshot disk layer matches the last block root
 	lastRoot := syncDisabledVM.blockChain.CurrentBlock().Root
-	if err := syncDisabledVM.blockChain.Snapshots().Verify(lastRoot); err != nil {
+	if err := syncDisabledVM.blockChain.VerifySnapshot(lastRoot); err != nil {
 		t.Fatal(err)
 	}
 	syncDisabledVM.blockChain.DrainAcceptorQueue()

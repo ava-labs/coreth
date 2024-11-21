@@ -23,9 +23,9 @@ func (t *TestBlockProvider) GetBlock(hash common.Hash, number uint64) *types.Blo
 }
 
 type TestSnapshotProvider struct {
-	Snapshot *snapshot.Tree
+	Snapshot snapshot.DiskIterable
 }
 
-func (t *TestSnapshotProvider) Snapshots() *snapshot.Tree {
+func (t *TestSnapshotProvider) Snapshots() snapshot.DiskIterable {
 	return t.Snapshot
 }

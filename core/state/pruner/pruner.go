@@ -38,9 +38,9 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/libevm/common"
+	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
@@ -87,7 +87,7 @@ type Pruner struct {
 	chainHeader *types.Header
 	db          ethdb.Database
 	stateBloom  *stateBloom
-	snaptree    *snapshot.Tree
+	snaptree    *ethsnapshot.Tree
 }
 
 // NewPruner creates the pruner instance.
@@ -103,13 +103,12 @@ func NewPruner(db ethdb.Database, config Config) (*Pruner, error) {
 	// us from ever needing to enter RecoverPruning in an invalid pruning session (a session where we do not have
 	// the protected trie in the triedb and in the snapshot disk layer).
 
-	snapconfig := snapshot.Config{
+	snapconfig := ethsnapshot.Config{
 		CacheSize:  256,
 		AsyncBuild: false,
 		NoBuild:    true,
-		SkipVerify: true,
 	}
-	snaptree, err := snapshot.New(snapconfig, db, triedb, headBlock.Hash(), headBlock.Root())
+	snaptree, err := ethsnapshot.New(snapconfig, db, triedb, headBlock.Root())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot for pruning, must restart without offline pruning disabled to recover: %w", err) // The relevant snapshot(s) might not exist
 	}
@@ -285,7 +284,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// Traverse the target state, re-construct the whole state trie and
 	// commit to the given bloom filter.
 	start := time.Now()
-	if err := snapshot.GenerateTrie(p.snaptree, root, p.db, p.stateBloom); err != nil {
+	if err := ethsnapshot.GenerateTrie(p.snaptree, root, p.db, p.stateBloom); err != nil {
 		return err
 	}
 	// Traverse the genesis, put all genesis state entries into the
