@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/metrics"
@@ -52,6 +51,7 @@ import (
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
+	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
@@ -242,11 +242,11 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db           ethdb.Database   // Low level persistent database to store final content in
-	snaps        *snapshot.Tree   // Snapshot tree for fast trie leaf access
-	triedb       *triedb.Database // The database handler for maintaining trie nodes.
-	stateCache   state.Database   // State database to reuse between imports (contains state cache)
-	txIndexer    *txIndexer       // Transaction indexer, might be nil if not enabled
+	db           ethdb.Database    // Low level persistent database to store final content in
+	snaps        *ethsnapshot.Tree // Snapshot tree for fast trie leaf access
+	triedb       *triedb.Database  // The database handler for maintaining trie nodes.
+	stateCache   state.Database    // State database to reuse between imports (contains state cache)
+	txIndexer    *txIndexer        // Transaction indexer, might be nil if not enabled
 	stateManager TrieWriter
 
 	hc                *HeaderChain
@@ -940,6 +940,14 @@ func (bc *BlockChain) Stop() {
 
 	// Ensure that the entirety of the state snapshot is journaled to disk.
 	if bc.snaps != nil {
+		_, err := bc.db.Has(nil)
+		dbOpen := err == nil
+		if dbOpen {
+			//if _, err = bc.snaps.Journal(bc.CurrentBlock().Root); err != nil {
+			//	log.Error("Failed to journal state snapshot", "err", err)
+			//}
+		}
+		bc.snaps.AbortGeneration()
 		bc.snaps.Release()
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
@@ -1695,10 +1703,10 @@ func (bc *BlockChain) commitWithSnap(
 ) (common.Hash, error) {
 	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
 	// are stored by block hash.
-	if bc.snaps != nil {
-		bc.snaps.WithBlockHashes(current.Hash(), current.ParentHash())
-	}
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
+	root, err := statedb.Commit(
+		current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()),
+		ethsnapshot.WithBlockHashes(current.Hash(), current.ParentHash()),
+	)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1706,7 +1714,10 @@ func (bc *BlockChain) commitWithSnap(
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
 	if bc.snaps != nil && root == parentRoot {
-		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil); err != nil {
+		if err := bc.snaps.Update(
+			root, parentRoot, nil, nil, nil,
+			ethsnapshot.WithBlockHashes(current.Hash(), current.ParentHash()),
+		); err != nil {
 			return common.Hash{}, err
 		}
 	}
@@ -1728,14 +1739,13 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 	asyncBuild := !bc.cacheConfig.SnapshotWait && b.Number.Uint64() > 0
 	noBuild := bc.cacheConfig.SnapshotNoBuild && b.Number.Uint64() > 0
 	log.Info("Initializing snapshots", "async", asyncBuild, "rebuild", !noBuild, "headHash", b.Hash(), "headRoot", b.Root)
-	snapconfig := snapshot.Config{
+	snapconfig := ethsnapshot.Config{
 		CacheSize:  bc.cacheConfig.SnapshotLimit,
 		NoBuild:    noBuild,
 		AsyncBuild: asyncBuild,
-		SkipVerify: !bc.cacheConfig.SnapshotVerify,
 	}
 	var err error
-	bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, b.Hash(), b.Root)
+	bc.snaps, err = ethsnapshot.New(snapconfig, bc.db, bc.triedb, b.Root)
 	if err != nil {
 		log.Error("failed to initialize snapshots", "headHash", b.Hash(), "headRoot", b.Root, "err", err, "async", asyncBuild)
 	}

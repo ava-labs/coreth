@@ -156,7 +156,7 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 		t.Errorf("The corresponding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
 	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
 		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
-	} else if len(chain.snaps.Snapshots(block.Hash(), -1, false)) != 1 {
+	} else if len(chain.snaps.Snapshots(block.Root(), -1, false)) != 1 {
 		t.Errorf("The corresponding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
 	}
 

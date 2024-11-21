@@ -14,7 +14,7 @@ type BlockProvider interface {
 }
 
 type SnapshotProvider interface {
-	Snapshots() *snapshot.Tree
+	Snapshots() snapshot.DiskIterable
 }
 
 type SyncDataProvider interface {

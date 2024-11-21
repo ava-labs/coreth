@@ -175,7 +175,7 @@ type responseBuilder struct {
 	request   *message.LeafsRequest
 	response  *message.LeafsResponse
 	t         *trie.Trie
-	snap      *snapshot.Tree
+	snap      snapshot.DiskIterable
 	keyLength int
 	limit     uint16
 

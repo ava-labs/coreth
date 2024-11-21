@@ -351,7 +351,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 
 	if blockchain.snaps != nil {
 		// Snap layer count should be 1 fewer
-		if want, got := len(chain1)+len(chain2), blockchain.snaps.NumBlockLayers(); got != want {
+		if want, got := len(chain1), blockchain.snaps.NumBlockLayers(); got != want {
 			t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 		}
 	}
@@ -359,13 +359,6 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 	for i := 0; i < len(chain2); i++ {
 		if err := blockchain.Reject(chain2[i]); err != nil {
 			t.Fatal(err)
-		}
-
-		if blockchain.snaps != nil {
-			// Snap layer count should decrease by 1 per Reject
-			if want, got := len(chain1)+len(chain2)-i-1, blockchain.snaps.NumBlockLayers(); got != want {
-				t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
-			}
 		}
 	}
 

@@ -264,8 +264,12 @@ func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
 
 // Snapshots returns the blockchain snapshot tree.
-func (bc *BlockChain) Snapshots() *snapshot.Tree {
+func (bc *BlockChain) Snapshots() snapshot.DiskIterable {
 	return bc.snaps
+}
+
+func (bc *BlockChain) VerifySnapshot(root common.Hash) error {
+	return bc.snaps.Verify(root)
 }
 
 // Validator returns the current validator.
