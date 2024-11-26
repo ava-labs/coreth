@@ -31,25 +31,11 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
 	"github.com/holiman/uint256"
 )
-
-type snapshotTree interface {
-	Snapshot(root common.Hash) snapshot.Snapshot
-	Update(
-		blockRoot common.Hash,
-		parentRoot common.Hash,
-		destructs map[common.Hash]struct{},
-		accounts map[common.Hash][]byte,
-		storage map[common.Hash]map[common.Hash][]byte,
-	) error
-	StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (snapshot.StorageIterator, error)
-	Cap(root common.Hash, layers int) error
-}
 
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
@@ -71,11 +57,11 @@ type StateDB struct {
 
 	// Some fields remembered as they are used in tests
 	db    Database
-	snaps snapshotTree
+	snaps ethstate.SnapshotTree
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps snapshotTree) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps ethstate.SnapshotTree) (*StateDB, error) {
 	if snaps != nil {
 		// XXX: Make sure we treat incoming `nil` ptrs as `nil` values, not an
 		// interface to a nil ptr

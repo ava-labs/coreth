@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 )
@@ -184,11 +185,6 @@ type Tree struct {
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
-
-	// XXX: The following fields are to help with integrating the modified snapshot
-	// with the upstream statedb.
-	parentBlockHash *common.Hash
-	blockHash       *common.Hash
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -311,9 +307,13 @@ func (t *Tree) Snapshots(blockHash common.Hash, limits int, nodisk bool) []Snaps
 	return ret
 }
 
-func (t *Tree) WithBlockHashes(blockHash, parentBlockHash common.Hash) {
-	t.blockHash = &blockHash
-	t.parentBlockHash = &parentBlockHash
+type blockHashes struct {
+	blockHash       common.Hash
+	parentBlockHash common.Hash
+}
+
+func WithBlockHashes(blockHash, parentBlockHash common.Hash) stateconf.SnapshotUpdateOption {
+	return stateconf.WithUpdatePayload(blockHashes{blockHash, parentBlockHash})
 }
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
@@ -324,13 +324,19 @@ func (t *Tree) Update(
 	destructs map[common.Hash]struct{},
 	accounts map[common.Hash][]byte,
 	storage map[common.Hash]map[common.Hash][]byte,
+	opts ...stateconf.SnapshotUpdateOption,
 ) error {
-	blockHash := *t.blockHash
-	parentBlockHash := *t.parentBlockHash
+	if len(opts) == 0 {
+		return fmt.Errorf("missing block hashes")
+	}
 
-	// Clear the block hashes, they must be set each time
-	t.blockHash, t.parentBlockHash = nil, nil
-	return t.UpdateWithBlockHashes(blockHash, blockRoot, parentBlockHash, destructs, accounts, storage)
+	payload := stateconf.ExtractUpdatePayload(opts[0])
+	p, ok := payload.(blockHashes)
+	if !ok {
+		return fmt.Errorf("invalid block hashes payload: %T", payload)
+	}
+
+	return t.UpdateWithBlockHashes(p.blockHash, blockRoot, p.parentBlockHash, destructs, accounts, storage)
 }
 
 func (t *Tree) UpdateWithBlockHashes(

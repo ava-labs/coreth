@@ -769,16 +769,14 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	assertBalances(10, 0, 0)
 
 	// Commit and get the new root
-	snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, _ = stateDB.Commit(0, false)
+	root, _ = stateDB.Commit(0, false, snapshot.WithBlockHashes(common.Hash{}, common.Hash{}))
 	assertBalances(10, 0, 0)
 
 	// Create a new state from the latest root, add a multicoin balance, and
 	// commit it to the tree.
 	stateDB, _ = New(root, sdb, snapTree)
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(10))
-	snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, _ = stateDB.Commit(0, false)
+	root, _ = stateDB.Commit(0, false, snapshot.WithBlockHashes(common.Hash{}, common.Hash{}))
 	assertBalances(10, 10, 0)
 
 	// Add more layers than the cap and ensure the balances and layers are correct
@@ -786,8 +784,7 @@ func TestMultiCoinSnapshot(t *testing.T) {
 		stateDB, _ = New(root, sdb, snapTree)
 		stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
 		stateDB.AddBalanceMultiCoin(addr, assetID2, big.NewInt(2))
-		snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
-		root, _ = stateDB.Commit(0, false)
+		root, _ = stateDB.Commit(0, false, snapshot.WithBlockHashes(common.Hash{}, common.Hash{}))
 	}
 	assertBalances(10, 266, 512)
 
@@ -796,8 +793,7 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	stateDB, _ = New(root, sdb, snapTree)
 	stateDB.AddBalance(addr, uint256.NewInt(1))
 	stateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
-	snapTree.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, _ = stateDB.Commit(0, false)
+	root, _ = stateDB.Commit(0, false, snapshot.WithBlockHashes(common.Hash{}, common.Hash{}))
 	stateDB, _ = New(root, sdb, snapTree)
 	assertBalances(11, 267, 512)
 }
@@ -928,8 +924,7 @@ func TestResetObject(t *testing.T) {
 	state.CreateAccount(addr)
 	state.SetBalance(addr, uint256.NewInt(2))
 	state.SetState(addr, slotB, common.BytesToHash([]byte{0x2}))
-	snaps.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, _ := state.Commit(0, true)
+	root, _ := state.Commit(0, true, snapshot.WithBlockHashes(common.Hash{}, common.Hash{}))
 
 	// Ensure the original account is wiped properly
 	snap := snaps.Snapshot(root)
