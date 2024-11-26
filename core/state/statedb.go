@@ -29,7 +29,6 @@ package state
 
 import (
 	"math/big"
-	"reflect"
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/libevm/common"
@@ -62,14 +61,6 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps ethstate.SnapshotTree) (*StateDB, error) {
-	if snaps != nil {
-		// XXX: Make sure we treat incoming `nil` ptrs as `nil` values, not an
-		// interface to a nil ptr
-		v := reflect.ValueOf(snaps)
-		if v.Kind() == reflect.Ptr && v.IsNil() {
-			snaps = nil
-		}
-	}
 	stateDB, err := ethstate.New(root, db, snaps)
 	if err != nil {
 		return nil, err
