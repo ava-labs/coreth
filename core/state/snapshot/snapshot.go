@@ -403,7 +403,7 @@ func (t *Tree) verifyIntegrity(base *diskLayer, waitBuild bool) error {
 }
 
 func (t *Tree) Cap(root common.Hash, layers int) error {
-	return nil // No-op for now
+	return nil // No-op as this code uses Flatten on block accept instead
 }
 
 // Flatten flattens the snapshot for [blockHash] into its parent. if its

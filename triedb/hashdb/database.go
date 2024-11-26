@@ -46,7 +46,6 @@ import (
 	"github.com/ava-labs/libevm/trie/triestate"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
-	ethhashdb "github.com/ava-labs/libevm/triedb/hashdb"
 )
 
 const (
@@ -87,7 +86,9 @@ var (
 
 // ChildResolver defines the required method to decode the provided
 // trie node and iterate the children on top.
-type ChildResolver = ethhashdb.ChildResolver
+type ChildResolver interface {
+	ForEach(node []byte, onChild func(common.Hash))
+}
 
 type cache interface {
 	HasGet([]byte, []byte) ([]byte, bool)
