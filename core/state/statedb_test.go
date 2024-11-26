@@ -657,14 +657,14 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		memDb = rawdb.NewMemoryDatabase()
 	)
 	if scheme == rawdb.PathScheme {
-		tdb = triedb.NewDatabase(memDb, &triedb.Config{PathDB: &pathdb.Config{
+		tdb = triedb.NewDatabase(memDb, &triedb.Config{DBOverride: pathdb.Config{
 			CleanCacheSize: 0,
 			DirtyCacheSize: 0,
-		}}) // disable caching
+		}.BackendConstructor}) // disable caching
 	} else {
-		tdb = triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
+		tdb = triedb.NewDatabase(memDb, &triedb.Config{DBOverride: hashdb.Config{
 			CleanCacheSize: 0,
-		}}) // disable caching
+		}.BackendConstructor}) // disable caching
 	}
 	db := NewDatabaseWithNodeDB(memDb, tdb)
 
