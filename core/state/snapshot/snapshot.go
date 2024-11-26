@@ -35,10 +35,11 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/common"
+	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 )
@@ -118,28 +119,7 @@ var (
 )
 
 // Snapshot represents the functionality supported by a snapshot storage layer.
-type Snapshot interface {
-	// Root returns the root hash for which this snapshot was made.
-	Root() common.Hash
-
-	// Account directly retrieves the account associated with a particular hash in
-	// the snapshot slim data format.
-	Account(hash common.Hash) (*types.SlimAccount, error)
-
-	// AccountRLP directly retrieves the account RLP associated with a particular
-	// hash in the snapshot slim data format.
-	AccountRLP(hash common.Hash) ([]byte, error)
-
-	// Storage directly retrieves the storage data associated with a particular hash,
-	// within a particular account.
-	Storage(accountHash, storageHash common.Hash) ([]byte, error)
-
-	// AccountIterator creates an account iterator over the account trie given by the provided root hash.
-	AccountIterator(seek common.Hash) AccountIterator
-
-	// StorageIterator creates a storage iterator over the storage trie given by the provided root hash.
-	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
-}
+type Snapshot = ethsnapshot.Snapshot
 
 // snapshot is the internal version of the snapshot data layer that supports some
 // additional methods compared to the public API.
@@ -164,6 +144,12 @@ type snapshot interface {
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
 	Stale() bool
+
+	// AccountIterator creates an account iterator over an arbitrary layer.
+	AccountIterator(seek common.Hash) AccountIterator
+
+	// StorageIterator creates a storage iterator over an arbitrary layer.
+	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
 }
 
 // Config includes the configurations for snapshots.
@@ -199,11 +185,6 @@ type Tree struct {
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
-
-	// XXX: The following fields are to help with integrating the modified snapshot
-	// with the upstream statedb.
-	parentBlockHash *common.Hash
-	blockHash       *common.Hash
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -326,9 +307,13 @@ func (t *Tree) Snapshots(blockHash common.Hash, limits int, nodisk bool) []Snaps
 	return ret
 }
 
-func (t *Tree) WithBlockHashes(blockHash, parentBlockHash common.Hash) {
-	t.blockHash = &blockHash
-	t.parentBlockHash = &parentBlockHash
+type blockHashes struct {
+	blockHash       common.Hash
+	parentBlockHash common.Hash
+}
+
+func WithBlockHashes(blockHash, parentBlockHash common.Hash) stateconf.SnapshotUpdateOption {
+	return stateconf.WithUpdatePayload(blockHashes{blockHash, parentBlockHash})
 }
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
@@ -339,13 +324,19 @@ func (t *Tree) Update(
 	destructs map[common.Hash]struct{},
 	accounts map[common.Hash][]byte,
 	storage map[common.Hash]map[common.Hash][]byte,
+	opts ...stateconf.SnapshotUpdateOption,
 ) error {
-	blockHash := *t.blockHash
-	parentBlockHash := *t.parentBlockHash
+	if len(opts) == 0 {
+		return fmt.Errorf("missing block hashes")
+	}
 
-	// Clear the block hashes, they must be set each time
-	t.blockHash, t.parentBlockHash = nil, nil
-	return t.UpdateWithBlockHashes(blockHash, blockRoot, parentBlockHash, destructs, accounts, storage)
+	payload := stateconf.ExtractUpdatePayload(opts[0])
+	p, ok := payload.(blockHashes)
+	if !ok {
+		return fmt.Errorf("invalid block hashes payload: %T", payload)
+	}
+
+	return t.UpdateWithBlockHashes(p.blockHash, blockRoot, p.parentBlockHash, destructs, accounts, storage)
 }
 
 func (t *Tree) UpdateWithBlockHashes(
