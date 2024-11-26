@@ -50,9 +50,9 @@ type StateTestState struct {
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
 	tconf := &triedb.Config{Preimages: true}
 	if scheme == rawdb.HashScheme {
-		tconf.HashDB = hashdb.Defaults
+		tconf.DBOverride = hashdb.Defaults.BackendConstructor
 	} else {
-		tconf.PathDB = pathdb.Defaults
+		tconf.DBOverride = pathdb.Defaults.BackendConstructor
 	}
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabaseWithNodeDB(db, triedb)

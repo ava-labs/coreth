@@ -178,18 +178,18 @@ type CacheConfig struct {
 func (c *CacheConfig) triedbConfig() *triedb.Config {
 	config := &triedb.Config{Preimages: c.Preimages}
 	if c.StateScheme == rawdb.HashScheme || c.StateScheme == "" {
-		config.HashDB = &hashdb.Config{
+		config.DBOverride = hashdb.Config{
 			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:    trieCleanCacheStatsNamespace,
 			ReferenceRoot:  true, // Automatically reference root nodes when an update is made
-		}
+		}.BackendConstructor
 	}
 	if c.StateScheme == rawdb.PathScheme {
-		config.PathDB = &pathdb.Config{
+		config.DBOverride = pathdb.Config{
 			StateHistory:   c.StateHistory,
 			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
-		}
+		}.BackendConstructor
 	}
 	return config
 }

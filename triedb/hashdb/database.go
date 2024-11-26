@@ -41,8 +41,10 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
 	ethhashdb "github.com/ava-labs/libevm/triedb/hashdb"
 )
@@ -102,8 +104,15 @@ type Config struct {
 	ReferenceRoot  bool   // Whether to reference the root node on update
 }
 
-func (c *Config) New(diskdb ethdb.Database, resolver ChildResolver) database.HashBackend {
-	return New(diskdb, c, resolver)
+func (c Config) BackendConstructor(diskdb ethdb.Database, config *triedb.Config) triedb.DBOverride {
+	var resolver ChildResolver
+	if config.IsVerkle {
+		// TODO define verkle resolver
+		log.Crit("Verkle node resolver is not defined")
+	} else {
+		resolver = trie.MerkleResolver{}
+	}
+	return New(diskdb, &c, resolver)
 }
 
 // Defaults is the default setting for database if it's not specified.
