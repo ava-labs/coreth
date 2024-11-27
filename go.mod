@@ -131,3 +131,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/ava-labs/avalanchego v1.11.13-rc.0 => github.com/ava-labs/avalanchego v1.12.0-initial-poc.9.0.20241127225011-c522086104d2
