@@ -333,7 +333,7 @@ func (t *Tree) Update(
 	payload := stateconf.ExtractUpdatePayload(opts[0])
 	p, ok := payload.(blockHashes)
 	if !ok {
-		return fmt.Errorf("invalid block hashes payload: %T", payload)
+		return fmt.Errorf("invalid block hashes payload type: %T", payload)
 	}
 
 	return t.UpdateWithBlockHashes(p.blockHash, blockRoot, p.parentBlockHash, destructs, accounts, storage)
