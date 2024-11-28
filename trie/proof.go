@@ -492,6 +492,20 @@ func hasRightElement(node node, key []byte) bool {
 // proofs are 'bloated' with neighbour leaves or random data, aside from the 'useful'
 // data, then the proof will still be accepted.
 func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (bool, error) {
+	deletesAllowed := false
+	return verifyRangeProof(rootHash, firstKey, keys, values, proof, deletesAllowed)
+}
+
+func VerifyRangeProofAllowDeletions(
+	rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader,
+) (bool, error) {
+	deletesAllowed := true
+	return verifyRangeProof(rootHash, firstKey, keys, values, proof, deletesAllowed)
+}
+func verifyRangeProof(
+	rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader,
+	deletesAllowed bool,
+) (bool, error) {
 	if len(keys) != len(values) {
 		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
@@ -502,7 +516,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		}
 	}
 	for _, value := range values {
-		if len(value) == 0 {
+		if len(value) == 0 && !deletesAllowed {
 			return false, errors.New("range contains deletion")
 		}
 	}
@@ -623,4 +637,53 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
+}
+
+func hasRightElementLeftOf(node node, key, last []byte) bool {
+	pos, key := 0, keybytesToHex(key)
+	last = keybytesToHex(last)
+	for node != nil {
+		switch rn := node.(type) {
+		case *fullNode:
+			for i := key[pos] + 1; i < 16; i++ {
+				if i >= last[pos] {
+					break
+				}
+				if rn.Children[i] != nil {
+					return true
+				}
+			}
+			node, pos = rn.Children[key[pos]], pos+1
+		case *shortNode:
+			if len(key)-pos < len(rn.Key) || !bytes.Equal(rn.Key, key[pos:pos+len(rn.Key)]) {
+				return bytes.Compare(rn.Key, key[pos:]) > 0 &&
+					bytes.Compare(rn.Key, last[pos:]) < 0
+			}
+			node, pos = rn.Val, pos+len(rn.Key)
+		case valueNode:
+			return false // We have resolved the whole path
+		default:
+			panic(fmt.Sprintf("%T: invalid node: %v", node, node)) // hashnode
+		}
+	}
+	return false
+}
+
+func VerifyRangeProofEmpty(rootHash common.Hash, firstKey []byte, lastKey []byte, proof ethdb.KeyValueReader) error {
+	root, val, err := proofToPath(rootHash, nil, firstKey, proof, true)
+	if err != nil {
+		return err
+	}
+	if bytes.Compare(firstKey, lastKey) >= 0 {
+		return errors.New("invalid edge keys (empty proof case)")
+	}
+	if len(firstKey) != len(lastKey) {
+		return fmt.Errorf("inconsistent edge keys (%d != %d)", len(firstKey), len(lastKey))
+	}
+
+	if val != nil || hasRightElementLeftOf(root, firstKey, lastKey) {
+		return fmt.Errorf("more entries available: %x %x", firstKey, lastKey)
+	}
+
+	return nil
 }
