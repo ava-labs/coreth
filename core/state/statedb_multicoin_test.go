@@ -150,8 +150,8 @@ func TestGenerateMultiCoinAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if isMultiCoin := types.IsMultiCoin(snapAccount); !isMultiCoin {
-		t.Fatalf("Expected SnapAccount to return IsMultiCoin: true, found: %v", isMultiCoin)
+	if !types.IsMultiCoin(snapAccount) {
+		t.Fatalf("Expected SnapAccount to return IsMultiCoin: true, found: false")
 	}
 
 	NormalizeCoinID(&assetID)

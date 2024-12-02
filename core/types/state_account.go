@@ -48,6 +48,6 @@ type isMultiCoin bool
 
 var IsMultiCoinPayloads = ethtypes.RegisterExtras[isMultiCoin]()
 
-func IsMultiCoin(a *SlimAccount) bool {
+func IsMultiCoin(a ethtypes.ExtraPayloadCarrier) bool {
 	return bool(IsMultiCoinPayloads.FromPayloadCarrier(a))
 }
