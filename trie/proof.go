@@ -674,7 +674,7 @@ func VerifyRangeProofEmpty(rootHash common.Hash, firstKey []byte, lastKey []byte
 	if err != nil {
 		return err
 	}
-	if bytes.Compare(firstKey, lastKey) >= 0 {
+	if bytes.Compare(firstKey, lastKey) > 0 {
 		return errors.New("invalid edge keys (empty proof case)")
 	}
 	if len(firstKey) != len(lastKey) {
