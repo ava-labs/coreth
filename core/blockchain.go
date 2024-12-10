@@ -72,6 +72,8 @@ var (
 	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", nil)
 	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", nil)
+	snapshotCacheMissAccount = metrics.NewRegisteredCounter("chain/snapshot/cache/miss/account", nil)
+	snapshotCacheMissStorage = metrics.NewRegisteredCounter("chain/snapshot/cache/miss/storage", nil)
 
 	triedbCommitTimer = metrics.NewRegisteredCounter("chain/triedb/commits", nil)
 
@@ -1315,11 +1317,18 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	}
 	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
 
+	// This will attempt to execute the block txs in parallel.
+	// This is to avoid snapshot misses during execution.
+	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
+	sp.Prefetch(block, statedb, bc.vmConfig, nil)
+
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
 	activeState = statedb
 
 	// Process block using the parent state as reference point
+	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
 	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
 	if serr := statedb.Error(); serr != nil {
@@ -1330,6 +1339,10 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		return err
 	}
 	ptime := time.Since(pstart)
+	accountMissEnd := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissEnd := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	snapshotCacheMissAccount.Inc(accountMissEnd - accountMissStart)
+	snapshotCacheMissStorage.Inc(storageMissEnd - storageMissStart)
 
 	// Validate the state using the default validator
 	vstart := time.Now()
