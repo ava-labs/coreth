@@ -79,8 +79,8 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 		if interrupt != nil && interrupt.Load() {
 			return
 		}
+		evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		eg.Go(func() error {
-			evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 			if err != nil {
