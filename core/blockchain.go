@@ -402,6 +402,10 @@ func NewBlockChain(
 		return nil, err
 	}
 
+	if err := bc.reprocessFromGenesis(); err != nil {
+		return nil, err
+	}
+
 	// After loading the last state (and reprocessing if necessary), we are
 	// guaranteed that [acceptorTip] is equal to [lastAccepted].
 	//
@@ -1687,6 +1691,11 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 		return common.Hash{}, fmt.Errorf("could not fetch state for (%s: %d): %v", parent.Hash().Hex(), parent.NumberU64(), err)
 	}
 
+	// This will attempt to execute the block txs in parallel.
+	// This is to avoid snapshot misses during execution.
+	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
+	sp.Prefetch(current, parent.Root(), bc.vmConfig, nil)
+
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
 	defer func() {
@@ -1694,10 +1703,16 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	}()
 
 	// Process previously stored block
+	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
+	accountMissEnd := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissEnd := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	snapshotCacheMissAccount.Inc(accountMissEnd - accountMissStart)
+	snapshotCacheMissStorage.Inc(storageMissEnd - storageMissStart)
 
 	// Validate the state using the default validator
 	if err := bc.validator.ValidateState(current, statedb, receipts, usedGas); err != nil {
@@ -1712,6 +1727,63 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 		return statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
 	}
 	return statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), bc.snaps, current.Hash(), current.ParentHash())
+}
+
+// reprocessFrom destroys the current snapshot (overrides it with genesis state) and
+// reprocesses the chain from the genesis block up to the current head block.
+func (bc *BlockChain) reprocessFromGenesis() error {
+	target := bc.CurrentBlock().Number
+	log.Warn("Reprocessing chain from genesis", "target", target)
+
+	if err := bc.loadGenesisState(); err != nil {
+		return err
+	}
+	bc.initSnapshot(bc.hc.genesisHeader)
+	log.Warn("Snapshot initialized with genesis state")
+
+	parent := bc.genesisBlock
+
+	var (
+		start         = time.Now()
+		logged        time.Time
+		previousRoot  common.Hash
+		triedb        = bc.triedb
+		totalFlatTime time.Duration
+	)
+	for i := uint64(1); i <= target.Uint64(); i++ {
+		current := bc.GetBlockByNumber(i)
+
+		root, err := bc.reprocessBlock(parent, current)
+		if err != nil {
+			return err
+		}
+
+		// Flatten snapshot if initialized, holding a reference to the state root until the next block
+		// is processed.
+		fstart := time.Now()
+		if err := bc.flattenSnapshot(func() error {
+			if previousRoot != (common.Hash{}) && previousRoot != root {
+				triedb.Dereference(previousRoot)
+			}
+			previousRoot = root
+			return nil
+		}, current.Hash()); err != nil {
+			return err
+		}
+		flatTime := time.Since(fstart)
+		totalFlatTime += flatTime
+
+		// Print progress logs if long enough time elapsed
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Reprocessing chain", "block", i,
+				"elapsed", common.PrettyDuration(time.Since(start).Truncate(time.Second)),
+				"flat", common.PrettyDuration(totalFlatTime.Truncate(time.Millisecond)),
+			)
+			logged = time.Now()
+		}
+	}
+
+	return nil
 }
 
 // initSnapshot instantiates a Snapshot instance and adds it to [bc]
