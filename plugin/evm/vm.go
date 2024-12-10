@@ -626,6 +626,9 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
+
+	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
+
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
@@ -654,8 +657,6 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
-
-	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
