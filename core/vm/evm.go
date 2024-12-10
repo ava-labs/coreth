@@ -132,6 +132,7 @@ type BlockContext struct {
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        uint64         // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
+	Random      *common.Hash   // Provides information for RANDOM
 	BaseFee     *big.Int       // Provides information for BASEFEE
 	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
 }
@@ -197,6 +198,8 @@ type EVM struct {
 	callGasTemp uint64
 }
 
+var StateDbHook = func(_ params.Rules, x StateDB) StateDB { return x }
+
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
@@ -219,6 +222,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time),
 	}
+	evm.StateDB = StateDbHook(evm.chainRules, evm.StateDB)
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
 }
@@ -227,7 +231,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	evm.TxContext = txCtx
-	evm.StateDB = statedb
+	evm.StateDB = StateDbHook(evm.chainRules, statedb)
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -248,7 +252,8 @@ func (evm *EVM) GetSnowContext() *snow.Context {
 
 // GetStateDB returns the evm's StateDB
 func (evm *EVM) GetStateDB() contract.StateDB {
-	return evm.StateDB
+	// XXX: This will be solved with libevm / configuring precompiles externally.
+	return evm.StateDB.(contract.StateDB)
 }
 
 // GetBlockContext returns the evm's BlockContext
