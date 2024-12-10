@@ -17,7 +17,8 @@
 package core
 
 import (
-	"sync/atomic"
+	"encoding/binary"
+	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/state"
@@ -26,6 +27,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -50,7 +52,11 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 // Prefetch processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb, but any changes are discarded. The
 // only goal is to pre-cache transaction signatures and state trie nodes.
-func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, cfg vm.Config, interrupt *atomic.Bool) {
+type tape []byte
+
+func (t tape) Len() int { return len(t) }
+
+func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, cfg vm.Config, tape *tape) {
 	if p.bc.snaps == nil {
 		log.Warn("Skipping prefetching transactions without snapshot cache")
 		return
@@ -74,20 +80,17 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 	var eg errgroup.Group
 	eg.SetLimit(1) // Some limits just in case.
 	// Iterate over and process the individual transactions
+	vmState := &StateReadsRecorder{vmStateDB: statedb}
 	for i, tx := range block.Transactions() {
-		// If block precaching was interrupted, abort
-		if interrupt != nil && interrupt.Load() {
-			return
-		}
-		evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+		evm := vm.NewEVM(blockContext, vm.TxContext{}, vmState, p.config, cfg)
 		eg.Go(func() error {
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 			if err != nil {
 				return err // Also invalid block, bail out
 			}
-			statedb.SetTxContext(tx.Hash(), i)
-			if err := precacheTransaction(msg, p.config, gaspool, statedb, header, evm); err != nil {
+			vmState.SetTxContext(tx.Hash(), i)
+			if err := precacheTransaction(msg, p.config, gaspool, vmState, header, evm); err != nil {
 				// NOTE: We don't care that the the transaction failed, we just want to pre-cache
 				return err // Ugh, something went horribly wrong, bail out
 			}
@@ -106,17 +109,119 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 
 	// Wait for all transactions to be processed
 	if err := eg.Wait(); err != nil {
-		log.Crit("Unexpected failure in pre-caching transactions", "err", err)
+		log.Error("Unexpected failure in pre-caching transactions", "err", err)
 	}
+	*tape = vmState.tape
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. The goal is not to execute
 // the transaction successfully, rather to warm up touched data slots.
-func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasPool, statedb *state.StateDB, header *types.Header, evm *vm.EVM) error {
+func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasPool, statedb vm.StateDB, header *types.Header, evm *vm.EVM) error {
 	// Update the evm with the new transaction context.
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
 	_, err := ApplyMessage(evm, msg, gaspool)
 	return err
+}
+
+type vmStateDB interface {
+	vm.StateDB
+	Finalise(bool)
+	IntermediateRoot(bool) common.Hash
+	SetTxContext(common.Hash, int)
+	TxIndex() int
+	GetLogs(common.Hash, uint64, common.Hash) []*types.Log
+}
+
+type StateReadsRecorder struct {
+	vmStateDB
+
+	tape []byte
+}
+
+type StateReadsReplayer struct {
+	vmStateDB
+
+	tape []byte
+}
+
+func (s *StateReadsRecorder) GetBalance(addr common.Address) *uint256.Int {
+	v := s.vmStateDB.GetBalance(addr)
+	bytes := v.Bytes()
+	s.tape = append(s.tape, byte(len(bytes)))
+	s.tape = append(s.tape, bytes...)
+	return v
+}
+
+func (s *StateReadsReplayer) GetBalance(common.Address) *uint256.Int {
+	l := int(s.tape[0])
+	v := new(uint256.Int)
+	v.SetBytes(s.tape[1 : 1+l])
+	s.tape = s.tape[1+l:]
+	return v
+}
+
+func (s *StateReadsRecorder) GetBalanceMultiCoin(addr common.Address, coin common.Hash) *big.Int {
+	v := s.vmStateDB.GetBalanceMultiCoin(addr, coin)
+	bytes := v.Bytes()
+	s.tape = append(s.tape, byte(len(bytes)))
+	s.tape = append(s.tape, v.Bytes()...)
+	return v
+}
+
+func (s *StateReadsReplayer) GetBalanceMultiCoin(common.Address, common.Hash) *big.Int {
+	l := int(s.tape[0])
+	v := new(big.Int)
+	v.SetBytes(s.tape[1 : 1+l])
+	s.tape = s.tape[1+l:]
+	return v
+}
+
+func (s *StateReadsRecorder) GetNonce(addr common.Address) uint64 {
+	v := s.vmStateDB.GetNonce(addr)
+	s.tape = binary.BigEndian.AppendUint64(s.tape, v)
+	return v
+}
+
+func (s *StateReadsReplayer) GetNonce(common.Address) uint64 {
+	v := binary.BigEndian.Uint64(s.tape)
+	s.tape = s.tape[8:]
+	return v
+}
+
+func (s *StateReadsRecorder) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+	v := s.vmStateDB.GetCommittedState(addr, hash)
+	s.tape = append(s.tape, v.Bytes()...)
+	return v
+}
+
+func (s *StateReadsReplayer) GetCommittedState(common.Address, common.Hash) common.Hash {
+	v := common.BytesToHash(s.tape[:32])
+	s.tape = s.tape[32:]
+	return v
+}
+
+func (s *StateReadsRecorder) GetCommittedStateAP1(addr common.Address, hash common.Hash) common.Hash {
+	v := s.vmStateDB.GetCommittedStateAP1(addr, hash)
+	s.tape = append(s.tape, v.Bytes()...)
+	return v
+}
+
+func (s *StateReadsReplayer) GetCommittedStateAP1(common.Address, common.Hash) common.Hash {
+	v := common.BytesToHash(s.tape[:32])
+	s.tape = s.tape[32:]
+	return v
+}
+
+func (s *StateReadsRecorder) GetState(addr common.Address, hash common.Hash) common.Hash {
+	v := s.vmStateDB.GetState(addr, hash)
+	s.tape = append(s.tape, v.Bytes()...)
+	return v
+}
+
+func (s *StateReadsReplayer) GetState(common.Address, common.Hash) common.Hash {
+	v := common.BytesToHash(s.tape[:32])
+	s.tape = s.tape[32:]
+	return v
 }

@@ -397,9 +397,9 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
-	if err := bc.reprocessFromGenesis(); err != nil {
-		return nil, err
-	}
+	// if err := bc.reprocessFromGenesis(); err != nil {
+	// 	return nil, err
+	// }
 
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
@@ -1324,7 +1324,8 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// This will attempt to execute the block txs in parallel.
 	// This is to avoid snapshot misses during execution.
 	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
-	sp.Prefetch(block, parent.Root, bc.vmConfig, nil)
+	tape := new(tape)
+	sp.Prefetch(block, parent.Root, bc.vmConfig, tape)
 
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
@@ -1334,6 +1335,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
+	bc.processor.(*StateProcessor).tape = *tape
 	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
 	if serr := statedb.Error(); serr != nil {
 		log.Error("statedb error encountered", "err", serr, "number", block.Number(), "hash", block.Hash())
@@ -1668,10 +1670,13 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 }
 
 type extraStats struct {
-	spTime time.Duration
-	pTime  time.Duration
-	vTime  time.Duration
-	cTime  time.Duration
+	spTime  time.Duration
+	pTime   time.Duration
+	vTime   time.Duration
+	cTime   time.Duration
+	tapeLen uint64
+	blocks  uint64
+	txs     uint64
 }
 
 // reprocessBlock reprocesses a previously accepted block. This is often used
@@ -1707,9 +1712,10 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 
 	// This will attempt to execute the block txs in parallel.
 	// This is to avoid snapshot misses during execution.
+	tape := new(tape)
 	spStart := time.Now()
 	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
-	sp.Prefetch(current, parent.Root(), bc.vmConfig, nil)
+	sp.Prefetch(current, parent.Root(), bc.vmConfig, tape)
 	spTime := time.Since(spStart)
 
 	// Enable prefetching to pull in trie node paths while processing transactions
@@ -1722,6 +1728,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
+	bc.processor.(*StateProcessor).tape = *tape
 	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
@@ -1757,6 +1764,9 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 		stats.pTime += ptime
 		stats.vTime += vtime
 		stats.cTime += ctime
+		stats.tapeLen += uint64(tape.Len())
+		stats.txs += uint64(len(current.Transactions()))
+		stats.blocks++
 	}
 
 	return root, err
@@ -1816,6 +1826,9 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 				"cTime", stats.cTime.Truncate(time.Millisecond),
 				"accountMiss", accountMiss,
 				"storageMiss", storageMiss,
+				"tapeLen", stats.tapeLen,
+				"txs", stats.txs,
+				"blocks", stats.blocks,
 			)
 			logged = time.Now()
 		}
