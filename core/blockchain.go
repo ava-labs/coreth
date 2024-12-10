@@ -1746,14 +1746,12 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 	var (
 		start         = time.Now()
 		logged        time.Time
-		previousRoot  common.Hash
-		triedb        = bc.triedb
 		totalFlatTime time.Duration
 	)
 	for i := uint64(1); i <= target.Uint64(); i++ {
 		current := bc.GetBlockByNumber(i)
 
-		root, err := bc.reprocessBlock(parent, current)
+		_, err := bc.reprocessBlock(parent, current)
 		if err != nil {
 			return err
 		}
@@ -1762,11 +1760,7 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 		// is processed.
 		fstart := time.Now()
 		if err := bc.flattenSnapshot(func() error {
-			if previousRoot != (common.Hash{}) && previousRoot != root {
-				triedb.Dereference(previousRoot)
-			}
-			previousRoot = root
-			return nil
+			return bc.stateManager.AcceptTrie(current)
 		}, current.Hash()); err != nil {
 			return err
 		}

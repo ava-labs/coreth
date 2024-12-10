@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func init() {
@@ -130,6 +131,7 @@ func (cm *cappedMemoryTrieWriter) InsertTrie(block *types.Block) error {
 	if nodes <= cm.memoryCap && imgs <= cm.imageCap {
 		return nil
 	}
+	log.Warn("Trie memory cap exceeded, capping trie", "block", block.Hash().Hex(), "nodes", nodes, "images", imgs)
 	if err := cm.TrieDB.Cap(cm.memoryCap - ethdb.IdealBatchSize); err != nil {
 		return fmt.Errorf("failed to cap trie for block %s: %w", block.Hash().Hex(), err)
 	}
@@ -150,6 +152,7 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	}
 
 	// Commit this root if we have reached the [commitInterval].
+	log.Info("Committing trie", "block", block.Hash, "root", root.Hex(), "number", block.NumberU64())
 	modCommitInterval := block.NumberU64() % cm.commitInterval
 	if modCommitInterval == 0 {
 		if err := cm.TrieDB.Commit(root, true); err != nil {
