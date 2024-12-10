@@ -152,9 +152,9 @@ func (cm *cappedMemoryTrieWriter) AcceptTrie(block *types.Block) error {
 	}
 
 	// Commit this root if we have reached the [commitInterval].
-	log.Info("Committing trie", "block", block.Hash, "root", root.Hex(), "number", block.NumberU64())
 	modCommitInterval := block.NumberU64() % cm.commitInterval
 	if modCommitInterval == 0 {
+		log.Info("Committing trie", "block", block.Hash, "root", root.Hex(), "number", block.NumberU64())
 		if err := cm.TrieDB.Commit(root, true); err != nil {
 			return fmt.Errorf("failed to commit trie for block %s: %w", block.Hash().Hex(), err)
 		}
