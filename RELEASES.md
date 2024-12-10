@@ -1,7 +1,7 @@
 # Release Notes
 
 ## [v0.13.9](https://github.com/ava-labs/coreth/releases/tag/v0.13.9)
-- Bump avalanchego to v1.12.0
+- Bump avalanchego to a version greater than v1.12.0
 - Remove unused historical opcodes CALLEX, BALANCEMC
 - Remove unused pre-AP2 handling of genesis contract
 - Fix to track tx size in block building
