@@ -1682,6 +1682,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 		stats = extras[0]
 	}
 
+	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, current.Number(), current.Time()), current.Transactions())
+
 	// Retrieve the parent block and its state to execute block
 	var (
 		statedb    *state.StateDB
