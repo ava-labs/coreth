@@ -1,7 +1,7 @@
 # Release Notes
 
-## [v0.13.9](https://github.com/ava-labs/coreth/releases/tag/v0.13.9)
-- Bump avalanchego to a version greater than v1.12.0
+## [v0.14.0](https://github.com/ava-labs/coreth/releases/tag/v0.14.0)
+- Minor version update to correspond to avalanchego v1.12.0 / Etna.
 - Remove unused historical opcodes CALLEX, BALANCEMC
 - Remove unused pre-AP2 handling of genesis contract
 - Fix to track tx size in block building
