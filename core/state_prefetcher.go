@@ -67,8 +67,12 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
 		signer       = types.MakeSigner(p.config, header.Number, header.Time)
 	)
+	statedb, err := state.New(parentRoot, p.bc.stateCache, p.bc.snaps)
+	if err != nil {
+		return
+	}
 	var eg errgroup.Group
-	eg.SetLimit(32) // Some limits just in case.
+	eg.SetLimit(1) // Some limits just in case.
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
@@ -76,11 +80,6 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 			return
 		}
 		eg.Go(func() error {
-			statedb, err := state.New(parentRoot, p.bc.stateCache, p.bc.snaps)
-			if err != nil {
-				return err
-			}
-
 			evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
