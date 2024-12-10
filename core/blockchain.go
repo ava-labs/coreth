@@ -1320,7 +1320,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// This will attempt to execute the block txs in parallel.
 	// This is to avoid snapshot misses during execution.
 	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
-	sp.Prefetch(block, statedb, bc.vmConfig, nil)
+	sp.Prefetch(block, parent.Root, bc.vmConfig, nil)
 
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)

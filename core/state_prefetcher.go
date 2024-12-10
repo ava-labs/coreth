@@ -24,6 +24,8 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -48,12 +50,21 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 // Prefetch processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb, but any changes are discarded. The
 // only goal is to pre-cache transaction signatures and state trie nodes.
-func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *atomic.Bool) {
+func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, cfg vm.Config, interrupt *atomic.Bool) {
+	if p.bc.snaps == nil {
+		log.Warn("Skipping prefetching transactions without snapshot cache")
+		return
+	}
+	snap := p.bc.snaps.Snapshot(parentRoot)
+	if snap == nil {
+		log.Warn("Skipping prefetching transactions without snapshot cache")
+		return
+	}
+
 	var (
 		header       = block.Header()
 		gaspool      = new(GasPool).AddGas(block.GasLimit())
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
-		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		signer       = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	var eg errgroup.Group
@@ -65,11 +76,15 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			return
 		}
 		eg.Go(func() error {
-			statedb := statedb.Copy() // Create a fresh state for each transaction
+			statedb, err := state.New(parentRoot, p.bc.stateCache, p.bc.snaps)
+			if err != nil {
+				return err
+			}
+
+			evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 			if err != nil {
-				// NOTE: should never happen
 				return nil // Also invalid block, bail out
 			}
 			statedb.SetTxContext(tx.Hash(), i)
@@ -91,7 +106,9 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 	// }
 
 	// Wait for all transactions to be processed
-	_ = eg.Wait()
+	if err := eg.Wait(); err != nil {
+		log.Crit("Unexpected failure in pre-caching transactions", "err", err)
+	}
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database
