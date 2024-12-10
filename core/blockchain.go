@@ -1667,9 +1667,21 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 	log.Debug(reason.String())
 }
 
+type extraStats struct {
+	spTime time.Duration
+	pTime  time.Duration
+	vTime  time.Duration
+	cTime  time.Duration
+}
+
 // reprocessBlock reprocesses a previously accepted block. This is often used
 // to regenerate previously pruned state tries.
-func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) (common.Hash, error) {
+func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, extras ...*extraStats) (common.Hash, error) {
+	var stats *extraStats
+	if len(extras) > 0 {
+		stats = extras[0]
+	}
+
 	// Retrieve the parent block and its state to execute block
 	var (
 		statedb    *state.StateDB
@@ -1693,8 +1705,10 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 
 	// This will attempt to execute the block txs in parallel.
 	// This is to avoid snapshot misses during execution.
+	spStart := time.Now()
 	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
 	sp.Prefetch(current, parent.Root(), bc.vmConfig, nil)
+	spTime := time.Since(spStart)
 
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
@@ -1705,28 +1719,45 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	// Process previously stored block
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	pstart := time.Now()
 	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
+	ptime := time.Since(pstart)
 	accountMissEnd := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissEnd := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	snapshotCacheMissAccount.Inc(accountMissEnd - accountMissStart)
 	snapshotCacheMissStorage.Inc(storageMissEnd - storageMissStart)
 
 	// Validate the state using the default validator
+	vstart := time.Now()
 	if err := bc.validator.ValidateState(current, statedb, receipts, usedGas); err != nil {
 		return common.Hash{}, fmt.Errorf("failed to validate state while re-processing block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
+	vtime := time.Since(vstart)
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
 	// If snapshots are enabled, call CommitWithSnaps to explicitly create a snapshot
 	// diff layer for the block.
+	var root common.Hash
+	cstart := time.Now()
 	if bc.snaps == nil {
-		return statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
+		root, err = statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
+	} else {
+		root, err = statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), bc.snaps, current.Hash(), current.ParentHash())
 	}
-	return statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), bc.snaps, current.Hash(), current.ParentHash())
+	ctime := time.Since(cstart)
+
+	if stats != nil {
+		stats.spTime += spTime
+		stats.pTime += ptime
+		stats.vTime += vtime
+		stats.cTime += ctime
+	}
+
+	return root, err
 }
 
 // reprocessFrom destroys the current snapshot (overrides it with genesis state) and
@@ -1743,6 +1774,7 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 
 	parent := bc.genesisBlock
 
+	stats := &extraStats{}
 	var (
 		start         = time.Now()
 		logged        time.Time
@@ -1751,7 +1783,7 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 	for i := uint64(1); i <= target; i++ {
 		current := bc.GetBlockByNumber(i)
 
-		_, err := bc.reprocessBlock(parent, current)
+		_, err := bc.reprocessBlock(parent, current, stats)
 		if err != nil {
 			return err
 		}
@@ -1776,6 +1808,10 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 				"block", i,
 				"elapsed", common.PrettyDuration(time.Since(start).Truncate(time.Second)),
 				"flat", common.PrettyDuration(totalFlatTime.Truncate(time.Millisecond)),
+				"spTime", stats.spTime.Truncate(time.Millisecond),
+				"pTime", stats.pTime.Truncate(time.Millisecond),
+				"vTime", stats.vTime.Truncate(time.Millisecond),
+				"cTime", stats.cTime.Truncate(time.Millisecond),
 				"accountMiss", accountMiss,
 				"storageMiss", storageMiss,
 			)
