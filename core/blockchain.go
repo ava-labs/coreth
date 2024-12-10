@@ -397,12 +397,12 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
-	// Re-generate current block state if it is missing
-	if err := bc.loadLastState(lastAcceptedHash); err != nil {
+	if err := bc.reprocessFromGenesis(); err != nil {
 		return nil, err
 	}
 
-	if err := bc.reprocessFromGenesis(); err != nil {
+	// Re-generate current block state if it is missing
+	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return nil, err
 	}
 
