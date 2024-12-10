@@ -1768,10 +1768,16 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 		totalFlatTime += flatTime
 
 		// Print progress logs if long enough time elapsed
+		accountMiss := snapshotCacheMissAccount.Snapshot().Count()
+		storageMiss := snapshotCacheMissStorage.Snapshot().Count()
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Reprocessing chain", "block", i,
+			log.Info(
+				"Reprocessing chain",
+				"block", i,
 				"elapsed", common.PrettyDuration(time.Since(start).Truncate(time.Second)),
 				"flat", common.PrettyDuration(totalFlatTime.Truncate(time.Millisecond)),
+				"accountMiss", accountMiss,
+				"storageMiss", storageMiss,
 			)
 			logged = time.Now()
 		}
