@@ -1,7 +1,7 @@
 // (c) 2023 Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package params
+package extras
 
 import (
 	"encoding/json"
@@ -131,9 +131,9 @@ func (c *ChainConfigExtra) verifyPrecompileUpgrades() error {
 	return nil
 }
 
-// getActivePrecompileConfig returns the most recent precompile config corresponding to [address].
+// GetActivePrecompileConfig returns the most recent precompile config corresponding to [address].
 // If none have occurred, returns nil.
-func (c *ChainConfigExtra) getActivePrecompileConfig(address common.Address, timestamp uint64) precompileconfig.Config {
+func (c *ChainConfigExtra) GetActivePrecompileConfig(address common.Address, timestamp uint64) precompileconfig.Config {
 	configs := c.GetActivatingPrecompileConfigs(address, nil, timestamp, c.PrecompileUpgrades)
 	if len(configs) == 0 {
 		return nil
@@ -229,7 +229,7 @@ func (c *ChainConfigExtra) checkPrecompileCompatible(address common.Address, pre
 func (c *ChainConfigExtra) EnabledStatefulPrecompiles(blockTimestamp uint64) Precompiles {
 	statefulPrecompileConfigs := make(Precompiles)
 	for _, module := range modules.RegisteredModules() {
-		if config := c.getActivePrecompileConfig(module.Address, blockTimestamp); config != nil && !config.IsDisabled() {
+		if config := c.GetActivePrecompileConfig(module.Address, blockTimestamp); config != nil && !config.IsDisabled() {
 			statefulPrecompileConfigs[module.ConfigKey] = config
 		}
 	}

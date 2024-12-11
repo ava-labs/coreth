@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -469,13 +470,13 @@ func (vm *VM) Initialize(
 	// If the Durango is activated, activate the Warp Precompile at the same time
 	configExtra := params.GetExtra(g.Config)
 	if configExtra.DurangoBlockTimestamp != nil {
-		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, params.PrecompileUpgrade{
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, extras.PrecompileUpgrade{
 			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
 		})
 	}
 
 	// Set the Avalanche Context on the ChainConfig
-	configExtra.AvalancheContext = params.AvalancheContext{
+	configExtra.AvalancheContext = extras.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
@@ -1946,7 +1947,7 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 	return state.GetNonce(address), nil
 }
 
-func (vm *VM) chainConfigExtra() *params.ChainConfigExtra {
+func (vm *VM) chainConfigExtra() *extras.ChainConfigExtra {
 	return params.GetExtra(vm.chainConfig)
 }
 
