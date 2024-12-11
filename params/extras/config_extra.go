@@ -14,10 +14,7 @@ import (
 )
 
 // XXX: Must fix this
-type ChainConfig = ethparams.ChainConfig
-
-// XXX: Must fix this
-var GetExtra func(c *ChainConfig) *ChainConfigExtra
+var GetExtra func(c *ethparams.ChainConfig) *ChainConfigExtra
 
 // UpgradeConfig includes the following configs that may be specified in upgradeBytes:
 // - Timestamps that enable avalanche network upgrades,
@@ -40,7 +37,7 @@ type ChainConfigExtra struct {
 	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Skip encoding/decoding directly into ChainConfig.
 }
 
-func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
+func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
 	if c == nil {
 		return nil
 	}
