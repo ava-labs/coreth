@@ -51,8 +51,6 @@ type StateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
 	engine consensus.Engine    // Consensus engine used for block rewards
-
-	tape tape
 }
 
 // NewStateProcessor initialises a new StateProcessor.

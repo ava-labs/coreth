@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -59,6 +60,12 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 )
+
+var tapeDir string
+
+func init() {
+	tapeDir = os.Getenv("TAPE_DIR")
+}
 
 var (
 	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", nil)
@@ -1702,22 +1709,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 		err        error
 		parentRoot = parent.Root()
 	)
-	// We don't simply use [NewWithSnapshot] here because it doesn't return an
-	// error if [bc.snaps != nil] and [bc.snaps.Snapshot(parentRoot) == nil].
-	if bc.snaps == nil {
-		statedb, err = state.New(parentRoot, bc.stateCache, nil)
-	} else {
-		snap := bc.snaps.Snapshot(parentRoot)
-		if snap == nil {
-			return common.Hash{}, fmt.Errorf("failed to get snapshot for parent root: %s", parentRoot)
-		}
-		statedb, err = state.NewWithSnapshot(parentRoot, bc.stateCache, snap)
-	}
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("could not fetch state for (%s: %d): %v", parent.Hash().Hex(), parent.NumberU64(), err)
-	}
 
-	// This will attempt to execute the block txs in parallel.
+	// This will attempt to execute the block txs and create a tape.
 	// This is to avoid snapshot misses during execution.
 	tape := new(tape)
 	spStart := time.Now()
@@ -1725,6 +1718,21 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 	sp.Prefetch(current, parent.Root(), bc.vmConfig, tape)
 	spTime := time.Since(spStart)
 
+	// We don't simply use [NewWithSnapshot] here because it doesn't return an
+	// error if [bc.snaps != nil] and [bc.snaps.Snapshot(parentRoot) == nil].
+	if bc.snaps == nil {
+		statedb, err = state.New(parentRoot, bc.stateCache, nil)
+	} else {
+		snap := bc.snaps.Snapshot(parentRoot)
+		withReplay := &snapReplay{snap, *tape}
+		if snap == nil {
+			return common.Hash{}, fmt.Errorf("failed to get snapshot for parent root: %s", parentRoot)
+		}
+		statedb, err = state.NewWithSnapshot(parentRoot, bc.stateCache, withReplay)
+	}
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("could not fetch state for (%s: %d): %v", parent.Hash().Hex(), parent.NumberU64(), err)
+	}
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
 	defer func() {
@@ -1735,7 +1743,6 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
-	bc.processor.(*StateProcessor).tape = *tape
 	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
