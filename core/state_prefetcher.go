@@ -143,11 +143,15 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 // precacheTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. The goal is not to execute
 // the transaction successfully, rather to warm up touched data slots.
-func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasPool, statedb vm.StateDB, header *types.Header, evm *vm.EVM) (*ExecutionResult, error) {
+func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasPool, statedb vmStateDB, header *types.Header, evm *vm.EVM) (*ExecutionResult, error) {
 	// Update the evm with the new transaction context.
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
 	er, err := ApplyMessage(evm, msg, gaspool)
+	if err != nil {
+		return nil, err
+	}
+	statedb.Finalise(true)
 	return er, err
 }
 
