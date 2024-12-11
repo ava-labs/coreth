@@ -401,7 +401,7 @@ func NewBlockChain(
 	for num := commitNum + 1; num <= blockNumber; num++ {
 		block := bc.GetBlockByNumber(uint64(blockNumber))
 		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-		if _, err := bc.reprocessBlock(block, parent); err != nil {
+		if _, err := bc.reprocessBlock(parent, block); err != nil {
 			return nil, err
 		}
 		log.Warn("Reprocessed block", "number", block.Number(), "hash", block.Hash())
