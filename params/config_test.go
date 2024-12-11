@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
 )
 
@@ -147,7 +148,7 @@ func TestConfigRules(t *testing.T) {
 	c := WithExtra(
 		&ChainConfig{},
 		&ChainConfigExtra{
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				CortinaBlockTimestamp: utils.NewUint64(500),
 			},
 		},

@@ -32,6 +32,7 @@ import (
 	"sort"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
 )
 
@@ -178,7 +179,7 @@ var Forks = map[string]*params.ChainConfig{
 			IstanbulBlock:       big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 			},
 		},
@@ -198,7 +199,7 @@ var Forks = map[string]*params.ChainConfig{
 			BerlinBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 			},
@@ -220,7 +221,7 @@ var Forks = map[string]*params.ChainConfig{
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),
@@ -243,7 +244,7 @@ var Forks = map[string]*params.ChainConfig{
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),
@@ -266,7 +267,7 @@ var Forks = map[string]*params.ChainConfig{
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),
@@ -290,7 +291,7 @@ var Forks = map[string]*params.ChainConfig{
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),
@@ -315,7 +316,7 @@ var Forks = map[string]*params.ChainConfig{
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),
@@ -341,7 +342,7 @@ var Forks = map[string]*params.ChainConfig{
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),
@@ -370,7 +371,7 @@ var Forks = map[string]*params.ChainConfig{
 			CancunTime:          utils.NewUint64(0),
 		},
 		&params.ChainConfigExtra{
-			NetworkUpgrades: params.NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp: utils.NewUint64(0),

@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -85,7 +86,7 @@ func setDefaults(cfg *Config) {
 				BerlinBlock:         new(big.Int),
 			},
 			&params.ChainConfigExtra{
-				NetworkUpgrades: params.NetworkUpgrades{
+				NetworkUpgrades: extras.NetworkUpgrades{
 					ApricotPhase1BlockTimestamp: new(uint64),
 					ApricotPhase2BlockTimestamp: new(uint64),
 					ApricotPhase3BlockTimestamp: new(uint64),

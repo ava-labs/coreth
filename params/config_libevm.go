@@ -15,7 +15,6 @@ import (
 
 type (
 	ChainConfigExtra = extras.ChainConfigExtra
-	NetworkUpgrades  = extras.NetworkUpgrades
 	AvalancheRules   = extras.AvalancheRules
 )
 

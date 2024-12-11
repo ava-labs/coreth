@@ -71,7 +71,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -104,7 +104,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     nil,
 				ApricotPhase2BlockTimestamp:     nil,
 				ApricotPhase3BlockTimestamp:     nil,
@@ -137,7 +137,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     nil,
 				ApricotPhase3BlockTimestamp:     nil,
@@ -171,7 +171,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     nil,
@@ -206,7 +206,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -241,7 +241,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -276,7 +276,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -311,7 +311,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -346,7 +346,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -381,7 +381,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -416,7 +416,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -451,7 +451,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -487,7 +487,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
@@ -524,7 +524,7 @@ var (
 		},
 		&ChainConfigExtra{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
-			NetworkUpgrades: NetworkUpgrades{
+			NetworkUpgrades: extras.NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
