@@ -1684,13 +1684,14 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 }
 
 type extraStats struct {
-	spTime  time.Duration
-	pTime   time.Duration
-	vTime   time.Duration
-	cTime   time.Duration
-	tapeLen uint64
-	blocks  uint64
-	txs     uint64
+	spTime   time.Duration
+	pTime    time.Duration
+	vTime    time.Duration
+	cTime    time.Duration
+	readTime time.Duration
+	tapeLen  uint64
+	blocks   uint64
+	txs      uint64
 }
 
 // reprocessBlock reprocesses a previously accepted block. This is often used
@@ -1740,6 +1741,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 	}()
 
 	// Process previously stored block
+	trieReadStart := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
+	trieReadStart += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
@@ -1750,6 +1753,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 	ptime := time.Since(pstart)
 	accountMissEnd := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissEnd := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	trieReadEnd := statedb.SnapshotAccountReads + statedb.AccountReads
+	trieReadEnd += statedb.SnapshotStorageReads + statedb.StorageReads
 	snapshotCacheMissAccount.Inc(accountMissEnd - accountMissStart)
 	snapshotCacheMissStorage.Inc(storageMissEnd - storageMissStart)
 
@@ -1780,6 +1785,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 		stats.cTime += ctime
 		stats.tapeLen += uint64(tape.Len())
 		stats.txs += uint64(len(current.Transactions()))
+		stats.readTime += trieReadEnd - trieReadStart
 		stats.blocks++
 	}
 
@@ -1834,11 +1840,12 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 				"Reprocessing chain",
 				"block", i,
 				"elapsed", common.PrettyDuration(time.Since(start).Truncate(time.Second)),
-				"flat", common.PrettyDuration(totalFlatTime.Truncate(time.Millisecond)),
-				"spTime", stats.spTime.Truncate(time.Millisecond),
-				"pTime", stats.pTime.Truncate(time.Millisecond),
-				"vTime", stats.vTime.Truncate(time.Millisecond),
-				"cTime", stats.cTime.Truncate(time.Millisecond),
+				"flat", common.PrettyDuration(totalFlatTime.Truncate(time.Second)),
+				"spTime", stats.spTime.Truncate(time.Second),
+				"pTime", stats.pTime.Truncate(time.Second),
+				"vTime", stats.vTime.Truncate(time.Second),
+				"cTime", stats.cTime.Truncate(time.Second),
+				"readTime", stats.readTime.Truncate(time.Millisecond),
 				"accountMiss", accountMiss,
 				"storageMiss", storageMiss,
 				"tapeLen", stats.tapeLen,
