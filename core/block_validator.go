@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie"
 )
 
@@ -126,6 +127,12 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// For valid blocks this should always validate to true.
 	rbloom := types.CreateBloom(receipts)
 	if rbloom != header.Bloom {
+		for i, receipt := range receipts {
+			log.Warn("receipt", "status", receipts[i].Status, "bloom", receipts[i].Bloom)
+			for _, l := range receipt.Logs {
+				log.Warn("log", "address", l.Address, "topics", l.Topics, "data", l.Data)
+			}
+		}
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
