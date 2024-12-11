@@ -4,6 +4,7 @@
 package params
 
 import (
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
 )
@@ -14,7 +15,7 @@ func GetRulesExtra(r Rules) *RulesExtra {
 
 type RulesExtra struct {
 	// Rules for Avalanche releases
-	AvalancheRules
+	extras.AvalancheRules
 
 	// Precompiles maps addresses to stateful precompiled contracts that are enabled
 	// for this rule set.

@@ -85,7 +85,7 @@ func setDefaults(cfg *Config) {
 				LondonBlock:         new(big.Int),
 				BerlinBlock:         new(big.Int),
 			},
-			&params.ChainConfigExtra{
+			&extras.ChainConfigExtra{
 				NetworkUpgrades: extras.NetworkUpgrades{
 					ApricotPhase1BlockTimestamp: new(uint64),
 					ApricotPhase2BlockTimestamp: new(uint64),

@@ -13,11 +13,6 @@ import (
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
-type (
-	ChainConfigExtra = extras.ChainConfigExtra
-	AvalancheRules   = extras.AvalancheRules
-)
-
 func init() {
 	// XXX: Must fix this
 	extras.GetExtra = GetExtra
@@ -26,19 +21,19 @@ func init() {
 // libevmInit would ideally be a regular init() function, but it MUST be run
 // before any calls to [ChainConfig.Rules]. See `config.go` for its call site.
 func libevmInit() any {
-	payloads = ethparams.RegisterExtras(ethparams.Extras[*ChainConfigExtra, RulesExtra]{
+	payloads = ethparams.RegisterExtras(ethparams.Extras[*extras.ChainConfigExtra, RulesExtra]{
 		ReuseJSONRoot: true, // Reuse the root JSON input when unmarshalling the extra payload.
 		NewRules:      constructRulesExtra,
 	})
 	return nil
 }
 
-var payloads ethparams.ExtraPayloads[*ChainConfigExtra, RulesExtra]
+var payloads ethparams.ExtraPayloads[*extras.ChainConfigExtra, RulesExtra]
 
 // constructRulesExtra acts as an adjunct to the [params.ChainConfig.Rules]
 // method. Its primary purpose is to construct the extra payload for the
 // [params.Rules] but it MAY also modify the [params.Rules].
-func constructRulesExtra(c *ethparams.ChainConfig, r *ethparams.Rules, cEx *ChainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) RulesExtra {
+func constructRulesExtra(c *ethparams.ChainConfig, r *ethparams.Rules, cEx *extras.ChainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) RulesExtra {
 	var rules RulesExtra
 	if cEx == nil {
 		return rules
