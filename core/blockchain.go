@@ -2085,6 +2085,17 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	lastAcceptedHash := block.Hash()
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 
+	blockNumber := 185230
+	commitNum := blockNumber - blockNumber%int(bc.cacheConfig.CommitInterval)
+	for num := commitNum + 1; num <= blockNumber; num++ {
+		block := bc.GetBlockByNumber(uint64(blockNumber))
+		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if _, err := bc.reprocessBlock(block, parent); err != nil {
+			return err
+		}
+		log.Info("Reprocessed block", "number", block.Number(), "hash", block.Hash())
+	}
+
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return err
 	}
