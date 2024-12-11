@@ -81,7 +81,7 @@ func WithExtra(c *ChainConfig, extra *ChainConfigExtra) *ChainConfig {
 
 type ChainConfigWithUpgradesJSON struct {
 	ChainConfig
-	UpgradeConfig UpgradeConfig `json:"upgrades,omitempty"`
+	UpgradeConfig extras.UpgradeConfig `json:"upgrades,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler. This is a workaround for the fact that
@@ -100,7 +100,7 @@ func (cu ChainConfigWithUpgradesJSON) MarshalJSON() ([]byte, error) {
 	}
 
 	type upgrades struct {
-		UpgradeConfig UpgradeConfig `json:"upgrades"`
+		UpgradeConfig extras.UpgradeConfig `json:"upgrades"`
 	}
 
 	upgradeJSON, err := json.Marshal(upgrades{cu.UpgradeConfig})
@@ -126,7 +126,7 @@ func (cu *ChainConfigWithUpgradesJSON) UnmarshalJSON(input []byte) error {
 	}
 
 	type upgrades struct {
-		UpgradeConfig UpgradeConfig `json:"upgrades"`
+		UpgradeConfig extras.UpgradeConfig `json:"upgrades"`
 	}
 
 	var u upgrades

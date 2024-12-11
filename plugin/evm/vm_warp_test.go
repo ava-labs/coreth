@@ -425,7 +425,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 		true, // RequirePrimaryNetworkSigners
 	)
 
-	vm.chainConfigExtra().UpgradeConfig = params.UpgradeConfig{
+	vm.chainConfigExtra().UpgradeConfig = extras.UpgradeConfig{
 		PrecompileUpgrades: []extras.PrecompileUpgrade{
 			{Config: enableConfig},
 			{Config: disableConfig},
