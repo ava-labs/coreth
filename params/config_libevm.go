@@ -16,7 +16,6 @@ import (
 type (
 	ChainConfigExtra  = extras.ChainConfigExtra
 	NetworkUpgrades   = extras.NetworkUpgrades
-	AvalancheContext  = extras.AvalancheContext
 	UpgradeConfig     = extras.UpgradeConfig
 	PrecompileUpgrade = extras.PrecompileUpgrade
 	AvalancheRules    = extras.AvalancheRules

@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -475,7 +476,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Set the Avalanche Context on the ChainConfig
-	configExtra.AvalancheContext = params.AvalancheContext{
+	configExtra.AvalancheContext = extras.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
