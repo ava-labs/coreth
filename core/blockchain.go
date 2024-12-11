@@ -399,7 +399,7 @@ func NewBlockChain(
 	commitNum := blockNumber - blockNumber%int(bc.cacheConfig.CommitInterval)
 	log.Warn("Reprocessing blocks", "commitNum", commitNum, "blockNumber", blockNumber)
 	for num := commitNum + 1; num <= blockNumber; num++ {
-		block := bc.GetBlockByNumber(uint64(blockNumber))
+		block := bc.GetBlockByNumber(uint64(num))
 		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 		if _, err := bc.reprocessBlock(parent, block); err != nil {
 			return nil, err
