@@ -29,6 +29,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -425,7 +426,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 	)
 
 	vm.chainConfigExtra().UpgradeConfig = params.UpgradeConfig{
-		PrecompileUpgrades: []params.PrecompileUpgrade{
+		PrecompileUpgrades: []extras.PrecompileUpgrade{
 			{Config: enableConfig},
 			{Config: disableConfig},
 			{Config: reEnableConfig},

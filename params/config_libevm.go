@@ -14,11 +14,10 @@ import (
 )
 
 type (
-	ChainConfigExtra  = extras.ChainConfigExtra
-	NetworkUpgrades   = extras.NetworkUpgrades
-	UpgradeConfig     = extras.UpgradeConfig
-	PrecompileUpgrade = extras.PrecompileUpgrade
-	AvalancheRules    = extras.AvalancheRules
+	ChainConfigExtra = extras.ChainConfigExtra
+	NetworkUpgrades  = extras.NetworkUpgrades
+	UpgradeConfig    = extras.UpgradeConfig
+	AvalancheRules   = extras.AvalancheRules
 )
 
 func init() {

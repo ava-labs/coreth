@@ -470,7 +470,7 @@ func (vm *VM) Initialize(
 	// If the Durango is activated, activate the Warp Precompile at the same time
 	configExtra := params.GetExtra(g.Config)
 	if configExtra.DurangoBlockTimestamp != nil {
-		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, params.PrecompileUpgrade{
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, extras.PrecompileUpgrade{
 			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
 		})
 	}
