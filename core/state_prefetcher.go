@@ -17,17 +17,15 @@
 package core
 
 import (
-	"encoding/binary"
-	"math/big"
-
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/holiman/uint256"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -73,24 +71,37 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
 		signer       = types.MakeSigner(p.config, header.Number, header.Time)
 	)
-	statedb, err := state.New(parentRoot, p.bc.stateCache, p.bc.snaps)
+	recorder := &snapRecorder{Snapshot: snap}
+	statedb, err := state.NewWithSnapshot(parentRoot, p.bc.stateCache, recorder)
 	if err != nil {
 		return
+	}
+
+	// Configure any upgrades that should go into effect during this block.
+	parent := p.bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	err = ApplyUpgrades(p.config, &parent.Time, block, statedb)
+	if err != nil {
+		log.Error("failed to configure precompiles processing block", "hash", block.Hash(), "number", block.NumberU64(), "timestamp", block.Time(), "err", err)
+	}
+
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	var eg errgroup.Group
 	eg.SetLimit(1) // Some limits just in case.
 	// Iterate over and process the individual transactions
-	vmState := &StateReadsRecorder{vmStateDB: statedb}
+	results := make([]*ExecutionResult, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
-		evm := vm.NewEVM(blockContext, vm.TxContext{}, vmState, p.config, cfg)
+		evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		eg.Go(func() error {
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 			if err != nil {
 				return err // Also invalid block, bail out
 			}
-			vmState.SetTxContext(tx.Hash(), i)
-			if err := precacheTransaction(msg, p.config, gaspool, vmState, header, evm); err != nil {
+			statedb.SetTxContext(tx.Hash(), i)
+			if results[i], err = precacheTransaction(msg, p.config, gaspool, statedb, header, evm); err != nil {
 				// NOTE: We don't care that the the transaction failed, we just want to pre-cache
 				return err // Ugh, something went horribly wrong, bail out
 			}
@@ -111,18 +122,33 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 	if err := eg.Wait(); err != nil {
 		log.Error("Unexpected failure in pre-caching transactions", "err", err)
 	}
-	*tape = vmState.tape
+
+	// hack: just setting the gas used for now
+	receipts := make(types.Receipts, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		receipts[i] = &types.Receipt{
+			TxHash: tx.Hash(),
+		}
+		if results[i] != nil {
+			receipts[i].GasUsed = results[i].UsedGas
+		}
+	}
+	if err := p.engine.Finalize(p.bc, block, parent, statedb, receipts); err != nil {
+		log.Error("Failed to finalize block", "err", err)
+	}
+
+	*tape = recorder.tape
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. The goal is not to execute
 // the transaction successfully, rather to warm up touched data slots.
-func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasPool, statedb vm.StateDB, header *types.Header, evm *vm.EVM) error {
+func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasPool, statedb vm.StateDB, header *types.Header, evm *vm.EVM) (*ExecutionResult, error) {
 	// Update the evm with the new transaction context.
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
-	_, err := ApplyMessage(evm, msg, gaspool)
-	return err
+	er, err := ApplyMessage(evm, msg, gaspool)
+	return er, err
 }
 
 type vmStateDB interface {
@@ -134,94 +160,73 @@ type vmStateDB interface {
 	GetLogs(common.Hash, uint64, common.Hash) []*types.Log
 }
 
-type StateReadsRecorder struct {
-	vmStateDB
+type snapRecorder struct {
+	snapshot.Snapshot
 
-	tape []byte
+	tape tape
 }
 
-type StateReadsReplayer struct {
-	vmStateDB
+type snapReplay struct {
+	snapshot.Snapshot
 
-	tape []byte
+	tape tape
 }
 
-func (s *StateReadsRecorder) GetBalance(addr common.Address) *uint256.Int {
-	v := s.vmStateDB.GetBalance(addr)
-	bytes := v.Bytes()
-	s.tape = append(s.tape, byte(len(bytes)))
-	s.tape = append(s.tape, bytes...)
-	return v
+func (s *snapRecorder) Account(accHash common.Hash) (*types.SlimAccount, error) {
+	acc, err := s.Snapshot.Account(accHash)
+	if err != nil {
+		return nil, err
+	}
+	if acc == nil {
+		// fmt.Println("nil account added")
+		s.tape = append(s.tape, 0)
+		return nil, nil
+	}
+
+	rlp, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		return nil, err
+	}
+	// fmt.Println("account added", len(rlp))
+	s.tape = append(s.tape, byte(len(rlp)))
+	s.tape = append(s.tape, rlp...)
+	return acc, err
 }
 
-func (s *StateReadsReplayer) GetBalance(common.Address) *uint256.Int {
-	l := int(s.tape[0])
-	v := new(uint256.Int)
-	v.SetBytes(s.tape[1 : 1+l])
-	s.tape = s.tape[1+l:]
-	return v
+func (s *snapRecorder) Storage(accHash common.Hash, hash common.Hash) ([]byte, error) {
+	val, err := s.Snapshot.Storage(accHash, hash)
+	if err != nil {
+		return nil, err
+	}
+	// fmt.Println("storage added", len(val))
+	s.tape = append(s.tape, byte(len(val)))
+	s.tape = append(s.tape, val...)
+	return val, nil
 }
 
-func (s *StateReadsRecorder) GetBalanceMultiCoin(addr common.Address, coin common.Hash) *big.Int {
-	v := s.vmStateDB.GetBalanceMultiCoin(addr, coin)
-	bytes := v.Bytes()
-	s.tape = append(s.tape, byte(len(bytes)))
-	s.tape = append(s.tape, v.Bytes()...)
-	return v
+func (s *snapReplay) Account(accHash common.Hash) (*types.SlimAccount, error) {
+	length := int(s.tape[0])
+	s.tape = s.tape[1:]
+	if length == 0 {
+		// fmt.Println("nil account replayed")
+		return nil, nil
+	}
+
+	// fmt.Println("account replayed", length)
+	acc := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(s.tape[:length], acc); err != nil {
+		return nil, err
+	}
+	s.tape = s.tape[length:]
+	return acc, nil
 }
 
-func (s *StateReadsReplayer) GetBalanceMultiCoin(common.Address, common.Hash) *big.Int {
-	l := int(s.tape[0])
-	v := new(big.Int)
-	v.SetBytes(s.tape[1 : 1+l])
-	s.tape = s.tape[1+l:]
-	return v
-}
+func (s *snapReplay) Storage(accHash common.Hash, hash common.Hash) ([]byte, error) {
+	length := int(s.tape[0])
+	s.tape = s.tape[1:]
+	// fmt.Println("storage replayed", length)
 
-func (s *StateReadsRecorder) GetNonce(addr common.Address) uint64 {
-	v := s.vmStateDB.GetNonce(addr)
-	s.tape = binary.BigEndian.AppendUint64(s.tape, v)
-	return v
-}
-
-func (s *StateReadsReplayer) GetNonce(common.Address) uint64 {
-	v := binary.BigEndian.Uint64(s.tape)
-	s.tape = s.tape[8:]
-	return v
-}
-
-func (s *StateReadsRecorder) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	v := s.vmStateDB.GetCommittedState(addr, hash)
-	s.tape = append(s.tape, v.Bytes()...)
-	return v
-}
-
-func (s *StateReadsReplayer) GetCommittedState(common.Address, common.Hash) common.Hash {
-	v := common.BytesToHash(s.tape[:32])
-	s.tape = s.tape[32:]
-	return v
-}
-
-func (s *StateReadsRecorder) GetCommittedStateAP1(addr common.Address, hash common.Hash) common.Hash {
-	v := s.vmStateDB.GetCommittedStateAP1(addr, hash)
-	s.tape = append(s.tape, v.Bytes()...)
-	return v
-}
-
-func (s *StateReadsReplayer) GetCommittedStateAP1(common.Address, common.Hash) common.Hash {
-	v := common.BytesToHash(s.tape[:32])
-	s.tape = s.tape[32:]
-	return v
-}
-
-func (s *StateReadsRecorder) GetState(addr common.Address, hash common.Hash) common.Hash {
-	v := s.vmStateDB.GetState(addr, hash)
-	s.tape = append(s.tape, v.Bytes()...)
-	return v
-}
-
-func (s *StateReadsReplayer) GetState(common.Address, common.Hash) common.Hash {
-	v := common.BytesToHash(s.tape[:32])
-	s.tape = s.tape[32:]
-	return v
+	val := s.tape[:length]
+	s.tape = s.tape[length:]
+	return val, nil
 }

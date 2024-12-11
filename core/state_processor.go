@@ -89,11 +89,6 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 		return nil, nil, 0, err
 	}
 
-	var vmState vmStateDB = statedb
-	if p.tape != nil {
-		vmState = &StateReadsRecorder{vmStateDB: statedb, tape: p.tape}
-	}
-
 	var (
 		context = NewEVMBlockContext(header, p.bc, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
@@ -109,7 +104,7 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, gp, vmState, blockNumber, blockHash, tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}

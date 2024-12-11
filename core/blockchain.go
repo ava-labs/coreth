@@ -397,9 +397,9 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
-	if err := bc.reprocessFromGenesis(); err != nil {
-		return nil, err
-	}
+	// if err := bc.reprocessFromGenesis(); err != nil {
+	// 	return nil, err
+	// }
 
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
@@ -1306,7 +1306,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	}()
 
 	// Retrieve the parent block to determine which root to build state on
-	substart = time.Now()
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 
 	// Instantiate the statedb to use for processing transactions
@@ -1315,17 +1314,26 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// entries directly from the trie (much slower).
 	bc.flattenLock.Lock()
 	defer bc.flattenLock.Unlock()
-	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-	if err != nil {
-		return err
-	}
-	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
-
 	// This will attempt to execute the block txs in parallel.
 	// This is to avoid snapshot misses during execution.
 	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
 	tape := new(tape)
 	sp.Prefetch(block, parent.Root, bc.vmConfig, tape)
+
+	substart = time.Now()
+	var statedb *state.StateDB
+	if bc.snaps != nil {
+		snap := bc.snaps.Snapshot(parent.Root)
+		withReplay := &snapReplay{snap, *tape}
+		//withReplay := snap
+		statedb, err = state.NewWithSnapshot(parent.Root, bc.stateCache, withReplay)
+	} else {
+		statedb, err = state.New(parent.Root, bc.stateCache, nil)
+	}
+	if err != nil {
+		return err
+	}
+	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
 
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
@@ -1335,7 +1343,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
-	bc.processor.(*StateProcessor).tape = *tape
 	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
 	if serr := statedb.Error(); serr != nil {
 		log.Error("statedb error encountered", "err", serr, "number", block.Number(), "hash", block.Hash())
