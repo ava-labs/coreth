@@ -395,7 +395,7 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
-	blockNumber := 185230
+	blockNumber := 185231
 	commitNum := blockNumber - blockNumber%int(bc.cacheConfig.CommitInterval)
 	log.Warn("Reprocessing blocks", "commitNum", commitNum, "blockNumber", blockNumber)
 	for num := commitNum + 1; num <= blockNumber; num++ {
