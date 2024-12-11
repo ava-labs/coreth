@@ -1789,6 +1789,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, 
 // reprocessFrom destroys the current snapshot (overrides it with genesis state) and
 // reprocesses the chain from the genesis block up to the current head block.
 func (bc *BlockChain) reprocessFromGenesis() error {
+	metrics.EnabledExpensive = false
 	target := uint64(30_000_000)
 	log.Warn("Reprocessing chain from genesis", "target", target)
 
