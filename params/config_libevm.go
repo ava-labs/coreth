@@ -13,11 +13,6 @@ import (
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
-func init() {
-	// XXX: Must fix this
-	extras.GetExtra = GetExtra
-}
-
 // libevmInit would ideally be a regular init() function, but it MUST be run
 // before any calls to [ChainConfig.Rules]. See `config.go` for its call site.
 func libevmInit() any {

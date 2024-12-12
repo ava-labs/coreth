@@ -13,9 +13,6 @@ import (
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
-// XXX: Must fix this
-var GetExtra func(c *ethparams.ChainConfig) *ChainConfigExtra
-
 // UpgradeConfig includes the following configs that may be specified in upgradeBytes:
 // - Timestamps that enable avalanche network upgrades,
 // - Enabling or disabling precompiles as network upgrades.
@@ -41,7 +38,10 @@ func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig,
 	if c == nil {
 		return nil
 	}
-	newcfg := GetExtra(newcfg_)
+	newcfg, ok := newcfg_.Hooks().(*ChainConfigExtra)
+	if !ok {
+		// XXX: if libevm is implemented properly then this can never happen, but that's only a runtime guarantee so shouldn't be relied upon
+	}
 
 	// Check avalanche network upgrades
 	if err := c.checkNetworkUpgradesCompatible(&newcfg.NetworkUpgrades, headTimestamp); err != nil {
