@@ -16,7 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/clienttypes"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
@@ -40,7 +40,9 @@ var _ atomic.UnsignedAtomicTx = &TestUnsignedTx{}
 func (t *TestUnsignedTx) GasUsed(fixedFee bool) (uint64, error) { return t.GasUsedV, nil }
 
 // Verify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) Verify(ctx *snow.Context, rules params.RulesExtra) error { return t.VerifyV }
+func (t *TestUnsignedTx) Verify(ctx *snow.Context, rules clienttypes.AvalancheRules) error {
+	return t.VerifyV
+}
 
 // AtomicOps implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) AtomicOps() (ids.ID, *avalancheatomic.Requests, error) {

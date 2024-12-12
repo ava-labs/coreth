@@ -1637,7 +1637,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	atomicBackend := &atomic.Backend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
-		Rules:        rules,
+		Rules:        rules.AvalancheRules,
 		Bootstrapped: vm.bootstrapped,
 		BlockFetcher: vm,
 		SecpCache:    &vm.secpCache,
@@ -1676,7 +1676,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	atomicBackend := &atomic.Backend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
-		Rules:        rules,
+		Rules:        rules.AvalancheRules,
 		Bootstrapped: vm.bootstrapped,
 		BlockFetcher: vm,
 		SecpCache:    &vm.secpCache,
@@ -1874,7 +1874,7 @@ func (vm *VM) newImportTx(
 		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
 	}
 
-	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, chainID, to, baseFee, kc, atomicUTXOs)
+	return atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 // newExportTx returns a new ExportTx
@@ -1893,8 +1893,8 @@ func (vm *VM) newExportTx(
 
 	// Create the transaction
 	tx, err := atomic.NewExportTx(
-		vm.ctx,            // Context
-		vm.currentRules(), // VM rules
+		vm.ctx,                           // Context
+		vm.currentRules().AvalancheRules, // VM rules
 		state,
 		assetID, // AssetID
 		amount,  // Amount

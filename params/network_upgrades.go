@@ -163,14 +163,7 @@ func (n NetworkUpgrades) Description() string {
 	return banner
 }
 
-type AvalancheRules struct {
-	IsApricotPhase1, IsApricotPhase2, IsApricotPhase3, IsApricotPhase4, IsApricotPhase5 bool
-	IsApricotPhasePre6, IsApricotPhase6, IsApricotPhasePost6                            bool
-	IsBanff                                                                             bool
-	IsCortina                                                                           bool
-	IsDurango                                                                           bool
-	IsEtna                                                                              bool
-}
+type AvalancheRules = clienttypes.AvalancheRules
 
 func (n *NetworkUpgrades) GetAvalancheRules(timestamp uint64) AvalancheRules {
 	return AvalancheRules{

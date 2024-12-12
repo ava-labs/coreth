@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/clienttypes"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
@@ -130,7 +130,7 @@ type UnsignedTx interface {
 type Backend struct {
 	Ctx          *snow.Context
 	Fx           fx.Fx
-	Rules        params.RulesExtra
+	Rules        clienttypes.AvalancheRules
 	Bootstrapped bool
 	BlockFetcher BlockFetcher
 	SecpCache    *secp256k1.RecoverCache
@@ -167,7 +167,7 @@ type UnsignedAtomicTx interface {
 	// InputUTXOs returns the UTXOs this tx consumes
 	InputUTXOs() set.Set[ids.ID]
 	// Verify attempts to verify that the transaction is well formed
-	Verify(ctx *snow.Context, rules params.RulesExtra) error
+	Verify(ctx *snow.Context, rules clienttypes.AvalancheRules) error
 	// SemanticVerify this transaction is valid.
 	SemanticVerify(backend *Backend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error
 	// AtomicOps returns the blockchainID and set of atomic requests that

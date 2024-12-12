@@ -649,7 +649,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal("Expected logs to be non-nil")
 	}
 
-	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*atomic.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1021,11 +1021,11 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
+			tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo})
+			tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1048,11 +1048,11 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
+			tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo1})
+			tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo1})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1076,17 +1076,17 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			importTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1})
+			importTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			importTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(3), initialBaseFee), kc, []*avax.UTXO{utxo2})
+			importTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(3), initialBaseFee), kc, []*avax.UTXO{utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			reissuanceTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(2), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
+			reissuanceTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(2), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1106,7 +1106,7 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			assert.True(t, vm.mempool.Has(importTx2.ID()))
 			assert.False(t, vm.mempool.Has(reissuanceTx1.ID()))
 
-			reissuanceTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(4), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
+			reissuanceTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(4), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -3677,7 +3677,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
 		assert.NoError(t, err)
 
-		importTx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
+		importTx, err := atomic.NewImportTx(vm.ctx, vm.currentRules().AvalancheRules, vm.clock, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -69,7 +69,7 @@ type atomicTxVerifyTest struct {
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
 	atomicTx := test.generate(t)
-	err := atomicTx.Verify(test.ctx, test.rules)
+	err := atomicTx.Verify(test.ctx, test.rules.AvalancheRules)
 	if len(test.expectedErr) == 0 {
 		require.NoError(err)
 	} else {
@@ -119,7 +119,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	backend := &atomic.Backend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
-		Rules:        rules,
+		Rules:        rules.AvalancheRules,
 		Bootstrapped: vm.bootstrapped,
 		BlockFetcher: vm,
 		SecpCache:    &vm.secpCache,

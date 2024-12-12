@@ -10,7 +10,7 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/clienttypes"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -73,7 +73,7 @@ func (utx *UnsignedImportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedImportTx) Verify(
 	ctx *snow.Context,
-	rules params.RulesExtra,
+	rules clienttypes.AvalancheRules,
 ) error {
 	switch {
 	case utx == nil:
@@ -151,7 +151,7 @@ func (utx *UnsignedImportTx) GasUsed(fixedFee bool) (uint64, error) {
 		}
 	}
 	if fixedFee {
-		cost, err = math.Add64(cost, params.AtomicTxBaseCost)
+		cost, err = math.Add64(cost, AtomicTxBaseCost)
 		if err != nil {
 			return 0, err
 		}
@@ -216,7 +216,7 @@ func (utx *UnsignedImportTx) SemanticVerify(
 
 	// Apply fees to import transactions as of Apricot Phase 2
 	case rules.IsApricotPhase2:
-		fc.Produce(ctx.AVAXAssetID, params.AvalancheAtomicTxFee)
+		fc.Produce(ctx.AVAXAssetID, AvalancheAtomicTxFee)
 	}
 	for _, out := range utx.Outs {
 		fc.Produce(out.AssetID, out.Amount)
@@ -290,7 +290,7 @@ func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 // NewImportTx returns a new ImportTx
 func NewImportTx(
 	ctx *snow.Context,
-	rules params.RulesExtra,
+	rules clienttypes.AvalancheRules,
 	clk mockable.Clock,
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
@@ -379,8 +379,8 @@ func NewImportTx(
 			return nil, err
 		}
 	case rules.IsApricotPhase2:
-		txFeeWithoutChange = params.AvalancheAtomicTxFee
-		txFeeWithChange = params.AvalancheAtomicTxFee
+		txFeeWithoutChange = AvalancheAtomicTxFee
+		txFeeWithChange = AvalancheAtomicTxFee
 	}
 
 	// AVAX output
