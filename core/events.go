@@ -34,6 +34,9 @@ import (
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
+// NewMinedBlockEvent is posted when a block has been imported.
+type NewMinedBlockEvent struct{ Block *types.Block }
+
 // NewTxPoolHeadEvent is posted when the pool receives a request to update
 // its head to [Block].
 type NewTxPoolHeadEvent struct{ Head *types.Header }
