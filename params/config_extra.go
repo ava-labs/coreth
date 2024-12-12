@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/upgrade"
+	clienttypes "github.com/ava-labs/coreth/clienttypes"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	ethparams "github.com/ava-labs/libevm/params"
@@ -266,15 +267,14 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 // Precompiles was presented as an inline object in the JSON.
 // This custom unmarshaler ensures backwards compatibility with the old format.
 func (c *ChainConfigExtra) UnmarshalJSON(data []byte) error {
-	// Alias ChainConfigExtra to avoid recursion
-	type _ChainConfigExtra ChainConfigExtra
-	tmp := _ChainConfigExtra{}
+	tmp := clienttypes.ChainConfigExtra{}
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
 
-	// At this point we have populated all fields except PrecompileUpgrade
-	*c = ChainConfigExtra(tmp)
+	*c = ChainConfigExtra{
+		NetworkUpgrades: NetworkUpgrades(tmp.NetworkUpgrades),
+	}
 
 	return nil
 }
@@ -282,9 +282,10 @@ func (c *ChainConfigExtra) UnmarshalJSON(data []byte) error {
 // MarshalJSON returns the JSON encoding of c.
 // This is a custom marshaler to handle the Precompiles field.
 func (c *ChainConfigExtra) MarshalJSON() ([]byte, error) {
-	// Alias ChainConfigExtra to avoid recursion
-	type _ChainConfigExtra ChainConfigExtra
-	return json.Marshal(_ChainConfigExtra(*c))
+	tmp := &clienttypes.ChainConfigExtra{
+		NetworkUpgrades: clienttypes.NetworkUpgrades(c.NetworkUpgrades),
+	}
+	return json.Marshal(tmp)
 }
 
 type ChainConfigWithUpgradesJSON struct {
@@ -373,25 +374,10 @@ func ToWithUpgradesJSON(c *ChainConfig) *ChainConfigWithUpgradesJSON {
 }
 
 func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
-	return WithExtra(
-		&ChainConfig{
-			ChainID:             chainID,
-			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        big.NewInt(0),
-			DAOForkSupport:      true,
-			EIP150Block:         big.NewInt(0),
-			EIP155Block:         big.NewInt(0),
-			EIP158Block:         big.NewInt(0),
-			ByzantiumBlock:      big.NewInt(0),
-			ConstantinopleBlock: big.NewInt(0),
-			PetersburgBlock:     big.NewInt(0),
-			IstanbulBlock:       big.NewInt(0),
-			MuirGlacierBlock:    big.NewInt(0),
-		},
-		&ChainConfigExtra{
-			NetworkUpgrades: getNetworkUpgrades(agoUpgrade),
-		},
-	)
+	eth, extras := clienttypes.GetChainConfig(agoUpgrade, chainID)
+	return WithExtra(eth, &ChainConfigExtra{
+		NetworkUpgrades: NetworkUpgrades(extras.NetworkUpgrades),
+	})
 }
 
 func ptrToString(val *uint64) string {
