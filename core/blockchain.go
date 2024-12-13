@@ -179,6 +179,8 @@ type CacheConfig struct {
 	StateHistory                    uint64  // Number of blocks from head whose state histories are reserved.
 	StateScheme                     string  // Scheme used to store ethereum states and merkle tree nodes on top
 
+	KeyValueDB *triedb.KeyValueConfig // Config for key value db
+
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -200,6 +202,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}
 	}
+	config.KeyValueDB = c.KeyValueDB
 	return config
 }
 
@@ -232,6 +235,13 @@ type txLookup struct {
 	lookup      *rawdb.LegacyTxLookupEntry
 	transaction *types.Transaction
 }
+
+type blockRoot struct {
+	*types.Block
+	root common.Hash
+}
+
+func (b *blockRoot) Root() common.Hash { return b.root }
 
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
@@ -298,7 +308,7 @@ type BlockChain struct {
 	// different than [chainAcceptedFeed], which is sent an event after an accepted
 	// block is processed (after each loop of the accepted worker). If there is a
 	// clean shutdown, all items inserted into the [acceptorQueue] will be processed.
-	acceptorQueue chan *types.Block
+	acceptorQueue chan *blockRoot
 
 	// [acceptorClosingLock], and [acceptorClosed] are used
 	// to synchronize the closing of the [acceptorQueue] channel.
@@ -382,7 +392,7 @@ func NewBlockChain(
 		engine:            engine,
 		vmConfig:          vmConfig,
 		senderCacher:      NewTxSenderCacher(runtime.NumCPU()),
-		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
+		acceptorQueue:     make(chan *blockRoot, cacheConfig.AcceptorQueueLimit),
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
@@ -404,9 +414,9 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
-	if err := bc.reprocessFromGenesis(); err != nil {
-		return nil, err
-	}
+	// if err := bc.reprocessFromGenesis(); err != nil {
+	// 	return nil, err
+	// }
 
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
@@ -568,6 +578,7 @@ func (bc *BlockChain) startAcceptor() {
 			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
 		}
 
+		next := next.Block
 		// Update last processed and transaction lookup index
 		if err := bc.writeBlockAcceptedIndices(next); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
@@ -606,7 +617,7 @@ func (bc *BlockChain) startAcceptor() {
 
 // addAcceptorQueue adds a new *types.Block to the [acceptorQueue]. This will
 // block if there are [AcceptorQueueLimit] items in [acceptorQueue].
-func (bc *BlockChain) addAcceptorQueue(b *types.Block) {
+func (bc *BlockChain) addAcceptorQueue(b *blockRoot) {
 	// We only acquire a read lock here because it is ok to add items to the
 	// [acceptorQueue] concurrently.
 	bc.acceptorClosingLock.RLock()
@@ -722,6 +733,11 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
 }
 
+func (bc *BlockChain) LoadGenesisState(block *types.Block) error {
+	bc.genesisBlock = block
+	return bc.loadGenesisState()
+}
+
 func (bc *BlockChain) loadGenesisState() error {
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
@@ -781,6 +797,13 @@ func (bc *BlockChain) ExportCallback(callback func(block *types.Block) error, fi
 		}
 	}
 	return nil
+}
+
+func (bc *BlockChain) WriteHeadBlock(block *types.Block) {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	bc.writeHeadBlock(block)
 }
 
 // writeHeadBlock injects a new head block into the current block chain. This method
@@ -1044,6 +1067,10 @@ func (bc *BlockChain) LastAcceptedBlock() *types.Block {
 //
 // Assumes [bc.chainmu] is not held by the caller.
 func (bc *BlockChain) Accept(block *types.Block) error {
+	return bc.AcceptWithRoot(block, block.Root())
+}
+
+func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
@@ -1070,7 +1097,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
-	bc.addAcceptorQueue(block)
+	bc.addAcceptorQueue(&blockRoot{Block: block, root: root})
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
 	return nil
@@ -1239,7 +1266,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 	for n, block := range chain {
-		if err := bc.insertBlock(block, true); err != nil {
+		if err := bc.insertBlock(block, nil, true); err != nil {
 			return n, err
 		}
 	}
@@ -1252,17 +1279,21 @@ func (bc *BlockChain) InsertBlock(block *types.Block) error {
 }
 
 func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {
+	return bc.InsertBlockManualWithParent(block, nil, writes)
+}
+
+func (bc *BlockChain) InsertBlockManualWithParent(block *types.Block, parent *types.Header, writes bool) error {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
 	bc.chainmu.Lock()
-	err := bc.insertBlock(block, writes)
+	err := bc.insertBlock(block, parent, writes)
 	bc.chainmu.Unlock()
 
 	return err
 }
 
-func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
+func (bc *BlockChain) insertBlock(block *types.Block, parent *types.Header, writes bool) error {
 	start := time.Now()
 	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), block.Time()), block.Transactions())
 
@@ -1312,8 +1343,10 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		}
 	}()
 
-	// Retrieve the parent block to determine which root to build state on
-	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		// Retrieve the parent block to determine which root to build state on
+		parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	}
 
 	// Instantiate the statedb to use for processing transactions
 	//
@@ -1323,16 +1356,16 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	defer bc.flattenLock.Unlock()
 	// This will attempt to execute the block txs in parallel.
 	// This is to avoid snapshot misses during execution.
-	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
-	tape := new(tape)
-	sp.Prefetch(block, parent.Root, bc.vmConfig, tape)
+	// sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
+	// tape := new(tape)
+	// sp.Prefetch(block, parent.Root, bc.vmConfig, tape)
 
 	substart = time.Now()
 	var statedb *state.StateDB
 	if bc.snaps != nil {
 		snap := bc.snaps.Snapshot(parent.Root)
-		withReplay := &snapReplay{snap, *tape}
-		//withReplay := snap
+		// withReplay := &snapReplay{snap, *tape}
+		withReplay := snap
 		statedb, err = state.NewWithSnapshot(parent.Root, bc.stateCache, withReplay)
 	} else {
 		statedb, err = state.New(parent.Root, bc.stateCache, nil)

@@ -30,12 +30,40 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type KV struct {
+	Key   []byte
+	Value []byte
+}
+
+type Batch []KV
+
+type KVBackend interface {
+	// Returns the current root hash of the trie.
+	// Empty trie must return common.Hash{}.
+	Root() common.Hash
+
+	// Get retrieves the value for the given key.
+	Get(key []byte) ([]byte, error)
+
+	// After this call, Root() should return the same hash as returned by this call.
+	Update(Batch) (common.Hash, error)
+
+	// After this call, changes related to [root] should be persisted to disk.
+	// This may be implemented as no-op if Update already persists changes.
+	Commit(root common.Hash) error
+}
+
+type KeyValueConfig struct {
+	KVBackend KVBackend
+}
+
 // Config defines all necessary options for database.
 type Config struct {
-	Preimages bool           // Flag whether the preimage of node key is recorded
-	IsVerkle  bool           // Flag whether the db is holding a verkle tree
-	HashDB    *hashdb.Config // Configs for hash-based scheme
-	PathDB    *pathdb.Config // Configs for experimental path-based scheme
+	Preimages  bool           // Flag whether the preimage of node key is recorded
+	IsVerkle   bool           // Flag whether the db is holding a verkle tree
+	HashDB     *hashdb.Config // Configs for hash-based scheme
+	PathDB     *pathdb.Config // Configs for experimental path-based scheme
+	KeyValueDB *KeyValueConfig
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -86,6 +114,10 @@ type Database struct {
 	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
+}
+
+func (db *Database) Config() *Config {
+	return db.config
 }
 
 // NewDatabase initializes the trie database with default settings, note
@@ -154,6 +186,11 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 func (db *Database) Commit(root common.Hash, report bool) error {
 	if db.preimages != nil {
 		db.preimages.commit(true)
+	}
+	if db.config.KeyValueDB != nil {
+		if backend := db.config.KeyValueDB.KVBackend; backend != nil {
+			return backend.Commit(root)
+		}
 	}
 	return db.backend.Commit(root, report)
 }

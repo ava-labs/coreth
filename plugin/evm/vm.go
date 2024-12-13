@@ -505,6 +505,7 @@ func (vm *VM) Initialize(
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
+	log.Info("Genesis bytes", "bytes", genesisBytes)
 	vm.ethConfig.NetworkId = vm.chainID.Uint64()
 	vm.genesisHash = vm.ethConfig.Genesis.ToBlock().Hash() // must create genesis hash before [vm.readLastAccepted]
 	lastAcceptedHash, lastAcceptedHeight, err := vm.readLastAccepted()
