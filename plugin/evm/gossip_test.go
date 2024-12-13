@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -33,15 +34,15 @@ func TestGossipAtomicTxMarshaller(t *testing.T) {
 	require := require.New(t)
 
 	want := &GossipAtomicTx{
-		Tx: &Tx{
-			UnsignedAtomicTx: &UnsignedImportTx{},
+		Tx: &atomic.Tx{
+			UnsignedAtomicTx: &atomic.UnsignedImportTx{},
 			Creds:            []verify.Verifiable{},
 		},
 	}
 	marshaller := GossipAtomicTxMarshaller{}
 
 	key0 := testKeys[0]
-	require.NoError(want.Tx.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}}))
+	require.NoError(want.Tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key0}}))
 
 	bytes, err := marshaller.MarshalGossip(want)
 	require.NoError(err)
@@ -54,14 +55,14 @@ func TestGossipAtomicTxMarshaller(t *testing.T) {
 func TestAtomicMempoolIterate(t *testing.T) {
 	txs := []*GossipAtomicTx{
 		{
-			Tx: &Tx{
+			Tx: &atomic.Tx{
 				UnsignedAtomicTx: &TestUnsignedTx{
 					IDV: ids.GenerateTestID(),
 				},
 			},
 		},
 		{
-			Tx: &Tx{
+			Tx: &atomic.Tx{
 				UnsignedAtomicTx: &TestUnsignedTx{
 					IDV: ids.GenerateTestID(),
 				},
