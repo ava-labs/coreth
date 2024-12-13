@@ -13,9 +13,9 @@ import (
 var _ triedb.KVBackend = &MerkleDB{}
 
 type MerkleDB struct {
-	db              merkledb.MerkleDB
-	pendingView     merkledb.View
-	pendingViewRoot common.Hash
+	db               merkledb.MerkleDB
+	pendingViews     []merkledb.View
+	pendingViewRoots []common.Hash
 }
 
 func NewMerkleDB(db merkledb.MerkleDB) *MerkleDB {
@@ -23,11 +23,18 @@ func NewMerkleDB(db merkledb.MerkleDB) *MerkleDB {
 }
 
 func (m *MerkleDB) Get(key []byte) ([]byte, error) {
-	val, err := m.db.Get(key)
+	val, err := m.latestView().GetValue(context.TODO(), key)
 	if err == database.ErrNotFound {
 		return nil, nil
 	}
 	return val, err
+}
+
+func (m *MerkleDB) latestView() merkledb.Trie {
+	if len(m.pendingViews) == 0 {
+		return m.db
+	}
+	return m.pendingViews[len(m.pendingViews)-1]
 }
 
 func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
@@ -40,7 +47,7 @@ func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
 			Delete: len(kv.Value) == 0,
 		}
 	}
-	view, err := m.db.NewView(ctx, merkledb.ViewChanges{BatchOps: changes})
+	view, err := m.latestView().NewView(ctx, merkledb.ViewChanges{BatchOps: changes})
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -48,28 +55,31 @@ func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	m.pendingView = view
-	m.pendingViewRoot = common.Hash(root)
+	m.pendingViews = append(m.pendingViews, view)
+	m.pendingViewRoots = append(m.pendingViewRoots, common.Hash(root))
 	return common.Hash(root), nil
 }
 
 func (m *MerkleDB) Commit(root common.Hash) error {
-	if m.pendingViewRoot != root {
-		return fmt.Errorf("root mismatch: expected %x, got %x", root, m.pendingViewRoot)
+	if len(m.pendingViews) == 0 {
+		return fmt.Errorf("no pending views")
+	}
+	if m.pendingViewRoots[0] != root {
+		return fmt.Errorf("root mismatch: expected %x, got %x", root, m.pendingViewRoots[0])
 	}
 	ctx := context.TODO()
-	if err := m.pendingView.CommitToDB(ctx); err != nil {
+	if err := m.pendingViews[0].CommitToDB(ctx); err != nil {
 		return err
 	}
-	m.pendingView = nil
-	m.pendingViewRoot = common.Hash{}
+	m.pendingViews = m.pendingViews[1:]
+	m.pendingViewRoots = m.pendingViewRoots[1:]
 	fmt.Printf("Commit: %x\n", root)
 	return nil
 }
 
 func (m *MerkleDB) Root() common.Hash {
 	ctx := context.TODO()
-	root, err := m.db.GetMerkleRoot(ctx)
+	root, err := m.latestView().GetMerkleRoot(ctx)
 	if err != nil {
 		panic(fmt.Sprintf("failed to get merkle root: %v", err))
 	}

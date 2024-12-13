@@ -71,7 +71,7 @@ func TestReprocessGenesis(t *testing.T) {
 	}
 	cacheConfig.TriePrefetcherParallelism = 4
 	cacheConfig.SnapshotLimit = 0
-	cacheConfig.Pruning = false
+	// cacheConfig.Pruning = false
 
 	bc, err := core.NewBlockChain(db, &cacheConfig, g, engine, vm.Config{}, common.Hash{}, false)
 	require.NoError(t, err)
