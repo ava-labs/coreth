@@ -37,12 +37,7 @@ type ChainConfigExtra struct {
 	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Skip encoding/decoding directly into ChainConfig.
 }
 
-func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
-	if c == nil {
-		return nil
-	}
-	newcfg := GetExtra(newcfg_)
-
+func (c *ChainConfigExtra) CheckConfigCompatible(newcfg *ChainConfigExtra, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
 	// Check avalanche network upgrades
 	if err := c.checkNetworkUpgradesCompatible(&newcfg.NetworkUpgrades, headTimestamp); err != nil {
 		return err
@@ -149,10 +144,10 @@ func (c *ChainConfigExtra) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON returns the JSON encoding of c.
 // This is a custom marshaler to handle the Precompiles field.
-func (c *ChainConfigExtra) MarshalJSON() ([]byte, error) {
+func (c ChainConfigExtra) MarshalJSON() ([]byte, error) {
 	// Alias ChainConfigExtra to avoid recursion
 	type _ChainConfigExtra ChainConfigExtra
-	return json.Marshal(_ChainConfigExtra(*c))
+	return json.Marshal(_ChainConfigExtra(c))
 }
 
 type fork struct {
