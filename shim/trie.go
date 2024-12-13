@@ -39,7 +39,6 @@ func (t *Trie) getKey(key []byte) []byte {
 
 // Update batches updates to the trie
 func (t *Trie) Update(key, value []byte) error {
-	fmt.Printf("Update: %x -> %x\n", key, value)
 	key = t.getKey(key)
 	value = bytes.Clone(value)
 	if t.parent != nil {
@@ -51,7 +50,6 @@ func (t *Trie) Update(key, value []byte) error {
 }
 
 func (t *Trie) Delete(key []byte) error {
-	fmt.Printf("Delete: %x\n", key)
 	key = t.getKey(key)
 	if t.parent != nil {
 		t.parent.changes = append(t.parent.changes, KV{Key: key})
@@ -66,7 +64,6 @@ func (t *Trie) Hash() common.Hash {
 		return common.Hash{}
 	}
 
-	fmt.Printf("Hashing %d changes\n", len(t.changes))
 	return t.backend.Hash(t.changes)
 }
 
@@ -75,12 +72,10 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		return common.Hash{}, nil, nil
 	}
 
-	fmt.Printf("Committing %d changes\n", len(t.changes))
 	return t.backend.Commit(t.changes, collectLeaf)
 }
 
 func (t *Trie) Get(key []byte) ([]byte, error) {
-	fmt.Printf("Get: %x\n", key)
 	key = t.getKey(key)
 	return t.backend.Get(key)
 }

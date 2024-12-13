@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
@@ -41,8 +42,14 @@ func TestReprocessGenesis(t *testing.T) {
 		Config: chainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000000000000000)}},
 	}
+	someAddr := common.Address{1}
+
 	cbs := dummy.ConsensusCallbacks{
-		OnExtraStateChange: testVM.onExtraStateChange,
+		OnExtraStateChange: func(block *types.Block, statedb *state.StateDB) (*big.Int, *big.Int, error) {
+			i := byte(block.Number().Uint64())
+			statedb.SetState(someAddr, common.Hash{i}, common.Hash{i})
+			return testVM.onExtraStateChange(block, statedb)
+		},
 	}
 	ctx := context.Background()
 

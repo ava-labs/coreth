@@ -29,12 +29,17 @@ type KVTrieBackend struct {
 }
 
 func (k *KVTrieBackend) Get(key []byte) ([]byte, error) {
+	fmt.Printf("Get: %x\n", key)
 	return k.backend.Get(key)
 }
 
 func (k *KVTrieBackend) Hash(batch Batch) common.Hash {
 	if k.hashed {
 		return k.hash
+	}
+	fmt.Printf("Update Total: %d\n", len(batch))
+	for _, kv := range batch {
+		fmt.Printf("Update: %x %x\n", kv.Key, kv.Value)
 	}
 	root, err := k.backend.Update(batch)
 	if err != nil {
