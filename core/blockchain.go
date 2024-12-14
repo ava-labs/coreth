@@ -260,6 +260,7 @@ func (b *blockRoot) Root() common.Hash { return b.root }
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
+	genesis     *Genesis
 
 	db           ethdb.Database   // Low level persistent database to store final content in
 	snaps        *snapshot.Tree   // Snapshot tree for fast trie leaf access
@@ -395,6 +396,7 @@ func NewBlockChain(
 		acceptorQueue:     make(chan *blockRoot, cacheConfig.AcceptorQueueLimit),
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
+		genesis:           genesis,
 	}
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -1914,6 +1916,34 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 		NoBuild:    noBuild,
 		AsyncBuild: asyncBuild,
 		SkipVerify: !bc.cacheConfig.SnapshotVerify,
+	}
+	if b.Number.Uint64() == 0 && bc.cacheConfig.KeyValueDB != nil {
+		snapcfgGenesis := snapconfig
+		snapcfgGenesis.AsyncBuild = !bc.cacheConfig.SnapshotWait
+		var err error
+		bc.snaps, err = snapshot.New(snapcfgGenesis, bc.db, bc.triedb, common.Hash{}, types.EmptyRootHash)
+		if err != nil {
+			log.Error("failed to initialize snapshots", "headRoot", b.Root, "err", err, "async", asyncBuild)
+		}
+		tmpDiskDB := rawdb.NewMemoryDatabase()
+		tmpTrieDB := triedb.NewDatabase(tmpDiskDB, nil)
+		tmpStateDatabase := state.NewDatabaseWithNodeDB(tmpDiskDB, tmpTrieDB)
+		statedb, err := state.New(types.EmptyRootHash, tmpStateDatabase, bc.snaps)
+		if err != nil {
+			log.Error("failed to initialize genesis state", "err", err)
+		}
+		bc.genesis.toBlockWithState(tmpDiskDB, statedb)
+		_, err = statedb.CommitWithSnap(0, false, bc.snaps, bc.genesisBlock.Hash(), common.Hash{})
+		if err != nil {
+			log.Error("failed to commit genesis state", "err", err)
+		}
+		if err := bc.snaps.Flatten(bc.genesisBlock.Hash()); err != nil {
+			log.Error("failed to flatten genesis snapshot", "err", err)
+		}
+		rawdb.WriteSnapshotRoot(bc.db, bc.genesisBlock.Root())
+		// Need to mark the snapshot completed
+		bc.snaps.AbortGeneration()
+		snapshot.ResetSnapshotGeneration(bc.db)
 	}
 	var err error
 	bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, b.Hash(), b.Root)

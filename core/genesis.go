@@ -230,7 +230,18 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	if err != nil {
 		panic(err)
 	}
+	head, root := g.toBlockWithState(db, statedb)
+	statedb.Commit(0, false)
+	// Commit newly generated states into disk if it's not empty.
+	if root != types.EmptyRootHash {
+		if err := triedb.Commit(root, true); err != nil {
+			panic(fmt.Sprintf("unable to commit genesis block: %v", err))
+		}
+	}
+	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+}
 
+func (g *Genesis) toBlockWithState(db ethdb.Database, statedb *state.StateDB) (*types.Header, common.Hash) {
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
@@ -246,7 +257,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	}
 
 	// Configure any stateful precompiles that should be enabled in the genesis.
-	err = ApplyPrecompileActivations(g.Config, nil, types.NewBlockWithHeader(head), statedb)
+	err := ApplyPrecompileActivations(g.Config, nil, types.NewBlockWithHeader(head), statedb)
 	if err != nil {
 		panic(fmt.Sprintf("unable to configure precompiles in genesis block: %v", err))
 	}
@@ -298,15 +309,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			}
 		}
 	}
-
-	statedb.Commit(0, false)
-	// Commit newly generated states into disk if it's not empty.
-	if root != types.EmptyRootHash {
-		if err := triedb.Commit(root, true); err != nil {
-			panic(fmt.Sprintf("unable to commit genesis block: %v", err))
-		}
-	}
-	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+	return head, root
 }
 
 // Commit writes the block and state of a genesis specification to the database.

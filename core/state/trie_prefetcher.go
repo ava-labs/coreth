@@ -46,6 +46,7 @@ const triePrefetchMetricsPrefix = "trie/prefetch/"
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
+	rootTrie Trie                   // Root trie for the state trie
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
@@ -219,6 +220,18 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
+}
+
+func (p *triePrefetcher) getRootTrie() Trie {
+	if p.rootTrie == nil {
+		var err error
+		p.rootTrie, err = p.db.OpenTrie(p.root)
+		if err != nil {
+			log.Warn("Trie prefetcher failed opening root trie", "root", p.root, "err", err)
+			return nil
+		}
+	}
+	return p.rootTrie
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
@@ -429,7 +442,7 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 	} else {
 		// The trie argument can be nil as verkle doesn't support prefetching
 		// yet. TODO FIX IT(rjl493456442), otherwise code will panic here.
-		base, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
+		base, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, sf.p.getRootTrie())
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return nil

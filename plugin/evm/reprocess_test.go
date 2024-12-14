@@ -47,6 +47,7 @@ func TestReprocessGenesis(t *testing.T) {
 	cbs := dummy.ConsensusCallbacks{
 		OnExtraStateChange: func(block *types.Block, statedb *state.StateDB) (*big.Int, *big.Int, error) {
 			i := byte(block.Number().Uint64())
+			statedb.SetNonce(someAddr, uint64(i))
 			statedb.SetState(someAddr, common.Hash{i}, common.Hash{i})
 			return testVM.onExtraStateChange(block, statedb)
 		},
@@ -77,7 +78,8 @@ func TestReprocessGenesis(t *testing.T) {
 		KVBackend: merkledb.NewMerkleDB(mdb),
 	}
 	cacheConfig.TriePrefetcherParallelism = 4
-	cacheConfig.SnapshotLimit = 0
+	cacheConfig.SnapshotLimit = 256
+	cacheConfig.SnapshotDelayInit = true
 	// cacheConfig.Pruning = false
 
 	bc, err := core.NewBlockChain(db, &cacheConfig, g, engine, vm.Config{}, common.Hash{}, false)
@@ -94,6 +96,8 @@ func TestReprocessGenesis(t *testing.T) {
 	// rawdb.WriteHeader(db, normalGenesis.Header())
 	// bc.WriteHeadBlock(normalGenesis)
 	require.NoError(t, bc.LoadGenesisState(normalGenesis))
+
+	bc.InitializeSnapshots()
 
 	t.Logf("Genesis block: %s", bc.CurrentBlock().Hash().Hex())
 	getCurrentRoot := func() common.Hash {
@@ -128,11 +132,30 @@ func TestReprocessGenesis(t *testing.T) {
 		// Restore parent root
 		parent.Root = originalParentRoot
 
+		t.Logf("Accepting block %s", block.Hash().Hex())
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
 		require.NoError(t, err)
 
 		bc.DrainAcceptorQueue()
 
 		lastRoot = getCurrentRoot()
+	}
+
+	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+	defer it.Release()
+	for it.Next() {
+		if len(it.Key()) != 33 {
+			continue
+		}
+		t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
+	}
+
+	it2 := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+	defer it2.Release()
+	for it2.Next() {
+		// if len(it2.Key()) != 65 {
+		// 	continue
+		// }
+		t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
 	}
 }
