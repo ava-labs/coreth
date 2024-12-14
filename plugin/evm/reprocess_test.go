@@ -153,9 +153,9 @@ func TestReprocessGenesis(t *testing.T) {
 	it2 := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 	defer it2.Release()
 	for it2.Next() {
-		// if len(it2.Key()) != 65 {
-		// 	continue
-		// }
+		if len(it2.Key()) != 65 {
+			continue
+		}
 		t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
 	}
 }
