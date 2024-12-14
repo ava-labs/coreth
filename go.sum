@@ -58,6 +58,8 @@ github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156/go.mod h1:Cb/ax
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/ava-labs/avalanchego v1.12.0-initial-poc.9.0.20241129191047-0a4ba1bb7045 h1:oOR9jYAlNm3FgWWatjCZIeOslLlmmbnCrqAErQDHngk=
 github.com/ava-labs/avalanchego v1.12.0-initial-poc.9.0.20241129191047-0a4ba1bb7045/go.mod h1:tubX8cWRjtVe6s6sm/2xeljfuhEISuJiVzvOiPiXSuI=
+github.com/ava-labs/avalanchego v1.12.0-initial-poc.9.0.20241214031447-5edadb4770e8 h1:wUgYOvy1WsCEji9oI1YDSf7FDmx9+Jy6HRoIq39iySQ=
+github.com/ava-labs/avalanchego v1.12.0-initial-poc.9.0.20241214031447-5edadb4770e8/go.mod h1:smk82TtXQPWGzPps+C9G9O97ojesjGRgGp6u6jf1zWs=
 github.com/ava-labs/libevm v1.13.14-0.1.0.rc-2 h1:CVbn0hSsPCl6gCkTCnqwuN4vtJgdVbkCqLXzYAE7qF8=
 github.com/ava-labs/libevm v1.13.14-0.1.0.rc-2/go.mod h1:yBctIV/wnxXTF38h95943jvpuk4aj07TrjbpoGor6LQ=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
