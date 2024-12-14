@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/nativeasset"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -29,8 +30,8 @@ func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _
 
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: params.AssetBalanceApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: params.AssetCallApricot, CallNewAccountGas: params.CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -41,8 +42,8 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: params.AssetBalanceApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: params.AssetCallApricot, CallNewAccountGas: params.CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{

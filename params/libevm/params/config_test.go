@@ -33,8 +33,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
 )
+
+type ConfigCompatError = params.ConfigCompatError
 
 func TestCheckCompatible(t *testing.T) {
 	type test struct {
@@ -146,22 +149,22 @@ func TestCheckCompatible(t *testing.T) {
 func TestConfigRules(t *testing.T) {
 	c := WithExtra(
 		&ChainConfig{},
-		&ChainConfigExtra{
+		&params.ChainConfigExtra{
 			NetworkUpgrades: NetworkUpgrades{
 				CortinaBlockTimestamp: utils.NewUint64(500),
 			},
 		},
 	)
 	var stamp uint64
-	if r := c.Rules(big.NewInt(0), IsMergeTODO, stamp); GetRulesExtra(r).IsCortina {
+	if r := c.Rules(big.NewInt(0), params.IsMergeTODO, stamp); GetRulesExtra(r).IsCortina {
 		t.Errorf("expected %v to not be cortina", stamp)
 	}
 	stamp = 500
-	if r := c.Rules(big.NewInt(0), IsMergeTODO, stamp); !GetRulesExtra(r).IsCortina {
+	if r := c.Rules(big.NewInt(0), params.IsMergeTODO, stamp); !GetRulesExtra(r).IsCortina {
 		t.Errorf("expected %v to be cortina", stamp)
 	}
 	stamp = math.MaxInt64
-	if r := c.Rules(big.NewInt(0), IsMergeTODO, stamp); !GetRulesExtra(r).IsCortina {
+	if r := c.Rules(big.NewInt(0), params.IsMergeTODO, stamp); !GetRulesExtra(r).IsCortina {
 		t.Errorf("expected %v to be cortina", stamp)
 	}
 }

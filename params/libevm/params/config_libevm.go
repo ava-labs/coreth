@@ -6,11 +6,25 @@ package params
 import (
 	"math/big"
 
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
 	ethparams "github.com/ava-labs/libevm/params"
 )
+
+type (
+	RulesExtra params.RulesExtra
+)
+
+type ChainConfigExtra struct {
+	*params.ChainConfigExtra
+}
+
+func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ChainConfig, headNumber *big.Int, headTimestamp uint64) *params.ConfigCompatError {
+	newcfg := GetExtra(newcfg_)
+	return c.ChainConfigExtra.CheckConfigCompatible(newcfg, headNumber, headTimestamp)
+}
 
 // libevmInit would ideally be a regular init() function, but it MUST be run
 // before any calls to [ChainConfig.Rules]. See `config.go` for its call site.
@@ -39,7 +53,7 @@ func constructRulesExtra(c *ethparams.ChainConfig, r *ethparams.Rules, cEx *Chai
 	rules.Predicaters = make(map[common.Address]precompileconfig.Predicater)
 	rules.AccepterPrecompiles = make(map[common.Address]precompileconfig.Accepter)
 	for _, module := range modules.RegisteredModules() {
-		if config := cEx.getActivePrecompileConfig(module.Address, timestamp); config != nil && !config.IsDisabled() {
+		if config := cEx.GetActivePrecompileConfig(module.Address, timestamp); config != nil && !config.IsDisabled() {
 			rules.Precompiles[module.Address] = config
 			if predicater, ok := config.(precompileconfig.Predicater); ok {
 				rules.Predicaters[module.Address] = predicater
@@ -51,4 +65,8 @@ func constructRulesExtra(c *ethparams.ChainConfig, r *ethparams.Rules, cEx *Chai
 	}
 
 	return rules
+}
+
+func GetRulesExtra(r Rules) *RulesExtra {
+	return extras.PointerFromRules(&r)
 }
