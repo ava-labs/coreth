@@ -43,13 +43,16 @@ type KVBackend interface {
 	Root() common.Hash
 
 	// Get retrieves the value for the given key.
+	// If the key does not exist, it must return (nil, nil).
 	Get(key []byte) ([]byte, error)
 
 	// After this call, Root() should return the same hash as returned by this call.
+	// Note when len(Value) == 0, it means the key should be deleted.
 	Update(Batch) (common.Hash, error)
 
 	// After this call, changes related to [root] should be persisted to disk.
-	// This may be implemented as no-op if Update already persists changes.
+	// This may be implemented as no-op if Update already persists changes, or
+	// commits happen on a rolling basis.
 	Commit(root common.Hash) error
 }
 
