@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -155,7 +156,7 @@ func TestGossipSubscribe(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	require.NoError(err)
-	txPool := setupPoolWithConfig(t, params.TestChainConfig, addr)
+	txPool := setupPoolWithConfig(t, extparams.TestChainConfig, addr)
 	defer txPool.Close()
 	txPool.SetGasTip(common.Big1)
 	txPool.SetMinFee(common.Big0)

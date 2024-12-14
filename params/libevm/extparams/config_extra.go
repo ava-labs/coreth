@@ -1,4 +1,4 @@
-package params
+package extparams
 
 import (
 	"encoding/json"
@@ -19,10 +19,10 @@ type UpgradeConfig = params.UpgradeConfig
 func GetExtra(c *ChainConfig) *params.ChainConfigExtra {
 	ex := extras.FromChainConfig(c)
 	if ex == nil {
-		ex = &ChainConfigExtra{&params.ChainConfigExtra{}}
+		ex = &ChainConfigExtra{params.ChainConfigExtra{}}
 		extras.SetOnChainConfig(c, ex)
 	}
-	return ex.ChainConfigExtra
+	return &ex.ChainConfigExtra
 }
 
 func Copy(c *ChainConfig) ChainConfig {
@@ -33,7 +33,7 @@ func Copy(c *ChainConfig) ChainConfig {
 
 // WithExtra sets the extra payload on `c` and returns the modified argument.
 func WithExtra(c *ChainConfig, extra *params.ChainConfigExtra) *ChainConfig {
-	extras.SetOnChainConfig(c, &ChainConfigExtra{extra})
+	extras.SetOnChainConfig(c, &ChainConfigExtra{*extra})
 	return c
 }
 

@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package params
+package extparams
 
 import (
 	"math/big"
@@ -18,10 +18,13 @@ type (
 )
 
 type ChainConfigExtra struct {
-	*params.ChainConfigExtra
+	params.ChainConfigExtra
 }
 
 func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ChainConfig, headNumber *big.Int, headTimestamp uint64) *params.ConfigCompatError {
+	if c == nil {
+		return nil
+	}
 	newcfg := GetExtra(newcfg_)
 	return c.ChainConfigExtra.CheckConfigCompatible(newcfg, headNumber, headTimestamp)
 }

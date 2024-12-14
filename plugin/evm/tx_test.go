@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -60,7 +61,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func(t *testing.T) UnsignedAtomicTx
-	rules       params.RulesExtra
+	rules       extparams.RulesExtra
 	expectedErr string
 }
 
@@ -68,7 +69,7 @@ type atomicTxVerifyTest struct {
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
 	atomicTx := test.generate(t)
-	err := atomicTx.Verify(test.ctx, test.rules)
+	err := atomicTx.Verify(test.ctx, params.RulesExtra(test.rules))
 	if len(test.expectedErr) == 0 {
 		require.NoError(err)
 	} else {

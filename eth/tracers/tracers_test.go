@@ -33,7 +33,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/tests"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
@@ -99,7 +99,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableMemory: false,
 		//EnableReturnData: false,
 	})
-	evm := vm.NewEVM(context, txContext, state.StateDB, params.TestChainConfig, vm.Config{Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, state.StateDB, extparams.TestChainConfig, vm.Config{Tracer: tracer})
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)

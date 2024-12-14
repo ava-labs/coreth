@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
@@ -1294,7 +1295,7 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
@@ -1305,10 +1306,10 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 	defer blockchain.Stop()
 
 	// This call generates a chain of 3 blocks.
-	signer := types.LatestSigner(params.TestChainConfig)
+	signer := types.LatestSigner(extparams.TestChainConfig)
 	_, _, _, err = GenerateChainWithGenesis(gspec, blockchain.engine, 3, 0, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   params.TestChainConfig.ChainID,
+			ChainID:   extparams.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
 			To:        &addr2,
 			Gas:       params.TxGas,
@@ -1343,7 +1344,7 @@ func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database,
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
@@ -1354,11 +1355,11 @@ func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database,
 	defer blockchain.Stop()
 
 	// This call generates a chain of 3 blocks.
-	signer := types.LatestSigner(params.TestChainConfig)
+	signer := types.LatestSigner(extparams.TestChainConfig)
 	eng := dummy.NewFakerWithMode(TestCallbacks, dummy.Mode{ModeSkipBlockFee: true, ModeSkipCoinbase: true})
 	_, chain, _, err := GenerateChainWithGenesis(gspec, eng, 3, 0, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   params.TestChainConfig.ChainID,
+			ChainID:   extparams.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
 			To:        &addr2,
 			Gas:       params.TxGas,
@@ -1399,7 +1400,7 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, g
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
@@ -1410,13 +1411,13 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, g
 	defer blockchain.Stop()
 
 	// This call generates a chain of 3 blocks.
-	signer := types.LatestSigner(params.TestChainConfig)
+	signer := types.LatestSigner(extparams.TestChainConfig)
 	tip := big.NewInt(50000 * params.GWei)
 	transfer := big.NewInt(10000)
 	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 0, func(i int, gen *BlockGen) {
 		feeCap := new(big.Int).Add(gen.BaseFee(), tip)
 		tx := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   params.TestChainConfig.ChainID,
+			ChainID:   extparams.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
 			To:        &addr2,
 			Gas:       params.TxGas,

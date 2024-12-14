@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
@@ -297,10 +298,10 @@ func TestCheckPredicate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			require := require.New(t)
 			// Create the rules from TestChainConfig and update the predicates based on the test params
-			rules := params.TestChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
+			rules := extparams.TestChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
 			if test.createPredicates != nil {
 				for address, predicater := range test.createPredicates(t) {
-					rules := params.GetRulesExtra(rules)
+					rules := extparams.GetRulesExtra(rules)
 					rules.Predicaters[address] = predicater
 				}
 			}
@@ -424,7 +425,7 @@ func TestCheckPredicatesOutput(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 			// Create the rules from TestChainConfig and update the predicates based on the test params
-			rules := params.TestChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
+			rules := extparams.TestChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
 			predicater := precompileconfig.NewMockPredicater(gomock.NewController(t))
 			predicater.EXPECT().PredicateGas(gomock.Any()).Return(uint64(0), nil).Times(len(test.testTuple))
 
@@ -446,7 +447,7 @@ func TestCheckPredicatesOutput(t *testing.T) {
 				})
 			}
 
-			rulesExtra := params.GetRulesExtra(rules)
+			rulesExtra := extparams.GetRulesExtra(rules)
 			rulesExtra.Predicaters[addr1] = predicater
 			rulesExtra.Predicaters[addr2] = predicater
 

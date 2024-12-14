@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
 )
@@ -526,7 +527,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		tx        *Tx
 		signers   [][]*secp256k1.PrivateKey
 		baseFee   *big.Int
-		rules     params.RulesExtra
+		rules     extparams.RulesExtra
 		shouldErr bool
 	}{
 		{
@@ -911,7 +912,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			tx := test.tx
 			exportTx := tx.UnsignedAtomicTx
 
-			err := exportTx.SemanticVerify(vm, tx, parent, test.baseFee, test.rules)
+			err := exportTx.SemanticVerify(vm, tx, parent, test.baseFee, params.RulesExtra(test.rules))
 			if test.shouldErr && err == nil {
 				t.Fatalf("should have errored but returned valid")
 			}
@@ -1633,7 +1634,7 @@ func TestNewExportTx(t *testing.T) {
 	tests := []struct {
 		name               string
 		genesis            string
-		rules              params.RulesExtra
+		rules              extparams.RulesExtra
 		bal                uint64
 		expectedBurnedAVAX uint64
 	}{
@@ -1760,7 +1761,7 @@ func TestNewExportTx(t *testing.T) {
 
 			exportTx := tx.UnsignedAtomicTx
 
-			if err := exportTx.SemanticVerify(vm, tx, parent, parent.ethBlock.BaseFee(), test.rules); err != nil {
+			if err := exportTx.SemanticVerify(vm, tx, parent, parent.ethBlock.BaseFee(), params.RulesExtra(test.rules)); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
@@ -1806,7 +1807,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	tests := []struct {
 		name    string
 		genesis string
-		rules   params.RulesExtra
+		rules   extparams.RulesExtra
 		bal     uint64
 		balmc   uint64
 	}{
@@ -1955,7 +1956,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 
 			exportTx := tx.UnsignedAtomicTx
 
-			if err := exportTx.SemanticVerify(vm, tx, parent, parent.ethBlock.BaseFee(), test.rules); err != nil {
+			if err := exportTx.SemanticVerify(vm, tx, parent, parent.ethBlock.BaseFee(), params.RulesExtra(test.rules)); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 

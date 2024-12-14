@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 
@@ -153,7 +154,8 @@ func (b *Block) Accept(context.Context) error {
 	// precompiles are committed atomically with the vm's lastAcceptedKey.
 	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
 	sharedMemoryWriter := NewSharedMemoryWriter()
-	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules), sharedMemoryWriter); err != nil {
+	rulesExtra := params.RulesExtra(*extparams.GetRulesExtra(rules))
+	if err := b.handlePrecompileAccept(rulesExtra, sharedMemoryWriter); err != nil {
 		return err
 	}
 	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
@@ -283,7 +285,7 @@ func (b *Block) Verify(context.Context) error {
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
-	rules := params.GetRulesExtra(b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp()))
+	rules := extparams.GetRulesExtra(b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp()))
 	predicates := rules.Predicaters
 	// Short circuit early if there are no predicates to verify
 	if len(predicates) == 0 {
@@ -365,7 +367,7 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 // verifyPredicates verifies the predicates in the block are valid according to predicateContext.
 func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateContext) error {
 	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
-	rulesExtra := params.GetRulesExtra(rules)
+	rulesExtra := extparams.GetRulesExtra(rules)
 
 	switch {
 	case !rulesExtra.IsDurango && rulesExtra.PredicatersExist():

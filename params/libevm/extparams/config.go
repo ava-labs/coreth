@@ -24,7 +24,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package params
+package extparams
 
 import (
 	"math/big"
@@ -65,7 +65,7 @@ var (
 			CancunTime:          utils.TimeToNewUint64(upgrade.GetConfig(constants.UnitTestID).EtnaTime),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -98,7 +98,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     nil,
 				ApricotPhase2BlockTimestamp:     nil,
@@ -131,7 +131,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     nil,
@@ -165,7 +165,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -200,7 +200,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -235,7 +235,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -270,7 +270,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -305,7 +305,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -340,7 +340,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -375,7 +375,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -410,7 +410,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -445,7 +445,7 @@ var (
 			LondonBlock:         big.NewInt(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -481,7 +481,7 @@ var (
 			ShanghaiTime:        utils.NewUint64(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
@@ -518,7 +518,7 @@ var (
 			CancunTime:          utils.NewUint64(0),
 		},
 		&params.ChainConfigExtra{
-			AvalancheContext: AvalancheContext{utils.TestSnowContext()},
+			AvalancheContext: AvalancheContext{SnowCtx: utils.TestSnowContext()},
 			NetworkUpgrades: NetworkUpgrades{
 				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
 				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),

@@ -47,6 +47,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
@@ -71,7 +72,7 @@ var testChainConfig *params.ChainConfig
 
 func init() {
 	testChainConfig = new(params.ChainConfig)
-	*testChainConfig = params.Copy(params.TestChainConfig)
+	*testChainConfig = extparams.Copy(extparams.TestChainConfig)
 
 	testChainConfig.CancunTime = new(uint64)
 	*testChainConfig.CancunTime = uint64(time.Now().Unix())

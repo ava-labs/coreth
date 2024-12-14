@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
@@ -76,7 +77,7 @@ type environment struct {
 	blobs    int
 	size     uint64
 
-	rules            params.Rules
+	rules            extparams.Rules
 	predicateContext *precompileconfig.PredicateContext
 	// predicateResults contains the results of checking the predicates for each transaction in the miner.
 	// The results are accumulated as transactions are executed by the miner and set on the BlockContext.
@@ -147,7 +148,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	var gasLimit uint64
-	chainExtra := params.GetExtra(w.chainConfig)
+	chainExtra := extparams.GetExtra(w.chainConfig)
 	if chainExtra.IsCortina(timestamp) {
 		gasLimit = params.CortinaGasLimit
 	} else if chainExtra.IsApricotPhase1(timestamp) {
@@ -330,7 +331,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 		blockContext vm.BlockContext
 	)
 
-	if params.GetRulesExtra(env.rules).IsDurango {
+	if extparams.GetRulesExtra(env.rules).IsDurango {
 		results, err := core.CheckPredicates(env.rules, env.predicateContext, tx)
 		if err != nil {
 			log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
@@ -464,7 +465,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 func (w *worker) commit(env *environment) (*types.Block, error) {
-	if params.GetRulesExtra(env.rules).IsDurango {
+	if extparams.GetRulesExtra(env.rules).IsDurango {
 		predicateResultsBytes, err := env.predicateResults.Bytes()
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal predicate results: %w", err)

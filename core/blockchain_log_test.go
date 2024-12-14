@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -41,7 +42,7 @@ func TestAcceptedLogsSubscription(t *testing.T) {
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		funds   = new(big.Int).Mul(big.NewInt(100), big.NewInt(params.Ether))
 		gspec   = &Genesis{
-			Config:  params.TestChainConfig,
+			Config:  extparams.TestChainConfig,
 			Alloc:   types.GenesisAlloc{addr1: {Balance: funds}},
 			BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 		}

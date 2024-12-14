@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -463,11 +464,11 @@ func (vm *VM) Initialize(
 	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
 	// normally it should not be empty, but some tests may not set it
 	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config = params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(chainID))
+		g.Config = extparams.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(chainID))
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
-	configExtra := params.GetExtra(g.Config)
+	configExtra := extparams.GetExtra(g.Config)
 	if configExtra.DurangoBlockTimestamp != nil {
 		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, params.PrecompileUpgrade{
 			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
@@ -497,7 +498,7 @@ func (vm *VM) Initialize(
 
 	vm.chainID = g.Config.ChainID
 
-	params.SetEthUpgrades(g.Config)
+	extparams.SetEthUpgrades(g.Config)
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
@@ -867,8 +868,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// once.
 		snapshot := state.Snapshot()
 		rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra := params.GetRulesExtra(rules)
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, *rulesExtra); err != nil {
+		rulesExtra := extparams.GetRulesExtra(rules)
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, params.RulesExtra(*rulesExtra)); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
 			vm.mempool.DiscardCurrentTx(tx.ID())
@@ -910,7 +911,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
 		rules                      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra                 = *params.GetRulesExtra(rules)
+		rulesExtra                 = *extparams.GetRulesExtra(rules)
 		size              int
 	)
 
@@ -959,7 +960,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		}
 
 		snapshot := state.Snapshot()
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rulesExtra); err != nil {
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, params.RulesExtra(rulesExtra)); err != nil {
 			// Discard the transaction from the mempool and reset the state to [snapshot]
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
@@ -1017,7 +1018,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
 		rules                      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra                 = *params.GetRulesExtra(rules)
+		rulesExtra                 = *extparams.GetRulesExtra(rules)
 	)
 
 	txs, err := ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, vm.codec)
@@ -1031,7 +1032,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
-			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rulesExtra); err != nil {
+			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), params.RulesExtra(rulesExtra)); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -1947,14 +1948,14 @@ func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
 }
 
 func (vm *VM) chainConfigExtra() *params.ChainConfigExtra {
-	return params.GetExtra(vm.chainConfig)
+	return extparams.GetExtra(vm.chainConfig)
 }
 
 // currentRules returns the chain rules for the current block.
 func (vm *VM) currentRules() params.RulesExtra {
 	header := vm.eth.APIBackend.CurrentHeader()
 	rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return *params.GetRulesExtra(rules)
+	return params.RulesExtra(*extparams.GetRulesExtra(rules))
 }
 
 // requirePrimaryNetworkSigners returns true if warp messages from the primary

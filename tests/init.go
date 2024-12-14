@@ -32,6 +32,7 @@ import (
 	"sort"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/utils"
 )
 
@@ -165,7 +166,7 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(5),
 	},
-	"ApricotPhase1": params.WithExtra(
+	"ApricotPhase1": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -183,7 +184,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"ApricotPhase2": params.WithExtra(
+	"ApricotPhase2": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -204,7 +205,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"ApricotPhase3": params.WithExtra(
+	"ApricotPhase3": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -227,7 +228,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"ApricotPhase4": params.WithExtra(
+	"ApricotPhase4": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -251,7 +252,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"ApricotPhase5": params.WithExtra(
+	"ApricotPhase5": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -275,7 +276,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"Banff": params.WithExtra(
+	"Banff": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -300,7 +301,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"Cortina": params.WithExtra(
+	"Cortina": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -326,7 +327,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"Durango": params.WithExtra(
+	"Durango": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -353,7 +354,7 @@ var Forks = map[string]*params.ChainConfig{
 			},
 		},
 	),
-	"Cancun": params.WithExtra(
+	"Cancun": extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),

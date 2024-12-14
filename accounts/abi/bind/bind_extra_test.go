@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/node"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 )
@@ -64,7 +64,7 @@ func TestGetSenderNativeAssetCall(t *testing.T) {
 	auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 	alloc := types.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}
 	atApricotPhase2 := func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-		chainConfig := *params.TestApricotPhase2Config
+		chainConfig := *extparams.TestApricotPhase2Config
 		chainConfig.ChainID = big.NewInt(1337)
 		ethConf.Genesis.Config = &chainConfig
 	}

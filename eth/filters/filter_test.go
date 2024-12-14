@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
@@ -70,7 +71,7 @@ func BenchmarkFilters(b *testing.B) {
 		gspec = &core.Genesis{
 			Alloc:   types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(1),
-			Config:  params.TestChainConfig,
+			Config:  extparams.TestChainConfig,
 		}
 	)
 	defer db.Close()
@@ -175,7 +176,7 @@ func TestFilters(t *testing.T) {
 		hash4 = common.BytesToHash([]byte("topic4"))
 
 		gspec = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc: types.GenesisAlloc{
 				addr:      {Balance: big.NewInt(0).Mul(big.NewInt(100), big.NewInt(params.Ether))},
 				contract:  {Balance: big.NewInt(0), Code: bytecode},

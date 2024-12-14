@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -67,7 +68,7 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
-		cfg.ChainConfig = params.WithExtra(
+		cfg.ChainConfig = extparams.WithExtra(
 			&params.ChainConfig{
 				ChainID:             big.NewInt(1),
 				HomesteadBlock:      new(big.Int),

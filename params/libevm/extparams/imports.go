@@ -1,4 +1,4 @@
-package params
+package extparams
 
 import "github.com/ava-labs/coreth/params"
 

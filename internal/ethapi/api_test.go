@@ -50,6 +50,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/blocktest"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/accounts"
@@ -105,14 +106,14 @@ func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainCo
 
 func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 	var (
-		config = params.TestChainConfig
+		config = extparams.TestChainConfig
 		tests  = allTransactionTypes(common.Address{0xde, 0xad}, config)
 	)
 	testTransactionMarshal(t, tests, config)
 }
 
 func TestTransactionBlobTx(t *testing.T) {
-	config := *params.TestChainConfig
+	config := *extparams.TestChainConfig
 	// config.ShanghaiTime = new(uint64)
 	config.CancunTime = new(uint64)
 	tests := allBlobTxs(common.Address{0xde, 0xad}, &config)
@@ -632,7 +633,7 @@ func TestEstimateGas(t *testing.T) {
 	var (
 		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -785,7 +786,7 @@ func TestEstimateGas(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	// Enable BLOBHASH opcode in Cancun
-	cfg := *params.TestChainConfig
+	cfg := *extparams.TestChainConfig
 	cfg.ShanghaiTime = utils.NewUint64(0)
 	cfg.CancunTime = utils.NewUint64(0)
 	t.Parallel()
@@ -990,7 +991,7 @@ func TestSignTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
@@ -1028,7 +1029,7 @@ func TestSignBlobTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
@@ -1062,7 +1063,7 @@ func TestSendBlobTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
@@ -1095,7 +1096,7 @@ func TestFillBlobTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
 		emptyBlob                      = kzg4844.Blob{}
@@ -1530,7 +1531,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.TestChainConfig)
+		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, extparams.TestChainConfig)
 		out, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
@@ -1550,7 +1551,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
 		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
 		genesis    = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
@@ -1788,7 +1789,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 }
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
-	config := *params.TestChainConfig
+	config := *extparams.TestChainConfig
 	config.ShanghaiTime = new(uint64)
 	config.CancunTime = new(uint64)
 	var (
@@ -1817,7 +1818,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
 			},
 		}
-		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
+		signer   = types.LatestSignerForChainID(extparams.TestChainConfig.ChainID)
 		txHashes = make([]common.Hash, genBlocks)
 	)
 

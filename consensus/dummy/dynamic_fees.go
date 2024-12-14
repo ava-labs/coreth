@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 )
@@ -43,7 +44,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	var (
-		configExtra     = params.GetExtra(config)
+		configExtra     = extparams.GetExtra(config)
 		isApricotPhase3 = configExtra.IsApricotPhase3(parent.Time)
 		isApricotPhase4 = configExtra.IsApricotPhase4(parent.Time)
 		isApricotPhase5 = configExtra.IsApricotPhase5(parent.Time)
@@ -333,7 +334,7 @@ func calcBlockGasCost(
 //
 // This function will return nil for all return values prior to Apricot Phase 4.
 func MinRequiredTip(config *params.ChainConfig, header *types.Header) (*big.Int, error) {
-	if !params.GetExtra(config).IsApricotPhase4(header.Time) {
+	if !extparams.GetExtra(config).IsApricotPhase4(header.Time) {
 		return nil, nil
 	}
 	if header.BaseFee == nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/trie"
 )
@@ -111,7 +112,7 @@ func NewFullFaker() *DummyEngine {
 }
 
 func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
-	configExtra := params.GetExtra(config)
+	configExtra := extparams.GetExtra(config)
 	// Verify that the gas limit is <= 2^63-1
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
@@ -214,7 +215,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 // modified from consensus.go
 func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
 	config := chain.Config()
-	configExtra := params.GetExtra(config)
+	configExtra := extparams.GetExtra(config)
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
@@ -394,7 +395,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 			return err
 		}
 	}
-	configExtra := params.GetExtra(chain.Config())
+	configExtra := extparams.GetExtra(chain.Config())
 	if configExtra.IsApricotPhase4(block.Time()) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
@@ -453,7 +454,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
-	chainConfigExtra := params.GetExtra(chain.Config())
+	chainConfigExtra := extparams.GetExtra(chain.Config())
 	if chainConfigExtra.IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {

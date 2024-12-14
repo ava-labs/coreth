@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/triedb"
@@ -42,7 +43,7 @@ import (
 
 func TestGenesisEthUpgrades(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	preEthUpgrades := params.WithExtra(
+	preEthUpgrades := extparams.WithExtra(
 		&params.ChainConfig{
 			ChainID:             big.NewInt(43114), // Specifically refers to mainnet for this UT
 			HomesteadBlock:      big.NewInt(0),
@@ -88,7 +89,7 @@ func TestGenesisEthUpgrades(t *testing.T) {
 
 	// We should still be able to re-initialize
 	config = *preEthUpgrades
-	params.SetEthUpgrades(&config) // New versions will set additional fields eg, LondonBlock
+	extparams.SetEthUpgrades(&config) // New versions will set additional fields eg, LondonBlock
 	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
 }

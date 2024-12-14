@@ -33,7 +33,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/rlp"
@@ -50,7 +50,7 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(50000 * 225000000000 * 200)
 		gspec   = &Genesis{
-			Config: params.TestChainConfig,
+			Config: extparams.TestChainConfig,
 			Alloc:  types.GenesisAlloc{address: {Balance: funds}},
 		}
 	)
@@ -61,7 +61,7 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 				// Add transactions and stuff on the last block
 				for i := 0; i < transactions; i++ {
 					tx, _ := types.SignTx(types.NewTransaction(uint64(i), aa,
-						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.LatestSigner(params.TestChainConfig), key)
+						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.LatestSigner(extparams.TestChainConfig), key)
 					b.AddTx(tx)
 				}
 				for i := 0; i < uncles; i++ {

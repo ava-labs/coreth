@@ -25,7 +25,7 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 )
 
 func fundAddressByGenesis(addrs []common.Address) (string, error) {
@@ -41,7 +41,7 @@ func fundAddressByGenesis(addrs []common.Address) (string, error) {
 		}
 	}
 	genesis.Alloc = funds
-	genesis.Config = params.TestChainConfig
+	genesis.Config = extparams.TestChainConfig
 
 	bytes, err := json.Marshal(genesis)
 	return string(bytes), err

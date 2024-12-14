@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
@@ -171,7 +172,7 @@ func SetupGenesisBlock(
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
-	params.SetEthUpgrades(storedcfg)
+	extparams.SetEthUpgrades(storedcfg)
 	storedData, _ := json.Marshal(storedcfg)
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
@@ -270,7 +271,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	}
 	if conf := g.Config; conf != nil {
 		num := new(big.Int).SetUint64(g.Number)
-		if params.GetExtra(conf).IsApricotPhase3(g.Timestamp) {
+		if extparams.GetExtra(conf).IsApricotPhase3(g.Timestamp) {
 			if g.BaseFee != nil {
 				head.BaseFee = g.BaseFee
 			} else {
@@ -340,7 +341,7 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := Genesis{
-		Config:  params.TestChainConfig,
+		Config:  extparams.TestChainConfig,
 		Alloc:   types.GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 	}

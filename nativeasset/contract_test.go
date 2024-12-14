@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	. "github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
@@ -456,7 +457,7 @@ func TestStatefulPrecompile(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			stateDB := test.setupStateDB()
 			// Create EVM with BlockNumber and Time initialized to 0 to enable Apricot Rules.
-			evm := vm.NewEVM(vmCtx, vm.TxContext{}, stateDB, params.TestApricotPhase5Config, vm.Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
+			evm := vm.NewEVM(vmCtx, vm.TxContext{}, stateDB, extparams.TestApricotPhase5Config, vm.Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
 			ret, gasRemaining, err := evm.Call(vm.AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
 			// Place gas remaining check before error check, so that it is not skipped when there is an error
 			assert.Equal(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining")

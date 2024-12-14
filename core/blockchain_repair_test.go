@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -533,7 +534,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		gspec   = &Genesis{
 			BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
-			Config:  params.TestChainConfig,
+			Config:  extparams.TestChainConfig,
 			Alloc:   types.GenesisAlloc{addr1: {Balance: big.NewInt(params.Ether)}},
 		}
 		signer = types.LatestSigner(gspec.Config)

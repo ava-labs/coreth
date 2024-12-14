@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
@@ -71,13 +72,13 @@ func (hooks) OverrideNewEVMArgs(args *vm.NewEVMArgs) *vm.NewEVMArgs {
 	return args
 }
 
-func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm.EVMResetArgs {
+func (hooks) OverrideEVMResetArgs(rules extparams.Rules, args *vm.EVMResetArgs) *vm.EVMResetArgs {
 	args.StateDB = wrapStateDB(rules, args.StateDB)
 	return args
 }
 
 func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
-	if params.GetRulesExtra(rules).IsApricotPhase1 {
+	if extparams.GetRulesExtra(rules).IsApricotPhase1 {
 		db = &StateDbAP1{db.(extstate.VmStateDB)}
 	}
 	return &extstate.StateDB{VmStateDB: db.(extstate.VmStateDB)}

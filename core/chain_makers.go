@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
@@ -271,7 +272,7 @@ func (b *BlockGen) SetOnBlockGenerated(onBlockGenerated func(*types.Block)) {
 // a similar non-validating proof of work implementation.
 func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gap uint64, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, error) {
 	if config == nil {
-		config = params.TestChainConfig
+		config = extparams.TestChainConfig
 	}
 	if engine == nil {
 		panic("nil consensus engine")
@@ -374,7 +375,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
 
 	var gasLimit uint64
-	configExtra := params.GetExtra(cm.config)
+	configExtra := extparams.GetExtra(cm.config)
 	if configExtra.IsCortina(time) {
 		gasLimit = params.CortinaGasLimit
 	} else if configExtra.IsApricotPhase1(time) {

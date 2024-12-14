@@ -1,6 +1,10 @@
 package params
 
-import "math/big"
+import (
+	"math/big"
+
+	ethparams "github.com/ava-labs/libevm/params"
+)
 
 // Avalanche ChainIDs
 var (
@@ -11,3 +15,5 @@ var (
 	// AvalancheLocalChainID ...
 	AvalancheLocalChainID = big.NewInt(43112)
 )
+
+type Rules = ethparams.Rules

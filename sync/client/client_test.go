@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	clientstats "github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/handlers"
@@ -140,14 +141,14 @@ func TestGetBlocks(t *testing.T) {
 	rand.Seed(1)
 
 	var gspec = &core.Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
 	numBlocks := 110
-	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, numBlocks, 0, func(i int, b *core.BlockGen) {})
+	blocks, _, err := core.GenerateChain(extparams.TestChainConfig, genesis, engine, memdb, numBlocks, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {
 		t.Fatal("unexpected error when generating test blockchain", err)
 	}

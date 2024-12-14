@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
@@ -32,7 +33,7 @@ type StateDB struct {
 }
 
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	rulesExtra := params.GetRulesExtra(rules)
+	rulesExtra := extparams.GetRulesExtra(rules)
 	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rulesExtra, list)
 	s.VmStateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
 }

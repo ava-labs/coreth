@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/trie"
 )
 
@@ -24,7 +25,7 @@ var (
 )
 
 type BlockValidator interface {
-	SyntacticVerify(b *Block, rules params.Rules) error
+	SyntacticVerify(b *Block, rules extparams.Rules) error
 }
 
 type blockValidator struct {
@@ -38,7 +39,7 @@ func NewBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockValidator
 }
 
 func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
-	rulesExtra := params.GetRulesExtra(rules)
+	rulesExtra := extparams.GetRulesExtra(rules)
 	if b == nil || b.ethBlock == nil {
 		return errInvalidBlock
 	}

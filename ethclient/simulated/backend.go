@@ -32,7 +32,7 @@ import (
 	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/node"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 )
@@ -81,7 +81,7 @@ type Backend struct {
 //
 // A simulated backend always uses chainID 1337.
 func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
-	chainConfig := *params.TestChainConfig
+	chainConfig := *extparams.TestChainConfig
 	chainConfig.ChainID = big.NewInt(1337)
 
 	// Create the default configurations for the outer node shell and the Ethereum

@@ -33,6 +33,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ava-labs/libevm/common"
@@ -113,7 +114,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		}
 		gas += z * params.TxDataZeroGas
 
-		if isContractCreation && params.GetRulesExtra(rules).IsDurango {
+		if isContractCreation && extparams.GetRulesExtra(rules).IsDurango {
 			lenWords := toWordSize(dataLen)
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
 				return 0, ErrGasUintOverflow
@@ -138,7 +139,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 
 func accessListGas(rules params.Rules, accessList types.AccessList) (uint64, error) {
 	var gas uint64
-	rulesExtra := params.GetRulesExtra(rules)
+	rulesExtra := extparams.GetRulesExtra(rules)
 	if !rulesExtra.PredicatersExist() {
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
@@ -450,7 +451,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From)
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, params.IsMergeTODO, st.evm.Context.Time)
-		rulesExtra       = params.GetRulesExtra(rules)
+		rulesExtra       = extparams.GetRulesExtra(rules)
 		contractCreation = msg.To == nil
 	)
 

@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/libevm/common"
@@ -214,7 +215,7 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 	// This ensures that the order we call Configure for each precompile is consistent.
 	// This ensures even if precompiles read/write state other than their own they will observe
 	// an identical global state in a deterministic order when they are configured.
-	extra := params.GetExtra(c)
+	extra := extparams.GetExtra(c)
 	for _, module := range modules.RegisteredModules() {
 		for _, activatingConfig := range extra.GetActivatingPrecompileConfigs(module.Address, parentTimestamp, blockTimestamp, extra.PrecompileUpgrades) {
 			// If this transition activates the upgrade, configure the stateful precompile.
@@ -245,7 +246,7 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 				// that it does not attempt to invoke a non-existent contract.
 				statedb.SetCode(module.Address, []byte{0x1})
 				extstatedb := &extstate.StateDB{VmStateDB: statedb}
-				if err := module.Configure(params.GetExtra(c), activatingConfig, extstatedb, blockContext); err != nil {
+				if err := module.Configure(extparams.GetExtra(c), activatingConfig, extstatedb, blockContext); err != nil {
 					return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
 				}
 			}

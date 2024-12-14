@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
@@ -30,7 +31,7 @@ func CheckPredicates(rules params.Rules, predicateContext *precompileconfig.Pred
 		return nil, fmt.Errorf("%w for predicate verification (%d) < intrinsic gas (%d)", ErrIntrinsicGas, tx.Gas(), intrinsicGas)
 	}
 
-	rulesExtra := params.GetRulesExtra(rules)
+	rulesExtra := extparams.GetRulesExtra(rules)
 	predicateResults := make(map[common.Address][]byte)
 	// Short circuit early if there are no precompile predicates to verify
 	if !rulesExtra.PredicatersExist() {
@@ -53,7 +54,7 @@ func CheckPredicates(rules params.Rules, predicateContext *precompileconfig.Pred
 	for address, predicates := range predicateArguments {
 		// Since [address] is only added to [predicateArguments] when there's a valid predicate in the ruleset
 		// there's no need to check if the predicate exists here.
-		rules := params.GetRulesExtra(rules)
+		rules := extparams.GetRulesExtra(rules)
 		predicaterContract := rules.Predicaters[address]
 		bitset := set.NewBits()
 		for i, predicate := range predicates {

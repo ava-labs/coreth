@@ -43,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/prque"
@@ -1783,13 +1784,13 @@ func (pool *LegacyPool) demoteUnexecutables() {
 }
 
 func (pool *LegacyPool) startPeriodicFeeUpdate() {
-	if params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp == nil {
+	if extparams.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp == nil {
 		return
 	}
 
 	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
 	// when starting up in ApricotPhase3 before the base fee is updated.
-	if time.Now().After(utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp)) {
+	if time.Now().After(utils.Uint64ToTime(extparams.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp)) {
 		pool.updateBaseFee()
 	}
 
@@ -1802,7 +1803,7 @@ func (pool *LegacyPool) periodicBaseFeeUpdate() {
 
 	// Sleep until its time to start the periodic base fee update or the tx pool is shutting down
 	select {
-	case <-time.After(time.Until(utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp))):
+	case <-time.After(time.Until(utils.Uint64ToTime(extparams.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp))):
 	case <-pool.generalShutdownChan:
 		return // Return early if shutting down
 	}

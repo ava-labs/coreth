@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
@@ -103,13 +104,13 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 
 func TestBlockRequestHandler(t *testing.T) {
 	var gspec = &core.Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
-	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
+	blocks, _, err := core.GenerateChain(extparams.TestChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {
 		t.Fatal("unexpected error when generating test blockchain", err)
 	}
@@ -215,13 +216,13 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 
 func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	var gspec = &core.Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
-	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
+	blocks, _, err := core.GenerateChain(extparams.TestChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {
 		t.Fatal("unexpected error when generating test blockchain", err)
 	}

@@ -40,7 +40,9 @@ var _ UnsignedAtomicTx = &TestUnsignedTx{}
 func (t *TestUnsignedTx) GasUsed(fixedFee bool) (uint64, error) { return t.GasUsedV, nil }
 
 // Verify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) Verify(ctx *snow.Context, rules params.RulesExtra) error { return t.VerifyV }
+func (t *TestUnsignedTx) Verify(ctx *snow.Context, rules params.RulesExtra) error {
+	return t.VerifyV
+}
 
 // AtomicOps implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) AtomicOps() (ids.ID, *atomic.Requests, error) {

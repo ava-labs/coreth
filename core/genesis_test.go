@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
@@ -67,8 +68,8 @@ func TestSetupGenesis(t *testing.T) {
 }
 
 func testSetupGenesis(t *testing.T, scheme string) {
-	apricotPhase1Config := params.Copy(params.TestApricotPhase1Config)
-	params.GetExtra(&apricotPhase1Config).ApricotPhase1BlockTimestamp = utils.NewUint64(100)
+	apricotPhase1Config := extparams.Copy(extparams.TestApricotPhase1Config)
+	extparams.GetExtra(&apricotPhase1Config).ApricotPhase1BlockTimestamp = utils.NewUint64(100)
 	var (
 		customghash = common.HexToHash("0x1099a11e9e454bd3ef31d688cf21936671966407bc330f051d754b5ce401e7ed")
 		customg     = Genesis{
@@ -80,8 +81,8 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		oldcustomg = customg
 	)
 
-	rollbackApricotPhase1Config := params.Copy(&apricotPhase1Config)
-	params.GetExtra(&rollbackApricotPhase1Config).ApricotPhase1BlockTimestamp = utils.NewUint64(90)
+	rollbackApricotPhase1Config := extparams.Copy(&apricotPhase1Config)
+	extparams.GetExtra(&rollbackApricotPhase1Config).ApricotPhase1BlockTimestamp = utils.NewUint64(90)
 	oldcustomg.Config = &rollbackApricotPhase1Config
 	tests := []struct {
 		name       string
@@ -195,7 +196,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	customg := Genesis{
-		Config: params.TestApricotPhase1Config,
+		Config: extparams.TestApricotPhase1Config,
 		Alloc: types.GenesisAlloc{
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 		},
@@ -222,8 +223,8 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 
 	activatedGenesis := customg
 	apricotPhase2Timestamp := utils.NewUint64(51)
-	updatedApricotPhase2Config := params.Copy(params.TestApricotPhase1Config)
-	params.GetExtra(&updatedApricotPhase2Config).ApricotPhase2BlockTimestamp = apricotPhase2Timestamp
+	updatedApricotPhase2Config := extparams.Copy(extparams.TestApricotPhase1Config)
+	extparams.GetExtra(&updatedApricotPhase2Config).ApricotPhase2BlockTimestamp = apricotPhase2Timestamp
 
 	activatedGenesis.Config = &updatedApricotPhase2Config
 
@@ -242,7 +243,7 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 
 func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	require := require.New(t)
-	config := params.Copy(params.TestChainConfig)
+	config := extparams.Copy(extparams.TestChainConfig)
 	genesis := &Genesis{
 		Config: &config,
 		Alloc: types.GenesisAlloc{
@@ -257,7 +258,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	_, _, err := SetupGenesisBlock(db, trieDB, genesis, genesisBlock.Hash(), false)
 	require.NoError(err)
 
-	params.GetExtra(genesis.Config).UpgradeConfig.PrecompileUpgrades = []params.PrecompileUpgrade{
+	extparams.GetExtra(genesis.Config).UpgradeConfig.PrecompileUpgrades = []params.PrecompileUpgrade{
 		{
 			Config: warp.NewConfig(utils.NewUint64(51), 0, false),
 		},

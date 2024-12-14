@@ -24,6 +24,7 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/trie"
 
@@ -94,7 +95,7 @@ var (
 		json.Unmarshal([]byte(allocStr), &g.Alloc)
 		// After Durango, an additional account is funded in tests to use
 		// with warp messages.
-		if params.GetExtra(cfg).IsDurango(0) {
+		if extparams.GetExtra(cfg).IsDurango(0) {
 			addr := common.HexToAddress("0x99b9DEA54C48Dfea6aA9A4Ca4623633EE04ddbB5")
 			balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
 			g.Alloc[addr] = types.Account{Balance: balance}
@@ -116,35 +117,35 @@ var (
 
 	activateEtna = func(cfg *params.ChainConfig, etnaTime uint64) *params.ChainConfig {
 		cpy := *cfg
-		params.GetExtra(&cpy).EtnaTimestamp = &etnaTime
+		extparams.GetExtra(&cpy).EtnaTimestamp = &etnaTime
 		return &cpy
 	}
 
-	genesisJSONApricotPhase0     = genesisJSON(params.TestLaunchConfig)
-	genesisJSONApricotPhase1     = genesisJSON(params.TestApricotPhase1Config)
-	genesisJSONApricotPhase2     = genesisJSON(params.TestApricotPhase2Config)
-	genesisJSONApricotPhase3     = genesisJSON(params.TestApricotPhase3Config)
-	genesisJSONApricotPhase4     = genesisJSON(params.TestApricotPhase4Config)
-	genesisJSONApricotPhase5     = genesisJSON(params.TestApricotPhase5Config)
-	genesisJSONApricotPhasePre6  = genesisJSON(params.TestApricotPhasePre6Config)
-	genesisJSONApricotPhase6     = genesisJSON(params.TestApricotPhase6Config)
-	genesisJSONApricotPhasePost6 = genesisJSON(params.TestApricotPhasePost6Config)
-	genesisJSONBanff             = genesisJSON(params.TestBanffChainConfig)
-	genesisJSONCortina           = genesisJSON(params.TestCortinaChainConfig)
-	genesisJSONDurango           = genesisJSON(params.TestDurangoChainConfig)
-	genesisJSONEtna              = genesisJSON(params.TestEtnaChainConfig)
+	genesisJSONApricotPhase0     = genesisJSON(extparams.TestLaunchConfig)
+	genesisJSONApricotPhase1     = genesisJSON(extparams.TestApricotPhase1Config)
+	genesisJSONApricotPhase2     = genesisJSON(extparams.TestApricotPhase2Config)
+	genesisJSONApricotPhase3     = genesisJSON(extparams.TestApricotPhase3Config)
+	genesisJSONApricotPhase4     = genesisJSON(extparams.TestApricotPhase4Config)
+	genesisJSONApricotPhase5     = genesisJSON(extparams.TestApricotPhase5Config)
+	genesisJSONApricotPhasePre6  = genesisJSON(extparams.TestApricotPhasePre6Config)
+	genesisJSONApricotPhase6     = genesisJSON(extparams.TestApricotPhase6Config)
+	genesisJSONApricotPhasePost6 = genesisJSON(extparams.TestApricotPhasePost6Config)
+	genesisJSONBanff             = genesisJSON(extparams.TestBanffChainConfig)
+	genesisJSONCortina           = genesisJSON(extparams.TestCortinaChainConfig)
+	genesisJSONDurango           = genesisJSON(extparams.TestDurangoChainConfig)
+	genesisJSONEtna              = genesisJSON(extparams.TestEtnaChainConfig)
 	genesisJSONLatest            = genesisJSONEtna
 
-	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
+	genesisJSONCancun = genesisJSON(activateCancun(extparams.TestChainConfig))
 
-	apricotRulesPhase0 = *params.GetRulesExtra(params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase1 = *params.GetRulesExtra(params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase2 = *params.GetRulesExtra(params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase3 = *params.GetRulesExtra(params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase4 = *params.GetRulesExtra(params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase5 = *params.GetRulesExtra(params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase6 = *params.GetRulesExtra(params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	banffRules         = *params.GetRulesExtra(params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase0 = *extparams.GetRulesExtra(extparams.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase1 = *extparams.GetRulesExtra(extparams.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase2 = *extparams.GetRulesExtra(extparams.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase3 = *extparams.GetRulesExtra(extparams.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase4 = *extparams.GetRulesExtra(extparams.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase5 = *extparams.GetRulesExtra(extparams.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase6 = *extparams.GetRulesExtra(extparams.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	banffRules         = *extparams.GetRulesExtra(extparams.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
 )
 
 func init() {
@@ -175,7 +176,7 @@ func newPrefundedGenesis(
 	}
 
 	return &core.Genesis{
-		Config:     params.TestChainConfig,
+		Config:     extparams.TestChainConfig,
 		Difficulty: big.NewInt(0),
 		Alloc:      alloc,
 	}
@@ -3810,7 +3811,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}
 	require.NoError(t, json.Unmarshal([]byte(genesisJSONApricotPhase1), genesisWithUpgrade))
-	params.GetExtra(genesisWithUpgrade.Config).ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
+	extparams.GetExtra(genesisWithUpgrade.Config).ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 
@@ -3992,7 +3993,7 @@ func TestMinFeeSetAtEtna(t *testing.T) {
 	etnaTime := uint64(now.Add(1 * time.Second).Unix())
 
 	genesis := genesisJSON(
-		activateEtna(params.TestEtnaChainConfig, etnaTime),
+		activateEtna(extparams.TestEtnaChainConfig, etnaTime),
 	)
 	clock := mockable.Clock{}
 	clock.Set(now)

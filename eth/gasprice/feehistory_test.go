@@ -34,6 +34,7 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params"
@@ -81,8 +82,8 @@ func TestFeeHistory(t *testing.T) {
 			MaxBlockHistory:     c.maxBlock,
 		}
 		tip := big.NewInt(1 * params.GWei)
-		backend := newTestBackendFakerEngine(t, params.TestChainConfig, 32, common.Big0, func(i int, b *core.BlockGen) {
-			signer := types.LatestSigner(params.TestChainConfig)
+		backend := newTestBackendFakerEngine(t, extparams.TestChainConfig, 32, common.Big0, func(i int, b *core.BlockGen) {
+			signer := types.LatestSigner(extparams.TestChainConfig)
 
 			b.SetCoinbase(common.Address{1})
 
@@ -91,7 +92,7 @@ func TestFeeHistory(t *testing.T) {
 
 			var tx *types.Transaction
 			txdata := &types.DynamicFeeTx{
-				ChainID:   params.TestChainConfig.ChainID,
+				ChainID:   extparams.TestChainConfig.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
 				Gas:       params.TxGas,

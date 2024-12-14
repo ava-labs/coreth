@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -45,7 +46,7 @@ import (
 )
 
 var (
-	signer     = types.LatestSigner(params.TestChainConfig)
+	signer     = types.LatestSigner(extparams.TestChainConfig)
 	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
 )
@@ -145,37 +146,37 @@ func TestNativeAssetContractCall(t *testing.T) {
 
 	tests := map[string]stateTransitionTest{
 		"phase5": {
-			config:  params.TestApricotPhase5Config,
+			config:  extparams.TestApricotPhase5Config,
 			txs:     txs,
 			gasUsed: []uint64{132091, 41618},
 			want:    "",
 		},
 		"prePhase6": {
-			config:  params.TestApricotPhasePre6Config,
+			config:  extparams.TestApricotPhasePre6Config,
 			txs:     txs,
 			gasUsed: []uint64{132091, 21618},
 			want:    "",
 		},
 		"phase6": {
-			config:  params.TestApricotPhase6Config,
+			config:  extparams.TestApricotPhase6Config,
 			txs:     txs,
 			gasUsed: []uint64{132091, 41618},
 			want:    "",
 		},
 		"banff": {
-			config:  params.TestBanffChainConfig,
+			config:  extparams.TestBanffChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{132091, 21618},
 			want:    "",
 		},
 		"durango": {
-			config:  params.TestDurangoChainConfig,
+			config:  extparams.TestDurangoChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{132117, 21618},
 			want:    "",
 		},
 		"etna": {
-			config:  params.TestEtnaChainConfig,
+			config:  extparams.TestEtnaChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{132117, 21618},
 			want:    "",
@@ -201,25 +202,25 @@ func TestNativeAssetContractConstructor(t *testing.T) {
 
 	phase6Tests := map[string]stateTransitionTest{
 		"phase5": {
-			config:  params.TestApricotPhase5Config,
+			config:  extparams.TestApricotPhase5Config,
 			txs:     txs,
 			gasUsed: []uint64{92046},
 			want:    "",
 		},
 		"prePhase6": {
-			config:  params.TestApricotPhasePre6Config,
+			config:  extparams.TestApricotPhasePre6Config,
 			txs:     txs,
 			gasUsed: []uint64{72046},
 			want:    "",
 		},
 		"phase6": {
-			config:  params.TestApricotPhase6Config,
+			config:  extparams.TestApricotPhase6Config,
 			txs:     txs,
 			gasUsed: []uint64{92046},
 			want:    "",
 		},
 		"banff": {
-			config:  params.TestBanffChainConfig,
+			config:  extparams.TestBanffChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{72046},
 			want:    "",
@@ -240,7 +241,7 @@ func TestNativeAssetDirectEOACall(t *testing.T) {
 
 	phase6Tests := map[string]stateTransitionTest{
 		"phase5": {
-			config:  params.TestApricotPhase5Config,
+			config:  extparams.TestApricotPhase5Config,
 			txs:     txs,
 			gasUsed: []uint64{41000},
 			want:    "",
@@ -251,19 +252,19 @@ func TestNativeAssetDirectEOACall(t *testing.T) {
 		// Therefore, there is no need for an error to be returned in this test case even though a soft error would have been
 		// returned during PrePhase6.
 		"prePhase6": {
-			config:  params.TestApricotPhasePre6Config,
+			config:  extparams.TestApricotPhasePre6Config,
 			txs:     txs,
 			gasUsed: []uint64{21000},
 			want:    "",
 		},
 		"phase6": {
-			config:  params.TestApricotPhase6Config,
+			config:  extparams.TestApricotPhase6Config,
 			txs:     txs,
 			gasUsed: []uint64{41000},
 			want:    "",
 		},
 		"banff": {
-			config:  params.TestBanffChainConfig,
+			config:  extparams.TestBanffChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{21000},
 			want:    "",

@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
@@ -54,7 +55,7 @@ func u64(val uint64) *uint64 { return &val }
 // blockchain imports bad blocks, meaning blocks which have valid headers but
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
-	cpcfg := *params.TestChainConfig
+	cpcfg := *extparams.TestChainConfig
 	config := &cpcfg
 	config.ShanghaiTime = u64(0)
 	config.CancunTime = u64(0)
@@ -257,7 +258,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		var (
 			db    = rawdb.NewMemoryDatabase()
 			gspec = &Genesis{
-				Config: params.WithExtra(
+				Config: extparams.WithExtra(
 					&params.ChainConfig{
 						ChainID:             big.NewInt(1),
 						HomesteadBlock:      big.NewInt(0),
@@ -371,10 +372,10 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		Time:      parent.Time() + 10,
 		UncleHash: types.EmptyUncleHash,
 	}
-	if params.GetExtra(config).IsApricotPhase3(header.Time) {
+	if extparams.GetExtra(config).IsApricotPhase3(header.Time) {
 		header.Extra, header.BaseFee, _ = dummy.CalcBaseFee(config, parent.Header(), header.Time)
 	}
-	if params.GetExtra(config).IsApricotPhase4(header.Time) {
+	if extparams.GetExtra(config).IsApricotPhase4(header.Time) {
 		header.BlockGasCost = big.NewInt(0)
 		header.ExtDataGasUsed = big.NewInt(0)
 	}

@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 )
@@ -142,7 +143,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	// Create a transaction that is not mined.
 	tx = types.NewContractCreation(1, big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
-	tx, _ = types.SignTx(tx, types.LatestSigner(params.TestChainConfig), testKey)
+	tx, _ = types.SignTx(tx, types.LatestSigner(extparams.TestChainConfig), testKey)
 
 	go func() {
 		contextCanceled := errors.New("context canceled")

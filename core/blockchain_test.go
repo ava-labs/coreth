@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/pruner"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -423,7 +424,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000)
 	gspec := &Genesis{
-		Config: params.WithExtra(
+		Config: extparams.WithExtra(
 			&params.ChainConfig{HomesteadBlock: new(big.Int)},
 			&params.ChainConfigExtra{},
 		),
@@ -584,7 +585,7 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 	for _, c := range cases {
 		var (
 			gspec = &Genesis{
-				Config:  params.TestChainConfig,
+				Config:  extparams.TestChainConfig,
 				Alloc:   types.GenesisAlloc{},
 				BaseFee: big.NewInt(params.ApricotPhase3InitialBaseFee),
 			}
@@ -705,7 +706,7 @@ func TestTxLookupSkipIndexingBlockChain(t *testing.T) {
 func TestCreateThenDeletePreByzantium(t *testing.T) {
 	// We want to use pre-byzantium rules where we have intermediate state roots
 	// between transactions.
-	config := *params.TestLaunchConfig
+	config := *extparams.TestLaunchConfig
 	config.ByzantiumBlock = nil
 	config.ConstantinopleBlock = nil
 	config.PetersburgBlock = nil
@@ -717,7 +718,7 @@ func TestCreateThenDeletePreByzantium(t *testing.T) {
 	testCreateThenDelete(t, &config)
 }
 func TestCreateThenDeletePostByzantium(t *testing.T) {
-	testCreateThenDelete(t, params.TestChainConfig)
+	testCreateThenDelete(t, extparams.TestChainConfig)
 }
 
 // testCreateThenDelete tests a creation and subsequent deletion of a contract, happening
@@ -836,7 +837,7 @@ func TestDeleteThenCreate(t *testing.T) {
 	contractAddr := crypto.CreateAddress2(factoryAddr, [32]byte{}, crypto.Keccak256(contractABI))
 
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 		Alloc: types.GenesisAlloc{
 			address: {Balance: funds},
 		},
@@ -952,7 +953,7 @@ func TestTransientStorageReset(t *testing.T) {
 		byte(vm.RETURN), // return 6 bytes of zero-code
 	}...)
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 		Alloc: types.GenesisAlloc{
 			address: {Balance: funds},
 		},
@@ -1019,7 +1020,7 @@ func TestEIP3651(t *testing.T) {
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec   = &Genesis{
-			Config:    params.TestChainConfig,
+			Config:    extparams.TestChainConfig,
 			Timestamp: uint64(upgrade.InitiallyActiveTime.Unix()),
 			Alloc: GenesisAlloc{
 				addr1: {Balance: funds},

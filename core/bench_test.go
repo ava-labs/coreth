@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/libevm/extparams"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/vm"
@@ -88,7 +89,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
 		data := make([]byte, nbytes)
-		gas, _ := IntrinsicGas(data, nil, false, params.Rules{}) // Disable Istanbul and EIP-2028 for this test
+		gas, _ := IntrinsicGas(data, nil, false, extparams.Rules{}) // Disable Istanbul and EIP-2028 for this test
 		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
@@ -174,7 +175,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: extparams.TestChainConfig,
 		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
 	}
 	_, chain, _, _ := GenerateChainWithGenesis(gspec, dummy.NewCoinbaseFaker(), b.N, 10, gen)
@@ -263,7 +264,7 @@ func makeChainForBench(db ethdb.Database, genesis *Genesis, full bool, count uin
 }
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
-	genesis := &Genesis{Config: params.TestChainConfig}
+	genesis := &Genesis{Config: extparams.TestChainConfig}
 	for i := 0; i < b.N; i++ {
 		dir := b.TempDir()
 		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
@@ -282,7 +283,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", dir, err)
 	}
-	genesis := &Genesis{Config: params.TestChainConfig}
+	genesis := &Genesis{Config: extparams.TestChainConfig}
 	makeChainForBench(db, genesis, full, count)
 	db.Close()
 
