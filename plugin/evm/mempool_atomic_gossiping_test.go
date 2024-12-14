@@ -127,6 +127,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 		assert.NoError(err)
 	}()
 	mempool, err := atomic.NewMempool(vm.ctx, prometheus.NewRegistry(), 1, vm.verifyTxAtTip)
+	assert.NoError(err)
 
 	tx1, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {

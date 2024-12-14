@@ -185,7 +185,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// (i.e., txs received via p2p are not included in push gossip)
 	// This test adds it directly to the mempool + gossiper to simulate that.
 	vm.mempool.AddRemoteTx(conflictingTx)
-	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{conflictingTx})
+	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: conflictingTx})
 	time.Sleep(500 * time.Millisecond)
 
 	vm.ctx.Lock.Lock()
