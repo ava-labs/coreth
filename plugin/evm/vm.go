@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -75,7 +76,7 @@ import (
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
-	"github.com/ava-labs/avalanchego/database"
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
@@ -229,18 +230,18 @@ type VM struct {
 	db *versiondb.Database
 
 	// metadataDB is used to store one off keys.
-	metadataDB database.Database
+	metadataDB avalanchedatabase.Database
 
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
 
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
-	acceptedBlockDB database.Database
+	acceptedBlockDB avalanchedatabase.Database
 
 	// [warpDB] is used to store warp message signatures
 	// set to a prefixDB with the prefix [warpPrefix]
-	warpDB database.Database
+	warpDB avalanchedatabase.Database
 
 	toEngine chan<- commonEng.Message
 
@@ -329,7 +330,7 @@ func (vm *VM) GetActivationTime() time.Time {
 func (vm *VM) Initialize(
 	_ context.Context,
 	chainCtx *snow.Context,
-	db database.Database,
+	db avalanchedatabase.Database,
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
@@ -560,7 +561,7 @@ func (vm *VM) Initialize(
 
 	// clear warpdb on initialization if config enabled
 	if vm.config.PruneWarpDB {
-		if err := database.Clear(vm.warpDB, ethdb.IdealBatchSize); err != nil {
+		if err := avalanchedatabase.Clear(vm.warpDB, ethdb.IdealBatchSize); err != nil {
 			return fmt.Errorf("failed to prune warpDB: %w", err)
 		}
 	}
@@ -1376,10 +1377,10 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 // by ChainState.
 func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 	ethBlock := vm.blockChain.GetBlockByHash(common.Hash(id))
-	// If [ethBlock] is nil, return [database.ErrNotFound] here
+	// If [ethBlock] is nil, return [avalanchedatabase.ErrNotFound] here
 	// so that the miss is considered cacheable.
 	if ethBlock == nil {
-		return nil, database.ErrNotFound
+		return nil, avalanchedatabase.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
 	return vm.newBlock(ethBlock)
@@ -1401,7 +1402,7 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 
 	if acceptedBlkID != blkID {
 		// The provided block is not accepted.
-		return nil, database.ErrNotFound
+		return nil, avalanchedatabase.ErrNotFound
 	}
 	return blk, nil
 }
@@ -1427,17 +1428,17 @@ func (vm *VM) VerifyHeightIndex(context.Context) error {
 
 // GetBlockIDAtHeight returns the canonical block at [height].
 // Note: the engine assumes that if a block is not found at [height], then
-// [database.ErrNotFound] will be returned. This indicates that the VM has state
+// [avalanchedatabase.ErrNotFound] will be returned. This indicates that the VM has state
 // synced and does not have all historical blocks available.
 func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {
 	lastAcceptedBlock := vm.LastAcceptedBlock()
 	if lastAcceptedBlock.Height() < height {
-		return ids.ID{}, database.ErrNotFound
+		return ids.ID{}, avalanchedatabase.ErrNotFound
 	}
 
 	hash := vm.blockChain.GetCanonicalHash(height)
 	if hash == (common.Hash{}) {
-		return ids.ID{}, database.ErrNotFound
+		return ids.ID{}, avalanchedatabase.ErrNotFound
 	}
 	return ids.ID(hash), nil
 }
@@ -1514,11 +1515,11 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 }
 
 // initializeDBs initializes the databases used by the VM.
-// coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db database.Database) error {
+// coreth always uses the avalanchego provided avalanchedatabase.
+func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, db)})
+	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
 	vm.db = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
@@ -1556,7 +1557,7 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
 func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
 	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
 		return tx, atomic.Accepted, height, nil
-	} else if err != database.ErrNotFound {
+	} else if err != avalanchedatabase.ErrNotFound {
 		return nil, atomic.Unknown, 0, err
 	}
 	tx, dropped, found := vm.mempool.GetTx(txID)
@@ -1802,7 +1803,7 @@ func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 	// initialize state with the genesis block.
 	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
 	switch {
-	case lastAcceptedErr == database.ErrNotFound:
+	case lastAcceptedErr == avalanchedatabase.ErrNotFound:
 		// If there is nothing in the database, return the genesis block hash and height
 		return vm.genesisHash, 0, nil
 	case lastAcceptedErr != nil:
