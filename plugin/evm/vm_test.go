@@ -161,7 +161,7 @@ func init() {
 		b, _ = cb58.Decode(key)
 		pk, _ := secp256k1.ToPrivateKey(b)
 		testKeys = append(testKeys, pk)
-		testEthAddrs = append(testEthAddrs, atomic.GetEthAddress(pk))
+		testEthAddrs = append(testEthAddrs, utils.GetEthAddress(pk))
 		testShortIDAddrs = append(testShortIDAddrs, pk.PublicKey().Address())
 	}
 }

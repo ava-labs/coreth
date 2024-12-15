@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/utils"
 )
 
 // Interface compliance
@@ -179,7 +180,7 @@ func (c *client) ImportKey(ctx context.Context, user api.UserPass, privateKey *s
 	if err != nil {
 		return common.Address{}, err
 	}
-	return atomic.ParseEthAddress(res.Address)
+	return utils.ParseEthAddress(res.Address)
 }
 
 // ImportArgs are arguments for passing into Import requests

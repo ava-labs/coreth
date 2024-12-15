@@ -10,12 +10,13 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/utils"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/math"
@@ -123,7 +124,7 @@ func (utx *UnsignedExportTx) Verify(
 	if !avax.IsSortedTransferableOutputs(utx.ExportedOutputs, Codec) {
 		return ErrOutputsNotSorted
 	}
-	if rules.IsApricotPhase1 && !utils.IsSortedAndUnique(utx.Ins) {
+	if rules.IsApricotPhase1 && !avalancheutils.IsSortedAndUnique(utx.Ins) {
 		return ErrInputsNotSortedUnique
 	}
 
@@ -240,7 +241,7 @@ func (utx *UnsignedExportTx) SemanticVerify(
 		if err != nil {
 			return err
 		}
-		if input.Address != PublicKeyToEthAddress(pubKey) {
+		if input.Address != utils.PublicKeyToEthAddress(pubKey) {
 			return errPublicKeySignatureMismatch
 		}
 	}
@@ -431,7 +432,7 @@ func GetSpendableFunds(
 		if amount == 0 {
 			break
 		}
-		addr := GetEthAddress(key)
+		addr := utils.GetEthAddress(key)
 		var balance uint64
 		if assetID == ctx.AVAXAssetID {
 			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
@@ -514,7 +515,7 @@ func GetSpendableAVAXWithFee(
 
 		additionalFee := newFee - prevFee
 
-		addr := GetEthAddress(key)
+		addr := utils.GetEthAddress(key)
 		// Since the asset is AVAX, we divide by the x2cRate to convert back to
 		// the correct denomination of AVAX that can be exported.
 		balance := new(uint256.Int).Div(state.GetBalance(addr), X2CRate).Uint64()
