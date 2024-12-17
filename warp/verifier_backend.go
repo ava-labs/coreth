@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
@@ -19,7 +20,7 @@ const (
 
 // Verify verifies the signature of the message
 // It also implements the acp118.Verifier interface
-func (b *backend) Verify(ctx context.Context, unsignedMessage *avalancheWarp.UnsignedMessage, _ []byte) *common.AppError {
+func (b *backend) Verify(ctx context.Context, unsignedMessage *avalancheWarp.UnsignedMessage, _ []byte, _ ids.NodeID) *common.AppError {
 	messageID := unsignedMessage.ID()
 	// Known on-chain messages should be signed
 	if _, err := b.GetMessage(messageID); err == nil {
