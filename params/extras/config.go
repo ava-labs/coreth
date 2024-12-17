@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	ethparams "github.com/ava-labs/libevm/params"
 )
@@ -40,7 +41,13 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 	}
 	newcfg, ok := newcfg_.Hooks().(*ChainConfig)
 	if !ok {
-		// XXX: if libevm is implemented properly then this can never happen, but that's only a runtime guarantee so shouldn't be relied upon
+		// Proper registration of the extras on libevm side should prevent this from happening.
+		// Return an error to prevent the chain from starting, just in case.
+		return newTimestampCompatError(
+			fmt.Sprintf("ChainConfig is not of the expected type *extras.ChainConfig, got %T", newcfg_.Hooks()),
+			utils.NewUint64(0),
+			nil,
+		)
 	}
 
 	// Check avalanche network upgrades
