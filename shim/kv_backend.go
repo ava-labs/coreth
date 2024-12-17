@@ -68,7 +68,7 @@ func NewAccountTrieKV(stateRoot common.Hash, kv KVBackend, db database.Database)
 		return nil, fmt.Errorf("%w: expected %x, got %x", ErrRootMismatch, stateRoot, kvRoot)
 	}
 
-	tr := Trie{
+	tr := &Trie{
 		backend: &KVTrieBackend{backend: kv},
 		origin:  kvRoot,
 	}
@@ -83,8 +83,8 @@ func NewStorageTrieKV(stateRoot common.Hash, account common.Hash, accountTrie *S
 	if accountTrie.trie.origin != stateRoot {
 		return nil, fmt.Errorf("%w: expected %x, got %x", ErrStorageStateRootMismatch, stateRoot, accountTrie.trie.origin)
 	}
-	tr := Trie{
-		parent:  &accountTrie.trie,
+	tr := &Trie{
+		parent:  accountTrie.trie,
 		backend: accountTrie.trie.backend,
 		prefix:  account.Bytes(),
 	}

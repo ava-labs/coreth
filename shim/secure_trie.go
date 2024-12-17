@@ -47,7 +47,7 @@ import (
 //
 // StateTrie is not safe for concurrent use.
 type StateTrie struct {
-	trie             Trie
+	trie             *Trie
 	db               database.Database
 	hashKeyBuf       [common.HashLength]byte
 	secKeyCache      map[string][]byte
@@ -185,7 +185,7 @@ func (t *StateTrie) Hash() common.Hash {
 // Copy returns a copy of StateTrie.
 func (t *StateTrie) Copy() *StateTrie {
 	return &StateTrie{
-		trie:        *t.trie.Copy(),
+		trie:        t.trie.Copy(),
 		db:          t.db,
 		secKeyCache: t.secKeyCache,
 	}

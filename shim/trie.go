@@ -2,7 +2,6 @@ package shim
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -28,7 +27,7 @@ type Backend interface {
 
 func NewStateTrie(backend Backend, db database.Database) *StateTrie {
 	return &StateTrie{
-		trie: Trie{backend: backend},
+		trie: &Trie{backend: backend},
 		db:   db,
 	}
 }
@@ -81,7 +80,7 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 }
 
 func (t *Trie) Copy() *Trie {
-	fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
+	// fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
 	return t
 }
 
