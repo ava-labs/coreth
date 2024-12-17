@@ -58,10 +58,10 @@ func SetEthUpgrades(c *ChainConfig) {
 	}
 }
 
-func GetExtra(c *ChainConfig) *extras.ChainConfigExtra {
+func GetExtra(c *ChainConfig) *extras.ChainConfig {
 	ex := payloads.FromChainConfig(c)
 	if ex == nil {
-		ex = &extras.ChainConfigExtra{}
+		ex = &extras.ChainConfig{}
 		payloads.SetOnChainConfig(c, ex)
 	}
 	return ex
@@ -74,7 +74,7 @@ func Copy(c *ChainConfig) ChainConfig {
 }
 
 // WithExtra sets the extra payload on `c` and returns the modified argument.
-func WithExtra(c *ChainConfig, extra *extras.ChainConfigExtra) *ChainConfig {
+func WithExtra(c *ChainConfig, extra *extras.ChainConfig) *ChainConfig {
 	payloads.SetOnChainConfig(c, extra)
 	return c
 }
@@ -164,7 +164,7 @@ func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
 			IstanbulBlock:       big.NewInt(0),
 			MuirGlacierBlock:    big.NewInt(0),
 		},
-		&extras.ChainConfigExtra{
+		&extras.ChainConfig{
 			NetworkUpgrades: extras.GetNetworkUpgrades(agoUpgrade),
 		},
 	)

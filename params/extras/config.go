@@ -26,7 +26,7 @@ type AvalancheContext struct {
 	SnowCtx *snow.Context
 }
 
-type ChainConfigExtra struct {
+type ChainConfig struct {
 	NetworkUpgrades // Config for timestamps that enable network upgrades. Skip encoding/decoding directly into ChainConfig.
 
 	AvalancheContext `json:"-"` // Avalanche specific context set during VM initialization. Not serialized.
@@ -34,11 +34,11 @@ type ChainConfigExtra struct {
 	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Skip encoding/decoding directly into ChainConfig.
 }
 
-func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
+func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
 	if c == nil {
 		return nil
 	}
-	newcfg, ok := newcfg_.Hooks().(*ChainConfigExtra)
+	newcfg, ok := newcfg_.Hooks().(*ChainConfig)
 	if !ok {
 		// XXX: if libevm is implemented properly then this can never happen, but that's only a runtime guarantee so shouldn't be relied upon
 	}
@@ -57,7 +57,7 @@ func (c *ChainConfigExtra) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig,
 	return nil
 }
 
-func (c *ChainConfigExtra) Description() string {
+func (c *ChainConfig) Description() string {
 	if c == nil {
 		return ""
 	}
@@ -133,25 +133,25 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 // This is a custom unmarshaler to handle the Precompiles field.
 // Precompiles was presented as an inline object in the JSON.
 // This custom unmarshaler ensures backwards compatibility with the old format.
-func (c *ChainConfigExtra) UnmarshalJSON(data []byte) error {
+func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	// Alias ChainConfigExtra to avoid recursion
-	type _ChainConfigExtra ChainConfigExtra
+	type _ChainConfigExtra ChainConfig
 	tmp := _ChainConfigExtra{}
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
 
 	// At this point we have populated all fields except PrecompileUpgrade
-	*c = ChainConfigExtra(tmp)
+	*c = ChainConfig(tmp)
 
 	return nil
 }
 
 // MarshalJSON returns the JSON encoding of c.
 // This is a custom marshaler to handle the Precompiles field.
-func (c *ChainConfigExtra) MarshalJSON() ([]byte, error) {
+func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	// Alias ChainConfigExtra to avoid recursion
-	type _ChainConfigExtra ChainConfigExtra
+	type _ChainConfigExtra ChainConfig
 	return json.Marshal(_ChainConfigExtra(*c))
 }
 
@@ -162,7 +162,7 @@ type fork struct {
 	optional  bool     // if true, the fork may be nil and next fork is still allowed
 }
 
-func (c *ChainConfigExtra) CheckConfigForkOrder() error {
+func (c *ChainConfig) CheckConfigForkOrder() error {
 	if c == nil {
 		return nil
 	}
@@ -224,7 +224,7 @@ func checkForks(forks []fork, blockFork bool) error {
 }
 
 // Verify verifies chain config and returns error
-func (c *ChainConfigExtra) Verify() error {
+func (c *ChainConfig) Verify() error {
 	// Verify the precompile upgrades are internally consistent given the existing chainConfig.
 	if err := c.verifyPrecompileUpgrades(); err != nil {
 		return fmt.Errorf("invalid precompile upgrades: %w", err)
@@ -234,7 +234,7 @@ func (c *ChainConfigExtra) Verify() error {
 }
 
 // IsPrecompileEnabled returns whether precompile with [address] is enabled at [timestamp].
-func (c *ChainConfigExtra) IsPrecompileEnabled(address common.Address, timestamp uint64) bool {
+func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint64) bool {
 	config := c.GetActivePrecompileConfig(address, timestamp)
 	return config != nil && !config.IsDisabled()
 }

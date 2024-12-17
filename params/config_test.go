@@ -147,7 +147,7 @@ func TestCheckCompatible(t *testing.T) {
 func TestConfigRules(t *testing.T) {
 	c := WithExtra(
 		&ChainConfig{},
-		&extras.ChainConfigExtra{
+		&extras.ChainConfig{
 			NetworkUpgrades: extras.NetworkUpgrades{
 				CortinaBlockTimestamp: utils.NewUint64(500),
 			},

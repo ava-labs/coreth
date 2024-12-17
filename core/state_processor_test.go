@@ -271,7 +271,7 @@ func TestStateProcessorErrors(t *testing.T) {
 						IstanbulBlock:       big.NewInt(0),
 						MuirGlacierBlock:    big.NewInt(0),
 					},
-					&extras.ChainConfigExtra{
+					&extras.ChainConfig{
 						NetworkUpgrades: extras.NetworkUpgrades{
 							ApricotPhase1BlockTimestamp: utils.NewUint64(0),
 							ApricotPhase2BlockTimestamp: utils.NewUint64(0),

@@ -426,7 +426,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 	gspec := &Genesis{
 		Config: params.WithExtra(
 			&params.ChainConfig{HomesteadBlock: new(big.Int)},
-			&extras.ChainConfigExtra{},
+			&extras.ChainConfig{},
 		),
 		Alloc: types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
