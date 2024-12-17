@@ -136,7 +136,7 @@ func (b *backend) GetMessageSignature(ctx context.Context, unsignedMessage *aval
 		return sig, nil
 	}
 
-	if err := b.Verify(ctx, unsignedMessage, nil); err != nil {
+	if err := b.Verify(ctx, unsignedMessage, nil, ids.EmptyNodeID); err != nil {
 		return nil, fmt.Errorf("failed to validate warp message: %w", err)
 	}
 	return b.signMessage(unsignedMessage)
