@@ -61,7 +61,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func(t *testing.T) UnsignedAtomicTx
-	rules       extras.RulesExtra
+	rules       extras.Rules
 	expectedErr string
 }
 

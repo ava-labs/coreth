@@ -194,7 +194,7 @@ func (b *Block) Accept(context.Context) error {
 // contract.Accepter
 // This function assumes that the Accept function will ONLY operate on state maintained in the VM's versiondb.
 // This ensures that any DB operations are performed atomically with marking the block as accepted.
-func (b *Block) handlePrecompileAccept(rules extras.RulesExtra, sharedMemoryWriter *sharedMemoryWriter) error {
+func (b *Block) handlePrecompileAccept(rules extras.Rules, sharedMemoryWriter *sharedMemoryWriter) error {
 	// Short circuit early if there are no precompile accepters to execute
 	if len(rules.AccepterPrecompiles) == 0 {
 		return nil

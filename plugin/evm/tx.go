@@ -122,9 +122,9 @@ type UnsignedAtomicTx interface {
 	// InputUTXOs returns the UTXOs this tx consumes
 	InputUTXOs() set.Set[ids.ID]
 	// Verify attempts to verify that the transaction is well formed
-	Verify(ctx *snow.Context, rules extras.RulesExtra) error
+	Verify(ctx *snow.Context, rules extras.Rules) error
 	// Attempts to verify this transaction with the provided state.
-	SemanticVerify(vm *VM, stx *Tx, parent *Block, baseFee *big.Int, rules extras.RulesExtra) error
+	SemanticVerify(vm *VM, stx *Tx, parent *Block, baseFee *big.Int, rules extras.Rules) error
 	// AtomicOps returns the blockchainID and set of atomic requests that
 	// must be applied to shared memory for this transaction to be accepted.
 	// The set of atomic requests must be returned in a consistent order.

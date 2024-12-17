@@ -20,11 +20,11 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type RulesExtra extras.RulesExtra
+type RulesExtra extras.Rules
 
-func GetRulesExtra(r Rules) *extras.RulesExtra {
+func GetRulesExtra(r Rules) *extras.Rules {
 	rules := payloads.PointerFromRules(&r)
-	return (*extras.RulesExtra)(rules)
+	return (*extras.Rules)(rules)
 }
 
 func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {

@@ -8,7 +8,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 )
 
-type RulesExtra struct {
+type Rules struct {
 	// Rules for Avalanche releases
 	AvalancheRules
 
@@ -25,17 +25,17 @@ type RulesExtra struct {
 	AccepterPrecompiles map[common.Address]precompileconfig.Accepter
 }
 
-func (r *RulesExtra) PredicatersExist() bool {
+func (r *Rules) PredicatersExist() bool {
 	return len(r.Predicaters) > 0
 }
 
-func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
+func (r *Rules) PredicaterExists(addr common.Address) bool {
 	_, ok := r.Predicaters[addr]
 	return ok
 }
 
 // IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
-func (r *RulesExtra) IsPrecompileEnabled(addr common.Address) bool {
+func (r *Rules) IsPrecompileEnabled(addr common.Address) bool {
 	_, ok := r.Precompiles[addr]
 	return ok
 }
