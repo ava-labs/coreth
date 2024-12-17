@@ -1,21 +1,16 @@
 // (c) 2024 Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package params
+package extras
 
 import (
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
 )
 
-func GetRulesExtra(r Rules) *RulesExtra {
-	return payloads.PointerFromRules(&r)
-}
-
 type RulesExtra struct {
 	// Rules for Avalanche releases
-	extras.AvalancheRules
+	AvalancheRules
 
 	// Precompiles maps addresses to stateful precompiled contracts that are enabled
 	// for this rule set.
@@ -28,19 +23,4 @@ type RulesExtra struct {
 	// AccepterPrecompiles map addresses to stateful precompile accepter functions
 	// that are enabled for this rule set.
 	AccepterPrecompiles map[common.Address]precompileconfig.Accepter
-}
-
-func (r *RulesExtra) PredicatersExist() bool {
-	return len(r.Predicaters) > 0
-}
-
-func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
-	_, ok := r.Predicaters[addr]
-	return ok
-}
-
-// IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
-func (r *RulesExtra) IsPrecompileEnabled(addr common.Address) bool {
-	_, ok := r.Precompiles[addr]
-	return ok
 }

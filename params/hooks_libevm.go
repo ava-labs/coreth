@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/nativeasset"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -18,6 +19,27 @@ import (
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 )
+
+type RulesExtra extras.RulesExtra
+
+func GetRulesExtra(r Rules) *RulesExtra {
+	return payloads.PointerFromRules(&r)
+}
+
+func (r *RulesExtra) PredicatersExist() bool {
+	return len(r.Predicaters) > 0
+}
+
+func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
+	_, ok := r.Predicaters[addr]
+	return ok
+}
+
+// IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
+func (r *RulesExtra) IsPrecompileEnabled(addr common.Address) bool {
+	_, ok := r.Precompiles[addr]
+	return ok
+}
 
 func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
 	return gas, nil
