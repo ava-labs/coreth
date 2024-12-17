@@ -22,23 +22,9 @@ import (
 
 type RulesExtra extras.RulesExtra
 
-func GetRulesExtra(r Rules) *RulesExtra {
-	return payloads.PointerFromRules(&r)
-}
-
-func (r *RulesExtra) PredicatersExist() bool {
-	return len(r.Predicaters) > 0
-}
-
-func (r *RulesExtra) PredicaterExists(addr common.Address) bool {
-	_, ok := r.Predicaters[addr]
-	return ok
-}
-
-// IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
-func (r *RulesExtra) IsPrecompileEnabled(addr common.Address) bool {
-	_, ok := r.Precompiles[addr]
-	return ok
+func GetRulesExtra(r Rules) *extras.RulesExtra {
+	rules := payloads.PointerFromRules(&r)
+	return (*extras.RulesExtra)(rules)
 }
 
 func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {

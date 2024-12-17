@@ -1699,7 +1699,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.RulesExtra) error {
+func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.RulesExtra) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1716,7 +1716,7 @@ func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
-func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.RulesExtra) error {
+func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules extras.RulesExtra) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
 		return errRejectedParent
@@ -1952,7 +1952,7 @@ func (vm *VM) chainConfigExtra() *extras.ChainConfigExtra {
 }
 
 // currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() params.RulesExtra {
+func (vm *VM) currentRules() extras.RulesExtra {
 	header := vm.eth.APIBackend.CurrentHeader()
 	rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
 	return *params.GetRulesExtra(rules)
