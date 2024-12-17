@@ -349,12 +349,17 @@ type BlockChain struct {
 	txIndexTailLock sync.Mutex
 }
 
+type Opts struct {
+	LastAcceptedRoot common.Hash
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
 func NewBlockChain(
 	db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, engine consensus.Engine,
 	vmConfig vm.Config, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+	opts ...Opts,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified
@@ -421,7 +426,11 @@ func NewBlockChain(
 	// }
 
 	// Re-generate current block state if it is missing
-	if err := bc.loadLastState(lastAcceptedHash); err != nil {
+	lastAcceptedRoot := common.Hash{}
+	if len(opts) > 0 {
+		lastAcceptedRoot = opts[0].LastAcceptedRoot
+	}
+	if err := bc.loadLastState(lastAcceptedHash, lastAcceptedRoot); err != nil {
 		return nil, err
 	}
 
@@ -434,7 +443,11 @@ func NewBlockChain(
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
-	if !bc.HasState(head.Root) {
+	headRoot := head.Root
+	if len(opts) > 0 {
+		headRoot = opts[0].LastAcceptedRoot
+	}
+	if !bc.HasState(headRoot) {
 		return nil, fmt.Errorf("head state missing %d:%s", head.Number, head.Hash())
 	}
 
@@ -672,12 +685,12 @@ func (bc *BlockChain) stopAcceptor() {
 	close(bc.acceptorQueue)
 }
 
-func (bc *BlockChain) InitializeSnapshots() {
+func (bc *BlockChain) InitializeSnapshots(opts ...*Opts) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
 	head := bc.CurrentBlock()
-	bc.initSnapshot(head)
+	bc.initSnapshot(head, opts...)
 }
 
 // SenderCacher returns the *TxSenderCacher used within the core package.
@@ -687,7 +700,7 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
-func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
+func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash, lastAcceptedRoot common.Hash) error {
 	// Initialize genesis state
 	if lastAcceptedHash == (common.Hash{}) {
 		return bc.loadGenesisState()
@@ -732,7 +745,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState is necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
+	return bc.reprocessState(bc.lastAccepted, lastAcceptedRoot, 2*bc.cacheConfig.CommitInterval)
 }
 
 func (bc *BlockChain) LoadGenesisState(block *types.Block) error {
@@ -1897,7 +1910,7 @@ func (bc *BlockChain) reprocessFromGenesis() error {
 }
 
 // initSnapshot instantiates a Snapshot instance and adds it to [bc]
-func (bc *BlockChain) initSnapshot(b *types.Header) {
+func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 	if bc.cacheConfig.SnapshotLimit <= 0 || bc.snaps != nil {
 		return
 	}
@@ -1946,9 +1959,13 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 		snapshot.ResetSnapshotGeneration(bc.db)
 	}
 	var err error
-	bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, b.Hash(), b.Root)
+	root := b.Root
+	if len(opts) > 0 {
+		root = opts[0].LastAcceptedRoot
+	}
+	bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, b.Hash(), root)
 	if err != nil {
-		log.Error("failed to initialize snapshots", "headHash", b.Hash(), "headRoot", b.Root, "err", err, "async", asyncBuild)
+		log.Error("failed to initialize snapshots", "headHash", b.Hash(), "headRoot", root, "err", err, "async", asyncBuild)
 	}
 }
 
@@ -1956,7 +1973,7 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 // it reaches a block with a state committed to the database. reprocessState does not use
 // snapshots since the disk layer for snapshots will most likely be above the last committed
 // state that reprocessing will start from.
-func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error {
+func (bc *BlockChain) reprocessState(current *types.Block, currentRoot common.Hash, reexec uint64) error {
 	origin := current.NumberU64()
 	acceptorTip, err := rawdb.ReadAcceptorTip(bc.db)
 	if err != nil {
@@ -1969,7 +1986,11 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	acceptorTipUpToDate := acceptorTip == (common.Hash{}) || acceptorTip == current.Hash()
 
 	// If the state is already available and the acceptor tip is up to date, skip re-processing.
-	if bc.HasState(current.Root()) && acceptorTipUpToDate {
+	root := current.Root()
+	if currentRoot != (common.Hash{}) {
+		root = currentRoot
+	}
+	if bc.HasState(root) && acceptorTipUpToDate {
 		log.Info("Skipping state reprocessing", "root", current.Root())
 		return nil
 	}
@@ -2298,7 +2319,7 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	lastAcceptedHash := block.Hash()
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 
-	if err := bc.loadLastState(lastAcceptedHash); err != nil {
+	if err := bc.loadLastState(lastAcceptedHash, common.Hash{}); err != nil {
 		return err
 	}
 	// Create the state manager

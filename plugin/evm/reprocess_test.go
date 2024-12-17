@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -46,9 +47,11 @@ func TestReprocessGenesis(t *testing.T) {
 
 	cbs := dummy.ConsensusCallbacks{
 		OnExtraStateChange: func(block *types.Block, statedb *state.StateDB) (*big.Int, *big.Int, error) {
-			i := byte(block.Number().Uint64())
-			statedb.SetNonce(someAddr, uint64(i))
-			statedb.SetState(someAddr, common.Hash{i}, common.Hash{i})
+			i := block.Number().Uint64()
+			statedb.SetNonce(someAddr, i)
+			iBytes := binary.BigEndian.AppendUint64(nil, i)
+			asHash := common.BytesToHash(iBytes)
+			statedb.SetState(someAddr, asHash, asHash)
 			return testVM.onExtraStateChange(block, statedb)
 		},
 	}
@@ -86,11 +89,12 @@ func TestReprocessGenesis(t *testing.T) {
 	require.NoError(t, err)
 
 	var lastInsertedRoot common.Hash
-	bc.Validator().(*core.BlockValidator).CheckRoot = func(expected, got common.Hash) bool {
+	checkRootFn := func(expected, got common.Hash) bool {
 		t.Logf("Got root: %s", got.Hex())
 		lastInsertedRoot = got
 		return true
 	}
+	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
 
 	normalGenesis := g.ToBlock()
 	// rawdb.WriteHeader(db, normalGenesis.Header())
@@ -107,7 +111,7 @@ func TestReprocessGenesis(t *testing.T) {
 
 	// Let's generate some blocks
 	signer := types.LatestSigner(chainConfig)
-	_, blocks, _, err := core.GenerateChainWithGenesis(g, engine, 10, 2, func(i int, b *core.BlockGen) {
+	_, blocks, _, err := core.GenerateChainWithGenesis(g, engine, 20, 2, func(i int, b *core.BlockGen) {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
 			Nonce:    uint64(i),
 			GasPrice: b.BaseFee(),
@@ -116,6 +120,10 @@ func TestReprocessGenesis(t *testing.T) {
 		}), signer, key1)
 		b.AddTx(tx)
 	})
+	insertAfterRestart := blocks[10:]
+	insertNow := blocks[:10]
+	blocks = insertNow
+
 	require.NoError(t, err)
 	t.Logf("Generated %d blocks", len(blocks))
 	for _, block := range blocks {
@@ -141,6 +149,9 @@ func TestReprocessGenesis(t *testing.T) {
 		lastRoot = getCurrentRoot()
 	}
 
+	// Great, now let's try to stop and restart the chain
+	bc.Stop()
+
 	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 	defer it.Release()
 	for it.Next() {
@@ -151,6 +162,59 @@ func TestReprocessGenesis(t *testing.T) {
 	}
 
 	it2 := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+	defer it2.Release()
+	for it2.Next() {
+		if len(it2.Key()) != 65 {
+			continue
+		}
+		t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
+	}
+
+	lastAccepted := blocks[len(blocks)-1]
+	cacheConfig.SnapshotNoBuild = true
+	bc, err = core.NewBlockChain(
+		db, &cacheConfig, g, engine, vm.Config{}, lastAccepted.Hash(), false,
+		core.Opts{LastAcceptedRoot: lastRoot},
+	)
+	require.NoError(t, err)
+	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
+	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
+
+	blocks = insertAfterRestart
+	for _, block := range blocks {
+		t.Logf("Transactions: %d, Parent State: %x", len(block.Transactions()), lastRoot)
+
+		// Override parentRoot to match last state
+		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
+		originalParentRoot := parent.Root
+		parent.Root = lastRoot
+
+		err := bc.InsertBlockManualWithParent(block, parent, true)
+		require.NoError(t, err)
+
+		// Restore parent root
+		parent.Root = originalParentRoot
+
+		t.Logf("Accepting block %s", block.Hash().Hex())
+		err = bc.AcceptWithRoot(block, lastInsertedRoot)
+		require.NoError(t, err)
+
+		bc.DrainAcceptorQueue()
+
+		lastRoot = getCurrentRoot()
+	}
+	bc.Stop()
+
+	it = db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+	defer it.Release()
+	for it.Next() {
+		if len(it.Key()) != 33 {
+			continue
+		}
+		t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
+	}
+
+	it2 = db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 	defer it2.Release()
 	for it2.Next() {
 		if len(it2.Key()) != 65 {

@@ -216,6 +216,11 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 // Initialized returns an indicator if the state data is already initialized
 // according to the state scheme.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
+	if db.config.KeyValueDB != nil {
+		if backend := db.config.KeyValueDB.KVBackend; backend != nil {
+			return backend.Root() != common.Hash{}
+		}
+	}
 	return db.backend.Initialized(genesisRoot)
 }
 

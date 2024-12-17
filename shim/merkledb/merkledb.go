@@ -64,6 +64,24 @@ func (m *MerkleDB) Commit(root common.Hash) error {
 	if len(m.pendingViews) == 0 {
 		return fmt.Errorf("no pending views")
 	}
+	pendingRootIdx := -1
+	for i, pendingRoot := range m.pendingViewRoots {
+		if pendingRoot == root {
+			pendingRootIdx = i
+			break
+		}
+	}
+	if pendingRootIdx > 0 {
+		for i := 0; i < pendingRootIdx; i++ {
+			if err := m.commitToDisk(m.pendingViewRoots[0]); err != nil {
+				return err
+			}
+		}
+	}
+	return m.commitToDisk(root)
+}
+
+func (m *MerkleDB) commitToDisk(root common.Hash) error {
 	if m.pendingViewRoots[0] != root {
 		return fmt.Errorf("root mismatch: expected %x, got %x", root, m.pendingViewRoots[0])
 	}

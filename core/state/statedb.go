@@ -214,6 +214,7 @@ func (s *StateDB) StartPrefetcher(namespace string, maxConcurrency int) {
 	}
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, maxConcurrency)
+		s.prefetcher.rootTrie = s.trie
 	}
 }
 

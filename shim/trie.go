@@ -81,10 +81,8 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 }
 
 func (t *Trie) Copy() *Trie {
-	fmt.Printf("Copy requested (%d changes): %p\n", len(t.changes), t)
-	changes := make(Batch, len(t.changes))
-	copy(changes, t.changes)
-	return &Trie{backend: t.backend, changes: changes}
+	fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
+	return t
 }
 
 func (t *Trie) NodeIterator(start []byte) (trie.NodeIterator, error) { panic("not implemented") }

@@ -434,11 +434,7 @@ func newTrieOrchestrator(sf *subfetcher) *trieOrchestrator {
 		err  error
 	)
 	if sf.owner == (common.Hash{}) {
-		base, err = sf.db.OpenTrie(sf.root)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			return nil
-		}
+		base = sf.p.getRootTrie()
 	} else {
 		// The trie argument can be nil as verkle doesn't support prefetching
 		// yet. TODO FIX IT(rjl493456442), otherwise code will panic here.
