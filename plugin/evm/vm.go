@@ -410,6 +410,7 @@ func (vm *VM) Initialize(
 	}
 	vm.logger = corethLogger
 
+	log.Info("AVAX assetID", "assetID", vm.ctx.AVAXAssetID)
 	log.Info("Initializing Coreth VM", "Version", Version, "Config", vm.config)
 
 	if deprecateMsg != "" {
