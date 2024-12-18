@@ -3,33 +3,30 @@ package evm
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"flag"
-	"math/big"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/trace"
 	"github.com/ava-labs/avalanchego/utils/units"
 	xmerkledb "github.com/ava-labs/avalanchego/x/merkledb"
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/shim/merkledb"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	cChainGenesisFuji    = "{\"config\":{\"chainId\":43113,\"homesteadBlock\":0,\"daoForkBlock\":0,\"daoForkSupport\":true,\"eip150Block\":0,\"eip150Hash\":\"0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0\",\"eip155Block\":0,\"eip158Block\":0,\"byzantiumBlock\":0,\"constantinopleBlock\":0,\"petersburgBlock\":0,\"istanbulBlock\":0,\"muirGlacierBlock\":0},\"nonce\":\"0x0\",\"timestamp\":\"0x0\",\"extraData\":\"0x00\",\"gasLimit\":\"0x5f5e100\",\"difficulty\":\"0x0\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"coinbase\":\"0x0000000000000000000000000000000000000000\",\"alloc\":{\"0100000000000000000000000000000000000000\":{\"code\":\"0x7300000000000000000000000000000000000000003014608060405260043610603d5760003560e01c80631e010439146042578063b6510bb314606e575b600080fd5b605c60048036036020811015605657600080fd5b503560b1565b60408051918252519081900360200190f35b818015607957600080fd5b5060af60048036036080811015608e57600080fd5b506001600160a01b03813516906020810135906040810135906060013560b6565b005b30cd90565b836001600160a01b031681836108fc8690811502906040516000604051808303818888878c8acf9550505050505015801560f4573d6000803e3d6000fd5b505050505056fea26469706673582212201eebce970fe3f5cb96bf8ac6ba5f5c133fc2908ae3dcd51082cfee8f583429d064736f6c634300060a0033\",\"balance\":\"0x0\"}},\"number\":\"0x0\",\"gasUsed\":\"0x0\",\"parentHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
+	cChainGenesisMainnet = "{\"config\":{\"chainId\":43114,\"homesteadBlock\":0,\"daoForkBlock\":0,\"daoForkSupport\":true,\"eip150Block\":0,\"eip150Hash\":\"0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0\",\"eip155Block\":0,\"eip158Block\":0,\"byzantiumBlock\":0,\"constantinopleBlock\":0,\"petersburgBlock\":0,\"istanbulBlock\":0,\"muirGlacierBlock\":0},\"nonce\":\"0x0\",\"timestamp\":\"0x0\",\"extraData\":\"0x00\",\"gasLimit\":\"0x5f5e100\",\"difficulty\":\"0x0\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"coinbase\":\"0x0000000000000000000000000000000000000000\",\"alloc\":{\"0100000000000000000000000000000000000000\":{\"code\":\"0x7300000000000000000000000000000000000000003014608060405260043610603d5760003560e01c80631e010439146042578063b6510bb314606e575b600080fd5b605c60048036036020811015605657600080fd5b503560b1565b60408051918252519081900360200190f35b818015607957600080fd5b5060af60048036036080811015608e57600080fd5b506001600160a01b03813516906020810135906040810135906060013560b6565b005b30cd90565b836001600160a01b031681836108fc8690811502906040516000604051808303818888878c8acf9550505050505015801560f4573d6000803e3d6000fd5b505050505056fea26469706673582212201eebce970fe3f5cb96bf8ac6ba5f5c133fc2908ae3dcd51082cfee8f583429d064736f6c634300060a0033\",\"balance\":\"0x0\"}},\"number\":\"0x0\",\"gasUsed\":\"0x0\",\"parentHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
 )
 
 var (
@@ -129,33 +126,11 @@ func TestCalculatePrefix(t *testing.T) {
 }
 
 func TestReprocessGenesis(t *testing.T) {
-	chainConfig := params.TestChainConfig
-	testVM := &VM{
-		chainConfig: chainConfig,
-		codec:       Codec,
-		ctx: &snow.Context{
-			AVAXAssetID: ids.ID{1},
-		},
-	}
-	key1, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
-	db := rawdb.NewMemoryDatabase()
-	g := &core.Genesis{
-		Config: chainConfig,
-		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000000000000000)}},
-	}
-	someAddr := common.Address{1}
+	backend := getBackend(t, "test")
+	g := backend.Genesis
+	engine := backend.Engine
 
-	cbs := dummy.ConsensusCallbacks{
-		OnExtraStateChange: func(block *types.Block, statedb *state.StateDB) (*big.Int, *big.Int, error) {
-			i := block.Number().Uint64()
-			statedb.SetNonce(someAddr, i)
-			iBytes := binary.BigEndian.AppendUint64(nil, i)
-			asHash := common.BytesToHash(iBytes)
-			statedb.SetState(someAddr, asHash, asHash)
-			return testVM.onExtraStateChange(block, statedb)
-		},
-	}
+	db := rawdb.NewMemoryDatabase()
 	ctx := context.Background()
 
 	mdbKVStore := memdb.New()
@@ -174,9 +149,6 @@ func TestReprocessGenesis(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	engine := dummy.NewFakerWithMode(cbs, dummy.Mode{
-		ModeSkipHeader: true,
-	})
 	cacheConfig := *core.DefaultCacheConfig
 	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{
 		KVBackend: merkledb.NewMerkleDB(mdb),
@@ -198,8 +170,6 @@ func TestReprocessGenesis(t *testing.T) {
 	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
 
 	normalGenesis := g.ToBlock()
-	// rawdb.WriteHeader(db, normalGenesis.Header())
-	// bc.WriteHeadBlock(normalGenesis)
 	require.NoError(t, bc.LoadGenesisState(normalGenesis))
 
 	bc.InitializeSnapshots()
@@ -209,26 +179,12 @@ func TestReprocessGenesis(t *testing.T) {
 		return cacheConfig.KeyValueDB.KVBackend.Root()
 	}
 	lastRoot := getCurrentRoot()
+	lastHash := normalGenesis.Hash()
 
-	// Let's generate some blocks
-	signer := types.LatestSigner(chainConfig)
-	_, blocks, _, err := core.GenerateChainWithGenesis(g, engine, 20, 2, func(i int, b *core.BlockGen) {
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
-			Nonce:    uint64(i),
-			GasPrice: b.BaseFee(),
-			Gas:      21000,
-			To:       &addr1,
-		}), signer, key1)
-		b.AddTx(tx)
-	})
-	insertAfterRestart := blocks[10:]
-	insertNow := blocks[:10]
-	blocks = insertNow
-
-	require.NoError(t, err)
-	t.Logf("Generated %d blocks", len(blocks))
-	for _, block := range blocks {
-		t.Logf("Transactions: %d, Parent State: %x", len(block.Transactions()), lastRoot)
+	start, stop := uint64(1), backend.BlockCount/2
+	for i := start; i <= stop; i++ {
+		block := backend.GetBlock(i)
+		t.Logf("Block: %d, Transactions: %d, Parent State: %x", i, len(block.Transactions()), lastRoot)
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
@@ -248,6 +204,7 @@ func TestReprocessGenesis(t *testing.T) {
 		bc.DrainAcceptorQueue()
 
 		lastRoot = getCurrentRoot()
+		lastHash = block.Hash()
 	}
 
 	// Great, now let's try to stop and restart the chain
@@ -271,19 +228,19 @@ func TestReprocessGenesis(t *testing.T) {
 		t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
 	}
 
-	lastAccepted := blocks[len(blocks)-1]
 	cacheConfig.SnapshotNoBuild = true
 	bc, err = core.NewBlockChain(
-		db, &cacheConfig, g, engine, vm.Config{}, lastAccepted.Hash(), false,
+		db, &cacheConfig, g, engine, vm.Config{}, lastHash, false,
 		core.Opts{LastAcceptedRoot: lastRoot},
 	)
 	require.NoError(t, err)
 	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
 	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
 
-	blocks = insertAfterRestart
-	for _, block := range blocks {
-		t.Logf("Transactions: %d, Parent State: %x", len(block.Transactions()), lastRoot)
+	start, stop = backend.BlockCount/2+1, backend.BlockCount
+	for i := start; i <= stop; i++ {
+		block := backend.GetBlock(i)
+		t.Logf("Block: %d, Transactions: %d, Parent State: %x", i, len(block.Transactions()), lastRoot)
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
