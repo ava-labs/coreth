@@ -93,7 +93,7 @@ func TestExportBlocks(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	logEach := 1_000
+	logEach := 100_000
 	for i := startBlock; i <= endBlock; i++ {
 		hash := rawdb.ReadCanonicalHash(sourceDb, i)
 		block := rawdb.ReadBlock(sourceDb, hash, i)
@@ -106,6 +106,8 @@ func TestExportBlocks(t *testing.T) {
 			t.Logf("Exported block %d", i)
 		}
 	}
+
+	t.Logf("Exported %d blocks", endBlock-startBlock+1)
 }
 
 var (
@@ -121,6 +123,8 @@ func TestCalculatePrefix(t *testing.T) {
 		prefixdb.MakePrefix(mainnetCChainID[:]),
 		VMDBPrefix,
 	)
+
+	prefix = append(prefix, prefixdb.MakePrefix(ethDBPrefix)...)
 	t.Logf("Prefix: %x", prefix)
 }
 
