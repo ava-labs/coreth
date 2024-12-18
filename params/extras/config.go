@@ -249,7 +249,7 @@ func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint
 // Taking [parent] as a pointer allows for us to pass nil when checking forks
 // that activate during genesis.
 // Note: [parent] and [current] can be either both timestamp values, or both
-// block number values, since this function  works for both block number and
+// block number values, since this function works for both block number and
 // timestamp activated forks.
 func IsForkTransition(fork *uint64, parent *uint64, current uint64) bool {
 	var parentForked bool
