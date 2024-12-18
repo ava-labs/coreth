@@ -201,8 +201,6 @@ func TestReprocessGenesis(t *testing.T) {
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
 		require.NoError(t, err)
 
-		bc.DrainAcceptorQueue()
-
 		lastRoot = getCurrentRoot()
 		lastHash = block.Hash()
 	}
@@ -240,8 +238,6 @@ func TestReprocessGenesis(t *testing.T) {
 		t.Logf("Accepting block %s", block.Hash().Hex())
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
 		require.NoError(t, err)
-
-		bc.DrainAcceptorQueue()
 
 		lastRoot = getCurrentRoot()
 	}
