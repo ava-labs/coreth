@@ -214,7 +214,8 @@ func (s *StateDB) StartPrefetcher(namespace string, maxConcurrency int) {
 	}
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, maxConcurrency)
-		if s.db.TrieDB().Config().KeyValueDB.KVBackend != nil {
+		kvConfig := s.db.TrieDB().Config().KeyValueDB
+		if kvConfig != nil && kvConfig.KVBackend != nil {
 			s.prefetcher.rootTrie = s.trie
 		}
 	}

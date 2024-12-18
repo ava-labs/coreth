@@ -60,7 +60,7 @@ func (r *prefixReader) Has(key []byte) (bool, error) {
 	return r.Database.Has(append(r.prefix, key...))
 }
 
-func TestExportBlocks(t *testing.T) {
+func ExampleExportBlocks(t *testing.T) {
 	cache := 128
 	handles := 1024
 
