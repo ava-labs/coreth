@@ -85,7 +85,7 @@ func (t *TestUnsignedTx) SignedBytes() []byte { return t.SignedBytesV }
 func (t *TestUnsignedTx) InputUTXOs() set.Set[ids.ID] { return t.InputUTXOsV }
 
 // SemanticVerify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) SemanticVerify(backend *Backend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
+func (t *TestUnsignedTx) SemanticVerify(backend *VerifierBackend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
 	return t.SemanticVerifyV
 }
 
