@@ -46,6 +46,9 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&dbDir, "dbDir", dbDir, "directory to store database")
 	flag.Uint64Var(&startBlock, "startBlock", startBlock, "start block number")
 	flag.Uint64Var(&endBlock, "endBlock", endBlock, "end block number")
+
+	flag.Parse()
+	m.Run()
 }
 
 type prefixReader struct {
