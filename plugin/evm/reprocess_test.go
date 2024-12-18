@@ -1,12 +1,16 @@
 package evm
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
+	"flag"
 	"math/big"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/trace"
@@ -23,9 +27,99 @@ import (
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
+
+var (
+	sourceDbDir  = "sourceDb"
+	sourcePrefix = ""
+	dbDir        = "db"
+	startBlock   = uint64(0)
+	endBlock     = uint64(20_000)
+)
+
+func TestMain(m *testing.M) {
+	flag.StringVar(&sourceDbDir, "sourceDbDir", sourceDbDir, "directory of source database")
+	flag.StringVar(&sourcePrefix, "sourcePrefix", sourcePrefix, "prefix of source database")
+	flag.StringVar(&dbDir, "dbDir", dbDir, "directory to store database")
+	flag.Uint64Var(&startBlock, "startBlock", startBlock, "start block number")
+	flag.Uint64Var(&endBlock, "endBlock", endBlock, "end block number")
+}
+
+type prefixReader struct {
+	ethdb.Database
+	prefix []byte
+}
+
+func (r *prefixReader) Get(key []byte) ([]byte, error) {
+	return r.Database.Get(append(r.prefix, key...))
+}
+
+func (r *prefixReader) Has(key []byte) (bool, error) {
+	return r.Database.Has(append(r.prefix, key...))
+}
+
+func TestExportBlocks(t *testing.T) {
+	cache := 128
+	handles := 1024
+
+	sourceDb, err := rawdb.NewLevelDBDatabase(sourceDbDir, cache, handles, "", true)
+	require.NoError(t, err)
+	defer sourceDb.Close()
+
+	prefix := []byte(sourcePrefix)
+	if bytes.HasPrefix(prefix, []byte("0x")) {
+		prefix = prefix[2:]
+		var err error
+		prefix, err = hex.DecodeString(string(prefix))
+		if err != nil {
+			t.Fatalf("invalid hex prefix: %s", prefix)
+		}
+	}
+	t.Logf("Using prefix: %x", prefix)
+	sourceDb = &prefixReader{Database: sourceDb, prefix: prefix}
+
+	if startBlock == 0 {
+		startBlock = 1
+		t.Logf("Start block is 0, setting to 1")
+	}
+
+	db, err := rawdb.NewLevelDBDatabase(dbDir, cache, handles, "", false)
+	require.NoError(t, err)
+	defer db.Close()
+
+	logEach := 1_000
+	for i := startBlock; i <= endBlock; i++ {
+		hash := rawdb.ReadCanonicalHash(sourceDb, i)
+		block := rawdb.ReadBlock(sourceDb, hash, i)
+		if block == nil {
+			t.Fatalf("Block %d not found", i)
+		}
+		rawdb.WriteCanonicalHash(db, hash, i)
+		rawdb.WriteBlock(db, block)
+		if i%uint64(logEach) == 0 {
+			t.Logf("Exported block %d", i)
+		}
+	}
+}
+
+var (
+	fujiXChainID    = ids.FromStringOrPanic("2JVSBoinj9C2J33VntvzYtVJNZdN2NKiwwKjcumHUWEb5DbBrm")
+	fujiCChainID    = ids.FromStringOrPanic("yH8D7ThNJkxmtkuv2jgBa4P1Rn3Qpr4pPr7QYNfcdoS6k6HWp")
+	mainnetXChainID = ids.FromStringOrPanic("2oYMBNV4eNHyqk2fjjV5nVQLDbtmNJzq5s3qs3Lo6ftnC6FByM")
+	mainnetCChainID = ids.FromStringOrPanic("2q9e4r6Mu3U68nU1fYjgbR6JvwrRx36CohpAX5UQxse55x1Q5")
+	VMDBPrefix      = []byte("vm")
+)
+
+func TestCalculatePrefix(t *testing.T) {
+	prefix := prefixdb.JoinPrefixes(
+		prefixdb.MakePrefix(mainnetCChainID[:]),
+		VMDBPrefix,
+	)
+	t.Logf("Prefix: %x", prefix)
+}
 
 func TestReprocessGenesis(t *testing.T) {
 	chainConfig := params.TestChainConfig
