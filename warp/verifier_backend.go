@@ -20,7 +20,7 @@ const (
 
 // Verify verifies the signature of the message
 // It also implements the acp118.Verifier interface
-func (b *backend) Verify(ctx context.Context, unsignedMessage *avalancheWarp.UnsignedMessage, _ []byte, _ ids.NodeID) *common.AppError {
+func (b *backend) Verify(ctx context.Context, _ ids.NodeID, unsignedMessage *avalancheWarp.UnsignedMessage, _ []byte) *common.AppError {
 	messageID := unsignedMessage.ID()
 	// Known on-chain messages should be signed
 	if _, err := b.GetMessage(messageID); err == nil {
