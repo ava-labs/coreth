@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atomic
 
 import (
 	"fmt"
@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -225,7 +224,7 @@ func (a *atomicTrie) commit(height uint64, root common.Hash) error {
 
 func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
 	for blockchainID, requests := range atomicOps {
-		valueBytes, err := a.codec.Marshal(atomic.CodecVersion, requests)
+		valueBytes, err := a.codec.Marshal(CodecVersion, requests)
 		if err != nil {
 			// highly unlikely but possible if atomic.Element
 			// has a change that is unsupported by the codec

@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atomic
 
 import (
 	"testing"
@@ -10,23 +10,17 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
-
-func testSharedMemory() avalancheatomic.SharedMemory {
-	m := avalancheatomic.NewMemory(memdb.New())
-	return m.NewSharedMemory(testCChainID)
-}
 
 func TestIteratorCanIterate(t *testing.T) {
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
-	codec := atomic.TestTxCodec
+	codec := TestTxCodec
 	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(t, err)
 
@@ -38,7 +32,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
-	atomicBackend, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie1 := atomicBackend.AtomicTrie()
 
@@ -51,7 +45,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// iterate on a new atomic trie to make sure there is no resident state affecting the data and the
 	// iterator
-	atomicBackend2, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend2, err := NewAtomicBackend(db, utils.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie2 := atomicBackend2.AtomicTrie()
 	lastCommittedHash2, lastCommittedHeight2 := atomicTrie2.LastCommitted()
@@ -66,7 +60,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	require := require.New(t)
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
-	codec := atomic.TestTxCodec
+	codec := TestTxCodec
 	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	require.NoError(err)
 
@@ -79,7 +73,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
 	commitInterval := uint64(100)
-	atomicBackend, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
 	require.NoError(err)
 	atomicTrie := atomicBackend.AtomicTrie()
 
@@ -94,7 +88,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	// handles an error when it runs into an unexpected key-value pair in the trie.
 	atomicTrieSnapshot, err := atomicTrie.OpenTrie(lastCommittedHash)
 	require.NoError(err)
-	require.NoError(atomicTrieSnapshot.Update(utils.RandomBytes(50), utils.RandomBytes(50)))
+	require.NoError(atomicTrieSnapshot.Update(avalancheutils.RandomBytes(50), avalancheutils.RandomBytes(50)))
 
 	nextRoot, nodes, err := atomicTrieSnapshot.Commit(false)
 	require.NoError(err)

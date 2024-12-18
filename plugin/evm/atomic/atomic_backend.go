@@ -1,9 +1,10 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atomic
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -16,13 +17,27 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// Syncer represents a step in state sync,
+// along with Start/Done methods to control
+// and monitor progress.
+// Error returns an error if any was encountered.
+type Syncer interface {
+	Start(ctx context.Context) error
+	Done() <-chan error
+}
+
 var _ AtomicBackend = &atomicBackend{}
+
+var (
+	// Prefixes for atomic trie
+	atomicTrieDBPrefix     = []byte("atomicTrieDB")
+	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
+)
 
 // AtomicBackend abstracts the verification and processing
 // of atomic transactions
@@ -34,7 +49,7 @@ type AtomicBackend interface {
 	// and it's the caller's responsibility to call either Accept or Reject on
 	// the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
 	// changes or abort them and free memory.
-	InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*atomic.Tx) (common.Hash, error)
+	InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error)
 
 	// Returns an AtomicState corresponding to a block hash that has been inserted
 	// but not Accepted or Rejected yet.
@@ -152,7 +167,7 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 		// iterate over the transactions, indexing them if the height is < commit height
 		// otherwise, add the atomic operations from the transaction to the uncommittedOpsMap
 		height = binary.BigEndian.Uint64(iter.Key())
-		txs, err := atomic.ExtractAtomicTxs(iter.Value(), true, a.codec)
+		txs, err := ExtractAtomicTxs(iter.Value(), true, a.codec)
 		if err != nil {
 			return err
 		}
@@ -397,7 +412,7 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 // and it's the caller's responsibility to call either Accept or Reject on
 // the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
 // changes or abort them and free memory.
-func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*atomic.Tx) (common.Hash, error) {
+func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*Tx) (common.Hash, error) {
 	// access the atomic trie at the parent block
 	parentRoot, err := a.getAtomicRootAt(parentHash)
 	if err != nil {
@@ -460,11 +475,11 @@ func (a *atomicBackend) AtomicTrie() AtomicTrie {
 
 // mergeAtomicOps merges atomic requests represented by [txs]
 // to the [output] map, depending on whether [chainID] is present in the map.
-func mergeAtomicOps(txs []*atomic.Tx) (map[ids.ID]*avalancheatomic.Requests, error) {
+func mergeAtomicOps(txs []*Tx) (map[ids.ID]*avalancheatomic.Requests, error) {
 	if len(txs) > 1 {
 		// txs should be stored in order of txID to ensure consistency
 		// with txs initialized from the txID index.
-		copyTxs := make([]*atomic.Tx, len(txs))
+		copyTxs := make([]*Tx, len(txs))
 		copy(copyTxs, txs)
 		utils.Sort(copyTxs)
 		txs = copyTxs

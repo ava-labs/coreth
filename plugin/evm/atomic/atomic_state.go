@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atomic
 
 import (
 	"fmt"
@@ -9,7 +9,6 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -37,7 +36,7 @@ type atomicState struct {
 	backend     *atomicBackend
 	blockHash   common.Hash
 	blockHeight uint64
-	txs         []*atomic.Tx
+	txs         []*Tx
 	atomicOps   map[ids.ID]*avalancheatomic.Requests
 	atomicRoot  common.Hash
 }

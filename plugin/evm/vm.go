@@ -107,6 +107,7 @@ var (
 	_ block.StateSyncableVM              = &VM{}
 	_ statesyncclient.EthBlockParser     = &VM{}
 	_ secp256k1fx.VM                     = &VM{}
+	_ BlockAcceptor                      = &VM{}
 )
 
 const (
@@ -153,13 +154,8 @@ var (
 	// Set last accepted key to be longer than the keys used to store accepted block IDs.
 	lastAcceptedKey = []byte("last_accepted_key")
 	acceptedPrefix  = []byte("snowman_accepted")
-	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	// Prefixes for atomic trie
-	atomicTrieDBPrefix     = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
 )
 
 var (
@@ -229,9 +225,6 @@ type VM struct {
 	// [db] is the VM's current database managed by ChainState
 	db *versiondb.Database
 
-	// metadataDB is used to store one off keys.
-	metadataDB avalanchedatabase.Database
-
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
 
@@ -250,11 +243,11 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository AtomicTxRepository
+	atomicTxRepository atomic.AtomicTxRepository
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
+	atomicTrie atomic.AtomicTrie
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend AtomicBackend
+	atomicBackend atomic.AtomicBackend
 
 	builder *blockBuilder
 
@@ -593,11 +586,11 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.db, atomic.Codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomic.NewAtomicTxRepository(vm.db, atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
+	vm.atomicBackend, err = atomic.NewAtomicBackend(
 		vm.db, vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,
@@ -624,7 +617,7 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
+	vm.StateSyncServer = NewStateSyncServer(&StateSyncServerConfig{
 		Chain:            vm.blockChain,
 		AtomicTrie:       vm.atomicTrie,
 		SyncableInterval: vm.config.StateSyncCommitInterval,
@@ -733,10 +726,10 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
-		chain: vm.eth,
-		state: vm.State,
-		client: statesyncclient.NewClient(
+	vm.StateSyncClient = NewStateSyncClient(&StateSyncClientConfig{
+		Chain: vm.eth,
+		State: vm.State,
+		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
 				Codec:            vm.networkCodec,
@@ -745,17 +738,16 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 				BlockParser:      vm,
 			},
 		),
-		enabled:              stateSyncEnabled,
-		skipResume:           vm.config.StateSyncSkipResume,
-		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		stateSyncRequestSize: vm.config.StateSyncRequestSize,
-		lastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		chaindb:              vm.chaindb,
-		metadataDB:           vm.metadataDB,
-		acceptedBlockDB:      vm.acceptedBlockDB,
-		db:                   vm.db,
-		atomicBackend:        vm.atomicBackend,
-		toEngine:             vm.toEngine,
+		Enabled:              stateSyncEnabled,
+		SkipResume:           vm.config.StateSyncSkipResume,
+		StateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
+		StateSyncRequestSize: vm.config.StateSyncRequestSize,
+		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
+		ChaindDB:             vm.chaindb,
+		DB:                   vm.db,
+		AtomicBackend:        vm.atomicBackend,
+		ToEngine:             vm.toEngine,
+		Acceptor:             vm,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1522,7 +1514,6 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
 	vm.db = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
-	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
 	// Note warpDB is not part of versiondb because it is not necessary
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
@@ -1648,7 +1639,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if !ok {
 		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
 	}
-	atomicBackend := &atomic.Backend{
+	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
@@ -1687,7 +1678,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := &atomic.Backend{
+	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
@@ -1917,4 +1908,8 @@ func (vm *VM) newExportTx(
 	}
 
 	return tx, nil
+}
+
+func (vm *VM) PutLastAcceptedID(ID []byte) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID)
 }
