@@ -177,8 +177,8 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	// Note: In Avalanche, upgrades must take place via block timestamps instead
 	// of block numbers since blocks are produced asynchronously. Therefore, we do
 	// not check block timestamp forks in the same way as block number forks since
-	// it would not be a meaningful comparison.  Instead, we check only that
-	// Phases are enabled in order.
+	// it would not be a meaningful comparison. Instead, we only check that the
+	// Avalanche upgrades are enabled in order.
 	// Note: we do not add the precompile configs here because they are optional
 	// and independent, i.e. the order in which they are enabled does not impact
 	// the correctness of the chain config.
