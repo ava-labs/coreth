@@ -60,11 +60,14 @@ func (r *prefixReader) Has(key []byte) (bool, error) {
 	return r.Database.Has(append(r.prefix, key...))
 }
 
-func ExampleExportBlocks(t *testing.T) {
+func TestExportBlocks(t *testing.T) {
 	cache := 128
 	handles := 1024
 
 	sourceDb, err := rawdb.NewLevelDBDatabase(sourceDbDir, cache, handles, "", true)
+	if err != nil {
+		t.Skipf("Failed to open source database: %s", err)
+	}
 	require.NoError(t, err)
 	defer sourceDb.Close()
 
@@ -191,14 +194,10 @@ func TestReprocessGenesis(t *testing.T) {
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
-		originalParentRoot := parent.Root
 		parent.Root = lastRoot
 
 		err := bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
-
-		// Restore parent root
-		parent.Root = originalParentRoot
 
 		t.Logf("Accepting block %s", block.Hash().Hex())
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
@@ -231,14 +230,10 @@ func TestReprocessGenesis(t *testing.T) {
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
-		originalParentRoot := parent.Root
 		parent.Root = lastRoot
 
 		err := bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
-
-		// Restore parent root
-		parent.Root = originalParentRoot
 
 		t.Logf("Accepting block %s", block.Hash().Hex())
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
