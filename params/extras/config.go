@@ -28,11 +28,11 @@ type AvalancheContext struct {
 }
 
 type ChainConfig struct {
-	NetworkUpgrades // Config for timestamps that enable network upgrades. Skip encoding/decoding directly into ChainConfig.
+	NetworkUpgrades // Config for timestamps that enable network upgrades.
 
 	AvalancheContext `json:"-"` // Avalanche specific context set during VM initialization. Not serialized.
 
-	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Skip encoding/decoding directly into ChainConfig.
+	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Not serialized.
 }
 
 func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
@@ -50,7 +50,6 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 		)
 	}
 
-	// Check avalanche network upgrades
 	if err := c.checkNetworkUpgradesCompatible(&newcfg.NetworkUpgrades, headTimestamp); err != nil {
 		return err
 	}
@@ -113,6 +112,8 @@ func configTimestampEqual(x, y *uint64) bool {
 // ChainConfig that would alter the past.
 type ConfigCompatError = ethparams.ConfigCompatError
 
+// newTimestampCompatError is taken verbatim from upstream.
+// TODO: export this function from upstream in libevm, so it can be used here.
 func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCompatError {
 	var rew *uint64
 	switch {
@@ -173,23 +174,20 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	if c == nil {
 		return nil
 	}
-	// Note: In Avalanche, hard forks must take place via block timestamps instead
-	// of block numbers since blocks are produced asynchronously. Therefore, we do not
-	// check that the block timestamps in the same way as for
-	// the block number forks since it would not be a meaningful comparison.
-	// Instead, we check only that Phases are enabled in order.
-	// Note: we do not add the optional stateful precompile configs in here because they are optional
-	// and independent, such that the ordering they are enabled does not impact the correctness of the
-	// chain config.
-	if err := checkForks(c.forkOrder(), false); err != nil {
-		return err
-	}
-
-	return nil
+	// Note: In Avalanche, upgrades must take place via block timestamps instead
+	// of block numbers since blocks are produced asynchronously. Therefore, we do
+	// not check block timestamp forks in the same way as block number forks since
+	// it would not be a meaningful comparison.  Instead, we check only that
+	// Phases are enabled in order.
+	// Note: we do not add the precompile configs here because they are optional
+	// and independent, i.e. the order in which they are enabled does not impact
+	// the correctness of the chain config.
+	return checkForks(c.forkOrder(), false)
 }
 
-// checkForks checks that forks are enabled in order and returns an error if not
+// checkForks checks that forks are enabled in order and returns an error if not.
 // [blockFork] is true if the fork is a block number fork, false if it is a timestamp fork
+// TODO: This code was adapted from CheckConfigForkOrder, consider refactoring to avoid duplication.
 func checkForks(forks []fork, blockFork bool) error {
 	lastFork := fork{}
 	for _, cur := range forks {
@@ -230,7 +228,7 @@ func checkForks(forks []fork, blockFork bool) error {
 	return nil
 }
 
-// Verify verifies chain config and returns error
+// Verify verifies chain config.
 func (c *ChainConfig) Verify() error {
 	// Verify the precompile upgrades are internally consistent given the existing chainConfig.
 	if err := c.verifyPrecompileUpgrades(); err != nil {
@@ -250,7 +248,9 @@ func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint
 // [parent] to [current].
 // Taking [parent] as a pointer allows for us to pass nil when checking forks
 // that activate during genesis.
-// Note: this works for both block number and timestamp activated forks.
+// Note: [parent] and [current] can be either both timestamp values, or both
+// block number values, since this function  works for both block number and
+// timestamp activated forks.
 func IsForkTransition(fork *uint64, parent *uint64, current uint64) bool {
 	var parentForked bool
 	if parent != nil {
