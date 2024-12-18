@@ -44,7 +44,7 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 		// Proper registration of the extras on libevm side should prevent this from happening.
 		// Return an error to prevent the chain from starting, just in case.
 		return newTimestampCompatError(
-			fmt.Sprintf("ChainConfig is not of the expected type *extras.ChainConfig, got %T", newcfg_.Hooks()),
+			fmt.Sprintf("ChainConfig.Hooks() is not of the expected type *extras.ChainConfig, got %T", newcfg_.Hooks()),
 			utils.NewUint64(0),
 			nil,
 		)
