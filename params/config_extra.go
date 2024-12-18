@@ -67,6 +67,11 @@ func GetExtra(c *ChainConfig) *extras.ChainConfig {
 	return ex
 }
 
+func GetRulesExtra(r Rules) *extras.Rules {
+	rules := payloads.PointerFromRules(&r)
+	return (*extras.Rules)(rules)
+}
+
 func Copy(c *ChainConfig) ChainConfig {
 	cpy := *c
 	extraCpy := *GetExtra(c)

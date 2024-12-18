@@ -21,6 +21,17 @@ import (
 // Apricot is incompatible with the YoloV3 Release since it does not include the
 // BLS12-381 Curve Operations added to the set of precompiled contracts
 
+const (
+	// Avalanche Stateful Precompile Params
+	// Gas price for native asset balance lookup. Based on the cost of an SLOAD operation since native
+	// asset balances are kept in state storage.
+	AssetBalanceApricot uint64 = 2100
+	// Gas price for native asset call. This gas price reflects the additional work done for the native
+	// asset transfer itself, which is a write to state storage. The cost of creating a new account and
+	// normal value transfer is assessed separately from this cost.
+	AssetCallApricot uint64 = 20000
+)
+
 var (
 	GenesisContractAddr    = common.HexToAddress("0x0100000000000000000000000000000000000000")
 	NativeAssetBalanceAddr = common.HexToAddress("0x0100000000000000000000000000000000000001")

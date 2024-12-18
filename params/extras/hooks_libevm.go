@@ -1,14 +1,13 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package params
+package extras
 
 import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/nativeasset"
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -16,29 +15,23 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 )
 
-type RulesExtra extras.Rules
-
-func GetRulesExtra(r Rules) *extras.Rules {
-	rules := payloads.PointerFromRules(&r)
-	return (*extras.Rules)(rules)
-}
-
-func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
+func (r Rules) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
 	return gas, nil
 }
 
-func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
+func (r Rules) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
 	return nil
 }
 
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: nativeasset.AssetBalanceApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: nativeasset.AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -49,8 +42,8 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: nativeasset.AssetBalanceApricot},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: nativeasset.AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
@@ -59,7 +52,7 @@ var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledC
 	nativeasset.NativeAssetCallAddr:    &nativeasset.DeprecatedContract{},
 }
 
-func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
+func (r Rules) ActivePrecompiles(existing []common.Address) []common.Address {
 	var precompiles map[common.Address]contract.StatefulPrecompiledContract
 	switch {
 	case r.IsBanff:
@@ -81,7 +74,7 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 // precompileOverrideBuiltin specifies precompiles that were activated prior to the
 // dynamic precompile activation registry.
 // These were only active historically and are not active in the current network.
-func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
+func (r Rules) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
 	var precompiles map[common.Address]contract.StatefulPrecompiledContract
 	switch {
 	case r.IsBanff:
@@ -128,7 +121,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 	return vm.NewStatefulPrecompile(run)
 }
 
-func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledContract, bool) {
+func (r Rules) PrecompileOverride(addr common.Address) (libevm.PrecompiledContract, bool) {
 	if p, ok := r.precompileOverrideBuiltin(addr); ok {
 		return p, true
 	}
@@ -164,11 +157,11 @@ func (a accessableState) GetBlockContext() contract.BlockContext {
 }
 
 func (a accessableState) GetChainConfig() precompileconfig.ChainConfig {
-	return GetExtra(a.env.ChainConfig())
+	return a.env.ChainConfig().Hooks().(*ChainConfig)
 }
 
 func (a accessableState) GetSnowContext() *snow.Context {
-	return GetExtra(a.env.ChainConfig()).SnowCtx
+	return a.env.ChainConfig().Hooks().(*ChainConfig).SnowCtx
 }
 
 func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...vm.CallOption) (ret []byte, gasRemaining uint64, _ error) {
