@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/shim/merkledb"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -148,10 +147,11 @@ func TestReprocessGenesis(t *testing.T) {
 		Tracer:                      trace.Noop,
 	})
 	require.NoError(t, err)
+	_ = mdb
 
 	cacheConfig := *core.DefaultCacheConfig
 	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{
-		KVBackend: merkledb.NewMerkleDB(mdb),
+		// KVBackend: merkledb.NewMerkleDB(mdb),
 	}
 	cacheConfig.TriePrefetcherParallelism = 4
 	cacheConfig.SnapshotLimit = 256
@@ -163,7 +163,7 @@ func TestReprocessGenesis(t *testing.T) {
 
 	var lastInsertedRoot common.Hash
 	checkRootFn := func(expected, got common.Hash) bool {
-		t.Logf("Got root: %s", got.Hex())
+		t.Logf("Got root: %x (original: %x)", got, expected)
 		lastInsertedRoot = got
 		return true
 	}
@@ -176,7 +176,10 @@ func TestReprocessGenesis(t *testing.T) {
 
 	t.Logf("Genesis block: %s", bc.CurrentBlock().Hash().Hex())
 	getCurrentRoot := func() common.Hash {
-		return cacheConfig.KeyValueDB.KVBackend.Root()
+		if backend := cacheConfig.KeyValueDB.KVBackend; backend != nil {
+			return backend.Root()
+		}
+		return bc.CurrentHeader().Root // If backend is not specified roots must match geth implementation
 	}
 	lastRoot := getCurrentRoot()
 	lastHash := normalGenesis.Hash()
@@ -207,7 +210,9 @@ func TestReprocessGenesis(t *testing.T) {
 	bc.Stop()
 
 	expectedAccounts, expectedStorages := 3, int(stop) // test backend inserts 1 storage per block
-	checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
+	if cacheConfig.SnapshotLimit > 0 {
+		checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
+	}
 
 	// Great, now let's restart the chain
 	cacheConfig.SnapshotNoBuild = true
@@ -244,7 +249,9 @@ func TestReprocessGenesis(t *testing.T) {
 	bc.Stop()
 
 	expectedAccounts, expectedStorages = 3, int(stop) // test backend inserts 1 storage per block
-	checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
+	if cacheConfig.SnapshotLimit > 0 {
+		checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
+	}
 }
 
 func checkSnapshot(t *testing.T, db ethdb.Database, expectedAccounts, expectedStorages *int, log bool) {

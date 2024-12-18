@@ -1930,7 +1930,7 @@ func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 		AsyncBuild: asyncBuild,
 		SkipVerify: !bc.cacheConfig.SnapshotVerify,
 	}
-	if b.Number.Uint64() == 0 && bc.cacheConfig.KeyValueDB != nil {
+	if b.Number.Uint64() == 0 && bc.cacheConfig.KeyValueDB.KVBackend != nil {
 		snapcfgGenesis := snapconfig
 		snapcfgGenesis.AsyncBuild = !bc.cacheConfig.SnapshotWait
 		var err error

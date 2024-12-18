@@ -80,6 +80,11 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 }
 
 func (t *Trie) Copy() *Trie {
+	if legacy, ok := t.backend.(*LegacyBackend); ok {
+		return &Trie{
+			backend: &LegacyBackend{tr: legacy.tr.Copy()},
+		}
+	}
 	// fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
 	return t
 }

@@ -42,14 +42,22 @@ func getBackend(t *testing.T, name string) *reprocessBackend {
 	}
 	someAddr := common.Address{1}
 
+	endOfBlockStateTransition := func(block *types.Header, statedb *state.StateDB) {
+		i := block.Number.Uint64()
+		statedb.SetNonce(someAddr, i)
+		iBytes := binary.BigEndian.AppendUint64(nil, i)
+		asHash := common.BytesToHash(iBytes)
+		statedb.SetState(someAddr, asHash, asHash)
+	}
+
 	cbs := dummy.ConsensusCallbacks{
 		OnExtraStateChange: func(block *types.Block, statedb *state.StateDB) (*big.Int, *big.Int, error) {
-			i := block.Number().Uint64()
-			statedb.SetNonce(someAddr, i)
-			iBytes := binary.BigEndian.AppendUint64(nil, i)
-			asHash := common.BytesToHash(iBytes)
-			statedb.SetState(someAddr, asHash, asHash)
+			endOfBlockStateTransition(block.Header(), statedb)
 			return testVM.onExtraStateChange(block, statedb)
+		},
+		OnFinalizeAndAssemble: func(header *types.Header, state *state.StateDB, txs []*types.Transaction) (extraData []byte, blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error) {
+			endOfBlockStateTransition(header, state)
+			return nil, nil, nil, nil
 		},
 	}
 

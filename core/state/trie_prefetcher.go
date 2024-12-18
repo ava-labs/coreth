@@ -223,15 +223,15 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 }
 
 func (p *triePrefetcher) getRootTrie() Trie {
-	if p.rootTrie == nil {
-		var err error
-		p.rootTrie, err = p.db.OpenTrie(p.root)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening root trie", "root", p.root, "err", err)
-			return nil
-		}
+	if p.rootTrie != nil {
+		return p.rootTrie
 	}
-	return p.rootTrie
+	rootTrie, err := p.db.OpenTrie(p.root)
+	if err != nil {
+		log.Warn("Trie prefetcher failed opening root trie", "root", p.root, "err", err)
+		return nil
+	}
+	return rootTrie
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
