@@ -206,28 +206,12 @@ func TestReprocessGenesis(t *testing.T) {
 		lastRoot = getCurrentRoot()
 		lastHash = block.Hash()
 	}
-
-	// Great, now let's try to stop and restart the chain
 	bc.Stop()
 
-	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	defer it.Release()
-	for it.Next() {
-		if len(it.Key()) != 33 {
-			continue
-		}
-		t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
-	}
+	expectedAccounts, expectedStorages := 3, int(stop) // test backend inserts 1 storage per block
+	checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
 
-	it2 := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
-	defer it2.Release()
-	for it2.Next() {
-		if len(it2.Key()) != 65 {
-			continue
-		}
-		t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
-	}
-
+	// Great, now let's restart the chain
 	cacheConfig.SnapshotNoBuild = true
 	bc, err = core.NewBlockChain(
 		db, &cacheConfig, g, engine, vm.Config{}, lastHash, false,
@@ -263,21 +247,42 @@ func TestReprocessGenesis(t *testing.T) {
 	}
 	bc.Stop()
 
-	it = db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+	expectedAccounts, expectedStorages = 3, int(stop) // test backend inserts 1 storage per block
+	checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
+}
+
+func checkSnapshot(t *testing.T, db ethdb.Database, expectedAccounts, expectedStorages *int, log bool) {
+	t.Helper()
+
+	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 	defer it.Release()
+	accounts := 0
 	for it.Next() {
 		if len(it.Key()) != 33 {
 			continue
 		}
-		t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
+		accounts++
+		if log {
+			t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
+		}
+	}
+	if expectedAccounts != nil {
+		require.Equal(t, *expectedAccounts, accounts)
 	}
 
-	it2 = db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+	it2 := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 	defer it2.Release()
+	storages := 0
 	for it2.Next() {
 		if len(it2.Key()) != 65 {
 			continue
 		}
-		t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
+		storages++
+		if log {
+			t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
+		}
+	}
+	if expectedStorages != nil {
+		require.Equal(t, *expectedStorages, storages)
 	}
 }
