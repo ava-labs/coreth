@@ -271,11 +271,6 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		t.Run(backend.Name, func(t *testing.T) {
 			defer backend.Close()
 
-			CleanupOnInterrupt(func() {
-				t.Logf("Cleaning up %s", backend.Name)
-				require.NoError(t, backend.Close())
-			})
-
 			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
 			t.Logf("Last hash: %x, Last root: %x", lastHash, lastRoot)
 		})
@@ -332,6 +327,7 @@ func reprocess(
 	)
 	require.NoError(t, err)
 	defer bc.Stop()
+	CleanupOnInterrupt(bc.Stop)
 
 	if start == 0 {
 		// Handling the genesis block
@@ -369,11 +365,9 @@ func reprocess(
 		lastHash = block.Hash()
 
 		// Update metadata
-		if i%bc.CacheConfig().CommitInterval == 0 || bc.CacheConfig().Pruning == false {
-			require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
-			require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
-			require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
-		}
+		require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
+		require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
+		require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
 	}
 
 	return lastHash, lastRoot

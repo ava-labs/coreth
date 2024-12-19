@@ -118,3 +118,20 @@ func (m *MerkleDB) Root() common.Hash {
 	}
 	return common.Hash(root)
 }
+
+func (m *MerkleDB) Close() error {
+	last := common.Hash{}
+	m.lock.Lock()
+	if len(m.pendingViewRoots) > 0 {
+		last = m.pendingViewRoots[len(m.pendingViewRoots)-1]
+	}
+	m.lock.Unlock()
+
+	if last != (common.Hash{}) {
+		if err := m.Commit(last); err != nil {
+			return err
+		}
+	}
+
+	return m.db.Close()
+}

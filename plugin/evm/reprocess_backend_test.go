@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -44,13 +43,7 @@ type reprocessBackend struct {
 }
 
 func (b *reprocessBackend) Close() error {
-	if b.mdb == nil {
-		return nil
-	}
-	mdb := b.mdb
-	b.mdb = nil
-	fmt.Println("Closing MerkleDB")
-	return mdb.Close()
+	return nil
 }
 
 func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB {

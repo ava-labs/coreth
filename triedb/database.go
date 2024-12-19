@@ -54,6 +54,8 @@ type KVBackend interface {
 	// This may be implemented as no-op if Update already persists changes, or
 	// commits happen on a rolling basis.
 	Commit(root common.Hash) error
+
+	Close() error
 }
 
 type KeyValueConfig struct {
@@ -238,6 +240,10 @@ func (db *Database) Scheme() string {
 // resources held can be released correctly.
 func (db *Database) Close() error {
 	db.WritePreimages()
+	kvConfig := db.config.KeyValueDB
+	if kvConfig != nil && kvConfig.KVBackend != nil {
+		return kvConfig.KVBackend.Close()
+	}
 	return db.backend.Close()
 }
 
