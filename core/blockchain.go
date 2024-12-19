@@ -1939,10 +1939,8 @@ func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 	}
 	kvConfig := bc.cacheConfig.KeyValueDB
 	if b.Number.Uint64() == 0 && kvConfig != nil && kvConfig.KVBackend != nil && !bc.cacheConfig.SnapshotNoBuild {
-		snapcfgGenesis := snapconfig
-		snapcfgGenesis.AsyncBuild = !bc.cacheConfig.SnapshotWait
 		var err error
-		bc.snaps, err = snapshot.New(snapcfgGenesis, bc.db, bc.triedb, common.Hash{}, types.EmptyRootHash)
+		bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, common.Hash{}, types.EmptyRootHash)
 		if err != nil {
 			log.Error("failed to initialize snapshots", "headRoot", b.Root, "err", err, "async", asyncBuild)
 		}
@@ -1967,7 +1965,6 @@ func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 		}
 		rawdb.WriteSnapshotRoot(bc.db, root)
 		// Need to mark the snapshot completed
-		bc.snaps.AbortGeneration()
 		snapshot.ResetSnapshotGeneration(bc.db)
 	}
 	var err error

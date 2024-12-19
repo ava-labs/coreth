@@ -42,10 +42,6 @@ type reprocessBackend struct {
 	mdb xmerkledb.MerkleDB
 }
 
-func (b *reprocessBackend) Close() error {
-	return nil
-}
-
 func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB {
 	ctx := context.Background()
 	mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{

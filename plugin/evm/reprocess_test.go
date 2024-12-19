@@ -233,18 +233,8 @@ func CleanupOnInterrupt(cleanup func()) {
 }
 
 func TestReprocessGenesis(t *testing.T) {
-	dbs := openDBs(t)
-	defer dbs.Close()
-
-	blocks := int(endBlock) // use the end block as the block count, since we start from 0
-	for _, backend := range []*reprocessBackend{
-		getBackend(t, "merkledb", blocks, dbs),
-		getBackend(t, "legacy", blocks, dbs),
-	} {
-		t.Run(backend.Name, func(t *testing.T) {
-			defer backend.Close()
-			testReprocessGenesis(t, backend, uint64(blocks))
-		})
+	for _, backend := range []string{"merkledb", "legacy"} {
+		t.Run(backend, func(t *testing.T) { testReprocessGenesis(t, backend) })
 	}
 }
 
@@ -270,15 +260,18 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		getMainnetBackend(t, "legacy", source, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
-			defer backend.Close()
-
 			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
 			t.Logf("Last hash: %x, Last root: %x", lastHash, lastRoot)
 		})
 	}
 }
 
-func testReprocessGenesis(t *testing.T, backend *reprocessBackend, blockCount uint64) {
+func testReprocessGenesis(t *testing.T, backendName string) {
+	dbs := openDBs(t)
+	defer dbs.Close()
+
+	blockCount := endBlock // use the end block as the block count, since we start from 0
+	backend := getBackend(t, backendName, int(blockCount), dbs)
 	cacheConfig := backend.CacheConfig
 
 	var lastHash, lastRoot common.Hash
@@ -289,6 +282,8 @@ func testReprocessGenesis(t *testing.T, backend *reprocessBackend, blockCount ui
 		t.Logf("Iterated snapshot: Accounts: %d, Storages: %d", accounts, storages)
 	}
 
+	// Need to re-open backend as the previous one is closed
+	backend = getBackend(t, backendName, int(blockCount), dbs)
 	start, stop = blockCount/2+1, blockCount
 	lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, start, stop)
 	if cacheConfig.SnapshotLimit > 0 {
