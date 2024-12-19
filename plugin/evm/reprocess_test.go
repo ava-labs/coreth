@@ -369,9 +369,11 @@ func reprocess(
 		lastHash = block.Hash()
 
 		// Update metadata
-		require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
-		require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
-		require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
+		if i%bc.CacheConfig().CommitInterval == 0 || bc.CacheConfig().Pruning == false {
+			require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
+			require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
+			require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
+		}
 	}
 
 	return lastHash, lastRoot
