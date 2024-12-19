@@ -32,14 +32,15 @@ var (
 )
 
 var (
-	sourceDbDir  = "sourceDb"
-	sourcePrefix = ""
-	dbDir        = ""
-	startBlock   = uint64(0)
-	endBlock     = uint64(200)
-	prefetchers  = 4
-	useSnapshot  = true
-	pruning      = true
+	sourceDbDir      = "sourceDb"
+	sourcePrefix     = ""
+	dbDir            = ""
+	startBlock       = uint64(0)
+	endBlock         = uint64(200)
+	prefetchers      = 4
+	useSnapshot      = true
+	pruning          = true
+	skipUpgradeCheck = false
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -58,6 +59,7 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&prefetchers, "prefetchers", prefetchers, "number of prefetchers")
 	flag.BoolVar(&useSnapshot, "useSnapshot", useSnapshot, "use snapshot")
 	flag.BoolVar(&pruning, "pruning", pruning, "pruning")
+	flag.BoolVar(&skipUpgradeCheck, "skipUpgradeCheck", skipUpgradeCheck, "skip upgrade check")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -332,7 +334,7 @@ func reprocess(
 		opts = append(opts, core.Opts{LastAcceptedRoot: lastRoot}) // after genesis, we must specify the last root
 	}
 	bc, err := core.NewBlockChain(
-		db, &cacheConfig, backend.Genesis, backend.Engine, vm.Config{}, lastHash, false,
+		db, &cacheConfig, backend.Genesis, backend.Engine, vm.Config{}, lastHash, skipUpgradeCheck,
 		opts...,
 	)
 	require.NoError(t, err)
