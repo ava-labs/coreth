@@ -129,6 +129,7 @@ func getBackend(t *testing.T, name string) *reprocessBackend {
 		CacheConfig: getCacheConfig(t, name),
 		Disk:        rawdb.NewMemoryDatabase(),
 		Name:        name,
+		VerifyRoot:  name == "legacy",
 	}
 }
 
@@ -157,5 +158,6 @@ func getMainnetInMemoryBackend(t *testing.T, name string, blocks uint64, source 
 		CacheConfig: getCacheConfig(t, name),
 		Disk:        rawdb.NewMemoryDatabase(),
 		Name:        name,
+		VerifyRoot:  name == "legacy",
 	}
 }
