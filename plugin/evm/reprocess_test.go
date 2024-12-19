@@ -242,7 +242,10 @@ func TestReprocessGenesis(t *testing.T) {
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
 			defer backend.Close()
-			CleanupOnInterrupt(func() { backend.Close() })
+			CleanupOnInterrupt(func() {
+				t.Logf("Cleaning up %s", backend.Name)
+				require.NoError(t, backend.Close())
+			})
 			testReprocessGenesis(t, backend, uint64(blocks))
 		})
 	}
