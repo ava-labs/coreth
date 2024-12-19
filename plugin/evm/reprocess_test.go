@@ -214,7 +214,7 @@ func TestReprocessGenesis(t *testing.T) {
 
 			// Channel to listen for OS signals
 			sigs := make(chan os.Signal, 1)
-			signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+			signal.Notify(sigs, syscall.SIGINT)
 
 			// Goroutine to handle signals
 			go func() {
