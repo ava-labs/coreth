@@ -1995,6 +1995,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, currentRoot common.Ha
 	if currentRoot != (common.Hash{}) {
 		root = currentRoot
 	}
+	log.Info("Looking for state", "root", root, "acceptorTip", acceptorTip, "acceptorTipUpToDate", acceptorTipUpToDate)
 	if bc.HasState(root) && acceptorTipUpToDate {
 		log.Info("Skipping state reprocessing", "root", current.Root())
 		return nil
