@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/trace"
@@ -37,14 +37,14 @@ type reprocessBackend struct {
 	CacheConfig core.CacheConfig
 	VerifyRoot  bool
 	Disk        ethdb.Database
+	Metadata    database.Database
 	Name        string
 }
 
-func getCacheConfig(t *testing.T, name string) core.CacheConfig {
+func getCacheConfig(t *testing.T, name string, mdbKVStore database.Database) core.CacheConfig {
 	var backend triedb.KVBackend
 	if name == "merkledb" {
 		ctx := context.Background()
-		mdbKVStore := memdb.New()
 		mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{
 			BranchFactor:                xmerkledb.BranchFactor16,
 			Hasher:                      xmerkledb.DefaultHasher,
@@ -66,12 +66,11 @@ func getCacheConfig(t *testing.T, name string) core.CacheConfig {
 	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{KVBackend: backend}
 	cacheConfig.TriePrefetcherParallelism = 4
 	cacheConfig.SnapshotLimit = 256
-	cacheConfig.SnapshotDelayInit = true
 	// cacheConfig.Pruning = false
 	return cacheConfig
 }
 
-func getBackend(t *testing.T, name string) *reprocessBackend {
+func getBackend(t *testing.T, name string, dbs dbs) *reprocessBackend {
 	chainConfig := params.TestChainConfig
 	key1, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
@@ -126,14 +125,15 @@ func getBackend(t *testing.T, name string) *reprocessBackend {
 		Engine:      engine,
 		BlockCount:  uint64(len(blocks)),
 		GetBlock:    func(i uint64) *types.Block { return blocks[i-1] },
-		CacheConfig: getCacheConfig(t, name),
-		Disk:        rawdb.NewMemoryDatabase(),
+		CacheConfig: getCacheConfig(t, name, dbs.merkledb),
+		Disk:        dbs.chain,
+		Metadata:    dbs.metadata,
 		Name:        name,
 		VerifyRoot:  name == "legacy",
 	}
 }
 
-func getMainnetInMemoryBackend(t *testing.T, name string, blocks uint64, source ethdb.Database) *reprocessBackend {
+func getMainnetBackend(t *testing.T, name string, blocks uint64, source ethdb.Database, dbs dbs) *reprocessBackend {
 	var g core.Genesis
 	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
 
@@ -155,8 +155,9 @@ func getMainnetInMemoryBackend(t *testing.T, name string, blocks uint64, source 
 			require.NotNil(t, block)
 			return block
 		},
-		CacheConfig: getCacheConfig(t, name),
-		Disk:        rawdb.NewMemoryDatabase(),
+		CacheConfig: getCacheConfig(t, name, dbs.merkledb),
+		Disk:        dbs.chain,
+		Metadata:    dbs.metadata,
 		Name:        name,
 		VerifyRoot:  name == "legacy",
 	}

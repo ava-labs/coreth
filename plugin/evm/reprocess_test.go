@@ -7,14 +7,19 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/leveldb"
+	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +31,7 @@ var (
 var (
 	sourceDbDir  = "sourceDb"
 	sourcePrefix = ""
-	dbDir        = "db"
+	dbDir        = ""
 	startBlock   = uint64(0)
 	endBlock     = uint64(20_000)
 )
@@ -116,6 +121,65 @@ var (
 	mainnetAvaxAssetID = ids.FromStringOrPanic("FvwEAhmxKfeiG8SnEvq42hc6whRyY3EFYAvebMqDNDGCgxN5Z")
 )
 
+type dbs struct {
+	metadata database.Database
+	chain    ethdb.Database
+	merkledb database.Database
+
+	base database.Database
+}
+
+func (d *dbs) Close() { d.base.Close() }
+
+func openDBs(t *testing.T) dbs {
+	var base database.Database
+	if dbDir == "" {
+		base = memdb.New()
+	} else {
+		db, err := leveldb.New(dbDir, nil, logging.NoLog{}, prometheus.NewRegistry())
+		require.NoError(t, err)
+		base = db
+	}
+
+	return dbs{
+		metadata: prefixdb.New(reprocessMetadataPrefix, base),
+		chain:    rawdb.NewDatabase(Database{prefixdb.New(ethDBPrefix, base)}),
+		merkledb: prefixdb.New(merkledbPrefix, base),
+		base:     base,
+	}
+}
+
+var (
+	reprocessMetadataPrefix = []byte("metadata")
+	merkledbPrefix          = []byte("merkledb")
+
+	lastAcceptedRootKey   = []byte("lastAcceptedRoot")
+	lastAcceptedHashKey   = []byte("lastAcceptedHash")
+	lastAcceptedHeightKey = []byte("lastAcceptedHeight")
+)
+
+func getMetadata(db database.Database) (lastHash, lastRoot common.Hash, lastHeight uint64) {
+	if bytes, err := db.Get(lastAcceptedRootKey); err == nil {
+		lastRoot = common.BytesToHash(bytes)
+	}
+	if bytes, err := db.Get(lastAcceptedHashKey); err == nil {
+		lastHash = common.BytesToHash(bytes)
+	}
+	if bytes, err := database.GetUInt64(db, lastAcceptedHeightKey); err == nil {
+		lastHeight = bytes
+	}
+
+	return lastHash, lastRoot, lastHeight
+}
+
+func TestPersistedMetadata(t *testing.T) {
+	dbs := openDBs(t)
+	defer dbs.Close()
+
+	lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
+	t.Logf("Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
+}
+
 func TestCalculatePrefix(t *testing.T) {
 	prefix := prefixdb.JoinPrefixes(
 		prefixdb.MakePrefix(mainnetCChainID[:]),
@@ -127,9 +191,12 @@ func TestCalculatePrefix(t *testing.T) {
 }
 
 func TestReprocessGenesis(t *testing.T) {
+	dbs := openDBs(t)
+	defer dbs.Close()
+
 	for _, backend := range []*reprocessBackend{
-		getBackend(t, "merkledb"),
-		getBackend(t, "legacy"),
+		getBackend(t, "merkledb", dbs),
+		getBackend(t, "legacy", dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
 			testReprocessGenesis(t, backend)
@@ -137,15 +204,18 @@ func TestReprocessGenesis(t *testing.T) {
 	}
 }
 
-func TestReprocessMainnetBlocksInMemory(t *testing.T) {
+func TestReprocessMainnetBlocks(t *testing.T) {
 	enableLogging()
 	source := openSourceDB(t)
 	defer source.Close()
 
+	dbs := openDBs(t)
+	defer dbs.Close()
+
 	blocks := endBlock
 	for _, backend := range []*reprocessBackend{
-		getMainnetInMemoryBackend(t, "merkledb", blocks, source),
-		getMainnetInMemoryBackend(t, "legacy", blocks, source),
+		getMainnetBackend(t, "merkledb", blocks, source, dbs),
+		getMainnetBackend(t, "legacy", blocks, source, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
 			testReprocessGenesis(t, backend)
@@ -238,6 +308,11 @@ func reprocess(
 
 		lastRoot = lastInsertedRoot
 		lastHash = block.Hash()
+
+		// Update metadata
+		require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
+		require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
+		require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
 	}
 
 	return lastHash, lastRoot
