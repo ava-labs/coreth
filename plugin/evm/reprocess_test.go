@@ -122,29 +122,12 @@ func TestCalculatePrefix(t *testing.T) {
 
 func TestReprocessGenesis(t *testing.T) {
 	backend := getBackend(t, "test")
-	g := backend.Genesis
-	engine := backend.Engine
 	cacheConfig := backend.CacheConfig
 
 	db := rawdb.NewMemoryDatabase()
 
-	bc, err := core.NewBlockChain(db, &cacheConfig, g, engine, vm.Config{}, common.Hash{}, false)
-	require.NoError(t, err)
-
-	normalGenesis := g.ToBlock()
-	require.NoError(t, bc.LoadGenesisState(normalGenesis))
-
-	lastRoot := normalGenesis.Root()
-	lastHash := normalGenesis.Hash()
-	if backend := cacheConfig.KeyValueDB.KVBackend; backend != nil {
-		lastRoot = backend.Root()
-	}
-
-	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
-	bc.Stop() // Genesis was created. Stop the chain.
-	t.Logf("Genesis block: %s", bc.CurrentBlock().Hash().Hex())
-
-	start, stop := uint64(1), backend.BlockCount/2
+	var lastHash, lastRoot common.Hash
+	start, stop := uint64(0), backend.BlockCount/2
 	lastHash, lastRoot = reprocess(t, db, backend, lastHash, lastRoot, start, stop)
 	if cacheConfig.SnapshotLimit > 0 {
 		accounts, storages := checkSnapshot(t, db, false)
@@ -177,14 +160,32 @@ func reprocess(
 		return true
 	}
 
-	// Great, now let's restart the chain
+	var opts []core.Opts
 	cacheConfig.SnapshotDelayInit = true
-	cacheConfig.SnapshotNoBuild = true
+	if start > 0 {
+		cacheConfig.SnapshotNoBuild = true                         // after genesis, snapshot must already be available
+		opts = append(opts, core.Opts{LastAcceptedRoot: lastRoot}) // after genesis, we must specify the last root
+	}
 	bc, err := core.NewBlockChain(
 		db, &cacheConfig, backend.Genesis, backend.Engine, vm.Config{}, lastHash, false,
-		core.Opts{LastAcceptedRoot: lastRoot},
+		opts...,
 	)
 	require.NoError(t, err)
+	defer bc.Stop()
+
+	if start == 0 {
+		// Handling the genesis block
+		normalGenesis := backend.Genesis.ToBlock()
+		require.NoError(t, bc.LoadGenesisState(normalGenesis))
+
+		lastRoot = normalGenesis.Root()
+		if backend := cacheConfig.KeyValueDB.KVBackend; backend != nil {
+			lastRoot = backend.Root()
+		}
+
+		t.Logf("Genesis performed: hash: %x, root : %x", bc.CurrentBlock().Hash(), lastRoot)
+		start = 1
+	}
 
 	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
 	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
@@ -207,7 +208,6 @@ func reprocess(
 		lastRoot = lastInsertedRoot
 		lastHash = block.Hash()
 	}
-	bc.Stop()
 
 	return lastHash, lastRoot
 }
