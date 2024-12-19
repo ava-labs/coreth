@@ -200,8 +200,6 @@ func TestCalculatePrefix(t *testing.T) {
 }
 
 func init() {
-	syscall.Setsid() // Creates a new process group
-
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go cleanupOnInterrupt(c)
@@ -339,6 +337,7 @@ func reprocess(
 
 		bc.Stop()
 	})
+	syscall.Setsid() // Creates a new process group
 
 	if start == 0 {
 		// Handling the genesis block
