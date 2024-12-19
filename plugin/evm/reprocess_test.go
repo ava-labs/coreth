@@ -223,6 +223,10 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 	t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
 
 	require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
+	if lastHash == (common.Hash{}) {
+		// Other than when genesis is not performed, start processing from the next block
+		startBlock++
+	}
 
 	for _, backend := range []*reprocessBackend{
 		getMainnetBackend(t, "merkledb", source, dbs),
