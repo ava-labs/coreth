@@ -632,19 +632,20 @@ func (bc *BlockChain) startAcceptor() {
 
 // addAcceptorQueue adds a new *types.Block to the [acceptorQueue]. This will
 // block if there are [AcceptorQueueLimit] items in [acceptorQueue].
-func (bc *BlockChain) addAcceptorQueue(b *blockRoot) {
+func (bc *BlockChain) addAcceptorQueue(b *blockRoot) bool {
 	// We only acquire a read lock here because it is ok to add items to the
 	// [acceptorQueue] concurrently.
 	bc.acceptorClosingLock.RLock()
 	defer bc.acceptorClosingLock.RUnlock()
 
 	if bc.acceptorClosed {
-		return
+		return false
 	}
 
 	acceptorQueueGauge.Inc(1)
 	bc.acceptorWg.Add(1)
 	bc.acceptorQueue <- b
+	return true
 }
 
 // DrainAcceptorQueue blocks until all items in [acceptorQueue] have been
@@ -1085,6 +1086,8 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	return bc.AcceptWithRoot(block, block.Root())
 }
 
+var ErrAcceptorClosed = errors.New("acceptor closed")
+
 func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
@@ -1112,7 +1115,11 @@ func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash) error
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
-	bc.addAcceptorQueue(&blockRoot{Block: block, root: root})
+	added := bc.addAcceptorQueue(&blockRoot{Block: block, root: root})
+	if !added {
+		return ErrAcceptorClosed
+	}
+
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
 	return nil

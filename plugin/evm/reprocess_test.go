@@ -327,7 +327,15 @@ func reprocess(
 	)
 	require.NoError(t, err)
 	defer bc.Stop()
-	CleanupOnInterrupt(bc.Stop)
+
+	var lock sync.Mutex
+
+	CleanupOnInterrupt(func() {
+		lock.Lock()
+		defer lock.Unlock()
+
+		bc.Stop()
+	})
 
 	if start == 0 {
 		// Handling the genesis block
@@ -354,6 +362,8 @@ func reprocess(
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
 		parent.Root = lastRoot
 
+		// Take lock here to prevent shutdown before block is accepted
+		lock.Lock()
 		err := bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
 
@@ -368,6 +378,7 @@ func reprocess(
 		require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
 		require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
 		require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
+		lock.Unlock()
 	}
 
 	return lastHash, lastRoot
