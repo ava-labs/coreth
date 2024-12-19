@@ -3,6 +3,7 @@ package merkledb
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/x/merkledb"
@@ -13,6 +14,7 @@ import (
 var _ triedb.KVBackend = &MerkleDB{}
 
 type MerkleDB struct {
+	lock             sync.RWMutex
 	db               merkledb.MerkleDB
 	pendingViews     []merkledb.View
 	pendingViewRoots []common.Hash
@@ -31,6 +33,13 @@ func (m *MerkleDB) Get(key []byte) ([]byte, error) {
 }
 
 func (m *MerkleDB) latestView() merkledb.Trie {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	return m.latestViewLocked()
+}
+
+func (m *MerkleDB) latestViewLocked() merkledb.Trie {
 	if len(m.pendingViews) == 0 {
 		return m.db
 	}
@@ -38,6 +47,9 @@ func (m *MerkleDB) latestView() merkledb.Trie {
 }
 
 func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	ctx := context.TODO()
 	changes := make([]database.BatchOp, len(batch))
 	for i, kv := range batch {
@@ -61,6 +73,9 @@ func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
 }
 
 func (m *MerkleDB) Commit(root common.Hash) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	if len(m.pendingViews) == 0 {
 		return fmt.Errorf("no pending views")
 	}
