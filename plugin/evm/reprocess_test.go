@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"flag"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database/prefixdb"
@@ -13,6 +14,7 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -136,6 +138,7 @@ func TestReprocessGenesis(t *testing.T) {
 }
 
 func TestReprocessMainnetBlocksInMemory(t *testing.T) {
+	enableLogging()
 	source := openSourceDB(t)
 	defer source.Close()
 
@@ -269,4 +272,8 @@ func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 		}
 	}
 	return accounts, storages
+}
+
+func enableLogging() {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 }
