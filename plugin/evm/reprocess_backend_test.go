@@ -46,7 +46,9 @@ func (b *reprocessBackend) Close() error {
 	if b.mdb == nil {
 		return nil
 	}
-	return b.mdb.Close()
+	mdb := b.mdb
+	b.mdb = nil
+	return mdb.Close()
 }
 
 func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB {

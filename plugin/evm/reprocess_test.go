@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"flag"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database"
@@ -206,9 +209,25 @@ func TestReprocessGenesis(t *testing.T) {
 		getBackend(t, "legacy", blocks, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
-			defer backend.Close()
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			// Channel to listen for OS signals
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+
+			// Goroutine to handle signals
+			go func() {
+				defer wg.Done()
+				<-sigs
+				t.Log("Performing cleanup...")
+				// Perform cleanup here
+				require.NoError(t, backend.Close())
+			}()
 
 			testReprocessGenesis(t, backend, uint64(blocks))
+			close(sigs)
+			wg.Wait()
 		})
 	}
 }
