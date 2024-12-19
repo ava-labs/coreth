@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"syscall"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database"
@@ -199,6 +198,39 @@ func TestCalculatePrefix(t *testing.T) {
 	t.Logf("Prefix: %x", prefix)
 }
 
+func init() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go cleanupOnInterrupt(c)
+}
+
+var cf struct {
+	o sync.Once
+	m sync.RWMutex
+	f []func()
+}
+
+// cleanupOnInterrupt registers a signal handler and will execute a stack of functions if an interrupt signal is caught
+func cleanupOnInterrupt(c chan os.Signal) {
+	for range c {
+		cf.o.Do(func() {
+			cf.m.RLock()
+			defer cf.m.RUnlock()
+			for i := len(cf.f) - 1; i >= 0; i-- {
+				cf.f[i]()
+			}
+			os.Exit(1)
+		})
+	}
+}
+
+// CleanupOnInterrupt stores cleanup functions to execute if an interrupt signal is caught
+func CleanupOnInterrupt(cleanup func()) {
+	cf.m.Lock()
+	defer cf.m.Unlock()
+	cf.f = append(cf.f, cleanup)
+}
+
 func TestReprocessGenesis(t *testing.T) {
 	dbs := openDBs(t)
 	defer dbs.Close()
@@ -209,25 +241,9 @@ func TestReprocessGenesis(t *testing.T) {
 		getBackend(t, "legacy", blocks, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
-			var wg sync.WaitGroup
-			wg.Add(1)
-
-			// Channel to listen for OS signals
-			sigs := make(chan os.Signal, 1)
-			signal.Notify(sigs, syscall.SIGINT)
-
-			// Goroutine to handle signals
-			go func() {
-				defer wg.Done()
-				<-sigs
-				t.Log("Performing cleanup...")
-				// Perform cleanup here
-				require.NoError(t, backend.Close())
-			}()
-
+			defer backend.Close()
+			CleanupOnInterrupt(func() { backend.Close() })
 			testReprocessGenesis(t, backend, uint64(blocks))
-			close(sigs)
-			wg.Wait()
 		})
 	}
 }
