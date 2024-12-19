@@ -23,7 +23,6 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
-	"github.com/holiman/uint256"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -41,6 +40,9 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -74,7 +76,7 @@ import (
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
-	"github.com/ava-labs/avalanchego/database"
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
@@ -84,7 +86,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
 	"github.com/ava-labs/avalanchego/utils/logging"
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -106,20 +107,7 @@ var (
 	_ block.StateSyncableVM              = &VM{}
 	_ statesyncclient.EthBlockParser     = &VM{}
 	_ secp256k1fx.VM                     = &VM{}
-)
-
-const (
-	x2cRateUint64       uint64 = 1_000_000_000
-	x2cRateMinus1Uint64 uint64 = x2cRateUint64 - 1
-)
-
-var (
-	// x2cRate is the conversion rate between the smallest denomination on the X-Chain
-	// 1 nAVAX and the smallest denomination on the C-Chain 1 wei. Where 1 nAVAX = 1 gWei.
-	// This is only required for AVAX because the denomination of 1 AVAX is 9 decimal
-	// places on the X and P chains, but is 18 decimal places within the EVM.
-	x2cRate       = uint256.NewInt(x2cRateUint64)
-	x2cRateMinus1 = uint256.NewInt(x2cRateMinus1Uint64)
+	_ BlockAcceptor                      = &VM{}
 )
 
 const (
@@ -128,7 +116,6 @@ const (
 	maxFutureBlockTime = 10 * time.Second
 	maxUTXOsToFetch    = 1024
 	defaultMempoolSize = 4096
-	codecVersion       = uint16(0)
 
 	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB
@@ -145,16 +132,12 @@ const (
 	targetAtomicTxsSize = 40 * units.KiB
 
 	// gossip constants
-	pushGossipDiscardedElements          = 16_384
-	txGossipBloomMinTargetElements       = 8 * 1024
-	txGossipBloomTargetFalsePositiveRate = 0.01
-	txGossipBloomResetFalsePositiveRate  = 0.05
-	txGossipBloomChurnMultiplier         = 3
-	txGossipTargetMessageSize            = 20 * units.KiB
-	maxValidatorSetStaleness             = time.Minute
-	txGossipThrottlingPeriod             = 10 * time.Second
-	txGossipThrottlingLimit              = 2
-	txGossipPollSize                     = 1
+	pushGossipDiscardedElements = 16_384
+	txGossipTargetMessageSize   = 20 * units.KiB
+	maxValidatorSetStaleness    = time.Minute
+	txGossipThrottlingPeriod    = 10 * time.Second
+	txGossipThrottlingLimit     = 2
+	txGossipPollSize            = 1
 )
 
 // Define the API endpoints for the VM
@@ -171,43 +154,20 @@ var (
 	// Set last accepted key to be longer than the keys used to store accepted block IDs.
 	lastAcceptedKey = []byte("last_accepted_key")
 	acceptedPrefix  = []byte("snowman_accepted")
-	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	// Prefixes for atomic trie
-	atomicTrieDBPrefix     = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
 )
 
 var (
 	errEmptyBlock                     = errors.New("empty block")
 	errUnsupportedFXs                 = errors.New("unsupported feature extensions")
 	errInvalidBlock                   = errors.New("invalid block")
-	errInvalidAddr                    = errors.New("invalid hex address")
-	errInsufficientAtomicTxFee        = errors.New("atomic tx fee too low for atomic mempool")
-	errAssetIDMismatch                = errors.New("asset IDs in the input don't match the utxo")
-	errNoImportInputs                 = errors.New("tx has no imported inputs")
-	errInputsNotSortedUnique          = errors.New("inputs not sorted and unique")
-	errPublicKeySignatureMismatch     = errors.New("signature doesn't match public key")
-	errWrongChainID                   = errors.New("tx has wrong chain ID")
-	errInsufficientFunds              = errors.New("insufficient funds")
-	errNoExportOutputs                = errors.New("tx has no export outputs")
-	errOutputsNotSorted               = errors.New("tx outputs not sorted")
-	errOutputsNotSortedUnique         = errors.New("outputs not sorted and unique")
-	errOverflowExport                 = errors.New("overflow when computing export amount + txFee")
 	errInvalidNonce                   = errors.New("invalid nonce")
-	errConflictingAtomicInputs        = errors.New("invalid block due to conflicting atomic inputs")
 	errUnclesUnsupported              = errors.New("uncles unsupported")
 	errRejectedParent                 = errors.New("rejected parent")
-	errInsufficientFundsForFee        = errors.New("insufficient AVAX funds to pay transaction fee")
-	errNoEVMOutputs                   = errors.New("tx has no EVM outputs")
 	errNilBaseFeeApricotPhase3        = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilExtDataGasUsedApricotPhase4 = errors.New("nil extDataGasUsed is invalid after apricotPhase4")
 	errNilBlockGasCostApricotPhase4   = errors.New("nil blockGasCost is invalid after apricotPhase4")
-	errConflictingAtomicTx            = errors.New("conflicting atomic tx present")
-	errTooManyAtomicTx                = errors.New("too many atomic tx")
-	errMissingAtomicTxs               = errors.New("cannot build a block with non-empty extra data and zero atomic transactions")
 	errInvalidHeaderPredicateResults  = errors.New("invalid header predicate results")
 )
 
@@ -248,7 +208,7 @@ type VM struct {
 	// with an efficient caching layer.
 	*chain.State
 
-	config Config
+	config config.Config
 
 	chainID     *big.Int
 	networkID   uint64
@@ -265,19 +225,16 @@ type VM struct {
 	// [db] is the VM's current database managed by ChainState
 	db *versiondb.Database
 
-	// metadataDB is used to store one off keys.
-	metadataDB database.Database
-
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
 
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
-	acceptedBlockDB database.Database
+	acceptedBlockDB avalanchedatabase.Database
 
 	// [warpDB] is used to store warp message signatures
 	// set to a prefixDB with the prefix [warpPrefix]
-	warpDB database.Database
+	warpDB avalanchedatabase.Database
 
 	toEngine chan<- commonEng.Message
 
@@ -286,18 +243,17 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository AtomicTxRepository
+	atomicTxRepository atomic.AtomicTxRepository
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
+	atomicTrie atomic.AtomicTrie
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend AtomicBackend
+	atomicBackend atomic.AtomicBackend
 
 	builder *blockBuilder
 
 	baseCodec codec.Registry
-	codec     codec.Manager
 	clock     mockable.Clock
-	mempool   *Mempool
+	mempool   *atomic.Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -335,7 +291,7 @@ type VM struct {
 	ethTxPushGossiper     avalancheUtils.Atomic[*gossip.PushGossiper[*GossipEthTx]]
 	ethTxPullGossiper     gossip.Gossiper
 	atomicTxGossipHandler p2p.Handler
-	atomicTxPushGossiper  *gossip.PushGossiper[*GossipAtomicTx]
+	atomicTxPushGossiper  *gossip.PushGossiper[*atomic.GossipAtomicTx]
 	atomicTxPullGossiper  gossip.Gossiper
 
 	chainAlias string
@@ -367,7 +323,7 @@ func (vm *VM) GetActivationTime() time.Time {
 func (vm *VM) Initialize(
 	_ context.Context,
 	chainCtx *snow.Context,
-	db database.Database,
+	db avalanchedatabase.Database,
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
@@ -381,15 +337,15 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
 		}
 	}
-	if err := vm.config.Validate(); err != nil {
+	vm.ctx = chainCtx
+
+	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
 		return err
 	}
 	// We should deprecate config flags as the first thing, before we do anything else
 	// because this can set old flags to new flags. log the message after we have
 	// initialized the logger.
 	deprecateMsg := vm.config.Deprecate()
-
-	vm.ctx = chainCtx
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -484,16 +440,6 @@ func (vm *VM) Initialize(
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
 
-	// Ensure that non-standard commit interval is not allowed for production networks
-	if avalanchegoConstants.ProductionNetworkIDs.Contains(chainCtx.NetworkID) {
-		if vm.config.CommitInterval != defaultCommitInterval {
-			return fmt.Errorf("cannot start non-local network with commit interval %d", vm.config.CommitInterval)
-		}
-		if vm.config.StateSyncCommitInterval != defaultSyncableCommitInterval {
-			return fmt.Errorf("cannot start non-local network with syncable interval %d", vm.config.StateSyncCommitInterval)
-		}
-	}
-
 	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
 	// config, free fuji)
 	fujiExtDataHashes = nil
@@ -574,10 +520,8 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
-	vm.codec = Codec
-
 	// TODO: read size from settings
-	vm.mempool, err = NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = atomic.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -587,6 +531,7 @@ func (vm *VM) Initialize(
 		vm.p2pSender = appSender
 	}
 
+	// TODO: move all network stuff to peer.NewNetwork
 	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
@@ -609,7 +554,7 @@ func (vm *VM) Initialize(
 
 	// clear warpdb on initialization if config enabled
 	if vm.config.PruneWarpDB {
-		if err := database.Clear(vm.warpDB, ethdb.IdealBatchSize); err != nil {
+		if err := avalanchedatabase.Clear(vm.warpDB, ethdb.IdealBatchSize); err != nil {
 			return fmt.Errorf("failed to prune warpDB: %w", err)
 		}
 	}
@@ -641,11 +586,11 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.db, vm.codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomic.NewAtomicTxRepository(vm.db, atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
+	vm.atomicBackend, err = atomic.NewAtomicBackend(
 		vm.db, vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,
@@ -672,7 +617,7 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
+	vm.StateSyncServer = NewStateSyncServer(&StateSyncServerConfig{
 		Chain:            vm.blockChain,
 		AtomicTrie:       vm.atomicTrie,
 		SyncableInterval: vm.config.StateSyncCommitInterval,
@@ -781,10 +726,10 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
-		chain: vm.eth,
-		state: vm.State,
-		client: statesyncclient.NewClient(
+	vm.StateSyncClient = NewStateSyncClient(&StateSyncClientConfig{
+		Chain: vm.eth,
+		State: vm.State,
+		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
 				Codec:            vm.networkCodec,
@@ -793,17 +738,16 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 				BlockParser:      vm,
 			},
 		),
-		enabled:              stateSyncEnabled,
-		skipResume:           vm.config.StateSyncSkipResume,
-		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		stateSyncRequestSize: vm.config.StateSyncRequestSize,
-		lastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		chaindb:              vm.chaindb,
-		metadataDB:           vm.metadataDB,
-		acceptedBlockDB:      vm.acceptedBlockDB,
-		db:                   vm.db,
-		atomicBackend:        vm.atomicBackend,
-		toEngine:             vm.toEngine,
+		Enabled:              stateSyncEnabled,
+		SkipResume:           vm.config.StateSyncSkipResume,
+		StateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
+		StateSyncRequestSize: vm.config.StateSyncRequestSize,
+		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
+		ChaindDB:             vm.chaindb,
+		DB:                   vm.db,
+		AtomicBackend:        vm.atomicBackend,
+		ToEngine:             vm.toEngine,
+		Acceptor:             vm,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -875,7 +819,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 			continue
 		}
 
-		atomicTxBytes, err := vm.codec.Marshal(codecVersion, tx)
+		atomicTxBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, tx)
 		if err != nil {
 			// Discard the transaction from the mempool and error if the transaction
 			// cannot be marshalled. This should never happen.
@@ -904,7 +848,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 // assumes that we are in at least Apricot Phase 5.
 func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
 	var (
-		batchAtomicTxs    []*Tx
+		batchAtomicTxs    []*atomic.Tx
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
@@ -979,7 +923,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 	// If there is a non-zero number of transactions, marshal them and return the byte slice
 	// for the block's extra data along with the contribution and gas used.
 	if len(batchAtomicTxs) > 0 {
-		atomicTxBytes, err := vm.codec.Marshal(codecVersion, batchAtomicTxs)
+		atomicTxBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, batchAtomicTxs)
 		if err != nil {
 			// If we fail to marshal the batch of atomic transactions for any reason,
 			// discard the entire set of current transactions.
@@ -1017,7 +961,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
 	)
 
-	txs, err := ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, vm.codec)
+	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1140,7 +1084,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	atomicTxGossipMarshaller := GossipAtomicTxMarshaller{}
+	atomicTxGossipMarshaller := atomic.GossipAtomicTxMarshaller{}
 	atomicTxGossipClient := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.validators))
 	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
 	if err != nil {
@@ -1178,7 +1122,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*GossipAtomicTx](
+		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.GossipAtomicTx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
 			vm.validators,
@@ -1196,10 +1140,8 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	gossipStats := NewGossipStats()
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
-	vm.Network.SetGossipHandler(NewGossipHandler(vm, gossipStats))
 
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
@@ -1219,7 +1161,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler = newTxGossipHandler[*GossipAtomicTx](
+		vm.atomicTxGossipHandler = newTxGossipHandler[*atomic.GossipAtomicTx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1263,7 +1205,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.atomicTxPullGossiper == nil {
-		atomicTxPullGossiper := gossip.NewPullGossiper[*GossipAtomicTx](
+		atomicTxPullGossiper := gossip.NewPullGossiper[*atomic.GossipAtomicTx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1427,10 +1369,10 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 // by ChainState.
 func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 	ethBlock := vm.blockChain.GetBlockByHash(common.Hash(id))
-	// If [ethBlock] is nil, return [database.ErrNotFound] here
+	// If [ethBlock] is nil, return [avalanchedatabase.ErrNotFound] here
 	// so that the miss is considered cacheable.
 	if ethBlock == nil {
-		return nil, database.ErrNotFound
+		return nil, avalanchedatabase.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
 	return vm.newBlock(ethBlock)
@@ -1452,7 +1394,7 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 
 	if acceptedBlkID != blkID {
 		// The provided block is not accepted.
-		return nil, database.ErrNotFound
+		return nil, avalanchedatabase.ErrNotFound
 	}
 	return blk, nil
 }
@@ -1478,17 +1420,17 @@ func (vm *VM) VerifyHeightIndex(context.Context) error {
 
 // GetBlockIDAtHeight returns the canonical block at [height].
 // Note: the engine assumes that if a block is not found at [height], then
-// [database.ErrNotFound] will be returned. This indicates that the VM has state
+// [avalanchedatabase.ErrNotFound] will be returned. This indicates that the VM has state
 // synced and does not have all historical blocks available.
 func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {
 	lastAcceptedBlock := vm.LastAcceptedBlock()
 	if lastAcceptedBlock.Height() < height {
-		return ids.ID{}, database.ErrNotFound
+		return ids.ID{}, avalanchedatabase.ErrNotFound
 	}
 
 	hash := vm.blockChain.GetCanonicalHash(height)
 	if hash == (common.Hash{}) {
-		return ids.ID{}, database.ErrNotFound
+		return ids.ID{}, avalanchedatabase.ErrNotFound
 	}
 	return ids.ID(hash), nil
 }
@@ -1565,14 +1507,13 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 }
 
 // initializeDBs initializes the databases used by the VM.
-// coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db database.Database) error {
+// coreth always uses the avalanchego provided avalanchedatabase.
+func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, db)})
+	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
 	vm.db = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
-	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
 	// Note warpDB is not part of versiondb because it is not necessary
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
@@ -1602,61 +1543,22 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
  ******************************************************************************
  */
 
-// conflicts returns an error if [inputs] conflicts with any of the atomic inputs contained in [ancestor]
-// or any of its ancestor blocks going back to the last accepted block in its ancestry. If [ancestor] is
-// accepted, then nil will be returned immediately.
-// If the ancestry of [ancestor] cannot be fetched, then [errRejectedParent] may be returned.
-func (vm *VM) conflicts(inputs set.Set[ids.ID], ancestor *Block) error {
-	lastAcceptedBlock := vm.LastAcceptedBlock()
-	lastAcceptedHeight := lastAcceptedBlock.Height()
-	for ancestor.Height() > lastAcceptedHeight {
-		// If any of the atomic transactions in the ancestor conflict with [inputs]
-		// return an error.
-		for _, atomicTx := range ancestor.atomicTxs {
-			if inputs.Overlaps(atomicTx.InputUTXOs()) {
-				return errConflictingAtomicInputs
-			}
-		}
-
-		// Move up the chain.
-		nextAncestorID := ancestor.Parent()
-		// If the ancestor is unknown, then the parent failed
-		// verification when it was called.
-		// If the ancestor is rejected, then this block shouldn't be
-		// inserted into the canonical chain because the parent is
-		// will be missing.
-		// If the ancestor is processing, then the block may have
-		// been verified.
-		nextAncestorIntf, err := vm.GetBlockInternal(context.TODO(), nextAncestorID)
-		if err != nil {
-			return errRejectedParent
-		}
-		nextAncestor, ok := nextAncestorIntf.(*Block)
-		if !ok {
-			return fmt.Errorf("ancestor block %s had unexpected type %T", nextAncestor.ID(), nextAncestorIntf)
-		}
-		ancestor = nextAncestor
-	}
-
-	return nil
-}
-
 // getAtomicTx returns the requested transaction, status, and height.
 // If the status is Unknown, then the returned transaction will be nil.
-func (vm *VM) getAtomicTx(txID ids.ID) (*Tx, Status, uint64, error) {
+func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
 	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
-		return tx, Accepted, height, nil
-	} else if err != database.ErrNotFound {
-		return nil, Unknown, 0, err
+		return tx, atomic.Accepted, height, nil
+	} else if err != avalanchedatabase.ErrNotFound {
+		return nil, atomic.Unknown, 0, err
 	}
 	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
 	case found && dropped:
-		return tx, Dropped, 0, nil
+		return tx, atomic.Dropped, 0, nil
 	case found:
-		return tx, Processing, 0, nil
+		return tx, atomic.Processing, 0, nil
 	default:
-		return nil, Unknown, 0, nil
+		return nil, atomic.Unknown, 0, nil
 	}
 }
 
@@ -1687,7 +1589,7 @@ func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 }
 
 // verifyTxAtTip verifies that [tx] is valid to be issued on top of the currently preferred block
-func (vm *VM) verifyTxAtTip(tx *Tx) error {
+func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	if txByteLen := len(tx.SignedBytes()); txByteLen > targetAtomicTxsSize {
 		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", txByteLen, targetAtomicTxsSize)
 	}
@@ -1728,7 +1630,7 @@ func (vm *VM) verifyTxAtTip(tx *Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1737,7 +1639,15 @@ func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *
 	if !ok {
 		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
 	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(vm, tx, parent, baseFee, rules); err != nil {
+	atomicBackend := &atomic.VerifierBackend{
+		Ctx:          vm.ctx,
+		Fx:           &vm.fx,
+		Rules:        rules,
+		Bootstrapped: vm.bootstrapped.Get(),
+		BlockFetcher: vm,
+		SecpCache:    &vm.secpCache,
+	}
+	if err := tx.UnsignedAtomicTx.SemanticVerify(atomicBackend, tx, parent, baseFee); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
@@ -1745,7 +1655,7 @@ func (vm *VM) verifyTx(tx *Tx, parentHash common.Hash, baseFee *big.Int, state *
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
-func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
+func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
 		return errRejectedParent
@@ -1768,14 +1678,22 @@ func (vm *VM) verifyTxs(txs []*Tx, parentHash common.Hash, baseFee *big.Int, hei
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
+	atomicBackend := &atomic.VerifierBackend{
+		Ctx:          vm.ctx,
+		Fx:           &vm.fx,
+		Rules:        rules,
+		Bootstrapped: vm.bootstrapped.Get(),
+		BlockFetcher: vm,
+		SecpCache:    &vm.secpCache,
+	}
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.SemanticVerify(vm, atomicTx, ancestor, baseFee, rules); err != nil {
+		if err := utx.SemanticVerify(atomicBackend, atomicTx, ancestor, baseFee); err != nil {
 			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
-			return errConflictingAtomicInputs
+			return atomic.ErrConflictingAtomicInputs
 		}
 		inputs.Union(txInputs)
 	}
@@ -1797,183 +1715,13 @@ func (vm *VM) GetAtomicUTXOs(
 
 	return avax.GetAtomicUTXOs(
 		vm.ctx.SharedMemory,
-		vm.codec,
+		atomic.Codec,
 		chainID,
 		addrs,
 		startAddr,
 		startUTXOID,
 		limit,
 	)
-}
-
-// GetSpendableFunds returns a list of EVMInputs and keys (in corresponding
-// order) to total [amount] of [assetID] owned by [keys].
-// Note: we return [][]*secp256k1.PrivateKey even though each input
-// corresponds to a single key, so that the signers can be passed in to
-// [tx.Sign] which supports multiple keys on a single input.
-func (vm *VM) GetSpendableFunds(
-	keys []*secp256k1.PrivateKey,
-	assetID ids.ID,
-	amount uint64,
-) ([]EVMInput, [][]*secp256k1.PrivateKey, error) {
-	// Note: current state uses the state of the preferred block.
-	state, err := vm.blockChain.State()
-	if err != nil {
-		return nil, nil, err
-	}
-	inputs := []EVMInput{}
-	signers := [][]*secp256k1.PrivateKey{}
-	// Note: we assume that each key in [keys] is unique, so that iterating over
-	// the keys will not produce duplicated nonces in the returned EVMInput slice.
-	for _, key := range keys {
-		if amount == 0 {
-			break
-		}
-		addr := GetEthAddress(key)
-		var balance uint64
-		if assetID == vm.ctx.AVAXAssetID {
-			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
-			// denomination of AVAX that can be exported.
-			balance = new(uint256.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
-		} else {
-			balance = state.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
-		}
-		if balance == 0 {
-			continue
-		}
-		if amount < balance {
-			balance = amount
-		}
-		nonce, err := vm.GetCurrentNonce(addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		inputs = append(inputs, EVMInput{
-			Address: addr,
-			Amount:  balance,
-			AssetID: assetID,
-			Nonce:   nonce,
-		})
-		signers = append(signers, []*secp256k1.PrivateKey{key})
-		amount -= balance
-	}
-
-	if amount > 0 {
-		return nil, nil, errInsufficientFunds
-	}
-
-	return inputs, signers, nil
-}
-
-// GetSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
-// order) to total [amount] + [fee] of [AVAX] owned by [keys].
-// This function accounts for the added cost of the additional inputs needed to
-// create the transaction and makes sure to skip any keys with a balance that is
-// insufficient to cover the additional fee.
-// Note: we return [][]*secp256k1.PrivateKey even though each input
-// corresponds to a single key, so that the signers can be passed in to
-// [tx.Sign] which supports multiple keys on a single input.
-func (vm *VM) GetSpendableAVAXWithFee(
-	keys []*secp256k1.PrivateKey,
-	amount uint64,
-	cost uint64,
-	baseFee *big.Int,
-) ([]EVMInput, [][]*secp256k1.PrivateKey, error) {
-	// Note: current state uses the state of the preferred block.
-	state, err := vm.blockChain.State()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	initialFee, err := CalculateDynamicFee(cost, baseFee)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	newAmount, err := math.Add64(amount, initialFee)
-	if err != nil {
-		return nil, nil, err
-	}
-	amount = newAmount
-
-	inputs := []EVMInput{}
-	signers := [][]*secp256k1.PrivateKey{}
-	// Note: we assume that each key in [keys] is unique, so that iterating over
-	// the keys will not produce duplicated nonces in the returned EVMInput slice.
-	for _, key := range keys {
-		if amount == 0 {
-			break
-		}
-
-		prevFee, err := CalculateDynamicFee(cost, baseFee)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		newCost := cost + EVMInputGas
-		newFee, err := CalculateDynamicFee(newCost, baseFee)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		additionalFee := newFee - prevFee
-
-		addr := GetEthAddress(key)
-		// Since the asset is AVAX, we divide by the x2cRate to convert back to
-		// the correct denomination of AVAX that can be exported.
-		balance := new(uint256.Int).Div(state.GetBalance(addr), x2cRate).Uint64()
-		// If the balance for [addr] is insufficient to cover the additional cost
-		// of adding an input to the transaction, skip adding the input altogether
-		if balance <= additionalFee {
-			continue
-		}
-
-		// Update the cost for the next iteration
-		cost = newCost
-
-		newAmount, err := math.Add64(amount, additionalFee)
-		if err != nil {
-			return nil, nil, err
-		}
-		amount = newAmount
-
-		// Use the entire [balance] as an input, but if the required [amount]
-		// is less than the balance, update the [inputAmount] to spend the
-		// minimum amount to finish the transaction.
-		inputAmount := balance
-		if amount < balance {
-			inputAmount = amount
-		}
-		nonce, err := vm.GetCurrentNonce(addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		inputs = append(inputs, EVMInput{
-			Address: addr,
-			Amount:  inputAmount,
-			AssetID: vm.ctx.AVAXAssetID,
-			Nonce:   nonce,
-		})
-		signers = append(signers, []*secp256k1.PrivateKey{key})
-		amount -= inputAmount
-	}
-
-	if amount > 0 {
-		return nil, nil, errInsufficientFunds
-	}
-
-	return inputs, signers, nil
-}
-
-// GetCurrentNonce returns the nonce associated with the address at the
-// preferred block
-func (vm *VM) GetCurrentNonce(address common.Address) (uint64, error) {
-	// Note: current state uses the state of the preferred block.
-	state, err := vm.blockChain.State()
-	if err != nil {
-		return 0, err
-	}
-	return state.GetNonce(address), nil
 }
 
 // currentRules returns the chain rules for the current block.
@@ -2020,23 +1768,6 @@ func (vm *VM) startContinuousProfiler() {
 	<-vm.shutdownChan
 }
 
-func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
-	// Get the base fee to use
-	baseFee, err := vm.eth.APIBackend.EstimateBaseFee(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if baseFee == nil {
-		baseFee = initialBaseFee
-	} else {
-		// give some breathing room
-		baseFee.Mul(baseFee, big.NewInt(11))
-		baseFee.Div(baseFee, big.NewInt(10))
-	}
-
-	return baseFee, nil
-}
-
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the
 // last accepted block hash and height by reading directly from [vm.chaindb] instead of relying
 // on [chain].
@@ -2046,7 +1777,7 @@ func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 	// initialize state with the genesis block.
 	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
 	switch {
-	case lastAcceptedErr == database.ErrNotFound:
+	case lastAcceptedErr == avalanchedatabase.ErrNotFound:
 		// If there is nothing in the database, return the genesis block hash and height
 		return vm.genesisHash, 0, nil
 	case lastAcceptedErr != nil:
@@ -2108,4 +1839,27 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 	// enable state sync by default if the chain is empty.
 	return lastAcceptedHeight == 0
+}
+
+func (vm *VM) newImportTx(
+	chainID ids.ID, // chain to import from
+	to common.Address, // Address of recipient
+	baseFee *big.Int, // fee to use post-AP3
+	keys []*secp256k1.PrivateKey, // Keys to import the funds
+) (*atomic.Tx, error) {
+	kc := secp256k1fx.NewKeychain()
+	for _, key := range keys {
+		kc.Add(key)
+	}
+
+	atomicUTXOs, _, _, err := vm.GetAtomicUTXOs(chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, -1)
+	if err != nil {
+		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
+	}
+
+	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, chainID, to, baseFee, kc, atomicUTXOs)
+}
+
+func (vm *VM) PutLastAcceptedID(ID []byte) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID)
 }

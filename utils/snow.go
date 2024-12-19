@@ -8,6 +8,8 @@ import (
 	"errors"
 
 	"github.com/ava-labs/avalanchego/api/metrics"
+	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/validators"
@@ -19,9 +21,10 @@ import (
 )
 
 var (
-	testCChainID = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
-	testXChainID = ids.ID{'t', 'e', 's', 't', 'x'}
-	testChainID  = ids.ID{'t', 'e', 's', 't', 'c', 'h', 'a', 'i', 'n'}
+	testCChainID    = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
+	testXChainID    = ids.ID{'t', 'e', 's', 't', 'x'}
+	testChainID     = ids.ID{'t', 'e', 's', 't', 'c', 'h', 'a', 'i', 'n'}
+	TestAvaxAssetID = ids.ID{1, 2, 3}
 )
 
 func TestSnowContext() *snow.Context {
@@ -31,19 +34,27 @@ func TestSnowContext() *snow.Context {
 	}
 	pk := sk.PublicKey()
 	networkID := constants.UnitTestID
-	chainID := testChainID
+	chainID := testCChainID
+
+	aliaser := ids.NewAliaser()
+	_ = aliaser.Alias(testCChainID, "C")
+	_ = aliaser.Alias(testCChainID, testCChainID.String())
+	_ = aliaser.Alias(testXChainID, "X")
+	_ = aliaser.Alias(testXChainID, testXChainID.String())
 
 	ctx := &snow.Context{
 		NetworkID:      networkID,
 		SubnetID:       ids.Empty,
 		ChainID:        chainID,
+		AVAXAssetID:    TestAvaxAssetID,
 		NodeID:         ids.GenerateTestNodeID(),
+		SharedMemory:   TestSharedMemory(),
 		XChainID:       testXChainID,
 		CChainID:       testCChainID,
 		PublicKey:      pk,
 		WarpSigner:     warp.NewSigner(sk, networkID, chainID),
 		Log:            logging.NoLog{},
-		BCLookup:       ids.NewAliaser(),
+		BCLookup:       aliaser,
 		Metrics:        metrics.NewPrefixGatherer(),
 		ChainDataDir:   "",
 		ValidatorState: NewTestValidatorState(),
@@ -75,4 +86,9 @@ func NewTestValidatorState() *validatorstest.State {
 			return map[ids.ID]*validators.GetCurrentValidatorOutput{}, 0, nil
 		},
 	}
+}
+
+func TestSharedMemory() atomic.SharedMemory {
+	m := atomic.NewMemory(memdb.New())
+	return m.NewSharedMemory(testCChainID)
 }
