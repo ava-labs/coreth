@@ -242,10 +242,6 @@ func TestReprocessGenesis(t *testing.T) {
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
 			defer backend.Close()
-			CleanupOnInterrupt(func() {
-				t.Logf("Cleaning up %s", backend.Name)
-				require.NoError(t, backend.Close())
-			})
 			testReprocessGenesis(t, backend, uint64(blocks))
 		})
 	}
@@ -273,9 +269,15 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		getMainnetBackend(t, "legacy", source, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
+			defer backend.Close()
+
+			CleanupOnInterrupt(func() {
+				t.Logf("Cleaning up %s", backend.Name)
+				require.NoError(t, backend.Close())
+			})
+
 			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
 			t.Logf("Last hash: %x, Last root: %x", lastHash, lastRoot)
-			backend.Close()
 		})
 	}
 }
