@@ -360,7 +360,7 @@ func reprocess(
 		isApricotPhase5 := backend.Genesis.Config.IsApricotPhase5(block.Time())
 		atomicTxs, err := ExtractAtomicTxs(block.ExtData(), isApricotPhase5, Codec)
 		require.NoError(t, err)
-		t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot)
+		t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
