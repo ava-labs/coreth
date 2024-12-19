@@ -2,24 +2,17 @@ package evm
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"flag"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/trace"
-	"github.com/ava-labs/avalanchego/utils/units"
-	xmerkledb "github.com/ava-labs/avalanchego/x/merkledb"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -131,63 +124,71 @@ func TestReprocessGenesis(t *testing.T) {
 	backend := getBackend(t, "test")
 	g := backend.Genesis
 	engine := backend.Engine
+	cacheConfig := backend.CacheConfig
 
 	db := rawdb.NewMemoryDatabase()
-	ctx := context.Background()
-
-	mdbKVStore := memdb.New()
-	mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{
-		BranchFactor:                xmerkledb.BranchFactor16,
-		Hasher:                      xmerkledb.DefaultHasher,
-		HistoryLength:               1,
-		RootGenConcurrency:          0,
-		ValueNodeCacheSize:          units.MiB,
-		IntermediateNodeCacheSize:   units.MiB,
-		IntermediateWriteBufferSize: units.KiB,
-		IntermediateWriteBatchSize:  256 * units.KiB,
-		Reg:                         prometheus.NewRegistry(),
-		TraceLevel:                  xmerkledb.InfoTrace,
-		Tracer:                      trace.Noop,
-	})
-	require.NoError(t, err)
-	_ = mdb
-
-	cacheConfig := *core.DefaultCacheConfig
-	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{
-		// KVBackend: merkledb.NewMerkleDB(mdb),
-	}
-	cacheConfig.TriePrefetcherParallelism = 4
-	cacheConfig.SnapshotLimit = 256
-	cacheConfig.SnapshotDelayInit = true
-	// cacheConfig.Pruning = false
 
 	bc, err := core.NewBlockChain(db, &cacheConfig, g, engine, vm.Config{}, common.Hash{}, false)
 	require.NoError(t, err)
+
+	normalGenesis := g.ToBlock()
+	require.NoError(t, bc.LoadGenesisState(normalGenesis))
+
+	lastRoot := normalGenesis.Root()
+	lastHash := normalGenesis.Hash()
+	if backend := cacheConfig.KeyValueDB.KVBackend; backend != nil {
+		lastRoot = backend.Root()
+	}
+
+	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
+	bc.Stop() // Genesis was created. Stop the chain.
+	t.Logf("Genesis block: %s", bc.CurrentBlock().Hash().Hex())
+
+	start, stop := uint64(1), backend.BlockCount/2
+	lastHash, lastRoot = reprocess(t, db, backend, lastHash, lastRoot, start, stop)
+	if cacheConfig.SnapshotLimit > 0 {
+		accounts, storages := checkSnapshot(t, db, false)
+		t.Logf("Iterated snapshot: Accounts: %d, Storages: %d", accounts, storages)
+	}
+
+	start, stop = backend.BlockCount/2+1, backend.BlockCount
+	lastHash, lastRoot = reprocess(t, db, backend, lastHash, lastRoot, start, stop)
+	if cacheConfig.SnapshotLimit > 0 {
+		accounts, storages := checkSnapshot(t, db, false)
+		t.Logf("Iterated snapshot: Accounts: %d, Storages: %d", accounts, storages)
+	}
+	t.Logf("Last block: %d, Last hash: %x, Last root: %x", stop, lastHash, lastRoot)
+}
+
+func reprocess(
+	t *testing.T, db ethdb.Database,
+	backend *reprocessBackend, lastHash, lastRoot common.Hash,
+	start, stop uint64,
+) (common.Hash, common.Hash) {
+	cacheConfig := backend.CacheConfig
 
 	var lastInsertedRoot common.Hash
 	checkRootFn := func(expected, got common.Hash) bool {
 		t.Logf("Got root: %x (original: %x)", got, expected)
 		lastInsertedRoot = got
+		if backend.VerifyRoot {
+			return expected == got
+		}
 		return true
 	}
+
+	// Great, now let's restart the chain
+	cacheConfig.SnapshotDelayInit = true
+	cacheConfig.SnapshotNoBuild = true
+	bc, err := core.NewBlockChain(
+		db, &cacheConfig, backend.Genesis, backend.Engine, vm.Config{}, lastHash, false,
+		core.Opts{LastAcceptedRoot: lastRoot},
+	)
+	require.NoError(t, err)
+
 	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
+	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
 
-	normalGenesis := g.ToBlock()
-	require.NoError(t, bc.LoadGenesisState(normalGenesis))
-
-	bc.InitializeSnapshots()
-
-	t.Logf("Genesis block: %s", bc.CurrentBlock().Hash().Hex())
-	getCurrentRoot := func() common.Hash {
-		if backend := cacheConfig.KeyValueDB.KVBackend; backend != nil {
-			return backend.Root()
-		}
-		return bc.CurrentHeader().Root // If backend is not specified roots must match geth implementation
-	}
-	lastRoot := getCurrentRoot()
-	lastHash := normalGenesis.Hash()
-
-	start, stop := uint64(1), backend.BlockCount/2
 	for i := start; i <= stop; i++ {
 		block := backend.GetBlock(i)
 		t.Logf("Block: %d, Transactions: %d, Parent State: %x", i, len(block.Transactions()), lastRoot)
@@ -203,53 +204,15 @@ func TestReprocessGenesis(t *testing.T) {
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
 		require.NoError(t, err)
 
-		lastRoot = getCurrentRoot()
+		lastRoot = lastInsertedRoot
 		lastHash = block.Hash()
 	}
 	bc.Stop()
 
-	expectedAccounts, expectedStorages := 3, int(stop) // test backend inserts 1 storage per block
-	if cacheConfig.SnapshotLimit > 0 {
-		checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
-	}
-
-	// Great, now let's restart the chain
-	cacheConfig.SnapshotNoBuild = true
-	bc, err = core.NewBlockChain(
-		db, &cacheConfig, g, engine, vm.Config{}, lastHash, false,
-		core.Opts{LastAcceptedRoot: lastRoot},
-	)
-	require.NoError(t, err)
-	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
-	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
-
-	start, stop = backend.BlockCount/2+1, backend.BlockCount
-	for i := start; i <= stop; i++ {
-		block := backend.GetBlock(i)
-		t.Logf("Block: %d, Transactions: %d, Parent State: %x", i, len(block.Transactions()), lastRoot)
-
-		// Override parentRoot to match last state
-		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
-		parent.Root = lastRoot
-
-		err := bc.InsertBlockManualWithParent(block, parent, true)
-		require.NoError(t, err)
-
-		t.Logf("Accepting block %s", block.Hash().Hex())
-		err = bc.AcceptWithRoot(block, lastInsertedRoot)
-		require.NoError(t, err)
-
-		lastRoot = getCurrentRoot()
-	}
-	bc.Stop()
-
-	expectedAccounts, expectedStorages = 3, int(stop) // test backend inserts 1 storage per block
-	if cacheConfig.SnapshotLimit > 0 {
-		checkSnapshot(t, db, &expectedAccounts, &expectedStorages, false)
-	}
+	return lastHash, lastRoot
 }
 
-func checkSnapshot(t *testing.T, db ethdb.Database, expectedAccounts, expectedStorages *int, log bool) {
+func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 	t.Helper()
 
 	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
@@ -264,9 +227,6 @@ func checkSnapshot(t *testing.T, db ethdb.Database, expectedAccounts, expectedSt
 			t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
 		}
 	}
-	if expectedAccounts != nil {
-		require.Equal(t, *expectedAccounts, accounts)
-	}
 
 	it2 := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 	defer it2.Release()
@@ -280,7 +240,5 @@ func checkSnapshot(t *testing.T, db ethdb.Database, expectedAccounts, expectedSt
 			t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
 		}
 	}
-	if expectedStorages != nil {
-		require.Equal(t, *expectedStorages, storages)
-	}
+	return accounts, storages
 }

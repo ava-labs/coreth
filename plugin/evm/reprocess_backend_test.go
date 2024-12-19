@@ -1,28 +1,68 @@
 package evm
 
 import (
+	"context"
 	"encoding/binary"
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/trace"
+	"github.com/ava-labs/avalanchego/utils/units"
+	xmerkledb "github.com/ava-labs/avalanchego/x/merkledb"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/shim/merkledb"
+	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
 type reprocessBackend struct {
-	Genesis    *core.Genesis
-	Engine     consensus.Engine
-	GetBlock   func(uint64) *types.Block
-	BlockCount uint64
+	Genesis     *core.Genesis
+	Engine      consensus.Engine
+	GetBlock    func(uint64) *types.Block
+	BlockCount  uint64
+	CacheConfig core.CacheConfig
+	VerifyRoot  bool
+}
+
+func getCacheConfig(t *testing.T, name string) core.CacheConfig {
+	ctx := context.Background()
+	mdbKVStore := memdb.New()
+	mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{
+		BranchFactor:                xmerkledb.BranchFactor16,
+		Hasher:                      xmerkledb.DefaultHasher,
+		HistoryLength:               1,
+		RootGenConcurrency:          0,
+		ValueNodeCacheSize:          units.MiB,
+		IntermediateNodeCacheSize:   units.MiB,
+		IntermediateWriteBufferSize: units.KiB,
+		IntermediateWriteBatchSize:  256 * units.KiB,
+		Reg:                         prometheus.NewRegistry(),
+		TraceLevel:                  xmerkledb.InfoTrace,
+		Tracer:                      trace.Noop,
+	})
+	require.NoError(t, err)
+	_ = mdb
+
+	cacheConfig := *core.DefaultCacheConfig
+	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{
+		KVBackend: merkledb.NewMerkleDB(mdb),
+	}
+	cacheConfig.TriePrefetcherParallelism = 4
+	cacheConfig.SnapshotLimit = 256
+	cacheConfig.SnapshotDelayInit = true
+	// cacheConfig.Pruning = false
+	return cacheConfig
 }
 
 func getBackend(t *testing.T, name string) *reprocessBackend {
@@ -78,9 +118,10 @@ func getBackend(t *testing.T, name string) *reprocessBackend {
 	require.NoError(t, err)
 
 	return &reprocessBackend{
-		Genesis:    g,
-		Engine:     engine,
-		BlockCount: uint64(len(blocks)),
-		GetBlock:   func(i uint64) *types.Block { return blocks[i-1] },
+		Genesis:     g,
+		Engine:      engine,
+		BlockCount:  uint64(len(blocks)),
+		GetBlock:    func(i uint64) *types.Block { return blocks[i-1] },
+		CacheConfig: getCacheConfig(t, name),
 	}
 }

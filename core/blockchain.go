@@ -1931,7 +1931,7 @@ func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 		SkipVerify: !bc.cacheConfig.SnapshotVerify,
 	}
 	kvConfig := bc.cacheConfig.KeyValueDB
-	if b.Number.Uint64() == 0 && kvConfig != nil && kvConfig.KVBackend != nil {
+	if b.Number.Uint64() == 0 && kvConfig != nil && kvConfig.KVBackend != nil && !bc.cacheConfig.SnapshotNoBuild {
 		snapcfgGenesis := snapconfig
 		snapcfgGenesis.AsyncBuild = !bc.cacheConfig.SnapshotWait
 		var err error
@@ -1954,7 +1954,11 @@ func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 		if err := bc.snaps.Flatten(bc.genesisBlock.Hash()); err != nil {
 			log.Error("failed to flatten genesis snapshot", "err", err)
 		}
-		rawdb.WriteSnapshotRoot(bc.db, bc.genesisBlock.Root())
+		root := bc.genesisBlock.Root()
+		if len(opts) > 0 {
+			root = opts[0].LastAcceptedRoot
+		}
+		rawdb.WriteSnapshotRoot(bc.db, root)
 		// Need to mark the snapshot completed
 		bc.snaps.AbortGeneration()
 		snapshot.ResetSnapshotGeneration(bc.db)
