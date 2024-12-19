@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/trace"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/units"
 	xmerkledb "github.com/ava-labs/avalanchego/x/merkledb"
 	"github.com/ava-labs/coreth/consensus"
@@ -149,6 +150,8 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs) *reprocessBackend {
 	var g core.Genesis
 	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
+	// Update the chain config with mainnet upgrades
+	g.Config = params.GetChainConfig(upgrade.Mainnet, g.Config.ChainID)
 
 	testVM := &VM{
 		chainConfig: g.Config,
