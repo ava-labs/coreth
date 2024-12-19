@@ -59,7 +59,7 @@ func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
 			Delete: len(kv.Value) == 0,
 		}
 	}
-	view, err := m.latestView().NewView(ctx, merkledb.ViewChanges{BatchOps: changes})
+	view, err := m.latestViewLocked().NewView(ctx, merkledb.ViewChanges{BatchOps: changes})
 	if err != nil {
 		return common.Hash{}, err
 	}
