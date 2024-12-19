@@ -65,8 +65,7 @@ func (m *MerkleDB) Commit(root common.Hash) error {
 		return fmt.Errorf("no pending views")
 	}
 	pendingRootIdx := -1
-	for i := len(m.pendingViewRoots) - 1; i >= 0; i-- {
-		pendingRoot := m.pendingViewRoots[i]
+	for i, pendingRoot := range m.pendingViewRoots {
 		if pendingRoot == root {
 			pendingRootIdx = i
 			break

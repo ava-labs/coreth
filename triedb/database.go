@@ -180,6 +180,10 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
+	kvConfig := db.config.KeyValueDB
+	if kvConfig != nil && kvConfig.KVBackend != nil {
+		return nil
+	}
 	return db.backend.Update(root, parent, block, nodes, states)
 }
 
