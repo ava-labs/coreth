@@ -357,7 +357,7 @@ func reprocess(
 		err := bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
 
-		t.Logf("Accepting block %d, was inserted with root %x", i, lastInsertedRoot)
+		t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
 		err = bc.AcceptWithRoot(block, lastInsertedRoot)
 		require.NoError(t, err)
 
