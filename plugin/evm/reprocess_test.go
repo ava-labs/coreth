@@ -337,7 +337,6 @@ func reprocess(
 
 		bc.Stop()
 	})
-	syscall.Setsid() // Creates a new process group
 
 	if start == 0 {
 		// Handling the genesis block
