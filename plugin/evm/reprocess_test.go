@@ -33,15 +33,21 @@ var (
 	sourcePrefix = ""
 	dbDir        = ""
 	startBlock   = uint64(0)
-	endBlock     = uint64(20_000)
+	endBlock     = uint64(200)
+	prefetchers  = 4
+	useSnapshot  = true
+	pruning      = true
 )
 
 func TestMain(m *testing.M) {
 	flag.StringVar(&sourceDbDir, "sourceDbDir", sourceDbDir, "directory of source database")
 	flag.StringVar(&sourcePrefix, "sourcePrefix", sourcePrefix, "prefix of source database")
-	flag.StringVar(&dbDir, "dbDir", dbDir, "directory to store database")
+	flag.StringVar(&dbDir, "dbDir", dbDir, "directory to store database (uses memory if empty)")
 	flag.Uint64Var(&startBlock, "startBlock", startBlock, "start block number")
 	flag.Uint64Var(&endBlock, "endBlock", endBlock, "end block number")
+	flag.IntVar(&prefetchers, "prefetchers", prefetchers, "number of prefetchers")
+	flag.BoolVar(&useSnapshot, "useSnapshot", useSnapshot, "use snapshot")
+	flag.BoolVar(&pruning, "pruning", pruning, "pruning")
 
 	flag.Parse()
 	m.Run()
@@ -194,12 +200,13 @@ func TestReprocessGenesis(t *testing.T) {
 	dbs := openDBs(t)
 	defer dbs.Close()
 
+	blocks := int(endBlock) // use the end block as the block count, since we start from 0
 	for _, backend := range []*reprocessBackend{
-		getBackend(t, "merkledb", dbs),
-		getBackend(t, "legacy", dbs),
+		getBackend(t, "merkledb", blocks, dbs),
+		getBackend(t, "legacy", blocks, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
-			testReprocessGenesis(t, backend)
+			testReprocessGenesis(t, backend, uint64(blocks))
 		})
 	}
 }
@@ -212,29 +219,34 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 	dbs := openDBs(t)
 	defer dbs.Close()
 
-	blocks := endBlock
+	lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
+	t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
+
+	require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
+
 	for _, backend := range []*reprocessBackend{
-		getMainnetBackend(t, "merkledb", blocks, source, dbs),
-		getMainnetBackend(t, "legacy", blocks, source, dbs),
+		getMainnetBackend(t, "merkledb", source, dbs),
+		getMainnetBackend(t, "legacy", source, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
-			testReprocessGenesis(t, backend)
+			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
+			t.Logf("Last hash: %x, Last root: %x", lastHash, lastRoot)
 		})
 	}
 }
 
-func testReprocessGenesis(t *testing.T, backend *reprocessBackend) {
+func testReprocessGenesis(t *testing.T, backend *reprocessBackend, blockCount uint64) {
 	cacheConfig := backend.CacheConfig
 
 	var lastHash, lastRoot common.Hash
-	start, stop := uint64(0), backend.BlockCount/2
+	start, stop := uint64(0), blockCount/2
 	lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, start, stop)
 	if cacheConfig.SnapshotLimit > 0 {
 		accounts, storages := checkSnapshot(t, backend.Disk, false)
 		t.Logf("Iterated snapshot: Accounts: %d, Storages: %d", accounts, storages)
 	}
 
-	start, stop = backend.BlockCount/2+1, backend.BlockCount
+	start, stop = blockCount/2+1, blockCount
 	lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, start, stop)
 	if cacheConfig.SnapshotLimit > 0 {
 		accounts, storages := checkSnapshot(t, backend.Disk, false)

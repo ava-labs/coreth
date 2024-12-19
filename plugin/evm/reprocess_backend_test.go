@@ -33,7 +33,6 @@ type reprocessBackend struct {
 	Genesis     *core.Genesis
 	Engine      consensus.Engine
 	GetBlock    func(uint64) *types.Block
-	BlockCount  uint64
 	CacheConfig core.CacheConfig
 	VerifyRoot  bool
 	Disk        ethdb.Database
@@ -64,13 +63,16 @@ func getCacheConfig(t *testing.T, name string, mdbKVStore database.Database) cor
 
 	cacheConfig := *core.DefaultCacheConfig
 	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{KVBackend: backend}
-	cacheConfig.TriePrefetcherParallelism = 4
-	cacheConfig.SnapshotLimit = 256
-	// cacheConfig.Pruning = false
+	cacheConfig.TriePrefetcherParallelism = prefetchers
+	cacheConfig.SnapshotLimit = 0
+	if useSnapshot {
+		cacheConfig.SnapshotLimit = 256
+	}
+	cacheConfig.Pruning = pruning
 	return cacheConfig
 }
 
-func getBackend(t *testing.T, name string, dbs dbs) *reprocessBackend {
+func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessBackend {
 	chainConfig := params.TestChainConfig
 	key1, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
@@ -109,7 +111,7 @@ func getBackend(t *testing.T, name string, dbs dbs) *reprocessBackend {
 	})
 
 	signer := types.LatestSigner(chainConfig)
-	_, blocks, _, err := core.GenerateChainWithGenesis(g, engine, 20, 2, func(i int, b *core.BlockGen) {
+	_, blocks, _, err := core.GenerateChainWithGenesis(g, engine, blocksCount, 2, func(i int, b *core.BlockGen) {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
 			Nonce:    uint64(i),
 			GasPrice: b.BaseFee(),
@@ -119,11 +121,11 @@ func getBackend(t *testing.T, name string, dbs dbs) *reprocessBackend {
 		b.AddTx(tx)
 	})
 	require.NoError(t, err)
+	require.Len(t, blocks, blocksCount)
 
 	return &reprocessBackend{
 		Genesis:     g,
 		Engine:      engine,
-		BlockCount:  uint64(len(blocks)),
 		GetBlock:    func(i uint64) *types.Block { return blocks[i-1] },
 		CacheConfig: getCacheConfig(t, name, dbs.merkledb),
 		Disk:        dbs.chain,
@@ -133,7 +135,7 @@ func getBackend(t *testing.T, name string, dbs dbs) *reprocessBackend {
 	}
 }
 
-func getMainnetBackend(t *testing.T, name string, blocks uint64, source ethdb.Database, dbs dbs) *reprocessBackend {
+func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs) *reprocessBackend {
 	var g core.Genesis
 	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
 
@@ -146,9 +148,8 @@ func getMainnetBackend(t *testing.T, name string, blocks uint64, source ethdb.Da
 	engine := dummy.NewFakerWithMode(cbs, dummy.Mode{ModeSkipHeader: true})
 
 	return &reprocessBackend{
-		Genesis:    &g,
-		Engine:     engine,
-		BlockCount: blocks,
+		Genesis: &g,
+		Engine:  engine,
 		GetBlock: func(i uint64) *types.Block {
 			hash := rawdb.ReadCanonicalHash(source, i)
 			block := rawdb.ReadBlock(source, hash, i)
