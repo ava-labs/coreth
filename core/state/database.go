@@ -32,6 +32,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/shim"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/trie/utils"
@@ -189,6 +190,19 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if kvConfig := db.triedb.Config().KeyValueDB; kvConfig != nil {
+		if kvConfig.KVBackend != nil {
+			return shim.NewAccountTrieKV(root, kvConfig.KVBackend, db.triedb)
+		}
+		// Legacy backend maintains hash compatibility with geth
+		// to test the shim layer.
+		backend, err := shim.NewLegacyBackend(root, common.Hash{}, root, db.triedb)
+		if err != nil {
+			return nil, err
+		}
+		return shim.NewStateTrie(backend, db.triedb), nil
+	}
+
 	if db.triedb.IsVerkle() {
 		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
 	}
@@ -201,6 +215,21 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+	if kvConfig := db.triedb.Config().KeyValueDB; kvConfig != nil {
+		addrHash := crypto.Keccak256Hash(address.Bytes())
+
+		if kvConfig.KVBackend != nil {
+			accountTrie := self.(*shim.StateTrie)
+			return shim.NewStorageTrieKV(stateRoot, addrHash, accountTrie)
+		}
+		// Legacy backend maintains hash compatibility with geth
+		// to test the shim layer.
+		backend, err := shim.NewLegacyBackend(stateRoot, addrHash, root, db.triedb)
+		if err != nil {
+			return nil, err
+		}
+		return shim.NewStateTrie(backend, db.triedb), nil
+	}
 	// In the verkle case, there is only one tree. But the two-tree structure
 	// is hardcoded in the codebase. So we need to return the same trie in this
 	// case.
@@ -217,6 +246,8 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 // CopyTrie returns an independent copy of the given trie.
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
+	case *shim.StateTrie:
+		return t.Copy()
 	case *trie.StateTrie:
 		return t.Copy()
 	default:
