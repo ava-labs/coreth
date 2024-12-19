@@ -53,17 +53,16 @@ func (r *prefixReader) Has(key []byte) (bool, error) {
 	return r.Database.Has(append(r.prefix, key...))
 }
 
-func TestExportBlocks(t *testing.T) {
-	cache := 128
-	handles := 1024
+const (
+	cacheSize = 128
+	handles   = 1024
+)
 
-	sourceDb, err := rawdb.NewLevelDBDatabase(sourceDbDir, cache, handles, "", true)
+func openSourceDB(t *testing.T) ethdb.Database {
+	sourceDb, err := rawdb.NewLevelDBDatabase(sourceDbDir, cacheSize, handles, "", true)
 	if err != nil {
 		t.Skipf("Failed to open source database: %s", err)
 	}
-	require.NoError(t, err)
-	defer sourceDb.Close()
-
 	prefix := []byte(sourcePrefix)
 	if bytes.HasPrefix(prefix, []byte("0x")) {
 		prefix = prefix[2:]
@@ -73,15 +72,19 @@ func TestExportBlocks(t *testing.T) {
 			t.Fatalf("invalid hex prefix: %s", prefix)
 		}
 	}
-	t.Logf("Using prefix: %x", prefix)
-	sourceDb = &prefixReader{Database: sourceDb, prefix: prefix}
+	return &prefixReader{Database: sourceDb, prefix: prefix}
+}
+
+func TestExportBlocks(t *testing.T) {
+	sourceDb := openSourceDB(t)
+	defer sourceDb.Close()
 
 	if startBlock == 0 {
 		startBlock = 1
 		t.Logf("Start block is 0, setting to 1")
 	}
 
-	db, err := rawdb.NewLevelDBDatabase(dbDir, cache, handles, "", false)
+	db, err := rawdb.NewLevelDBDatabase(dbDir, cacheSize, handles, "", false)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -125,6 +128,21 @@ func TestReprocessGenesis(t *testing.T) {
 	for _, backend := range []*reprocessBackend{
 		getBackend(t, "merkledb"),
 		getBackend(t, "legacy"),
+	} {
+		t.Run(backend.Name, func(t *testing.T) {
+			testReprocessGenesis(t, backend)
+		})
+	}
+}
+
+func TestReprocessMainnetBlocksInMemory(t *testing.T) {
+	source := openSourceDB(t)
+	defer source.Close()
+
+	blocks := uint64(100)
+	for _, backend := range []*reprocessBackend{
+		getMainnetInMemoryBackend(t, "merkledb", blocks, source),
+		getMainnetInMemoryBackend(t, "legacy", blocks, source),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
 			testReprocessGenesis(t, backend)

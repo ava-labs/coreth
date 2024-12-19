@@ -3,6 +3,7 @@ package evm
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -81,9 +82,7 @@ func getBackend(t *testing.T, name string) *reprocessBackend {
 	testVM := &VM{
 		chainConfig: chainConfig,
 		codec:       Codec,
-		ctx: &snow.Context{
-			AVAXAssetID: ids.ID{1},
-		},
+		ctx:         &snow.Context{AVAXAssetID: ids.ID{1}},
 	}
 	someAddr := common.Address{1}
 
@@ -127,6 +126,34 @@ func getBackend(t *testing.T, name string) *reprocessBackend {
 		Engine:      engine,
 		BlockCount:  uint64(len(blocks)),
 		GetBlock:    func(i uint64) *types.Block { return blocks[i-1] },
+		CacheConfig: getCacheConfig(t, name),
+		Disk:        rawdb.NewMemoryDatabase(),
+		Name:        name,
+	}
+}
+
+func getMainnetInMemoryBackend(t *testing.T, name string, blocks uint64, source ethdb.Database) *reprocessBackend {
+	var g core.Genesis
+	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
+
+	testVM := &VM{
+		chainConfig: g.Config,
+		codec:       Codec,
+		ctx:         &snow.Context{AVAXAssetID: mainnetAvaxAssetID},
+	}
+	cbs := dummy.ConsensusCallbacks{OnExtraStateChange: testVM.onExtraStateChange}
+	engine := dummy.NewFakerWithMode(cbs, dummy.Mode{ModeSkipHeader: true})
+
+	return &reprocessBackend{
+		Genesis:    &g,
+		Engine:     engine,
+		BlockCount: blocks,
+		GetBlock: func(i uint64) *types.Block {
+			hash := rawdb.ReadCanonicalHash(source, i)
+			block := rawdb.ReadBlock(source, hash, i)
+			require.NotNil(t, block)
+			return block
+		},
 		CacheConfig: getCacheConfig(t, name),
 		Disk:        rawdb.NewMemoryDatabase(),
 		Name:        name,
