@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -48,6 +49,7 @@ func (b *reprocessBackend) Close() error {
 	}
 	mdb := b.mdb
 	b.mdb = nil
+	fmt.Println("Closing MerkleDB")
 	return mdb.Close()
 }
 
