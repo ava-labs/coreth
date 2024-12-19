@@ -241,13 +241,6 @@ type ExportAVAXArgs struct {
 	To string `json:"to"`
 }
 
-// ExportArgs are the arguments to Export
-type ExportArgs struct {
-	ExportAVAXArgs
-	// AssetID of the tokens
-	AssetID string `json:"assetID"`
-}
-
 // Export sends an asset from this chain to the P/C-Chain.
 // After this tx is accepted, the AVAX must be imported to the P/C-chain with an importTx.
 // Returns the ID of the newly created atomic transaction
@@ -261,14 +254,11 @@ func (c *client) Export(
 	options ...rpc.Option,
 ) (ids.ID, error) {
 	res := &api.JSONTxID{}
-	err := c.requester.SendRequest(ctx, "avax.export", &ExportArgs{
-		ExportAVAXArgs: ExportAVAXArgs{
-			UserPass:    user,
-			Amount:      json.Uint64(amount),
-			TargetChain: targetChain,
-			To:          to.String(),
-		},
-		AssetID: assetID,
+	err := c.requester.SendRequest(ctx, "avax.export", &ExportAVAXArgs{
+		UserPass:    user,
+		Amount:      json.Uint64(amount),
+		TargetChain: targetChain,
+		To:          to.String(),
 	}, res, options...)
 	return res.TxID, err
 }

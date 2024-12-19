@@ -610,7 +610,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal("Expected logs to be non-nil")
 	}
 
-	exportTx, err := vm.newExportTx(vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	exportTx, err := vm.newExportTx(importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -971,6 +971,37 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomic.ErrConflictingAtomicInputs) {
 		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomic.ErrConflictingAtomicInputs, err)
 	}
+}
+
+// newExportTx returns a new ExportTx
+func (vm *VM) newExportTx(
+	amount uint64, // Amount of tokens to export
+	chainID ids.ID, // Chain to send the UTXOs to
+	to ids.ShortID, // Address of chain recipient
+	baseFee *big.Int, // fee to use post-AP3
+	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
+) (*atomic.Tx, error) {
+	state, err := vm.blockChain.State()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the transaction
+	tx, err := atomic.NewExportTx(
+		vm.ctx,            // Context
+		vm.currentRules(), // VM rules
+		state,
+		amount,  // Amount
+		chainID, // ID of the chain to send the funds to
+		to,      // Address
+		baseFee,
+		keys, // Private keys
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx, nil
 }
 
 func TestReissueAtomicTxHigherGasPrice(t *testing.T) {

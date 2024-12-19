@@ -35,7 +35,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/accounts"
 	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/accounts/scwallet"
@@ -229,7 +228,7 @@ func (s *TxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	pending, queue := s.b.TxPoolContent()
 
 	// Define a formatter to flatten a transaction into a string
-	var format = func(tx *types.Transaction) string {
+	format := func(tx *types.Transaction) string {
 		if to := tx.To(); to != nil {
 			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), tx.GasPrice())
 		}
@@ -644,17 +643,6 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, 
 	}
 	b := state.GetBalance(address).ToBig()
 	return (*hexutil.Big)(b), state.Error()
-}
-
-// GetAssetBalance returns the amount of [assetID] for the given address in the state of the
-// given block number. The rpc.LatestBlockNumber, rpc.PendingBlockNumber, and
-// rpc.AcceptedBlockNumber meta block numbers are also allowed.
-func (s *BlockChainAPI) GetAssetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash, assetID ids.ID) (*hexutil.Big, error) {
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
-	return (*hexutil.Big)(state.GetBalanceMultiCoin(address, common.Hash(assetID))), state.Error()
 }
 
 // AccountResult structs for GetProof
@@ -1966,11 +1954,11 @@ func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, g
 	matchTx := sendArgs.toTransaction()
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
-	var price = matchTx.GasPrice()
+	price := matchTx.GasPrice()
 	if gasPrice != nil {
 		price = gasPrice.ToInt()
 	}
-	var gas = matchTx.Gas()
+	gas := matchTx.Gas()
 	if gasLimit != nil {
 		gas = uint64(*gasLimit)
 	}

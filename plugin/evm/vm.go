@@ -1768,23 +1768,6 @@ func (vm *VM) startContinuousProfiler() {
 	<-vm.shutdownChan
 }
 
-func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
-	// Get the base fee to use
-	baseFee, err := vm.eth.APIBackend.EstimateBaseFee(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if baseFee == nil {
-		baseFee = initialBaseFee
-	} else {
-		// give some breathing room
-		baseFee.Mul(baseFee, big.NewInt(11))
-		baseFee.Div(baseFee, big.NewInt(10))
-	}
-
-	return baseFee, nil
-}
-
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the
 // last accepted block hash and height by reading directly from [vm.chaindb] instead of relying
 // on [chain].
@@ -1875,39 +1858,6 @@ func (vm *VM) newImportTx(
 	}
 
 	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, chainID, to, baseFee, kc, atomicUTXOs)
-}
-
-// newExportTx returns a new ExportTx
-func (vm *VM) newExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
-	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
-) (*atomic.Tx, error) {
-	state, err := vm.blockChain.State()
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the transaction
-	tx, err := atomic.NewExportTx(
-		vm.ctx,            // Context
-		vm.currentRules(), // VM rules
-		state,
-		assetID, // AssetID
-		amount,  // Amount
-		chainID, // ID of the chain to send the funds to
-		to,      // Address
-		baseFee,
-		keys, // Private keys
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return tx, nil
 }
 
 func (vm *VM) PutLastAcceptedID(ID []byte) error {
