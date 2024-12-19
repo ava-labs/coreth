@@ -61,8 +61,8 @@ func TestMain(m *testing.M) {
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
-	flag.IntVar(&valueNodeCacheSizeMB, "valueNodeCacheSizeKB", valueNodeCacheSizeMB, "value node cache size in MB")
-	flag.IntVar(&intermediateNodeCacheSizeMB, "intermediateNodeCacheSizeKB", intermediateNodeCacheSizeMB, "intermediate node cache size in MB")
+	flag.IntVar(&valueNodeCacheSizeMB, "valueNodeCacheSizeMB", valueNodeCacheSizeMB, "value node cache size in MB")
+	flag.IntVar(&intermediateNodeCacheSizeMB, "intermediateNodeCacheSizeMB", intermediateNodeCacheSizeMB, "intermediate node cache size in MB")
 	flag.IntVar(&intermediateWriteBufferSizeKB, "intermediateWriteBufferSizeKB", intermediateWriteBufferSizeKB, "intermediate write buffer size in KB")
 	flag.IntVar(&intermediateWriteBatchSizeKB, "intermediateWriteBatchSizeKB", intermediateWriteBatchSizeKB, "intermediate write batch size in KB")
 
