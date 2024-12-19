@@ -139,7 +139,7 @@ func TestReprocessMainnetBlocksInMemory(t *testing.T) {
 	source := openSourceDB(t)
 	defer source.Close()
 
-	blocks := uint64(100)
+	blocks := endBlock
 	for _, backend := range []*reprocessBackend{
 		getMainnetInMemoryBackend(t, "merkledb", blocks, source),
 		getMainnetInMemoryBackend(t, "legacy", blocks, source),
