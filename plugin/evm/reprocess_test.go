@@ -40,6 +40,13 @@ var (
 	prefetchers  = 4
 	useSnapshot  = true
 	pruning      = true
+
+	// merkledb options
+	merkleDBBranchFactor          = 16
+	valueNodeCacheSizeKB          = 1024
+	intermediateNodeCacheSizeKB   = 1024
+	intermediateWriteBufferSizeKB = 1024
+	intermediateWriteBatchSizeKB  = 256
 )
 
 func TestMain(m *testing.M) {
@@ -51,6 +58,13 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&prefetchers, "prefetchers", prefetchers, "number of prefetchers")
 	flag.BoolVar(&useSnapshot, "useSnapshot", useSnapshot, "use snapshot")
 	flag.BoolVar(&pruning, "pruning", pruning, "pruning")
+
+	// merkledb options
+	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
+	flag.IntVar(&valueNodeCacheSizeKB, "valueNodeCacheSizeKB", valueNodeCacheSizeKB, "value node cache size in KB")
+	flag.IntVar(&intermediateNodeCacheSizeKB, "intermediateNodeCacheSizeKB", intermediateNodeCacheSizeKB, "intermediate node cache size in KB")
+	flag.IntVar(&intermediateWriteBufferSizeKB, "intermediateWriteBufferSizeKB", intermediateWriteBufferSizeKB, "intermediate write buffer size in KB")
+	flag.IntVar(&intermediateWriteBatchSizeKB, "intermediateWriteBatchSizeKB", intermediateWriteBatchSizeKB, "intermediate write batch size in KB")
 
 	flag.Parse()
 	m.Run()

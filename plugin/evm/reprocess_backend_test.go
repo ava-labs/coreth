@@ -45,14 +45,14 @@ type reprocessBackend struct {
 func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB {
 	ctx := context.Background()
 	mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{
-		BranchFactor:                xmerkledb.BranchFactor16,
+		BranchFactor:                xmerkledb.BranchFactor(merkleDBBranchFactor),
 		Hasher:                      xmerkledb.DefaultHasher,
 		HistoryLength:               1,
 		RootGenConcurrency:          0,
-		ValueNodeCacheSize:          units.MiB,
-		IntermediateNodeCacheSize:   units.MiB,
-		IntermediateWriteBufferSize: units.KiB,
-		IntermediateWriteBatchSize:  256 * units.KiB,
+		ValueNodeCacheSize:          uint(valueNodeCacheSizeKB) * units.KiB,
+		IntermediateNodeCacheSize:   uint(intermediateNodeCacheSizeKB) * units.KiB,
+		IntermediateWriteBufferSize: uint(intermediateWriteBufferSizeKB) * units.KiB,
+		IntermediateWriteBatchSize:  uint(intermediateWriteBatchSizeKB) * units.KiB,
 		Reg:                         prometheus.NewRegistry(),
 		TraceLevel:                  xmerkledb.InfoTrace,
 		Tracer:                      trace.Noop,
