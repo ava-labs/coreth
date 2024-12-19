@@ -357,7 +357,10 @@ func reprocess(
 
 	for i := start; i <= stop; i++ {
 		block := backend.GetBlock(i)
-		t.Logf("Block: %d, Transactions: %d, Parent State: %x", i, len(block.Transactions()), lastRoot)
+		isApricotPhase5 := backend.Genesis.Config.IsApricotPhase5(block.Time())
+		atomicTxs, err := ExtractAtomicTxs(block.ExtData(), isApricotPhase5, Codec)
+		require.NoError(t, err)
+		t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot)
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
@@ -365,7 +368,7 @@ func reprocess(
 
 		// Take lock here to prevent shutdown before block is accepted
 		lock.Lock()
-		err := bc.InsertBlockManualWithParent(block, parent, true)
+		err = bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
 
 		t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
