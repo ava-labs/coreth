@@ -38,29 +38,38 @@ type reprocessBackend struct {
 	Disk        ethdb.Database
 	Metadata    database.Database
 	Name        string
+
+	mdb xmerkledb.MerkleDB
 }
 
-func getCacheConfig(t *testing.T, name string, mdbKVStore database.Database) core.CacheConfig {
-	var backend triedb.KVBackend
-	if name == "merkledb" {
-		ctx := context.Background()
-		mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{
-			BranchFactor:                xmerkledb.BranchFactor16,
-			Hasher:                      xmerkledb.DefaultHasher,
-			HistoryLength:               1,
-			RootGenConcurrency:          0,
-			ValueNodeCacheSize:          units.MiB,
-			IntermediateNodeCacheSize:   units.MiB,
-			IntermediateWriteBufferSize: units.KiB,
-			IntermediateWriteBatchSize:  256 * units.KiB,
-			Reg:                         prometheus.NewRegistry(),
-			TraceLevel:                  xmerkledb.InfoTrace,
-			Tracer:                      trace.Noop,
-		})
-		require.NoError(t, err)
-		backend = merkledb.NewMerkleDB(mdb)
+func (b *reprocessBackend) Close() error {
+	if b.mdb == nil {
+		return nil
 	}
+	return b.mdb.Close()
+}
 
+func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB {
+	ctx := context.Background()
+	mdb, err := xmerkledb.New(ctx, mdbKVStore, xmerkledb.Config{
+		BranchFactor:                xmerkledb.BranchFactor16,
+		Hasher:                      xmerkledb.DefaultHasher,
+		HistoryLength:               1,
+		RootGenConcurrency:          0,
+		ValueNodeCacheSize:          units.MiB,
+		IntermediateNodeCacheSize:   units.MiB,
+		IntermediateWriteBufferSize: units.KiB,
+		IntermediateWriteBatchSize:  256 * units.KiB,
+		Reg:                         prometheus.NewRegistry(),
+		TraceLevel:                  xmerkledb.InfoTrace,
+		Tracer:                      trace.Noop,
+	})
+	require.NoError(t, err)
+
+	return mdb
+}
+
+func getCacheConfig(t *testing.T, name string, backend triedb.KVBackend) core.CacheConfig {
 	cacheConfig := *core.DefaultCacheConfig
 	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{KVBackend: backend}
 	cacheConfig.TriePrefetcherParallelism = prefetchers
@@ -123,15 +132,24 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 	require.NoError(t, err)
 	require.Len(t, blocks, blocksCount)
 
+	var (
+		merkleDB  xmerkledb.MerkleDB
+		kvBackend triedb.KVBackend
+	)
+	if name == "merkledb" {
+		merkleDB = getMerkleDB(t, dbs.merkledb)
+		kvBackend = merkledb.NewMerkleDB(merkleDB)
+	}
 	return &reprocessBackend{
 		Genesis:     g,
 		Engine:      engine,
 		GetBlock:    func(i uint64) *types.Block { return blocks[i-1] },
-		CacheConfig: getCacheConfig(t, name, dbs.merkledb),
+		CacheConfig: getCacheConfig(t, name, kvBackend),
 		Disk:        dbs.chain,
 		Metadata:    dbs.metadata,
 		Name:        name,
 		VerifyRoot:  name == "legacy",
+		mdb:         merkleDB,
 	}
 }
 
@@ -147,6 +165,14 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	cbs := dummy.ConsensusCallbacks{OnExtraStateChange: testVM.onExtraStateChange}
 	engine := dummy.NewFakerWithMode(cbs, dummy.Mode{ModeSkipHeader: true})
 
+	var (
+		merkleDB  xmerkledb.MerkleDB
+		kvBackend triedb.KVBackend
+	)
+	if name == "merkledb" {
+		merkleDB = getMerkleDB(t, dbs.merkledb)
+		kvBackend = merkledb.NewMerkleDB(merkleDB)
+	}
 	return &reprocessBackend{
 		Genesis: &g,
 		Engine:  engine,
@@ -156,10 +182,11 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 			require.NotNil(t, block)
 			return block
 		},
-		CacheConfig: getCacheConfig(t, name, dbs.merkledb),
+		CacheConfig: getCacheConfig(t, name, kvBackend),
 		Disk:        dbs.chain,
 		Metadata:    dbs.metadata,
 		Name:        name,
 		VerifyRoot:  name == "legacy",
+		mdb:         merkleDB,
 	}
 }

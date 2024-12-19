@@ -206,6 +206,8 @@ func TestReprocessGenesis(t *testing.T) {
 		getBackend(t, "legacy", blocks, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
+			defer backend.Close()
+
 			testReprocessGenesis(t, backend, uint64(blocks))
 		})
 	}
@@ -233,6 +235,8 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		getMainnetBackend(t, "legacy", source, dbs),
 	} {
 		t.Run(backend.Name, func(t *testing.T) {
+			defer backend.Close()
+
 			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
 			t.Logf("Last hash: %x, Last root: %x", lastHash, lastRoot)
 		})
