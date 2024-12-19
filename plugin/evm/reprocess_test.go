@@ -384,6 +384,14 @@ func reprocess(
 	return lastHash, lastRoot
 }
 
+func TestCheckSnapshot(t *testing.T) {
+	dbs := openDBs(t)
+	defer dbs.Close()
+
+	accounts, storages := checkSnapshot(t, dbs.chain, false)
+	t.Logf("Snapshot: Accounts: %d, Storages: %d", accounts, storages)
+}
+
 func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 	t.Helper()
 
