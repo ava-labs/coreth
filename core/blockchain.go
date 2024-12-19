@@ -1083,12 +1083,14 @@ func (bc *BlockChain) LastAcceptedBlock() *types.Block {
 //
 // Assumes [bc.chainmu] is not held by the caller.
 func (bc *BlockChain) Accept(block *types.Block) error {
-	return bc.AcceptWithRoot(block, block.Root())
+	// in normal operation, don't error on closed as we can recover on restart
+	errorOnClosed := false
+	return bc.AcceptWithRoot(block, block.Root(), errorOnClosed)
 }
 
 var ErrAcceptorClosed = errors.New("acceptor closed")
 
-func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash) error {
+func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash, errorOnClosed bool) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
@@ -1116,7 +1118,7 @@ func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash) error
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
 	added := bc.addAcceptorQueue(&blockRoot{Block: block, root: root})
-	if !added {
+	if !added && errorOnClosed {
 		return ErrAcceptorClosed
 	}
 

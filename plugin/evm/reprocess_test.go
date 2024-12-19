@@ -367,7 +367,8 @@ func reprocess(
 		require.NoError(t, err)
 
 		t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
-		err = bc.AcceptWithRoot(block, lastInsertedRoot)
+		errorOnClosed := true // make sure block is accepted
+		err = bc.AcceptWithRoot(block, lastInsertedRoot, errorOnClosed)
 		require.NoError(t, err)
 
 		lastRoot = lastInsertedRoot
