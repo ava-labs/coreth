@@ -103,11 +103,12 @@ func TestExportBlocks(t *testing.T) {
 }
 
 var (
-	fujiXChainID    = ids.FromStringOrPanic("2JVSBoinj9C2J33VntvzYtVJNZdN2NKiwwKjcumHUWEb5DbBrm")
-	fujiCChainID    = ids.FromStringOrPanic("yH8D7ThNJkxmtkuv2jgBa4P1Rn3Qpr4pPr7QYNfcdoS6k6HWp")
-	mainnetXChainID = ids.FromStringOrPanic("2oYMBNV4eNHyqk2fjjV5nVQLDbtmNJzq5s3qs3Lo6ftnC6FByM")
-	mainnetCChainID = ids.FromStringOrPanic("2q9e4r6Mu3U68nU1fYjgbR6JvwrRx36CohpAX5UQxse55x1Q5")
-	VMDBPrefix      = []byte("vm")
+	VMDBPrefix         = []byte("vm")
+	fujiXChainID       = ids.FromStringOrPanic("2JVSBoinj9C2J33VntvzYtVJNZdN2NKiwwKjcumHUWEb5DbBrm")
+	fujiCChainID       = ids.FromStringOrPanic("yH8D7ThNJkxmtkuv2jgBa4P1Rn3Qpr4pPr7QYNfcdoS6k6HWp")
+	mainnetXChainID    = ids.FromStringOrPanic("2oYMBNV4eNHyqk2fjjV5nVQLDbtmNJzq5s3qs3Lo6ftnC6FByM")
+	mainnetCChainID    = ids.FromStringOrPanic("2q9e4r6Mu3U68nU1fYjgbR6JvwrRx36CohpAX5UQxse55x1Q5")
+	mainnetAvaxAssetID = ids.FromStringOrPanic("FvwEAhmxKfeiG8SnEvq42hc6whRyY3EFYAvebMqDNDGCgxN5Z")
 )
 
 func TestCalculatePrefix(t *testing.T) {
@@ -121,34 +122,43 @@ func TestCalculatePrefix(t *testing.T) {
 }
 
 func TestReprocessGenesis(t *testing.T) {
-	backend := getBackend(t, "test")
-	cacheConfig := backend.CacheConfig
+	for _, backend := range []*reprocessBackend{
+		getBackend(t, "merkledb"),
+		getBackend(t, "legacy"),
+	} {
+		t.Run(backend.Name, func(t *testing.T) {
+			testReprocessGenesis(t, backend)
+		})
+	}
+}
 
-	db := rawdb.NewMemoryDatabase()
+func testReprocessGenesis(t *testing.T, backend *reprocessBackend) {
+	cacheConfig := backend.CacheConfig
 
 	var lastHash, lastRoot common.Hash
 	start, stop := uint64(0), backend.BlockCount/2
-	lastHash, lastRoot = reprocess(t, db, backend, lastHash, lastRoot, start, stop)
+	lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, start, stop)
 	if cacheConfig.SnapshotLimit > 0 {
-		accounts, storages := checkSnapshot(t, db, false)
+		accounts, storages := checkSnapshot(t, backend.Disk, false)
 		t.Logf("Iterated snapshot: Accounts: %d, Storages: %d", accounts, storages)
 	}
 
 	start, stop = backend.BlockCount/2+1, backend.BlockCount
-	lastHash, lastRoot = reprocess(t, db, backend, lastHash, lastRoot, start, stop)
+	lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, start, stop)
 	if cacheConfig.SnapshotLimit > 0 {
-		accounts, storages := checkSnapshot(t, db, false)
+		accounts, storages := checkSnapshot(t, backend.Disk, false)
 		t.Logf("Iterated snapshot: Accounts: %d, Storages: %d", accounts, storages)
 	}
 	t.Logf("Last block: %d, Last hash: %x, Last root: %x", stop, lastHash, lastRoot)
 }
 
 func reprocess(
-	t *testing.T, db ethdb.Database,
+	t *testing.T,
 	backend *reprocessBackend, lastHash, lastRoot common.Hash,
 	start, stop uint64,
 ) (common.Hash, common.Hash) {
 	cacheConfig := backend.CacheConfig
+	db := backend.Disk
 
 	var lastInsertedRoot common.Hash
 	checkRootFn := func(expected, got common.Hash) bool {
