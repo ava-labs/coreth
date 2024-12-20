@@ -717,7 +717,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 			if err != nil {
 				return nil, err
 			}
-			storageTrie = st
+			storageTrie = state.LegacyAdapter{Itrie: st}
 		}
 		// Create the proofs for the storageKeys.
 		for i, key := range keys {

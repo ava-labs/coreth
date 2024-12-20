@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -45,14 +46,17 @@ type BlockValidator struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
 	engine consensus.Engine    // Consensus engine used for validating
+
+	CheckRoot func(expected, got common.Hash) bool
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
 func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engine consensus.Engine) *BlockValidator {
 	validator := &BlockValidator{
-		config: config,
-		engine: engine,
-		bc:     blockchain,
+		config:    config,
+		engine:    engine,
+		bc:        blockchain,
+		CheckRoot: func(expected, got common.Hash) bool { return expected == got },
 	}
 	return validator
 }
@@ -106,12 +110,12 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	}
 
 	// Ancestor block must be known.
-	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-			return consensus.ErrUnknownAncestor
-		}
-		return consensus.ErrPrunedAncestor
-	}
+	// if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+	// 	if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+	// 		return consensus.ErrUnknownAncestor
+	// 	}
+	// 	return consensus.ErrPrunedAncestor
+	// }
 	return nil
 }
 
@@ -135,7 +139,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); !v.CheckRoot(header.Root, root) {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil

@@ -30,12 +30,50 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type KV struct {
+	Key   []byte
+	Value []byte
+}
+
+type Batch []KV
+
+type KVBackend interface {
+	// Returns the current root hash of the trie.
+	// Empty trie must return common.Hash{}.
+	Root() common.Hash
+
+	// Get retrieves the value for the given key.
+	// If the key does not exist, it must return (nil, nil).
+	Get(key []byte) ([]byte, error)
+
+	// Prefetch loads the intermediary nodes of the given key into memory.
+	// The first return value is ignored.
+	Prefetch(key []byte) ([]byte, error)
+
+	// After this call, Root() should return the same hash as returned by this call.
+	// Note when len(Value) == 0, it means the key should be deleted.
+	Update(Batch) (common.Hash, error)
+
+	// After this call, changes related to [root] should be persisted to disk.
+	// This may be implemented as no-op if Update already persists changes, or
+	// commits happen on a rolling basis.
+	Commit(root common.Hash) error
+
+	// Close closes the backend and releases all held resources.
+	Close() error
+}
+
+type KeyValueConfig struct {
+	KVBackend KVBackend
+}
+
 // Config defines all necessary options for database.
 type Config struct {
-	Preimages bool           // Flag whether the preimage of node key is recorded
-	IsVerkle  bool           // Flag whether the db is holding a verkle tree
-	HashDB    *hashdb.Config // Configs for hash-based scheme
-	PathDB    *pathdb.Config // Configs for experimental path-based scheme
+	Preimages  bool           // Flag whether the preimage of node key is recorded
+	IsVerkle   bool           // Flag whether the db is holding a verkle tree
+	HashDB     *hashdb.Config // Configs for hash-based scheme
+	PathDB     *pathdb.Config // Configs for experimental path-based scheme
+	KeyValueDB *KeyValueConfig
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -86,6 +124,10 @@ type Database struct {
 	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
+}
+
+func (db *Database) Config() *Config {
+	return db.config
 }
 
 // NewDatabase initializes the trie database with default settings, note
@@ -145,6 +187,10 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
+	kvConfig := db.config.KeyValueDB
+	if kvConfig != nil && kvConfig.KVBackend != nil {
+		return nil
+	}
 	return db.backend.Update(root, parent, block, nodes, states)
 }
 
@@ -154,6 +200,11 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 func (db *Database) Commit(root common.Hash, report bool) error {
 	if db.preimages != nil {
 		db.preimages.commit(true)
+	}
+	if db.config.KeyValueDB != nil {
+		if backend := db.config.KeyValueDB.KVBackend; backend != nil {
+			return backend.Commit(root)
+		}
 	}
 	return db.backend.Commit(root, report)
 }
@@ -176,6 +227,11 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 // Initialized returns an indicator if the state data is already initialized
 // according to the state scheme.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
+	if db.config.KeyValueDB != nil {
+		if backend := db.config.KeyValueDB.KVBackend; backend != nil {
+			return backend.Root() != common.Hash{}
+		}
+	}
 	return db.backend.Initialized(genesisRoot)
 }
 
@@ -189,6 +245,10 @@ func (db *Database) Scheme() string {
 // resources held can be released correctly.
 func (db *Database) Close() error {
 	db.WritePreimages()
+	kvConfig := db.config.KeyValueDB
+	if kvConfig != nil && kvConfig.KVBackend != nil {
+		return kvConfig.KVBackend.Close()
+	}
 	return db.backend.Close()
 }
 
