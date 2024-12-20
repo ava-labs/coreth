@@ -31,7 +31,8 @@ func NewLegacyBackend(
 	return &LegacyBackend{tr: tr}, nil
 }
 
-func (b *LegacyBackend) Get(key []byte) ([]byte, error) { return b.tr.Get(key) }
+func (b *LegacyBackend) Prefetch(key []byte) ([]byte, error) { return b.tr.Get(key) }
+func (b *LegacyBackend) Get(key []byte) ([]byte, error)      { return b.tr.Get(key) }
 
 func (b *LegacyBackend) Hash(batch Batch) common.Hash {
 	if b.hashed {

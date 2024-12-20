@@ -564,9 +564,9 @@ func (to *trieOrchestrator) processTasks() {
 				// Perform task
 				var err error
 				if len(fTask) == common.AddressLength {
-					_, err = t.GetAccount(common.BytesToAddress(fTask))
+					_, err = t.PrefetchAccount(common.BytesToAddress(fTask))
 				} else {
-					_, err = t.GetStorage(to.sf.addr, fTask)
+					_, err = t.PrefetchStorage(to.sf.addr, fTask)
 				}
 				if err != nil {
 					log.Error("Trie prefetcher failed fetching", "root", to.sf.root, "err", err)

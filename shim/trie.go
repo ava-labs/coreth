@@ -23,6 +23,7 @@ type Backend interface {
 	Get(key []byte) ([]byte, error)
 	Hash(batch Batch) common.Hash
 	Commit(batch Batch, collectLeaf bool) (common.Hash, *trienode.NodeSet, error)
+	Prefetch(key []byte) ([]byte, error) // Note []byte value is ignored
 }
 
 func NewStateTrie(backend Backend, db database.Database) *StateTrie {
@@ -77,6 +78,11 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 func (t *Trie) Get(key []byte) ([]byte, error) {
 	key = t.getKey(key)
 	return t.backend.Get(key)
+}
+
+func (t *Trie) Prefetch(key []byte) ([]byte, error) {
+	key = t.getKey(key)
+	return t.backend.Prefetch(key)
 }
 
 func (t *Trie) Copy() *Trie {

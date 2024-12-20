@@ -33,6 +33,11 @@ func (k *KVTrieBackend) Get(key []byte) ([]byte, error) {
 	return k.backend.Get(key)
 }
 
+func (k *KVTrieBackend) Prefetch(key []byte) ([]byte, error) {
+	fmt.Printf("Prefetch: %x\n", key)
+	return k.backend.Get(key)
+}
+
 func (k *KVTrieBackend) Hash(batch Batch) common.Hash {
 	if k.hashed {
 		return k.hash

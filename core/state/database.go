@@ -82,8 +82,26 @@ type Database interface {
 	TrieDB() *triedb.Database
 }
 
-// Trie is a Ethereum Merkle Patricia trie.
 type Trie interface {
+	Itrie
+	PrefetchAccount(address common.Address) (*types.StateAccount, error)
+	PrefetchStorage(addr common.Address, key []byte) ([]byte, error)
+}
+
+type LegacyAdapter struct {
+	Itrie
+}
+
+func (a LegacyAdapter) PrefetchAccount(address common.Address) (*types.StateAccount, error) {
+	return a.Itrie.GetAccount(address)
+}
+
+func (a LegacyAdapter) PrefetchStorage(addr common.Address, key []byte) ([]byte, error) {
+	return a.Itrie.GetStorage(addr, key)
+}
+
+// Trie is a Ethereum Merkle Patricia trie.
+type Itrie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
 	//
@@ -204,13 +222,14 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	}
 
 	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+		tr, err := trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+		return LegacyAdapter{tr}, err
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
 	}
-	return tr, nil
+	return LegacyAdapter{tr}, nil
 }
 
 // OpenStorageTrie opens the storage trie of an account.
@@ -240,7 +259,7 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	if err != nil {
 		return nil, err
 	}
-	return tr, nil
+	return LegacyAdapter{tr}, nil
 }
 
 // CopyTrie returns an independent copy of the given trie.
@@ -248,8 +267,8 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *shim.StateTrie:
 		return t.Copy()
-	case *trie.StateTrie:
-		return t.Copy()
+	case LegacyAdapter:
+		return LegacyAdapter{t.Itrie.(*trie.StateTrie).Copy()}
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}

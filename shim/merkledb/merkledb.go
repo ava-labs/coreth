@@ -32,6 +32,10 @@ func (m *MerkleDB) Get(key []byte) ([]byte, error) {
 	return val, err
 }
 
+func (m *MerkleDB) Prefetch(key []byte) ([]byte, error) {
+	return nil, m.db.PrefetchPath(key)
+}
+
 func (m *MerkleDB) latestView() merkledb.Trie {
 	m.lock.RLock()
 	defer m.lock.RUnlock()

@@ -67,6 +67,11 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	return content, err
 }
 
+func (t *StateTrie) PrefetchStorage(_ common.Address, key []byte) ([]byte, error) {
+	_, err := t.trie.Prefetch(t.hashKey(key))
+	return nil, err
+}
+
 // GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
@@ -78,6 +83,11 @@ func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, err
 	ret := new(types.StateAccount)
 	err = rlp.DecodeBytes(res, ret)
 	return ret, err
+}
+
+func (t *StateTrie) PrefetchAccount(address common.Address) (*types.StateAccount, error) {
+	_, err := t.trie.Prefetch(t.hashKey(address.Bytes()))
+	return nil, err
 }
 
 // GetAccountByHash does the same thing as GetAccount, however it expects an

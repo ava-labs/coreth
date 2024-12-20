@@ -46,6 +46,10 @@ type KVBackend interface {
 	// If the key does not exist, it must return (nil, nil).
 	Get(key []byte) ([]byte, error)
 
+	// Prefetch loads the intermediary nodes of the given key into memory.
+	// The first return value is ignored.
+	Prefetch(key []byte) ([]byte, error)
+
 	// After this call, Root() should return the same hash as returned by this call.
 	// Note when len(Value) == 0, it means the key should be deleted.
 	Update(Batch) (common.Hash, error)
@@ -55,6 +59,7 @@ type KVBackend interface {
 	// commits happen on a rolling basis.
 	Commit(root common.Hash) error
 
+	// Close closes the backend and releases all held resources.
 	Close() error
 }
 
