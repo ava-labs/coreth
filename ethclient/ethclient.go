@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/interfaces"
@@ -90,7 +89,6 @@ type Client interface {
 	SubscribeNewHead(context.Context, chan<- *types.Header) (interfaces.Subscription, error)
 	NetworkID(context.Context) (*big.Int, error)
 	BalanceAt(context.Context, common.Address, *big.Int) (*big.Int, error)
-	AssetBalanceAt(context.Context, common.Address, ids.ID, *big.Int) (*big.Int, error)
 	BalanceAtHash(ctx context.Context, account common.Address, blockHash common.Hash) (*big.Int, error)
 	StorageAt(context.Context, common.Address, common.Hash, *big.Int) ([]byte, error)
 	StorageAtHash(ctx context.Context, account common.Address, key common.Hash, blockHash common.Hash) ([]byte, error)
