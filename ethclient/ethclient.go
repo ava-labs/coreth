@@ -467,14 +467,6 @@ func (ec *client) BalanceAt(ctx context.Context, account common.Address, blockNu
 	return (*big.Int)(&result), err
 }
 
-// AssetBalanceAt returns the [assetID] balance of the given account
-// The block number can be nil, in which case the balance is taken from the latest known block.
-func (ec *client) AssetBalanceAt(ctx context.Context, account common.Address, assetID ids.ID, blockNumber *big.Int) (*big.Int, error) {
-	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getAssetBalance", account, ToBlockNumArg(blockNumber), assetID)
-	return (*big.Int)(&result), err
-}
-
 // BalanceAtHash returns the wei balance of the given account.
 func (ec *client) BalanceAtHash(ctx context.Context, account common.Address, blockHash common.Hash) (*big.Int, error) {
 	var result hexutil.Big
