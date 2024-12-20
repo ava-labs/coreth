@@ -32,15 +32,16 @@ var (
 )
 
 var (
-	sourceDbDir      = "sourceDb"
-	sourcePrefix     = ""
-	dbDir            = ""
-	startBlock       = uint64(0)
-	endBlock         = uint64(200)
-	prefetchers      = 4
-	useSnapshot      = true
-	pruning          = true
-	skipUpgradeCheck = false
+	sourceDbDir            = "sourceDb"
+	sourcePrefix           = ""
+	dbDir                  = ""
+	startBlock             = uint64(0)
+	endBlock               = uint64(200)
+	prefetchers            = 4
+	useSnapshot            = true
+	pruning                = true
+	skipUpgradeCheck       = false
+	usePersistedStartBlock = false
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -60,6 +61,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&useSnapshot, "useSnapshot", useSnapshot, "use snapshot")
 	flag.BoolVar(&pruning, "pruning", pruning, "pruning")
 	flag.BoolVar(&skipUpgradeCheck, "skipUpgradeCheck", skipUpgradeCheck, "skip upgrade check")
+	flag.BoolVar(&usePersistedStartBlock, "usePersistedStartBlock", usePersistedStartBlock, "use persisted start block")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -265,6 +267,9 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 	lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
 	t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
 
+	if usePersistedStartBlock {
+		startBlock = lastHeight
+	}
 	require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
 	if lastHash != (common.Hash{}) {
 		// Other than when genesis is not performed, start processing from the next block
