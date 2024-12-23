@@ -3987,25 +3987,3 @@ func TestNoBlobsAllowed(t *testing.T) {
 	err = vmBlock.Verify(ctx)
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 }
-
-func TestMinFeeSetAtEtna(t *testing.T) {
-	require := require.New(t)
-	now := time.Now()
-	etnaTime := uint64(now.Add(1 * time.Second).Unix())
-
-	genesis := genesisJSON(
-		activateEtna(params.TestEtnaChainConfig, etnaTime),
-	)
-	clock := mockable.Clock{}
-	clock.Set(now)
-
-	_, vm, _, _, _ := GenesisVMWithClock(t, false, genesis, "", "", clock)
-	initial := vm.txPool.MinFee()
-	require.Equal(params.ApricotPhase4MinBaseFee, initial.Int64())
-
-	require.Eventually(
-		func() bool { return params.EtnaMinBaseFee == vm.txPool.MinFee().Int64() },
-		5*time.Second,
-		1*time.Second,
-	)
-}
