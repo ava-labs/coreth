@@ -115,12 +115,6 @@ var (
 		return &cpy
 	}
 
-	activateEtna = func(cfg *params.ChainConfig, etnaTime uint64) *params.ChainConfig {
-		cpy := *cfg
-		cpy.EtnaTimestamp = &etnaTime
-		return &cpy
-	}
-
 	genesisJSONApricotPhase0     = genesisJSON(params.TestLaunchConfig)
 	genesisJSONApricotPhase1     = genesisJSON(params.TestApricotPhase1Config)
 	genesisJSONApricotPhase2     = genesisJSON(params.TestApricotPhase2Config)
