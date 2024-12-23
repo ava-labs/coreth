@@ -1,7 +1,7 @@
 // (c) 2019-2024, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package utils
 
 import (
 	"errors"
@@ -13,7 +13,6 @@ import (
 
 var errInvalidAddr = errors.New("invalid hex address")
 
-// ParseEthAddress parses [addrStr] and returns an Ethereum address
 func ParseEthAddress(addrStr string) (common.Address, error) {
 	if !common.IsHexAddress(addrStr) {
 		return common.Address{}, errInvalidAddr

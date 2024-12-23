@@ -9,12 +9,13 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -117,8 +118,8 @@ func TestImportTxVerify(t *testing.T) {
 	}
 
 	// Sort the inputs and outputs to ensure the transaction is canonical
-	utils.Sort(importTx.ImportedInputs)
-	utils.Sort(importTx.Outs)
+	avalancheutils.Sort(importTx.ImportedInputs)
+	avalancheutils.Sort(importTx.Outs)
 
 	tests := map[string]atomicTxVerifyTest{
 		"nil tx": {
@@ -498,7 +499,7 @@ func TestNewImportTx(t *testing.T) {
 
 		expectedRemainingBalance := new(uint256.Int).Mul(
 			uint256.NewInt(importAmount-actualAVAXBurned), atomic.X2CRate)
-		addr := atomic.GetEthAddress(testKeys[0])
+		addr := utils.GetEthAddress(testKeys[0])
 		if actualBalance := sdb.GetBalance(addr); actualBalance.Cmp(expectedRemainingBalance) != 0 {
 			t.Fatalf("address remaining balance %s equal %s not %s", addr.String(), actualBalance, expectedRemainingBalance)
 		}

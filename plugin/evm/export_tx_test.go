@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -104,7 +105,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 func TestExportTxEVMStateTransfer(t *testing.T) {
 	key := testKeys[0]
 	addr := key.PublicKey().Address()
-	ethAddr := atomic.GetEthAddress(key)
+	ethAddr := utils.GetEthAddress(key)
 
 	avaxAmount := 50 * units.MilliAvax
 	avaxUTXOID := avax.UTXOID{
@@ -1822,7 +1823,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addr := atomic.GetEthAddress(testKeys[0])
+			addr := utils.GetEthAddress(testKeys[0])
 			if sdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), sdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
@@ -1970,7 +1971,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			parent = vm.LastAcceptedBlockInternal().(*Block)
 			exportAmount := uint64(5000000)
 
-			testKeys0Addr := atomic.GetEthAddress(testKeys[0])
+			testKeys0Addr := utils.GetEthAddress(testKeys[0])
 			exportId, err := ids.ToShortID(testKeys0Addr[:])
 			if err != nil {
 				t.Fatal(err)
@@ -2022,7 +2023,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addr := atomic.GetEthAddress(testKeys[0])
+			addr := utils.GetEthAddress(testKeys[0])
 			if stdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), stdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
 			}

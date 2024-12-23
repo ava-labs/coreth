@@ -49,7 +49,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	address := atomic.GetEthAddress(pk)
+	address := utils.GetEthAddress(pk)
 	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
@@ -183,7 +183,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	address := atomic.GetEthAddress(pk)
+	address := utils.GetEthAddress(pk)
 	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
@@ -281,7 +281,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		pk.PublicKey().Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 
@@ -328,7 +328,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	address := atomic.GetEthAddress(pk)
+	address := utils.GetEthAddress(pk)
 	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
@@ -388,7 +388,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	address := atomic.GetEthAddress(pk)
+	address := utils.GetEthAddress(pk)
 	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
@@ -447,7 +447,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	address := atomic.GetEthAddress(pk)
+	address := utils.GetEthAddress(pk)
 	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
@@ -489,7 +489,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		pk.PublicKey().Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: tx})
@@ -520,7 +520,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	address := atomic.GetEthAddress(pk)
+	address := utils.GetEthAddress(pk)
 	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
@@ -560,7 +560,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		pk.PublicKey().Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 
