@@ -60,7 +60,6 @@ type StateDB interface {
 	GetRefund() uint64
 
 	GetCommittedState(common.Address, common.Hash) common.Hash
-	GetCommittedStateAP1(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
 
@@ -94,9 +93,6 @@ type StateDB interface {
 
 	AddLog(addr common.Address, topics []common.Hash, data []byte, blockNumber uint64)
 	GetLogData() (topics [][]common.Hash, data [][]byte)
-	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
-	SetPredicateStorageSlots(address common.Address, predicates [][]byte)
-
 	GetTxHash() common.Hash
 
 	AddPreimage(common.Hash, []byte)
