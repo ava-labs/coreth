@@ -347,6 +347,13 @@ type BlockChain struct {
 
 	// [txIndexTailLock] is used to synchronize the updating of the tx index tail.
 	txIndexTailLock sync.Mutex
+
+	// for logging kvs read from snapshot
+	snapWriter writer
+}
+
+func (bc *BlockChain) SetSnapWriter(w writer) {
+	bc.snapWriter = w
 }
 
 type Opts struct {
@@ -1388,9 +1395,11 @@ func (bc *BlockChain) insertBlock(block *types.Block, parent *types.Header, writ
 	var statedb *state.StateDB
 	if bc.snaps != nil {
 		snap := bc.snaps.Snapshot(parent.Root)
-		// withReplay := &snapReplay{snap, *tape}
-		withReplay := snap
-		statedb, err = state.NewWithSnapshot(parent.Root, bc.stateCache, withReplay)
+		withRecording := snap
+		if bc.snapWriter != nil {
+			withRecording = &snapRecorder{snap, bc.snapWriter}
+		}
+		statedb, err = state.NewWithSnapshot(parent.Root, bc.stateCache, withRecording)
 	} else {
 		statedb, err = state.New(parent.Root, bc.stateCache, nil)
 	}

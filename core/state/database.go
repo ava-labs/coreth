@@ -214,7 +214,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		}
 		// Legacy backend maintains hash compatibility with geth
 		// to test the shim layer.
-		backend, err := shim.NewLegacyBackend(root, common.Hash{}, root, db.triedb)
+		backend, err := shim.NewLegacyBackend(root, common.Hash{}, root, db.triedb, kvConfig.Writer)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +243,7 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 		}
 		// Legacy backend maintains hash compatibility with geth
 		// to test the shim layer.
-		backend, err := shim.NewLegacyBackend(stateRoot, addrHash, root, db.triedb)
+		backend, err := shim.NewLegacyBackend(stateRoot, addrHash, root, db.triedb, kvConfig.Writer)
 		if err != nil {
 			return nil, err
 		}

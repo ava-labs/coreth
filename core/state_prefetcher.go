@@ -52,9 +52,21 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 // only goal is to pre-cache transaction signatures and state trie nodes.
 type tape []byte
 
+func (t *tape) RecordAccountRead(_ common.Hash, val []byte) error {
+	*t = append(*t, byte(len(val)))
+	*t = append(*t, val...)
+	return nil
+}
+
+func (t *tape) RecordStorageRead(_, _ common.Hash, val []byte) error {
+	*t = append(*t, byte(len(val)))
+	*t = append(*t, val...)
+	return nil
+}
+
 func (t tape) Len() int { return len(t) }
 
-func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, cfg vm.Config, tape *tape) {
+func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, cfg vm.Config, recorded *tape) {
 	if p.bc.snaps == nil {
 		log.Warn("Skipping prefetching transactions without snapshot cache")
 		return
@@ -137,7 +149,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 		log.Error("Failed to finalize block", "err", err)
 	}
 
-	*tape = recorder.tape
+	*recorded = *(recorder.writer.(*tape))
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database
@@ -164,10 +176,14 @@ type vmStateDB interface {
 	GetLogs(common.Hash, uint64, common.Hash) []*types.Log
 }
 
+type writer interface {
+	RecordStorageRead(common.Hash, common.Hash, []byte) error
+	RecordAccountRead(common.Hash, []byte) error
+}
+
 type snapRecorder struct {
 	snapshot.Snapshot
-
-	tape tape
+	writer writer
 }
 
 type snapReplay struct {
@@ -183,8 +199,8 @@ func (s *snapRecorder) Account(accHash common.Hash) (*types.SlimAccount, error) 
 	}
 	if acc == nil {
 		// fmt.Println("nil account added")
-		s.tape = append(s.tape, 0)
-		return nil, nil
+		err := s.writer.RecordAccountRead(accHash, nil)
+		return nil, err
 	}
 
 	rlp, err := rlp.EncodeToBytes(acc)
@@ -192,8 +208,7 @@ func (s *snapRecorder) Account(accHash common.Hash) (*types.SlimAccount, error) 
 		return nil, err
 	}
 	// fmt.Println("account added", len(rlp))
-	s.tape = append(s.tape, byte(len(rlp)))
-	s.tape = append(s.tape, rlp...)
+	err = s.writer.RecordAccountRead(accHash, rlp)
 	return acc, err
 }
 
@@ -203,9 +218,8 @@ func (s *snapRecorder) Storage(accHash common.Hash, hash common.Hash) ([]byte, e
 		return nil, err
 	}
 	// fmt.Println("storage added", len(val))
-	s.tape = append(s.tape, byte(len(val)))
-	s.tape = append(s.tape, val...)
-	return val, nil
+	err = s.writer.RecordStorageRead(accHash, hash, val)
+	return val, err
 }
 
 func (s *snapReplay) Account(accHash common.Hash) (*types.SlimAccount, error) {

@@ -63,8 +63,13 @@ type KVBackend interface {
 	Close() error
 }
 
+type KVWriter interface {
+	MustUpdate(key, value []byte)
+}
+
 type KeyValueConfig struct {
 	KVBackend KVBackend
+	Writer    KVWriter
 }
 
 // Config defines all necessary options for database.

@@ -42,6 +42,7 @@ var (
 	pruning                = true
 	skipUpgradeCheck       = false
 	usePersistedStartBlock = false
+	tapeDir                = ""
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -62,6 +63,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&pruning, "pruning", pruning, "pruning")
 	flag.BoolVar(&skipUpgradeCheck, "skipUpgradeCheck", skipUpgradeCheck, "skip upgrade check")
 	flag.BoolVar(&usePersistedStartBlock, "usePersistedStartBlock", usePersistedStartBlock, "use persisted start block")
+	flag.StringVar(&tapeDir, "tapeDir", tapeDir, "directory to store tape")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -332,6 +334,12 @@ func reprocess(
 		return true
 	}
 
+	var tapeRecorder *blockRecorder
+	if tapeDir != "" {
+		tapeRecorder = &blockRecorder{}
+		cacheConfig.KeyValueDB.Writer = tapeRecorder
+	}
+
 	var opts []core.Opts
 	cacheConfig.SnapshotDelayInit = true
 	if start > 0 {
@@ -370,6 +378,9 @@ func reprocess(
 
 	bc.Validator().(*core.BlockValidator).CheckRoot = checkRootFn
 	bc.InitializeSnapshots(&core.Opts{LastAcceptedRoot: lastRoot})
+	if tapeRecorder != nil {
+		bc.SetSnapWriter(tapeRecorder)
+	}
 
 	for i := start; i <= stop; i++ {
 		block := backend.GetBlock(i)
@@ -386,6 +397,11 @@ func reprocess(
 		lock.Lock()
 		err = bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
+
+		if tapeRecorder != nil {
+			tapeRecorder.Summary(block)
+			tapeRecorder.Reset()
+		}
 
 		t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
 		errorOnClosed := true // make sure block is accepted
