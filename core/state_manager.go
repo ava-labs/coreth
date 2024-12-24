@@ -76,6 +76,7 @@ type NoDerefTrieDB struct {
 }
 
 func (nd *NoDerefTrieDB) Dereference(root common.Hash) error { return nil }
+func (nd *NoDerefTrieDB) Cap(limit common.StorageSize) error { return nil }
 
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 	if config.Pruning {
