@@ -310,7 +310,7 @@ func (c *Config) Validate(networkID uint32) error {
 			return fmt.Errorf("cannot start non-local network with commit interval %d different than %d", c.CommitInterval, defaultCommitInterval)
 		}
 		if c.StateSyncCommitInterval != defaultSyncableCommitInterval {
-			return fmt.Errorf("cannot start non-local network with syncable interval %d", c.StateSyncCommitInterval)
+			return fmt.Errorf("cannot start non-local network with syncable interval %d different than %d", c.StateSyncCommitInterval, defaultSyncableCommitInterval)
 		}
 	}
 
