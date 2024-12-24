@@ -72,6 +72,9 @@ func getCacheConfig(t *testing.T, name string, backend triedb.KVBackend) core.Ca
 	if useSnapshot {
 		cacheConfig.SnapshotLimit = 256
 	}
+	if trieCleanCacheMBs > 0 {
+		cacheConfig.TrieCleanLimit = trieCleanCacheMBs
+	}
 	cacheConfig.Pruning = pruning
 	return cacheConfig
 }

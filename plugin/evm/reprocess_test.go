@@ -45,6 +45,7 @@ var (
 	tapeDir                = ""
 	tapeVerbose            = false
 	legacyScheme           = rawdb.HashScheme
+	trieCleanCacheMBs      = 0
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -68,6 +69,7 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&tapeDir, "tapeDir", tapeDir, "directory to store tape")
 	flag.BoolVar(&tapeVerbose, "tapeVerbose", tapeVerbose, "verbose tape")
 	flag.StringVar(&legacyScheme, "legacyScheme", legacyScheme, "legacy scheme (hash or path)")
+	flag.IntVar(&trieCleanCacheMBs, "trieCleanCacheMBs", trieCleanCacheMBs, "clean cache size in MB")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
