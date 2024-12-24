@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -60,6 +61,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var tapeDir string
+
+func init() {
+	tapeDir = os.Getenv("TAPE_DIR")
+}
+
 var (
 	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", nil)
 	accountHashTimer         = metrics.NewRegisteredCounter("chain/account/hashes", nil)
@@ -72,6 +79,8 @@ var (
 	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", nil)
 	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", nil)
+	snapshotCacheMissAccount = metrics.NewRegisteredCounter("chain/snapshot/cache/miss/account", nil)
+	snapshotCacheMissStorage = metrics.NewRegisteredCounter("chain/snapshot/cache/miss/storage", nil)
 
 	triedbCommitTimer = metrics.NewRegisteredCounter("chain/triedb/commits", nil)
 
@@ -170,6 +179,8 @@ type CacheConfig struct {
 	StateHistory                    uint64  // Number of blocks from head whose state histories are reserved.
 	StateScheme                     string  // Scheme used to store ethereum states and merkle tree nodes on top
 
+	KeyValueDB *triedb.KeyValueConfig // Config for key value db
+
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -191,6 +202,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}
 	}
+	config.KeyValueDB = c.KeyValueDB
 	return config
 }
 
@@ -224,6 +236,13 @@ type txLookup struct {
 	transaction *types.Transaction
 }
 
+type blockRoot struct {
+	*types.Block
+	root common.Hash
+}
+
+func (b *blockRoot) Root() common.Hash { return b.root }
+
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -241,6 +260,7 @@ type txLookup struct {
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
+	genesis     *Genesis
 
 	db           ethdb.Database   // Low level persistent database to store final content in
 	snaps        *snapshot.Tree   // Snapshot tree for fast trie leaf access
@@ -289,7 +309,7 @@ type BlockChain struct {
 	// different than [chainAcceptedFeed], which is sent an event after an accepted
 	// block is processed (after each loop of the accepted worker). If there is a
 	// clean shutdown, all items inserted into the [acceptorQueue] will be processed.
-	acceptorQueue chan *types.Block
+	acceptorQueue chan *blockRoot
 
 	// [acceptorClosingLock], and [acceptorClosed] are used
 	// to synchronize the closing of the [acceptorQueue] channel.
@@ -327,6 +347,17 @@ type BlockChain struct {
 
 	// [txIndexTailLock] is used to synchronize the updating of the tx index tail.
 	txIndexTailLock sync.Mutex
+
+	// for logging kvs read from snapshot
+	snapWriter writer
+}
+
+func (bc *BlockChain) SetSnapWriter(w writer) {
+	bc.snapWriter = w
+}
+
+type Opts struct {
+	LastAcceptedRoot common.Hash
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -335,6 +366,7 @@ type BlockChain struct {
 func NewBlockChain(
 	db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, engine consensus.Engine,
 	vmConfig vm.Config, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+	opts ...Opts,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
 		return nil, errCacheConfigNotSpecified
@@ -373,9 +405,10 @@ func NewBlockChain(
 		engine:            engine,
 		vmConfig:          vmConfig,
 		senderCacher:      NewTxSenderCacher(runtime.NumCPU()),
-		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
+		acceptorQueue:     make(chan *blockRoot, cacheConfig.AcceptorQueueLimit),
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
+		genesis:           genesis,
 	}
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -393,10 +426,22 @@ func NewBlockChain(
 	bc.currentBlock.Store(nil)
 
 	// Create the state manager
-	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
+	var tdb TrieDB = bc.triedb
+	if cacheConfig.StateScheme == rawdb.PathScheme {
+		tdb = &NoDerefTrieDB{tdb}
+	}
+	bc.stateManager = NewTrieWriter(tdb, cacheConfig)
+
+	// if err := bc.reprocessFromGenesis(); err != nil {
+	// 	return nil, err
+	// }
 
 	// Re-generate current block state if it is missing
-	if err := bc.loadLastState(lastAcceptedHash); err != nil {
+	lastAcceptedRoot := common.Hash{}
+	if len(opts) > 0 {
+		lastAcceptedRoot = opts[0].LastAcceptedRoot
+	}
+	if err := bc.loadLastState(lastAcceptedHash, lastAcceptedRoot); err != nil {
 		return nil, err
 	}
 
@@ -409,7 +454,11 @@ func NewBlockChain(
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
-	if !bc.HasState(head.Root) {
+	headRoot := head.Root
+	if len(opts) > 0 {
+		headRoot = opts[0].LastAcceptedRoot
+	}
+	if !bc.HasState(headRoot) {
 		return nil, fmt.Errorf("head state missing %d:%s", head.Number, head.Hash())
 	}
 
@@ -555,6 +604,7 @@ func (bc *BlockChain) startAcceptor() {
 			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
 		}
 
+		next := next.Block
 		// Update last processed and transaction lookup index
 		if err := bc.writeBlockAcceptedIndices(next); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
@@ -593,19 +643,20 @@ func (bc *BlockChain) startAcceptor() {
 
 // addAcceptorQueue adds a new *types.Block to the [acceptorQueue]. This will
 // block if there are [AcceptorQueueLimit] items in [acceptorQueue].
-func (bc *BlockChain) addAcceptorQueue(b *types.Block) {
+func (bc *BlockChain) addAcceptorQueue(b *blockRoot) bool {
 	// We only acquire a read lock here because it is ok to add items to the
 	// [acceptorQueue] concurrently.
 	bc.acceptorClosingLock.RLock()
 	defer bc.acceptorClosingLock.RUnlock()
 
 	if bc.acceptorClosed {
-		return
+		return false
 	}
 
 	acceptorQueueGauge.Inc(1)
 	bc.acceptorWg.Add(1)
 	bc.acceptorQueue <- b
+	return true
 }
 
 // DrainAcceptorQueue blocks until all items in [acceptorQueue] have been
@@ -646,12 +697,12 @@ func (bc *BlockChain) stopAcceptor() {
 	close(bc.acceptorQueue)
 }
 
-func (bc *BlockChain) InitializeSnapshots() {
+func (bc *BlockChain) InitializeSnapshots(opts ...*Opts) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
 	head := bc.CurrentBlock()
-	bc.initSnapshot(head)
+	bc.initSnapshot(head, opts...)
 }
 
 // SenderCacher returns the *TxSenderCacher used within the core package.
@@ -661,7 +712,7 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
-func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
+func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash, lastAcceptedRoot common.Hash) error {
 	// Initialize genesis state
 	if lastAcceptedHash == (common.Hash{}) {
 		return bc.loadGenesisState()
@@ -706,7 +757,12 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// reprocessState is necessary to ensure that the last accepted state is
 	// available. The state may not be available if it was not committed due
 	// to an unclean shutdown.
-	return bc.reprocessState(bc.lastAccepted, 2*bc.cacheConfig.CommitInterval)
+	return bc.reprocessState(bc.lastAccepted, lastAcceptedRoot, 2*bc.cacheConfig.CommitInterval)
+}
+
+func (bc *BlockChain) LoadGenesisState(block *types.Block) error {
+	bc.genesisBlock = block
+	return bc.loadGenesisState()
 }
 
 func (bc *BlockChain) loadGenesisState() error {
@@ -768,6 +824,13 @@ func (bc *BlockChain) ExportCallback(callback func(block *types.Block) error, fi
 		}
 	}
 	return nil
+}
+
+func (bc *BlockChain) WriteHeadBlock(block *types.Block) {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	bc.writeHeadBlock(block)
 }
 
 // writeHeadBlock injects a new head block into the current block chain. This method
@@ -1031,6 +1094,14 @@ func (bc *BlockChain) LastAcceptedBlock() *types.Block {
 //
 // Assumes [bc.chainmu] is not held by the caller.
 func (bc *BlockChain) Accept(block *types.Block) error {
+	// in normal operation, don't error on closed as we can recover on restart
+	errorOnClosed := false
+	return bc.AcceptWithRoot(block, block.Root(), errorOnClosed)
+}
+
+var ErrAcceptorClosed = errors.New("acceptor closed")
+
+func (bc *BlockChain) AcceptWithRoot(block *types.Block, root common.Hash, errorOnClosed bool) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
@@ -1057,7 +1128,11 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
-	bc.addAcceptorQueue(block)
+	added := bc.addAcceptorQueue(&blockRoot{Block: block, root: root})
+	if !added && errorOnClosed {
+		return ErrAcceptorClosed
+	}
+
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
 	return nil
@@ -1226,7 +1301,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 	for n, block := range chain {
-		if err := bc.insertBlock(block, true); err != nil {
+		if err := bc.insertBlock(block, nil, true); err != nil {
 			return n, err
 		}
 	}
@@ -1239,17 +1314,21 @@ func (bc *BlockChain) InsertBlock(block *types.Block) error {
 }
 
 func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {
+	return bc.InsertBlockManualWithParent(block, nil, writes)
+}
+
+func (bc *BlockChain) InsertBlockManualWithParent(block *types.Block, parent *types.Header, writes bool) error {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
 	bc.chainmu.Lock()
-	err := bc.insertBlock(block, writes)
+	err := bc.insertBlock(block, parent, writes)
 	bc.chainmu.Unlock()
 
 	return err
 }
 
-func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
+func (bc *BlockChain) insertBlock(block *types.Block, parent *types.Header, writes bool) error {
 	start := time.Now()
 	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), block.Time()), block.Transactions())
 
@@ -1299,9 +1378,10 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		}
 	}()
 
-	// Retrieve the parent block to determine which root to build state on
-	substart = time.Now()
-	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		// Retrieve the parent block to determine which root to build state on
+		parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	}
 
 	// Instantiate the statedb to use for processing transactions
 	//
@@ -1309,7 +1389,24 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// entries directly from the trie (much slower).
 	bc.flattenLock.Lock()
 	defer bc.flattenLock.Unlock()
-	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+	// This will attempt to execute the block txs in parallel.
+	// This is to avoid snapshot misses during execution.
+	// sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
+	// tape := new(tape)
+	// sp.Prefetch(block, parent.Root, bc.vmConfig, tape)
+
+	substart = time.Now()
+	var statedb *state.StateDB
+	if bc.snaps != nil {
+		snap := bc.snaps.Snapshot(parent.Root)
+		withRecording := snap
+		if bc.snapWriter != nil {
+			withRecording = &snapRecorder{snap, bc.snapWriter}
+		}
+		statedb, err = state.NewWithSnapshot(parent.Root, bc.stateCache, withRecording)
+	} else {
+		statedb, err = state.New(parent.Root, bc.stateCache, nil)
+	}
 	if err != nil {
 		return err
 	}
@@ -1320,6 +1417,8 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	activeState = statedb
 
 	// Process block using the parent state as reference point
+	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
 	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
 	if serr := statedb.Error(); serr != nil {
@@ -1330,6 +1429,10 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		return err
 	}
 	ptime := time.Since(pstart)
+	accountMissEnd := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissEnd := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	snapshotCacheMissAccount.Inc(accountMissEnd - accountMissStart)
+	snapshotCacheMissStorage.Inc(storageMissEnd - storageMissStart)
 
 	// Validate the state using the default validator
 	vstart := time.Now()
@@ -1650,30 +1753,57 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 	log.Debug(reason.String())
 }
 
+type extraStats struct {
+	spTime   time.Duration
+	pTime    time.Duration
+	vTime    time.Duration
+	cTime    time.Duration
+	readTime time.Duration
+	tapeLen  uint64
+	blocks   uint64
+	txs      uint64
+}
+
 // reprocessBlock reprocesses a previously accepted block. This is often used
 // to regenerate previously pruned state tries.
-func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) (common.Hash, error) {
+func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block, extras ...*extraStats) (common.Hash, error) {
+	var stats *extraStats
+	if len(extras) > 0 {
+		stats = extras[0]
+	}
+
+	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, current.Number(), current.Time()), current.Transactions())
+
 	// Retrieve the parent block and its state to execute block
 	var (
 		statedb    *state.StateDB
 		err        error
 		parentRoot = parent.Root()
 	)
+
+	// This will attempt to execute the block txs and create a tape.
+	// This is to avoid snapshot misses during execution.
+	tape := new(tape)
+	spStart := time.Now()
+	sp := newStatePrefetcher(bc.chainConfig, bc, bc.engine)
+	sp.Prefetch(current, parent.Root(), bc.vmConfig, tape)
+	spTime := time.Since(spStart)
+
 	// We don't simply use [NewWithSnapshot] here because it doesn't return an
 	// error if [bc.snaps != nil] and [bc.snaps.Snapshot(parentRoot) == nil].
 	if bc.snaps == nil {
 		statedb, err = state.New(parentRoot, bc.stateCache, nil)
 	} else {
 		snap := bc.snaps.Snapshot(parentRoot)
+		withReplay := &snapReplay{snap, *tape}
 		if snap == nil {
 			return common.Hash{}, fmt.Errorf("failed to get snapshot for parent root: %s", parentRoot)
 		}
-		statedb, err = state.NewWithSnapshot(parentRoot, bc.stateCache, snap)
+		statedb, err = state.NewWithSnapshot(parentRoot, bc.stateCache, withReplay)
 	}
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("could not fetch state for (%s: %d): %v", parent.Hash().Hex(), parent.NumberU64(), err)
 	}
-
 	// Enable prefetching to pull in trie node paths while processing transactions
 	statedb.StartPrefetcher("chain", bc.cacheConfig.TriePrefetcherParallelism)
 	defer func() {
@@ -1681,28 +1811,128 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	}()
 
 	// Process previously stored block
+	trieReadStart := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
+	trieReadStart += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
+	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	pstart := time.Now()
 	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
+	ptime := time.Since(pstart)
+	accountMissEnd := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
+	storageMissEnd := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
+	trieReadEnd := statedb.SnapshotAccountReads + statedb.AccountReads
+	trieReadEnd += statedb.SnapshotStorageReads + statedb.StorageReads
+	snapshotCacheMissAccount.Inc(accountMissEnd - accountMissStart)
+	snapshotCacheMissStorage.Inc(storageMissEnd - storageMissStart)
 
 	// Validate the state using the default validator
+	vstart := time.Now()
 	if err := bc.validator.ValidateState(current, statedb, receipts, usedGas); err != nil {
 		return common.Hash{}, fmt.Errorf("failed to validate state while re-processing block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
+	vtime := time.Since(vstart)
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
 	// If snapshots are enabled, call CommitWithSnaps to explicitly create a snapshot
 	// diff layer for the block.
+	var root common.Hash
+	cstart := time.Now()
 	if bc.snaps == nil {
-		return statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
+		root, err = statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
+	} else {
+		root, err = statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), bc.snaps, current.Hash(), current.ParentHash())
 	}
-	return statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), bc.snaps, current.Hash(), current.ParentHash())
+	ctime := time.Since(cstart)
+
+	if stats != nil {
+		stats.spTime += spTime
+		stats.pTime += ptime
+		stats.vTime += vtime
+		stats.cTime += ctime
+		stats.tapeLen += uint64(tape.Len())
+		stats.txs += uint64(len(current.Transactions()))
+		stats.readTime += trieReadEnd - trieReadStart
+		stats.blocks++
+	}
+
+	return root, err
+}
+
+// reprocessFrom destroys the current snapshot (overrides it with genesis state) and
+// reprocesses the chain from the genesis block up to the current head block.
+func (bc *BlockChain) reprocessFromGenesis() error {
+	metrics.EnabledExpensive = false
+	target := uint64(30_000_000)
+	log.Warn("Reprocessing chain from genesis", "target", target)
+
+	if err := bc.loadGenesisState(); err != nil {
+		return err
+	}
+	bc.initSnapshot(bc.hc.genesisHeader)
+	log.Warn("Snapshot initialized with genesis state")
+
+	parent := bc.genesisBlock
+
+	stats := &extraStats{}
+	var (
+		start         = time.Now()
+		logged        time.Time
+		totalFlatTime time.Duration
+	)
+	for i := uint64(1); i <= target; i++ {
+		current := bc.GetBlockByNumber(i)
+
+		_, err := bc.reprocessBlock(parent, current, stats)
+		if err != nil {
+			return err
+		}
+
+		// Flatten snapshot if initialized, holding a reference to the state root until the next block
+		// is processed.
+		fstart := time.Now()
+		if err := bc.flattenSnapshot(func() error {
+			return bc.stateManager.AcceptTrie(current)
+		}, current.Hash()); err != nil {
+			return err
+		}
+		flatTime := time.Since(fstart)
+		totalFlatTime += flatTime
+
+		// Print progress logs if long enough time elapsed
+		accountMiss := snapshotCacheMissAccount.Snapshot().Count()
+		storageMiss := snapshotCacheMissStorage.Snapshot().Count()
+		if time.Since(logged) > 8*time.Second {
+			log.Info(
+				"Reprocessing chain",
+				"block", i,
+				"elapsed", common.PrettyDuration(time.Since(start).Truncate(time.Second)),
+				"flat", common.PrettyDuration(totalFlatTime.Truncate(time.Second)),
+				"spTime", stats.spTime.Truncate(time.Second),
+				"pTime", stats.pTime.Truncate(time.Second),
+				"vTime", stats.vTime.Truncate(time.Second),
+				"cTime", stats.cTime.Truncate(time.Second),
+				"readTime", stats.readTime.Truncate(time.Millisecond),
+				"accountMiss", accountMiss,
+				"storageMiss", storageMiss,
+				"tapeLen", stats.tapeLen,
+				"txs", stats.txs,
+				"blocks", stats.blocks,
+			)
+			logged = time.Now()
+		}
+
+		parent = current
+	}
+
+	return nil
 }
 
 // initSnapshot instantiates a Snapshot instance and adds it to [bc]
-func (bc *BlockChain) initSnapshot(b *types.Header) {
+func (bc *BlockChain) initSnapshot(b *types.Header, opts ...*Opts) {
 	if bc.cacheConfig.SnapshotLimit <= 0 || bc.snaps != nil {
 		return
 	}
@@ -1722,10 +1952,44 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 		AsyncBuild: asyncBuild,
 		SkipVerify: !bc.cacheConfig.SnapshotVerify,
 	}
+	kvConfig := bc.cacheConfig.KeyValueDB
+	if b.Number.Uint64() == 0 && kvConfig != nil && kvConfig.KVBackend != nil && !bc.cacheConfig.SnapshotNoBuild {
+		var err error
+		bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, common.Hash{}, types.EmptyRootHash)
+		if err != nil {
+			log.Error("failed to initialize snapshots", "headRoot", b.Root, "err", err, "async", asyncBuild)
+		}
+		tmpDiskDB := rawdb.NewMemoryDatabase()
+		tmpTrieDB := triedb.NewDatabase(tmpDiskDB, nil)
+		tmpStateDatabase := state.NewDatabaseWithNodeDB(tmpDiskDB, tmpTrieDB)
+		statedb, err := state.New(types.EmptyRootHash, tmpStateDatabase, bc.snaps)
+		if err != nil {
+			log.Error("failed to initialize genesis state", "err", err)
+		}
+		bc.genesis.toBlockWithState(tmpDiskDB, statedb)
+		_, err = statedb.CommitWithSnap(0, false, bc.snaps, bc.genesisBlock.Hash(), common.Hash{})
+		if err != nil {
+			log.Error("failed to commit genesis state", "err", err)
+		}
+		if err := bc.snaps.Flatten(bc.genesisBlock.Hash()); err != nil {
+			log.Error("failed to flatten genesis snapshot", "err", err)
+		}
+		root := bc.genesisBlock.Root()
+		if len(opts) > 0 {
+			root = opts[0].LastAcceptedRoot
+		}
+		rawdb.WriteSnapshotRoot(bc.db, root)
+		// Need to mark the snapshot completed
+		snapshot.ResetSnapshotGeneration(bc.db)
+	}
 	var err error
-	bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, b.Hash(), b.Root)
+	root := b.Root
+	if len(opts) > 0 {
+		root = opts[0].LastAcceptedRoot
+	}
+	bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, b.Hash(), root)
 	if err != nil {
-		log.Error("failed to initialize snapshots", "headHash", b.Hash(), "headRoot", b.Root, "err", err, "async", asyncBuild)
+		log.Error("failed to initialize snapshots", "headHash", b.Hash(), "headRoot", root, "err", err, "async", asyncBuild)
 	}
 }
 
@@ -1733,7 +1997,7 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 // it reaches a block with a state committed to the database. reprocessState does not use
 // snapshots since the disk layer for snapshots will most likely be above the last committed
 // state that reprocessing will start from.
-func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error {
+func (bc *BlockChain) reprocessState(current *types.Block, currentRoot common.Hash, reexec uint64) error {
 	origin := current.NumberU64()
 	acceptorTip, err := rawdb.ReadAcceptorTip(bc.db)
 	if err != nil {
@@ -1746,7 +2010,12 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	acceptorTipUpToDate := acceptorTip == (common.Hash{}) || acceptorTip == current.Hash()
 
 	// If the state is already available and the acceptor tip is up to date, skip re-processing.
-	if bc.HasState(current.Root()) && acceptorTipUpToDate {
+	root := current.Root()
+	if currentRoot != (common.Hash{}) {
+		root = currentRoot
+	}
+	log.Info("Looking for state", "root", root, "acceptorTip", acceptorTip, "acceptorTipUpToDate", acceptorTipUpToDate)
+	if bc.HasState(root) && acceptorTipUpToDate {
 		log.Info("Skipping state reprocessing", "root", current.Root())
 		return nil
 	}
@@ -2075,7 +2344,7 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	lastAcceptedHash := block.Hash()
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 
-	if err := bc.loadLastState(lastAcceptedHash); err != nil {
+	if err := bc.loadLastState(lastAcceptedHash, common.Hash{}); err != nil {
 		return err
 	}
 	// Create the state manager

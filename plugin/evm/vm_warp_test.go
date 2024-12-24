@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -491,6 +492,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 	// Note each test corresponds to a block, the tests must be ordered by block
 	// time and cannot, eg be run in parallel or a separate golang test.
 	for _, test := range tests {
+		fmt.Println("Running test:", test.name)
 		testReceiveWarpMessage(
 			t, issuer, vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
 		)
