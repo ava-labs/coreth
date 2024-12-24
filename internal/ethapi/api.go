@@ -688,7 +688,13 @@ func (n *proofList) Delete(key []byte) error {
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
+// If the requested block is part of historical blocks, an error is returned.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	err := s.b.BlockIsRecent(blockNrOrHash)
+	if err != nil {
+		return nil, fmt.Errorf("checking if block requested is recent: %w", err)
+	}
+
 	var (
 		keys         = make([]common.Hash, len(storageKeys))
 		keyLengths   = make([]int, len(storageKeys))

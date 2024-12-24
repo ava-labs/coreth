@@ -95,6 +95,7 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 	LastAcceptedBlock() *types.Block
+	BlockIsRecent(blockNumOrHash rpc.BlockNumberOrHash) error
 
 	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by

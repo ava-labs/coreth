@@ -625,6 +625,9 @@ func (b testBackend) LastAcceptedBlock() *types.Block { panic("implement me") }
 func (b testBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	panic("implement me")
 }
+func (b testBackend) BlockIsRecent(blockNumOrHash rpc.BlockNumberOrHash) error {
+	panic("implement me")
+}
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()

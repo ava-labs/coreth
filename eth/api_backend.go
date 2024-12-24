@@ -29,6 +29,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -58,6 +59,7 @@ type EthAPIBackend struct {
 	allowUnprotectedTxs      bool
 	allowUnprotectedTxHashes map[common.Hash]struct{} // Invariant: read-only after creation.
 	allowUnfinalizedQueries  bool
+	historicalProofs         bool
 	eth                      *Ethereum
 	gpo                      *gasprice.Oracle
 }
@@ -512,4 +514,41 @@ func (b *EthAPIBackend) MinRequiredTip(ctx context.Context, header *types.Header
 
 func (b *EthAPIBackend) isLatestAndAllowed(number rpc.BlockNumber) bool {
 	return number.IsLatest() && b.IsAllowUnfinalizedQueries()
+}
+
+// BlockIsRecent returns a nil error only if either:
+//   - the node is configured to accept historical proofs queries; or
+//   - the block number given is within the window of recent accepted
+//     blocks and not yet part of the historical blocks.
+//
+// Otherwise, a non-nil error is returned.
+func (b *EthAPIBackend) BlockIsRecent(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
+	if b.historicalProofs {
+		return nil
+	}
+
+	lastBlock := b.LastAcceptedBlock()
+	lastNumber := lastBlock.NumberU64()
+
+	var number uint64
+	if blockNumOrHash.BlockNumber != nil {
+		number = uint64(blockNumOrHash.BlockNumber.Int64())
+	} else {
+		block, err := b.BlockByNumberOrHash(context.Background(), blockNumOrHash)
+		if err != nil {
+			return fmt.Errorf("getting block from hash: %s", err)
+		}
+		number = block.NumberU64()
+	}
+
+	const latestBlocksWindow = 1024 // TODO: find a decent default for validators
+	var oldestContemporaryNumber uint64
+	if lastNumber > latestBlocksWindow {
+		oldestContemporaryNumber = lastNumber - latestBlocksWindow
+	}
+	if number >= oldestContemporaryNumber {
+		return nil
+	}
+	return fmt.Errorf("block number %d is before the oldest non-historical block number %d (window of %d blocks)",
+		number, oldestContemporaryNumber, latestBlocksWindow)
 }
