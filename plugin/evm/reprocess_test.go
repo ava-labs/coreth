@@ -43,6 +43,7 @@ var (
 	skipUpgradeCheck       = false
 	usePersistedStartBlock = false
 	tapeDir                = ""
+	tapeVerbose            = false
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -64,6 +65,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&skipUpgradeCheck, "skipUpgradeCheck", skipUpgradeCheck, "skip upgrade check")
 	flag.BoolVar(&usePersistedStartBlock, "usePersistedStartBlock", usePersistedStartBlock, "use persisted start block")
 	flag.StringVar(&tapeDir, "tapeDir", tapeDir, "directory to store tape")
+	flag.BoolVar(&tapeVerbose, "tapeVerbose", tapeVerbose, "verbose tape")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -326,7 +328,6 @@ func reprocess(
 
 	var lastInsertedRoot common.Hash
 	checkRootFn := func(expected, got common.Hash) bool {
-		t.Logf("Got root: %x (original: %x)", got, expected)
 		lastInsertedRoot = got
 		if backend.VerifyRoot {
 			return expected == got
@@ -387,7 +388,6 @@ func reprocess(
 		isApricotPhase5 := backend.Genesis.Config.IsApricotPhase5(block.Time())
 		atomicTxs, err := ExtractAtomicTxs(block.ExtData(), isApricotPhase5, Codec)
 		require.NoError(t, err)
-		t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
 
 		// Override parentRoot to match last state
 		parent := bc.GetHeaderByNumber(block.NumberU64() - 1)
@@ -399,8 +399,10 @@ func reprocess(
 		require.NoError(t, err)
 
 		if tapeRecorder != nil {
-			tapeRecorder.Summary(block)
+			tapeRecorder.Summary(block, uint16(len(atomicTxs)))
 			tapeRecorder.Reset()
+		} else {
+			t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
 		}
 
 		t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())

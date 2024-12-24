@@ -13,6 +13,7 @@ import (
 // - Block number (8 bytes)
 // - Block hash (32 bytes)
 // - Transactions (uint16)
+// - Atomic transactions (uint16)
 // - Accounts Read (uint16)
 // - Storages Read (uint16)
 // - Accounts Written (uint16)
@@ -63,9 +64,21 @@ func (b *blockRecorder) RecordStorageRead(account common.Hash, key common.Hash, 
 	return nil
 }
 
-func (b *blockRecorder) Summary(block *types.Block) {
-	fmt.Printf("Block %d: %s (%d txs) \n", block.NumberU64(), block.Hash().TerminalString(), len(block.Transactions()))
+func (b *blockRecorder) Summary(block *types.Block, atomicTxs uint16) {
+	fmt.Printf("Block %d: %s (%d txs + %d atomic)\tReads: %d(a) %d(s), Writes: %d(a) %d(s)\n",
+		block.NumberU64(),
+		block.Hash().TerminalString(),
+		len(block.Transactions()),
+		atomicTxs,
+		len(b.accountReads),
+		len(b.storageReads),
+		len(b.accountWrites),
+		len(b.storageWrites),
+	)
 
+	if !tapeVerbose {
+		return
+	}
 	fmt.Printf("Account Reads: %d\n", len(b.accountReads))
 	for _, kv := range b.accountReads {
 		fmt.Printf("  %x: %x\n", kv.Key, kv.Value)
