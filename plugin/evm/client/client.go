@@ -5,6 +5,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,11 +20,12 @@ import (
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/utils"
 )
 
 // Interface compliance
 var _ Client = (*client)(nil)
+
+var errInvalidAddr = errors.New("invalid hex address")
 
 // Client interface for interacting with EVM [chain]
 type Client interface {
@@ -180,7 +182,7 @@ func (c *client) ImportKey(ctx context.Context, user api.UserPass, privateKey *s
 	if err != nil {
 		return common.Address{}, err
 	}
-	return utils.ParseEthAddress(res.Address)
+	return ParseEthAddress(res.Address)
 }
 
 // ImportArgs are arguments for passing into Import requests

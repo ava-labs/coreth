@@ -161,8 +161,8 @@ func init() {
 		b, _ = cb58.Decode(key)
 		pk, _ := secp256k1.ToPrivateKey(b)
 		testKeys = append(testKeys, pk)
-		testEthAddrs = append(testEthAddrs, utils.GetEthAddress(pk))
-		testShortIDAddrs = append(testShortIDAddrs, pk.PublicKey().Address())
+		testEthAddrs = append(testEthAddrs, pk.EthAddress())
+		testShortIDAddrs = append(testShortIDAddrs, pk.Address())
 	}
 }
 
@@ -1390,10 +1390,10 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	}
 
 	key0 := testKeys[0]
-	addr0 := key0.PublicKey().Address()
+	addr0 := key0.Address()
 
 	key1 := testKeys[1]
-	addr1 := key1.PublicKey().Address()
+	addr1 := key1.Address()
 
 	importAmount := uint64(1000000000)
 
@@ -1533,7 +1533,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 			Amt: importAmount,
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+				Addrs:     []ids.ShortID{testKeys[0].Address()},
 			},
 		},
 	}
@@ -1548,7 +1548,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testKeys[0].PublicKey().Address().Bytes(),
+			testKeys[0].Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
@@ -3071,7 +3071,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 	}()
 
 	key0 := testKeys[0]
-	addr0 := key0.PublicKey().Address()
+	addr0 := key0.Address()
 
 	// Create the transaction
 	utx := &atomic.UnsignedImportTx{
@@ -3228,7 +3228,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 			Amt: importAmount,
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+				Addrs:     []ids.ShortID{testKeys[0].Address()},
 			},
 		},
 	}
@@ -3243,7 +3243,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testKeys[0].PublicKey().Address().Bytes(),
+			testKeys[0].Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
@@ -3398,7 +3398,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 			Amt: importAmount,
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+				Addrs:     []ids.ShortID{testKeys[0].Address()},
 			},
 		},
 	}
@@ -3413,7 +3413,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testKeys[0].PublicKey().Address().Bytes(),
+			testKeys[0].Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
