@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Each 1000 blocks, we will make a new file.
+// Each 10000 blocks, we will make a new file.
 // Each file contains:
 // - Block number (8 bytes)
 // - Block hash (32 bytes)

@@ -426,7 +426,11 @@ func NewBlockChain(
 	bc.currentBlock.Store(nil)
 
 	// Create the state manager
-	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
+	var tdb TrieDB = bc.triedb
+	if cacheConfig.StateScheme == rawdb.PathScheme {
+		tdb = &NoDerefTrieDB{tdb}
+	}
+	bc.stateManager = NewTrieWriter(tdb, cacheConfig)
 
 	// if err := bc.reprocessFromGenesis(); err != nil {
 	// 	return nil, err

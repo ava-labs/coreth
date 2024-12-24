@@ -83,7 +83,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
 		signer       = types.MakeSigner(p.config, header.Number, header.Time)
 	)
-	recorder := &snapRecorder{Snapshot: snap}
+	recorder := &snapRecorder{Snapshot: snap, writer: recorded}
 	statedb, err := state.NewWithSnapshot(parentRoot, p.bc.stateCache, recorder)
 	if err != nil {
 		return
@@ -148,8 +148,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, c
 	if err := p.engine.Finalize(p.bc, block, parent, statedb, receipts); err != nil {
 		log.Error("Failed to finalize block", "err", err)
 	}
-
-	*recorded = *(recorder.writer.(*tape))
+	*recorded = *recorder.writer.(*tape)
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database

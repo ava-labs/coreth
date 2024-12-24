@@ -65,6 +65,7 @@ func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB 
 
 func getCacheConfig(t *testing.T, name string, backend triedb.KVBackend) core.CacheConfig {
 	cacheConfig := *core.DefaultCacheConfig
+	cacheConfig.StateScheme = legacyScheme
 	cacheConfig.KeyValueDB = &triedb.KeyValueConfig{KVBackend: backend}
 	cacheConfig.TriePrefetcherParallelism = prefetchers
 	cacheConfig.SnapshotLimit = 0

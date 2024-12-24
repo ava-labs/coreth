@@ -71,6 +71,12 @@ type TrieDB interface {
 	Cap(limit common.StorageSize) error
 }
 
+type NoDerefTrieDB struct {
+	TrieDB
+}
+
+func (nd *NoDerefTrieDB) Dereference(root common.Hash) error { return nil }
+
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 	if config.Pruning {
 		cm := &cappedMemoryTrieWriter{
