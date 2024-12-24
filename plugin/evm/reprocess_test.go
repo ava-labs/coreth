@@ -340,7 +340,7 @@ func reprocess(
 	var tapeRecorder *blockRecorder
 	if tapeDir != "" {
 		tapeRecorder = &blockRecorder{
-			fileManager: &fileManager{dir: tapeDir},
+			fileManager: &fileManager{dir: tapeDir, newEach: 10_000},
 		}
 		defer tapeRecorder.Close()
 		cacheConfig.KeyValueDB.Writer = tapeRecorder
