@@ -307,7 +307,7 @@ func (c *Config) Validate(networkID uint32) error {
 	// Ensure that non-standard commit interval is not allowed for production networks
 	if constants.ProductionNetworkIDs.Contains(networkID) {
 		if c.CommitInterval != defaultCommitInterval {
-			return fmt.Errorf("cannot start non-local network with commit interval %d", c.CommitInterval)
+			return fmt.Errorf("cannot start non-local network with commit interval %d different than %d", c.CommitInterval, defaultCommitInterval)
 		}
 		if c.StateSyncCommitInterval != defaultSyncableCommitInterval {
 			return fmt.Errorf("cannot start non-local network with syncable interval %d", c.StateSyncCommitInterval)
