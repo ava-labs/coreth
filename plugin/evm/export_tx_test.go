@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -35,7 +34,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 			Amt: uint64(50000000),
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+				Addrs:     []ids.ShortID{testKeys[0].Address()},
 			},
 		},
 	}
@@ -50,7 +49,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testKeys[0].PublicKey().Address().Bytes(),
+			testKeys[0].Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
@@ -104,8 +103,8 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 
 func TestExportTxEVMStateTransfer(t *testing.T) {
 	key := testKeys[0]
-	addr := key.PublicKey().Address()
-	ethAddr := utils.GetEthAddress(key)
+	addr := key.Address()
+	ethAddr := key.EthAddress()
 
 	avaxAmount := 50 * units.MilliAvax
 	avaxUTXOID := avax.UTXOID{
@@ -452,7 +451,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 	parent := vm.LastAcceptedBlockInternal().(*Block)
 
 	key := testKeys[0]
-	addr := key.PublicKey().Address()
+	addr := key.Address()
 	ethAddr := testEthAddrs[0]
 
 	var (
@@ -949,7 +948,7 @@ func TestExportTxAccept(t *testing.T) {
 	}()
 
 	key := testKeys[0]
-	addr := key.PublicKey().Address()
+	addr := key.Address()
 	ethAddr := testEthAddrs[0]
 
 	var (
@@ -1716,7 +1715,7 @@ func TestNewExportTx(t *testing.T) {
 					Amt: importAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+						Addrs:     []ids.ShortID{testKeys[0].Address()},
 					},
 				},
 			}
@@ -1731,7 +1730,7 @@ func TestNewExportTx(t *testing.T) {
 				Key:   inputID[:],
 				Value: utxoBytes,
 				Traits: [][]byte{
-					testKeys[0].PublicKey().Address().Bytes(),
+					testKeys[0].Address().Bytes(),
 				},
 			}}}}); err != nil {
 				t.Fatal(err)
@@ -1823,7 +1822,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addr := utils.GetEthAddress(testKeys[0])
+			addr := testKeys[0].EthAddress()
 			if sdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), sdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
@@ -1889,7 +1888,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					Amt: importAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+						Addrs:     []ids.ShortID{testKeys[0].Address()},
 					},
 				},
 			}
@@ -1910,7 +1909,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					Amt: importAmount2,
 					OutputOwners: secp256k1fx.OutputOwners{
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+						Addrs:     []ids.ShortID{testKeys[0].Address()},
 					},
 				},
 			}
@@ -1926,14 +1925,14 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					Key:   inputID[:],
 					Value: utxoBytes,
 					Traits: [][]byte{
-						testKeys[0].PublicKey().Address().Bytes(),
+						testKeys[0].Address().Bytes(),
 					},
 				},
 				{
 					Key:   inputID2[:],
 					Value: utxoBytes2,
 					Traits: [][]byte{
-						testKeys[0].PublicKey().Address().Bytes(),
+						testKeys[0].Address().Bytes(),
 					},
 				},
 			}}}); err != nil {
@@ -1971,7 +1970,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			parent = vm.LastAcceptedBlockInternal().(*Block)
 			exportAmount := uint64(5000000)
 
-			testKeys0Addr := utils.GetEthAddress(testKeys[0])
+			testKeys0Addr := testKeys[0].EthAddress()
 			exportId, err := ids.ToShortID(testKeys0Addr[:])
 			if err != nil {
 				t.Fatal(err)
@@ -2023,7 +2022,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addr := utils.GetEthAddress(testKeys[0])
+			addr := testKeys[0].EthAddress()
 			if stdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), stdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
