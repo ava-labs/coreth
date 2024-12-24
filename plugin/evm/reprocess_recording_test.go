@@ -234,7 +234,7 @@ func (f *fileManager) GetWriterFor(blockNumber uint64) io.Writer {
 	if f.f != nil {
 		f.f.Close()
 	}
-	file, err := os.OpenFile(fmt.Sprintf("%s/%07d", f.dir, group), os.O_APPEND, 0644)
+	file, err := os.OpenFile(fmt.Sprintf("%s/%07d", f.dir, group), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
