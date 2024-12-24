@@ -405,7 +405,7 @@ func reprocess(
 			t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
 		}
 
-		t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
+		// t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
 		errorOnClosed := true // make sure block is accepted
 		err = bc.AcceptWithRoot(block, lastInsertedRoot, errorOnClosed)
 		require.NoError(t, err)
