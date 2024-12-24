@@ -339,7 +339,10 @@ func reprocess(
 
 	var tapeRecorder *blockRecorder
 	if tapeDir != "" {
-		tapeRecorder = &blockRecorder{}
+		tapeRecorder = &blockRecorder{
+			fileManager: &fileManager{dir: tapeDir},
+		}
+		defer tapeRecorder.Close()
 		cacheConfig.KeyValueDB.Writer = tapeRecorder
 	}
 
@@ -363,6 +366,9 @@ func reprocess(
 		defer lock.Unlock()
 
 		bc.Stop()
+		if tapeRecorder != nil {
+			tapeRecorder.Close()
+		}
 	})
 
 	if start == 0 {
@@ -402,6 +408,7 @@ func reprocess(
 
 		if tapeRecorder != nil {
 			tapeRecorder.Summary(block, uint16(len(atomicTxs)))
+			tapeRecorder.WriteToDisk(block, uint16(len(atomicTxs)))
 			tapeRecorder.Reset()
 		} else {
 			t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
