@@ -65,7 +65,7 @@ func (b *blockRecorder) RecordStorageRead(account common.Hash, key common.Hash, 
 }
 
 func (b *blockRecorder) Summary(block *types.Block, atomicTxs uint16) {
-	fmt.Printf("Block %d: %s (%d txs + %d atomic)\tReads: %d(a) %d(s), Writes: %d(a) %d(s)\n",
+	fmt.Printf("Block %d: %s (%d txs + %d atomic)\tReads (acc, storage): %d, %d\t Writes: %d, %d\n",
 		block.NumberU64(),
 		block.Hash().TerminalString(),
 		len(block.Transactions()),
