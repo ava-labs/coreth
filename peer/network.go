@@ -340,7 +340,6 @@ func (n *network) markRequestFulfilled(requestID uint32) (message.ResponseHandle
 // from a peer. An error returned by this function is treated as fatal by the
 // engine.
 func (n *network) AppGossip(ctx context.Context, nodeID ids.NodeID, gossipBytes []byte) error {
-	log.Debug("forwarding AppGossip to SDK network", "nodeID", nodeID, "gossipLen", len(gossipBytes))
 	return n.p2pNetwork.AppGossip(ctx, nodeID, gossipBytes)
 }
 

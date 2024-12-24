@@ -29,8 +29,6 @@ func init() {
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		c.RegisterType(&avalancheatomic.Element{}),
-		c.RegisterType(&avalancheatomic.Requests{}),
 		TestTxCodec.RegisterCodec(atomic.CodecVersion, c),
 	)
 

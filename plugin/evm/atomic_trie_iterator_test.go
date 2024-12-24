@@ -11,11 +11,10 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
 func testSharedMemory() avalancheatomic.SharedMemory {
