@@ -64,6 +64,10 @@ func (t *tape) RecordStorageRead(_, _ common.Hash, val []byte) error {
 	return nil
 }
 
+func (t *tape) RecordTransactionEnd() error {
+	return nil
+}
+
 func (t tape) Len() int { return len(t) }
 
 func (p *statePrefetcher) Prefetch(block *types.Block, parentRoot common.Hash, cfg vm.Config, recorded *tape) {
@@ -178,6 +182,7 @@ type vmStateDB interface {
 type writer interface {
 	RecordStorageRead(common.Hash, common.Hash, []byte) error
 	RecordAccountRead(common.Hash, []byte) error
+	RecordTransactionEnd() error
 }
 
 type snapRecorder struct {

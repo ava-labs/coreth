@@ -1420,7 +1420,11 @@ func (bc *BlockChain) insertBlock(block *types.Block, parent *types.Header, writ
 	accountMissStart := snapshot.SnapshotCleanAccountMissMeter.Snapshot().Count()
 	storageMissStart := snapshot.SnapshotCleanStorageMissMeter.Snapshot().Count()
 	pstart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
+	var writers []writer
+	if bc.snapWriter != nil {
+		writers = append(writers, bc.snapWriter)
+	}
+	receipts, logs, usedGas, err := bc.processor.Process(block, parent, statedb, bc.vmConfig, writers...)
 	if serr := statedb.Error(); serr != nil {
 		log.Error("statedb error encountered", "err", serr, "number", block.Number(), "hash", block.Hash())
 	}

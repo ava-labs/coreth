@@ -17,19 +17,21 @@ import (
 // - Block hash (32 bytes)
 // - Transactions (uint16)
 // - Atomic transactions (uint16)
-// - Accounts Read (uint16)
-// - Storages Read (uint16)
+// - Length of read tape (uint32)
+// - Read tape (variable)
+//   - byte type (1 byte)
+//   - type = account
+//     - Account address hash (32 bytes)
+//     - Value len (byte)
+//     - Value (variable)
+//   - type = storage
+//     - Account address hash (32 bytes)
+//     - Key hash (32 bytes)
+//     - Value len (byte)
+//     - Value (variable)
+//   - type = end tx
 // - Accounts Written (uint16)
 // - Storages Written (uint16)
-// For each account read:
-// - Account address hash (32 bytes)
-// - Value len (byte)
-// - Value (variable)
-// For each storage read:
-// - Account address hash (32 bytes)
-// - Key hash (32 bytes)
-// - Value len (byte)
-// - Value (variable)
 // For each account written:
 // - Account address hash (32 bytes)
 // - Value len (byte)
@@ -40,9 +42,11 @@ import (
 // - Value len (byte)
 
 type blockRecorder struct {
-	accountReads  []triedb.KV
+	accountReads int
+	storageReads int
+	readTape     []byte
+
 	accountWrites []triedb.KV
-	storageReads  []triedb.KV
 	storageWrites []triedb.KV
 
 	fileManager *fileManager
@@ -59,13 +63,31 @@ func (b *blockRecorder) MustUpdate(key, value []byte) {
 	}
 }
 
+const typeAccount = 0
+const typeStorage = 1
+const typeEndTx = 2
+
 func (b *blockRecorder) RecordAccountRead(key common.Hash, value []byte) error {
-	b.accountReads = append(b.accountReads, triedb.KV{Key: key[:], Value: value})
+	b.accountReads++
+	b.readTape = append(b.readTape, typeAccount)
+	b.readTape = append(b.readTape, key[:]...)
+	b.readTape = append(b.readTape, byte(len(value)))
+	b.readTape = append(b.readTape, value...)
 	return nil
 }
 
 func (b *blockRecorder) RecordStorageRead(account common.Hash, key common.Hash, value []byte) error {
-	b.storageReads = append(b.storageReads, triedb.KV{Key: append(account[:], key[:]...), Value: value})
+	b.storageReads++
+	b.readTape = append(b.readTape, typeStorage)
+	b.readTape = append(b.readTape, account[:]...)
+	b.readTape = append(b.readTape, key[:]...)
+	b.readTape = append(b.readTape, byte(len(value)))
+	b.readTape = append(b.readTape, value...)
+	return nil
+}
+
+func (b *blockRecorder) RecordTransactionEnd() error {
+	b.readTape = append(b.readTape, typeEndTx)
 	return nil
 }
 
@@ -87,13 +109,14 @@ func (b *blockRecorder) Close() {
 }
 
 func (b *blockRecorder) Summary(block *types.Block, atomicTxs uint16) {
-	fmt.Printf("Block %d: %s (%d txs + %d atomic)\tReads (acc, storage): %d, %d\t Writes: %d, %d\n",
+	fmt.Printf("Block %d: %s (%d txs + %d atomic)\tReads (acc, storage, tape KBs): %d, %d, %d\t Writes: %d, %d\n",
 		block.NumberU64(),
 		block.Hash().TerminalString(),
 		len(block.Transactions()),
 		atomicTxs,
-		len(b.accountReads),
-		len(b.storageReads),
+		b.accountReads,
+		b.storageReads,
+		len(b.readTape)/1024,
 		len(b.accountWrites),
 		len(b.storageWrites),
 	)
@@ -101,14 +124,7 @@ func (b *blockRecorder) Summary(block *types.Block, atomicTxs uint16) {
 	if !tapeVerbose {
 		return
 	}
-	fmt.Printf("Account Reads: %d\n", len(b.accountReads))
-	for _, kv := range b.accountReads {
-		fmt.Printf("  %x: %x\n", kv.Key, kv.Value)
-	}
-	fmt.Printf("Storage Reads: %d\n", len(b.storageReads))
-	for _, kv := range b.storageReads {
-		fmt.Printf("  %x: %x\n", kv.Key, kv.Value)
-	}
+	fmt.Printf("Read Tape: %x\n", b.readTape)
 
 	fmt.Printf("Account Writes: %d\n", len(b.accountWrites))
 	for _, kv := range b.accountWrites {
@@ -131,6 +147,11 @@ func writeUint16(w io.Writer, i uint16) error {
 	return err
 }
 
+func writeUint32(w io.Writer, i uint32) error {
+	_, err := w.Write(binary.BigEndian.AppendUint32(nil, i))
+	return err
+}
+
 func writeUint64(w io.Writer, i uint64) error {
 	_, err := w.Write(binary.BigEndian.AppendUint64(nil, i))
 	return err
@@ -149,10 +170,10 @@ func (b *blockRecorder) Write(block *types.Block, atomicTxs uint16, w io.Writer)
 	if err := writeUint16(w, atomicTxs); err != nil {
 		return err
 	}
-	if err := writeUint16(w, uint16(len(b.accountReads))); err != nil {
+	if err := writeUint32(w, uint32(len(b.readTape))); err != nil {
 		return err
 	}
-	if err := writeUint16(w, uint16(len(b.storageReads))); err != nil {
+	if _, err := w.Write(b.readTape); err != nil {
 		return err
 	}
 	if err := writeUint16(w, uint16(len(b.accountWrites))); err != nil {
@@ -160,30 +181,6 @@ func (b *blockRecorder) Write(block *types.Block, atomicTxs uint16, w io.Writer)
 	}
 	if err := writeUint16(w, uint16(len(b.storageWrites))); err != nil {
 		return err
-	}
-
-	for _, kv := range b.accountReads {
-		if _, err := w.Write(kv.Key); err != nil {
-			return err
-		}
-		if err := writeByte(w, byte(len(kv.Value))); err != nil {
-			return err
-		}
-		if _, err := w.Write(kv.Value); err != nil {
-			return err
-		}
-	}
-
-	for _, kv := range b.storageReads {
-		if _, err := w.Write(kv.Key); err != nil {
-			return err
-		}
-		if err := writeByte(w, byte(len(kv.Value))); err != nil {
-			return err
-		}
-		if _, err := w.Write(kv.Value); err != nil {
-			return err
-		}
 	}
 
 	for _, kv := range b.accountWrites {
@@ -213,10 +210,11 @@ func (b *blockRecorder) Write(block *types.Block, atomicTxs uint16, w io.Writer)
 }
 
 func (b *blockRecorder) Reset() {
-	b.accountReads = nil
+	b.readTape = nil
 	b.accountWrites = nil
-	b.storageReads = nil
 	b.storageWrites = nil
+	b.storageReads = 0
+	b.accountReads = 0
 }
 
 type fileManager struct {
