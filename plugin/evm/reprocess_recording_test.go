@@ -44,6 +44,7 @@ import (
 type blockRecorder struct {
 	accountReads int
 	storageReads int
+	txEnds       int
 	readTape     []byte
 
 	accountWrites []triedb.KV
@@ -87,6 +88,7 @@ func (b *blockRecorder) RecordStorageRead(account common.Hash, key common.Hash, 
 }
 
 func (b *blockRecorder) RecordTransactionEnd() error {
+	b.txEnds++
 	b.readTape = append(b.readTape, typeEndTx)
 	return nil
 }
@@ -158,6 +160,9 @@ func writeUint64(w io.Writer, i uint64) error {
 }
 
 func (b *blockRecorder) Write(block *types.Block, atomicTxs uint16, w io.Writer) error {
+	if len(block.Transactions()) != b.txEnds {
+		panic(fmt.Sprintf("mismatch block txs: %d, ends recorded: %d", len(block.Transactions()), b.txEnds))
+	}
 	if err := writeUint64(w, block.NumberU64()); err != nil {
 		return err
 	}
@@ -215,6 +220,7 @@ func (b *blockRecorder) Reset() {
 	b.storageWrites = nil
 	b.storageReads = 0
 	b.accountReads = 0
+	b.txEnds = 0
 }
 
 type fileManager struct {
