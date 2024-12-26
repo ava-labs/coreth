@@ -765,7 +765,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 //
 // Otherwise, a non-nil error is returned.
 func (s *BlockChainAPI) isAllowedToBeQueried(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
-	historicalProofs := s.b.HistoricalConfig()
+	historicalProofs, recentBlocksWindow := s.b.HistoricalConfig()
 	if historicalProofs {
 		return nil
 	}
@@ -784,16 +784,15 @@ func (s *BlockChainAPI) isAllowedToBeQueried(blockNumOrHash rpc.BlockNumberOrHas
 		number = block.NumberU64()
 	}
 
-	const latestBlocksWindow = 1024 // TODO: find a decent default for validators
 	var oldestContemporaryNumber uint64
-	if lastNumber > latestBlocksWindow {
-		oldestContemporaryNumber = lastNumber - latestBlocksWindow
+	if lastNumber > recentBlocksWindow {
+		oldestContemporaryNumber = lastNumber - recentBlocksWindow
 	}
 	if number >= oldestContemporaryNumber {
 		return nil
 	}
 	return fmt.Errorf("block number %d is before the oldest non-historical block number %d (window of %d blocks)",
-		number, oldestContemporaryNumber, latestBlocksWindow)
+		number, oldestContemporaryNumber, recentBlocksWindow)
 }
 
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally

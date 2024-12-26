@@ -627,7 +627,7 @@ func (b testBackend) LastAcceptedBlock() *types.Block { panic("implement me") }
 func (b testBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	panic("implement me")
 }
-func (b testBackend) HistoricalConfig() (historicalBlocks bool) {
+func (b testBackend) HistoricalConfig() (historicalBlocks bool, recentBlocksWindow uint64) {
 	panic("implement me")
 }
 
@@ -2071,6 +2071,8 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 	t.Parallel()
 
+	const recentBlocksWindow uint64 = 1024
+
 	makeBlockWithNumber := func(number uint64) *types.Block {
 		header := &types.Header{
 			Number: big.NewInt(int64(number)),
@@ -2087,7 +2089,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(0)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(true)
+				backend.EXPECT().HistoricalConfig().Return(true, recentBlocksWindow)
 				return backend
 			},
 		},
@@ -2095,7 +2097,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false)
+				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(1020))
 				return backend
 			},
@@ -2104,7 +2106,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false)
+				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},
@@ -2113,7 +2115,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithHash(common.Hash{99}, false),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false)
+				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
 					BlockByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithHash(common.Hash{99}, false)).
@@ -2125,7 +2127,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithHash(common.Hash{99}, false),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false)
+				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
 					BlockByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithHash(common.Hash{99}, false)).
@@ -2138,7 +2140,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false)
+				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},

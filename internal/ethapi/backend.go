@@ -80,7 +80,7 @@ type Backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	BadBlocks() ([]*types.Block, []*core.BadBlockReason)
-	HistoricalConfig() (historicalBlocks bool)
+	HistoricalConfig() (historicalBlocks bool, recentBlocksWindow uint64)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

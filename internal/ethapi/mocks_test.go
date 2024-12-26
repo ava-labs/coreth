@@ -428,11 +428,12 @@ func (mr *MockBackendMockRecorder) HeaderByNumberOrHash(ctx, blockNrOrHash any) 
 }
 
 // HistoricalConfig mocks base method.
-func (m *MockBackend) HistoricalConfig() bool {
+func (m *MockBackend) HistoricalConfig() (bool, uint64) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HistoricalConfig")
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(uint64)
+	return ret0, ret1
 }
 
 // HistoricalConfig indicates an expected call of HistoricalConfig.
