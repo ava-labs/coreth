@@ -676,7 +676,8 @@ func (n *proofList) Delete(key []byte) error {
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
-// If the requested block is part of historical blocks, an error is returned.
+// If the requested block is part of historical blocks and the node does not accept
+// getting proofs for historical blocks, an error is returned.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
 	err := s.isAllowedToBeQueried(blockNrOrHash)
 	if err != nil {
@@ -758,7 +759,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	}, statedb.Error()
 }
 
-// isAllowedToBeQueried returns a nil error only if either:
+// isAllowedToBeQueried returns a nil error only if:
 //   - the node is configured to accept historical proofs queries; or
 //   - the block number given is within the window of recent accepted
 //     blocks and not yet part of the historical blocks.
@@ -784,15 +785,15 @@ func (s *BlockChainAPI) isAllowedToBeQueried(blockNumOrHash rpc.BlockNumberOrHas
 		number = block.NumberU64()
 	}
 
-	var oldestContemporaryNumber uint64
+	var oldestRecentNumber uint64
 	if lastNumber > recentBlocksWindow {
-		oldestContemporaryNumber = lastNumber - recentBlocksWindow
+		oldestRecentNumber = lastNumber - recentBlocksWindow
 	}
-	if number >= oldestContemporaryNumber {
+	if number >= oldestRecentNumber {
 		return nil
 	}
 	return fmt.Errorf("block number %d is before the oldest non-historical block number %d (window of %d blocks)",
-		number, oldestContemporaryNumber, recentBlocksWindow)
+		number, oldestRecentNumber, recentBlocksWindow)
 }
 
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally
