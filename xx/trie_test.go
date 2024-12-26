@@ -60,6 +60,7 @@ func BenchmarkTrie(b *testing.B) {
 	config.CleanCacheSize = 0
 	tdb := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
 	var lastKey uint64
+	var lastRoot common.Hash
 
 	for _, initialSize := range []uint64{1_000_000, 4_000_000, 16_000_000, 32_000_000, 64_000_000} {
 		getKV := func(i uint64) (key, value common.Hash) {
@@ -71,7 +72,6 @@ func BenchmarkTrie(b *testing.B) {
 		tr, err := trie.New(trie.TrieID(types.EmptyRootHash), tdb)
 		require.NoError(b, err)
 
-		var lastRoot common.Hash
 		commit := func() {
 			root, set, err := tr.Commit(false)
 			require.NoError(b, err)
@@ -100,9 +100,9 @@ func BenchmarkTrie(b *testing.B) {
 		}
 		lastKey = initialSize
 
-		for _, writeBatch := range []uint64{200} {
+		for _, writeBatch := range []uint64{200, 500, 1000, 2000, 10_000} {
 			b.Run(fmt.Sprintf("InitialSize-%d_WriteBatch-%d", initialSize, writeBatch), func(b *testing.B) {
-				for i := uint64(0); i < uint64(b.N); i++ {
+				for i := uint64(0); i < uint64(b.N)/writeBatch; i++ {
 					for j := uint64(0); j < writeBatch; j++ {
 						b.StopTimer()
 						key, value := getKV(lastKey + j)
