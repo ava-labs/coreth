@@ -123,3 +123,16 @@ jobs:
         with:
           name: tmpnet-data
           path: ~/.tmpnet/networks/1000
+  mock_gen:
+    name: MockGen Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.min_go_version }}
+          check-latest: true
+      - shell: bash
+        run: scripts/mock.gen.sh
+      - shell: bash
+        run: .github/workflows/check-clean-branch.sh
