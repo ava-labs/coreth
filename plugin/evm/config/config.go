@@ -47,6 +47,7 @@ const (
 	defaultLogJSONFormat                          = false
 	defaultMaxOutboundActiveRequests              = 16
 	defaultPopulateMissingTriesParallelism        = 1024
+	defaultRecentBlocksWindow                     = 1024
 	defaultStateSyncServerTrieCache               = 64 // MB
 	defaultAcceptedCacheSize                      = 32 // blocks
 
@@ -124,6 +125,7 @@ type Config struct {
 	PopulateMissingTriesParallelism int     `json:"populate-missing-tries-parallelism"` // Number of concurrent readers to use when re-populating missing tries on startup.
 	PruneWarpDB                     bool    `json:"prune-warp-db-enabled"`              // Determines if the warpDB should be cleared on startup
 	HistoricalProofs                bool    `json:"historical-proofs"`                  // HistoricalProofs, if set to true, allows to query historical block numbers for proofs.
+	RecentBlocksWindow              uint64  `json:"recent-blocks-window"`               // RecentBlocksWindow is the number of blocks before the last accepted block to be considered as recent and non-historical. It defaults to 1024.
 
 	// Metric Settings
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
@@ -283,6 +285,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.LogJSONFormat = defaultLogJSONFormat
 	c.MaxOutboundActiveRequests = defaultMaxOutboundActiveRequests
 	c.PopulateMissingTriesParallelism = defaultPopulateMissingTriesParallelism
+	c.RecentBlocksWindow = defaultRecentBlocksWindow
 	c.StateSyncServerTrieCache = defaultStateSyncServerTrieCache
 	c.StateSyncCommitInterval = defaultSyncableCommitInterval
 	c.StateSyncMinBlocks = defaultStateSyncMinBlocks

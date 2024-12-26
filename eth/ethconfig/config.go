@@ -70,6 +70,7 @@ func NewDefaultConfig() Config {
 		RPCEVMTimeout:             5 * time.Second,
 		GPO:                       DefaultFullGPOConfig,
 		RPCTxFeeCap:               1, // 1 AVAX
+		RecentBlocksWindow:        1024,
 	}
 }
 
@@ -96,6 +97,7 @@ type Config struct {
 	SnapshotVerify                  bool    // Whether to verify generated snapshots
 	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
 	HistoricalProofs                bool    // HistoricalProofs, if set to true, allows to query historical blocks for proofs.
+	RecentBlocksWindow              uint64  // RecentBlocksWindow is the number of blocks before the last accepted block to be considered as recent and non-historical. It defaults to 1024.
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
