@@ -55,13 +55,13 @@ func getMerkleDB(t testing.TB, mdbKVStore avagoDb.Database) xmerkledb.MerkleDB {
 }
 
 func BenchmarkTrie(b *testing.B) {
-	for _, initialSize := range []uint64{1_000_000, 4_000_000, 16_000_000, 32_000_000, 64_000_000} {
-		disk := rawdb.NewMemoryDatabase()
-		config := *pathdb.Defaults
-		config.CleanCacheSize = 0
-		tdb := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
-		var lastKey uint64
+	disk := rawdb.NewMemoryDatabase()
+	config := *pathdb.Defaults
+	config.CleanCacheSize = 0
+	tdb := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
+	var lastKey uint64
 
+	for _, initialSize := range []uint64{1_000_000, 4_000_000, 16_000_000, 32_000_000, 64_000_000} {
 		getKV := func(i uint64) (key, value common.Hash) {
 			key = common.BytesToHash(hashKey(binary.BigEndian.AppendUint64(nil, i)))
 			value = common.BytesToHash(binary.BigEndian.AppendUint64(nil, i))
