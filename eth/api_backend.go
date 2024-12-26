@@ -58,6 +58,7 @@ type EthAPIBackend struct {
 	allowUnprotectedTxs      bool
 	allowUnprotectedTxHashes map[common.Hash]struct{} // Invariant: read-only after creation.
 	allowUnfinalizedQueries  bool
+	historicalProofs         bool
 	eth                      *Ethereum
 	gpo                      *gasprice.Oracle
 }
@@ -65,6 +66,10 @@ type EthAPIBackend struct {
 // ChainConfig returns the active chain configuration.
 func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
+}
+
+func (b *EthAPIBackend) HistoricalConfig() (historicalProofs bool) {
+	return b.historicalProofs
 }
 
 func (b *EthAPIBackend) IsAllowUnfinalizedQueries() bool {

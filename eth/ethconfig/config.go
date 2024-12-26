@@ -95,6 +95,7 @@ type Config struct {
 	SnapshotWait                    bool    // Whether to wait for the initial snapshot generation
 	SnapshotVerify                  bool    // Whether to verify generated snapshots
 	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
+	HistoricalProofs                bool    // HistoricalProofs, if set to true, allows to query historical blocks for proofs.
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
