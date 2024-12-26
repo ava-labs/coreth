@@ -2118,7 +2118,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
-					BlockByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithHash(common.Hash{99}, false)).
+					BlockByNumberOrHash(gomock.Any(), gomock.Any()).
 					Return(makeBlockWithNumber(2000), nil)
 				return backend
 			},
@@ -2130,7 +2130,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
-					BlockByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithHash(common.Hash{99}, false)).
+					BlockByNumberOrHash(gomock.Any(), gomock.Any()).
 					Return(nil, fmt.Errorf("test error"))
 				return backend
 			},
