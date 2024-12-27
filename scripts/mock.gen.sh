@@ -22,7 +22,7 @@ while IFS= read -r line; do
   IFS='=' read -r src_import_path interface_name output_path <<<"${line}"
   package_name=$(basename "$(dirname "$output_path")")
   echo "Generating ${output_path}..."
-  mockgen -package="${package_name}" -destination="${output_path}" "${src_import_path}" "${interface_name}"
+  mockgen -package="${package_name}" -destination="${output_path}" -copyright_file=license_header "${src_import_path}" "${interface_name}"
 done <"$input"
 
 echo "SUCCESS"
