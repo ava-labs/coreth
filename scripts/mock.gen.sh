@@ -16,12 +16,6 @@ fi
 # https://github.com/uber-go/mock
 go install -v go.uber.org/mock/mockgen@v0.4.0
 
-if ! command -v go-license &>/dev/null; then
-  echo "go-license not found, installing..."
-  # https://github.com/palantir/go-license
-  go install -v github.com/palantir/go-license@v1.25.0
-fi
-
 # Load the versions
 source "$CORETH_PATH"/scripts/versions.sh
 
@@ -35,10 +29,6 @@ while IFS= read -r line; do
   package_name=$(basename "$(dirname "$output_path")")
   echo "Generating ${output_path}..."
   mockgen -package="${package_name}" -destination="${output_path}" "${src_import_path}" "${interface_name}"
-
-  go-license \
-    --config=./header.yml \
-    "${output_path}"
 done <"$input"
 
 echo "SUCCESS"
