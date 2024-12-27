@@ -28,6 +28,8 @@ source "$CORETH_PATH"/scripts/versions.sh
 # Load the constants
 source "$CORETH_PATH"/scripts/constants.sh
 
+go generate -run mockgen ./...
+
 # tuples of (source interface import path, comma-separated interface names, output file path)
 input="scripts/mocks.mockgen.txt"
 while IFS= read -r line; do
