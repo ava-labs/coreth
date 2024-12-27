@@ -31,6 +31,7 @@ func TestPostProcess(t *testing.T) {
 
 	var sum totals
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
+	t.Logf("(txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS)")
 	for i := start; i <= end; i++ {
 		r := fm.GetReaderFor(i)
 
@@ -109,7 +110,7 @@ func TestPostProcess(t *testing.T) {
 		sum.accounts += uint64(int(accountWrites) - accountUpdates - 2*accountDeletes)
 		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
-		t.Logf("Block[%d:%s]: (txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS) = (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+		t.Logf("Block[%d:%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
 			blockNumber, blockHash.TerminalString(),
 			sum.txs, sum.atomicTxs,
 			sum.accountReads, sum.storageReads, sum.accountWrites, sum.storageWrites,
