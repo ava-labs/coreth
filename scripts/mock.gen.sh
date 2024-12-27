@@ -16,9 +16,6 @@ fi
 # https://github.com/uber-go/mock
 go install -v go.uber.org/mock/mockgen@v0.4.0
 
-# Load the versions
-source "$CORETH_PATH"/scripts/versions.sh
-
 # tuples of (source interface import path, comma-separated interface names, output file path)
 input="scripts/mocks.mockgen.txt"
 while IFS= read -r line; do
