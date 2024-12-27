@@ -759,43 +759,6 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	}, statedb.Error()
 }
 
-// isAllowedToBeQueried returns a nil error only if:
-//   - the node is configured to accept historical proofs queries; or
-//   - the block number given is within the window of recent accepted
-//     blocks and not yet part of the historical blocks.
-//
-// Otherwise, a non-nil error is returned.
-func (s *BlockChainAPI) isAllowedToBeQueried(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
-	historicalProofs, recentBlocksWindow := s.b.HistoricalConfig()
-	if historicalProofs {
-		return nil
-	}
-
-	lastBlock := s.b.LastAcceptedBlock()
-	lastNumber := lastBlock.NumberU64()
-
-	var number uint64
-	if blockNumOrHash.BlockNumber != nil {
-		number = uint64(blockNumOrHash.BlockNumber.Int64())
-	} else {
-		block, err := s.b.BlockByNumberOrHash(context.Background(), blockNumOrHash)
-		if err != nil {
-			return fmt.Errorf("getting block from hash: %s", err)
-		}
-		number = block.NumberU64()
-	}
-
-	var oldestRecentNumber uint64
-	if lastNumber > recentBlocksWindow {
-		oldestRecentNumber = lastNumber - recentBlocksWindow
-	}
-	if number >= oldestRecentNumber {
-		return nil
-	}
-	return fmt.Errorf("block number %d is before the oldest non-historical block number %d (window of %d blocks)",
-		number, oldestRecentNumber, recentBlocksWindow)
-}
-
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally
 // be prefixed by 0x and can have a byte length up to 32.
 func decodeHash(s string) (h common.Hash, inputLength int, err error) {
