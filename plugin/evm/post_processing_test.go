@@ -30,10 +30,7 @@ func TestPostProcess(t *testing.T) {
 
 		blockNumber, err := readUint64(r)
 		require.NoError(t, err)
-		if i != blockNumber {
-			t.Logf("blockNumber: %d (expected: %d)", blockNumber, i)
-		}
-		//require.Equal(t, i, blockNumber)
+		require.Equal(t, i, blockNumber)
 
 		blockHash, err := readHash(r)
 		require.NoError(t, err)
