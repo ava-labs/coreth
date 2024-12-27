@@ -87,14 +87,11 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type GenesisMultiCoinBalance map[common.Hash]*big.Int
-
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
 	Code       []byte                      `json:"code,omitempty"`
 	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
 	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	MCBalance  GenesisMultiCoinBalance     `json:"mcbalance,omitempty"`
 	Nonce      uint64                      `json:"nonce,omitempty"`
 	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
 }
