@@ -24,6 +24,9 @@ type totals struct {
 }
 
 func TestPostProcess(t *testing.T) {
+	if dbDir == "" {
+		t.Skip("No database directory provided")
+	}
 	start, end := startBlock, endBlock
 	if start == 0 {
 		start = 1 // TODO: Verify whether genesis outs were recorded in the first block
@@ -31,7 +34,7 @@ func TestPostProcess(t *testing.T) {
 
 	var sum totals
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
-	t.Logf("(txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS)")
+	t.Logf("(blockNumber, txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS)")
 	for i := start; i <= end; i++ {
 		r := fm.GetReaderFor(i)
 
@@ -107,7 +110,7 @@ func TestPostProcess(t *testing.T) {
 		sum.accounts += uint64(int(accountWrites) - accountUpdates - 2*accountDeletes)
 		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
-		t.Logf("Block[%d:%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+		t.Logf("Block[%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
 			blockNumber, blockHash.TerminalString(),
 			sum.txs, sum.atomicTxs,
 			sum.accountReads, sum.storageReads, sum.accountWrites, sum.storageWrites,
