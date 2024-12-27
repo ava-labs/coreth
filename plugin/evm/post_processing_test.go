@@ -72,9 +72,6 @@ func TestPostProcess(t *testing.T) {
 			} else {
 				t.Logf("account write without read: %x -> %x", k, v)
 			}
-			if len(v) == 0 {
-				accountDeletes++
-			}
 			if tapeVerbose {
 				t.Logf("account write: %x -> %x", k, v)
 			}
