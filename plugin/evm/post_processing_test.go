@@ -74,7 +74,8 @@ func TestPostProcess(t *testing.T) {
 		totals.storageWrites += uint64(storageWrites)
 
 		t.Logf("Block[%d:%s]: totals: (txs: %d, atomic: %d, accReads: %d, storageReads: %d, accWrites: %d, storageWrites: %d)",
-			blockNumber, blockHash.TerminalString(), txs, atomicTxs, accountReads, storageReads, accountWrites, storageWrites)
+			blockNumber, blockHash.TerminalString(), totals.txs, totals.atomicTxs,
+			totals.accountReads, totals.storageReads, totals.accountWrites, totals.storageWrites)
 	}
 }
 
