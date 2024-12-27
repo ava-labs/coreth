@@ -424,6 +424,8 @@ func reprocess(
 		lastRoot = lastInsertedRoot
 		lastHash = block.Hash()
 
+		bc.DrainAcceptorQueue()
+
 		// Update metadata
 		require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
 		require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
