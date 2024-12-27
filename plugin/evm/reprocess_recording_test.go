@@ -159,6 +159,51 @@ func writeUint64(w io.Writer, i uint64) error {
 	return err
 }
 
+func readByte(r io.Reader) (byte, error) {
+	buf := make([]byte, 1)
+	_, err := r.Read(buf)
+	return buf[0], err
+}
+
+func readUint16(r io.Reader) (uint16, error) {
+	buf := make([]byte, 2)
+	_, err := r.Read(buf)
+	return binary.BigEndian.Uint16(buf), err
+}
+
+func readUint32(r io.Reader) (uint32, error) {
+	buf := make([]byte, 4)
+	_, err := r.Read(buf)
+	return binary.BigEndian.Uint32(buf), err
+}
+
+func readUint64(r io.Reader) (uint64, error) {
+	buf := make([]byte, 8)
+	_, err := r.Read(buf)
+	return binary.BigEndian.Uint64(buf), err
+}
+
+func readKV(r io.Reader, keyLen int) ([]byte, []byte, error) {
+	key := make([]byte, keyLen)
+	_, err := r.Read(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	valLen, err := readByte(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	val := make([]byte, valLen)
+	_, err = r.Read(val)
+	return key, val, err
+}
+
+func readHash(r io.Reader) (common.Hash, error) {
+	var h common.Hash
+	_, err := r.Read(h[:])
+	return h, err
+}
+
 func (b *blockRecorder) Write(block *types.Block, atomicTxs uint16, w io.Writer) error {
 	if len(block.Transactions()) != b.txEnds {
 		panic(fmt.Sprintf("mismatch block txs: %d, ends recorded: %d", len(block.Transactions()), b.txEnds))
@@ -239,6 +284,22 @@ func (f *fileManager) GetWriterFor(blockNumber uint64) io.Writer {
 		f.f.Close()
 	}
 	file, err := os.OpenFile(fmt.Sprintf("%s/%08d", f.dir, group), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	f.f = file
+	return f.f
+}
+
+func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
+	group := blockNumber - blockNumber%f.newEach
+	if group == f.lastFile && f.f != nil {
+		return f.f
+	}
+	if f.f != nil {
+		f.f.Close()
+	}
+	file, err := os.Open(fmt.Sprintf("%s/%08d", f.dir, group))
 	if err != nil {
 		panic(err)
 	}
