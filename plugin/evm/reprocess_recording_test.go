@@ -288,6 +288,7 @@ func (f *fileManager) GetWriterFor(blockNumber uint64) io.Writer {
 		panic(err)
 	}
 	f.f = file
+	f.lastFile = group
 	return f.f
 }
 
@@ -304,6 +305,7 @@ func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
 		panic(err)
 	}
 	f.f = file
+	f.lastFile = group
 	return f.f
 }
 
