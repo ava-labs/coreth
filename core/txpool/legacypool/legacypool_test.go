@@ -50,7 +50,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -1269,15 +1271,44 @@ func TestAllowedTxSize(t *testing.T) {
 	// Compute maximal data size for transactions (lower bound).
 	//
 	// It is assumed the fields in the transaction (except of the data) are:
-	//   - nonce     <= 32 bytes
-	//   - gasTip  <= 32 bytes
-	//   - gasLimit  <= 32 bytes
+	//   - nonce     <= 8 bytes
+	//   - gasTip  <= 8 bytes
+	//   - gasLimit  <= 8 bytes
 	//   - recipient == 20 bytes
-	//   - value     <= 32 bytes
+	//   - value     <= 8 bytes
 	//   - signature == 65 bytes
-	// All those fields are summed up to at most 213 bytes.
-	baseSize := uint64(213)
-	dataSize := txMaxSize - baseSize
+	//   - data length <= 5 bytes
+	// All those fields are summed up to at most 122 bytes.
+
+	makeBigInt := func(size int) (n *big.Int) {
+		n = big.NewInt(0)
+		buffer := make([]byte, size)
+		for i := range size {
+			buffer[i] = ^buffer[i]
+		}
+		n.SetBytes(buffer)
+		return n
+	}
+
+	const dataLength = txMaxSize - 300
+	fasttestLegacyTransaction := types.NewTx(&types.LegacyTx{
+		Nonce:    ^uint64(0),
+		GasPrice: makeBigInt(8),
+		Gas:      ^uint64(0),
+		To:       &common.Address{},
+		Value:    makeBigInt(8),
+		Data:     make([]byte, dataLength), // for 5 bytes of data length
+		V:        makeBigInt(1),
+		R:        makeBigInt(32),
+		S:        makeBigInt(32),
+	})
+	encoded, err := rlp.EncodeToBytes(fasttestLegacyTransaction)
+	require.NoError(t, err)
+	t.Log("RLP encoded length of largest legacy transaction without data:", len(encoded)-dataLength) // 133
+
+	maxBaseSize := uint64(103)
+	dataSize := txMaxSize - maxBaseSize
+
 	// Try adding a transaction with maximal allowed size
 	tx := pricedDataTransaction(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, dataSize)
 	if err := pool.addRemoteSync(tx); err != nil {
@@ -1292,7 +1323,7 @@ func TestAllowedTxSize(t *testing.T) {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 	// Try adding a transaction of random not allowed size
-	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, dataSize+1+uint64(rand.Intn(10*txMaxSize)))); err == nil {
+	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, dataSize+1)); err == nil {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
 	// Run some sanity checks on the pool internals
