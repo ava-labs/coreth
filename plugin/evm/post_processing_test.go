@@ -63,7 +63,9 @@ func TestPostProcess(t *testing.T) {
 			k, v, err := readKV(r, 32)
 			require.NoError(t, err)
 			if prev, ok := accountReads[string(k)]; ok {
-				if len(prev) > 0 {
+				if len(prev) > 0 && len(v) == 0 {
+					accountDeletes++
+				} else if len(prev) > 0 {
 					accountUpdates++
 				}
 			} else {
@@ -80,14 +82,13 @@ func TestPostProcess(t *testing.T) {
 			k, v, err := readKV(r, 64)
 			require.NoError(t, err)
 			if prev, ok := storageReads[string(k)]; ok {
-				if len(prev) > 0 {
+				if len(prev) > 0 && len(v) == 0 {
+					storageDeletes++
+				} else if len(prev) > 0 {
 					storageUpdates++
 				}
 			} else {
 				t.Logf("storage write without read: %x -> %x", k, v)
-			}
-			if len(v) == 0 {
-				storageDeletes++
 			}
 			if tapeVerbose {
 				t.Logf("storage write: %x -> %x", k, v)
