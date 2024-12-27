@@ -104,8 +104,9 @@ func TestPostProcess(t *testing.T) {
 		sum.accounts += uint64(int(accountWrites) - accountUpdates - 2*accountDeletes)
 		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
-		t.Logf("Block[%d:%s]: (txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS) = (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
-			blockNumber, blockHash, sum.txs, sum.atomicTxs,
+		t.Logf("Block[%d:%s]: (txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS) = (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+			blockNumber, blockHash,
+			sum.txs, sum.atomicTxs,
 			sum.accountReads, sum.storageReads, sum.accountWrites, sum.storageWrites,
 			sum.accountUpdates, sum.storageUpdates, sum.accountDeletes, sum.storageDeletes,
 			sum.accounts, sum.storage)
