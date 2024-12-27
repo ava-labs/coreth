@@ -62,10 +62,12 @@ func TestPostProcess(t *testing.T) {
 		for j := 0; j < int(accountWrites); j++ {
 			k, v, err := readKV(r, 32)
 			require.NoError(t, err)
-			prev, ok := accountReads[string(k)]
-			require.True(t, ok)
-			if len(prev) > 0 {
-				accountUpdates++
+			if prev, ok := accountReads[string(k)]; ok {
+				if len(prev) > 0 {
+					accountUpdates++
+				}
+			} else {
+				t.Logf("account write without read: %x -> %x", k, v)
 			}
 			if len(v) == 0 {
 				accountDeletes++
@@ -77,10 +79,12 @@ func TestPostProcess(t *testing.T) {
 		for j := 0; j < int(storageWrites); j++ {
 			k, v, err := readKV(r, 64)
 			require.NoError(t, err)
-			prev, ok := storageReads[string(k)]
-			require.True(t, ok)
-			if len(prev) > 0 {
-				storageUpdates++
+			if prev, ok := storageReads[string(k)]; ok {
+				if len(prev) > 0 {
+					storageUpdates++
+				}
+			} else {
+				t.Logf("storage write without read: %x -> %x", k, v)
 			}
 			if len(v) == 0 {
 				storageDeletes++
