@@ -4,6 +4,8 @@ import (
 	"io"
 	"testing"
 
+	"github.com/Yiling-J/theine-go"
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +23,10 @@ type totals struct {
 	storageDeletes uint64
 	accounts       uint64
 	storage        uint64
+
+	// cache stats
+	accountReadHits uint64
+	storageReadHits uint64
 }
 
 func TestPostProcess(t *testing.T) {
@@ -30,6 +36,15 @@ func TestPostProcess(t *testing.T) {
 	start, end := startBlock, endBlock
 	if start == 0 {
 		start = 1 // TODO: Verify whether genesis outs were recorded in the first block
+	}
+
+	cache, err := theine.NewBuilder[string, []byte](readCacheSize * units.MiB).Build()
+	require.NoError(t, err)
+
+	cacheFn := func(k string, v []byte) bool {
+		_, found := cache.Get(k)
+		cache.Set(k, v, int64(len(k)+len(v)))
+		return found
 	}
 
 	var sum totals
@@ -51,7 +66,7 @@ func TestPostProcess(t *testing.T) {
 		atomicTxs, err := readUint16(r)
 		require.NoError(t, err)
 
-		tapeTxs, accountReads, storageReads := processTape(t, r)
+		tapeTxs, accountReads, storageReads := processTape(t, r, cacheFn, &sum)
 		require.Equal(t, txs, tapeTxs)
 
 		accountWrites, err := readUint16(r)
@@ -110,16 +125,27 @@ func TestPostProcess(t *testing.T) {
 		sum.accounts += uint64(int(accountWrites) - accountUpdates - 2*accountDeletes)
 		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
-		t.Logf("Block[%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
-			blockHash.TerminalString(), blockNumber,
-			sum.txs, sum.atomicTxs,
-			sum.accountReads, sum.storageReads, sum.accountWrites, sum.storageWrites,
-			sum.accountUpdates, sum.storageUpdates, sum.accountDeletes, sum.storageDeletes,
-			sum.accounts, sum.storage)
+		if blockNumber%uint64(logEach) == 0 {
+			t.Logf("Block[%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+				blockHash.TerminalString(), blockNumber,
+				sum.txs, sum.atomicTxs,
+				sum.accountReads, sum.storageReads,
+				sum.accountReadHits, sum.storageReadHits,
+				sum.accountWrites, sum.storageWrites,
+				sum.accountUpdates, sum.storageUpdates, sum.accountDeletes, sum.storageDeletes,
+				sum.accounts, sum.storage)
+			st := cache.Stats()
+			t.Logf(
+				"Cache stats: %d gets, %d misses, %.2f hit rate, %d entries, %d MiB",
+				st.Hits(), st.Misses(), st.HitRatio(),
+				cache.Len(), cache.EstimatedSize()/(units.MiB),
+			)
+		}
 	}
 }
 
-func processTape(t *testing.T, r io.Reader) (uint16, map[string][]byte, map[string][]byte) {
+// cache should return true if the value was found in the cache
+func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool, sum *totals) (uint16, map[string][]byte, map[string][]byte) {
 	length, err := readUint32(r)
 	require.NoError(t, err)
 
@@ -140,6 +166,9 @@ func processTape(t *testing.T, r io.Reader) (uint16, map[string][]byte, map[stri
 			if _, ok := accountReads[k]; !ok {
 				accountReads[k] = val
 			}
+			if cache(k, val) {
+				sum.accountReadHits++
+			}
 		case typeStorage:
 			key, val, err := readKV(r, 64)
 			require.NoError(t, err)
@@ -147,6 +176,9 @@ func processTape(t *testing.T, r io.Reader) (uint16, map[string][]byte, map[stri
 			k := string(key)
 			if _, ok := storageReads[k]; !ok {
 				storageReads[k] = val
+			}
+			if cache(k, val) {
+				sum.storageReadHits++
 			}
 		case typeEndTx:
 			txCount++

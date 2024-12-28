@@ -46,6 +46,8 @@ var (
 	tapeVerbose            = false
 	legacyScheme           = rawdb.HashScheme
 	trieCleanCacheMBs      = 0
+	logEach                = 1
+	readCacheSize          = int64(256)
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -70,6 +72,8 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&tapeVerbose, "tapeVerbose", tapeVerbose, "verbose tape")
 	flag.StringVar(&legacyScheme, "legacyScheme", legacyScheme, "legacy scheme (hash or path)")
 	flag.IntVar(&trieCleanCacheMBs, "trieCleanCacheMBs", trieCleanCacheMBs, "clean cache size in MB")
+	flag.IntVar(&logEach, "logEach", logEach, "log one of each N blocks")
+	flag.Int64Var(&readCacheSize, "readCacheSize", readCacheSize, "read cache size in MB")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")

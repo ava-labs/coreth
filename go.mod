@@ -4,6 +4,7 @@ go 1.22.8
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
+	github.com/Yiling-J/theine-go v0.6.0
 	github.com/ava-labs/avalanchego v1.12.0-initial-poc.9.0.20241129153017-3f46a5a4a084
 	github.com/cespare/cp v0.1.0
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
@@ -82,6 +83,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
@@ -110,6 +112,7 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
+	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/otel v1.22.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.22.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.22.0 // indirect
