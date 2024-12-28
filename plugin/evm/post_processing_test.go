@@ -28,10 +28,12 @@ type totals struct {
 	storage        uint64
 
 	// cache stats
-	accountReadHits  uint64
-	storageReadHits  uint64
-	accountWriteHits uint64
-	storageWriteHits uint64
+	accountReadHits        uint64
+	storageReadHits        uint64
+	accountWriteHits       uint64
+	storageWriteHits       uint64
+	writeCacheEvictAccount uint64
+	writeCacheEvictStorage uint64
 }
 
 type cacheIntf interface {
@@ -146,15 +148,20 @@ func TestPostProcess(t *testing.T) {
 	}
 
 	var writeCache *lru.Cache[string, withUpdatedAt]
+	var sum totals
 	var blockNumber uint64
 	onEvict := func(k string, v withUpdatedAt) {
-		t.Logf("evicting key: %x @ block %d, updatedAt: %d (%d blocks ago)", short(k), blockNumber, v.updatedAt, blockNumber-v.updatedAt)
+		if len(k) == 32 {
+			sum.writeCacheEvictAccount++
+		} else {
+			sum.writeCacheEvictStorage++
+		}
+		// t.Logf("evicting key: %x @ block %d, updatedAt: %d (%d blocks ago)", short(k), blockNumber, v.updatedAt, blockNumber-v.updatedAt)
 	}
 
 	writeCache, err := lru.NewWithEvict(int(writeCacheSize), onEvict)
 	require.NoError(t, err)
 
-	var sum totals
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
 
 	var lastReported totals
@@ -270,10 +277,14 @@ func TestPostProcess(t *testing.T) {
 			}
 			writeHits := sum.accountWriteHits + sum.storageWriteHits - lastReported.accountWriteHits - lastReported.storageWriteHits
 			writeTotal := sum.accountWrites + sum.storageWrites - lastReported.accountWrites - lastReported.storageWrites
+			_, oldest, _ := writeCache.GetOldest()
 			t.Logf(
-				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state)",
+				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted: %d accounts, %d storage (oldest updatedAt: %d)",
 				writeHits, writeTotal-writeHits, float64(writeHits)/float64(writeTotal),
 				writeCache.Len(), float64(writeCache.Len())/float64(sum.accounts+sum.storage),
+				sum.writeCacheEvictAccount-lastReported.writeCacheEvictAccount,
+				sum.writeCacheEvictStorage-lastReported.writeCacheEvictStorage,
+				oldest.updatedAt,
 			)
 			lastReported = sum
 		}
