@@ -107,6 +107,11 @@ type withUpdatedAt struct {
 	updatedAt uint64
 }
 
+func short(s string) string {
+	// return first 2 and last 2 characters
+	return s[:2] + "..." + s[len(s)-2:]
+}
+
 func TestPostProcess(t *testing.T) {
 	if tapeDir == "" {
 		t.Skip("No tape directory provided")
@@ -143,7 +148,7 @@ func TestPostProcess(t *testing.T) {
 	var writeCache *lru.Cache[string, withUpdatedAt]
 	var blockNumber uint64
 	onEvict := func(k string, v withUpdatedAt) {
-		t.Logf("evicting key: %x, updatedAt: %d (%d blocks ago)", k, v.updatedAt, blockNumber-v.updatedAt)
+		t.Logf("evicting key: %x @ block %d, updatedAt: %d (%d blocks ago)", short(k), blockNumber, v.updatedAt, blockNumber-v.updatedAt)
 	}
 
 	writeCache, err := lru.NewWithEvict(int(writeCacheSize), onEvict)
