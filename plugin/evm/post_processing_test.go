@@ -7,6 +7,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/Yiling-J/theine-go"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
 )
 
@@ -73,6 +74,24 @@ func (c *theineCache) Get(k string, v []byte) bool {
 	return found
 }
 
+type otterCache struct {
+	otter.Cache[string, []byte]
+}
+
+func (c *otterCache) Get(k string, v []byte) bool {
+	_, found := c.Cache.Get(k)
+	c.Cache.Set(k, v)
+	return found
+}
+
+func (c *otterCache) EstimatedSize() int {
+	return c.Cache.Capacity()
+}
+
+func (c *otterCache) Len() int {
+	return c.Cache.Size()
+}
+
 func TestPostProcess(t *testing.T) {
 	if tapeDir == "" {
 		t.Skip("No tape directory provided")
@@ -90,6 +109,16 @@ func TestPostProcess(t *testing.T) {
 		impl, err := theine.NewBuilder[string, []byte](cacheBytes).Build()
 		require.NoError(t, err)
 		cache = &theineCache{Cache: impl}
+	} else if readCacheBackend == "otter" {
+		impl, err := otter.MustBuilder[string, []byte](int(cacheBytes)).
+			CollectStats().
+			Cost(func(key string, value []byte) uint32 {
+				return uint32(len(key) + len(value))
+			}).Build()
+		if err != nil {
+			panic(err)
+		}
+		cache = &otterCache{Cache: impl}
 	} else {
 		t.Fatalf("Unknown cache backend: %s", readCacheBackend)
 	}
