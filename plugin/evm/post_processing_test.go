@@ -301,15 +301,15 @@ func TestPostProcess(t *testing.T) {
 			_, oldest, _ := writeCache.GetOldest()
 			txs := sum.txs - lastReported.txs
 			t.Logf(
-				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (oldest updatedAt: %d)",
+				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (oldest age: %d)",
 				writeHits, writeTotal-writeHits, float64(writeHits)/float64(writeTotal),
 				writeCache.Len(), float64(writeCache.Len())/float64(sum.accounts+sum.storage),
 				float64(sum.writeCacheEvictAccount-lastReported.writeCacheEvictAccount)/float64(txs),
 				float64(sum.writeCacheEvictStorage-lastReported.writeCacheEvictStorage)/float64(txs),
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
-				oldest.updatedAt,
+				blockNumber-oldest.updatedAt,
 			)
-			quants := []float64{0.05, 0.1, 0.25, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99}
+			quants := []float64{0.05, 0.1, 0.25, 0.5, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95}
 			var outString string
 			for _, q := range quants {
 				val := hst.Quantile(q)
