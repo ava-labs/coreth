@@ -280,11 +280,12 @@ func TestPostProcess(t *testing.T) {
 			_, oldest, _ := writeCache.GetOldest()
 			txs := sum.txs - lastReported.txs
 			t.Logf(
-				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (oldest updatedAt: %d)",
+				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (oldest updatedAt: %d)",
 				writeHits, writeTotal-writeHits, float64(writeHits)/float64(writeTotal),
 				writeCache.Len(), float64(writeCache.Len())/float64(sum.accounts+sum.storage),
 				float64(sum.writeCacheEvictAccount-lastReported.writeCacheEvictAccount)/float64(txs),
 				float64(sum.writeCacheEvictStorage-lastReported.writeCacheEvictStorage)/float64(txs),
+				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
 				oldest.updatedAt,
 			)
 			lastReported = sum
