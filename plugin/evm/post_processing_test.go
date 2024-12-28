@@ -67,7 +67,11 @@ func TestPostProcess(t *testing.T) {
 		atomicTxs, err := readUint16(r)
 		require.NoError(t, err)
 
-		tapeTxs, accountReads, storageReads := processTape(t, r, cacheFn, &sum)
+		tapeResult := &tapeResult{
+			accountReads: make(map[string][]byte),
+			storageReads: make(map[string][]byte),
+		}
+		tapeTxs := processTape(t, r, tapeResult, cacheFn, &sum)
 		require.Equal(t, txs, tapeTxs)
 
 		accountWrites, err := readUint16(r)
@@ -82,7 +86,7 @@ func TestPostProcess(t *testing.T) {
 		for j := 0; j < int(accountWrites); j++ {
 			k, v, err := readKV(r, 32)
 			require.NoError(t, err)
-			if prev, ok := accountReads[string(k)]; ok {
+			if prev, ok := tapeResult.accountReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					accountDeletes++
 				} else if len(prev) > 0 {
@@ -98,7 +102,7 @@ func TestPostProcess(t *testing.T) {
 		for j := 0; j < int(storageWrites); j++ {
 			k, v, err := readKV(r, 64)
 			require.NoError(t, err)
-			if prev, ok := storageReads[string(k)]; ok {
+			if prev, ok := tapeResult.storageReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					storageDeletes++
 				} else if len(prev) > 0 {
@@ -115,8 +119,8 @@ func TestPostProcess(t *testing.T) {
 		sum.blocks++
 		sum.txs += uint64(txs)
 		sum.atomicTxs += uint64(atomicTxs)
-		sum.accountReads += uint64(len(accountReads))
-		sum.storageReads += uint64(len(storageReads))
+		sum.accountReads += uint64(len(tapeResult.accountReads))
+		sum.storageReads += uint64(len(tapeResult.storageReads))
 		sum.accountWrites += uint64(accountWrites)
 		sum.storageWrites += uint64(storageWrites)
 		sum.accountUpdates += uint64(accountUpdates)
@@ -147,14 +151,17 @@ func TestPostProcess(t *testing.T) {
 	}
 }
 
+type tapeResult struct {
+	accountReads, storageReads map[string][]byte
+}
+
 // cache should return true if the value was found in the cache
-func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool, sum *totals) (uint16, map[string][]byte, map[string][]byte) {
+func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k string, v []byte) bool, sum *totals) uint16 {
 	length, err := readUint32(r)
 	require.NoError(t, err)
 
 	pos := 0
 	txCount := uint16(0)
-	accountReads, storageReads := make(map[string][]byte), make(map[string][]byte)
 	for pos < int(length) {
 		typ, err := readByte(r)
 		require.NoError(t, err)
@@ -166,8 +173,8 @@ func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool,
 			require.NoError(t, err)
 			pos += 32 + 1 + len(val)
 			k := string(key)
-			if _, ok := accountReads[k]; !ok {
-				accountReads[k] = val
+			if _, ok := tapeResult.accountReads[k]; !ok {
+				tapeResult.accountReads[k] = val
 				if cache(k, val) {
 					sum.accountReadHits++
 				}
@@ -177,8 +184,8 @@ func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool,
 			require.NoError(t, err)
 			pos += 64 + 1 + len(val)
 			k := string(key)
-			if _, ok := storageReads[k]; !ok {
-				storageReads[k] = val
+			if _, ok := tapeResult.storageReads[k]; !ok {
+				tapeResult.storageReads[k] = val
 				if cache(k, val) {
 					sum.storageReadHits++
 				}
@@ -187,5 +194,5 @@ func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool,
 			txCount++
 		}
 	}
-	return txCount, accountReads, storageReads
+	return txCount
 }
