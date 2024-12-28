@@ -223,7 +223,7 @@ func TestPostProcess(t *testing.T) {
 				hst.Update(inf)
 				hstWithReset.Update(inf)
 			}
-			writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			writeCache.Add(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
 			if found {
 				sum.accountWriteHits++
 			}
@@ -252,7 +252,7 @@ func TestPostProcess(t *testing.T) {
 				hst.Update(inf)
 				hstWithReset.Update(inf)
 			}
-			writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			writeCache.Add(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
 			if found {
 				sum.storageWriteHits++
 			}
