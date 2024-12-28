@@ -136,7 +136,7 @@ func TestPostProcess(t *testing.T) {
 				sum.accounts, sum.storage)
 			st := cache.Stats()
 			t.Logf(
-				"Cache stats: %d gets, %d misses, %.2f hit rate, %d entries, %d MiB",
+				"Cache stats: %d hits, %d misses, %.2f hit rate, %d entries, %d MiB",
 				st.Hits(), st.Misses(), st.HitRatio(),
 				cache.Len(), cache.EstimatedSize()/(units.MiB),
 			)
