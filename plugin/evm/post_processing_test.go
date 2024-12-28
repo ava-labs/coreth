@@ -7,6 +7,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/Yiling-J/theine-go"
 	"github.com/ava-labs/avalanchego/utils/units"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
 )
@@ -27,8 +28,10 @@ type totals struct {
 	storage        uint64
 
 	// cache stats
-	accountReadHits uint64
-	storageReadHits uint64
+	accountReadHits  uint64
+	storageReadHits  uint64
+	accountWriteHits uint64
+	storageWriteHits uint64
 }
 
 type cacheIntf interface {
@@ -92,6 +95,18 @@ func (c *otterCache) Len() int {
 	return c.Cache.Size()
 }
 
+type noCache struct{}
+
+func (c *noCache) Get(k string, v []byte) bool { return false }
+func (c *noCache) Delete(k string)             {}
+func (c *noCache) Len() int                    { return 0 }
+func (c *noCache) EstimatedSize() int          { return 0 }
+
+type withUpdatedAt struct {
+	val       []byte
+	updatedAt uint64
+}
+
 func TestPostProcess(t *testing.T) {
 	if tapeDir == "" {
 		t.Skip("No tape directory provided")
@@ -119,9 +134,20 @@ func TestPostProcess(t *testing.T) {
 			panic(err)
 		}
 		cache = &otterCache{Cache: impl}
+	} else if readCacheBackend == "none" {
+		cache = &noCache{}
 	} else {
 		t.Fatalf("Unknown cache backend: %s", readCacheBackend)
 	}
+
+	var writeCache *lru.Cache[string, withUpdatedAt]
+	var blockNumber uint64
+	onEvict := func(k string, v withUpdatedAt) {
+		t.Logf("evicting key: %x, updatedAt: %d (%d blocks ago)", k, v.updatedAt, blockNumber-v.updatedAt)
+	}
+
+	writeCache, err := lru.NewWithEvict(int(writeCacheSize), onEvict)
+	require.NoError(t, err)
 
 	var sum totals
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
@@ -130,7 +156,8 @@ func TestPostProcess(t *testing.T) {
 	for i := start; i <= end; i++ {
 		r := fm.GetReaderFor(i)
 
-		blockNumber, err := readUint64(r)
+		var err error
+		blockNumber, err = readUint64(r)
 		require.NoError(t, err)
 		require.Equal(t, i, blockNumber)
 
@@ -165,13 +192,24 @@ func TestPostProcess(t *testing.T) {
 			if prev, ok := tapeResult.accountReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					accountDeletes++
-					cache.Delete(string(k))
 				} else if len(prev) > 0 {
 					accountUpdates++
 				}
 			} else if tapeVerbose {
 				t.Logf("account write without read: %x -> %x", k, v)
 			}
+			if len(v) > 0 {
+				found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+				if found {
+					sum.accountWriteHits++
+				}
+			} else {
+				found := writeCache.Remove(string(k))
+				if found {
+					sum.accountWriteHits++
+				}
+			}
+
 			if tapeVerbose {
 				t.Logf("account write: %x -> %x", k, v)
 			}
@@ -182,13 +220,24 @@ func TestPostProcess(t *testing.T) {
 			if prev, ok := tapeResult.storageReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					storageDeletes++
-					cache.Delete(string(k))
 				} else if len(prev) > 0 {
 					storageUpdates++
 				}
 			} else if tapeVerbose {
 				t.Logf("storage write without read: %x -> %x", k, v)
 			}
+			if len(v) > 0 {
+				found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+				if found {
+					sum.storageWriteHits++
+				}
+			} else {
+				found := writeCache.Remove(string(k))
+				if found {
+					sum.storageWriteHits++
+				}
+			}
+
 			if tapeVerbose {
 				t.Logf("storage write: %x -> %x", k, v)
 			}
@@ -209,21 +258,31 @@ func TestPostProcess(t *testing.T) {
 		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
 		if blockNumber%uint64(logEach) == 0 {
-			t.Logf("Block[%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+			t.Logf("Block[%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
 				blockHash.TerminalString(), blockNumber,
 				sum.txs, sum.atomicTxs,
 				sum.accountReads, sum.storageReads,
 				sum.accountReadHits, sum.storageReadHits,
 				sum.accountWrites, sum.storageWrites,
+				sum.accountWriteHits, sum.storageWriteHits,
 				sum.accountUpdates, sum.storageUpdates, sum.accountDeletes, sum.storageDeletes,
 				sum.accounts, sum.storage)
-			hits := sum.accountReadHits - lastReported.accountReadHits + sum.storageReadHits - lastReported.storageReadHits
-			total := sum.accountReads - lastReported.accountReads + sum.storageReads - lastReported.storageReads
+			if readCacheBackend != "none" {
+				hits := sum.accountReadHits - lastReported.accountReadHits + sum.storageReadHits - lastReported.storageReadHits
+				total := sum.accountReads - lastReported.accountReads + sum.storageReads - lastReported.storageReads
+				t.Logf(
+					"Cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), %d MiB",
+					hits, total-hits, float64(hits)/float64(total),
+					cache.Len(), float64(cache.Len())/float64(sum.accounts+sum.storage),
+					cache.EstimatedSize()/(units.MiB),
+				)
+			}
+			writeHits := sum.accountWriteHits + sum.storageWriteHits - lastReported.accountWriteHits - lastReported.storageWriteHits
+			writeTotal := sum.accountWrites + sum.storageWrites - lastReported.accountWrites - lastReported.storageWrites
 			t.Logf(
-				"Cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), %d MiB",
-				hits, total-hits, float64(hits)/float64(total),
-				cache.Len(), float64(cache.Len())/float64(sum.accounts+sum.storage),
-				cache.EstimatedSize()/(units.MiB),
+				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state)",
+				writeHits, writeTotal-writeHits, float64(writeHits)/float64(writeTotal),
+				writeCache.Len(), float64(writeCache.Len())/float64(sum.accounts+sum.storage),
 			)
 			lastReported = sum
 		}

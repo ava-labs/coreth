@@ -48,7 +48,8 @@ var (
 	trieCleanCacheMBs      = 0
 	logEach                = 1
 	readCacheSize          = int64(256)
-	readCacheBackend       = "theine"
+	readCacheBackend       = "none"
+	writeCacheSize         = uint64(1024)
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -75,7 +76,8 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&trieCleanCacheMBs, "trieCleanCacheMBs", trieCleanCacheMBs, "clean cache size in MB")
 	flag.IntVar(&logEach, "logEach", logEach, "log one of each N blocks")
 	flag.Int64Var(&readCacheSize, "readCacheSize", readCacheSize, "read cache size in MB")
-	flag.StringVar(&readCacheBackend, "readCacheBackend", readCacheBackend, "read cache backend (theine, fastcache)")
+	flag.StringVar(&readCacheBackend, "readCacheBackend", readCacheBackend, "read cache backend (theine, fastcache, otter, none)")
+	flag.Uint64Var(&writeCacheSize, "writeCacheSize", writeCacheSize, "write cache size in items")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
