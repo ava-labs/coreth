@@ -49,6 +49,8 @@ func TestPostProcess(t *testing.T) {
 
 	var sum totals
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
+
+	var lastReported totals
 	for i := start; i <= end; i++ {
 		r := fm.GetReaderFor(i)
 
@@ -133,12 +135,14 @@ func TestPostProcess(t *testing.T) {
 				sum.accountWrites, sum.storageWrites,
 				sum.accountUpdates, sum.storageUpdates, sum.accountDeletes, sum.storageDeletes,
 				sum.accounts, sum.storage)
-			st := cache.Stats()
+			hits := sum.accountReadHits - lastReported.accountReadHits + sum.storageReadHits - lastReported.storageReadHits
+			total := sum.accountReads - lastReported.accountReads + sum.storageReads - lastReported.storageReads
 			t.Logf(
 				"Cache stats: %d hits, %d misses, %.2f hit rate, %d entries, %d MiB",
-				st.Hits(), st.Misses(), st.HitRatio(),
+				hits, total-hits, float64(hits)/float64(total),
 				cache.Len(), cache.EstimatedSize()/(units.MiB),
 			)
+			lastReported = sum
 		}
 	}
 }
