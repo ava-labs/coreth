@@ -192,7 +192,7 @@ func TestPostProcess(t *testing.T) {
 			if prev, ok := tapeResult.accountReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					accountDeletes++
-				} else if len(prev) > 0 {
+				} else if len(prev) > 0 || (len(prev) == 0 && len(v) == 0) {
 					accountUpdates++
 				}
 			} else if tapeVerbose {
@@ -213,7 +213,7 @@ func TestPostProcess(t *testing.T) {
 			if prev, ok := tapeResult.storageReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					storageDeletes++
-				} else if len(prev) > 0 {
+				} else if len(prev) > 0 || (len(prev) == 0 && len(v) == 0) {
 					storageUpdates++
 				}
 			} else if tapeVerbose {
