@@ -165,9 +165,9 @@ func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool,
 			k := string(key)
 			if _, ok := accountReads[k]; !ok {
 				accountReads[k] = val
-			}
-			if cache(k, val) {
-				sum.accountReadHits++
+				if cache(k, val) {
+					sum.accountReadHits++
+				}
 			}
 		case typeStorage:
 			key, val, err := readKV(r, 64)
@@ -176,9 +176,9 @@ func processTape(t *testing.T, r io.Reader, cache func(k string, v []byte) bool,
 			k := string(key)
 			if _, ok := storageReads[k]; !ok {
 				storageReads[k] = val
-			}
-			if cache(k, val) {
-				sum.storageReadHits++
+				if cache(k, val) {
+					sum.storageReadHits++
+				}
 			}
 		case typeEndTx:
 			txCount++
