@@ -315,6 +315,7 @@ func TestPostProcess(t *testing.T) {
 				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hst.Quantile(q)))
 			}
 			t.Logf("Write cache quantiles: %s", outString)
+			outString = ""
 			for _, q := range quants {
 				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hstWithReset.Quantile(q)))
 			}
