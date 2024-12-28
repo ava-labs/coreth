@@ -4,6 +4,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/Yiling-J/theine-go"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,44 @@ type totals struct {
 	storageReadHits uint64
 }
 
+type cacheIntf interface {
+	Get(k string, v []byte) bool
+	Len() int
+	EstimatedSize() int
+}
+
+type fastCache struct {
+	cache *fastcache.Cache
+}
+
+func (c *fastCache) Get(k string, v []byte) bool {
+	found := c.cache.Has([]byte(k))
+	c.cache.Set([]byte(k), v)
+	return found
+}
+
+func (c *fastCache) Len() int {
+	var stats fastcache.Stats
+	c.cache.UpdateStats(&stats)
+	return int(stats.EntriesCount)
+}
+
+func (c *fastCache) EstimatedSize() int {
+	var stats fastcache.Stats
+	c.cache.UpdateStats(&stats)
+	return int(stats.BytesSize)
+}
+
+type theineCache struct {
+	*theine.Cache[string, []byte]
+}
+
+func (c *theineCache) Get(k string, v []byte) bool {
+	_, found := c.Cache.Get(k)
+	c.Cache.Set(k, v, int64(len(k)+len(v)))
+	return found
+}
+
 func TestPostProcess(t *testing.T) {
 	if tapeDir == "" {
 		t.Skip("No tape directory provided")
@@ -38,13 +77,16 @@ func TestPostProcess(t *testing.T) {
 		start = 1 // TODO: Verify whether genesis outs were recorded in the first block
 	}
 
-	cache, err := theine.NewBuilder[string, []byte](readCacheSize * units.MiB).Build()
-	require.NoError(t, err)
-
-	cacheFn := func(k string, v []byte) bool {
-		_, found := cache.Get(k)
-		cache.Set(k, v, int64(len(k)+len(v)))
-		return found
+	var cache cacheIntf
+	cacheBytes := readCacheSize * units.MiB
+	if readCacheBackend == "fastcache" {
+		cache = &fastCache{cache: fastcache.New(int(cacheBytes))}
+	} else if readCacheBackend == "theine" {
+		impl, err := theine.NewBuilder[string, []byte](cacheBytes).Build()
+		require.NoError(t, err)
+		cache = &theineCache{Cache: impl}
+	} else {
+		t.Fatalf("Unknown cache backend: %s", readCacheBackend)
 	}
 
 	var sum totals
@@ -71,7 +113,7 @@ func TestPostProcess(t *testing.T) {
 			accountReads: make(map[string][]byte),
 			storageReads: make(map[string][]byte),
 		}
-		tapeTxs := processTape(t, r, tapeResult, cacheFn, &sum)
+		tapeTxs := processTape(t, r, tapeResult, cache.Get, &sum)
 		require.Equal(t, txs, tapeTxs)
 
 		accountWrites, err := readUint16(r)
