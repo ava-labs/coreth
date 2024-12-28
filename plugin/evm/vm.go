@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
@@ -107,7 +108,7 @@ var (
 	_ block.StateSyncableVM              = &VM{}
 	_ statesyncclient.EthBlockParser     = &VM{}
 	_ secp256k1fx.VM                     = &VM{}
-	_ BlockAcceptor                      = &VM{}
+	_ vmsync.BlockAcceptor               = &VM{}
 )
 
 const (
@@ -278,8 +279,8 @@ type VM struct {
 
 	logger CorethLogger
 	// State sync server and client
-	StateSyncServer
-	StateSyncClient
+	vmsync.StateSyncServer
+	vmsync.StateSyncClient
 
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
@@ -617,11 +618,8 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	vm.StateSyncServer = NewStateSyncServer(&StateSyncServerConfig{
-		Chain:            vm.blockChain,
-		AtomicTrie:       vm.atomicTrie,
-		SyncableInterval: vm.config.StateSyncCommitInterval,
-	})
+	// TODO: register a different provider for the atomic txs
+	vm.StateSyncServer = vmsync.NewStateSyncServer(vm.blockChain, atomic.NewAtomicProvider(vm.blockChain, vm.atomicTrie), vm.config.StateSyncCommitInterval)
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
@@ -726,9 +724,11 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	vm.StateSyncClient = NewStateSyncClient(&StateSyncClientConfig{
-		Chain: vm.eth,
-		State: vm.State,
+	// register different extrasyncer and parser for atomic txs
+	vm.StateSyncClient = vmsync.NewStateSyncClient(&vmsync.StateSyncClientConfig{
+		Chain:       vm.eth,
+		State:       vm.State,
+		ExtraSyncer: atomic.NewAtomicSyncExtender(vm.atomicBackend, vm.config.StateSyncRequestSize),
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
@@ -745,9 +745,9 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
 		ChaindDB:             vm.chaindb,
 		DB:                   vm.db,
-		AtomicBackend:        vm.atomicBackend,
 		ToEngine:             vm.toEngine,
 		Acceptor:             vm,
+		SyncableParser:       atomic.NewAtomicSyncSummaryParser(),
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

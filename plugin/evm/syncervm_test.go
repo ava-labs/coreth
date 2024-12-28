@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/database"
+	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -55,7 +56,7 @@ func TestSkipStateSync(t *testing.T) {
 		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
 		syncMode:           block.StateSyncSkipped,
 	}
-	vmSetup := createSyncServerAndClientVMs(t, test, StateSyncParentsToFetch)
+	vmSetup := createSyncServerAndClientVMs(t, test, vmsync.StateSyncParentsToFetch)
 
 	testSyncerVM(t, vmSetup, test)
 }
@@ -67,14 +68,14 @@ func TestStateSyncFromScratch(t *testing.T) {
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		syncMode:           block.StateSyncStatic,
 	}
-	vmSetup := createSyncServerAndClientVMs(t, test, StateSyncParentsToFetch)
+	vmSetup := createSyncServerAndClientVMs(t, test, vmsync.StateSyncParentsToFetch)
 
 	testSyncerVM(t, vmSetup, test)
 }
 
 func TestStateSyncFromScratchExceedParent(t *testing.T) {
 	rand.Seed(1)
-	numToGen := StateSyncParentsToFetch + uint64(32)
+	numToGen := vmsync.StateSyncParentsToFetch + uint64(32)
 	test := syncTest{
 		syncableInterval:   numToGen,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -109,11 +110,8 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID, commonEng.ErrTimeout); err != nil {
 					panic(err)
 				}
-				cancel := syncerVM.StateSyncClient.(*stateSyncerClient).cancel
-				if cancel != nil {
-					cancel()
-				} else {
-					t.Fatal("state sync client not populated correctly")
+				if err := syncerVM.StateSyncClient.Shutdown(); err != nil {
+					panic(err)
 				}
 			} else {
 				syncerVM.AppResponse(context.Background(), nodeID, requestID, response)
@@ -121,7 +119,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		},
 		expectedErr: context.Canceled,
 	}
-	vmSetup := createSyncServerAndClientVMs(t, test, StateSyncParentsToFetch)
+	vmSetup := createSyncServerAndClientVMs(t, test, vmsync.StateSyncParentsToFetch)
 
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, vmSetup, test)
@@ -272,7 +270,7 @@ func TestVMShutdownWhileSyncing(t *testing.T) {
 		},
 		expectedErr: context.Canceled,
 	}
-	vmSetup = createSyncServerAndClientVMs(t, test, StateSyncParentsToFetch)
+	vmSetup = createSyncServerAndClientVMs(t, test, vmsync.StateSyncParentsToFetch)
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, vmSetup, test)
 }
@@ -285,7 +283,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			testShortIDAddrs[0]: importAmount,
 		}
 	)
-	config := fmt.Sprintf(`{"commit-interval": %d}`, test.syncableInterval)
+	config := fmt.Sprintf(`{"commit-interval": %d, "state-sync-commit-interval": %d}`, test.syncableInterval, test.syncableInterval)
 	_, serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
 		t, true, "", config, "", alloc,
 	)
@@ -359,9 +357,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	internalBlock, err := serverVM.parseBlock(context.Background(), blockBytes)
 	require.NoError(err)
 	require.NoError(serverVM.State.SetLastAcceptedBlock(internalBlock))
-
-	// patch syncableInterval for test
-	serverVM.StateSyncServer.(*stateSyncServer).syncableInterval = test.syncableInterval
 
 	// initialise [syncerVM] with blank genesis state
 	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d, "commit-interval": %d}`, test.stateSyncMinBlocks, 4, test.syncableInterval)
