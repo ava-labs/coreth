@@ -10,6 +10,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/histogram"
 )
 
 type totals struct {
@@ -150,6 +151,8 @@ func TestPostProcess(t *testing.T) {
 	var writeCache *lru.Cache[string, withUpdatedAt]
 	var sum totals
 	var blockNumber uint64
+	hst := histogram.NewFast()
+	inf := float64(100_000_000)
 	onEvict := func(k string, v withUpdatedAt) {
 		if len(k) == 32 {
 			sum.writeCacheEvictAccount++
@@ -210,7 +213,13 @@ func TestPostProcess(t *testing.T) {
 			} else if tapeVerbose {
 				t.Logf("account write without read: %x -> %x", k, v)
 			}
-			found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			got, found := writeCache.Get(string(k))
+			if found {
+				hst.Update(float64(blockNumber - got.updatedAt))
+			} else {
+				hst.Update(inf)
+			}
+			writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
 			if found {
 				sum.accountWriteHits++
 			}
@@ -231,7 +240,13 @@ func TestPostProcess(t *testing.T) {
 			} else if tapeVerbose {
 				t.Logf("storage write without read: %x -> %x", k, v)
 			}
-			found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			got, found := writeCache.Get(string(k))
+			if found {
+				hst.Update(float64(blockNumber - got.updatedAt))
+			} else {
+				hst.Update(inf)
+			}
+			writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
 			if found {
 				sum.storageWriteHits++
 			}
@@ -288,6 +303,10 @@ func TestPostProcess(t *testing.T) {
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
 				oldest.updatedAt,
 			)
+			quants := []float64{0.5, 0.9, 0.99, 0.999}
+			for _, q := range quants {
+				t.Logf("Eviction histogram quantile %.3f: %.1f", q, hst.Quantile(q))
+			}
 			lastReported = sum
 		}
 	}
