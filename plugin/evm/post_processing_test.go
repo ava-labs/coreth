@@ -309,15 +309,25 @@ func TestPostProcess(t *testing.T) {
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
 				oldest.updatedAt,
 			)
-			quants := []float64{0.05, 0.1, 0.25, 0.5, 0.7, 0.8, 0.9}
+			quants := []float64{0.05, 0.1, 0.25, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99}
 			var outString string
 			for _, q := range quants {
-				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hst.Quantile(q)))
+				val := hst.Quantile(q)
+				if val == inf {
+					outString = fmt.Sprintf("%s [%.2f inf]", outString, q)
+					continue
+				}
+				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, val)
 			}
 			t.Logf("Write cache quantiles: %s", outString)
 			outString = ""
 			for _, q := range quants {
-				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hstWithReset.Quantile(q)))
+				val := hst.Quantile(q)
+				if val == inf {
+					outString = fmt.Sprintf("%s [%.2f inf]", outString, q)
+					continue
+				}
+				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, val)
 			}
 			t.Logf("Reset cache quantiles: %s", outString)
 			hstWithReset.Reset()
