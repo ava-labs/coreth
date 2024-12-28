@@ -317,7 +317,7 @@ func TestPostProcess(t *testing.T) {
 					outString = fmt.Sprintf("%s [%.2f inf]", outString, q)
 					continue
 				}
-				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, val)
+				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(val))
 			}
 			t.Logf("Write cache quantiles: %s", outString)
 			outString = ""
@@ -327,7 +327,7 @@ func TestPostProcess(t *testing.T) {
 					outString = fmt.Sprintf("%s [%.2f inf]", outString, q)
 					continue
 				}
-				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, val)
+				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(val))
 			}
 			t.Logf("Reset cache quantiles: %s", outString)
 			hstWithReset.Reset()
