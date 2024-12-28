@@ -142,9 +142,10 @@ func TestPostProcess(t *testing.T) {
 			hits := sum.accountReadHits - lastReported.accountReadHits + sum.storageReadHits - lastReported.storageReadHits
 			total := sum.accountReads - lastReported.accountReads + sum.storageReads - lastReported.storageReads
 			t.Logf(
-				"Cache stats: %d hits, %d misses, %.2f hit rate, %d entries, %d MiB",
+				"Cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.2f of state), %d MiB",
 				hits, total-hits, float64(hits)/float64(total),
-				cache.Len(), cache.EstimatedSize()/(units.MiB),
+				cache.Len(), float64(cache.Len())/float64(sum.accounts+sum.storage),
+				cache.EstimatedSize()/(units.MiB),
 			)
 			lastReported = sum
 		}
