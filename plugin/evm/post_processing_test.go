@@ -49,7 +49,6 @@ func TestPostProcess(t *testing.T) {
 
 	var sum totals
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
-	t.Logf("(blockNumber, txs, atomic, readsA, readsS, writeA, writeS, upA, upS, delA, delS, sizeA, sizeS)")
 	for i := start; i <= end; i++ {
 		r := fm.GetReaderFor(i)
 
