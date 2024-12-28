@@ -154,7 +154,7 @@ func TestPostProcess(t *testing.T) {
 	var blockNumber uint64
 	hst := histogram.NewFast()
 	hstWithReset := histogram.NewFast()
-	inf := float64(100_000_000)
+	inf := float64(1_000_000_000)
 	onEvict := func(k string, v withUpdatedAt) {
 		if len(k) == 32 {
 			sum.writeCacheEvictAccount++
