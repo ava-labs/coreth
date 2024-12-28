@@ -30,8 +30,8 @@ type totals struct {
 }
 
 func TestPostProcess(t *testing.T) {
-	if dbDir == "" {
-		t.Skip("No database directory provided")
+	if tapeDir == "" {
+		t.Skip("No tape directory provided")
 	}
 	start, end := startBlock, endBlock
 	if start == 0 {
