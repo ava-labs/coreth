@@ -32,6 +32,7 @@ type totals struct {
 
 type cacheIntf interface {
 	Get(k string, v []byte) bool
+	Delete(k string)
 	Len() int
 	EstimatedSize() int
 }
@@ -56,6 +57,10 @@ func (c *fastCache) EstimatedSize() int {
 	var stats fastcache.Stats
 	c.cache.UpdateStats(&stats)
 	return int(stats.BytesSize)
+}
+
+func (c *fastCache) Delete(k string) {
+	c.cache.Del([]byte(k))
 }
 
 type theineCache struct {
@@ -131,6 +136,7 @@ func TestPostProcess(t *testing.T) {
 			if prev, ok := tapeResult.accountReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					accountDeletes++
+					cache.Delete(string(k))
 				} else if len(prev) > 0 {
 					accountUpdates++
 				}
@@ -147,6 +153,7 @@ func TestPostProcess(t *testing.T) {
 			if prev, ok := tapeResult.storageReads[string(k)]; ok {
 				if len(prev) > 0 && len(v) == 0 {
 					storageDeletes++
+					cache.Delete(string(k))
 				} else if len(prev) > 0 {
 					storageUpdates++
 				}
