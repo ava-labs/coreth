@@ -304,7 +304,7 @@ func TestPostProcess(t *testing.T) {
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
 				oldest.updatedAt,
 			)
-			quants := []float64{0.5, 0.7, 0.8, 0.9}
+			quants := []float64{0.1, 0.25, 0.5, 0.7, 0.8, 0.9}
 			var outString string
 			for _, q := range quants {
 				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hst.Quantile(q)))
