@@ -198,16 +198,9 @@ func TestPostProcess(t *testing.T) {
 			} else if tapeVerbose {
 				t.Logf("account write without read: %x -> %x", k, v)
 			}
-			if len(v) > 0 {
-				found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
-				if found {
-					sum.accountWriteHits++
-				}
-			} else {
-				found := writeCache.Remove(string(k))
-				if found {
-					sum.accountWriteHits++
-				}
+			found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			if found {
+				sum.accountWriteHits++
 			}
 
 			if tapeVerbose {
@@ -226,16 +219,9 @@ func TestPostProcess(t *testing.T) {
 			} else if tapeVerbose {
 				t.Logf("storage write without read: %x -> %x", k, v)
 			}
-			if len(v) > 0 {
-				found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
-				if found {
-					sum.storageWriteHits++
-				}
-			} else {
-				found := writeCache.Remove(string(k))
-				if found {
-					sum.storageWriteHits++
-				}
+			found, _ := writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			if found {
+				sum.storageWriteHits++
 			}
 
 			if tapeVerbose {
