@@ -322,7 +322,7 @@ func TestPostProcess(t *testing.T) {
 			t.Logf("Write cache quantiles: %s", outString)
 			outString = ""
 			for _, q := range quants {
-				val := hst.Quantile(q)
+				val := hstWithReset.Quantile(q)
 				if val == inf {
 					outString = fmt.Sprintf("%s [%.2f inf]", outString, q)
 					continue
