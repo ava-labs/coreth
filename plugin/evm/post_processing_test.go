@@ -153,6 +153,7 @@ func TestPostProcess(t *testing.T) {
 	var sum totals
 	var blockNumber uint64
 	hst := histogram.NewFast()
+	hstWithReset := histogram.NewFast()
 	inf := float64(100_000_000)
 	onEvict := func(k string, v withUpdatedAt) {
 		if len(k) == 32 {
@@ -217,8 +218,10 @@ func TestPostProcess(t *testing.T) {
 			got, found := writeCache.Get(string(k))
 			if found {
 				hst.Update(float64(blockNumber - got.updatedAt))
+				hstWithReset.Update(float64(blockNumber - got.updatedAt))
 			} else {
 				hst.Update(inf)
+				hstWithReset.Update(inf)
 			}
 			writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
 			if found {
@@ -244,8 +247,10 @@ func TestPostProcess(t *testing.T) {
 			got, found := writeCache.Get(string(k))
 			if found {
 				hst.Update(float64(blockNumber - got.updatedAt))
+				hstWithReset.Update(float64(blockNumber - got.updatedAt))
 			} else {
 				hst.Update(inf)
+				hstWithReset.Update(inf)
 			}
 			writeCache.ContainsOrAdd(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
 			if found {
@@ -310,6 +315,11 @@ func TestPostProcess(t *testing.T) {
 				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hst.Quantile(q)))
 			}
 			t.Logf("Write cache quantiles: %s", outString)
+			for _, q := range quants {
+				outString = fmt.Sprintf("%s [%.2f %d]", outString, q, int(hstWithReset.Quantile(q)))
+			}
+			t.Logf("Reset cache quantiles: %s", outString)
+			hstWithReset.Reset()
 			lastReported = sum
 		}
 	}
