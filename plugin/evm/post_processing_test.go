@@ -169,7 +169,7 @@ func TestPostProcess(t *testing.T) {
 				} else if len(prev) > 0 {
 					accountUpdates++
 				}
-			} else {
+			} else if tapeVerbose {
 				t.Logf("account write without read: %x -> %x", k, v)
 			}
 			if tapeVerbose {
@@ -186,7 +186,7 @@ func TestPostProcess(t *testing.T) {
 				} else if len(prev) > 0 {
 					storageUpdates++
 				}
-			} else {
+			} else if tapeVerbose {
 				t.Logf("storage write without read: %x -> %x", k, v)
 			}
 			if tapeVerbose {
