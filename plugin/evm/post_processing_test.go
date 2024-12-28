@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"fmt"
 	"io"
 	"testing"
 
@@ -303,10 +304,12 @@ func TestPostProcess(t *testing.T) {
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
 				oldest.updatedAt,
 			)
-			quants := []float64{0.5, 0.9, 0.99, 0.999}
+			quants := []float64{0.5, 0.7, 0.8, 0.9}
+			var outString string
 			for _, q := range quants {
-				t.Logf("Eviction histogram quantile %.3f: %.1f", q, hst.Quantile(q))
+				outString = fmt.Sprintf("%s [%f %f]", outString, q, hst.Quantile(q))
 			}
+			t.Logf("Write cache quantiles: %s", outString)
 			lastReported = sum
 		}
 	}
