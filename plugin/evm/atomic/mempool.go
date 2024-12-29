@@ -184,7 +184,7 @@ func (m *Mempool) AddLocalTx(tx *Tx) error {
 	return err
 }
 
-// forceAddTx forcibly adds a *Tx to the mempool and bypasses all verification.
+// ForceAddTx forcibly adds a *Tx to the mempool and bypasses all verification.
 func (m *Mempool) ForceAddTx(tx *Tx) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()

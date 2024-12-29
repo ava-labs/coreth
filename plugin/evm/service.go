@@ -96,7 +96,7 @@ func (service *AvaxAPI) Version(r *http.Request, _ *struct{}, reply *VersionRepl
 func (service *AvaxAPI) ExportKey(r *http.Request, args *client.ExportKeyArgs, reply *client.ExportKeyReply) error {
 	log.Info("EVM: ExportKey called")
 
-	address, err := atomic.ParseEthAddress(args.Address)
+	address, err := client.ParseEthAddress(args.Address)
 	if err != nil {
 		return fmt.Errorf("couldn't parse %s to address: %s", args.Address, err)
 	}
@@ -127,7 +127,7 @@ func (service *AvaxAPI) ImportKey(r *http.Request, args *client.ImportKeyArgs, r
 		return errMissingPrivateKey
 	}
 
-	reply.Address = atomic.GetEthAddress(args.PrivateKey).Hex()
+	reply.Address = args.PrivateKey.EthAddress().Hex()
 
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
