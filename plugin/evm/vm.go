@@ -1874,7 +1874,7 @@ func (vm *VM) newImportTx(
 		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
 	}
 
-	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock, chainID, to, baseFee, kc, atomicUTXOs)
+	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 // newExportTx returns a new ExportTx
