@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	syncatomic "sync/atomic"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,14 +30,16 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 )
 
+const (
+	codecVersion uint16 = 0
+)
+
 var (
 	defaultPeerVersion = &version.Application{
 		Major: 1,
 		Minor: 0,
 		Patch: 0,
 	}
-
-	codecVersion uint16 = 0
 
 	_ message.Request = &HelloRequest{}
 	_                 = &HelloResponse{}
@@ -85,7 +87,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 				if err := net.AppResponse(context.Background(), nodeID, requestID, responseBytes); err != nil {
 					panic(err)
 				}
-				syncatomic.AddUint32(&callNum, 1)
+				atomic.AddUint32(&callNum, 1)
 			}()
 			return nil
 		},
@@ -130,7 +132,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 
 	requestWg.Wait()
 	senderWg.Wait()
-	assert.Equal(t, totalCalls, int(syncatomic.LoadUint32(&callNum)))
+	assert.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 }
 
 func TestAppRequestOnCtxCancellation(t *testing.T) {
@@ -190,7 +192,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 				if err := net.AppResponse(context.Background(), nodeID, requestID, responseBytes); err != nil {
 					panic(err)
 				}
-				syncatomic.AddUint32(&callNum, 1)
+				atomic.AddUint32(&callNum, 1)
 			}()
 			return nil
 		},
@@ -245,7 +247,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 
 	requestWg.Wait()
 	senderWg.Wait()
-	assert.Equal(t, totalCalls, int(syncatomic.LoadUint32(&callNum)))
+	assert.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 	for _, nodeID := range nodes {
 		if _, exists := contactedNodes[nodeID]; !exists {
 			t.Fatalf("expected nodeID %s to be contacted but was not", nodeID)
@@ -386,13 +388,13 @@ func TestRequestMinVersion(t *testing.T) {
 	var net Network
 	sender := testAppSender{
 		sendAppRequestFn: func(_ context.Context, nodes set.Set[ids.NodeID], reqID uint32, messageBytes []byte) error {
-			syncatomic.AddUint32(&callNum, 1)
+			atomic.AddUint32(&callNum, 1)
 			assert.True(t, nodes.Contains(nodeID), "request nodes should contain expected nodeID")
 			assert.Len(t, nodes, 1, "request nodes should contain exactly one node")
 
 			go func() {
 				time.Sleep(200 * time.Millisecond)
-				syncatomic.AddUint32(&callNum, 1)
+				atomic.AddUint32(&callNum, 1)
 				responseBytes, err := codecManager.Marshal(codecVersion, TestMessage{Message: "this is a response"})
 				if err != nil {
 					panic(err)

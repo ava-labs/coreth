@@ -70,7 +70,7 @@ func (u *user) putAddress(privKey *secp256k1.PrivateKey) error {
 		return errKeyNil
 	}
 
-	address := atomic.GetEthAddress(privKey) // address the privKey controls
+	address := privKey.EthAddress() // address the privKey controls
 	controlsAddress, err := u.controlsAddress(address)
 	if err != nil {
 		return err
