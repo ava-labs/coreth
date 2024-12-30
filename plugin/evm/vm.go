@@ -724,7 +724,6 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	// register different extrasyncer and parser for atomic txs
 	vm.StateSyncClient = vmsync.NewStateSyncClient(&vmsync.StateSyncClientConfig{
 		Chain:       vm.eth,
 		State:       vm.State,
