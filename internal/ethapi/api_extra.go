@@ -93,13 +93,13 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 	return results, nil
 }
 
-// isAllowedToBeQueried returns a nil error only if:
+// isHistoricalStateQueryAllowed returns a nil error only if:
 //   - the node is configured to accept historical proofs queries; or
 //   - the block number given is within the window of recent accepted
 //     blocks and not yet part of the historical blocks.
 //
 // Otherwise, a non-nil error is returned.
-func (s *BlockChainAPI) isAllowedToBeQueried(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
+func (s *BlockChainAPI) isHistoricalStateQueryAllowed(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
 	historicalProofs, recentBlocksWindow := s.b.HistoricalConfig()
 	if historicalProofs {
 		return nil
