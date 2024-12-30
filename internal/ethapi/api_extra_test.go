@@ -15,7 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
+func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 	t.Parallel()
 
 	const recentBlocksWindow uint64 = 1024
@@ -104,7 +104,7 @@ func TestBlockChainAPI_isAllowedToBeQueried(t *testing.T) {
 				b: testCase.makeBackend(ctrl),
 			}
 
-			err := api.isAllowedToBeQueried(testCase.blockNumOrHash)
+			err := api.isHistoricalStateQueryAllowed(testCase.blockNumOrHash)
 			if testCase.wantErrMessage == "" {
 				assert.NoError(t, err)
 			} else {

@@ -679,7 +679,7 @@ func (n *proofList) Delete(key []byte) error {
 // If the requested block is part of historical blocks and the node does not accept
 // getting proofs for historical blocks, an error is returned.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
-	err := s.isAllowedToBeQueried(blockNrOrHash)
+	err := s.isHistoricalStateQueryAllowed(blockNrOrHash)
 	if err != nil {
 		return nil, fmt.Errorf("checking if block is allowed to be queried: %w", err)
 	}
