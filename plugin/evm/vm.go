@@ -618,7 +618,6 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	// TODO: register a different provider for the atomic txs
 	vm.StateSyncServer = vmsync.NewStateSyncServer(vm.blockChain, atomic.NewAtomicProvider(vm.blockChain, vm.atomicTrie), vm.config.StateSyncCommitInterval)
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
@@ -724,7 +723,6 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	// register different extrasyncer and parser for atomic txs
 	vm.StateSyncClient = vmsync.NewStateSyncClient(&vmsync.StateSyncClientConfig{
 		Chain:       vm.eth,
 		State:       vm.State,
