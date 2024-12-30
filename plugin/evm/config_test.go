@@ -29,19 +29,19 @@ func TestUnmarshalConfig(t *testing.T) {
 		{
 			"string durations parsed",
 			[]byte(`{"api-max-duration": "1m", "continuous-profiler-frequency": "2m"}`),
-			Config{APIMaxDuration: Duration{1 * time.Minute}, ContinuousProfilerFrequency: Duration{2 * time.Minute}},
+			Config{APIMaxDuration: Duration{Duration: 1 * time.Minute}, ContinuousProfilerFrequency: Duration{Duration: 2 * time.Minute}},
 			false,
 		},
 		{
 			"integer durations parsed",
 			[]byte(fmt.Sprintf(`{"api-max-duration": "%v", "continuous-profiler-frequency": "%v"}`, 1*time.Minute, 2*time.Minute)),
-			Config{APIMaxDuration: Duration{1 * time.Minute}, ContinuousProfilerFrequency: Duration{2 * time.Minute}},
+			Config{APIMaxDuration: Duration{Duration: 1 * time.Minute}, ContinuousProfilerFrequency: Duration{Duration: 2 * time.Minute}},
 			false,
 		},
 		{
 			"nanosecond durations parsed",
 			[]byte(`{"api-max-duration": 5000000000, "continuous-profiler-frequency": 5000000000}`),
-			Config{APIMaxDuration: Duration{5 * time.Second}, ContinuousProfilerFrequency: Duration{5 * time.Second}},
+			Config{APIMaxDuration: Duration{Duration: 5 * time.Second}, ContinuousProfilerFrequency: Duration{Duration: 5 * time.Second}},
 			false,
 		},
 		{
