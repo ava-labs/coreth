@@ -17,8 +17,8 @@
 package state
 
 import (
-	"github.com/ava-labs/subnet-evm/libevm/options"
-	"github.com/ava-labs/subnet-evm/libevm/sync"
+	"github.com/ava-labs/coreth/libevm/options"
+	"github.com/ava-labs/coreth/libevm/sync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )

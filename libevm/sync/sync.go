@@ -1,4 +1,4 @@
-// Copyright 2024 the subnet-evm authors.
+// Copyright 2024 the coreth authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
