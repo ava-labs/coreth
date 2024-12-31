@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -273,6 +274,7 @@ type fileManager struct {
 	newEach  uint64
 	lastFile uint64
 	f        *os.File
+	reader   io.Reader
 }
 
 func (f *fileManager) GetWriterFor(blockNumber uint64) io.Writer {
@@ -295,7 +297,7 @@ func (f *fileManager) GetWriterFor(blockNumber uint64) io.Writer {
 func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
 	group := blockNumber - blockNumber%f.newEach
 	if group == f.lastFile && f.f != nil {
-		return f.f
+		return f.reader
 	}
 	if f.f != nil {
 		f.f.Close()
@@ -306,7 +308,8 @@ func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
 	}
 	f.f = file
 	f.lastFile = group
-	return f.f
+	f.reader = bufio.NewReaderSize(f.f, 1024*1024)
+	return f.reader
 }
 
 func (f *fileManager) Close() error {
