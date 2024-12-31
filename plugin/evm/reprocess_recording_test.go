@@ -1,7 +1,6 @@
 package evm
 
 import (
-	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -308,7 +307,7 @@ func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
 	}
 	f.f = file
 	f.lastFile = group
-	f.reader = bufio.NewReader(file)
+	f.reader = file
 	return f.reader
 }
 
