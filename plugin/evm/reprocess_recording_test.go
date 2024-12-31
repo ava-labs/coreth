@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -161,31 +162,31 @@ func writeUint64(w io.Writer, i uint64) error {
 
 func readByte(r io.Reader) (byte, error) {
 	buf := make([]byte, 1)
-	_, err := r.Read(buf)
+	_, err := io.ReadFull(r, buf)
 	return buf[0], err
 }
 
 func readUint16(r io.Reader) (uint16, error) {
 	buf := make([]byte, 2)
-	_, err := r.Read(buf)
+	_, err := io.ReadFull(r, buf)
 	return binary.BigEndian.Uint16(buf), err
 }
 
 func readUint32(r io.Reader) (uint32, error) {
 	buf := make([]byte, 4)
-	_, err := r.Read(buf)
+	_, err := io.ReadFull(r, buf)
 	return binary.BigEndian.Uint32(buf), err
 }
 
 func readUint64(r io.Reader) (uint64, error) {
 	buf := make([]byte, 8)
-	_, err := r.Read(buf)
+	_, err := io.ReadFull(r, buf)
 	return binary.BigEndian.Uint64(buf), err
 }
 
 func readKV(r io.Reader, keyLen int) ([]byte, []byte, error) {
 	key := make([]byte, keyLen)
-	_, err := r.Read(key)
+	_, err := io.ReadFull(r, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -194,13 +195,13 @@ func readKV(r io.Reader, keyLen int) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	val := make([]byte, valLen)
-	_, err = r.Read(val)
+	_, err = io.ReadFull(r, val)
 	return key, val, err
 }
 
 func readHash(r io.Reader) (common.Hash, error) {
 	var h common.Hash
-	_, err := r.Read(h[:])
+	_, err := io.ReadFull(r, h[:])
 	return h, err
 }
 
@@ -307,7 +308,7 @@ func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
 	}
 	f.f = file
 	f.lastFile = group
-	f.reader = file
+	f.reader = bufio.NewReaderSize(f.f, 1024*1024)
 	return f.reader
 }
 
