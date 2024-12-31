@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"testing"
@@ -172,6 +173,7 @@ func TestPostProcess(t *testing.T) {
 	var lastReported totals
 	for i := start; i <= end; i++ {
 		r := fm.GetReaderFor(i)
+		r = bufio.NewReaderSize(r, 1<<20) // 1 MiB buffer
 
 		var err error
 		blockNumber, err = readUint64(r)
