@@ -308,7 +308,7 @@ func (f *fileManager) GetReaderFor(blockNumber uint64) io.Reader {
 	}
 	f.f = file
 	f.lastFile = group
-	f.reader = bufio.NewReaderSize(f.f, 1024*1024)
+	f.reader = bufio.NewReader(file)
 	return f.reader
 }
 
