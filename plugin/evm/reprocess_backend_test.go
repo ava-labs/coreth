@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/shim/merkledb"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
@@ -156,6 +157,13 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
 	// Update the chain config with mainnet upgrades
 	g.Config = params.GetChainConfig(upgrade.Mainnet, g.Config.ChainID)
+	// If the Durango is activated, activate the Warp Precompile at the same time
+	if g.Config.DurangoBlockTimestamp != nil {
+		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
+			Config: warpcontract.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
+		})
+	}
+
 	t.Logf("Mainnet chain config: %v", g.Config)
 
 	testVM := &VM{
