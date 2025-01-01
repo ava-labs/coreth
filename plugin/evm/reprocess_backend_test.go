@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/trace"
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/units"
 	xmerkledb "github.com/ava-labs/avalanchego/x/merkledb"
 	"github.com/ava-labs/coreth/consensus"
@@ -166,6 +167,7 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	g.Config.SnowCtx = &snow.Context{
 		AVAXAssetID: mainnetAvaxAssetID,
 		ChainID:     mainnetCChainID,
+		NetworkID:   constants.MainnetID,
 	}
 
 	t.Logf("Mainnet chain config: %v", g.Config)
