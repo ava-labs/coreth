@@ -19,6 +19,11 @@ import (
 	"github.com/ava-labs/coreth/trie"
 )
 
+const (
+	// AtomicTrieNode represents a leaf node that belongs to the atomic trie.
+	AtomicTrieNode message.NodeType = 2
+)
+
 var (
 	_ Syncer                  = &atomicSyncer{}
 	_ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
@@ -53,7 +58,7 @@ type atomicSyncer struct {
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
 func addZeroes(height uint64) []byte {
-	packer := wrappers.Packer{Bytes: make([]byte, atomicKeyLength)}
+	packer := wrappers.Packer{Bytes: make([]byte, AtomicTrieKeyLength)}
 	packer.PackLong(height)
 	packer.PackFixedBytes(bytes.Repeat([]byte{0x00}, common.HashLength))
 	return packer.Bytes
@@ -91,7 +96,7 @@ func (s *atomicSyncer) Start(ctx context.Context) error {
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
 func (s *atomicSyncer) onLeafs(keys [][]byte, values [][]byte) error {
 	for i, key := range keys {
-		if len(key) != atomicKeyLength {
+		if len(key) != AtomicTrieKeyLength {
 			return fmt.Errorf("unexpected key len (%d) in atomic trie sync", len(key))
 		}
 		// key = height + blockchainID
@@ -176,7 +181,7 @@ type atomicSyncerLeafTask struct {
 
 func (a *atomicSyncerLeafTask) Start() []byte                  { return addZeroes(a.atomicSyncer.lastHeight + 1) }
 func (a *atomicSyncerLeafTask) End() []byte                    { return nil }
-func (a *atomicSyncerLeafTask) NodeType() message.NodeType     { return message.AtomicTrieNode }
+func (a *atomicSyncerLeafTask) NodeType() message.NodeType     { return AtomicTrieNode }
 func (a *atomicSyncerLeafTask) OnFinish(context.Context) error { return a.atomicSyncer.onFinish() }
 func (a *atomicSyncerLeafTask) OnStart() (bool, error)         { return false, nil }
 func (a *atomicSyncerLeafTask) Root() common.Hash              { return a.atomicSyncer.targetRoot }

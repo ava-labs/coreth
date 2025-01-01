@@ -29,7 +29,7 @@ import (
 
 const (
 	progressLogFrequency       = 30 * time.Second
-	atomicKeyLength            = wrappers.LongLen + common.HashLength
+	AtomicTrieKeyLength        = wrappers.LongLen + common.HashLength
 	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
 
 	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
@@ -232,7 +232,7 @@ func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[id
 		}
 
 		// key is [height]+[blockchainID]
-		keyPacker := wrappers.Packer{Bytes: make([]byte, atomicKeyLength)}
+		keyPacker := wrappers.Packer{Bytes: make([]byte, AtomicTrieKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
 		if err := trie.Update(keyPacker.Bytes, valueBytes); err != nil {
