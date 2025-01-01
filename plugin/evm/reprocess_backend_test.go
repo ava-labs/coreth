@@ -156,6 +156,7 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
 	// Update the chain config with mainnet upgrades
 	g.Config = params.GetChainConfig(upgrade.Mainnet, g.Config.ChainID)
+	t.Logf("Mainnet chain config: %v", g.Config)
 
 	testVM := &VM{
 		chainConfig: g.Config,
