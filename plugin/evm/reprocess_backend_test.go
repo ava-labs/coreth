@@ -169,7 +169,10 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	testVM := &VM{
 		chainConfig: g.Config,
 		codec:       Codec,
-		ctx:         &snow.Context{AVAXAssetID: mainnetAvaxAssetID},
+		ctx: &snow.Context{
+			AVAXAssetID: mainnetAvaxAssetID,
+			ChainID:     mainnetCChainID,
+		},
 	}
 	cbs := dummy.ConsensusCallbacks{OnExtraStateChange: testVM.onExtraStateChange}
 	engine := dummy.NewFakerWithMode(cbs, dummy.Mode{ModeSkipHeader: true})
