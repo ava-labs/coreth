@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math/big"
+	"net"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database"
@@ -24,6 +25,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/shim/merkledb"
+	"github.com/ava-labs/coreth/shim/nomt"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -41,8 +43,6 @@ type reprocessBackend struct {
 	Disk        ethdb.Database
 	Metadata    database.Database
 	Name        string
-
-	mdb xmerkledb.MerkleDB
 }
 
 func getMerkleDB(t *testing.T, mdbKVStore database.Database) xmerkledb.MerkleDB {
@@ -140,6 +140,11 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 		merkleDB = getMerkleDB(t, dbs.merkledb)
 		kvBackend = merkledb.NewMerkleDB(merkleDB)
 	}
+	if name == "nomt" {
+		conn, err := net.Dial("unix", socketPath)
+		require.NoError(t, err)
+		kvBackend = nomt.New(conn)
+	}
 	return &reprocessBackend{
 		Genesis:     g,
 		Engine:      engine,
@@ -149,7 +154,6 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 		Metadata:    dbs.metadata,
 		Name:        name,
 		VerifyRoot:  name == "legacy",
-		mdb:         merkleDB,
 	}
 }
 
@@ -188,6 +192,11 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 		merkleDB = getMerkleDB(t, dbs.merkledb)
 		kvBackend = merkledb.NewMerkleDB(merkleDB)
 	}
+	if name == "nomt" {
+		conn, err := net.Dial("unix", socketPath)
+		require.NoError(t, err)
+		kvBackend = nomt.New(conn)
+	}
 	return &reprocessBackend{
 		Genesis: &g,
 		Engine:  engine,
@@ -202,6 +211,5 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 		Metadata:    dbs.metadata,
 		Name:        name,
 		VerifyRoot:  name == "legacy",
-		mdb:         merkleDB,
 	}
 }

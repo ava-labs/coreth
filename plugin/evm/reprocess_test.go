@@ -57,6 +57,9 @@ var (
 	intermediateNodeCacheSizeMB   = 1
 	intermediateWriteBufferSizeKB = 1024
 	intermediateWriteBatchSizeKB  = 256
+
+	// ipc options
+	socketPath = "/tmp/rust_socket"
 )
 
 func TestMain(m *testing.M) {
@@ -78,6 +81,7 @@ func TestMain(m *testing.M) {
 	flag.Int64Var(&readCacheSize, "readCacheSize", readCacheSize, "read cache size in MB")
 	flag.StringVar(&readCacheBackend, "readCacheBackend", readCacheBackend, "read cache backend (theine, fastcache, otter, none)")
 	flag.Uint64Var(&writeCacheSize, "writeCacheSize", writeCacheSize, "write cache size in items")
+	flag.StringVar(&socketPath, "socketPath", socketPath, "socket path")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -267,7 +271,8 @@ func CleanupOnInterrupt(cleanup func()) {
 }
 
 func TestReprocessGenesis(t *testing.T) {
-	for _, backend := range []string{"merkledb", "legacy"} {
+	// nomt commented out as needs separate process to function
+	for _, backend := range []string{"merkledb", "legacy" /* , "nomt" */} {
 		t.Run(backend, func(t *testing.T) { testReprocessGenesis(t, backend) })
 	}
 }
@@ -293,6 +298,7 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 	}
 
 	for _, backend := range []*reprocessBackend{
+		getMainnetBackend(t, "nomt", source, dbs),
 		getMainnetBackend(t, "merkledb", source, dbs),
 		getMainnetBackend(t, "legacy", source, dbs),
 	} {

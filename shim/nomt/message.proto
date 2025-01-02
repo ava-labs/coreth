@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package database_interface;
+
+message Request {
+  oneof request {
+    RootRequest root = 1;
+    GetRequest get = 2;
+    PrefetchRequest prefetch = 3;
+    UpdateRequest update = 4;
+    CloseRequest close = 5;
+  }
+}
+
+message Response {
+  int32 err_code = 1;
+  oneof response {
+    RootResponse root = 2;
+    GetResponse get = 3;
+    PrefetchResponse prefetch = 4;
+    UpdateResponse update = 5;
+    CloseResponse close = 6;
+  }
+}
+
+message RootRequest {}
+message RootResponse {
+  bytes root = 1;
+}
+
+message GetRequest {
+  bytes key = 1;
+}
+
+message GetResponse {
+  bytes value = 2;
+}
+
+message PrefetchRequest {
+  bytes key = 1;
+}
+
+message PrefetchResponse {}
+
+message UpdateRequestItem {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message UpdateRequest {
+  repeated UpdateRequestItem items = 1;
+}
+
+message UpdateResponse {
+  bytes root = 2;
+}
+
+message CloseRequest { }
+message CloseResponse { }
