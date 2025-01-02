@@ -297,12 +297,9 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		startBlock++
 	}
 
-	for _, backend := range []*reprocessBackend{
-		getMainnetBackend(t, "nomt", source, dbs),
-		getMainnetBackend(t, "merkledb", source, dbs),
-		getMainnetBackend(t, "legacy", source, dbs),
-	} {
-		t.Run(backend.Name, func(t *testing.T) {
+	for _, backendName := range []string{"nomt", "merkledb", "legacy"} {
+		t.Run(backendName, func(t *testing.T) {
+			backend := getMainnetBackend(t, backendName, source, dbs)
 			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
 			t.Logf("Last hash: %x, Last root: %x", lastHash, lastRoot)
 		})
