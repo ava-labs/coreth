@@ -427,7 +427,9 @@ func reprocess(
 			tapeRecorder.WriteToDisk(block, uint16(len(atomicTxs)))
 			tapeRecorder.Reset()
 		} else {
-			t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
+			if i%uint64(logEach) == 0 {
+				t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
+			}
 		}
 
 		// t.Logf("Accepting block %d, was inserted with root: %x, hash: %x", i, lastInsertedRoot, block.Hash())
