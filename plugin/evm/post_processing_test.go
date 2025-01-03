@@ -427,6 +427,7 @@ func TestPostProcess(t *testing.T) {
 						genesis := getMainnetGenesis(t)
 						genesisHash := genesis.ToBlock().Hash()
 						rawdb.WriteCanonicalHash(b, genesisHash, 0)
+						rawdb.WriteBlock(b, genesis.ToBlock())
 						t.Logf("Updating genesis hash: %s", genesisHash.TerminalString())
 					}
 
