@@ -40,6 +40,7 @@ var (
 	endBlock               = uint64(200)
 	prefetchers            = 4
 	useSnapshot            = true
+	writeSnapshot          = false
 	pruning                = true
 	skipUpgradeCheck       = false
 	usePersistedStartBlock = false
@@ -74,6 +75,7 @@ func TestMain(m *testing.M) {
 	flag.Uint64Var(&endBlock, "endBlock", endBlock, "end block number")
 	flag.IntVar(&prefetchers, "prefetchers", prefetchers, "number of prefetchers")
 	flag.BoolVar(&useSnapshot, "useSnapshot", useSnapshot, "use snapshot")
+	flag.BoolVar(&writeSnapshot, "writeSnapshot", writeSnapshot, "write snapshot")
 	flag.BoolVar(&pruning, "pruning", pruning, "pruning")
 	flag.BoolVar(&skipUpgradeCheck, "skipUpgradeCheck", skipUpgradeCheck, "skip upgrade check")
 	flag.BoolVar(&usePersistedStartBlock, "usePersistedStartBlock", usePersistedStartBlock, "use persisted start block")

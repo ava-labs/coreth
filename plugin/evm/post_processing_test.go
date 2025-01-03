@@ -9,9 +9,11 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/Yiling-J/theine-go"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/shim/legacy"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
@@ -180,6 +182,7 @@ func TestPostProcess(t *testing.T) {
 
 	var (
 		dbs          dbs
+		sourceDb     ethdb.Database
 		sum          totals
 		blockNumber  uint64
 		storageRoot  common.Hash
@@ -190,6 +193,11 @@ func TestPostProcess(t *testing.T) {
 			number uint64
 		}
 	)
+	if sourceDbDir != "" {
+		sourceDb = openSourceDB(t)
+		defer sourceDb.Close()
+	}
+
 	if storageBackend != "none" {
 		dbs = openDBs(t)
 		defer dbs.Close()
@@ -385,6 +393,35 @@ func TestPostProcess(t *testing.T) {
 				sum.storageUpdateTime += updateTime
 				sum.storagePersistCount++
 				sum.storageUpdateCount++
+
+				if writeSnapshot {
+					for _, kv := range batch {
+						if len(kv.Key) == 32 {
+							rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), kv.Value)
+						} else {
+							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
+						}
+					}
+				}
+				if sourceDb != nil {
+					// update block and metadata from source db
+					hash := rawdb.ReadCanonicalHash(sourceDb, blockNumber)
+					require.Equal(t, blockHash, hash, "Block hash mismatch")
+
+					block := rawdb.ReadBlock(sourceDb, hash, blockNumber)
+					require.NotNil(t, block, "Block not found in source db")
+
+					b := dbs.chain.NewBatch()
+					rawdb.WriteCanonicalHash(b, hash, blockNumber)
+					rawdb.WriteBlock(b, block)
+
+					// update metadata
+					rawdb.WriteAcceptorTip(b, blockHash)
+					rawdb.WriteHeadBlockHash(b, blockHash)
+					rawdb.WriteHeadHeaderHash(b, blockHash)
+					rawdb.WriteSnapshotBlockHash(b, blockHash)
+					rawdb.WriteSnapshotRoot(b, block.Root()) // TODO: unsure if this should be block.Root() or storageRoot
+				}
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
 				lastCommit.number = blockNumber
