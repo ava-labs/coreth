@@ -625,7 +625,7 @@ func (b testBackend) LastAcceptedBlock() *types.Block { panic("implement me") }
 func (b testBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	panic("implement me")
 }
-func (b testBackend) HistoricalConfig() (historicalBlocks bool, recentBlocksWindow uint64) {
+func (b testBackend) HistoricalStateQueryWindow() (queryWindow uint64) {
 	panic("implement me")
 }
 

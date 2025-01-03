@@ -345,6 +345,8 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
 		}
 	}
+	vm.config.UpdateWithDefaults()
+
 	vm.ctx = chainCtx
 
 	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
@@ -495,8 +497,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SnapshotDelayInit = vm.stateSyncEnabled(lastAcceptedHeight)
 	vm.ethConfig.SnapshotWait = vm.config.SnapshotWait
 	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
-	vm.ethConfig.HistoricalProofs = vm.config.HistoricalProofs
-	vm.ethConfig.RecentBlocksWindow = vm.config.RecentBlocksWindow
+	vm.ethConfig.HistoricalStateQueryWindow = *vm.config.HistoricalStateQueryWindow
 	vm.ethConfig.OfflinePruning = vm.config.OfflinePruning
 	vm.ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory

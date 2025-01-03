@@ -427,19 +427,18 @@ func (mr *MockBackendMockRecorder) HeaderByNumberOrHash(ctx, blockNrOrHash any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumberOrHash", reflect.TypeOf((*MockBackend)(nil).HeaderByNumberOrHash), ctx, blockNrOrHash)
 }
 
-// HistoricalConfig mocks base method.
-func (m *MockBackend) HistoricalConfig() (bool, uint64) {
+// HistoricalStateQueryWindow mocks base method.
+func (m *MockBackend) HistoricalStateQueryWindow() uint64 {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HistoricalConfig")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(uint64)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "HistoricalStateQueryWindow")
+	ret0, _ := ret[0].(uint64)
+	return ret0
 }
 
-// HistoricalConfig indicates an expected call of HistoricalConfig.
-func (mr *MockBackendMockRecorder) HistoricalConfig() *gomock.Call {
+// HistoricalStateQueryWindow indicates an expected call of HistoricalStateQueryWindow.
+func (mr *MockBackendMockRecorder) HistoricalStateQueryWindow() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HistoricalConfig", reflect.TypeOf((*MockBackend)(nil).HistoricalConfig))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HistoricalStateQueryWindow", reflect.TypeOf((*MockBackend)(nil).HistoricalStateQueryWindow))
 }
 
 // LastAcceptedBlock mocks base method.

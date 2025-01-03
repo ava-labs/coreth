@@ -58,10 +58,13 @@ type EthAPIBackend struct {
 	allowUnprotectedTxs      bool
 	allowUnprotectedTxHashes map[common.Hash]struct{} // Invariant: read-only after creation.
 	allowUnfinalizedQueries  bool
-	historicalProofs         bool
-	recentBlocksWindow       uint64
 	eth                      *Ethereum
 	gpo                      *gasprice.Oracle
+
+	// stateQueryWindow is the number of blocks before the last accepted block to be accepted for state queries.
+	// For archive nodes, it can be set to any strictly positive value OR 0 to indicate to accept any block query.
+	// For non-archive nodes, it MUST be set to the tip buffer size core.TipBufferSize.
+	stateQueryWindow uint64
 }
 
 // ChainConfig returns the active chain configuration.
@@ -69,8 +72,10 @@ func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
 }
 
-func (b *EthAPIBackend) HistoricalConfig() (historicalProofs bool, recentBlocksWindow uint64) {
-	return b.historicalProofs, b.recentBlocksWindow
+// HistoricalStateQueryWindow returns the number of blocks before the last accepted block to be accepted for state queries.
+// It returns 0 to indicate to accept any block query.
+func (b *EthAPIBackend) HistoricalStateQueryWindow() uint64 {
+	return b.stateQueryWindow
 }
 
 func (b *EthAPIBackend) IsAllowUnfinalizedQueries() bool {
