@@ -193,6 +193,7 @@ func TestPostProcess(t *testing.T) {
 
 		lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
 		t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
+		lastCommit.number = lastHeight
 
 		if usePersistedStartBlock {
 			start = lastHeight + 1
