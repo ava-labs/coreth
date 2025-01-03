@@ -93,15 +93,15 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 	return results, nil
 }
 
-// isHistoricalStateQueryAllowed returns a nil error only if:
-//   - the node is configured to accept historical proofs queries; or
-//   - the block number given is within the window of recent accepted
-//     blocks and not yet part of the historical blocks.
+// isHistoricalStateQueryAllowed returns a nil error if:
+//   - the node is configured to accept any state query (the query window is zero)
+//   - the block given has its number within the query window
+//     before the last accepted block
 //
-// Otherwise, a non-nil error is returned.
+// Otherwise, it returns a non-nil error containing block number information.
 func (s *BlockChainAPI) isHistoricalStateQueryAllowed(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
-	historicalProofs, recentBlocksWindow := s.b.HistoricalConfig()
-	if historicalProofs {
+	queryWindow := s.b.HistoricalStateQueryWindow()
+	if queryWindow == 0 {
 		return nil
 	}
 
@@ -119,13 +119,13 @@ func (s *BlockChainAPI) isHistoricalStateQueryAllowed(blockNumOrHash rpc.BlockNu
 		number = block.NumberU64()
 	}
 
-	var oldestRecentNumber uint64
-	if lastNumber > recentBlocksWindow {
-		oldestRecentNumber = lastNumber - recentBlocksWindow
+	var oldestAllowed uint64
+	if lastNumber > queryWindow {
+		oldestAllowed = lastNumber - queryWindow
 	}
-	if number >= oldestRecentNumber {
+	if number >= oldestAllowed {
 		return nil
 	}
-	return fmt.Errorf("block number %d is before the oldest non-historical block number %d (window of %d blocks)",
-		number, oldestRecentNumber, recentBlocksWindow)
+	return fmt.Errorf("block number %d is before the oldest allowed block number %d (window of %d blocks)",
+		number, oldestAllowed, queryWindow)
 }

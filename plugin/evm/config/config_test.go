@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/core"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
@@ -130,6 +131,59 @@ func TestUnmarshalConfig(t *testing.T) {
 				tmp.Deprecate()
 				assert.Equal(t, tt.expected, tmp)
 			}
+		})
+	}
+}
+
+func TestConfig_UpdateWithDefaults(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]struct {
+		existing Config
+		want     Config
+	}{
+		"non_archive_node_window_not_set": {
+			existing: Config{
+				Pruning: true,
+			},
+			want: Config{
+				Pruning:                    true,
+				HistoricalStateQueryWindow: ptrTo(uint64(core.TipBufferSize)),
+			},
+		},
+		"non_archive_node_window_set": {
+			existing: Config{
+				Pruning:                    true,
+				HistoricalStateQueryWindow: ptrTo(uint64(core.TipBufferSize + 100)),
+			},
+			want: Config{
+				Pruning:                    true,
+				HistoricalStateQueryWindow: ptrTo(uint64(core.TipBufferSize)),
+			},
+		},
+		"archive_node_window_not_set": {
+			existing: Config{},
+			want: Config{
+				HistoricalStateQueryWindow: ptrTo(uint64(43200)),
+			},
+		},
+		"archive_node_window_set": {
+			existing: Config{
+				HistoricalStateQueryWindow: ptrTo(uint64(100)),
+			},
+			want: Config{
+				HistoricalStateQueryWindow: ptrTo(uint64(100)),
+			},
+		},
+	}
+
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			testCase.existing.UpdateWithDefaults()
+
+			assert.Equal(t, testCase.want, testCase.existing)
 		})
 	}
 }

@@ -55,22 +55,22 @@ var DefaultConfig = NewDefaultConfig()
 
 func NewDefaultConfig() Config {
 	return Config{
-		NetworkId:                 0, // enable auto configuration of networkID == chainID
-		StateHistory:              params.FullImmutabilityThreshold,
-		TrieCleanCache:            512,
-		TrieDirtyCache:            256,
-		TrieDirtyCommitTarget:     20,
-		TriePrefetcherParallelism: 16,
-		SnapshotCache:             256,
-		AcceptedCacheSize:         32,
-		Miner:                     miner.Config{},
-		TxPool:                    legacypool.DefaultConfig,
-		BlobPool:                  blobpool.DefaultConfig,
-		RPCGasCap:                 25000000,
-		RPCEVMTimeout:             5 * time.Second,
-		GPO:                       DefaultFullGPOConfig,
-		RPCTxFeeCap:               1, // 1 AVAX
-		RecentBlocksWindow:        1024,
+		NetworkId:                  0, // enable auto configuration of networkID == chainID
+		StateHistory:               params.FullImmutabilityThreshold,
+		TrieCleanCache:             512,
+		TrieDirtyCache:             256,
+		TrieDirtyCommitTarget:      20,
+		TriePrefetcherParallelism:  16,
+		SnapshotCache:              256,
+		AcceptedCacheSize:          32,
+		Miner:                      miner.Config{},
+		TxPool:                     legacypool.DefaultConfig,
+		BlobPool:                   blobpool.DefaultConfig,
+		RPCGasCap:                  25000000,
+		RPCEVMTimeout:              5 * time.Second,
+		GPO:                        DefaultFullGPOConfig,
+		RPCTxFeeCap:                1, // 1 AVAX
+		HistoricalStateQueryWindow: 43200,
 	}
 }
 
@@ -96,8 +96,10 @@ type Config struct {
 	SnapshotWait                    bool    // Whether to wait for the initial snapshot generation
 	SnapshotVerify                  bool    // Whether to verify generated snapshots
 	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
-	HistoricalProofs                bool    // HistoricalProofs, if set to true, allows to query historical blocks for proofs.
-	RecentBlocksWindow              uint64  // RecentBlocksWindow is the number of blocks before the last accepted block to be considered as recent and non-historical. It defaults to 1024.
+	// HistoricalStateQueryWindow is the number of blocks before the last accepted block to be accepted for state queries.
+	// For archive nodes, it defaults to 43200 and can be set to 0 to indicate to accept any block query.
+	// For non-archive nodes, it is forcibly set to the value of [core.TipBufferSize].
+	HistoricalStateQueryWindow uint64
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`

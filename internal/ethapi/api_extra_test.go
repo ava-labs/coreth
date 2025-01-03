@@ -18,7 +18,7 @@ import (
 func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 	t.Parallel()
 
-	const recentBlocksWindow uint64 = 1024
+	const queryWindow uint64 = 1024
 
 	makeBlockWithNumber := func(number uint64) *types.Block {
 		header := &types.Header{
@@ -32,37 +32,37 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 		makeBackend    func(ctrl *gomock.Controller) *MockBackend
 		wantErrMessage string
 	}{
-		"historical_proofs_accepted": {
-			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(0)),
-			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
-				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(true, recentBlocksWindow)
-				return backend
-			},
-		},
-		"block_number_recent_below_window": {
+		"zero_query_window": {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
+				backend.EXPECT().HistoricalStateQueryWindow().Return(uint64(0))
+				return backend
+			},
+		},
+		"block_number_allowed_below_window": {
+			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
+			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
+				backend := NewMockBackend(ctrl)
+				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(1020))
 				return backend
 			},
 		},
-		"block_number_recent": {
+		"block_number_allowed": {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
+				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},
 		},
-		"block_number_recent_by_hash": {
+		"block_number_allowed_by_hash": {
 			blockNumOrHash: rpc.BlockNumberOrHashWithHash(common.Hash{99}, false),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
+				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
 					BlockByNumberOrHash(gomock.Any(), gomock.Any()).
@@ -70,11 +70,11 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 				return backend
 			},
 		},
-		"block_number_recent_by_hash_error": {
+		"block_number_allowed_by_hash_error": {
 			blockNumOrHash: rpc.BlockNumberOrHashWithHash(common.Hash{99}, false),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
+				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
 					BlockByNumberOrHash(gomock.Any(), gomock.Any()).
@@ -83,15 +83,15 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			},
 			wantErrMessage: "getting block from hash: test error",
 		},
-		"block_number_historical": {
+		"block_number_out_of_window": {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
-				backend.EXPECT().HistoricalConfig().Return(false, recentBlocksWindow)
+				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},
-			wantErrMessage: "block number 1000 is before the oldest non-historical block number 1176 (window of 1024 blocks)",
+			wantErrMessage: "block number 1000 is before the oldest allowed block number 1176 (window of 1024 blocks)",
 		},
 	}
 
