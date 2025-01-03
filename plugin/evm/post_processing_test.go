@@ -436,6 +436,7 @@ func TestPostProcess(t *testing.T) {
 					require.NoError(t, b.Write())
 
 					if storageBackend == "legacy" {
+						t.Logf("Verified root: %s", block.Root().TerminalString())
 						require.Equal(t, storageRoot, block.Root(), "Root mismatch")
 					}
 				}
