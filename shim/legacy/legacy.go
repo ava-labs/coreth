@@ -50,10 +50,10 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		}
 		tr, ok := tries[accHash]
 		if !ok {
-			legacyTrie, err := trie.NewStateTrie(trie.StorageTrieID(l.root, accHash, root), l.triedb)
+			tr, err = trie.NewStateTrie(trie.StorageTrieID(l.root, accHash, root), l.triedb)
 			if err != nil {
 			}
-			tries[accHash] = legacyTrie
+			tries[accHash] = tr
 		}
 
 		// Update the storage trie
