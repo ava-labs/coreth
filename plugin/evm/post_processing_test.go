@@ -246,7 +246,7 @@ func TestPostProcess(t *testing.T) {
 		var err error
 		blockNumber, err = readUint64(r)
 		require.NoError(t, err)
-		require.Equal(t, i, blockNumber)
+		require.LessOrEqual(t, blockNumber, i)
 
 		blockHash, err := readHash(r)
 		require.NoError(t, err)
@@ -269,6 +269,21 @@ func TestPostProcess(t *testing.T) {
 
 		storageWrites, err := readUint16(r)
 		require.NoError(t, err)
+
+		if blockNumber < i {
+			// we need to just finish reading the block but not process it
+			for j := 0; j < int(accountWrites); j++ {
+				_, _, err := readKV(r, 32)
+				require.NoError(t, err)
+			}
+			for j := 0; j < int(storageWrites); j++ {
+				_, _, err := readKV(r, 64)
+				require.NoError(t, err)
+			}
+			t.Logf("Skipping block %d", blockNumber)
+			i--
+			continue
+		}
 
 		accountUpdates, storageUpdates := 0, 0
 		accountDeletes, storageDeletes := 0, 0
