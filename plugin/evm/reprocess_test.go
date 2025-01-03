@@ -168,6 +168,33 @@ func TestExportBlocks(t *testing.T) {
 	t.Logf("Exported %d blocks", endBlock-startBlock+1)
 }
 
+func TestExportCode(t *testing.T) {
+	sourceDb := openSourceDB(t)
+	defer sourceDb.Close()
+
+	db, err := rawdb.NewLevelDBDatabase(dbDir, cacheSize, handles, "", false)
+	require.NoError(t, err)
+	defer db.Close()
+
+	it := sourceDb.NewIterator(rawdb.CodePrefix, nil)
+	defer it.Release()
+
+	count, bytes := uint64(0), uint64(0)
+	for it.Next() {
+		if len(it.Key()) != 33 {
+			continue
+		}
+		hash := common.BytesToHash(it.Key()[1:])
+		rawdb.WriteCode(db, hash, it.Value())
+		count++
+		bytes += uint64(len(it.Value()))
+
+		if count%uint64(logEach) == 0 {
+			t.Logf("Exported %d code entries (%d MBs)", count, bytes/(1024*1024))
+		}
+	}
+}
+
 func TestQueryBlock(t *testing.T) {
 	sourceDb := openSourceDB(t)
 	defer sourceDb.Close()
