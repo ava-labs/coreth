@@ -423,7 +423,7 @@ func TestPostProcess(t *testing.T) {
 					rawdb.WriteSnapshotRoot(b, block.Root()) // TODO: unsure if this should be block.Root() or storageRoot
 
 					// handle genesis
-					if blockNumber == 1 {
+					if lastCommit.number == 0 {
 						t.Logf("Updating genesis")
 						genesisHash := rawdb.ReadCanonicalHash(sourceDb, 0)
 						require.NotZero(t, genesisHash, "Genesis hash not found in source db")
