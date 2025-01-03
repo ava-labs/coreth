@@ -88,7 +88,11 @@ func (t *Trie) Prefetch(key []byte) ([]byte, error) {
 func (t *Trie) Copy() *Trie {
 	if legacy, ok := t.backend.(*LegacyBackend); ok {
 		return &Trie{
-			backend: &LegacyBackend{tr: legacy.tr.Copy()},
+			backend: &LegacyBackend{
+				tr:       legacy.tr.Copy(),
+				addrHash: legacy.addrHash,
+				writer:   legacy.writer,
+			},
 			prefix:  t.prefix,
 			parent:  t.parent,
 			origin:  t.origin,
