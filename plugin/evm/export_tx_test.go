@@ -1261,7 +1261,7 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  0,
-						AssetID: utils.TestAvaxAssetID,
+						AssetID: ctx.AVAXAssetID,
 						Nonce:   0,
 					},
 				}

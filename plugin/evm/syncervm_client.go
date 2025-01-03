@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// State sync fetches [StateSyncParentsToFetch] parents of the block it syncs to.
+// StateSyncParentsToFetch is the number of the block parents the state syncs to.
 // The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 const StateSyncParentsToFetch = 256
 
@@ -40,14 +40,14 @@ var (
 )
 
 type BlockAcceptor interface {
-	PutLastAcceptedID([]byte) error
+	PutLastAcceptedID(ids.ID) error
 }
 
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
-// StateSyncClientConfig defines the options and dependencies needed to construct a StateSyncerClient
+// StateSyncClientConfig defines the options and dependencies needed to construct a StateSyncClient
 type StateSyncClientConfig struct {
 	Enabled    bool
 	SkipResume bool
@@ -407,7 +407,11 @@ func (client *stateSyncerClient) updateVMMarkers() error {
 		return err
 	}
 	client.AtomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
-	if err := client.Acceptor.PutLastAcceptedID(client.syncSummary.BlockHash.Bytes()); err != nil {
+	id, err := ids.ToID(client.syncSummary.BlockHash.Bytes())
+	if err != nil {
+		return err
+	}
+	if err := client.Acceptor.PutLastAcceptedID(id); err != nil {
 		return err
 	}
 	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {

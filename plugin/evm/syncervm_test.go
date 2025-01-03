@@ -285,6 +285,10 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			testShortIDAddrs[0]: importAmount,
 		}
 	)
+
+	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
+	// creates a commit at the height [syncableInterval]. This is necessary to support
+	// fetching a state summary.
 	config := fmt.Sprintf(`{"commit-interval": %d}`, test.syncableInterval)
 	_, serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
 		t, true, "", config, "", alloc,
@@ -330,9 +334,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		}
 	}, nil)
 
-	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
-	// creates a commit at the height [syncableInterval]. This is necessary to support
-	// fetching a state summary.
 	serverAtomicTrie := serverVM.atomicTrie
 	require.True(serverAtomicTrie.AcceptTrie(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
 	require.NoError(serverVM.db.Commit())
@@ -364,6 +365,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	serverVM.StateSyncServer.(*stateSyncServer).syncableInterval = test.syncableInterval
 
 	// initialise [syncerVM] with blank genesis state
+	// we also override [syncerVM]'s commit interval so the atomic trie works correctly.
 	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d, "commit-interval": %d}`, test.stateSyncMinBlocks, 4, test.syncableInterval)
 	syncerEngineChan, syncerVM, syncerDB, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
 		t, false, "", stateSyncEnabledJSON, "", alloc,

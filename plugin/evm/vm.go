@@ -1910,6 +1910,6 @@ func (vm *VM) newExportTx(
 	return tx, nil
 }
 
-func (vm *VM) PutLastAcceptedID(ID []byte) error {
-	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID)
+func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
 }
