@@ -30,8 +30,11 @@ type totals struct {
 	storageUpdates uint64
 	accountDeletes uint64
 	storageDeletes uint64
-	accounts       uint64
-	storage        uint64
+
+	// These are int64 as we want to compute the difference (since last log),
+	// and state may be deleted.
+	accounts int64
+	storage  int64
 
 	// cache stats
 	accountReadHits        uint64
@@ -397,8 +400,8 @@ func TestPostProcess(t *testing.T) {
 		sum.storageUpdates += uint64(storageUpdates)
 		sum.accountDeletes += uint64(accountDeletes)
 		sum.storageDeletes += uint64(storageDeletes)
-		sum.accounts += uint64(int(accountWrites) - accountUpdates - 2*accountDeletes)
-		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
+		sum.accounts += int64(int(accountWrites) - accountUpdates - 2*accountDeletes)
+		sum.storage += int64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
 		if blockNumber%uint64(logEach) == 0 {
 			storageRootStr := ""
