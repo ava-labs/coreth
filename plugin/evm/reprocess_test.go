@@ -118,7 +118,10 @@ func (r *prefixReader) Has(key []byte) (bool, error) {
 }
 
 func (r *prefixReader) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return prefixIt{r.Database.NewIterator(append(r.prefix, prefix...), start), r.prefix}
+	pfx := make([]byte, len(r.prefix)+len(prefix))
+	copy(pfx, r.prefix)
+	copy(pfx[len(r.prefix):], prefix)
+	return prefixIt{r.Database.NewIterator(pfx, start), r.prefix}
 }
 
 type prefixIt struct {
