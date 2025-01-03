@@ -375,9 +375,9 @@ func TestPostProcess(t *testing.T) {
 				sum.storageUpdateCount++
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
+				lastCommit.number = blockNumber
+				lastCommit.txs = sum.txs + sum.atomicTxs
 			}
-			lastCommit.number = blockNumber
-			lastCommit.txs = sum.txs + sum.atomicTxs
 		}
 
 		sum.accountReads += uint64(len(tapeResult.accountReads))
