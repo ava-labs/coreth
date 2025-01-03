@@ -91,6 +91,8 @@ func (t *Trie) Copy() *Trie {
 			backend: &LegacyBackend{tr: legacy.tr.Copy()},
 			prefix:  t.prefix,
 			parent:  t.parent,
+			origin:  t.origin,
+			changes: append(Batch(nil), t.changes...),
 		}
 	}
 	// fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
