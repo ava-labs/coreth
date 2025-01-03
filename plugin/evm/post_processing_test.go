@@ -358,6 +358,11 @@ func TestPostProcess(t *testing.T) {
 			shouldCommitBlocks := commitEachBlocks > 0 && blockNumber-lastCommit.number >= uint64(commitEachBlocks)
 			shouldCommitTxs := commitEachTxs > 0 && sum.txs+sum.atomicTxs-lastCommit.txs >= uint64(commitEachTxs)
 			if len(evitcedBatch) > 0 && (shouldCommitBlocks || shouldCommitTxs) {
+				if tapeVerbose {
+					for _, kv := range evitcedBatch {
+						t.Logf("storing: %x -> %x", kv.Key, kv.Value)
+					}
+				}
 				now := time.Now()
 				// Get state commitment from storage backend
 				storageRoot, err = storage.Update(evitcedBatch)
