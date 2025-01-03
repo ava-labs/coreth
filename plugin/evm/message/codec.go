@@ -15,7 +15,11 @@ const (
 	maxMessageSize = 2*units.MiB - 64*units.KiB // Subtract 64 KiB from p2p network cap to leave room for encoding overhead from AvalancheGo
 )
 
-var Codec codec.Manager
+var (
+	Codec codec.Manager
+	// TODO: Remove this once we have a better way to register types (i.e use a different codec version or use build flags)
+	SyncSummaryType interface{} = BlockSyncSummary{}
+)
 
 func init() {
 	Codec = codec.NewManager(maxMessageSize)
@@ -26,7 +30,7 @@ func init() {
 	c.SkipRegistrations(2)
 	errs.Add(
 		// Types for state sync frontier consensus
-		c.RegisterType(SyncSummary{}),
+		c.RegisterType(SyncSummaryType),
 
 		// state sync types
 		c.RegisterType(BlockRequest{}),
