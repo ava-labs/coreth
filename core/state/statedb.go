@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/trie/triestate"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -201,18 +202,38 @@ func NewWithSnapshot(root common.Hash, db Database, snap snapshot.Snapshot) (*St
 	return sdb, nil
 }
 
+type workerPool struct {
+	*utils.BoundedWorkers
+}
+
+func (wp *workerPool) Done() {
+	// Done is guaranteed to only be called after all work is already complete,
+	// so Wait()ing is redundant, but it also releases resources.
+	wp.BoundedWorkers.Wait()
+}
+
+func WithConcurrentWorkers(prefetchers int) PrefetcherOption {
+	if prefetchers <= 0 {
+		return nil
+	}
+	pool := &workerPool{
+		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),
+	}
+	return WithWorkerPools(func() WorkerPool { return pool })
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, maxConcurrency int) {
+func (s *StateDB) StartPrefetcher(namespace string, opts ...PrefetcherOption) {
 	if s.prefetcher != nil {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if maxConcurrency == 0 {
+	if len(opts) == 0 || opts[0] == nil {
 		return // No prefetching
 	}
-	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, maxConcurrency)
+	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, opts...)
 	kvConfig := s.db.TrieDB().Config().KeyValueDB
 	if kvConfig != nil && kvConfig.KVBackend != nil {
 		s.prefetcher.rootTrie = s.trie
