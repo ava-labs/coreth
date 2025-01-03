@@ -195,9 +195,9 @@ func TestPostProcess(t *testing.T) {
 		t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
 
 		if usePersistedStartBlock {
-			startBlock = lastHeight
+			start = lastHeight
 		}
-		require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
+		require.Equal(t, lastHeight, start, "Last height does not match start block")
 
 		storage = getKVBackend(t, storageBackend, dbs.merkledb)
 		if storageBackend == "legacy" {
