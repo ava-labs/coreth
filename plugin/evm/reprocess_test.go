@@ -198,6 +198,7 @@ func TestExportCode(t *testing.T) {
 
 	h := sha3.NewLegacyKeccak256()
 	count, bytes := uint64(0), uint64(0)
+	target := common.HexToHash("774f38ab67f94b7d7d2a1bccebb8b39223e7026f5f495ea34d98980289079c4d")
 	for it.Next() {
 		if len(it.Key()) != 33 {
 			continue
@@ -210,6 +211,10 @@ func TestExportCode(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, hash, common.BytesToHash(h.Sum(nil)))
 		h.Reset()
+
+		if hash == target {
+			t.Logf("Code: %x", code)
+		}
 
 		rawdb.WriteCode(db, hash, it.Value())
 		count++
