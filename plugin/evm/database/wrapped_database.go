@@ -17,15 +17,23 @@ var (
 )
 
 // ethDbWrapper implements ethdb.Database
-type ethDbWrapper struct{ database.Database }
+type ethDbWrapper struct {
+	database.Database
+}
 
-func WrapDatabase(db database.Database) ethdb.KeyValueStore { return ethDbWrapper{db} }
+func WrapDatabase(db database.Database) ethdb.KeyValueStore {
+	return ethDbWrapper{db}
+}
 
 // Stat implements ethdb.Database
-func (db ethDbWrapper) Stat(string) (string, error) { return "", database.ErrNotFound }
+func (db ethDbWrapper) Stat(string) (string, error) {
+	return "", database.ErrNotFound
+}
 
 // NewBatch implements ethdb.Database
-func (db ethDbWrapper) NewBatch() ethdb.Batch { return wrappedBatch{db.Database.NewBatch()} }
+func (db ethDbWrapper) NewBatch() ethdb.Batch {
+	return wrappedBatch{db.Database.NewBatch()}
+}
 
 // NewBatchWithSize implements ethdb.Database
 // TODO: propagate size through avalanchego Database interface
@@ -59,10 +67,16 @@ func (db ethDbWrapper) NewIteratorWithStart(start []byte) ethdb.Iterator {
 }
 
 // wrappedBatch implements ethdb.wrappedBatch
-type wrappedBatch struct{ database.Batch }
+type wrappedBatch struct {
+	database.Batch
+}
 
 // ValueSize implements ethdb.Batch
-func (batch wrappedBatch) ValueSize() int { return batch.Batch.Size() }
+func (batch wrappedBatch) ValueSize() int {
+	return batch.Batch.Size()
+}
 
 // Replay implements ethdb.Batch
-func (batch wrappedBatch) Replay(w ethdb.KeyValueWriter) error { return batch.Batch.Replay(w) }
+func (batch wrappedBatch) Replay(w ethdb.KeyValueWriter) error {
+	return batch.Batch.Replay(w)
+}

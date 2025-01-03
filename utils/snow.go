@@ -23,7 +23,6 @@ import (
 var (
 	testCChainID    = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
 	testXChainID    = ids.ID{'t', 'e', 's', 't', 'x'}
-	testChainID     = ids.ID{'t', 'e', 's', 't', 'c', 'h', 'a', 'i', 'n'}
 	TestAvaxAssetID = ids.ID{1, 2, 3}
 )
 

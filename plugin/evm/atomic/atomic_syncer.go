@@ -24,6 +24,15 @@ var (
 	_ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
 )
 
+// Syncer represents a step in state sync,
+// along with Start/Done methods to control
+// and monitor progress.
+// Error returns an error if any was encountered.
+type Syncer interface {
+	Start(ctx context.Context) error
+	Done() <-chan error
+}
+
 // atomicSyncer is used to sync the atomic trie from the network. The CallbackLeafSyncer
 // is responsible for orchestrating the sync while atomicSyncer is responsible for maintaining
 // the state of progress and writing the actual atomic trie to the trieDB.

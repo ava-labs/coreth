@@ -348,7 +348,7 @@ func (client *stateSyncerClient) finishSync() error {
 
 	evmBlockGetter, ok := wrappedBlock.(EthBlockWrapper)
 	if !ok {
-		return fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
+		return fmt.Errorf("could not convert block(%T) to evm.EthBlockWrapper", stateBlock)
 	}
 
 	block := evmBlockGetter.GetEthBlock()
