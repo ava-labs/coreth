@@ -1,6 +1,8 @@
 package legacy
 
 import (
+	"fmt"
+
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -75,6 +77,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		if len(kv.Key) == 64 {
 			continue
 		}
+		fmt.Println("Account Update", kv.Key, kv.Value)
 		accounts.MustUpdate(kv.Key, kv.Value)
 	}
 	next, set, err := accounts.Commit(true)
