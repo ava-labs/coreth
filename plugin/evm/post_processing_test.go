@@ -10,6 +10,7 @@ import (
 	"github.com/Yiling-J/theine-go"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/shim/legacy"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
@@ -428,6 +429,7 @@ func TestPostProcess(t *testing.T) {
 						genesisHash := genesis.ToBlock().Hash()
 						rawdb.WriteCanonicalHash(b, genesisHash, 0)
 						rawdb.WriteBlock(b, genesis.ToBlock())
+						snapshot.ResetSnapshotGeneration(b)
 						t.Logf("Updating genesis hash: %s", genesisHash.TerminalString())
 					}
 
