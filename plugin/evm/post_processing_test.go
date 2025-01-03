@@ -424,8 +424,9 @@ func TestPostProcess(t *testing.T) {
 
 					// handle genesis
 					if blockNumber == 1 {
+						t.Logf("Updating genesis")
 						genesisHash := rawdb.ReadCanonicalHash(sourceDb, 0)
-						require.NotNil(t, genesisHash, "Genesis hash not found in source db")
+						require.NotZero(t, genesisHash, "Genesis hash not found in source db")
 						rawdb.WriteCanonicalHash(b, genesisHash, 0)
 
 						genesisChainConfig := rawdb.ReadChainConfig(sourceDb, genesisHash)
