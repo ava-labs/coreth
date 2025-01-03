@@ -116,6 +116,10 @@ func (r *prefixReader) Has(key []byte) (bool, error) {
 	return r.Database.Has(append(r.prefix, key...))
 }
 
+func (r *prefixReader) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
+	return r.Database.NewIterator(append(r.prefix, prefix...), start)
+}
+
 const (
 	cacheSize = 128
 	handles   = 1024
