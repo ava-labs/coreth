@@ -165,6 +165,21 @@ func TestExportBlocks(t *testing.T) {
 	t.Logf("Exported %d blocks", endBlock-startBlock+1)
 }
 
+func TestQueryBlock(t *testing.T) {
+	sourceDb := openSourceDB(t)
+	defer sourceDb.Close()
+
+	for i := startBlock; i <= endBlock; i++ {
+		hash := rawdb.ReadCanonicalHash(sourceDb, i)
+		block := rawdb.ReadBlock(sourceDb, hash, i)
+		if block == nil {
+			t.Fatalf("Block %d not found", i)
+		}
+
+		t.Logf("Block %d: %x, %x", i, hash, block.Root())
+	}
+}
+
 var (
 	VMDBPrefix         = []byte("vm")
 	fujiXChainID       = ids.FromStringOrPanic("2JVSBoinj9C2J33VntvzYtVJNZdN2NKiwwKjcumHUWEb5DbBrm")
