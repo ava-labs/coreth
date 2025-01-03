@@ -42,7 +42,7 @@ type totals struct {
 	writeCacheEvictStorage uint64
 
 	// eviction (historical state storage update) time
-	writeCacheEvictTime uint64
+	writeCacheEvictTime time.Duration
 
 	// update time (historical state state commitment + persistence)
 	storageUpdateTime   time.Duration
@@ -226,7 +226,7 @@ func TestPostProcess(t *testing.T) {
 		if storage != nil {
 			evitcedBatch[k] = v.val
 		}
-		sum.writeCacheEvictTime += uint64(time.Since(now).Nanoseconds())
+		sum.writeCacheEvictTime += time.Since(now)
 	}
 
 	var writeCache writeCache[string, withUpdatedAt] = &noCache[string, withUpdatedAt]{
@@ -452,7 +452,7 @@ func TestPostProcess(t *testing.T) {
 				float64(sum.writeCacheEvictAccount-lastReported.writeCacheEvictAccount)/float64(txs),
 				float64(sum.writeCacheEvictStorage-lastReported.writeCacheEvictStorage)/float64(txs),
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
-				(sum.writeCacheEvictTime-lastReported.writeCacheEvictTime)/1000, sum.writeCacheEvictTime/1000,
+				(sum.writeCacheEvictTime - lastReported.writeCacheEvictTime).Milliseconds(), sum.writeCacheEvictTime.Milliseconds(),
 				storageUpdateCount, storageUpdateTime.Milliseconds(), storageUpdateAvg, sum.storageUpdateTime.Milliseconds(),
 				storagePersistCount, storagePersistTime.Milliseconds(), storagePersistAvg, sum.storagePersistTime.Milliseconds(),
 				blockNumber-oldest.updatedAt,
