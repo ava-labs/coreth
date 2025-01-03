@@ -445,14 +445,17 @@ func reprocess(
 
 		bc.DrainAcceptorQueue()
 
-		// Update metadata
-		require.NoError(t, backend.Metadata.Put(lastAcceptedRootKey, lastRoot.Bytes()))
-		require.NoError(t, backend.Metadata.Put(lastAcceptedHashKey, lastHash.Bytes()))
-		require.NoError(t, database.PutUInt64(backend.Metadata, lastAcceptedHeightKey, i))
+		updateMetadata(t, backend.Metadata, lastHash, lastRoot, i)
 		lock.Unlock()
 	}
 
 	return lastHash, lastRoot
+}
+
+func updateMetadata(t *testing.T, db database.Database, lastHash, lastRoot common.Hash, lastHeight uint64) {
+	require.NoError(t, db.Put(lastAcceptedRootKey, lastRoot.Bytes()))
+	require.NoError(t, db.Put(lastAcceptedHashKey, lastHash.Bytes()))
+	require.NoError(t, database.PutUInt64(db, lastAcceptedHeightKey, lastHeight))
 }
 
 func TestCheckSnapshot(t *testing.T) {

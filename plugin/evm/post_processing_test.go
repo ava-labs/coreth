@@ -176,6 +176,7 @@ func TestPostProcess(t *testing.T) {
 	}
 
 	var (
+		dbs          dbs
 		sum          totals
 		blockNumber  uint64
 		storageRoot  common.Hash
@@ -187,7 +188,7 @@ func TestPostProcess(t *testing.T) {
 		}
 	)
 	if storageBackend != "none" {
-		dbs := openDBs(t)
+		dbs = openDBs(t)
 		defer dbs.Close()
 
 		lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
@@ -354,6 +355,8 @@ func TestPostProcess(t *testing.T) {
 				sum.storageUpdateTime += updateTime
 				sum.storagePersistCount++
 				sum.storageUpdateCount++
+
+				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
 			}
 			lastCommit.number = blockNumber
 			lastCommit.txs = sum.txs + sum.atomicTxs
