@@ -1545,7 +1545,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	// Make [blk] a bonus block.
 	wrappedBackend := &wrappedBackend{
 		AtomicBackend:         vm.atomicBackend,
-		registeredBonusBlocks: map[uint64]common.Hash{1: common.Hash(blk.ID())},
+		registeredBonusBlocks: map[uint64]common.Hash{blk.Height(): common.Hash(blk.ID())},
 	}
 	vm.atomicBackend = wrappedBackend
 
