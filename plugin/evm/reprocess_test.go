@@ -419,6 +419,14 @@ func reprocess(
 		t.Logf("Genesis performed: hash: %x, root : %x", bc.CurrentBlock().Hash(), lastRoot)
 		if tapeRecorder != nil {
 			t.Logf("Accounts: %d, Storages: %d", len(tapeRecorder.accountWrites), len(tapeRecorder.storageWrites))
+			if tapeVerbose {
+				for _, kv := range tapeRecorder.accountWrites {
+					t.Logf("Account: %x, %x", kv.Key, kv.Value)
+				}
+				for _, kv := range tapeRecorder.storageWrites {
+					t.Logf("Storage: %x, %x", kv.Key, kv.Value)
+				}
+			}
 		}
 		start = 1
 	}
