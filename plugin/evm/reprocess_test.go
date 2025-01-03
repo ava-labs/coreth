@@ -117,7 +117,16 @@ func (r *prefixReader) Has(key []byte) (bool, error) {
 }
 
 func (r *prefixReader) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return r.Database.NewIterator(append(r.prefix, prefix...), start)
+	return prefixIt{r.Database.NewIterator(append(r.prefix, prefix...), start), r.prefix}
+}
+
+type prefixIt struct {
+	ethdb.Iterator
+	prefix []byte
+}
+
+func (it prefixIt) Key() []byte {
+	return it.Iterator.Key()[len(it.prefix):]
 }
 
 const (
@@ -185,11 +194,10 @@ func TestExportCode(t *testing.T) {
 
 	count, bytes := uint64(0), uint64(0)
 	for it.Next() {
-		// break of abstraction here, easier than wrapping the iterator
-		if len(it.Key()) != 33+len(sourcePrefix) {
+		if len(it.Key()) != 33 {
 			continue
 		}
-		acc := it.Key()[1+len(sourcePrefix):]
+		acc := it.Key()[1:]
 
 		hash := common.BytesToHash(acc)
 		rawdb.WriteCode(db, hash, it.Value())
