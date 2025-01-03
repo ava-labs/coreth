@@ -8,6 +8,7 @@ import (
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var _ triedb.KVBackend = &Legacy{}
@@ -29,30 +30,34 @@ func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bo
 }
 
 func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
-	accounts, err := trie.NewStateTrie(trie.StateTrieID(l.root), l.triedb)
+	accounts, err := trie.New(trie.StateTrieID(l.root), l.triedb)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	// Process the storage tries first, this means we can access the root for the
 	// storage tries before they are updated in the account trie. Necessary for
 	// the hash scheme.
-	tries := make(map[common.Hash]*trie.StateTrie)
+	tries := make(map[common.Hash]*trie.Trie)
 	for _, kv := range batch {
 		if len(kv.Key) != 64 {
 			continue
 		}
 		accHash := common.BytesToHash(kv.Key[:32])
-		acc, err := accounts.GetAccountByHash(accHash)
+		accBytes, err := accounts.Get(kv.Key[:32])
 		if err != nil {
 			return common.Hash{}, err
 		}
 		root := types.EmptyRootHash
-		if acc != nil {
+		if accBytes != nil {
+			var acc types.StateAccount
+			if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
+				return common.Hash{}, err
+			}
 			root = acc.Root
 		}
 		tr, ok := tries[accHash]
 		if !ok {
-			tr, err = trie.NewStateTrie(trie.StorageTrieID(l.root, accHash, root), l.triedb)
+			tr, err = trie.New(trie.StorageTrieID(l.root, accHash, root), l.triedb)
 			if err != nil {
 			}
 			tries[accHash] = tr
