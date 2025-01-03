@@ -87,11 +87,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	if l.dereference {
-		if err := l.triedb.Dereference(l.root); err != nil {
-			return common.Hash{}, err
-		}
-	}
+	// TODO: fix hashdb scheme later
 	l.root = next
 	l.count++
 	return next, nil
