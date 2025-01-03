@@ -72,7 +72,9 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		if err != nil {
 			return common.Hash{}, err
 		}
-		nodes.Merge(set)
+		if set != nil {
+			nodes.Merge(set)
+		}
 	}
 
 	// Update the account trie
@@ -86,7 +88,9 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	nodes.Merge(set)
+	if set != nil {
+		nodes.Merge(set)
+	}
 
 	if err := l.triedb.Update(next, l.root, l.count, nodes, nil); err != nil {
 		return common.Hash{}, err
