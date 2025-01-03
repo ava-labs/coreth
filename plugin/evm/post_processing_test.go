@@ -45,9 +45,9 @@ type totals struct {
 	writeCacheEvictTime uint64
 
 	// update time (historical state state commitment + persistence)
-	storageUpdateTime   uint64
+	storageUpdateTime   time.Duration
 	storageUpdateCount  uint64
-	storagePersistTime  uint64
+	storagePersistTime  time.Duration
 	storagePersistCount uint64
 }
 
@@ -372,13 +372,13 @@ func TestPostProcess(t *testing.T) {
 				storageRoot, err = storage.Update(batch)
 				require.NoError(t, err)
 				clear(evitcedBatch)
-				updateTime := uint64(time.Since(now).Nanoseconds())
+				updateTime := time.Since(now)
 
 				// Request storage backend to persist the state
 				err = storage.Commit(storageRoot)
 				require.NoError(t, err)
 
-				sum.storagePersistTime += uint64(time.Since(now).Nanoseconds()) - updateTime
+				sum.storagePersistTime += time.Since(now) - updateTime
 				sum.storageUpdateTime += updateTime
 				sum.storagePersistCount++
 				sum.storageUpdateCount++
@@ -433,16 +433,28 @@ func TestPostProcess(t *testing.T) {
 				oldest.updatedAt = blockNumber // so displays as 0
 			}
 			txs := sum.txs + sum.atomicTxs - lastReported.txs - lastReported.atomicTxs
+			storageUpdateCount := sum.storageUpdateCount - lastReported.storageUpdateCount
+			storageUpdateTime := sum.storageUpdateTime - lastReported.storageUpdateTime
+			storageUpdateAvg := int64(0)
+			if storageUpdateCount > 0 {
+				storageUpdateAvg = storageUpdateTime.Milliseconds() / int64(storageUpdateCount)
+			}
+			storagePersistCount := sum.storagePersistCount - lastReported.storagePersistCount
+			storagePersistTime := sum.storagePersistTime - lastReported.storagePersistTime
+			storagePersistAvg := int64(0)
+			if storagePersistCount > 0 {
+				storagePersistAvg = storagePersistTime.Milliseconds() / int64(storagePersistCount)
+			}
 			t.Logf(
-				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (time: %d, total: %d micros) (updates: %d, time: %d, total %d micros) (commits: %d, time: %d, total %d micros) (oldest age: %d)",
+				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (time: %d, total: %d ms) (updates: %d, time: %d, avg: %d, total: %d ms) (commits: %d, time: %d, avg: %d, total %d ms) (oldest age: %d)",
 				writeHits, writeTotal-writeHits, float64(writeHits)/float64(writeTotal),
 				writeCache.Len(), float64(writeCache.Len())/float64(sum.accounts+sum.storage),
 				float64(sum.writeCacheEvictAccount-lastReported.writeCacheEvictAccount)/float64(txs),
 				float64(sum.writeCacheEvictStorage-lastReported.writeCacheEvictStorage)/float64(txs),
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
 				(sum.writeCacheEvictTime-lastReported.writeCacheEvictTime)/1000, sum.writeCacheEvictTime/1000,
-				sum.storageUpdateCount-lastReported.storageUpdateCount, (sum.storageUpdateTime-lastReported.storageUpdateTime)/1000, sum.storageUpdateTime/1000,
-				sum.storagePersistCount-lastReported.storagePersistCount, (sum.storagePersistTime-lastReported.storagePersistTime)/1000, sum.storagePersistTime/1000,
+				storageUpdateCount, storageUpdateTime.Milliseconds(), storageUpdateAvg, sum.storageUpdateTime.Milliseconds(),
+				storagePersistCount, storagePersistTime.Milliseconds(), storagePersistAvg, sum.storagePersistTime.Milliseconds(),
 				blockNumber-oldest.updatedAt,
 			)
 			quants := []float64{0.05, 0.1, 0.25, 0.5, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95}
