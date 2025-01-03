@@ -77,7 +77,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		}
 		accounts.MustUpdate(kv.Key, kv.Value)
 	}
-	next, set, err := accounts.Commit(false)
+	next, set, err := accounts.Commit(true)
 	if err != nil {
 		return common.Hash{}, err
 	}
