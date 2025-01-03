@@ -603,7 +603,7 @@ func (bc *BlockChain) startAcceptor() {
 		acceptorQueueGauge.Dec(1)
 
 		if err := bc.flattenSnapshot(func() error {
-			parent := bc.GetHeaderByHash(next.Hash())
+			parent := bc.GetHeaderByHash(next.ParentHash())
 			if parent.Root == next.Block.Root() {
 				return nil
 			}
