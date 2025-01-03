@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -192,6 +193,7 @@ func TestExportCode(t *testing.T) {
 	it := sourceDb.NewIterator(rawdb.CodePrefix, nil)
 	defer it.Release()
 
+	h := sha3.NewLegacyKeccak256()
 	count, bytes := uint64(0), uint64(0)
 	for it.Next() {
 		if len(it.Key()) != 33 {
@@ -200,6 +202,12 @@ func TestExportCode(t *testing.T) {
 		acc := it.Key()[1:]
 
 		hash := common.BytesToHash(acc)
+		code := it.Value()
+		_, err = h.Write(code)
+		require.NoError(t, err)
+		require.Equal(t, hash, common.BytesToHash(h.Sum(nil)))
+		h.Reset()
+
 		rawdb.WriteCode(db, hash, it.Value())
 		count++
 		bytes += uint64(len(it.Value()))
