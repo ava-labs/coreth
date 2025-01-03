@@ -185,10 +185,13 @@ func TestExportCode(t *testing.T) {
 
 	count, bytes := uint64(0), uint64(0)
 	for it.Next() {
-		if len(it.Key()) != 33 {
+		// break of abstraction here, easier than wrapping the iterator
+		if len(it.Key()) != 33+len(sourcePrefix) {
 			continue
 		}
-		hash := common.BytesToHash(it.Key()[1:])
+		acc := it.Key()[1+len(sourcePrefix):]
+
+		hash := common.BytesToHash(acc)
 		rawdb.WriteCode(db, hash, it.Value())
 		count++
 		bytes += uint64(len(it.Value()))
