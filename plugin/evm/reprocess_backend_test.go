@@ -91,7 +91,6 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 	}
 	testVM := &VM{
 		chainConfig: chainConfig,
-		codec:       Codec,
 		ctx:         &snow.Context{AVAXAssetID: ids.ID{1}},
 	}
 	someAddr := common.Address{1}
@@ -178,7 +177,6 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 
 	testVM := &VM{
 		chainConfig: g.Config,
-		codec:       Codec,
 		ctx:         g.Config.SnowCtx,
 	}
 	cbs := dummy.ConsensusCallbacks{OnExtraStateChange: testVM.onExtraStateChange}

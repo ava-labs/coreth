@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -428,7 +429,7 @@ func reprocess(
 	for i := start; i <= stop; i++ {
 		block := backend.GetBlock(i)
 		isApricotPhase5 := backend.Genesis.Config.IsApricotPhase5(block.Time())
-		atomicTxs, err := ExtractAtomicTxs(block.ExtData(), isApricotPhase5, Codec)
+		atomicTxs, err := atomic.ExtractAtomicTxs(block.ExtData(), isApricotPhase5, atomic.Codec)
 		require.NoError(t, err)
 
 		// Override parentRoot to match last state
