@@ -89,6 +89,8 @@ func (t *Trie) Copy() *Trie {
 	if legacy, ok := t.backend.(*LegacyBackend); ok {
 		return &Trie{
 			backend: &LegacyBackend{tr: legacy.tr.Copy()},
+			prefix:  t.prefix,
+			parent:  t.parent,
 		}
 	}
 	// fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
