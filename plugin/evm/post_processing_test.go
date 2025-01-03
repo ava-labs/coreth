@@ -421,6 +421,19 @@ func TestPostProcess(t *testing.T) {
 					rawdb.WriteHeadHeaderHash(b, blockHash)
 					rawdb.WriteSnapshotBlockHash(b, blockHash)
 					rawdb.WriteSnapshotRoot(b, block.Root()) // TODO: unsure if this should be block.Root() or storageRoot
+
+					// handle genesis
+					if blockNumber == 1 {
+						genesisHash := rawdb.ReadCanonicalHash(sourceDb, 0)
+						require.NotNil(t, genesisHash, "Genesis hash not found in source db")
+						rawdb.WriteCanonicalHash(b, genesisHash, 0)
+
+						genesisChainConfig := rawdb.ReadChainConfig(sourceDb, genesisHash)
+						require.NotNil(t, genesisChainConfig, "Genesis chain config not found in source db")
+						rawdb.WriteChainConfig(b, genesisHash, genesisChainConfig)
+					}
+
+					require.NoError(t, b.Write())
 				}
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
