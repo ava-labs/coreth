@@ -34,7 +34,7 @@ State sync code is structured as follows:
 - `plugin/evm/`: The engine expects the VM to implement `StateSyncableVM` interface,
   - `StateSyncServer`: Contains methods executed on nodes _serving_ state sync requests.
   - `StateSyncClient`: Contains methods executed on nodes joining the network via state sync, and orchestrates the top level steps of the sync.
-- `peer`: Contains abstractions used by `sync/statesync` to send requests to peers (`AppRequest`) and receive responses from peers (`AppResponse`). 
+- `peer`: Contains abstractions used by `sync/statesync` to send requests to peers (`AppRequest`) and receive responses from peers (`AppResponse`).
 - `message`: Contains structs that are serialized and sent over the network during state sync.
 
 
@@ -65,8 +65,8 @@ The following steps are executed by the VM to sync its state from peers (see `st
 
 Steps 3 and 4 involve syncing tries. To sync trie data, the VM will send a series of `LeafRequests` to its peers. Each request specifies:
 - Type of trie (`NodeType`):
-  - `message.StateTrieNode` (account trie and storage tries share the same database)
-  - `message.AtomicTrieNode` (atomic trie has an independent database)
+  - `statesync.StateTrieNode` (account trie and storage tries share the same database)
+  - `atomic.AtomicTrieNode` (atomic trie has an independent database)
 - `Root` of the trie to sync,
 - `Start` and `End` specify a range of keys.
 
