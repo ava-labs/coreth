@@ -280,7 +280,9 @@ func TestPostProcess(t *testing.T) {
 				_, _, err := readKV(r, 64)
 				require.NoError(t, err)
 			}
-			t.Logf("Skipping block %d", blockNumber)
+			if blockNumber%uint64(logEach) == 0 {
+				t.Logf("Skipping block %d", blockNumber)
+			}
 			i--
 			continue
 		}
