@@ -189,9 +189,10 @@ func TestExportCode(t *testing.T) {
 	sourceDb := openSourceDB(t)
 	defer sourceDb.Close()
 
-	db, err := rawdb.NewLevelDBDatabase(dbDir, cacheSize, handles, "", false)
-	require.NoError(t, err)
-	defer db.Close()
+	dbs := openDBs(t)
+	defer dbs.Close()
+
+	db := dbs.chain
 
 	it := sourceDb.NewIterator(rawdb.CodePrefix, nil)
 	defer it.Release()
