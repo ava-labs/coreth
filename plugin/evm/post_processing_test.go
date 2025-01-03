@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/Yiling-J/theine-go"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/coreth/shim/legacy"
+	"github.com/ava-labs/coreth/triedb"
+	"github.com/ethereum/go-ethereum/common"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
@@ -36,10 +40,19 @@ type totals struct {
 	storageWriteHits       uint64
 	writeCacheEvictAccount uint64
 	writeCacheEvictStorage uint64
+
+	// eviction (historical state storage update) time
+	writeCacheEvictTime uint64
+
+	// update time (historical state state commitment + persistence)
+	storageUpdateTime   uint64
+	storageUpdateCount  uint64
+	storagePersistTime  uint64
+	storagePersistCount uint64
 }
 
 type cacheIntf interface {
-	Get(k string, v []byte) bool
+	GetAndSet(k string, v []byte) bool
 	Delete(k string)
 	Len() int
 	EstimatedSize() int
@@ -49,7 +62,7 @@ type fastCache struct {
 	cache *fastcache.Cache
 }
 
-func (c *fastCache) Get(k string, v []byte) bool {
+func (c *fastCache) GetAndSet(k string, v []byte) bool {
 	found := c.cache.Has([]byte(k))
 	c.cache.Set([]byte(k), v)
 	return found
@@ -75,7 +88,7 @@ type theineCache struct {
 	*theine.Cache[string, []byte]
 }
 
-func (c *theineCache) Get(k string, v []byte) bool {
+func (c *theineCache) GetAndSet(k string, v []byte) bool {
 	_, found := c.Cache.Get(k)
 	c.Cache.Set(k, v, int64(len(k)+len(v)))
 	return found
@@ -85,7 +98,7 @@ type otterCache struct {
 	otter.Cache[string, []byte]
 }
 
-func (c *otterCache) Get(k string, v []byte) bool {
+func (c *otterCache) GetAndSet(k string, v []byte) bool {
 	_, found := c.Cache.Get(k)
 	c.Cache.Set(k, v)
 	return found
@@ -99,21 +112,34 @@ func (c *otterCache) Len() int {
 	return c.Cache.Size()
 }
 
-type noCache struct{}
+type noCache[K, V any] struct {
+	onEvict func(k K, v V)
+}
 
-func (c *noCache) Get(k string, v []byte) bool { return false }
-func (c *noCache) Delete(k string)             {}
-func (c *noCache) Len() int                    { return 0 }
-func (c *noCache) EstimatedSize() int          { return 0 }
+func (c *noCache[K, V]) Get(k K) (v V, ok bool)         { return }
+func (c *noCache[K, V]) GetAndSet(k K, v V) bool        { return false }
+func (c *noCache[K, V]) Delete(k K)                     {}
+func (c *noCache[K, V]) Len() int                       { return 0 }
+func (c *noCache[K, V]) EstimatedSize() int             { return 0 }
+func (c *noCache[K, V]) GetOldest() (k K, v V, ok bool) { return }
+
+func (c *noCache[K, V]) Add(k K, v V) bool {
+	if c.onEvict != nil {
+		c.onEvict(k, v)
+	}
+	return false
+}
 
 type withUpdatedAt struct {
 	val       []byte
 	updatedAt uint64
 }
 
-func short(s string) string {
-	// return first 2 and last 2 characters
-	return s[:2] + "..." + s[len(s)-2:]
+type writeCache[K, V any] interface {
+	Get(k K) (V, bool)
+	Add(k K, v V) bool
+	GetOldest() (K, V, bool)
+	Len() int
 }
 
 func TestPostProcess(t *testing.T) {
@@ -144,28 +170,71 @@ func TestPostProcess(t *testing.T) {
 		}
 		cache = &otterCache{Cache: impl}
 	} else if readCacheBackend == "none" {
-		cache = &noCache{}
+		cache = &noCache[string, []byte]{}
 	} else {
 		t.Fatalf("Unknown cache backend: %s", readCacheBackend)
 	}
 
-	var writeCache *lru.Cache[string, withUpdatedAt]
-	var sum totals
-	var blockNumber uint64
+	var (
+		sum          totals
+		blockNumber  uint64
+		storageRoot  common.Hash
+		storage      triedb.KVBackend
+		evitcedBatch triedb.Batch
+		lastCommit   struct {
+			txs    uint64
+			number uint64
+		}
+	)
+	if storageBackend != "none" {
+		dbs := openDBs(t)
+		defer dbs.Close()
+
+		lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
+		t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
+
+		if usePersistedStartBlock {
+			startBlock = lastHeight
+		}
+		require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
+
+		storage = getKVBackend(t, storageBackend, dbs.merkledb)
+		if storageBackend == "legacy" {
+			cacheConfig := getCacheConfig(t, storageBackend, storage)
+			tdbConfig := cacheConfig.TrieDBConfig()
+			tdb := triedb.NewDatabase(dbs.chain, tdbConfig)
+			storage = legacy.New(tdb, lastRoot, lastHeight, true)
+		}
+		require.Equal(t, lastRoot, storage.Root(), "Root mismatch")
+		storageRoot = lastRoot
+		t.Logf("Storage backend initialized: %s", storageBackend)
+	}
+
 	hst := histogram.NewFast()
 	hstWithReset := histogram.NewFast()
 	inf := float64(1_000_000_000)
 	onEvict := func(k string, v withUpdatedAt) {
+		now := time.Now()
 		if len(k) == 32 {
 			sum.writeCacheEvictAccount++
 		} else {
 			sum.writeCacheEvictStorage++
 		}
 		// t.Logf("evicting key: %x @ block %d, updatedAt: %d (%d blocks ago)", short(k), blockNumber, v.updatedAt, blockNumber-v.updatedAt)
+		if storage != nil {
+			evitcedBatch = append(evitcedBatch, triedb.KV{Key: []byte(k), Value: v.val})
+		}
+		sum.writeCacheEvictTime += uint64(time.Since(now).Nanoseconds())
 	}
 
-	writeCache, err := lru.NewWithEvict(int(writeCacheSize), onEvict)
-	require.NoError(t, err)
+	var writeCache writeCache[string, withUpdatedAt] = &noCache[string, withUpdatedAt]{
+		onEvict: onEvict,
+	}
+	if writeCacheSize > 0 {
+		var err error
+		writeCache, err = lru.NewWithEvict(int(writeCacheSize), onEvict)
+		require.NoError(t, err)
+	}
 
 	fm := &fileManager{dir: tapeDir, newEach: 10_000}
 
@@ -191,7 +260,7 @@ func TestPostProcess(t *testing.T) {
 			accountReads: make(map[string][]byte),
 			storageReads: make(map[string][]byte),
 		}
-		tapeTxs := processTape(t, r, tapeResult, cache.Get, &sum)
+		tapeTxs := processTape(t, r, tapeResult, cache.GetAndSet, &sum)
 		require.Equal(t, txs, tapeTxs)
 
 		accountWrites, err := readUint16(r)
@@ -265,6 +334,31 @@ func TestPostProcess(t *testing.T) {
 		sum.blocks++
 		sum.txs += uint64(txs)
 		sum.atomicTxs += uint64(atomicTxs)
+
+		if storage != nil {
+			shouldCommitBlocks := commitEachBlocks > 0 && blockNumber-lastCommit.number >= uint64(commitEachBlocks)
+			shouldCommitTxs := commitEachTxs > 0 && sum.txs+sum.atomicTxs-lastCommit.txs >= uint64(commitEachTxs)
+			if len(evitcedBatch) > 0 && (shouldCommitBlocks || shouldCommitTxs) {
+				now := time.Now()
+				// Get state commitment from storage backend
+				storageRoot, err = storage.Update(evitcedBatch)
+				require.NoError(t, err)
+				evitcedBatch = evitcedBatch[:0]
+				updateTime := uint64(time.Since(now).Nanoseconds())
+
+				// Request storage backend to persist the state
+				err = storage.Commit(storageRoot)
+				require.NoError(t, err)
+
+				sum.storagePersistTime += uint64(time.Since(now).Nanoseconds()) - updateTime
+				sum.storageUpdateTime += updateTime
+				sum.storagePersistCount++
+				sum.storageUpdateCount++
+			}
+			lastCommit.number = blockNumber
+			lastCommit.txs = sum.txs + sum.atomicTxs
+		}
+
 		sum.accountReads += uint64(len(tapeResult.accountReads))
 		sum.storageReads += uint64(len(tapeResult.storageReads))
 		sum.accountWrites += uint64(accountWrites)
@@ -277,15 +371,21 @@ func TestPostProcess(t *testing.T) {
 		sum.storage += uint64(int(storageWrites) - storageUpdates - 2*storageDeletes)
 
 		if blockNumber%uint64(logEach) == 0 {
-			t.Logf("Block[%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
-				blockHash.TerminalString(), blockNumber,
-				sum.txs, sum.atomicTxs,
-				sum.accountReads, sum.storageReads,
-				sum.accountReadHits, sum.storageReadHits,
-				sum.accountWrites, sum.storageWrites,
-				sum.accountWriteHits, sum.storageWriteHits,
-				sum.accountUpdates, sum.storageUpdates, sum.accountDeletes, sum.storageDeletes,
-				sum.accounts, sum.storage)
+			storageRootStr := ""
+			if storageRoot != (common.Hash{}) {
+				storageRootStr = "/" + storageRoot.TerminalString()
+			}
+			t.Logf("Block[%s%s]: (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+				blockHash.TerminalString(), storageRootStr, blockNumber,
+				sum.txs-lastReported.txs, sum.atomicTxs-lastReported.atomicTxs,
+				sum.accountReads-lastReported.accountReads, sum.storageReads-lastReported.storageReads,
+				sum.accountReadHits-lastReported.accountReadHits, sum.storageReadHits-lastReported.storageReadHits,
+				sum.accountWrites-lastReported.accountWrites, sum.storageWrites-lastReported.storageWrites,
+				sum.accountWriteHits-lastReported.accountWriteHits, sum.storageWriteHits-lastReported.storageWriteHits,
+				sum.accountUpdates-lastReported.accountUpdates, sum.storageUpdates-lastReported.storageUpdates,
+				sum.accountDeletes-lastReported.accountDeletes, sum.storageDeletes-lastReported.storageDeletes,
+				sum.accounts-lastReported.accounts, sum.storage-lastReported.storage,
+			)
 			if readCacheBackend != "none" {
 				hits := sum.accountReadHits - lastReported.accountReadHits + sum.storageReadHits - lastReported.storageReadHits
 				total := sum.accountReads - lastReported.accountReads + sum.storageReads - lastReported.storageReads
@@ -301,12 +401,15 @@ func TestPostProcess(t *testing.T) {
 			_, oldest, _ := writeCache.GetOldest()
 			txs := sum.txs - lastReported.txs
 			t.Logf(
-				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (oldest age: %d)",
+				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (time: %d, total: %d micros) (updates: %d, time: %d, total %d micros) (commits: %d, time: %d, total %d micros) (oldest age: %d)",
 				writeHits, writeTotal-writeHits, float64(writeHits)/float64(writeTotal),
 				writeCache.Len(), float64(writeCache.Len())/float64(sum.accounts+sum.storage),
 				float64(sum.writeCacheEvictAccount-lastReported.writeCacheEvictAccount)/float64(txs),
 				float64(sum.writeCacheEvictStorage-lastReported.writeCacheEvictStorage)/float64(txs),
 				(sum.writeCacheEvictAccount+sum.writeCacheEvictStorage)/1000,
+				(sum.writeCacheEvictTime-lastReported.writeCacheEvictTime)/1000, sum.writeCacheEvictTime/1000,
+				sum.storageUpdateCount-lastReported.storageUpdateCount, (sum.storageUpdateTime-lastReported.storageUpdateTime)/1000, sum.storageUpdateTime/1000,
+				sum.storagePersistCount-lastReported.storagePersistCount, (sum.storagePersistTime-lastReported.storagePersistTime)/1000, sum.storagePersistTime/1000,
 				blockNumber-oldest.updatedAt,
 			)
 			quants := []float64{0.05, 0.1, 0.25, 0.5, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95}

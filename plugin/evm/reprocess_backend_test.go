@@ -184,19 +184,7 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	cbs := dummy.ConsensusCallbacks{OnExtraStateChange: testVM.onExtraStateChange}
 	engine := dummy.NewFakerWithMode(cbs, dummy.Mode{ModeSkipHeader: true})
 
-	var (
-		merkleDB  xmerkledb.MerkleDB
-		kvBackend triedb.KVBackend
-	)
-	if name == "merkledb" {
-		merkleDB = getMerkleDB(t, dbs.merkledb)
-		kvBackend = merkledb.NewMerkleDB(merkleDB)
-	}
-	if name == "nomt" {
-		conn, err := net.Dial("unix", socketPath)
-		require.NoError(t, err)
-		kvBackend = nomt.New(conn)
-	}
+	kvBackend := getKVBackend(t, name, dbs.merkledb)
 	return &reprocessBackend{
 		Genesis: &g,
 		Engine:  engine,
@@ -212,4 +200,16 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 		Name:        name,
 		VerifyRoot:  name == "legacy",
 	}
+}
+
+func getKVBackend(t *testing.T, name string, merkleKVStore database.Database) triedb.KVBackend {
+	if name == "merkledb" {
+		return merkledb.NewMerkleDB(getMerkleDB(t, merkleKVStore))
+	}
+	if name == "nomt" {
+		conn, err := net.Dial("unix", socketPath)
+		require.NoError(t, err)
+		return nomt.New(conn)
+	}
+	return nil
 }

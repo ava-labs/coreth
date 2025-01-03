@@ -52,6 +52,8 @@ type KVBackend interface {
 
 	// After this call, Root() should return the same hash as returned by this call.
 	// Note when len(Value) == 0, it means the key should be deleted.
+	// Note after this call, the next call to Update must build on the returned root,
+	// regardless of whether Commit is called.
 	Update(Batch) (common.Hash, error)
 
 	// After this call, changes related to [root] should be persisted to disk.

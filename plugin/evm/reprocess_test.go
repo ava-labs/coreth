@@ -50,6 +50,9 @@ var (
 	readCacheSize          = int64(256)
 	readCacheBackend       = "none"
 	writeCacheSize         = uint64(1024)
+	storageBackend         = "none"
+	commitEachBlocks       = 1
+	commitEachTxs          = 0
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -82,6 +85,9 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&readCacheBackend, "readCacheBackend", readCacheBackend, "read cache backend (theine, fastcache, otter, none)")
 	flag.Uint64Var(&writeCacheSize, "writeCacheSize", writeCacheSize, "write cache size in items")
 	flag.StringVar(&socketPath, "socketPath", socketPath, "socket path")
+	flag.StringVar(&storageBackend, "storageBackend", storageBackend, "storage backend (none, legacy, merkledb, nomt)")
+	flag.IntVar(&commitEachBlocks, "commitEachBlocks", commitEachBlocks, "commit each N blocks")
+	flag.IntVar(&commitEachTxs, "commitEachTxs", commitEachTxs, "commit each N transactions")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
