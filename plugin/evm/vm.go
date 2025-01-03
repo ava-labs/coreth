@@ -372,6 +372,7 @@ func (vm *VM) Initialize(
 	}
 	vm.logger = corethLogger
 
+	log.Info("AVAX assetID", "assetID", vm.ctx.AVAXAssetID)
 	log.Info("Initializing Coreth VM", "Version", Version, "Config", vm.config)
 
 	if deprecateMsg != "" {
@@ -457,6 +458,7 @@ func (vm *VM) Initialize(
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
+	log.Info("Genesis bytes", "bytes", genesisBytes)
 	vm.ethConfig.NetworkId = vm.chainID.Uint64()
 	vm.genesisHash = vm.ethConfig.Genesis.ToBlock().Hash() // must create genesis hash before [vm.readLastAccepted]
 	lastAcceptedHash, lastAcceptedHeight, err := vm.readLastAccepted()
@@ -577,6 +579,9 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
+
+	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
+
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
@@ -605,8 +610,6 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
-
-	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely

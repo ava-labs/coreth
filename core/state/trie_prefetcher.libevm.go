@@ -110,7 +110,7 @@ func (p *subfetcherPool) execute(fn func(Trie)) {
 // and logging errors. See [subfetcherPool.execute] re worker pools.
 func (p *subfetcherPool) GetAccount(addr common.Address) {
 	p.execute(func(t Trie) {
-		if _, err := t.GetAccount(addr); err != nil {
+		if _, err := t.PrefetchAccount(addr); err != nil {
 			log.Error("account prefetching failed", "address", addr, "err", err)
 		}
 	})
@@ -119,7 +119,7 @@ func (p *subfetcherPool) GetAccount(addr common.Address) {
 // GetStorage is the storage equivalent of [subfetcherPool.GetAccount].
 func (p *subfetcherPool) GetStorage(addr common.Address, key []byte) {
 	p.execute(func(t Trie) {
-		if _, err := t.GetStorage(addr, key); err != nil {
+		if _, err := t.PrefetchStorage(addr, key); err != nil {
 			log.Error("storage prefetching failed", "address", addr, "key", key, "err", err)
 		}
 	})

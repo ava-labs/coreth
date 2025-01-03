@@ -213,6 +213,9 @@ func (wp *workerPool) Done() {
 }
 
 func WithConcurrentWorkers(prefetchers int) PrefetcherOption {
+	if prefetchers <= 0 {
+		return nil
+	}
 	pool := &workerPool{
 		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),
 	}
@@ -227,8 +230,13 @@ func (s *StateDB) StartPrefetcher(namespace string, opts ...PrefetcherOption) {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if s.snap != nil {
-		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, opts...)
+	if len(opts) == 0 || opts[0] == nil {
+		return // No prefetching
+	}
+	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, opts...)
+	kvConfig := s.db.TrieDB().Config().KeyValueDB
+	if kvConfig != nil && kvConfig.KVBackend != nil {
+		s.prefetcher.rootTrie = s.trie
 	}
 }
 
