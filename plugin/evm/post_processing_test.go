@@ -424,7 +424,10 @@ func TestPostProcess(t *testing.T) {
 			}
 			writeHits := sum.accountWriteHits + sum.storageWriteHits - lastReported.accountWriteHits - lastReported.storageWriteHits
 			writeTotal := sum.accountWrites + sum.storageWrites - lastReported.accountWrites - lastReported.storageWrites
-			_, oldest, _ := writeCache.GetOldest()
+			_, oldest, found := writeCache.GetOldest()
+			if !found {
+				oldest.updatedAt = blockNumber // so displays as 0
+			}
 			txs := sum.txs + sum.atomicTxs - lastReported.txs - lastReported.atomicTxs
 			t.Logf(
 				"Write cache stats: %d hits, %d misses, %.2f hit rate, %d entries (= %.4f of state), evicted/tx: %.1f acc, %.1f storage (total: %dk) (time: %d, total: %d micros) (updates: %d, time: %d, total %d micros) (commits: %d, time: %d, total %d micros) (oldest age: %d)",
