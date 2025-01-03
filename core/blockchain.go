@@ -603,6 +603,10 @@ func (bc *BlockChain) startAcceptor() {
 		acceptorQueueGauge.Dec(1)
 
 		if err := bc.flattenSnapshot(func() error {
+			parent := bc.GetHeaderByHash(next.Hash())
+			if parent.Root == next.Block.Root() {
+				return nil
+			}
 			return bc.stateManager.AcceptTrie(next)
 		}, next.Hash()); err != nil {
 			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
