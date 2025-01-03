@@ -424,14 +424,10 @@ func TestPostProcess(t *testing.T) {
 
 					// handle genesis
 					if lastCommit.number == 0 {
-						t.Logf("Updating genesis")
-						genesisHash := rawdb.ReadCanonicalHash(sourceDb, 0)
-						require.NotZero(t, genesisHash, "Genesis hash not found in source db")
+						genesis := getMainnetGenesis(t)
+						genesisHash := genesis.ToBlock().Hash()
 						rawdb.WriteCanonicalHash(b, genesisHash, 0)
-
-						genesisChainConfig := rawdb.ReadChainConfig(sourceDb, genesisHash)
-						require.NotNil(t, genesisChainConfig, "Genesis chain config not found in source db")
-						rawdb.WriteChainConfig(b, genesisHash, genesisChainConfig)
+						t.Logf("Updating genesis hash: %s", genesisHash.TerminalString())
 					}
 
 					require.NoError(t, b.Write())

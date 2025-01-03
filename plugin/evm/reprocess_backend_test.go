@@ -156,7 +156,7 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 	}
 }
 
-func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs) *reprocessBackend {
+func getMainnetGenesis(t *testing.T) core.Genesis {
 	var g core.Genesis
 	require.NoError(t, json.Unmarshal([]byte(cChainGenesisMainnet), &g))
 	// Update the chain config with mainnet upgrades
@@ -174,7 +174,11 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 	}
 
 	t.Logf("Mainnet chain config: %v", g.Config)
+	return g
+}
 
+func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs) *reprocessBackend {
+	g := getMainnetGenesis(t)
 	testVM := &VM{
 		chainConfig: g.Config,
 		ctx:         g.Config.SnowCtx,
