@@ -379,7 +379,6 @@ func TestPostProcess(t *testing.T) {
 				// Get state commitment from storage backend
 				storageRoot, err = storage.Update(evitcedBatch)
 				require.NoError(t, err)
-				evitcedBatch = evitcedBatch[:0]
 				updateTime := time.Since(now)
 
 				// Request storage backend to persist the state
@@ -410,6 +409,8 @@ func TestPostProcess(t *testing.T) {
 							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
 						}
 					}
+
+					evitcedBatch = evitcedBatch[:0]
 				}
 				if sourceDb != nil {
 					// update block and metadata from source db
