@@ -392,7 +392,7 @@ func TestPostProcess(t *testing.T) {
 				sum.storageUpdateCount++
 
 				if writeSnapshot {
-					for _, kv := range batch {
+					for _, kv := range evitcedBatch {
 						if len(kv.Key) == 32 {
 							rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), kv.Value)
 						} else {
