@@ -456,13 +456,13 @@ func TestPostProcess(t *testing.T) {
 						require.Equal(t, storageRoot, block.Root(), "Root mismatch")
 					}
 
-					commitLock.Unlock()
 				}
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
 				lastCommit.number = blockNumber
 				lastCommit.txs = sum.txs + sum.atomicTxs
 			}
+			commitLock.Unlock()
 		}
 
 		sum.accountReads += uint64(len(tapeResult.accountReads))
