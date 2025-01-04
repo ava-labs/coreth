@@ -1,6 +1,8 @@
 package legacy
 
 import (
+	"fmt"
+
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -85,6 +87,22 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		}
 		accounts.MustUpdate(kv.Key, kv.Value)
 	}
+
+	// Verify account trie updates match the storage trie updates
+	for accHash, tr := range tries {
+		accBytes, err := accounts.Get(accHash[:])
+		if err != nil {
+			return common.Hash{}, err
+		}
+		var acc types.StateAccount
+		if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
+			return common.Hash{}, err
+		}
+		if acc.Root != tr.Hash() {
+			return common.Hash{}, fmt.Errorf("account trie root mismatch: %x != %x", acc.Root, tr.Hash())
+		}
+	}
+
 	next, set, err := accounts.Commit(true)
 	if err != nil {
 		return common.Hash{}, err
