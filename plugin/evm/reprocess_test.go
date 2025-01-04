@@ -313,6 +313,8 @@ func TestCalculatePrefix(t *testing.T) {
 
 	prefix = append(prefix, prefixdb.MakePrefix(ethDBPrefix)...)
 	t.Logf("Prefix: %x", prefix)
+
+	t.Logf("Prefix: %x", prefixdb.MakePrefix(ethDBPrefix))
 }
 
 func init() {
