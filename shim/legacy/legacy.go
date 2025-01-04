@@ -55,10 +55,21 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 	// the hash scheme.
 	tries := make(map[common.Hash]*trie.Trie)
 	for _, kv := range batch {
-		if len(kv.Key) != 64 {
+		accHash := common.BytesToHash(kv.Key[:32])
+		if len(kv.Key) == 32 {
+			if len(kv.Value) == 0 {
+				// this trie is DELETED, so if it was updated before these updates should not be applied
+				// further updates shold apply to an empty trie
+				tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
+				if err != nil {
+					return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
+				}
+			}
+
+			// otherwise, skip account updates for now
 			continue
 		}
-		accHash := common.BytesToHash(kv.Key[:32])
+
 		root, err := getAccountRoot(accounts, accHash)
 		if err != nil {
 			return common.Hash{}, err
