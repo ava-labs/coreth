@@ -279,6 +279,8 @@ func (s *stateObject) finalise(prefetch bool) {
 	}
 }
 
+var target = common.HexToHash("8745943f66c4324de3dcba5e992c0a19ff9f273c37c5279436d549a2ae51f0f6")
+
 // updateTrie is responsible for persisting cached storage changes into the
 // object's storage trie. In case the storage trie is not yet loaded, this
 // function will load the trie automatically. If any issues arise during the
@@ -302,6 +304,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		storage map[common.Hash][]byte
 		origin  map[common.Hash][]byte
 	)
+	if target == s.addrHash {
+		fmt.Printf("target (data.Root=%x, origin.Root=%x)\n", s.data.Root, s.origin.Root)
+	}
 	tr, err := s.getTrie()
 	if err != nil {
 		s.db.setError(err)
@@ -319,6 +324,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 
 		var encoded []byte // rlp-encoded value to be used by the snapshot
 		if (value == common.Hash{}) {
+			if target == s.addrHash {
+				fmt.Printf("delete %x\n", key)
+			}
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
 				return nil, err
@@ -328,6 +336,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			trimmed := common.TrimLeftZeroes(value[:])
 			encoded, _ = rlp.EncodeToBytes(trimmed)
+			if target == s.addrHash {
+				fmt.Printf("update %x %x\n", key, trimmed)
+			}
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
 				s.db.setError(err)
 				return nil, err
