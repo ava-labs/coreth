@@ -188,7 +188,7 @@ func TestPostProcess(t *testing.T) {
 		blockNumber  uint64
 		storageRoot  common.Hash
 		storage      triedb.KVBackend
-		evitcedBatch = make(map[string][]byte)
+		evitcedBatch triedb.Batch
 		lastCommit   struct {
 			txs    uint64
 			number uint64
@@ -236,7 +236,7 @@ func TestPostProcess(t *testing.T) {
 		}
 		// t.Logf("evicting key: %x @ block %d, updatedAt: %d (%d blocks ago)", short(k), blockNumber, v.updatedAt, blockNumber-v.updatedAt)
 		if storage != nil {
-			evitcedBatch[k] = v.val
+			evitcedBatch = append(evitcedBatch, triedb.KV{Key: []byte(k), Value: v.val})
 		}
 		sum.writeCacheEvictTime += time.Since(now)
 	}
@@ -371,17 +371,13 @@ func TestPostProcess(t *testing.T) {
 			shouldCommitTxs := commitEachTxs > 0 && sum.txs+sum.atomicTxs-lastCommit.txs >= uint64(commitEachTxs)
 			if len(evitcedBatch) > 0 && (shouldCommitBlocks || shouldCommitTxs) {
 				if tapeVerbose {
-					for k, v := range evitcedBatch {
-						t.Logf("storing: %x -> %x", k, v)
+					for _, kv := range evitcedBatch {
+						t.Logf("storing: %x -> %x", kv.Key, kv.Value)
 					}
-				}
-				batch := make(triedb.Batch, 0, len(evitcedBatch))
-				for k, v := range evitcedBatch {
-					batch = append(batch, triedb.KV{Key: []byte(k), Value: v})
 				}
 				now := time.Now()
 				// Get state commitment from storage backend
-				storageRoot, err = storage.Update(batch)
+				storageRoot, err = storage.Update(evitcedBatch)
 				require.NoError(t, err)
 				clear(evitcedBatch)
 				updateTime := time.Since(now)
