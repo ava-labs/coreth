@@ -51,7 +51,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		if accBytes != nil {
 			var acc types.StateAccount
 			if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
-				return common.Hash{}, err
+				return common.Hash{}, fmt.Errorf("failed to decode account: %w", err)
 			}
 			root = acc.Root
 		}
@@ -96,7 +96,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		}
 		var acc types.StateAccount
 		if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, fmt.Errorf("failed to decode account (%x): %w", accBytes, err)
 		}
 		if acc.Root != tr.Hash() {
 			return common.Hash{}, fmt.Errorf("account trie root mismatch: %x != %x", acc.Root, tr.Hash())
