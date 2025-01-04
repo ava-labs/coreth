@@ -405,6 +405,7 @@ func TestPostProcess(t *testing.T) {
 									t.Fatalf("Failed to iterate over snapshot account: %v", err)
 								}
 								it.Release()
+							}
 						} else {
 							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
 						}
