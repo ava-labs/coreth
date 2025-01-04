@@ -631,7 +631,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
-	bytes, err := rlp.EncodeToBytes(obj.data)
+	bytes, err := rlp.EncodeToBytes(&obj.data)
 	if err != nil {
 		panic(fmt.Sprintf("failed to encode account: %v", err))
 	}
