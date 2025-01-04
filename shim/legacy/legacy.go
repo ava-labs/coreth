@@ -70,13 +70,12 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 			continue
 		}
 
-		root, err := getAccountRoot(accounts, accHash)
-		if err != nil {
-			return common.Hash{}, err
-		}
-
 		tr, ok := tries[accHash]
 		if !ok {
+			root, err := getAccountRoot(accounts, accHash)
+			if err != nil {
+				return common.Hash{}, err
+			}
 			tr, err = trie.New(trie.StorageTrieID(l.root, accHash, root), l.triedb)
 			if err != nil {
 				return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)

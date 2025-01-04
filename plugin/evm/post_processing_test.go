@@ -3,6 +3,7 @@ package evm
 import (
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -193,6 +194,7 @@ func TestPostProcess(t *testing.T) {
 			txs    uint64
 			number uint64
 		}
+		commitLock sync.Mutex
 	)
 	if sourceDbDir != "" {
 		sourceDb = openSourceDB(t)
@@ -202,6 +204,11 @@ func TestPostProcess(t *testing.T) {
 	if storageBackend != "none" {
 		dbs = openDBs(t)
 		defer dbs.Close()
+		CleanupOnInterrupt(func() {
+			commitLock.Lock()
+			dbs.Close()
+			commitLock.Unlock()
+		})
 
 		lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
 		t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
@@ -367,6 +374,8 @@ func TestPostProcess(t *testing.T) {
 		sum.atomicTxs += uint64(atomicTxs)
 
 		if storage != nil {
+			commitLock.Lock()
+
 			shouldCommitBlocks := commitEachBlocks > 0 && blockNumber-lastCommit.number >= uint64(commitEachBlocks)
 			shouldCommitTxs := commitEachTxs > 0 && sum.txs+sum.atomicTxs-lastCommit.txs >= uint64(commitEachTxs)
 			if len(evitcedBatch) > 0 && (shouldCommitBlocks || shouldCommitTxs) {
@@ -446,6 +455,8 @@ func TestPostProcess(t *testing.T) {
 					if storageBackend == "legacy" {
 						require.Equal(t, storageRoot, block.Root(), "Root mismatch")
 					}
+
+					commitLock.Unlock()
 				}
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
