@@ -104,7 +104,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 			return common.Hash{}, err
 		}
 		if root != tr.Hash() {
-			return common.Hash{}, fmt.Errorf("account trie root mismatch (%x != %x)", root, tr.Hash())
+			return common.Hash{}, fmt.Errorf("account %x trie root mismatch (%x != %x)", accHash, root, tr.Hash())
 		}
 	}
 
