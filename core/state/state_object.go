@@ -328,9 +328,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			trimmed := common.TrimLeftZeroes(value[:])
 			encoded, _ = rlp.EncodeToBytes(trimmed)
-			if target == s.addrHash {
-				fmt.Printf("update %x %x\n", key, trimmed)
-			}
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
 				s.db.setError(err)
 				return nil, err
