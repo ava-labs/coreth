@@ -635,7 +635,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to encode account: %v", err))
 	}
-	fmt.Printf("updateStateObject %x -> %x\n", addr, bytes)
+	fmt.Printf("updateStateObject %x -> %x\n", obj.addrHash, bytes)
 
 	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
@@ -669,7 +669,7 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	}
 	// Delete the account from the trie
 	addr := obj.Address()
-	fmt.Printf("deleteStateObject %x\n", addr)
+	fmt.Printf("deleteStateObject %x\n", obj.addrHash)
 	if err := s.trie.DeleteAccount(addr); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
