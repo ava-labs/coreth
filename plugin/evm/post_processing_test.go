@@ -395,6 +395,16 @@ func TestPostProcess(t *testing.T) {
 					for _, kv := range evitcedBatch {
 						if len(kv.Key) == 32 {
 							rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), kv.Value)
+							if len(kv.Value) == 0 {
+								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
+								for it.Next() {
+									k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
+									rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
+								}
+								if err := it.Error(); err != nil {
+									t.Fatalf("Failed to iterate over snapshot account: %v", err)
+								}
+								it.Release()
 						} else {
 							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
 						}
