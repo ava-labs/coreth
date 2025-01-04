@@ -29,6 +29,22 @@ func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bo
 	}
 }
 
+func getAccountRoot(tr *trie.Trie, accHash common.Hash) (common.Hash, error) {
+	root := types.EmptyRootHash
+	accBytes, err := tr.Get(accHash[:])
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if len(accBytes) > 0 {
+		var acc types.StateAccount
+		if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
+			return common.Hash{}, fmt.Errorf("failed to decode account: %w", err)
+		}
+		root = acc.Root
+	}
+	return root, nil
+}
+
 func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 	accounts, err := trie.New(trie.StateTrieID(l.root), l.triedb)
 	if err != nil {
@@ -43,18 +59,11 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 			continue
 		}
 		accHash := common.BytesToHash(kv.Key[:32])
-		accBytes, err := accounts.Get(kv.Key[:32])
+		root, err := getAccountRoot(accounts, accHash)
 		if err != nil {
 			return common.Hash{}, err
 		}
-		root := types.EmptyRootHash
-		if accBytes != nil {
-			var acc types.StateAccount
-			if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
-				return common.Hash{}, fmt.Errorf("failed to decode account: %w", err)
-			}
-			root = acc.Root
-		}
+
 		tr, ok := tries[accHash]
 		if !ok {
 			tr, err = trie.New(trie.StorageTrieID(l.root, accHash, root), l.triedb)
@@ -90,16 +99,12 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 
 	// Verify account trie updates match the storage trie updates
 	for accHash, tr := range tries {
-		accBytes, err := accounts.Get(accHash[:])
+		root, err := getAccountRoot(accounts, accHash)
 		if err != nil {
 			return common.Hash{}, err
 		}
-		var acc types.StateAccount
-		if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
-			return common.Hash{}, fmt.Errorf("failed to decode account (%x): %w", accBytes, err)
-		}
-		if acc.Root != tr.Hash() {
-			return common.Hash{}, fmt.Errorf("account trie root mismatch: %x != %x", acc.Root, tr.Hash())
+		if root != tr.Hash() {
+			return common.Hash{}, fmt.Errorf("account trie root mismatch (%x != %x)", root, tr.Hash())
 		}
 	}
 
