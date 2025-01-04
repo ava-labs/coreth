@@ -20,6 +20,7 @@ import (
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/histogram"
+	"golang.org/x/crypto/sha3"
 )
 
 type totals struct {
@@ -310,35 +311,15 @@ func TestPostProcess(t *testing.T) {
 		accountUpdates, storageUpdates := 0, 0
 		accountDeletes, storageDeletes := 0, 0
 
+		// 1. Read account writes from the tape as they come first
+		accountWritesBatch := make([]triedb.KV, accountWrites)
 		for j := 0; j < int(accountWrites); j++ {
 			k, v, err := readKV(r, 32)
 			require.NoError(t, err)
-			if prev, ok := tapeResult.accountReads[string(k)]; ok {
-				if len(prev) > 0 && len(v) == 0 {
-					accountDeletes++
-				} else if len(prev) > 0 || (len(prev) == 0 && len(v) == 0) {
-					accountUpdates++
-				}
-			} else if tapeVerbose {
-				t.Logf("account write without read: %x -> %x", k, v)
-			}
-			got, found := writeCache.Get(string(k))
-			if found {
-				hst.Update(float64(blockNumber - got.updatedAt))
-				hstWithReset.Update(float64(blockNumber - got.updatedAt))
-			} else {
-				hst.Update(inf)
-				hstWithReset.Update(inf)
-			}
-			writeCache.Add(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
-			if found {
-				sum.accountWriteHits++
-			}
-
-			if tapeVerbose {
-				t.Logf("account write: %x -> %x", k, v)
-			}
+			accountWritesBatch[j] = triedb.KV{Key: k, Value: v}
 		}
+
+		// 2. Process storage writes
 		for j := 0; j < int(storageWrites); j++ {
 			k, v, err := readKV(r, 64)
 			require.NoError(t, err)
@@ -366,6 +347,36 @@ func TestPostProcess(t *testing.T) {
 
 			if tapeVerbose {
 				t.Logf("storage write: %x -> %x", k, v)
+			}
+		}
+
+		// 3. Process account writes
+		for j := 0; j < int(accountWrites); j++ {
+			k, v := accountWritesBatch[j].Key, accountWritesBatch[j].Value
+			if prev, ok := tapeResult.accountReads[string(k)]; ok {
+				if len(prev) > 0 && len(v) == 0 {
+					accountDeletes++
+				} else if len(prev) > 0 || (len(prev) == 0 && len(v) == 0) {
+					accountUpdates++
+				}
+			} else if tapeVerbose {
+				t.Logf("account write without read: %x -> %x", k, v)
+			}
+			got, found := writeCache.Get(string(k))
+			if found {
+				hst.Update(float64(blockNumber - got.updatedAt))
+				hstWithReset.Update(float64(blockNumber - got.updatedAt))
+			} else {
+				hst.Update(inf)
+				hstWithReset.Update(inf)
+			}
+			writeCache.Add(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
+			if found {
+				sum.accountWriteHits++
+			}
+
+			if tapeVerbose {
+				t.Logf("account write: %x -> %x", k, v)
 			}
 		}
 
@@ -604,4 +615,10 @@ func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k
 		}
 	}
 	return txCount
+}
+
+func TestXxx(t *testing.T) {
+	h := sha3.NewLegacyKeccak256()
+	h.Write(common.Hex2Bytes("ac7bbff258e5ff67efcbac43331033010676e22cbf7a9515a31e4e2b661b9b96"))
+	fmt.Printf("%x\n", h.Sum(nil))
 }
