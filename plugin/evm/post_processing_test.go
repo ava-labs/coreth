@@ -367,36 +367,6 @@ func TestPostProcess(t *testing.T) {
 			if tapeVerbose {
 				t.Logf("storage write: %x -> %x", k, v)
 			}
-
-			// 3. Now we can pr
-			for _, kv := range accountWritesTape {
-				k, v := kv.Key, kv.Value
-				if prev, ok := tapeResult.accountReads[string(k)]; ok {
-					if len(prev) > 0 && len(v) == 0 {
-						accountDeletes++
-					} else if len(prev) > 0 || (len(prev) == 0 && len(v) == 0) {
-						accountUpdates++
-					}
-				} else if tapeVerbose {
-					t.Logf("account write without read: %x -> %x", k, v)
-				}
-				got, found := writeCache.Get(string(k))
-				if found {
-					hst.Update(float64(blockNumber - got.updatedAt))
-					hstWithReset.Update(float64(blockNumber - got.updatedAt))
-				} else {
-					hst.Update(inf)
-					hstWithReset.Update(inf)
-				}
-				writeCache.Add(string(k), withUpdatedAt{val: v, updatedAt: blockNumber})
-				if found {
-					sum.accountWriteHits++
-				}
-
-				if tapeVerbose {
-					t.Logf("account write: %x -> %x", k, v)
-				}
-			}
 		}
 
 		sum.blocks++
