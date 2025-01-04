@@ -379,7 +379,7 @@ func TestPostProcess(t *testing.T) {
 				// Get state commitment from storage backend
 				storageRoot, err = storage.Update(evitcedBatch)
 				require.NoError(t, err)
-				clear(evitcedBatch)
+				evitcedBatch = evitcedBatch[:0]
 				updateTime := time.Since(now)
 
 				// Request storage backend to persist the state
