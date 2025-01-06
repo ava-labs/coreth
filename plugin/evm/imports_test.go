@@ -1,0 +1,64 @@
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
+package evm
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"golang.org/x/tools/go/packages"
+)
+
+func getDependencies(packageName string) (map[string]struct{}, error) {
+	// Configure the load mode to include dependencies
+	cfg := &packages.Config{Mode: packages.NeedDeps | packages.NeedImports | packages.NeedName | packages.NeedModule}
+	pkgs, err := packages.Load(cfg, packageName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load package %s: %v", packageName, err)
+	}
+
+	if len(pkgs) == 0 || pkgs[0].Errors != nil {
+		return nil, fmt.Errorf("failed to load package %s", packageName)
+	}
+
+	deps := make(map[string]struct{})
+	var collectDeps func(pkg *packages.Package)
+	collectDeps = func(pkg *packages.Package) {
+		if _, ok := deps[pkg.PkgPath]; ok {
+			return // Avoid re-processing the same dependency
+		}
+		deps[pkg.PkgPath] = struct{}{}
+		for _, dep := range pkg.Imports {
+			collectDeps(dep)
+		}
+	}
+
+	// Start collecting dependencies
+	collectDeps(pkgs[0])
+	return deps, nil
+}
+
+func TestMustNotImport(t *testing.T) {
+	repo := "github.com/ava-labs/coreth"
+	withRepo := func(pkg string) string {
+		return fmt.Sprintf("%s/%s", repo, pkg)
+	}
+	mustNotImport := map[string][]string{
+		"plugin/evm/atomic": {"core", "core/vm"},
+		"plugin/evm/client": {"core", "core/vm"},
+		"plugin/evm/config": {"core", "core/vm"},
+	}
+
+	for packageName, forbiddenImports := range mustNotImport {
+		imports, err := getDependencies(withRepo(packageName))
+		require.NoError(t, err)
+
+		for _, forbiddenImport := range forbiddenImports {
+			fullForbiddenImport := withRepo(forbiddenImport)
+			_, found := imports[fullForbiddenImport]
+			require.False(t, found, "package %s must not import %s, check output of go list -f '{{ .Deps }}' \"%s\" ", packageName, fullForbiddenImport, withRepo(packageName))
+		}
+	}
+}
