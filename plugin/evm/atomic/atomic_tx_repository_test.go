@@ -182,7 +182,7 @@ func verifyOperations(t testing.TB, atomicTrie AtomicTrie, codec codec.Manager, 
 
 func TestAtomicRepositoryReadWriteSingleTx(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 	repo, err := NewAtomicTxRepository(db, codec, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +195,7 @@ func TestAtomicRepositoryReadWriteSingleTx(t *testing.T) {
 
 func TestAtomicRepositoryReadWriteMultipleTxs(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 	repo, err := NewAtomicTxRepository(db, codec, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +208,7 @@ func TestAtomicRepositoryReadWriteMultipleTxs(t *testing.T) {
 
 func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*Tx)
@@ -233,7 +233,7 @@ func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 
 func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*Tx)
@@ -258,7 +258,7 @@ func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 
 func benchAtomicRepositoryIndex10_000(b *testing.B, maxHeight uint64, txsPerHeight int) {
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*Tx)

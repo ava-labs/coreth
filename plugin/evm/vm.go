@@ -620,7 +620,8 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	vm.StateSyncServer = vmsync.NewStateSyncServer(vm.blockChain, atomic.NewAtomicProvider(vm.blockChain, vm.atomicTrie), vm.config.StateSyncCommitInterval)
+	atomicProvider := atomic.NewAtomicProvider(vm.blockChain, vm.atomicTrie)
+	vm.StateSyncServer = vmsync.NewStateSyncServer(vm.blockChain, atomicProvider, vm.config.StateSyncCommitInterval)
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
@@ -1939,6 +1940,6 @@ func (vm *VM) newExportTx(
 	return tx, nil
 }
 
-func (vm *VM) PutLastAcceptedID(ID []byte) error {
-	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID)
+func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
 }

@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 package atomic
 
@@ -12,23 +12,25 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type atomicSyncProvider struct {
+var _ sync.SummaryProvider = &AtomicSyncProvider{}
+
+type AtomicSyncProvider struct {
 	chain      *core.BlockChain
 	atomicTrie AtomicTrie
 }
 
-func NewAtomicProvider(chain *core.BlockChain, atomicTrie AtomicTrie) sync.SummaryProvider {
-	return &atomicSyncProvider{chain: chain, atomicTrie: atomicTrie}
+func NewAtomicProvider(chain *core.BlockChain, atomicTrie AtomicTrie) *AtomicSyncProvider {
+	return &AtomicSyncProvider{chain: chain, atomicTrie: atomicTrie}
 }
 
-// StateSummaryAtHeight returns the SyncSummary at [height] if valid and available.
-func (a *atomicSyncProvider) StateSummaryAtHeight(height uint64) (block.StateSummary, error) {
+// StateSummaryAtHeight returns the block state summary  at [height] if valid and available.
+func (a *AtomicSyncProvider) StateSummaryAtHeight(height uint64) (block.StateSummary, error) {
 	atomicRoot, err := a.atomicTrie.Root(height)
 	if err != nil {
-		return nil, fmt.Errorf("error getting atomic trie root for height (%d): %w", height, err)
+		return nil, fmt.Errorf("failed to retrieve atomic trie root for height (%d): %w", height, err)
 	}
 
-	if (atomicRoot == common.Hash{}) {
+	if atomicRoot == (common.Hash{}) {
 		return nil, fmt.Errorf("atomic trie root not found for height (%d)", height)
 	}
 

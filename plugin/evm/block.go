@@ -158,7 +158,7 @@ func (b *Block) Accept(context.Context) error {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
 	}
 
-	if err := vm.PutLastAcceptedID(b.id[:]); err != nil {
+	if err := vm.PutLastAcceptedID(b.id); err != nil {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
