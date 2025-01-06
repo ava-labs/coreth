@@ -1275,6 +1275,9 @@ func (vm *VM) setAppRequestHandlers() error {
 }
 
 func (vm *VM) RegisterLeafRequestHandler(nodeType message.NodeType, metricName string, trieDB *triedb.Database, trieKeyLen int, useSnapshot bool) error {
+	if vm.leafRequestTypeConfigs == nil {
+		vm.leafRequestTypeConfigs = make(map[message.NodeType]LeafRequestTypeConfig)
+	}
 	if _, ok := vm.leafRequestTypeConfigs[nodeType]; ok {
 		return fmt.Errorf("leaf request handler for node type %d already registered", nodeType)
 	}

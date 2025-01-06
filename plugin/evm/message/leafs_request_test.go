@@ -12,8 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const nodeType = NodeType(0)
-
 // TestMarshalLeafsRequest asserts that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalLeafsRequest(t *testing.T) {
@@ -35,7 +33,7 @@ func TestMarshalLeafsRequest(t *testing.T) {
 		Start:    startBytes,
 		End:      endBytes,
 		Limit:    1024,
-		NodeType: nodeType,
+		NodeType: NodeType(1),
 	}
 
 	base64LeafsRequest := "AAAAAAAAAAAAAAAAAAAAAABpbSBST09UaW5nIGZvciB5YQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIFL9/AchgmVPFj9fD5piHXKVZsdNEAN8TXu7BAfR4sZJAAAAIIGFWthoHQ2G0ekeABZ5OctmlNLEIqzSCKAHKTlIf2mZBAAB"
