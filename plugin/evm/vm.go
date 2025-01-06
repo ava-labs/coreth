@@ -41,7 +41,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -211,7 +210,7 @@ type VM struct {
 	// with an efficient caching layer.
 	*chain.State
 
-	config config.Config
+	config Config
 
 	chainID     *big.Int
 	networkID   uint64
