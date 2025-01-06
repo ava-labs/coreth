@@ -41,13 +41,16 @@ func TestSnowContext() *snow.Context {
 	_ = aliaser.Alias(testXChainID, "X")
 	_ = aliaser.Alias(testXChainID, testXChainID.String())
 
+	m := atomic.NewMemory(memdb.New())
+	sm := m.NewSharedMemory(testCChainID)
+
 	ctx := &snow.Context{
 		NetworkID:      networkID,
 		SubnetID:       ids.Empty,
 		ChainID:        chainID,
 		AVAXAssetID:    TestAvaxAssetID,
 		NodeID:         ids.GenerateTestNodeID(),
-		SharedMemory:   TestSharedMemory(),
+		SharedMemory:   sm,
 		XChainID:       testXChainID,
 		CChainID:       testCChainID,
 		PublicKey:      pk,
@@ -85,9 +88,4 @@ func NewTestValidatorState() *validatorstest.State {
 			return map[ids.ID]*validators.GetCurrentValidatorOutput{}, 0, nil
 		},
 	}
-}
-
-func TestSharedMemory() atomic.SharedMemory {
-	m := atomic.NewMemory(memdb.New())
-	return m.NewSharedMemory(testCChainID)
 }

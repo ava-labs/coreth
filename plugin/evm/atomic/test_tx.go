@@ -20,16 +20,16 @@ import (
 	"github.com/ava-labs/coreth/params"
 )
 
-var TestTxCodec codec.Manager
+var testTxCodec codec.Manager
 
 func init() {
-	TestTxCodec = codec.NewDefaultManager()
+	testTxCodec = codec.NewDefaultManager()
 	c := linearcodec.NewDefault()
 
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		TestTxCodec.RegisterCodec(atomic.CodecVersion, c),
+		testTxCodec.RegisterCodec(atomic.CodecVersion, c),
 	)
 
 	if errs.Errored() {
