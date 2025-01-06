@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 )
 
-var _ Syncable = &BlockSyncSummary{}
+var _ Syncable = (*BlockSyncSummary)(nil)
 
 type Syncable interface {
 	block.StateSummary
@@ -43,14 +43,14 @@ type BlockSyncSummary struct {
 
 type BlockSyncSummaryParser struct{}
 
-func NewBlockSyncSummaryParser() SyncableParser {
+func NewBlockSyncSummaryParser() *BlockSyncSummaryParser {
 	return &BlockSyncSummaryParser{}
 }
 
 func (b *BlockSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl AcceptImplFn) (Syncable, error) {
 	summary := BlockSyncSummary{}
 	if codecVersion, err := Codec.Unmarshal(summaryBytes, &summary); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
 	} else if codecVersion != Version {
 		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (%d != %d)", codecVersion, Version)
 	}
@@ -58,14 +58,14 @@ func (b *BlockSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl 
 	summary.bytes = summaryBytes
 	summaryID, err := ids.ToID(crypto.Keccak256(summaryBytes))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute summary ID: %w", err)
 	}
 	summary.summaryID = summaryID
 	summary.acceptImpl = acceptImpl
 	return &summary, nil
 }
 
-func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash) (Syncable, error) {
+func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash) (*BlockSyncSummary, error) {
 	summary := BlockSyncSummary{
 		BlockNumber: blockNumber,
 		BlockHash:   blockHash,
@@ -73,13 +73,13 @@ func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot co
 	}
 	bytes, err := Codec.Marshal(Version, &summary)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal syncable summary: %w", err)
 	}
 
 	summary.bytes = bytes
 	summaryID, err := ids.ToID(crypto.Keccak256(bytes))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute summary ID: %w", err)
 	}
 	summary.summaryID = summaryID
 
@@ -111,7 +111,7 @@ func (s *BlockSyncSummary) ID() ids.ID {
 }
 
 func (s *BlockSyncSummary) String() string {
-	return fmt.Sprintf("SyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s)", s.BlockHash, s.BlockNumber, s.BlockRoot)
+	return fmt.Sprintf("BlockSyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s)", s.BlockHash, s.BlockNumber, s.BlockRoot)
 }
 
 func (s *BlockSyncSummary) Accept(context.Context) (block.StateSyncMode, error) {
