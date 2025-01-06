@@ -17,7 +17,7 @@ var _ Request = LeafsRequest{}
 
 // NodeType outlines the trie that a leaf node belongs to
 // handlers.LeafsRequestHandler uses this information to determine
-// which of the two tries (state/atomic) to fetch the information from
+// which trie type to fetch the information from
 type NodeType uint8
 
 const (
