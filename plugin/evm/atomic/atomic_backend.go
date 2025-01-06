@@ -24,7 +24,6 @@ import (
 var _ AtomicBackend = &atomicBackend{}
 
 var (
-	// Prefixes for atomic trie
 	atomicTrieDBPrefix     = []byte("atomicTrieDB")
 	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
 )
