@@ -1479,11 +1479,8 @@ type wrappedBackend struct {
 }
 
 func (w *wrappedBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
-	// Check if the block is a bonus block
-	if hash, ok := w.registeredBonusBlocks[blockHeight]; ok {
-		return blockHash.Cmp(hash) == 0
-	}
-	return false
+	hash, ok := w.registeredBonusBlocks[blockHeight]
+	return ok && blockHash.Cmp(hash) == 0
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
@@ -1545,7 +1542,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	// Make [blk] a bonus block.
 	wrappedBackend := &wrappedBackend{
 		AtomicBackend:         vm.atomicBackend,
-		registeredBonusBlocks: map[uint64]common.Hash{1: common.Hash(blk.ID())},
+		registeredBonusBlocks: map[uint64]common.Hash{blk.Height(): common.Hash(blk.ID())},
 	}
 	vm.atomicBackend = wrappedBackend
 

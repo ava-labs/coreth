@@ -20,7 +20,7 @@ import (
 func TestIteratorCanIterate(t *testing.T) {
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	assert.NoError(t, err)
 
@@ -32,7 +32,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
-	atomicBackend, err := NewAtomicBackend(db, utils.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie1 := atomicBackend.AtomicTrie()
 
@@ -45,7 +45,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// iterate on a new atomic trie to make sure there is no resident state affecting the data and the
 	// iterator
-	atomicBackend2, err := NewAtomicBackend(db, utils.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend2, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie2 := atomicBackend2.AtomicTrie()
 	lastCommittedHash2, lastCommittedHeight2 := atomicTrie2.LastCommitted()
@@ -60,7 +60,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	require := require.New(t)
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
-	codec := TestTxCodec
+	codec := testTxCodec
 	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
 	require.NoError(err)
 
@@ -73,7 +73,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
 	commitInterval := uint64(100)
-	atomicBackend, err := NewAtomicBackend(db, utils.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
 	require.NoError(err)
 	atomicTrie := atomicBackend.AtomicTrie()
 

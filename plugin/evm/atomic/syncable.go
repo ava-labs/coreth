@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomic
@@ -15,7 +15,10 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 )
 
-var _ message.Syncable = &AtomicBlockSyncSummary{}
+var (
+	_ message.Syncable       = (*AtomicBlockSyncSummary)(nil)
+	_ message.SyncableParser = (*AtomicSyncSummaryParser)(nil)
+)
 
 // AtomicBlockSyncSummary provides the information necessary to sync a node starting
 // at the given block.
@@ -34,31 +37,31 @@ func init() {
 	message.SyncSummaryType = &AtomicBlockSyncSummary{}
 }
 
-type atomicSyncSummaryParser struct{}
+type AtomicSyncSummaryParser struct{}
 
-func NewAtomicSyncSummaryParser() message.SyncableParser {
-	return &atomicSyncSummaryParser{}
+func NewAtomicSyncSummaryParser() *AtomicSyncSummaryParser {
+	return &AtomicSyncSummaryParser{}
 }
 
-func (b *atomicSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
+func (a *AtomicSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
 	summary := AtomicBlockSyncSummary{}
 	if codecVersion, err := Codec.Unmarshal(summaryBytes, &summary); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
 	} else if codecVersion != message.Version {
-		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (%d != %d)", codecVersion, message.Version)
+		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (got %d, expected %d)", codecVersion, message.Version)
 	}
 
 	summary.bytes = summaryBytes
 	summaryID, err := ids.ToID(crypto.Keccak256(summaryBytes))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute summary ID: %w", err)
 	}
 	summary.summaryID = summaryID
 	summary.acceptImpl = acceptImpl
 	return &summary, nil
 }
 
-func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (message.Syncable, error) {
+func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (*AtomicBlockSyncSummary, error) {
 	summary := AtomicBlockSyncSummary{
 		BlockNumber: blockNumber,
 		BlockHash:   blockHash,
@@ -67,13 +70,13 @@ func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot c
 	}
 	bytes, err := Codec.Marshal(message.Version, &summary)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal syncable summary: %w", err)
 	}
 
 	summary.bytes = bytes
 	summaryID, err := ids.ToID(crypto.Keccak256(bytes))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute summary ID: %w", err)
 	}
 	summary.summaryID = summaryID
 
@@ -105,7 +108,7 @@ func (a *AtomicBlockSyncSummary) ID() ids.ID {
 }
 
 func (a *AtomicBlockSyncSummary) String() string {
-	return fmt.Sprintf("SyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", a.BlockHash, a.BlockNumber, a.BlockRoot, a.AtomicRoot)
+	return fmt.Sprintf("AtomicBlockSyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", a.BlockHash, a.BlockNumber, a.BlockRoot, a.AtomicRoot)
 }
 
 func (a *AtomicBlockSyncSummary) Accept(context.Context) (block.StateSyncMode, error) {
