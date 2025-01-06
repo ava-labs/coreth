@@ -84,6 +84,11 @@ jobs:
         run: echo "TIMEOUT=1200s" >> "$GITHUB_ENV"
       - run: go mod download
         shell: bash
+      - name: go mod tidy
+        shell: bash
+        run: |
+          go mod tidy
+          git diff --exit-code
       - run: ./scripts/build.sh evm
         shell: bash
       - run: ./scripts/build_test.sh
