@@ -11,6 +11,8 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// getDependencies takes a fully qualified package name and returns a map of all
+// its recursive package imports (including itself) in the same format.
 func getDependencies(packageName string) (map[string]struct{}, error) {
 	// Configure the load mode to include dependencies
 	cfg := &packages.Config{Mode: packages.NeedDeps | packages.NeedImports | packages.NeedName | packages.NeedModule}
