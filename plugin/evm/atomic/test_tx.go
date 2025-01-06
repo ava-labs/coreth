@@ -11,7 +11,6 @@ import (
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/utils"
 
-	"github.com/ava-labs/avalanchego/chains/atomic"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -19,6 +18,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/params"
 )
+
+const testCodecVersion = 0
 
 var testTxCodec codec.Manager
 
@@ -29,7 +30,7 @@ func init() {
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		testTxCodec.RegisterCodec(atomic.CodecVersion, c),
+		testTxCodec.RegisterCodec(testCodecVersion, c),
 	)
 
 	if errs.Errored() {

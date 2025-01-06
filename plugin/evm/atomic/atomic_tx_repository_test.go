@@ -182,8 +182,7 @@ func verifyOperations(t testing.TB, atomicTrie AtomicTrie, codec codec.Manager, 
 
 func TestAtomicRepositoryReadWriteSingleTx(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := testTxCodec
-	repo, err := NewAtomicTxRepository(db, codec, 0)
+	repo, err := NewAtomicTxRepository(db, testTxCodec, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,8 +194,7 @@ func TestAtomicRepositoryReadWriteSingleTx(t *testing.T) {
 
 func TestAtomicRepositoryReadWriteMultipleTxs(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := testTxCodec
-	repo, err := NewAtomicTxRepository(db, codec, 0)
+	repo, err := NewAtomicTxRepository(db, testTxCodec, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,18 +206,17 @@ func TestAtomicRepositoryReadWriteMultipleTxs(t *testing.T) {
 
 func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := testTxCodec
 
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*Tx)
-	addTxs(t, codec, acceptedAtomicTxDB, 1, 100, 1, txMap, nil)
+	addTxs(t, testTxCodec, acceptedAtomicTxDB, 1, 100, 1, txMap, nil)
 	if err := db.Commit(); err != nil {
 		t.Fatal(err)
 	}
 
 	// Ensure the atomic repository can correctly migrate the transactions
 	// from the old accepted atomic tx DB to add the height index.
-	repo, err := NewAtomicTxRepository(db, codec, 100)
+	repo, err := NewAtomicTxRepository(db, testTxCodec, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,19 +230,18 @@ func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 
 func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 	db := versiondb.New(memdb.New())
-	codec := testTxCodec
 
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*Tx)
-	addTxs(t, codec, acceptedAtomicTxDB, 1, 100, 1, txMap, nil)
-	addTxs(t, codec, acceptedAtomicTxDB, 100, 200, 10, txMap, nil)
+	addTxs(t, testTxCodec, acceptedAtomicTxDB, 1, 100, 1, txMap, nil)
+	addTxs(t, testTxCodec, acceptedAtomicTxDB, 100, 200, 10, txMap, nil)
 	if err := db.Commit(); err != nil {
 		t.Fatal(err)
 	}
 
 	// Ensure the atomic repository can correctly migrate the transactions
 	// from the old accepted atomic tx DB to add the height index.
-	repo, err := NewAtomicTxRepository(db, codec, 200)
+	repo, err := NewAtomicTxRepository(db, testTxCodec, 200)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,16 +254,15 @@ func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 
 func benchAtomicRepositoryIndex10_000(b *testing.B, maxHeight uint64, txsPerHeight int) {
 	db := versiondb.New(memdb.New())
-	codec := testTxCodec
 
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*Tx)
 
-	addTxs(b, codec, acceptedAtomicTxDB, 0, maxHeight, txsPerHeight, txMap, nil)
+	addTxs(b, testTxCodec, acceptedAtomicTxDB, 0, maxHeight, txsPerHeight, txMap, nil)
 	if err := db.Commit(); err != nil {
 		b.Fatal(err)
 	}
-	repo, err := NewAtomicTxRepository(db, codec, maxHeight)
+	repo, err := NewAtomicTxRepository(db, testTxCodec, maxHeight)
 	if err != nil {
 		b.Fatal(err)
 	}
