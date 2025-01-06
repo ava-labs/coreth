@@ -23,6 +23,7 @@ import (
 type MockSignatureGetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockSignatureGetterMockRecorder
+	isgomock struct{}
 }
 
 // MockSignatureGetterMockRecorder is the mock recorder for MockSignatureGetter.
@@ -61,6 +62,7 @@ func (mr *MockSignatureGetterMockRecorder) GetSignature(ctx, nodeID, unsignedWar
 type MockNetworkClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockNetworkClientMockRecorder
+	isgomock struct{}
 }
 
 // MockNetworkClientMockRecorder is the mock recorder for MockNetworkClient.
