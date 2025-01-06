@@ -1,33 +1,32 @@
 // (c) 2019-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atomic
 
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTxHeap(t *testing.T) {
 	var (
-		tx0 = &atomic.Tx{
-			UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		tx0 = &Tx{
+			UnsignedAtomicTx: &UnsignedImportTx{
 				NetworkID: 0,
 			},
 		}
 		tx0Bytes = []byte{0}
 
-		tx1 = &atomic.Tx{
-			UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		tx1 = &Tx{
+			UnsignedAtomicTx: &UnsignedImportTx{
 				NetworkID: 1,
 			},
 		}
 		tx1Bytes = []byte{1}
 
-		tx2 = &atomic.Tx{
-			UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		tx2 = &Tx{
+			UnsignedAtomicTx: &UnsignedImportTx{
 				NetworkID: 2,
 			},
 		}

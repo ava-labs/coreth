@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 
@@ -31,9 +32,7 @@ var (
 	_ block.WithVerifyContext = (*Block)(nil)
 )
 
-var (
-	errMissingUTXOs = errors.New("missing UTXOs")
-)
+var errMissingUTXOs = errors.New("missing UTXOs")
 
 // readMainnetBonusBlocks returns maps of bonus block numbers to block IDs.
 // Note bonus blocks are indexed in the atomic trie.
@@ -114,13 +113,13 @@ type Block struct {
 	id        ids.ID
 	ethBlock  *types.Block
 	vm        *VM
-	atomicTxs []*Tx
+	atomicTxs []*atomic.Tx
 }
 
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
 func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(ethBlock.Time())
-	atomicTxs, err := ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, vm.codec)
+	atomicTxs, err := atomic.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +134,8 @@ func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 
 // ID implements the snowman.Block interface
 func (b *Block) ID() ids.ID { return b.id }
+
+func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
 // Accept implements the snowman.Block interface
 func (b *Block) Accept(context.Context) error {
@@ -224,8 +225,9 @@ func (b *Block) handlePrecompileAccept(rules params.Rules) error {
 func (b *Block) Reject(context.Context) error {
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
+		// Re-issue the transaction in the mempool, continue even if it fails
 		b.vm.mempool.RemoveTx(tx)
-		if err := b.vm.mempool.AddTx(tx); err != nil {
+		if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
