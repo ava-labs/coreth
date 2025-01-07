@@ -981,7 +981,7 @@ func (vm *VM) newExportTx(
 	}
 
 	// Create the transaction
-	tx, err := atomic.NewExportTx(
+	return atomic.NewExportTx(
 		vm.ctx,            // Context
 		vm.currentRules(), // VM rules
 		state,
