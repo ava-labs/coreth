@@ -280,13 +280,18 @@ func openDBs(t *testing.T) dbs {
 		}
 	}
 
-	dbPrefix := ethDBPrefix
+	var chaindb ethdb.Database
 	if len(prefix) > 0 {
-		dbPrefix = prefix
+		chaindb = &prefixReader{
+			Database: rawdb.NewDatabase(Database{base}),
+			prefix:   prefix,
+		}
+	} else {
+		chaindb = rawdb.NewDatabase(Database{prefixdb.New(ethDBPrefix, base)})
 	}
 	return dbs{
 		metadata: prefixdb.New(reprocessMetadataPrefix, base),
-		chain:    rawdb.NewDatabase(Database{prefixdb.New(dbPrefix, base)}),
+		chain:    chaindb,
 		merkledb: prefixdb.New(merkledbPrefix, base),
 		base:     base,
 	}
