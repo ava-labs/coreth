@@ -4,7 +4,6 @@
 package atomic
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -21,15 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-// Syncer represents a step in state sync,
-// along with Start/Done methods to control
-// and monitor progress.
-// Error returns an error if any was encountered.
-type Syncer interface {
-	Start(ctx context.Context) error
-	Done() <-chan error
-}
 
 var _ AtomicBackend = &atomicBackend{}
 

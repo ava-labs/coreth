@@ -33,7 +33,7 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 			Amt: uint64(50000000),
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testKeys[0].PublicKey().Address()},
+				Addrs:     []ids.ShortID{testKeys[0].Address()},
 			},
 		},
 	}
@@ -48,7 +48,7 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testKeys[0].PublicKey().Address().Bytes(),
+			testKeys[0].Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
@@ -317,7 +317,7 @@ func TestImportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  0,
-						AssetID: utils.TestAvaxAssetID,
+						AssetID: ctx.AVAXAssetID,
 					},
 				}
 				return &tx
@@ -499,7 +499,7 @@ func TestNewImportTx(t *testing.T) {
 
 		expectedRemainingBalance := new(uint256.Int).Mul(
 			uint256.NewInt(importAmount-actualAVAXBurned), atomic.X2CRate)
-		addr := atomic.GetEthAddress(testKeys[0])
+		addr := testKeys[0].EthAddress()
 		if actualBalance := sdb.GetBalance(addr); actualBalance.Cmp(expectedRemainingBalance) != 0 {
 			t.Fatalf("address remaining balance %s equal %s not %s", addr.String(), actualBalance, expectedRemainingBalance)
 		}

@@ -27,7 +27,8 @@ func TestGossipAtomicTxMarshaller(t *testing.T) {
 
 	key0, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	require.NoError(want.Tx.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}}))
+	err = want.Tx.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}})
+	require.NoError(err)
 
 	bytes, err := marshaller.MarshalGossip(want)
 	require.NoError(err)
@@ -56,11 +57,10 @@ func TestAtomicMempoolIterate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		add            []*GossipAtomicTx
-		f              func(tx *GossipAtomicTx) bool
-		possibleValues []*GossipAtomicTx
-		expectedLen    int
+		name        string
+		add         []*GossipAtomicTx
+		f           func(tx *GossipAtomicTx) bool
+		expectedTxs []*GossipAtomicTx
 	}{
 		{
 			name: "func matches nothing",
@@ -68,7 +68,7 @@ func TestAtomicMempoolIterate(t *testing.T) {
 			f: func(*GossipAtomicTx) bool {
 				return false
 			},
-			possibleValues: nil,
+			expectedTxs: []*GossipAtomicTx{},
 		},
 		{
 			name: "func matches all",
@@ -76,8 +76,7 @@ func TestAtomicMempoolIterate(t *testing.T) {
 			f: func(*GossipAtomicTx) bool {
 				return true
 			},
-			possibleValues: txs,
-			expectedLen:    2,
+			expectedTxs: txs,
 		},
 		{
 			name: "func matches subset",
@@ -85,8 +84,7 @@ func TestAtomicMempoolIterate(t *testing.T) {
 			f: func(tx *GossipAtomicTx) bool {
 				return tx.Tx == txs[0].Tx
 			},
-			possibleValues: txs,
-			expectedLen:    1,
+			expectedTxs: []*GossipAtomicTx{txs[0]},
 		},
 	}
 
@@ -113,8 +111,7 @@ func TestAtomicMempoolIterate(t *testing.T) {
 
 			m.Iterate(f)
 
-			require.Len(matches, tt.expectedLen)
-			require.Subset(tt.possibleValues, matches)
+			require.ElementsMatch(tt.expectedTxs, matches)
 		})
 	}
 }

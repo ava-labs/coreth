@@ -20,7 +20,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -291,7 +290,7 @@ func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 func NewImportTx(
 	ctx *snow.Context,
 	rules params.Rules,
-	clk mockable.Clock,
+	time uint64,
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
 	baseFee *big.Int, // fee to use post-AP3
@@ -302,9 +301,8 @@ func NewImportTx(
 	signers := [][]*secp256k1.PrivateKey{}
 
 	importedAmount := make(map[ids.ID]uint64)
-	now := clk.Unix()
 	for _, utxo := range atomicUTXOs {
-		inputIntf, utxoSigners, err := kc.Spend(utxo.Out, now)
+		inputIntf, utxoSigners, err := kc.Spend(utxo.Out, time)
 		if err != nil {
 			continue
 		}
