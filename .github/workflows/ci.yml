@@ -87,6 +87,7 @@ jobs:
       - name: go mod tidy
         run: |
           go mod tidy
+          git diff --exit-code
       - name: Mocks are up to date
         shell: bash
         run: |
