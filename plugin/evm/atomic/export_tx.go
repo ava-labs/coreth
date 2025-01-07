@@ -180,7 +180,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 
 // SemanticVerify this transaction is valid.
 func (utx *UnsignedExportTx) SemanticVerify(
-	backend *Backend,
+	backend *VerifierBackend,
 	stx *Tx,
 	parent AtomicBlockContext,
 	baseFee *big.Int,

@@ -19,16 +19,18 @@ import (
 	"github.com/ava-labs/coreth/params"
 )
 
-var TestTxCodec codec.Manager
+const testCodecVersion = 0
+
+var testTxCodec codec.Manager
 
 func init() {
-	TestTxCodec = codec.NewDefaultManager()
+	testTxCodec = codec.NewDefaultManager()
 	c := linearcodec.NewDefault()
 
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		TestTxCodec.RegisterCodec(CodecVersion, c),
+		testTxCodec.RegisterCodec(testCodecVersion, c),
 	)
 
 	if errs.Errored() {
@@ -82,7 +84,7 @@ func (t *TestUnsignedTx) SignedBytes() []byte { return t.SignedBytesV }
 func (t *TestUnsignedTx) InputUTXOs() set.Set[ids.ID] { return t.InputUTXOsV }
 
 // SemanticVerify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) SemanticVerify(backend *Backend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
+func (t *TestUnsignedTx) SemanticVerify(backend *VerifierBackend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
 	return t.SemanticVerifyV
 }
 

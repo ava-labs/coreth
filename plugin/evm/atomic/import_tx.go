@@ -187,7 +187,7 @@ func (utx *UnsignedImportTx) Burned(assetID ids.ID) (uint64, error) {
 
 // SemanticVerify this transaction is valid.
 func (utx *UnsignedImportTx) SemanticVerify(
-	backend *Backend,
+	backend *VerifierBackend,
 	stx *Tx,
 	parent AtomicBlockContext,
 	baseFee *big.Int,
@@ -441,7 +441,7 @@ func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) 
 // or any of its ancestor blocks going back to the last accepted block in its ancestry. If [ancestor] is
 // accepted, then nil will be returned immediately.
 // If the ancestry of [ancestor] cannot be fetched, then [errRejectedParent] may be returned.
-func conflicts(backend *Backend, inputs set.Set[ids.ID], ancestor AtomicBlockContext) error {
+func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor AtomicBlockContext) error {
 	fetcher := backend.BlockFetcher
 	lastAcceptedBlock := fetcher.LastAcceptedBlockInternal()
 	lastAcceptedHeight := lastAcceptedBlock.Height()

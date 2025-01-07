@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package atomic
 
 import (
 	"bytes"
@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/coreth/sync/syncutils"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/triedb"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -56,7 +57,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	if err != nil {
 		t.Fatal("could not initialize atomix tx repository", err)
 	}
-	atomicBackend, err := NewAtomicBackend(clientDB, testSharedMemory(), nil, repo, 0, common.Hash{}, commitInterval)
+	atomicBackend, err := NewAtomicBackend(clientDB, utils.TestSnowContext().SharedMemory, nil, repo, 0, common.Hash{}, commitInterval)
 	if err != nil {
 		t.Fatal("could not initialize atomic backend", err)
 	}

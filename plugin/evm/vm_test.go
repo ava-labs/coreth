@@ -39,10 +39,8 @@ import (
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/cb58"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
@@ -56,7 +54,6 @@ import (
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
-	constantsEng "github.com/ava-labs/avalanchego/utils/constants"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -65,19 +62,15 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 
-	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
 )
 
 var (
 	testNetworkID    uint32 = 10
-	testCChainID            = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
-	testXChainID            = ids.ID{'t', 'e', 's', 't', 'x'}
 	nonExistentID           = ids.ID{'F'}
 	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
-	testAvaxAssetID  = ids.ID{1, 2, 3}
 	username         = "Johns"
 	password         = "CjasdjhiPeirbSenfeI13" // #nosec G101
 
@@ -198,41 +191,6 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 	return genesisBytes
 }
 
-func NewContext() *snow.Context {
-	ctx := utils.TestSnowContext()
-	ctx.NodeID = ids.GenerateTestNodeID()
-	ctx.NetworkID = testNetworkID
-	ctx.ChainID = testCChainID
-	ctx.AVAXAssetID = testAvaxAssetID
-	ctx.XChainID = testXChainID
-	ctx.SharedMemory = testSharedMemory()
-	aliaser := ctx.BCLookup.(ids.Aliaser)
-	_ = aliaser.Alias(testCChainID, "C")
-	_ = aliaser.Alias(testCChainID, testCChainID.String())
-	_ = aliaser.Alias(testXChainID, "X")
-	_ = aliaser.Alias(testXChainID, testXChainID.String())
-	ctx.ValidatorState = &validatorstest.State{
-		GetSubnetIDF: func(_ context.Context, chainID ids.ID) (ids.ID, error) {
-			subnetID, ok := map[ids.ID]ids.ID{
-				constantsEng.PlatformChainID: constantsEng.PrimaryNetworkID,
-				testXChainID:                 constantsEng.PrimaryNetworkID,
-				testCChainID:                 constantsEng.PrimaryNetworkID,
-			}[chainID]
-			if !ok {
-				return ids.Empty, errors.New("unknown chain")
-			}
-			return subnetID, nil
-		},
-	}
-	blsSecretKey, err := bls.NewSigner()
-	if err != nil {
-		panic(err)
-	}
-	ctx.WarpSigner = avalancheWarp.NewSigner(blsSecretKey, ctx.NetworkID, ctx.ChainID)
-	ctx.PublicKey = blsSecretKey.PublicKey()
-	return ctx
-}
-
 // setupGenesis sets up the genesis
 // If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
 func setupGenesis(
@@ -248,7 +206,7 @@ func setupGenesis(
 		genesisJSON = genesisJSONLatest
 	}
 	genesisBytes := BuildGenesisTest(t, genesisJSON)
-	ctx := NewContext()
+	ctx := utils.TestSnowContext()
 
 	baseDB := memdb.New()
 
@@ -807,7 +765,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 	restartedVM := &VM{}
 	if err := restartedVM.Initialize(
 		context.Background(),
-		NewContext(),
+		utils.TestSnowContext(),
 		dbManager,
 		[]byte(genesisJSONApricotPhase2),
 		[]byte(""),
@@ -1509,6 +1467,16 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	}
 }
 
+type wrappedBackend struct {
+	atomic.AtomicBackend
+	registeredBonusBlocks map[uint64]common.Hash
+}
+
+func (w *wrappedBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
+	hash, ok := w.registeredBonusBlocks[blockHeight]
+	return ok && blockHash.Cmp(hash) == 0
+}
+
 func TestBonusBlocksTxs(t *testing.T) {
 	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
@@ -1566,7 +1534,11 @@ func TestBonusBlocksTxs(t *testing.T) {
 	}
 
 	// Make [blk] a bonus block.
-	vm.atomicBackend.(*atomicBackend).bonusBlocks = map[uint64]ids.ID{blk.Height(): blk.ID()}
+	wrappedBackend := &wrappedBackend{
+		AtomicBackend:         vm.atomicBackend,
+		registeredBonusBlocks: map[uint64]common.Hash{blk.Height(): common.Hash(blk.ID())},
+	}
+	vm.atomicBackend = wrappedBackend
 
 	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
 	if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}); err != nil {

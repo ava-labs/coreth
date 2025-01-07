@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 
@@ -66,7 +67,7 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 }
 
 func TestImportTxVerify(t *testing.T) {
-	ctx := NewContext()
+	ctx := utils.TestSnowContext()
 
 	var importAmount uint64 = 10000000
 	txID := ids.GenerateTestID()
@@ -316,7 +317,7 @@ func TestImportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  0,
-						AssetID: testAvaxAssetID,
+						AssetID: ctx.AVAXAssetID,
 					},
 				}
 				return &tx

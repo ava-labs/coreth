@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -155,7 +156,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount / 2,
-					AssetID: testAvaxAssetID,
+					AssetID: utils.TestAvaxAssetID,
 					Nonce:   0,
 				},
 			},
@@ -172,7 +173,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: utils.TestAvaxAssetID,
 					Nonce:   0,
 				},
 			},
@@ -189,7 +190,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount + 1,
-					AssetID: testAvaxAssetID,
+					AssetID: utils.TestAvaxAssetID,
 					Nonce:   0,
 				},
 			},
@@ -263,7 +264,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: utils.TestAvaxAssetID,
 					Nonce:   0,
 				},
 			},
@@ -286,7 +287,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: utils.TestAvaxAssetID,
 					Nonce:   1,
 				},
 			},
@@ -309,7 +310,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: utils.TestAvaxAssetID,
 					Nonce:   1,
 				},
 			},
@@ -912,7 +913,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		backend := &atomic.Backend{
+		backend := &atomic.VerifierBackend{
 			Ctx:          vm.ctx,
 			Fx:           &vm.fx,
 			Rules:        test.rules,
@@ -1087,27 +1088,28 @@ func TestExportTxAccept(t *testing.T) {
 
 func TestExportTxVerify(t *testing.T) {
 	var exportAmount uint64 = 10000000
+	ctx := utils.TestSnowContext()
 	exportTx := &atomic.UnsignedExportTx{
-		NetworkID:        testNetworkID,
-		BlockchainID:     testCChainID,
-		DestinationChain: testXChainID,
+		NetworkID:        ctx.NetworkID,
+		BlockchainID:     ctx.CChainID,
+		DestinationChain: ctx.XChainID,
 		Ins: []atomic.EVMInput{
 			{
 				Address: testEthAddrs[0],
 				Amount:  exportAmount,
-				AssetID: testAvaxAssetID,
+				AssetID: ctx.AVAXAssetID,
 				Nonce:   0,
 			},
 			{
 				Address: testEthAddrs[2],
 				Amount:  exportAmount,
-				AssetID: testAvaxAssetID,
+				AssetID: ctx.AVAXAssetID,
 				Nonce:   0,
 			},
 		},
 		ExportedOutputs: []*avax.TransferableOutput{
 			{
-				Asset: avax.Asset{ID: testAvaxAssetID},
+				Asset: avax.Asset{ID: ctx.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: exportAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -1118,7 +1120,7 @@ func TestExportTxVerify(t *testing.T) {
 				},
 			},
 			{
-				Asset: avax.Asset{ID: testAvaxAssetID},
+				Asset: avax.Asset{ID: ctx.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: exportAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -1137,8 +1139,6 @@ func TestExportTxVerify(t *testing.T) {
 	// to avoid causing a nil-pointer error in the helper method
 	emptySigners := make([][]*secp256k1.PrivateKey, 2)
 	atomic.SortEVMInputsAndSigners(exportTx.Ins, emptySigners)
-
-	ctx := NewContext()
 
 	tests := map[string]atomicTxVerifyTest{
 		"nil tx": {
@@ -1261,7 +1261,7 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  0,
-						AssetID: testAvaxAssetID,
+						AssetID: ctx.AVAXAssetID,
 						Nonce:   0,
 					},
 				}
@@ -1779,7 +1779,7 @@ func TestNewExportTx(t *testing.T) {
 
 			exportTx := tx.UnsignedAtomicTx
 
-			backend := &atomic.Backend{
+			backend := &atomic.VerifierBackend{
 				Ctx:          vm.ctx,
 				Fx:           &vm.fx,
 				Rules:        vm.currentRules(),
@@ -1987,7 +1987,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			}
 
 			exportTx := tx.UnsignedAtomicTx
-			backend := &atomic.Backend{
+			backend := &atomic.VerifierBackend{
 				Ctx:          vm.ctx,
 				Fx:           &vm.fx,
 				Rules:        vm.currentRules(),
