@@ -17,7 +17,7 @@ import (
 	precompileconfig "github.com/ava-labs/coreth/precompile/precompileconfig"
 	common "github.com/ava-labs/libevm/common"
 	types "github.com/ava-labs/libevm/core/types"
-	vm "github.com/ava-labs/libevm/core/vm"
+	options "github.com/ava-labs/libevm/libevm/options"
 	uint256 "github.com/holiman/uint256"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -113,10 +113,10 @@ func (m *MockAccessibleState) EXPECT() *MockAccessibleStateMockRecorder {
 }
 
 // Call mocks base method.
-func (m *MockAccessibleState) Call(arg0 common.Address, arg1 []byte, arg2 uint64, arg3 *uint256.Int, arg4 ...vm.CallOption) ([]byte, uint64, error) {
+func (m *MockAccessibleState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...options.Option[vm.callConfig]) ([]byte, uint64, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2, arg3}
-	for _, a := range arg4 {
+	varargs := []any{addr, input, gas, value}
+	for _, a := range _ {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Call", varargs...)
@@ -127,9 +127,9 @@ func (m *MockAccessibleState) Call(arg0 common.Address, arg1 []byte, arg2 uint64
 }
 
 // Call indicates an expected call of Call.
-func (mr *MockAccessibleStateMockRecorder) Call(arg0, arg1, arg2, arg3 any, arg4 ...any) *gomock.Call {
+func (mr *MockAccessibleStateMockRecorder) Call(addr, input, gas, value any, _ ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2, arg3}, arg4...)
+	varargs := append([]any{addr, input, gas, value}, _...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockAccessibleState)(nil).Call), varargs...)
 }
 
