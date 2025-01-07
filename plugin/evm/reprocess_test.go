@@ -37,6 +37,7 @@ var (
 	sourceDbDir            = "sourceDb"
 	sourcePrefix           = ""
 	dbDir                  = ""
+	dbPrefix               = ""
 	startBlock             = uint64(0)
 	endBlock               = uint64(200)
 	prefetchers            = 4
@@ -73,6 +74,7 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&sourceDbDir, "sourceDbDir", sourceDbDir, "directory of source database")
 	flag.StringVar(&sourcePrefix, "sourcePrefix", sourcePrefix, "prefix of source database")
 	flag.StringVar(&dbDir, "dbDir", dbDir, "directory to store database (uses memory if empty)")
+	flag.StringVar(&dbPrefix, "dbPrefix", dbPrefix, "prefix of database")
 	flag.Uint64Var(&startBlock, "startBlock", startBlock, "start block number")
 	flag.Uint64Var(&endBlock, "endBlock", endBlock, "end block number")
 	flag.IntVar(&prefetchers, "prefetchers", prefetchers, "number of prefetchers")
@@ -268,9 +270,23 @@ func openDBs(t *testing.T) dbs {
 		base = db
 	}
 
+	prefix := []byte(dbPrefix)
+	if bytes.HasPrefix(prefix, []byte("0x")) {
+		prefix = prefix[2:]
+		var err error
+		prefix, err = hex.DecodeString(string(prefix))
+		if err != nil {
+			t.Fatalf("invalid hex prefix: %s", prefix)
+		}
+	}
+
+	dbPrefix := ethDBPrefix
+	if len(prefix) > 0 {
+		dbPrefix = prefix
+	}
 	return dbs{
 		metadata: prefixdb.New(reprocessMetadataPrefix, base),
-		chain:    rawdb.NewDatabase(Database{prefixdb.New(ethDBPrefix, base)}),
+		chain:    rawdb.NewDatabase(Database{prefixdb.New(dbPrefix, base)}),
 		merkledb: prefixdb.New(merkledbPrefix, base),
 		base:     base,
 	}
