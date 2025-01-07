@@ -222,6 +222,8 @@ type Config struct {
 	HttpBodyLimit uint64 `json:"http-body-limit"`
 }
 
+// TxPoolConfig contains the transaction pool config to be passed
+// to [Config.SetDefaults].
 type TxPoolConfig struct {
 	PriceLimit   uint64
 	PriceBump    uint64
