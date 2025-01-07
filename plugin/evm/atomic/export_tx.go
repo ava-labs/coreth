@@ -333,7 +333,8 @@ func NewExportTx(
 
 		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, amount, cost, baseFee)
 	default:
-		avaxNeeded, err := math.Add(amount, params.AvalancheAtomicTxFee)
+		var avaxNeeded uint64
+		avaxNeeded, err = math.Add(amount, params.AvalancheAtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}
