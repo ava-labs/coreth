@@ -21,9 +21,10 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
 	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
-	vm.db = versiondb.New(db)
-	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
-	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
+	vm.versiondb = versiondb.New(db)
+	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.versiondb)
+	vm.metadataDB = prefixdb.New(metadataPrefix, vm.versiondb)
+	vm.db = db
 	// Note warpDB is not part of versiondb because it is not necessary
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
