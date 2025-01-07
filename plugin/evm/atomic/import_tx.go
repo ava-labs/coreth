@@ -28,21 +28,21 @@ import (
 )
 
 var (
-	_                           UnsignedAtomicTx       = &UnsignedImportTx{}
-	_                           secp256k1fx.UnsignedTx = &UnsignedImportTx{}
-	ErrImportNonAVAXInputBanff                         = errors.New("import input cannot contain non-AVAX in Banff")
-	ErrImportNonAVAXOutputBanff                        = errors.New("import output cannot contain non-AVAX in Banff")
-	ErrNoImportInputs                                  = errors.New("tx has no imported inputs")
-	ErrConflictingAtomicInputs                         = errors.New("invalid block due to conflicting atomic inputs")
-	ErrWrongChainID                                    = errors.New("tx has wrong chain ID")
-	ErrNoEVMOutputs                                    = errors.New("tx has no EVM outputs")
-	ErrInputsNotSortedUnique                           = errors.New("inputs not sorted and unique")
-	ErrOutputsNotSortedUnique                          = errors.New("outputs not sorted and unique")
-	ErrOutputsNotSorted                                = errors.New("tx outputs not sorted")
-	ErrAssetIDMismatch                                 = errors.New("asset IDs in the input don't match the utxo")
-	errNilBaseFeeApricotPhase3                         = errors.New("nil base fee is invalid after apricotPhase3")
-	errInsufficientFundsForFee                         = errors.New("insufficient AVAX funds to pay transaction fee")
-	errRejectedParent                                  = errors.New("rejected parent")
+	_                          UnsignedAtomicTx       = &UnsignedImportTx{}
+	_                          secp256k1fx.UnsignedTx = &UnsignedImportTx{}
+	ErrImportNonAVAXInput                             = errors.New("import input cannot contain non-AVAX")
+	ErrImportNonAVAXOutput                            = errors.New("import output cannot contain non-AVAX")
+	ErrNoImportInputs                                 = errors.New("tx has no imported inputs")
+	ErrConflictingAtomicInputs                        = errors.New("invalid block due to conflicting atomic inputs")
+	ErrWrongChainID                                   = errors.New("tx has wrong chain ID")
+	ErrNoEVMOutputs                                   = errors.New("tx has no EVM outputs")
+	ErrInputsNotSortedUnique                          = errors.New("inputs not sorted and unique")
+	ErrOutputsNotSortedUnique                         = errors.New("outputs not sorted and unique")
+	ErrOutputsNotSorted                               = errors.New("tx outputs not sorted")
+	ErrAssetIDMismatch                                = errors.New("asset IDs in the input don't match the utxo")
+	errNilBaseFeeApricotPhase3                        = errors.New("nil base fee is invalid after apricotPhase3")
+	errInsufficientFundsForFee                        = errors.New("insufficient AVAX funds to pay transaction fee")
+	errRejectedParent                                 = errors.New("rejected parent")
 )
 
 // UnsignedImportTx is an unsigned ImportTx
@@ -104,8 +104,8 @@ func (utx *UnsignedImportTx) Verify(
 		if err := out.Verify(); err != nil {
 			return fmt.Errorf("EVM Output failed verification: %w", err)
 		}
-		if rules.IsBanff && out.AssetID != ctx.AVAXAssetID {
-			return ErrImportNonAVAXOutputBanff
+		if out.AssetID != ctx.AVAXAssetID {
+			return ErrImportNonAVAXOutput
 		}
 	}
 
@@ -113,8 +113,8 @@ func (utx *UnsignedImportTx) Verify(
 		if err := in.Verify(); err != nil {
 			return fmt.Errorf("atomic input failed verification: %w", err)
 		}
-		if rules.IsBanff && in.AssetID() != ctx.AVAXAssetID {
-			return ErrImportNonAVAXInputBanff
+		if in.AssetID() != ctx.AVAXAssetID {
+			return ErrImportNonAVAXInput
 		}
 	}
 	if !utils.IsSortedAndUnique(utx.ImportedInputs) {
@@ -345,40 +345,34 @@ func NewImportTx(
 		txFeeWithoutChange uint64
 		txFeeWithChange    uint64
 	)
-	switch {
-	case rules.IsApricotPhase3:
-		if baseFee == nil {
-			return nil, errNilBaseFeeApricotPhase3
-		}
-		utx := &UnsignedImportTx{
-			NetworkID:      ctx.NetworkID,
-			BlockchainID:   ctx.ChainID,
-			Outs:           outs,
-			ImportedInputs: importedInputs,
-			SourceChain:    chainID,
-		}
-		tx := &Tx{UnsignedAtomicTx: utx}
-		if err := tx.Sign(Codec, nil); err != nil {
-			return nil, err
-		}
+	if baseFee == nil {
+		return nil, errNilBaseFeeApricotPhase3
+	}
+	tempUtx := &UnsignedImportTx{
+		NetworkID:      ctx.NetworkID,
+		BlockchainID:   ctx.ChainID,
+		Outs:           outs,
+		ImportedInputs: importedInputs,
+		SourceChain:    chainID,
+	}
+	tempTx := &Tx{UnsignedAtomicTx: tempUtx}
+	if err := tempTx.Sign(Codec, nil); err != nil {
+		return nil, err
+	}
 
-		gasUsedWithoutChange, err := tx.GasUsed(rules.IsApricotPhase5)
-		if err != nil {
-			return nil, err
-		}
-		gasUsedWithChange := gasUsedWithoutChange + EVMOutputGas
+	gasUsedWithoutChange, err := tempTx.GasUsed(true)
+	if err != nil {
+		return nil, err
+	}
+	gasUsedWithChange := gasUsedWithoutChange + EVMOutputGas
 
-		txFeeWithoutChange, err = CalculateDynamicFee(gasUsedWithoutChange, baseFee)
-		if err != nil {
-			return nil, err
-		}
-		txFeeWithChange, err = CalculateDynamicFee(gasUsedWithChange, baseFee)
-		if err != nil {
-			return nil, err
-		}
-	case rules.IsApricotPhase2:
-		txFeeWithoutChange = params.AvalancheAtomicTxFee
-		txFeeWithChange = params.AvalancheAtomicTxFee
+	txFeeWithoutChange, err = CalculateDynamicFee(gasUsedWithoutChange, baseFee)
+	if err != nil {
+		return nil, err
+	}
+	txFeeWithChange, err = CalculateDynamicFee(gasUsedWithChange, baseFee)
+	if err != nil {
+		return nil, err
 	}
 
 	// AVAX output

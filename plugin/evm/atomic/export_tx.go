@@ -31,8 +31,8 @@ import (
 var (
 	_                             UnsignedAtomicTx       = &UnsignedExportTx{}
 	_                             secp256k1fx.UnsignedTx = &UnsignedExportTx{}
-	ErrExportNonAVAXInputBanff                           = errors.New("export input cannot contain non-AVAX in Banff")
-	ErrExportNonAVAXOutputBanff                          = errors.New("export output cannot contain non-AVAX in Banff")
+	ErrExportNonAVAXInput                                = errors.New("export input cannot contain non-AVAX")
+	ErrExportNonAVAXOutput                               = errors.New("export output cannot contain non-AVAX")
 	ErrNoExportOutputs                                   = errors.New("tx has no export outputs")
 	errPublicKeySignatureMismatch                        = errors.New("signature doesn't match public key")
 	errOverflowExport                                    = errors.New("overflow when computing export amount + txFee")
@@ -103,8 +103,8 @@ func (utx *UnsignedExportTx) Verify(
 		if err := in.Verify(); err != nil {
 			return err
 		}
-		if rules.IsBanff && in.AssetID != ctx.AVAXAssetID {
-			return ErrExportNonAVAXInputBanff
+		if in.AssetID != ctx.AVAXAssetID {
+			return ErrExportNonAVAXInput
 		}
 	}
 
@@ -116,8 +116,8 @@ func (utx *UnsignedExportTx) Verify(
 		if assetID != ctx.AVAXAssetID && utx.DestinationChain == constants.PlatformChainID {
 			return ErrWrongChainID
 		}
-		if rules.IsBanff && assetID != ctx.AVAXAssetID {
-			return ErrExportNonAVAXOutputBanff
+		if assetID != ctx.AVAXAssetID {
+			return ErrExportNonAVAXOutput
 		}
 	}
 	if !avax.IsSortedTransferableOutputs(utx.ExportedOutputs, Codec) {
@@ -311,34 +311,26 @@ func NewExportTx(
 		err                  error
 	)
 
-	switch {
-	case rules.IsApricotPhase3:
-		utx := &UnsignedExportTx{
-			NetworkID:        ctx.NetworkID,
-			BlockchainID:     ctx.ChainID,
-			DestinationChain: chainID,
-			Ins:              ins,
-			ExportedOutputs:  outs,
-		}
-		tx := &Tx{UnsignedAtomicTx: utx}
-		if err := tx.Sign(Codec, nil); err != nil {
-			return nil, err
-		}
-
-		var cost uint64
-		cost, err = tx.GasUsed(rules.IsApricotPhase5)
-		if err != nil {
-			return nil, err
-		}
-
-		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, amount, cost, baseFee)
-	default:
-		avaxNeeded, err := math.Add(amount, params.AvalancheAtomicTxFee)
-		if err != nil {
-			return nil, errOverflowExport
-		}
-		avaxIns, avaxSigners, err = GetSpendableFunds(ctx, state, keys, avaxNeeded)
+	// Create the temp transaction to get the cost
+	tempUtx := &UnsignedExportTx{
+		NetworkID:        ctx.NetworkID,
+		BlockchainID:     ctx.ChainID,
+		DestinationChain: chainID,
+		Ins:              ins,
+		ExportedOutputs:  outs,
 	}
+	tempTx := &Tx{UnsignedAtomicTx: tempUtx}
+	if err := tempTx.Sign(Codec, nil); err != nil {
+		return nil, err
+	}
+
+	var cost uint64
+	cost, err = tempTx.GasUsed(true)
+	if err != nil {
+		return nil, err
+	}
+
+	avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, amount, cost, baseFee)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
 	}

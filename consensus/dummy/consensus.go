@@ -450,42 +450,39 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
-	if chain.Config().IsApricotPhase4(header.Time) {
-		header.ExtDataGasUsed = extDataGasUsed
-		if header.ExtDataGasUsed == nil {
-			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
-		}
-		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(header.Time) {
-			blockGasCostStep = ApricotPhase5BlockGasCostStep
-		}
-		// Calculate the required block gas cost for this block.
-		header.BlockGasCost = calcBlockGasCost(
-			ApricotPhase4TargetBlockRate,
-			ApricotPhase4MinBlockGasCost,
-			ApricotPhase4MaxBlockGasCost,
-			blockGasCostStep,
-			parent.BlockGasCost,
-			parent.Time, header.Time,
-		)
-		// Verify that this block covers the block fee.
-		if err := eng.verifyBlockFee(
-			header.BaseFee,
-			header.BlockGasCost,
-			txs,
-			receipts,
-			contribution,
-		); err != nil {
-			return nil, err
-		}
+
+	header.ExtDataGasUsed = extDataGasUsed
+	if header.ExtDataGasUsed == nil {
+		header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 	}
+	blockGasCostStep := ApricotPhase5BlockGasCostStep
+	// Calculate the required block gas cost for this block.
+	header.BlockGasCost = calcBlockGasCost(
+		ApricotPhase4TargetBlockRate,
+		ApricotPhase4MinBlockGasCost,
+		ApricotPhase4MaxBlockGasCost,
+		blockGasCostStep,
+		parent.BlockGasCost,
+		parent.Time, header.Time,
+	)
+	// Verify that this block covers the block fee.
+	if err := eng.verifyBlockFee(
+		header.BaseFee,
+		header.BlockGasCost,
+		txs,
+		receipts,
+		contribution,
+	); err != nil {
+		return nil, err
+	}
+
 	// commit the final state root
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(true)
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlockWithExtData(
 		header, txs, uncles, receipts, trie.NewStackTrie(nil),
-		extraData, chain.Config().IsApricotPhase1(header.Time),
+		extraData, true,
 	), nil
 }
 
