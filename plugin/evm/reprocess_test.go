@@ -56,6 +56,7 @@ var (
 	storageBackend         = "none"
 	commitEachBlocks       = 1
 	commitEachTxs          = 0
+	forceStartWithMismatch = false
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -92,6 +93,7 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&storageBackend, "storageBackend", storageBackend, "storage backend (none, legacy, merkledb, nomt)")
 	flag.IntVar(&commitEachBlocks, "commitEachBlocks", commitEachBlocks, "commit each N blocks")
 	flag.IntVar(&commitEachTxs, "commitEachTxs", commitEachTxs, "commit each N transactions")
+	flag.BoolVar(&forceStartWithMismatch, "forceStartWithMismatch", forceStartWithMismatch, "force start with mismatch")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -370,6 +372,13 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 
 	if usePersistedStartBlock {
 		startBlock = lastHeight
+	}
+	if forceStartWithMismatch {
+		// recover the last hash / root from the source database.
+		// makes it possible to continue from a hash source database.
+		lastHash = rawdb.ReadCanonicalHash(source, startBlock)
+		block := rawdb.ReadBlock(source, lastHash, startBlock)
+		lastRoot = block.Root()
 	}
 	require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
 	if lastHash != (common.Hash{}) {
