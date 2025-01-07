@@ -3,7 +3,7 @@
 ## Pending Release
 
 - Removed the `IsMultiCoin` field from the Dump results and related functions
-- Removed the GenesisMultiCoinBalance type and MCBalance field from the GenesisAccount
+- Removed the `GenesisMultiCoinBalance` type and `MCBalance` field from the `GenesisAccount`
 - Removed deprecated `ExportKey`, `ImportKey`, `ImportAVAX`, `Import`, `ExportAVAX`, `Export` APIs
 
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
