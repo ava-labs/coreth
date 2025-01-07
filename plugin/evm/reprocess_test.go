@@ -399,7 +399,7 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		// makes it possible to continue from a hash source database.
 		lastHash = rawdb.ReadCanonicalHash(dbs.chain, startBlock)
 		block := rawdb.ReadBlock(dbs.chain, lastHash, startBlock)
-		lastRoot = block.Root()
+		lastHeight, lastRoot = startBlock, block.Root()
 		t.Logf("Forcing start with mismatch: Last hash: %x, Last root: %x", lastHash, lastRoot)
 	}
 	require.Equal(t, lastHeight, startBlock, "Last height does not match start block")
