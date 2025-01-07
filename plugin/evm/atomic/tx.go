@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
@@ -131,7 +130,7 @@ type UnsignedTx interface {
 type Backend struct {
 	Ctx          *snow.Context
 	Fx           fx.Fx
-	Rules        params.Rules
+	Rules        extras.Rules
 	Bootstrapped bool
 	BlockFetcher BlockFetcher
 	SecpCache    *secp256k1.RecoverCache

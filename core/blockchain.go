@@ -179,9 +179,9 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 	config := &triedb.Config{Preimages: c.Preimages}
 	if c.StateScheme == rawdb.HashScheme || c.StateScheme == "" {
 		config.DBOverride = hashdb.Config{
-			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
-			StatsPrefix:    trieCleanCacheStatsNamespace,
-			ReferenceRoot:  true, // Automatically reference root nodes when an update is made
+			CleanCacheSize:                  c.TrieCleanLimit * 1024 * 1024,
+			StatsPrefix:                     trieCleanCacheStatsNamespace,
+			ReferenceRootAtomicallyOnUpdate: true, // Automatically reference root nodes when an update is made
 		}.BackendConstructor
 	}
 	if c.StateScheme == rawdb.PathScheme {
@@ -1837,7 +1837,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
-			if previousRoot != (common.Hash{}) && previousRoot != root {
+			if previousRoot != (common.Hash{}) {
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root

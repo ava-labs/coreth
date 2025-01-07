@@ -286,7 +286,7 @@ func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 // NewExportTx returns a new ExportTx
 func NewExportTx(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules extras.Rules,
 	state StateDB,
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export

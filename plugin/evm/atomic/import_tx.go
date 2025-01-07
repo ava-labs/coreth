@@ -290,7 +290,7 @@ func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 // NewImportTx returns a new ImportTx
 func NewImportTx(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules extras.Rules,
 	time uint64,
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
