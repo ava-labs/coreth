@@ -90,6 +90,23 @@ func withConcurrentWorkers(prefetchers int) ethstate.PrefetcherOption {
 	return ethstate.WithWorkerPools(func() ethstate.WorkerPool { return pool })
 }
 
+type workerPool struct {
+	*utils.BoundedWorkers
+}
+
+func (wp *workerPool) Done() {
+	// Done is guaranteed to only be called after all work is already complete,
+	// so Wait()ing is redundant, but it also releases resources.
+	wp.BoundedWorkers.Wait()
+}
+
+func WithConcurrentWorkers(prefetchers int) PrefetcherOption {
+	pool := &workerPool{
+		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),
+	}
+	return WithWorkerPools(func() WorkerPool { return pool })
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
