@@ -76,7 +76,6 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -396,14 +395,10 @@ func (vm *VM) Initialize(
 	if err := vm.initializeDBs(db); err != nil {
 		return fmt.Errorf("failed to initialize databases: %w", err)
 	}
-
 	if vm.config.InspectDatabase {
-		start := time.Now()
-		log.Info("Starting database inspection")
-		if err := rawdb.InspectDatabase(vm.chaindb, nil, nil); err != nil {
+		if err := vm.inspectDatabases(); err != nil {
 			return err
 		}
-		log.Info("Completed database inspection", "elapsed", time.Since(start))
 	}
 
 	g := new(core.Genesis)
@@ -1482,22 +1477,6 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 
 	vm.rpcHandlers = append(vm.rpcHandlers, handler)
 	return apis, nil
-}
-
-// initializeDBs initializes the databases used by the VM.
-// coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db database.Database) error {
-	// Use NewNested rather than New so that the structure of the database
-	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(Database{prefixdb.NewNested(ethDBPrefix, db)})
-	vm.db = versiondb.New(db)
-	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
-	vm.metadataDB = prefixdb.New(metadataPrefix, vm.db)
-	// Note warpDB is not part of versiondb because it is not necessary
-	// that warp signatures are committed to the database atomically with
-	// the last accepted block.
-	vm.warpDB = prefixdb.New(warpPrefix, db)
-	return nil
 }
 
 // CreateStaticHandlers makes new http handlers that can handle API calls
