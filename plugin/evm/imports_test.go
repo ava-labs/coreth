@@ -48,6 +48,12 @@ func TestMustNotImport(t *testing.T) {
 		return fmt.Sprintf("%s/%s", repo, pkg)
 	}
 	mustNotImport := map[string][]string{
+		// The following sub-packages of plugin/evm must not import core, core/vm
+		// so clients (e.g., wallets, e2e tests) can import them without pulling in
+		// the entire VM logic.
+		// Importing these packages configures libevm globally and it is not
+		// possible to do so for both coreth and subnet-evm, where the client may
+		// wish to connect to multiple chains.
 		"plugin/evm/atomic": {"core", "core/vm"},
 		"plugin/evm/client": {"core", "core/vm"},
 		"plugin/evm/config": {"core", "core/vm"},
