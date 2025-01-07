@@ -8,8 +8,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 )
 
-// defaultTxPoolConfig uses legacypool's DefaultConfig to make a TxPoolConfig
-// that can be passed to config.Config.SetDefaults.
+// defaultTxPoolConfig uses [legacypool.DefaultConfig] to make a [config.TxPoolConfig]
+// that can be passed to [config.Config.SetDefaults].
 var defaultTxPoolConfig = config.TxPoolConfig{
 	PriceLimit:   legacypool.DefaultConfig.PriceLimit,
 	PriceBump:    legacypool.DefaultConfig.PriceBump,
