@@ -10,7 +10,6 @@ import (
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -80,6 +79,6 @@ func (p *Admin) SetLogLevel(_ *http.Request, args *client.SetLogLevelArgs, reply
 }
 
 func (p *Admin) GetVMConfig(_ *http.Request, _ *struct{}, reply *client.ConfigReply) error {
-	reply.Config = (*config.Config)(&p.vm.config)
+	reply.Config = &p.vm.config
 	return nil
 }
