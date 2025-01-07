@@ -137,12 +137,12 @@ func (utx *UnsignedExportTx) GasUsed(fixedFee bool) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	cost, err := math.Add64(byteCost, sigCost)
+	cost, err := math.Add(byteCost, sigCost)
 	if err != nil {
 		return 0, err
 	}
 	if fixedFee {
-		cost, err = math.Add64(cost, params.AtomicTxBaseCost)
+		cost, err = math.Add(cost, params.AtomicTxBaseCost)
 		if err != nil {
 			return 0, err
 		}
@@ -160,7 +160,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	)
 	for _, out := range utx.ExportedOutputs {
 		if out.AssetID() == assetID {
-			spent, err = math.Add64(spent, out.Output().Amount())
+			spent, err = math.Add(spent, out.Output().Amount())
 			if err != nil {
 				return 0, err
 			}
@@ -168,7 +168,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	}
 	for _, in := range utx.Ins {
 		if in.AssetID == assetID {
-			input, err = math.Add64(input, in.Amount)
+			input, err = math.Add(input, in.Amount)
 			if err != nil {
 				return 0, err
 			}
@@ -287,7 +287,7 @@ func NewExportTx(
 	ctx *snow.Context,
 	rules params.Rules,
 	state StateDB,
-	amount uint64, // Amount of tokens to export
+	amount uint64, // Amount of AVAX to export
 	chainID ids.ID, // Chain to send the UTXOs to
 	to ids.ShortID, // Address of chain recipient
 	baseFee *big.Int, // fee to use post-AP3
@@ -306,7 +306,6 @@ func NewExportTx(
 	}}
 
 	var (
-		avaxNeeded           uint64 = amount
 		ins, avaxIns         []EVMInput
 		signers, avaxSigners [][]*secp256k1.PrivateKey
 		err                  error
@@ -332,14 +331,13 @@ func NewExportTx(
 			return nil, err
 		}
 
-		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
+		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, amount, cost, baseFee)
 	default:
-		var newAvaxNeeded uint64
-		newAvaxNeeded, err = math.Add64(avaxNeeded, params.AvalancheAtomicTxFee)
+		avaxNeeded, err := math.Add(amount, params.AvalancheAtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}
-		avaxIns, avaxSigners, err = GetSpendableFunds(ctx, state, keys, newAvaxNeeded)
+		avaxIns, avaxSigners, err = GetSpendableFunds(ctx, state, keys, avaxNeeded)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
@@ -471,7 +469,7 @@ func GetSpendableAVAXWithFee(
 		return nil, nil, err
 	}
 
-	newAmount, err := math.Add64(amount, initialFee)
+	newAmount, err := math.Add(amount, initialFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -512,7 +510,7 @@ func GetSpendableAVAXWithFee(
 		// Update the cost for the next iteration
 		cost = newCost
 
-		newAmount, err := math.Add64(amount, additionalFee)
+		newAmount, err := math.Add(amount, additionalFee)
 		if err != nil {
 			return nil, nil, err
 		}

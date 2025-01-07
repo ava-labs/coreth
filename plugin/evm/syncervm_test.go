@@ -315,7 +315,14 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			require.NoError(serverVM.mempool.AddLocalTx(importTx))
 		case 1:
 			// export some of the imported UTXOs to test exportTx is properly synced
-			exportTx, err = serverVM.newExportTx(
+			state, err := serverVM.blockChain.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			exportTx, err = atomic.NewExportTx(
+				serverVM.ctx,
+				serverVM.currentRules(),
+				state,
 				importAmount/2,
 				serverVM.ctx.XChainID,
 				testShortIDAddrs[0],
