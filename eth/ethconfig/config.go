@@ -96,10 +96,6 @@ type Config struct {
 	SnapshotWait                    bool    // Whether to wait for the initial snapshot generation
 	SnapshotVerify                  bool    // Whether to verify generated snapshots
 	SkipSnapshotRebuild             bool    // Whether to skip rebuilding the snapshot in favor of returning an error (only set to true for tests)
-	// HistoricalStateQueryWindow is the number of blocks before the last accepted block to be accepted for state queries.
-	// For archive nodes, it defaults to 43200 and can be set to 0 to indicate to accept any block query.
-	// For non-archive nodes, it is forcibly set to the value of [core.TipBufferSize].
-	HistoricalStateQueryWindow uint64
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
@@ -141,6 +137,11 @@ type Config struct {
 
 	// AllowUnfinalizedQueries allow unfinalized queries
 	AllowUnfinalizedQueries bool
+
+	// HistoricalStateQueryWindow is the number of blocks before the last accepted block to be accepted for state queries.
+	// For archive nodes, it defaults to 43200 and can be set to 0 to indicate to accept any block query.
+	// For non-archive nodes, it is forcibly set to the value of [core.TipBufferSize].
+	HistoricalStateQueryWindow uint64
 
 	// AllowUnprotectedTxs allow unprotected transactions to be locally issued.
 	// Unprotected transactions are transactions that are signed without EIP-155
