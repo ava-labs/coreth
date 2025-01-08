@@ -55,22 +55,21 @@ var DefaultConfig = NewDefaultConfig()
 
 func NewDefaultConfig() Config {
 	return Config{
-		NetworkId:                  0, // enable auto configuration of networkID == chainID
-		StateHistory:               params.FullImmutabilityThreshold,
-		TrieCleanCache:             512,
-		TrieDirtyCache:             256,
-		TrieDirtyCommitTarget:      20,
-		TriePrefetcherParallelism:  16,
-		SnapshotCache:              256,
-		AcceptedCacheSize:          32,
-		Miner:                      miner.Config{},
-		TxPool:                     legacypool.DefaultConfig,
-		BlobPool:                   blobpool.DefaultConfig,
-		RPCGasCap:                  25000000,
-		RPCEVMTimeout:              5 * time.Second,
-		GPO:                        DefaultFullGPOConfig,
-		RPCTxFeeCap:                1, // 1 AVAX
-		HistoricalStateQueryWindow: 43200,
+		NetworkId:                 0, // enable auto configuration of networkID == chainID
+		StateHistory:              params.FullImmutabilityThreshold,
+		TrieCleanCache:            512,
+		TrieDirtyCache:            256,
+		TrieDirtyCommitTarget:     20,
+		TriePrefetcherParallelism: 16,
+		SnapshotCache:             256,
+		AcceptedCacheSize:         32,
+		Miner:                     miner.Config{},
+		TxPool:                    legacypool.DefaultConfig,
+		BlobPool:                  blobpool.DefaultConfig,
+		RPCGasCap:                 25000000,
+		RPCEVMTimeout:             5 * time.Second,
+		GPO:                       DefaultFullGPOConfig,
+		RPCTxFeeCap:               1, // 1 AVAX
 	}
 }
 
