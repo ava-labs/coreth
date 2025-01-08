@@ -55,18 +55,13 @@ type StateDB interface {
 	RevertToSnapshot(int)
 }
 
-// This type is aliased here since mockgen will try to resolve vm.CallOption
-// to its underlying type, which includes an unexported type as a type parameter.
-// As a result, without this workaround, it produces code that cannot be compiled.
-type CallOption vm.CallOption
-
 // AccessibleState defines the interface exposed to stateful precompile contracts
 type AccessibleState interface {
 	GetStateDB() StateDB
 	GetBlockContext() BlockContext
 	GetSnowContext() *snow.Context
 	GetChainConfig() precompileconfig.ChainConfig
-	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (ret []byte, gasRemaining uint64, _ error)
+	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...vm.CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
 // ConfigurationBlockContext defines the interface required to configure a precompile.

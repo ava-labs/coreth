@@ -171,12 +171,8 @@ func (a accessableState) GetSnowContext() *snow.Context {
 	return GetExtra(a.env.ChainConfig()).SnowCtx
 }
 
-func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...contract.CallOption) (ret []byte, gasRemaining uint64, _ error) {
-	libevmOpts := make([]vm.CallOption, len(opts))
-	for i, opt := range opts {
-		libevmOpts[i] = vm.CallOption(opt)
-	}
-	return a.env.Call(addr, input, gas, value, libevmOpts...)
+func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...vm.CallOption) (ret []byte, gasRemaining uint64, _ error) {
+	return a.env.Call(addr, input, gas, value, opts...)
 }
 
 type precompileBlockContext struct {
