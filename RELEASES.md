@@ -1,13 +1,11 @@
 # Release Notes
 
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
+
+- ⚠️ Archive node behavior change: by default, only the 24 hours preceeding the last accepted block are accepted for state proof queries. This can be adjusted with the new option `historical-proof-query-window` which defines the number of blocks before the last accepted block which should be accepted for state proof queries. This option can also be set to `0` to accept any block number state query.
 - Remove API eth_getAssetBalance that was used to query ANT balances (deprecated since v0.10.0)
 - Remove legacy gossip handler and metrics (deprecated since v0.10.0)
 - Refactored trie_prefetcher.go to be structurally similar to [upstream](https://github.com/ethereum/go-ethereum/tree/v1.13.14).
-- New option `historical-state-query-window` for archive nodes only which:
-  - can be set to a strictly positive number to accept state queries for a block number above the last accepted block number - `historical-state-query-window`
-  - defaults to `43200` to accept state queries for blocks dating from the last 24 hours approximately
-  - can be set to `0` to accept any block number state query
 
 ## [v0.14.0](https://github.com/ava-labs/coreth/releases/tag/v0.14.0)
 - Minor version update to correspond to avalanchego v1.12.0 / Etna.
