@@ -129,7 +129,7 @@ type Config struct {
 
 	// HistoricalStateQueryWindow is, when running in archive mode only, the number of blocks before the
 	// last accepted block to be accepted for state queries.
-	HistoricalStateQueryWindow uint64 `json:"historical-state-query-window,omitempty"`
+	HistoricalStateQueryWindow uint64 `json:"historical-proof-query-window,omitempty"`
 
 	// Metric Settings
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
