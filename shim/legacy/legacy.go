@@ -46,6 +46,10 @@ func getAccountRoot(tr *trie.Trie, accHash common.Hash) (common.Hash, error) {
 }
 
 func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
+	// Collect all nodes that are modified during the update
+	// Defined here so we can process storage deletes
+	nodes := trienode.NewMergedNodeSet()
+
 	accounts, err := trie.New(trie.StateTrieID(l.root), l.triedb)
 	if err != nil {
 		return common.Hash{}, err
@@ -58,8 +62,27 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		accHash := common.BytesToHash(kv.Key[:32])
 		if len(kv.Key) == 32 {
 			if len(kv.Value) == 0 {
-				// this trie is DELETED, so if it was updated before these updates should not be applied
-				// further updates shold apply to an empty trie
+				// this trie is DELETED. First we will remove it from storage:
+				// if it was updated before, we should have a trie for it
+				prevRoot, err := getAccountRoot(accounts, accHash)
+				if err != nil {
+					return common.Hash{}, fmt.Errorf("failed to get account root %x: %w", accHash, err)
+				}
+				if prevRoot != types.EmptyRootHash {
+					fmt.Printf(":: slow delete storage for %x\n", accHash)
+					_, _, _, set, err := slowDeleteStorage(l.triedb, l.root, accHash, prevRoot)
+					if err != nil {
+						return common.Hash{}, err
+					}
+					if set != nil {
+						updates, deletes := set.Size()
+						fmt.Printf("::: set merged: %d updates, %d deletes\n", updates, deletes)
+						nodes.Merge(set)
+					}
+				}
+
+				// Also any pending updates should not be apply
+				// Further updates shold apply to an empty trie
 				tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
 				if err != nil {
 					return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
@@ -88,7 +111,6 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 	}
 
 	// Hash the storage tries
-	nodes := trienode.NewMergedNodeSet()
 	for _, tr := range tries {
 		_, set, err := tr.Commit(false)
 		if err != nil {
@@ -141,3 +163,49 @@ func (l *Legacy) Close() error                        { return nil }
 func (l *Legacy) Get(key []byte) ([]byte, error)      { panic("implement me") }
 func (l *Legacy) Prefetch(key []byte) ([]byte, error) { panic("implement me") }
 func (l *Legacy) Root() common.Hash                   { return l.root }
+
+const (
+	// storageDeleteLimit denotes the highest permissible memory allocation
+	// employed for contract storage deletion.
+	storageDeleteLimit = 512 * 1024 * 1024
+)
+
+// slowDeleteStorage serves as a less-efficient alternative to "fastDeleteStorage,"
+// employed when the associated state snapshot is not available. It iterates the
+// storage slots along with all internal trie nodes via trie directly.
+func slowDeleteStorage(
+	db *triedb.Database, originalRoot, addrHash, root common.Hash,
+) (bool, common.StorageSize, map[common.Hash][]byte, *trienode.NodeSet, error) {
+	tr, err := trie.New(trie.StorageTrieID(originalRoot, addrHash, root), db)
+	if err != nil {
+		return false, 0, nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
+	}
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		return false, 0, nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
+	}
+	var (
+		size  common.StorageSize
+		nodes = trienode.NewNodeSet(addrHash)
+		slots = make(map[common.Hash][]byte)
+	)
+	for it.Next(true) {
+		if size > storageDeleteLimit {
+			return true, size, nil, nil, nil
+		}
+		if it.Leaf() {
+			slots[common.BytesToHash(it.LeafKey())] = common.CopyBytes(it.LeafBlob())
+			size += common.StorageSize(common.HashLength + len(it.LeafBlob()))
+			continue
+		}
+		if it.Hash() == (common.Hash{}) {
+			continue
+		}
+		size += common.StorageSize(len(it.Path()))
+		nodes.AddNode(it.Path(), trienode.NewDeleted())
+	}
+	if err := it.Error(); err != nil {
+		return false, 0, nil, nil, err
+	}
+	return false, size, slots, nodes, nil
+}
