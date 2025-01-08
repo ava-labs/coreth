@@ -86,7 +86,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 					Return(nil, fmt.Errorf("test error"))
 				return backend
 			},
-			wantErrMessage: "getting block from hash: test error",
+			wantErrMessage: "failed to get block from hash: test error",
 		},
 		"block_number_out_of_window": {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
