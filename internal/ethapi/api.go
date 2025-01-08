@@ -681,7 +681,7 @@ func (n *proofList) Delete(key []byte) error {
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
 	err := s.stateQueryBlockNumberAllowed(blockNrOrHash)
 	if err != nil {
-		return nil, fmt.Errorf("checking if possibly historical state query is allowed: %s", err)
+		return nil, fmt.Errorf("historical proof query not allowed: %s", err)
 	}
 
 	var (
