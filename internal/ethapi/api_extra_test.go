@@ -121,7 +121,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 				b: testCase.makeBackend(ctrl),
 			}
 
-			err := api.isHistoricalStateQueryAllowed(testCase.blockNumOrHash)
+			err := api.stateQueryBlockNumberAllowed(testCase.blockNumOrHash)
 			if testCase.wantErrMessage == "" {
 				assert.NoError(t, err)
 			} else {
