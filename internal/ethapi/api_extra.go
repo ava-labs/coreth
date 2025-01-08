@@ -95,14 +95,17 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 
 // isHistoricalStateQueryAllowed returns a nil error if:
 //   - the node is configured to accept any state query (the query window is zero)
-//   - the block given has its number within the query window
-//     before the last accepted block
+//   - the block given has its number within the query window before the last accepted block.
+//     This query window is set to [core.TipBufferSize] when running in a non-archive mode.
 //
 // Otherwise, it returns a non-nil error containing block number information.
 func (s *BlockChainAPI) isHistoricalStateQueryAllowed(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
-	queryWindow := s.b.HistoricalStateQueryWindow()
-	if queryWindow == 0 {
-		return nil
+	queryWindow := uint64(core.TipBufferSize)
+	if s.b.IsArchive() {
+		queryWindow = s.b.HistoricalStateQueryWindow()
+		if queryWindow == 0 {
+			return nil
+		}
 	}
 
 	lastBlock := s.b.LastAcceptedBlock()

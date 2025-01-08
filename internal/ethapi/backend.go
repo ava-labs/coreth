@@ -80,6 +80,7 @@ type Backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	BadBlocks() ([]*types.Block, []*core.BadBlockReason)
+	IsArchive() bool
 	HistoricalStateQueryWindow() uint64
 
 	// Transaction pool API

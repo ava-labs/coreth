@@ -625,6 +625,9 @@ func (b testBackend) LastAcceptedBlock() *types.Block { panic("implement me") }
 func (b testBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	panic("implement me")
 }
+func (b testBackend) IsArchive() bool {
+	panic("implement me")
+}
 func (b testBackend) HistoricalStateQueryWindow() (queryWindow uint64) {
 	panic("implement me")
 }

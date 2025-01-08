@@ -36,6 +36,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(true)
 				backend.EXPECT().HistoricalStateQueryWindow().Return(uint64(0))
 				return backend
 			},
@@ -44,6 +45,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(true)
 				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(1020))
 				return backend
@@ -53,6 +55,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(true)
 				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
@@ -62,6 +65,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithHash(common.Hash{99}, false),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(true)
 				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
@@ -74,6 +78,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithHash(common.Hash{99}, false),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(true)
 				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
@@ -87,11 +92,23 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(true)
 				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},
 			wantErrMessage: "block number 1000 is before the oldest allowed block number 1176 (window of 1024 blocks)",
+		},
+		"block_number_out_of_window_non_archive": {
+			blockNumOrHash: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1000)),
+			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
+				backend := NewMockBackend(ctrl)
+				backend.EXPECT().IsArchive().Return(false)
+				// query window is 32 as set to core.TipBufferSize
+				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(1033))
+				return backend
+			},
+			wantErrMessage: "block number 1000 is before the oldest allowed block number 1001 (window of 32 blocks)",
 		},
 	}
 

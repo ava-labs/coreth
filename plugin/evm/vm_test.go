@@ -405,7 +405,6 @@ func TestVMConfigDefaults(t *testing.T) {
 	vmConfig.SetDefaults(defaultTxPoolConfig)
 	vmConfig.RPCTxFeeCap = txFeeCap
 	vmConfig.EnabledEthAPIs = enabledEthAPIs
-	vmConfig.UpdateWithDefaults()
 	require.Equal(t, vmConfig, vm.config, "VM Config should match default with overrides")
 	require.NoError(t, vm.Shutdown(context.Background()))
 }
@@ -416,7 +415,6 @@ func TestVMNilConfig(t *testing.T) {
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
 	vmConfig.SetDefaults(defaultTxPoolConfig)
-	vmConfig.UpdateWithDefaults()
 	require.Equal(t, vmConfig, vm.config, "VM Config should match default config")
 	require.NoError(t, vm.Shutdown(context.Background()))
 }

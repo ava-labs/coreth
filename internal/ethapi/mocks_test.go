@@ -441,6 +441,20 @@ func (mr *MockBackendMockRecorder) HistoricalStateQueryWindow() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HistoricalStateQueryWindow", reflect.TypeOf((*MockBackend)(nil).HistoricalStateQueryWindow))
 }
 
+// IsArchive mocks base method.
+func (m *MockBackend) IsArchive() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsArchive")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsArchive indicates an expected call of IsArchive.
+func (mr *MockBackendMockRecorder) IsArchive() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsArchive", reflect.TypeOf((*MockBackend)(nil).IsArchive))
+}
+
 // LastAcceptedBlock mocks base method.
 func (m *MockBackend) LastAcceptedBlock() *types.Block {
 	m.ctrl.T.Helper()

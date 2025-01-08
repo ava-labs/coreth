@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/constants"
-	"github.com/ava-labs/coreth/core"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/spf13/cast"
@@ -60,6 +59,9 @@ const (
 	// - state sync time: ~6 hrs.
 	defaultStateSyncMinBlocks   = 300_000
 	DefaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
+
+	estimatedBlockAcceptPeriod = 2 * time.Second
+	defaultBlocksWindow        = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
 )
 
 var (
@@ -125,10 +127,9 @@ type Config struct {
 	PopulateMissingTriesParallelism int     `json:"populate-missing-tries-parallelism"` // Number of concurrent readers to use when re-populating missing tries on startup.
 	PruneWarpDB                     bool    `json:"prune-warp-db-enabled"`              // Determines if the warpDB should be cleared on startup
 
-	// HistoricalStateQueryWindow is the number of blocks before the last accepted block to be accepted for state queries.
-	// For archive nodes, it defaults to 43200 and can be set to 0 to indicate to accept any block query.
-	// For non-archive nodes, it is forcibly set to the value of [core.TipBufferSize].
-	HistoricalStateQueryWindow *uint64 `json:"historical-state-query-window,omitempty"`
+	// HistoricalStateQueryWindow is, when running in archive mode only, the number of blocks before the
+	// last accepted block to be accepted for state queries.
+	HistoricalStateQueryWindow uint64 `json:"historical-state-query-window,omitempty"`
 
 	// Metric Settings
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
@@ -294,32 +295,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.StateSyncRequestSize = DefaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
-}
-
-// UpdateWithDefaults updates the configuration with defaults depending
-// on fields already set.
-func (c *Config) UpdateWithDefaults() {
-	if c.Pruning {
-		// Force state query window to be the value of [core.TipBufferSize].
-		c.HistoricalStateQueryWindow = ptrTo(uint64(core.TipBufferSize))
-	} else {
-		// Default the state query window to approximately 24 hours of block history
-		// for nodes operating in archive mode.
-		const estimatedBlockAcceptPeriod = 2 * time.Second
-		const defaultBlocksWindow = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
-		c.HistoricalStateQueryWindow = defaultPtr(c.HistoricalStateQueryWindow, defaultBlocksWindow)
-	}
-}
-
-func ptrTo[T any](x T) *T { return &x }
-
-func defaultPtr[T any](existing *T, defaultValue T) (defaulted *T) {
-	if existing != nil {
-		return existing
-	}
-	defaulted = new(T)
-	*defaulted = defaultValue
-	return defaulted
+	c.HistoricalStateQueryWindow = defaultBlocksWindow
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

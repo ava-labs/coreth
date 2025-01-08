@@ -263,12 +263,12 @@ func New(
 	}
 
 	eth.APIBackend = &EthAPIBackend{
-		extRPCEnabled:            stack.Config().ExtRPCEnabled(),
-		allowUnprotectedTxs:      config.AllowUnprotectedTxs,
-		allowUnprotectedTxHashes: allowUnprotectedTxHashes,
-		allowUnfinalizedQueries:  config.AllowUnfinalizedQueries,
-		stateQueryWindow:         config.HistoricalStateQueryWindow,
-		eth:                      eth,
+		extRPCEnabled:              stack.Config().ExtRPCEnabled(),
+		allowUnprotectedTxs:        config.AllowUnprotectedTxs,
+		allowUnprotectedTxHashes:   allowUnprotectedTxHashes,
+		allowUnfinalizedQueries:    config.AllowUnfinalizedQueries,
+		historicalStateQueryWindow: config.HistoricalStateQueryWindow,
+		eth:                        eth,
 	}
 	if config.AllowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
