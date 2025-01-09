@@ -345,7 +345,6 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
 		}
 	}
-
 	vm.ctx = chainCtx
 
 	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
