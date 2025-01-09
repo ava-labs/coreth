@@ -417,6 +417,15 @@ func TestPostProcess(t *testing.T) {
 						if len(kv.Key) == 32 {
 							if len(kv.Value) == 0 {
 								rawdb.DeleteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key))
+								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
+								for it.Next() {
+									k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
+									rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
+								}
+								if err := it.Error(); err != nil {
+									t.Fatalf("Failed to iterate over snapshot account: %v", err)
+								}
+								it.Release()
 							} else {
 								var acc types.StateAccount
 								if err := rlp.DecodeBytes(kv.Value, &acc); err != nil {
@@ -424,17 +433,6 @@ func TestPostProcess(t *testing.T) {
 								}
 								data := types.SlimAccountRLP(acc)
 								rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), data)
-								if len(kv.Value) == 0 {
-									it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
-									for it.Next() {
-										k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
-										rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
-									}
-									if err := it.Error(); err != nil {
-										t.Fatalf("Failed to iterate over snapshot account: %v", err)
-									}
-									it.Release()
-								}
 							}
 						} else {
 							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
