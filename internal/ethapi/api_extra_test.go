@@ -15,7 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
+func TestBlockChainAPI_stateQueryBlockNumberAllowed(t *testing.T) {
 	t.Parallel()
 
 	const queryWindow uint64 = 1024
