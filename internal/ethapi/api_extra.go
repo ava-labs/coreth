@@ -102,7 +102,7 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
 	queryWindow := uint64(core.TipBufferSize)
 	if s.b.IsArchive() {
-		queryWindow = s.b.HistoricalStateQueryWindow()
+		queryWindow = s.b.HistoricalProofQueryWindow()
 		if queryWindow == 0 {
 			return nil
 		}

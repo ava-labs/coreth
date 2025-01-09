@@ -37,7 +37,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
 				backend.EXPECT().IsArchive().Return(true)
-				backend.EXPECT().HistoricalStateQueryWindow().Return(uint64(0))
+				backend.EXPECT().HistoricalProofQueryWindow().Return(uint64(0))
 				return backend
 			},
 		},
@@ -46,7 +46,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
 				backend.EXPECT().IsArchive().Return(true)
-				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
+				backend.EXPECT().HistoricalProofQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(1020))
 				return backend
 			},
@@ -56,7 +56,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
 				backend.EXPECT().IsArchive().Return(true)
-				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
+				backend.EXPECT().HistoricalProofQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},
@@ -66,7 +66,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
 				backend.EXPECT().IsArchive().Return(true)
-				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
+				backend.EXPECT().HistoricalProofQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
 					BlockByNumberOrHash(gomock.Any(), gomock.Any()).
@@ -79,7 +79,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
 				backend.EXPECT().IsArchive().Return(true)
-				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
+				backend.EXPECT().HistoricalProofQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				backend.EXPECT().
 					BlockByNumberOrHash(gomock.Any(), gomock.Any()).
@@ -93,7 +93,7 @@ func TestBlockChainAPI_isHistoricalStateQueryAllowed(t *testing.T) {
 			makeBackend: func(ctrl *gomock.Controller) *MockBackend {
 				backend := NewMockBackend(ctrl)
 				backend.EXPECT().IsArchive().Return(true)
-				backend.EXPECT().HistoricalStateQueryWindow().Return(queryWindow)
+				backend.EXPECT().HistoricalProofQueryWindow().Return(queryWindow)
 				backend.EXPECT().LastAcceptedBlock().Return(makeBlockWithNumber(2200))
 				return backend
 			},

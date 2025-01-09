@@ -267,7 +267,7 @@ func New(
 		allowUnprotectedTxs:        config.AllowUnprotectedTxs,
 		allowUnprotectedTxHashes:   allowUnprotectedTxHashes,
 		allowUnfinalizedQueries:    config.AllowUnfinalizedQueries,
-		historicalStateQueryWindow: config.HistoricalStateQueryWindow,
+		historicalProofQueryWindow: config.HistoricalProofQueryWindow,
 		eth:                        eth,
 	}
 	if config.AllowUnprotectedTxs {

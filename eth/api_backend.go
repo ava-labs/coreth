@@ -61,9 +61,9 @@ type EthAPIBackend struct {
 	eth                      *Ethereum
 	gpo                      *gasprice.Oracle
 
-	// historicalStateQueryWindow is the number of blocks before the last accepted block to be accepted for
+	// historicalProofQueryWindow is the number of blocks before the last accepted block to be accepted for
 	// state queries when running archive mode.
-	historicalStateQueryWindow uint64
+	historicalProofQueryWindow uint64
 }
 
 // ChainConfig returns the active chain configuration.
@@ -76,10 +76,10 @@ func (b *EthAPIBackend) IsArchive() bool {
 	return !b.eth.config.Pruning
 }
 
-// HistoricalStateQueryWindow returns the number of blocks before the last accepted block to be accepted for state queries.
+// HistoricalProofQueryWindow returns the number of blocks before the last accepted block to be accepted for state queries.
 // It returns 0 to indicate to accept any block number for state queries.
-func (b *EthAPIBackend) HistoricalStateQueryWindow() uint64 {
-	return b.historicalStateQueryWindow
+func (b *EthAPIBackend) HistoricalProofQueryWindow() uint64 {
+	return b.historicalProofQueryWindow
 }
 
 func (b *EthAPIBackend) IsAllowUnfinalizedQueries() bool {

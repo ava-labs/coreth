@@ -628,7 +628,7 @@ func (b testBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 func (b testBackend) IsArchive() bool {
 	panic("implement me")
 }
-func (b testBackend) HistoricalStateQueryWindow() (queryWindow uint64) {
+func (b testBackend) HistoricalProofQueryWindow() (queryWindow uint64) {
 	panic("implement me")
 }
 

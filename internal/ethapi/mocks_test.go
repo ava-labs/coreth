@@ -427,18 +427,18 @@ func (mr *MockBackendMockRecorder) HeaderByNumberOrHash(ctx, blockNrOrHash any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumberOrHash", reflect.TypeOf((*MockBackend)(nil).HeaderByNumberOrHash), ctx, blockNrOrHash)
 }
 
-// HistoricalStateQueryWindow mocks base method.
-func (m *MockBackend) HistoricalStateQueryWindow() uint64 {
+// HistoricalProofQueryWindow mocks base method.
+func (m *MockBackend) HistoricalProofQueryWindow() uint64 {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HistoricalStateQueryWindow")
+	ret := m.ctrl.Call(m, "HistoricalProofQueryWindow")
 	ret0, _ := ret[0].(uint64)
 	return ret0
 }
 
-// HistoricalStateQueryWindow indicates an expected call of HistoricalStateQueryWindow.
-func (mr *MockBackendMockRecorder) HistoricalStateQueryWindow() *gomock.Call {
+// HistoricalProofQueryWindow indicates an expected call of HistoricalProofQueryWindow.
+func (mr *MockBackendMockRecorder) HistoricalProofQueryWindow() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HistoricalStateQueryWindow", reflect.TypeOf((*MockBackend)(nil).HistoricalStateQueryWindow))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HistoricalProofQueryWindow", reflect.TypeOf((*MockBackend)(nil).HistoricalProofQueryWindow))
 }
 
 // IsArchive mocks base method.
