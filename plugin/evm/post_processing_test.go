@@ -12,10 +12,12 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/shim/legacy"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
@@ -413,17 +415,26 @@ func TestPostProcess(t *testing.T) {
 				if writeSnapshot {
 					for _, kv := range evitcedBatch {
 						if len(kv.Key) == 32 {
-							rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), kv.Value)
 							if len(kv.Value) == 0 {
-								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
-								for it.Next() {
-									k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
-									rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
+								rawdb.DeleteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key))
+							} else {
+								var acc types.StateAccount
+								if err := rlp.DecodeBytes(kv.Value, &acc); err != nil {
+									t.Fatalf("Failed to decode account: %v", err)
 								}
-								if err := it.Error(); err != nil {
-									t.Fatalf("Failed to iterate over snapshot account: %v", err)
+								data := types.SlimAccountRLP(acc)
+								rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), data)
+								if len(kv.Value) == 0 {
+									it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
+									for it.Next() {
+										k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
+										rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
+									}
+									if err := it.Error(); err != nil {
+										t.Fatalf("Failed to iterate over snapshot account: %v", err)
+									}
+									it.Release()
 								}
-								it.Release()
 							}
 						} else {
 							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
