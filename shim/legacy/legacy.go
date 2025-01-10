@@ -121,7 +121,11 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 		}
 
 		// Update the storage trie
-		tr.MustUpdate(k[32:], v)
+		if len(v) == 0 {
+			tr.MustDelete(k[32:])
+		} else {
+			tr.MustUpdate(k[32:], v)
+		}
 	}
 
 	// Hash the storage tries
