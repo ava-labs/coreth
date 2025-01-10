@@ -228,10 +228,6 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			return common.Hash{}
 		}
 		val, err := tr.GetStorage(s.address, key.Bytes())
-		if crypto.Keccak256Hash(key.Bytes()) == common.Hash(target) {
-			fmt.Println("GetState: ", s.address, key, value)
-			panic("found")
-		}
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -244,8 +240,6 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.originStorage[key] = value
 	return value
 }
-
-var target = common.Hex2Bytes("171ab08901be24769dbebedbdf7e0245486fbc64ab975cd431a39533032d5415")
 
 // SetState updates a value in account storage.
 func (s *stateObject) SetState(key, value common.Hash) {
