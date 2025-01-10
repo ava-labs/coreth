@@ -286,7 +286,7 @@ func TestPostProcess(t *testing.T) {
 			accountReads: make(map[string][]byte),
 			storageReads: make(map[string][]byte),
 		}
-		tapeTxs := processTape(t, r, tapeResult, cache.GetAndSet, &sum)
+		tapeTxs := processTape(t, r, tapeResult, cache.GetAndSet, &sum, tapeVerbose && blockNumber >= i)
 		require.Equal(t, txs, tapeTxs)
 
 		accountWrites, err := readUint16(r)
@@ -488,7 +488,6 @@ func TestPostProcess(t *testing.T) {
 					if storageBackend == "legacy" {
 						require.Equal(t, storageRoot, block.Root(), "Root mismatch")
 					}
-
 				}
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
@@ -598,7 +597,7 @@ type tapeResult struct {
 }
 
 // cache should return true if the value was found in the cache
-func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k string, v []byte) bool, sum *totals) uint16 {
+func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k string, v []byte) bool, sum *totals, tapeVerbose bool) uint16 {
 	length, err := readUint32(r)
 	require.NoError(t, err)
 
@@ -621,6 +620,9 @@ func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k
 					sum.accountReadHits++
 				}
 			}
+			if tapeVerbose {
+				t.Logf("account read: %x -> %x", key, val)
+			}
 		case typeStorage:
 			key, val, err := readKV(r, 64)
 			require.NoError(t, err)
@@ -632,8 +634,14 @@ func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k
 					sum.storageReadHits++
 				}
 			}
+			if tapeVerbose {
+				t.Logf("storage read: %x -> %x", key, val)
+			}
 		case typeEndTx:
 			txCount++
+			if tapeVerbose {
+				t.Logf("end tx")
+			}
 		}
 	}
 	return txCount

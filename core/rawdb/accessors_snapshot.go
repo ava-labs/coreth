@@ -27,6 +27,8 @@
 package rawdb
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -91,6 +93,7 @@ func DeleteSnapshotBlockHash(db ethdb.KeyValueWriter) {
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(accountSnapshotKey(hash))
+	fmt.Printf("**** ReadAccountSnapshot: %x: %x\n", hash, data)
 	return data
 }
 
@@ -111,6 +114,7 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 // ReadStorageSnapshot retrieves the snapshot entry of an storage trie leaf.
 func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
 	data, _ := db.Get(storageSnapshotKey(accountHash, storageHash))
+	fmt.Printf("**** ReadStorageSnapshot: %x %x: %x\n", accountHash, storageHash, data)
 	return data
 }
 

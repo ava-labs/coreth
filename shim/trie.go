@@ -93,7 +93,7 @@ func (t *Trie) Copy() *Trie {
 				addrHash: legacy.addrHash,
 				writer:   legacy.writer,
 			},
-			prefix:  t.prefix,
+			prefix:  bytes.Clone(t.prefix),
 			parent:  t.parent,
 			origin:  t.origin,
 			changes: append(Batch(nil), t.changes...),
