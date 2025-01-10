@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -727,6 +728,15 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 		if data == nil {
 			return nil
+		}
+		if s.snap != nil {
+			bytes, err := rlp.EncodeToBytes(data)
+			if err != nil {
+				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+				return nil
+			}
+
+			fmt.Printf("Warning: account %v not found in snapshot but found in trie as %x\n", addr, bytes)
 		}
 	}
 	// Insert into the live set
