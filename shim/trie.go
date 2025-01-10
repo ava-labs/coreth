@@ -103,6 +103,12 @@ func (t *Trie) Copy() *Trie {
 	return t
 }
 
-func (t *Trie) NodeIterator(start []byte) (trie.NodeIterator, error) { panic("not implemented") }
+func (t *Trie) NodeIterator(start []byte) (trie.NodeIterator, error) {
+	if legacy, ok := t.backend.(*LegacyBackend); ok {
+		return legacy.tr.NodeIterator(start)
+	}
+	panic("not implemented")
+}
+
 func (t *Trie) MustNodeIterator(start []byte) trie.NodeIterator      { panic("not implemented") }
 func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error { panic("not implemented") }
