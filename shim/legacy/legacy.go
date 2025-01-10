@@ -141,7 +141,11 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 		if len(k) == 64 {
 			continue
 		}
-		accounts.MustUpdate(k, v)
+		if len(v) == 0 {
+			accounts.MustDelete(k)
+		} else {
+			accounts.MustUpdate(k, v)
+		}
 	}
 
 	// Verify account trie updates match the storage trie updates
