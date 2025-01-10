@@ -108,8 +108,7 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 		}
 	}
 
-	lastBlock := s.b.LastAcceptedBlock()
-	lastNumber := lastBlock.NumberU64()
+	lastAcceptedNumber := s.b.LastAcceptedBlock().NumberU64()
 
 	var number uint64
 	if blockNumOrHash.BlockNumber != nil {
@@ -123,8 +122,8 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 	}
 
 	var oldestAllowed uint64
-	if lastNumber > queryWindow {
-		oldestAllowed = lastNumber - queryWindow
+	if lastAcceptedNumber > queryWindow {
+		oldestAllowed = lastAcceptedNumber - queryWindow
 	}
 	if number >= oldestAllowed {
 		return nil

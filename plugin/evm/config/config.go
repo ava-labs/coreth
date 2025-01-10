@@ -60,8 +60,8 @@ const (
 	defaultStateSyncMinBlocks   = 300_000
 	DefaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
 
-	estimatedBlockAcceptPeriod = 2 * time.Second
-	defaultBlocksWindow        = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
+	estimatedBlockAcceptPeriod        = 2 * time.Second
+	defaultHistoricalProofQueryWindow = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
 )
 
 var (
@@ -295,7 +295,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.StateSyncRequestSize = DefaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
-	c.HistoricalProofQueryWindow = defaultBlocksWindow
+	c.HistoricalProofQueryWindow = defaultHistoricalProofQueryWindow
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
