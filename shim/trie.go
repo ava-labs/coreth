@@ -102,7 +102,6 @@ func (t *Trie) Copy() *Trie {
 			changes: append(Batch(nil), t.changes...),
 		}
 	}
-	panic("unexpected backend")
 	// fmt.Printf("Copy requested (%d changes): %p: %x\n", len(t.changes), t, t.prefix)
 	return t
 }
