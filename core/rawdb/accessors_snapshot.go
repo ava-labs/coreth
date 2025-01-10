@@ -93,6 +93,7 @@ func DeleteSnapshotBlockHash(db ethdb.KeyValueWriter) {
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(accountSnapshotKey(hash))
+	fmt.Printf("**** ReadAccountSnapshot: %x: %x\n", hash, data)
 	return data
 }
 
