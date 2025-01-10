@@ -93,12 +93,12 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 						keys++
 					}
 					fmt.Printf("::: dropped trie with %d pending updates for %x\n", keys, accHash)
-				}
-				// Also any pending updates should not be apply
-				// Further updates shold apply to an empty trie
-				tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
-				if err != nil {
-					return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
+					// Also any pending updates should not be apply
+					// Further updates shold apply to an empty trie
+					tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
+					if err != nil {
+						return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
+					}
 				}
 			}
 
