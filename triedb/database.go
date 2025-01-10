@@ -46,8 +46,8 @@ type KVBackend interface {
 	Prefetch(key []byte) ([]byte, error)
 
 	// After this call, Root() should return the same hash as returned by this call.
-	// Note when length of a particular value, it means the corresponding key should
-	// be deleted.
+	// Note when length of a particular value is zero, it means the corresponding
+	// key should be deleted.
 	// There may be duplicate keys in the batch provided, and the last one should
 	// take effect.
 	// Note after this call, the next call to Update must build on the returned root,
