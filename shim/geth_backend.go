@@ -1,6 +1,8 @@
 package shim
 
 import (
+	"fmt"
+
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/triedb/database"
@@ -40,7 +42,11 @@ func NewLegacyBackend(
 }
 
 func (b *LegacyBackend) Prefetch(key []byte) ([]byte, error) { return b.tr.Get(key) }
-func (b *LegacyBackend) Get(key []byte) ([]byte, error)      { return b.tr.Get(key) }
+func (b *LegacyBackend) Get(key []byte) ([]byte, error) {
+	val, err := b.tr.Get(key)
+	fmt.Printf("Get: %x %x\n", key, val)
+	return val, err
+}
 
 func (b *LegacyBackend) Hash(batch Batch) common.Hash {
 	if b.hashed {
