@@ -715,6 +715,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
 		ChaindDB:             vm.chaindb,
 		VerDB:                vm.versiondb,
+		MetadataDB:           vm.metadataDB,
 		AtomicBackend:        vm.atomicBackend,
 		ToEngine:             vm.toEngine,
 		Acceptor:             vm,
