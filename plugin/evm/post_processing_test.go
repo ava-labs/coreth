@@ -488,7 +488,6 @@ func TestPostProcess(t *testing.T) {
 					if storageBackend == "legacy" {
 						require.Equal(t, storageRoot, block.Root(), "Root mismatch")
 					}
-
 				}
 
 				updateMetadata(t, dbs.metadata, blockHash, storageRoot, blockNumber)
