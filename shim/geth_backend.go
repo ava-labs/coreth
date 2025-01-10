@@ -1,6 +1,7 @@
 package shim
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ava-labs/coreth/trie"
@@ -41,11 +42,16 @@ func NewLegacyBackend(
 	return &LegacyBackend{tr: tr, addrHash: addrHash, writer: writer}, nil
 }
 
+var target = common.Hex2Bytes("171ab08901be24769dbebedbdf7e0245486fbc64ab975cd431a39533032d5415")
+
 func (b *LegacyBackend) Prefetch(key []byte) ([]byte, error) { return b.tr.Get(key) }
 func (b *LegacyBackend) Get(key []byte) ([]byte, error) {
 	val, err := b.tr.Get(key)
 	if b.addrHash != (common.Hash{}) {
 		fmt.Printf("Get: %x%x %x\n", b.addrHash, key, val)
+		if bytes.Equal(key, target) {
+			panic("found")
+		}
 	} else {
 		fmt.Printf("Get: %x %x\n", key, val)
 	}
