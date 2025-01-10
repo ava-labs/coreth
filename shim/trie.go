@@ -2,7 +2,6 @@ package shim
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -78,9 +77,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 
 func (t *Trie) Get(key []byte) ([]byte, error) {
 	key = t.getKey(key)
-	val, err := t.backend.Get(key)
-	fmt.Printf("Get: %x -> %x\n", key, val)
-	return val, err
+	return t.backend.Get(key)
 }
 
 func (t *Trie) Prefetch(key []byte) ([]byte, error) {
