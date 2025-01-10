@@ -45,34 +45,35 @@ func getAccountRoot(tr *trie.Trie, accHash common.Hash) (common.Hash, error) {
 	return root, nil
 }
 
-func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
+func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 	// Collect all nodes that are modified during the update
 	// Defined here so we can process storage deletes
 	nodes := trienode.NewMergedNodeSet()
 
 	accounts, err := trie.New(trie.StateTrieID(l.root), l.triedb)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	// Process the storage tries first, this means we can access the root for the
 	// storage tries before they are updated in the account trie. Necessary for
 	// the hash scheme.
 	tries := make(map[common.Hash]*trie.Trie)
-	for _, kv := range batch {
-		accHash := common.BytesToHash(kv.Key[:32])
-		if len(kv.Key) == 32 {
-			if len(kv.Value) == 0 {
+	for i, k := range ks {
+		v := vs[i]
+		accHash := common.BytesToHash(k[:32])
+		if len(k) == 32 {
+			if len(v) == 0 {
 				// this trie is DELETED. First we will remove it from storage:
 				// if it was updated before, we should have a trie for it
 				prevRoot, err := getAccountRoot(accounts, accHash)
 				if err != nil {
-					return common.Hash{}, fmt.Errorf("failed to get account root %x: %w", accHash, err)
+					return nil, fmt.Errorf("failed to get account root %x: %w", accHash, err)
 				}
 				if prevRoot != types.EmptyRootHash {
 					fmt.Printf(":: slow delete storage for %x\n", accHash)
 					_, leafs, _, set, err := slowDeleteStorage(l.triedb, l.root, accHash, prevRoot)
 					if err != nil {
-						return common.Hash{}, err
+						return nil, err
 					}
 					if set != nil {
 						updates, deletes := set.Size()
@@ -81,7 +82,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 					}
 				}
 				// Remove the account from the account trie so we don't try to delete it again
-				accounts.MustDelete(kv.Key[:32])
+				accounts.MustDelete(k[:32])
 
 				if pending, ok := tries[accHash]; ok {
 					// If there are pending updates for this account, we should not apply them
@@ -97,7 +98,7 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 					// Further updates shold apply to an empty trie
 					tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
 					if err != nil {
-						return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
+						return nil, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
 					}
 				}
 			}
@@ -110,24 +111,24 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 		if !ok {
 			root, err := getAccountRoot(accounts, accHash)
 			if err != nil {
-				return common.Hash{}, err
+				return nil, err
 			}
 			tr, err = trie.New(trie.StorageTrieID(l.root, accHash, root), l.triedb)
 			if err != nil {
-				return common.Hash{}, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
+				return nil, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
 			}
 			tries[accHash] = tr
 		}
 
 		// Update the storage trie
-		tr.MustUpdate(kv.Key[32:], kv.Value)
+		tr.MustUpdate(k[32:], v)
 	}
 
 	// Hash the storage tries
 	for _, tr := range tries {
 		_, set, err := tr.Commit(false)
 		if err != nil {
-			return common.Hash{}, err
+			return nil, err
 		}
 		if set != nil {
 			nodes.Merge(set)
@@ -135,47 +136,51 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 	}
 
 	// Update the account trie
-	for _, kv := range batch {
-		if len(kv.Key) == 64 {
+	for i, k := range ks {
+		v := vs[i]
+		if len(k) == 64 {
 			continue
 		}
-		accounts.MustUpdate(kv.Key, kv.Value)
+		accounts.MustUpdate(k, v)
 	}
 
 	// Verify account trie updates match the storage trie updates
 	for accHash, tr := range tries {
 		root, err := getAccountRoot(accounts, accHash)
 		if err != nil {
-			return common.Hash{}, err
+			return nil, err
 		}
 		if root != tr.Hash() {
-			return common.Hash{}, fmt.Errorf("account %x trie root mismatch (%x != %x)", accHash, root, tr.Hash())
+			return nil, fmt.Errorf("account %x trie root mismatch (%x != %x)", accHash, root, tr.Hash())
 		}
 	}
 
 	next, set, err := accounts.Commit(true)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	if set != nil {
 		nodes.Merge(set)
 	}
 
 	if err := l.triedb.Update(next, l.root, l.count, nodes, nil); err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 
 	// TODO: fix hashdb scheme later
 	l.root = next
 	l.count++
-	return next, nil
+	return next[:], nil
 }
 
-func (l *Legacy) Commit(root common.Hash) error       { return l.triedb.Commit(root, false) }
+func (l *Legacy) Commit(rootBytes []byte) error {
+	root := common.BytesToHash(rootBytes)
+	return l.triedb.Commit(root, false)
+}
 func (l *Legacy) Close() error                        { return nil }
 func (l *Legacy) Get(key []byte) ([]byte, error)      { panic("implement me") }
 func (l *Legacy) Prefetch(key []byte) ([]byte, error) { panic("implement me") }
-func (l *Legacy) Root() common.Hash                   { return l.root }
+func (l *Legacy) Root() []byte                        { return l.root[:] }
 
 const (
 	// storageDeleteLimit denotes the highest permissible memory allocation

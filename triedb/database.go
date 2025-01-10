@@ -17,6 +17,7 @@
 package triedb
 
 import (
+	"bytes"
 	"errors"
 
 	"github.com/ava-labs/coreth/trie"
@@ -30,17 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type KV struct {
-	Key   []byte
-	Value []byte
-}
-
-type Batch []KV
-
 type KVBackend interface {
 	// Returns the current root hash of the trie.
 	// Empty trie must return common.Hash{}.
-	Root() common.Hash
+	// Length of the returned slice must be common.HashLength.
+	Root() []byte
 
 	// Get retrieves the value for the given key.
 	// If the key does not exist, it must return (nil, nil).
@@ -51,15 +46,20 @@ type KVBackend interface {
 	Prefetch(key []byte) ([]byte, error)
 
 	// After this call, Root() should return the same hash as returned by this call.
-	// Note when len(Value) == 0, it means the key should be deleted.
+	// Note when length of a particular value, it means the corresponding key should
+	// be deleted.
+	// There may be duplicate keys in the batch provided, and the last one should
+	// take effect.
 	// Note after this call, the next call to Update must build on the returned root,
 	// regardless of whether Commit is called.
-	Update(Batch) (common.Hash, error)
+	// Length of the returned root must be common.HashLength.
+	Update(keys, vals [][]byte) ([]byte, error)
 
 	// After this call, changes related to [root] should be persisted to disk.
 	// This may be implemented as no-op if Update already persists changes, or
 	// commits happen on a rolling basis.
-	Commit(root common.Hash) error
+	// Length of the root slice is guaranteed to be common.HashLength.
+	Commit(root []byte) error
 
 	// Close closes the backend and releases all held resources.
 	Close() error
@@ -210,7 +210,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	}
 	if db.config.KeyValueDB != nil {
 		if backend := db.config.KeyValueDB.KVBackend; backend != nil {
-			return backend.Commit(root)
+			return backend.Commit(root[:])
 		}
 	}
 	return db.backend.Commit(root, report)
@@ -236,7 +236,7 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	if db.config.KeyValueDB != nil {
 		if backend := db.config.KeyValueDB.KVBackend; backend != nil {
-			return backend.Root() != common.Hash{}
+			return !bytes.Equal(backend.Root(), common.Hash{}.Bytes())
 		}
 	}
 	return db.backend.Initialized(genesisRoot)

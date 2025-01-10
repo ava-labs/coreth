@@ -186,14 +186,15 @@ func TestPostProcess(t *testing.T) {
 	}
 
 	var (
-		dbs          dbs
-		sourceDb     ethdb.Database
-		sum          totals
-		blockNumber  uint64
-		storageRoot  common.Hash
-		storage      triedb.KVBackend
-		evitcedBatch triedb.Batch
-		lastCommit   struct {
+		dbs         dbs
+		sourceDb    ethdb.Database
+		sum         totals
+		blockNumber uint64
+		storageRoot common.Hash
+		storage     triedb.KVBackend
+		evictedKs   [][]byte
+		evictedVs   [][]byte
+		lastCommit  struct {
 			txs    uint64
 			number uint64
 		}
@@ -246,7 +247,8 @@ func TestPostProcess(t *testing.T) {
 		}
 		// t.Logf("evicting key: %x @ block %d, updatedAt: %d (%d blocks ago)", short(k), blockNumber, v.updatedAt, blockNumber-v.updatedAt)
 		if storage != nil {
-			evitcedBatch = append(evitcedBatch, triedb.KV{Key: []byte(k), Value: v.val})
+			evictedKs = append(evictedKs, []byte(k))
+			evictedVs = append(evictedVs, v.val)
 		}
 		sum.writeCacheEvictTime += time.Since(now)
 	}
@@ -314,11 +316,11 @@ func TestPostProcess(t *testing.T) {
 		accountDeletes, storageDeletes := 0, 0
 
 		// 1. Read account writes from the tape as they come first
-		accountWritesBatch := make([]triedb.KV, accountWrites)
+		accountWritesBatch := make([]KV, accountWrites)
 		for j := 0; j < int(accountWrites); j++ {
 			k, v, err := readKV(r, 32)
 			require.NoError(t, err)
-			accountWritesBatch[j] = triedb.KV{Key: k, Value: v}
+			accountWritesBatch[j] = KV{Key: k, Value: v}
 		}
 
 		// 2. Process storage writes
@@ -391,20 +393,21 @@ func TestPostProcess(t *testing.T) {
 
 			shouldCommitBlocks := commitEachBlocks > 0 && blockNumber-lastCommit.number >= uint64(commitEachBlocks)
 			shouldCommitTxs := commitEachTxs > 0 && sum.txs+sum.atomicTxs-lastCommit.txs >= uint64(commitEachTxs)
-			if len(evitcedBatch) > 0 && (shouldCommitBlocks || shouldCommitTxs) {
+			if len(evictedKs) > 0 && (shouldCommitBlocks || shouldCommitTxs) {
 				if tapeVerbose {
-					for _, kv := range evitcedBatch {
-						t.Logf("storing: %x -> %x", kv.Key, kv.Value)
+					for i, k := range evictedKs {
+						t.Logf("storing: %x -> %x", k, evictedVs[i])
 					}
 				}
 				now := time.Now()
 				// Get state commitment from storage backend
-				storageRoot, err = storage.Update(evitcedBatch)
+				storageRootBytes, err := storage.Update(evictedKs, evictedVs)
 				require.NoError(t, err)
+				storageRoot = common.BytesToHash(storageRootBytes)
 				updateTime := time.Since(now)
 
 				// Request storage backend to persist the state
-				err = storage.Commit(storageRoot)
+				err = storage.Commit(storageRootBytes)
 				require.NoError(t, err)
 
 				sum.storagePersistTime += time.Since(now) - updateTime
@@ -413,11 +416,12 @@ func TestPostProcess(t *testing.T) {
 				sum.storageUpdateCount++
 
 				if writeSnapshot {
-					for _, kv := range evitcedBatch {
-						if len(kv.Key) == 32 {
-							if len(kv.Value) == 0 {
-								rawdb.DeleteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key))
-								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
+					for i, k := range evictedKs {
+						v := evictedVs[i]
+						if len(k) == 32 {
+							if len(v) == 0 {
+								rawdb.DeleteAccountSnapshot(dbs.chain, common.BytesToHash(k))
+								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, k...), nil)
 								keysDeleted := 0
 								for it.Next() {
 									k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
@@ -429,26 +433,26 @@ func TestPostProcess(t *testing.T) {
 								}
 								it.Release()
 								if keysDeleted > 0 {
-									t.Logf("Deleted %d storage keys for account %x", keysDeleted, kv.Key)
+									t.Logf("Deleted %d storage keys for account %x", keysDeleted, k)
 								}
 							} else {
 								var acc types.StateAccount
-								if err := rlp.DecodeBytes(kv.Value, &acc); err != nil {
+								if err := rlp.DecodeBytes(v, &acc); err != nil {
 									t.Fatalf("Failed to decode account: %v", err)
 								}
 								data := types.SlimAccountRLP(acc)
-								rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), data)
+								rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(k), data)
 							}
 						} else {
-							if len(kv.Value) > 0 {
-								rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
+							if len(v) > 0 {
+								rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]), v)
 							} else {
-								rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]))
+								rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
 							}
 						}
 					}
 
-					evitcedBatch = evitcedBatch[:0]
+					evictedKs, evictedVs = evictedKs[:0], evictedVs[:0]
 				}
 				if sourceDb != nil {
 					// update block and metadata from source db

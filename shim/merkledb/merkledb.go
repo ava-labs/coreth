@@ -50,35 +50,34 @@ func (m *MerkleDB) latestViewLocked() merkledb.Trie {
 	return m.pendingViews[len(m.pendingViews)-1]
 }
 
-func (m *MerkleDB) Update(batch triedb.Batch) (common.Hash, error) {
+func (m *MerkleDB) Update(ks, vs [][]byte) ([]byte, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	ctx := context.TODO()
-	changes := make([]database.BatchOp, len(batch))
-	for i, kv := range batch {
-		changes[i] = database.BatchOp{
-			Key:    kv.Key,
-			Value:  kv.Value,
-			Delete: len(kv.Value) == 0,
-		}
+	changes := make([]database.BatchOp, len(ks))
+	for i, k := range ks {
+		v := vs[i]
+		changes[i] = database.BatchOp{Key: k, Value: v, Delete: len(v) == 0}
 	}
 	view, err := m.latestViewLocked().NewView(ctx, merkledb.ViewChanges{BatchOps: changes})
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	root, err := view.GetMerkleRoot(ctx)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	m.pendingViews = append(m.pendingViews, view)
 	m.pendingViewRoots = append(m.pendingViewRoots, common.Hash(root))
-	return common.Hash(root), nil
+	return root[:], nil
 }
 
-func (m *MerkleDB) Commit(root common.Hash) error {
+func (m *MerkleDB) Commit(rootBytes []byte) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	root := common.BytesToHash(rootBytes)
 
 	if len(m.pendingViews) == 0 {
 		return fmt.Errorf("no pending views")
@@ -114,13 +113,13 @@ func (m *MerkleDB) commitToDisk(root common.Hash) error {
 	return nil
 }
 
-func (m *MerkleDB) Root() common.Hash {
+func (m *MerkleDB) Root() []byte {
 	ctx := context.TODO()
 	root, err := m.latestView().GetMerkleRoot(ctx)
 	if err != nil {
 		panic(fmt.Sprintf("failed to get merkle root: %v", err))
 	}
-	return common.Hash(root)
+	return root[:]
 }
 
 func (m *MerkleDB) Close() error {
@@ -132,7 +131,7 @@ func (m *MerkleDB) Close() error {
 	m.lock.Unlock()
 
 	if last != (common.Hash{}) {
-		if err := m.Commit(last); err != nil {
+		if err := m.Commit(last[:]); err != nil {
 			return err
 		}
 	}

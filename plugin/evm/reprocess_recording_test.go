@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -42,14 +41,18 @@ import (
 // - Key hash (32 bytes)
 // - Value len (byte)
 
+type KV struct {
+	Key   []byte
+	Value []byte
+}
 type blockRecorder struct {
 	accountReads int
 	storageReads int
 	txEnds       int
 	readTape     []byte
 
-	accountWrites []triedb.KV
-	storageWrites []triedb.KV
+	accountWrites []KV
+	storageWrites []KV
 
 	fileManager *fileManager
 }
@@ -57,9 +60,9 @@ type blockRecorder struct {
 func (b *blockRecorder) MustUpdate(key, value []byte) {
 	switch len(key) {
 	case 32:
-		b.accountWrites = append(b.accountWrites, triedb.KV{Key: key, Value: value})
+		b.accountWrites = append(b.accountWrites, KV{Key: key, Value: value})
 	case 64:
-		b.storageWrites = append(b.storageWrites, triedb.KV{Key: key, Value: value})
+		b.storageWrites = append(b.storageWrites, KV{Key: key, Value: value})
 	default:
 		panic("unexpected key length")
 	}

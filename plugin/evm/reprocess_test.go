@@ -502,7 +502,7 @@ func reprocess(
 
 		lastRoot = normalGenesis.Root()
 		if backend := cacheConfig.KeyValueDB.KVBackend; backend != nil {
-			lastRoot = backend.Root()
+			lastRoot = common.BytesToHash(backend.Root())
 		}
 
 		t.Logf("Genesis performed: hash: %x, root : %x", bc.CurrentBlock().Hash(), lastRoot)

@@ -7,7 +7,6 @@ import (
 
 	"github.com/ava-labs/coreth/shim/nomt/nomt"
 	"github.com/ava-labs/coreth/triedb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"google.golang.org/protobuf/proto"
 )
@@ -58,7 +57,7 @@ func (n *Nomt) response(req *nomt.Request) (*nomt.Response, error) {
 	return response(n.conn, req)
 }
 
-func (n *Nomt) Root() common.Hash {
+func (n *Nomt) Root() []byte {
 	req := &nomt.Request{
 		Request: &nomt.Request_Root{
 			Root: &nomt.RootRequest{},
@@ -67,9 +66,9 @@ func (n *Nomt) Root() common.Hash {
 	resp, err := n.response(req)
 	if err != nil {
 		log.Error("Failed to get root", "err", err)
-		return common.Hash{}
+		return nil
 	}
-	return common.BytesToHash(resp.GetRoot().Root)
+	return resp.GetRoot().Root
 }
 
 func (n *Nomt) Get(key []byte) ([]byte, error) {
@@ -104,30 +103,27 @@ func (n *Nomt) Prefetch(key []byte) ([]byte, error) {
 	return nil, err
 }
 
-func (n *Nomt) Update(batch triedb.Batch) (common.Hash, error) {
+func (n *Nomt) Update(ks, vs [][]byte) ([]byte, error) {
 	req := &nomt.Request{
 		Request: &nomt.Request_Update{
 			Update: &nomt.UpdateRequest{
-				Items: make([]*nomt.UpdateRequestItem, len(batch)),
+				Items: make([]*nomt.UpdateRequestItem, len(ks)),
 			},
 		},
 	}
 
-	for i, item := range batch {
-		req.GetUpdate().Items[i] = &nomt.UpdateRequestItem{
-			Key:   item.Key,
-			Value: item.Value,
-		}
+	for i, k := range ks {
+		req.GetUpdate().Items[i] = &nomt.UpdateRequestItem{Key: k, Value: vs[i]}
 	}
 
 	resp, err := n.response(req)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
-	return common.BytesToHash(resp.GetUpdate().Root), nil
+	return resp.GetUpdate().Root, nil
 }
 
-func (n *Nomt) Commit(root common.Hash) error {
+func (n *Nomt) Commit(root []byte) error {
 	return nil
 }
 

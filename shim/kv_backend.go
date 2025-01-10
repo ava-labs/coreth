@@ -17,10 +17,15 @@ var (
 )
 
 type (
-	KV        = triedb.KV
-	Batch     = triedb.Batch
 	KVBackend = triedb.KVBackend
 )
+
+type KV struct {
+	Key   []byte
+	Value []byte
+}
+
+type Batch []KV
 
 type KVTrieBackend struct {
 	hashed  bool
@@ -46,13 +51,18 @@ func (k *KVTrieBackend) Hash(batch Batch) common.Hash {
 	//for _, kv := range batch {
 	//	fmt.Printf("Update: %x %x\n", kv.Key, kv.Value)
 	//}
-	root, err := k.backend.Update(batch)
+	ks, vs := make([][]byte, len(batch)), make([][]byte, len(batch))
+	for i, kv := range batch {
+		ks[i] = kv.Key
+		vs[i] = kv.Value
+	}
+	root, err := k.backend.Update(ks, vs)
 	if err != nil {
 		panic(fmt.Sprintf("failed to update trie: %v", err))
 	}
 	k.hashed = true
-	k.hash = root
-	return root
+	k.hash = common.BytesToHash(root)
+	return k.hash
 }
 
 func (k *KVTrieBackend) Commit(batch Batch, collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
@@ -68,7 +78,7 @@ func NewAccountTrieKV(stateRoot common.Hash, kv KVBackend, db database.Database)
 	if stateRoot == types.EmptyRootHash {
 		stateRoot = common.Hash{}
 	}
-	kvRoot := kv.Root()
+	kvRoot := common.BytesToHash(kv.Root())
 	if kvRoot != stateRoot {
 		return nil, fmt.Errorf("%w: expected %x, got %x", ErrRootMismatch, stateRoot, kvRoot)
 	}
