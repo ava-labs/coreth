@@ -83,6 +83,17 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 				// Remove the account from the account trie so we don't try to delete it again
 				accounts.MustDelete(kv.Key[:32])
 
+				if pending, ok := tries[accHash]; ok {
+					// If there are pending updates for this account, we should not apply them
+					// but log them for checking
+					nodeIt := pending.MustNodeIterator(nil)
+					it := trie.NewIterator(nodeIt)
+					keys := 0
+					for it.Next() {
+						keys++
+					}
+					fmt.Printf("::: dropped trie with %d pending updates for %x\n", keys, accHash)
+				}
 				// Also any pending updates should not be apply
 				// Further updates shold apply to an empty trie
 				tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
