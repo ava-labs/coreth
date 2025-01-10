@@ -242,6 +242,10 @@ func TestExportHeaders(t *testing.T) {
 			t.Fatalf("Header %d not found", i)
 		}
 		rawdb.WriteHeader(db, header)
+
+		if i%uint64(logEach) == 0 {
+			t.Logf("Exported header %d", i)
+		}
 	}
 
 	t.Logf("Exported %d headers", endBlock-startBlock+1)
