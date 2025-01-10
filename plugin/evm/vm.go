@@ -42,7 +42,6 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
-	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -77,7 +76,6 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -222,8 +220,11 @@ type VM struct {
 	blockChain *core.BlockChain
 	miner      *miner.Miner
 
-	// [db] is the VM's current database managed by ChainState
-	db *versiondb.Database
+	// [versiondb] is the VM's current versioned database
+	versiondb *versiondb.Database
+
+	// [db] is the VM's current database
+	db avalanchedatabase.Database
 
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
@@ -235,6 +236,8 @@ type VM struct {
 	// [warpDB] is used to store warp message signatures
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB avalanchedatabase.Database
+
+	metadataDB avalanchedatabase.Database
 
 	toEngine chan<- commonEng.Message
 
@@ -268,7 +271,7 @@ type VM struct {
 	client       peer.NetworkClient
 	networkCodec codec.Manager
 
-	validators *p2p.Validators
+	p2pValidators *p2p.Validators
 
 	// Metrics
 	sdkMetrics *prometheus.Registry
@@ -331,7 +334,7 @@ func (vm *VM) Initialize(
 	fxs []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
-	vm.config.SetDefaults()
+	vm.config.SetDefaults(defaultTxPoolConfig)
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
 			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
@@ -390,14 +393,10 @@ func (vm *VM) Initialize(
 	if err := vm.initializeDBs(db); err != nil {
 		return fmt.Errorf("failed to initialize databases: %w", err)
 	}
-
 	if vm.config.InspectDatabase {
-		start := time.Now()
-		log.Info("Starting database inspection")
-		if err := rawdb.InspectDatabase(vm.chaindb, nil, nil); err != nil {
+		if err := vm.inspectDatabases(); err != nil {
 			return err
 		}
-		log.Info("Completed database inspection", "elapsed", time.Since(start))
 	}
 
 	g := new(core.Genesis)
@@ -536,7 +535,7 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
-	vm.validators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
+	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
 	vm.networkCodec = message.Codec
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
@@ -586,12 +585,12 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = atomic.NewAtomicTxRepository(vm.db, atomic.Codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomic.NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
 	vm.atomicBackend, err = atomic.NewAtomicBackend(
-		vm.db, vm.ctx.SharedMemory, bonusBlockHeights,
+		vm.versiondb, vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,
 	)
@@ -656,7 +655,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		&vm.ethConfig,
 		&EthPushGossiper{vm: vm},
 		vm.chaindb,
-		vm.config.EthBackendSettings(),
+		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
 		dummy.NewFakerWithClock(callbacks, &vm.clock),
 		&vm.clock,
@@ -715,7 +714,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		StateSyncRequestSize: vm.config.StateSyncRequestSize,
 		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
 		ChaindDB:             vm.chaindb,
-		DB:                   vm.db,
+		VerDB:                vm.versiondb,
 		AtomicBackend:        vm.atomicBackend,
 		ToEngine:             vm.toEngine,
 		Acceptor:             vm,
@@ -1040,7 +1039,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.validators))
+	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.p2pValidators))
 	ethTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -1056,7 +1055,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	atomicTxGossipMarshaller := atomic.GossipAtomicTxMarshaller{}
-	atomicTxGossipClient := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.validators))
+	atomicTxGossipClient := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.p2pValidators))
 	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
@@ -1077,7 +1076,7 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
 			ethTxGossipMarshaller,
 			ethTxPool,
-			vm.validators,
+			vm.p2pValidators,
 			ethTxGossipClient,
 			ethTxGossipMetrics,
 			pushGossipParams,
@@ -1096,7 +1095,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.GossipAtomicTx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
-			vm.validators,
+			vm.p2pValidators,
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
 			pushGossipParams,
@@ -1123,7 +1122,7 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipTargetMessageSize,
 			txGossipThrottlingPeriod,
 			txGossipThrottlingLimit,
-			vm.validators,
+			vm.p2pValidators,
 		)
 	}
 
@@ -1140,7 +1139,7 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipTargetMessageSize,
 			txGossipThrottlingPeriod,
 			txGossipThrottlingLimit,
-			vm.validators,
+			vm.p2pValidators,
 		)
 	}
 
@@ -1161,7 +1160,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.ethTxPullGossiper = gossip.ValidatorGossiper{
 			Gossiper:   ethTxPullGossiper,
 			NodeID:     vm.ctx.NodeID,
-			Validators: vm.validators,
+			Validators: vm.p2pValidators,
 		}
 	}
 
@@ -1188,7 +1187,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.atomicTxPullGossiper = &gossip.ValidatorGossiper{
 			Gossiper:   atomicTxPullGossiper,
 			NodeID:     vm.ctx.NodeID,
-			Validators: vm.validators,
+			Validators: vm.p2pValidators,
 		}
 	}
 
@@ -1450,6 +1449,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		enabledAPIs = append(enabledAPIs, "coreth-admin")
 	}
 
+	// RPC APIs
 	if vm.config.SnowmanAPIEnabled {
 		if err := handler.RegisterName("snowman", &SnowmanAPI{vm}); err != nil {
 			return nil, err
@@ -1475,21 +1475,6 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 
 	vm.rpcHandlers = append(vm.rpcHandlers, handler)
 	return apis, nil
-}
-
-// initializeDBs initializes the databases used by the VM.
-// coreth always uses the avalanchego provided avalanchedatabase.
-func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
-	// Use NewNested rather than New so that the structure of the database
-	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
-	vm.db = versiondb.New(db)
-	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.db)
-	// Note warpDB is not part of versiondb because it is not necessary
-	// that warp signatures are committed to the database atomically with
-	// the last accepted block.
-	vm.warpDB = prefixdb.New(warpPrefix, db)
-	return nil
 }
 
 // CreateStaticHandlers makes new http handlers that can handle API calls

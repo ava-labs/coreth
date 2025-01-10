@@ -336,7 +336,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 
 	serverAtomicTrie := serverVM.atomicTrie
 	require.True(serverAtomicTrie.AcceptTrie(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
-	require.NoError(serverVM.db.Commit())
+	require.NoError(serverVM.versiondb.Commit())
 
 	serverSharedMemories := atomic.NewSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
 	importOps, err := atomic.ConvertToAtomicOps(importTx)
