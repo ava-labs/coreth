@@ -418,14 +418,19 @@ func TestPostProcess(t *testing.T) {
 							if len(kv.Value) == 0 {
 								rawdb.DeleteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key))
 								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, kv.Key...), nil)
+								keysDeleted := 0
 								for it.Next() {
 									k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
 									rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
+									keysDeleted++
 								}
 								if err := it.Error(); err != nil {
 									t.Fatalf("Failed to iterate over snapshot account: %v", err)
 								}
 								it.Release()
+								if keysDeleted > 0 {
+									t.Logf("Deleted %d storage keys for account %x", keysDeleted, kv.Key)
+								}
 							} else {
 								var acc types.StateAccount
 								if err := rlp.DecodeBytes(kv.Value, &acc); err != nil {
