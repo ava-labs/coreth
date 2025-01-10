@@ -33,7 +33,7 @@ import (
 
 type KVBackend interface {
 	// Returns the current root hash of the trie.
-	// Empty trie must return common.Hash{}.
+	// Empty trie must return common.HashLength (32) worth of zero bytes.
 	// Length of the returned slice must be common.HashLength.
 	Root() []byte
 
