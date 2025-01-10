@@ -227,11 +227,11 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			s.db.setError(err)
 			return common.Hash{}
 		}
+		val, err := tr.GetStorage(s.address, key.Bytes())
 		if crypto.Keccak256Hash(key.Bytes()) == common.Hash(target) {
 			fmt.Println("GetState: ", s.address, key, value)
 			panic("found")
 		}
-		val, err := tr.GetStorage(s.address, key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
