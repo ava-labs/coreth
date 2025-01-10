@@ -621,6 +621,9 @@ func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k
 					sum.accountReadHits++
 				}
 			}
+			if tapeVerbose {
+				t.Logf("account read: %x -> %x", key, val)
+			}
 		case typeStorage:
 			key, val, err := readKV(r, 64)
 			require.NoError(t, err)
@@ -632,8 +635,14 @@ func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k
 					sum.storageReadHits++
 				}
 			}
+			if tapeVerbose {
+				t.Logf("storage read: %x -> %x", key, val)
+			}
 		case typeEndTx:
 			txCount++
+			if tapeVerbose {
+				t.Logf("end tx")
+			}
 		}
 	}
 	return txCount
