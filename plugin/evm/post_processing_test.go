@@ -440,7 +440,11 @@ func TestPostProcess(t *testing.T) {
 								rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(kv.Key), data)
 							}
 						} else {
-							rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
+							if len(kv.Value) > 0 {
+								rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]), kv.Value)
+							} else {
+								rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(kv.Key[:32]), common.BytesToHash(kv.Key[32:]))
+							}
 						}
 					}
 
