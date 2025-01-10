@@ -230,7 +230,7 @@ func TestPostProcess(t *testing.T) {
 			tdb := triedb.NewDatabase(dbs.chain, tdbConfig)
 			storage = legacy.New(tdb, lastRoot, lastHeight, true)
 		}
-		require.Equal(t, lastRoot, storage.Root(), "Root mismatch")
+		require.Equal(t, lastRoot, common.BytesToHash(storage.Root()), "Root mismatch")
 		storageRoot = lastRoot
 		t.Logf("Storage backend initialized: %s", storageBackend)
 	}
