@@ -286,7 +286,7 @@ func TestPostProcess(t *testing.T) {
 			accountReads: make(map[string][]byte),
 			storageReads: make(map[string][]byte),
 		}
-		tapeTxs := processTape(t, r, tapeResult, cache.GetAndSet, &sum)
+		tapeTxs := processTape(t, r, tapeResult, cache.GetAndSet, &sum, tapeVerbose && blockNumber >= i)
 		require.Equal(t, txs, tapeTxs)
 
 		accountWrites, err := readUint16(r)
@@ -598,7 +598,7 @@ type tapeResult struct {
 }
 
 // cache should return true if the value was found in the cache
-func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k string, v []byte) bool, sum *totals) uint16 {
+func processTape(t *testing.T, r io.Reader, tapeResult *tapeResult, cache func(k string, v []byte) bool, sum *totals, tapeVerbose bool) uint16 {
 	length, err := readUint32(r)
 	require.NoError(t, err)
 
