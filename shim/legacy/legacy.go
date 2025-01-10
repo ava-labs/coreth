@@ -80,6 +80,8 @@ func (l *Legacy) Update(batch triedb.Batch) (common.Hash, error) {
 						nodes.Merge(set)
 					}
 				}
+				// Remove the account from the account trie so we don't try to delete it again
+				accounts.MustDelete(kv.Key[:32])
 
 				// Also any pending updates should not be apply
 				// Further updates shold apply to an empty trie
