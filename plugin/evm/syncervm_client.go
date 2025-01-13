@@ -21,7 +21,8 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ethereum/go-ethereum/common"
@@ -64,7 +65,7 @@ type StateSyncClientConfig struct {
 	Acceptor      BlockAcceptor
 	VerDB         *versiondb.Database
 	MetadataDB    database.Database
-	AtomicBackend atomic.AtomicBackend
+	AtomicBackend state.AtomicBackend
 
 	Client syncclient.Client
 
@@ -288,7 +289,7 @@ func (client *stateSyncerClient) syncBlocks(ctx context.Context, fromHash common
 
 func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", client.syncSummary.AtomicRoot)
-	atomicSyncer, err := atomic.NewAtomicSyncer(
+	atomicSyncer, err := atomicsync.NewAtomicSyncer(
 		client.Client,
 		client.VerDB,
 		client.AtomicBackend.AtomicTrie(),

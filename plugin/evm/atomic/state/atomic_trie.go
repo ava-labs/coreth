@@ -1,11 +1,10 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package state
 
 import (
 	"fmt"
-	"time"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
@@ -16,11 +15,12 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/triedb"
+
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -28,18 +28,7 @@ import (
 )
 
 const (
-	progressLogFrequency       = 30 * time.Second
-	atomicKeyLength            = wrappers.LongLen + common.HashLength
-	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
-
-	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
-	atomicTrieMemoryCap     = 64 * units.MiB
-)
-
-var (
-	_                            AtomicTrie = &atomicTrie{}
-	lastCommittedKey                        = []byte("atomicTrieLastCommittedBlock")
-	appliedSharedMemoryCursorKey            = []byte("atomicTrieLastAppliedToSharedMemory")
+	AtomicKeyLength = wrappers.LongLen + common.HashLength
 )
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
@@ -115,6 +104,20 @@ type AtomicTrieIterator interface {
 	Error() error
 }
 
+const (
+	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
+	atomicTrieMemoryCap     = 64 * units.MiB
+)
+
+var _ AtomicTrie = &atomicTrie{}
+
+var (
+	// EmptyAtomicRootHash is the known root hash of an empty atomic merkle trie.
+	// TODO: this is a workaround to avoid importing types from core package
+	EmptyAtomicRootHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	lastCommittedKey    = []byte("atomicTrieLastCommittedBlock")
+)
+
 // atomicTrie implements the AtomicTrie interface
 type atomicTrie struct {
 	commitInterval      uint64                     // commit interval, same as commitHeightInterval by default
@@ -125,12 +128,13 @@ type atomicTrie struct {
 	lastAcceptedRoot    common.Hash                // most recent trie root passed to accept trie or the root of the atomic trie on intialization.
 	codec               codec.Manager
 	memoryCap           common.StorageSize
-	tipBuffer           *core.BoundedBuffer[common.Hash]
+	// TODO: we don't really need this to be imported from core package
+	tipBuffer *core.BoundedBuffer[common.Hash]
 }
 
-// newAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
+// NewAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
 // Initializes the trie before returning it.
-func newAtomicTrie(
+func NewAtomicTrie(
 	atomicTrieDB avalanchedatabase.Database, metadataDB avalanchedatabase.Database,
 	codec codec.Manager, lastAcceptedHeight uint64, commitHeightInterval uint64,
 ) (*atomicTrie, error) {
@@ -140,7 +144,7 @@ func newAtomicTrie(
 	}
 	// initialize to EmptyRootHash if there is no committed root.
 	if root == (common.Hash{}) {
-		root = types.EmptyRootHash
+		root = EmptyAtomicRootHash
 	}
 	// If the last committed height is above the last accepted height, then we fall back to
 	// the last commit below the last accepted height.
@@ -224,7 +228,7 @@ func (a *atomicTrie) commit(height uint64, root common.Hash) error {
 
 func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
 	for blockchainID, requests := range atomicOps {
-		valueBytes, err := a.codec.Marshal(CodecVersion, requests)
+		valueBytes, err := a.codec.Marshal(atomic.CodecVersion, requests)
 		if err != nil {
 			// highly unlikely but possible if atomic.Element
 			// has a change that is unsupported by the codec
@@ -232,7 +236,7 @@ func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[id
 		}
 
 		// key is [height]+[blockchainID]
-		keyPacker := wrappers.Packer{Bytes: make([]byte, atomicKeyLength)}
+		keyPacker := wrappers.Packer{Bytes: make([]byte, AtomicKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
 		if err := trie.Update(keyPacker.Bytes, valueBytes); err != nil {
@@ -268,7 +272,7 @@ func (a *atomicTrie) updateLastCommitted(root common.Hash, height uint64) error 
 	return nil
 }
 
-// Iterator returns a types.AtomicTrieIterator that iterates the trie from the given
+// Iterator returns a AtomicTrieIterator that iterates the trie from the given
 // atomic trie root, starting at the specified [cursor].
 func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (AtomicTrieIterator, error) {
 	t, err := trie.New(trie.TrieID(root), a.trieDB)
@@ -302,7 +306,7 @@ func getRoot(metadataDB avalanchedatabase.Database, height uint64) (common.Hash,
 		// if root is queried at height == 0, return the empty root hash
 		// this may occur if peers ask for the most recent state summary
 		// and number of accepted blocks is less than the commit interval.
-		return types.EmptyRootHash, nil
+		return EmptyAtomicRootHash, nil
 	}
 
 	heightBytes := avalanchedatabase.PackUInt64(height)
@@ -322,7 +326,7 @@ func (a *atomicTrie) LastAcceptedRoot() common.Hash {
 
 func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error {
 	if nodes != nil {
-		if err := a.trieDB.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
+		if err := a.trieDB.Update(root, EmptyAtomicRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 			return err
 		}
 	}

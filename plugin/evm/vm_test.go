@@ -25,6 +25,8 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
@@ -1053,8 +1055,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.mempool.AddLocalTx(reissuanceTx1); !errors.Is(err, atomic.ErrConflictingAtomicTx) {
-				t.Fatalf("Expected to fail with err: %s, but found err: %s", atomic.ErrConflictingAtomicTx, err)
+			if err := vm.mempool.AddLocalTx(reissuanceTx1); !errors.Is(err, txpool.ErrConflictingAtomicTx) {
+				t.Fatalf("Expected to fail with err: %s, but found err: %s", txpool.ErrConflictingAtomicTx, err)
 			}
 
 			assert.True(t, vm.mempool.Has(importTx1.ID()))
@@ -1468,7 +1470,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 type wrappedBackend struct {
-	atomic.AtomicBackend
+	state.AtomicBackend
 	registeredBonusBlocks map[uint64]common.Hash
 }
 

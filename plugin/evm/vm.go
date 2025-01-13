@@ -41,16 +41,17 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/triedb"
-	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/utils"
-
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/triedb"
+	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 
 	// Force-load tracer engine to trigger registration
@@ -246,17 +247,17 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository atomic.AtomicTxRepository
+	atomicTxRepository atomicstate.AtomicTxRepository
 	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie atomic.AtomicTrie
+	atomicTrie atomicstate.AtomicTrie
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend atomic.AtomicBackend
+	atomicBackend atomicstate.AtomicBackend
 
 	builder *blockBuilder
 
 	baseCodec codec.Registry
 	clock     mockable.Clock
-	mempool   *atomic.Mempool
+	mempool   *atomictxpool.Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -520,7 +521,7 @@ func (vm *VM) Initialize(
 	}
 
 	// TODO: read size from settings
-	vm.mempool, err = atomic.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -585,11 +586,11 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = atomic.NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = atomic.NewAtomicBackend(
+	vm.atomicBackend, err = atomicstate.NewAtomicBackend(
 		vm.versiondb, vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,

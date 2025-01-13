@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package state
 
 import (
 	"encoding/binary"
@@ -13,10 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
 )
-
-const atomicTrieKeyLen = wrappers.LongLen + common.HashLength
 
 // atomicTrieIterator is an implementation of types.AtomicTrieIterator that serves
 // parsed data with each iteration
@@ -55,8 +52,8 @@ func (a *atomicTrieIterator) Next() bool {
 	keyLen := len(a.trieIterator.Key)
 	// If the key has an unexpected length, set the error and stop the iteration since the data is
 	// no longer reliable.
-	if keyLen != atomicTrieKeyLen {
-		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", atomicTrieKeyLen, keyLen))
+	if keyLen != AtomicKeyLength {
+		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", AtomicKeyLength, keyLen))
 		return false
 	}
 
