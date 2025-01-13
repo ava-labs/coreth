@@ -45,7 +45,7 @@ import (
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"

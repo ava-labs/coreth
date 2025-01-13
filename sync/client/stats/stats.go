@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/libevm/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
