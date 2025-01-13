@@ -1,6 +1,7 @@
 package legacy
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/ava-labs/coreth/core/types"
@@ -86,16 +87,16 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 						fmt.Printf("::: set merged: %d updates, %d deletes (%d leafs deleted)\n", updates, deletes, leafs)
 						nodes.Merge(set)
 					}
+
+					// Track that this account is deleted
+					if l.trackDeletedTries != nil {
+						if err := l.trackDeletedTries.Put(accHash[:], binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
+							return nil, fmt.Errorf("failed to track deleted trie %x: %w", accHash, err)
+						}
+					}
 				}
 				// Remove the account from the account trie so we don't try to delete it again
 				accounts.MustDelete(k[:32])
-
-				// Track that this account is deleted
-				if l.trackDeletedTries != nil {
-					if err := l.trackDeletedTries.Put(accHash[:], []byte{1}); err != nil {
-						return nil, fmt.Errorf("failed to track deleted trie %x: %w", accHash, err)
-					}
-				}
 
 				if pending, ok := tries[accHash]; ok {
 					// If there are pending updates for this account, we should not apply them
@@ -115,6 +116,13 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 					// if err != nil {
 					// 	return nil, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
 					// }
+
+					// Track that this account is deleted
+					if l.trackDeletedTries != nil {
+						if err := l.trackDeletedTries.Put(accHash[:], binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
+							return nil, fmt.Errorf("failed to track deleted trie %x: %w", accHash, err)
+						}
+					}
 				}
 			}
 
