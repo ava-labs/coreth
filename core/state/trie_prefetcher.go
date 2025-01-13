@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/libevm/options"
-	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
