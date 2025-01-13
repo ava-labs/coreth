@@ -566,12 +566,14 @@ func reprocess(
 		err = bc.InsertBlockManualWithParent(block, parent, true)
 		require.NoError(t, err)
 
-		if i%uint64(logEach) == 0 {
-			if tapeRecorder != nil {
+		if tapeRecorder != nil {
+			if i%uint64(logEach) == 0 {
 				tapeRecorder.Summary(block, uint16(len(atomicTxs)))
-				tapeRecorder.WriteToDisk(block, uint16(len(atomicTxs)))
-				tapeRecorder.Reset()
-			} else {
+			}
+			tapeRecorder.WriteToDisk(block, uint16(len(atomicTxs)))
+			tapeRecorder.Reset()
+		} else {
+			if i%uint64(logEach) == 0 {
 				t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
 			}
 		}
