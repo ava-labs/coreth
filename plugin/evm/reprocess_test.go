@@ -58,6 +58,7 @@ var (
 	commitEachBlocks       = 1
 	commitEachTxs          = 0
 	forceStartWithMismatch = false
+	trackDeletedTries      = false
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -96,6 +97,7 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&commitEachBlocks, "commitEachBlocks", commitEachBlocks, "commit each N blocks")
 	flag.IntVar(&commitEachTxs, "commitEachTxs", commitEachTxs, "commit each N transactions")
 	flag.BoolVar(&forceStartWithMismatch, "forceStartWithMismatch", forceStartWithMismatch, "force start with mismatch")
+	flag.BoolVar(&trackDeletedTries, "trackDeletedTries", trackDeletedTries, "track deleted tries (detect re-use of SELFDESTRUCTed accounts)")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")

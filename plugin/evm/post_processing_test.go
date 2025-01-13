@@ -9,6 +9,7 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/Yiling-J/theine-go"
+	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -228,7 +229,14 @@ func TestPostProcess(t *testing.T) {
 			cacheConfig := getCacheConfig(t, storageBackend, storage)
 			tdbConfig := cacheConfig.TrieDBConfig()
 			tdb := triedb.NewDatabase(dbs.chain, tdbConfig)
-			storage = legacy.New(tdb, lastRoot, lastHeight, true)
+			legacyStore := legacy.New(tdb, lastRoot, lastHeight, true)
+			// install selfdestruct re-use detection if requested
+			if trackDeletedTries {
+				store := prefixdb.New([]byte("trackDeletedTries"), dbs.metadata)
+				legacyStore.TrackDeletedTries(rawdb.NewDatabase(Database{store}))
+				t.Logf("Enabled trackDeletedTries")
+			}
+			storage = legacyStore
 		}
 		require.Equal(t, lastRoot, common.BytesToHash(storage.Root()), "Root mismatch")
 		storageRoot = lastRoot

@@ -8,16 +8,18 @@ import (
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var _ triedb.KVBackend = &Legacy{}
 
 type Legacy struct {
-	triedb      *triedb.Database
-	root        common.Hash
-	count       uint64
-	dereference bool
+	triedb            *triedb.Database
+	root              common.Hash
+	count             uint64
+	dereference       bool
+	trackDeletedTries ethdb.KeyValueStore
 }
 
 func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bool) *Legacy {
@@ -27,6 +29,10 @@ func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bo
 		count:       count,
 		dereference: dereference,
 	}
+}
+
+func (l *Legacy) TrackDeletedTries(db ethdb.KeyValueStore) {
+	l.trackDeletedTries = db
 }
 
 func getAccountRoot(tr *trie.Trie, accHash common.Hash) (common.Hash, error) {
@@ -84,6 +90,13 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 				// Remove the account from the account trie so we don't try to delete it again
 				accounts.MustDelete(k[:32])
 
+				// Track that this account is deleted
+				if l.trackDeletedTries != nil {
+					if err := l.trackDeletedTries.Put(accHash[:], []byte{1}); err != nil {
+						return nil, fmt.Errorf("failed to track deleted trie %x: %w", accHash, err)
+					}
+				}
+
 				if pending, ok := tries[accHash]; ok {
 					// If there are pending updates for this account, we should not apply them
 					// but log them for checking
@@ -96,10 +109,12 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 					fmt.Printf("::: dropped trie with %d pending updates for %x\n", keys, accHash)
 					// Also any pending updates should not be apply
 					// Further updates shold apply to an empty trie
-					tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
-					if err != nil {
-						return nil, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
-					}
+					delete(tries, accHash)
+					// Previous code:
+					// tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
+					// if err != nil {
+					// 	return nil, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
+					// }
 				}
 			}
 
@@ -109,6 +124,15 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 
 		tr, ok := tries[accHash]
 		if !ok {
+			if l.trackDeletedTries != nil {
+				found, err := l.trackDeletedTries.Has(accHash[:])
+				if err != nil {
+					return nil, fmt.Errorf("failed to check if account %x is deleted: %w", accHash, err)
+				}
+				if found {
+					return nil, fmt.Errorf("attempt to update deleted account %x", accHash)
+				}
+			}
 			root, err := getAccountRoot(accounts, accHash)
 			if err != nil {
 				return nil, err
