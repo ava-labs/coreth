@@ -17,7 +17,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
-	"github.com/ava-labs/libevm/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 )
 
