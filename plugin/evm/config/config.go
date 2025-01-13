@@ -27,6 +27,7 @@ const (
 	defaultSnapshotWait                           = false
 	defaultRpcGasCap                              = 50_000_000 // Default to 50M Gas Limit
 	defaultRpcTxFeeCap                            = 100        // 100 AVAX
+	defaultMetricsEnabled                         = true
 	defaultMetricsExpensiveEnabled                = true
 	defaultApiMaxDuration                         = 0 // Default to no maximum API call duration
 	defaultWsCpuRefillRate                        = 0 // Default to no maximum WS CPU usage
@@ -125,7 +126,8 @@ type Config struct {
 	PruneWarpDB                     bool    `json:"prune-warp-db-enabled"`              // Determines if the warpDB should be cleared on startup
 
 	// Metric Settings
-	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
+	MetricsEnabled          *bool `json:"metrics-enabled,omitempty"`
+	MetricsExpensiveEnabled bool  `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
 
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
@@ -243,6 +245,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.EnabledEthAPIs = defaultEnabledAPIs
 	c.RPCGasCap = defaultRpcGasCap
 	c.RPCTxFeeCap = defaultRpcTxFeeCap
+	c.MetricsEnabled = defaultPointer(c.MetricsEnabled, defaultMetricsEnabled)
 	c.MetricsExpensiveEnabled = defaultMetricsExpensiveEnabled
 
 	// TxPool settings
@@ -288,6 +291,13 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.StateSyncRequestSize = DefaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
+}
+
+func defaultPointer[T any](existing *T, defaultValue T) (updated *T) {
+	if existing != nil {
+		return existing
+	}
+	return &defaultValue
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

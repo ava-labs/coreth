@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -44,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -85,13 +85,10 @@ func TestStateSyncFromScratchExceedParent(t *testing.T) {
 	testSyncerVM(t, vmSetup, test)
 }
 
+func pointerTo[T any](x T) *T { return &x }
+
 func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	rand.Seed(1)
-	// Hack: registering metrics uses global variables, so we need to disable metrics here so that we can initialize the VM twice.
-	metrics.Enabled = false
-	defer func() {
-		metrics.Enabled = true
-	}()
 
 	var lock sync.Mutex
 	reqCount := 0
@@ -130,7 +127,11 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	test.responseIntercept = nil
 	test.expectedErr = nil
 
-	syncDisabledVM := &VM{}
+	syncDisabledVM := &VM{
+		config: config.Config{
+			MetricsEnabled: pointerTo(false),
+		},
+	}
 	appSender := &enginetest.Sender{T: t}
 	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 	appSender.SendAppRequestF = func(ctx context.Context, nodeSet set.Set[ids.NodeID], requestID uint32, request []byte) error {
@@ -200,7 +201,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	syncDisabledVM.blockChain.DrainAcceptorQueue()
 
 	// Create a new VM from the same database with state sync enabled.
-	syncReEnabledVM := &VM{}
+	syncReEnabledVM := &VM{
+		config: config.Config{MetricsEnabled: pointerTo(false)},
+	}
 	// Enable state sync in configJSON
 	configJSON := fmt.Sprintf(
 		`{"state-sync-enabled":true, "state-sync-min-blocks":%d}`,
