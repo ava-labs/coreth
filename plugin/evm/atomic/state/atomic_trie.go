@@ -15,6 +15,7 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/trie"
@@ -110,7 +111,7 @@ func NewAtomicTrie(
 	}
 	// initialize to EmptyRootHash if there is no committed root.
 	if root == (common.Hash{}) {
-		root = types.EmptyAtomicRootHash
+		root = types.EmptyRootHash
 	}
 	// If the last committed height is above the last accepted height, then we fall back to
 	// the last commit below the last accepted height.
@@ -272,7 +273,7 @@ func getRoot(metadataDB avalanchedatabase.Database, height uint64) (common.Hash,
 		// if root is queried at height == 0, return the empty root hash
 		// this may occur if peers ask for the most recent state summary
 		// and number of accepted blocks is less than the commit interval.
-		return EmptyAtomicRootHash, nil
+		return types.EmptyRootHash, nil
 	}
 
 	heightBytes := avalanchedatabase.PackUInt64(height)
@@ -292,7 +293,7 @@ func (a *atomicTrie) LastAcceptedRoot() common.Hash {
 
 func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error {
 	if nodes != nil {
-		if err := a.trieDB.Update(root, EmptyAtomicRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
+		if err := a.trieDB.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 			return err
 		}
 	}
