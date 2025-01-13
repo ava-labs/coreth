@@ -27,9 +27,16 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var _ AtomicTrie = &atomicTrie{}
+
 const (
 	AtomicKeyLength = wrappers.LongLen + common.HashLength
+
+	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
+	atomicTrieMemoryCap     = 64 * units.MiB
 )
+
+var lastCommittedKey = []byte("atomicTrieLastCommittedBlock")
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
 // height containing atomic transactions. The backing data structure for this index is
@@ -77,47 +84,6 @@ type AtomicTrie interface {
 	RejectTrie(root common.Hash) error
 }
 
-// AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie
-type AtomicTrieIterator interface {
-	// Next advances the iterator to the next node in the atomic trie and
-	// returns true if there are more leaves to iterate
-	Next() bool
-
-	// Key returns the current database key that the iterator is iterating
-	// returned []byte can be freely modified
-	Key() []byte
-
-	// Value returns the current database value that the iterator is iterating
-	Value() []byte
-
-	// BlockNumber returns the current block number
-	BlockNumber() uint64
-
-	// BlockchainID returns the current blockchain ID at the current block number
-	BlockchainID() ids.ID
-
-	// AtomicOps returns a map of blockchainIDs to the set of atomic requests
-	// for that blockchainID at the current block number
-	AtomicOps() *avalancheatomic.Requests
-
-	// Error returns error, if any encountered during this iteration
-	Error() error
-}
-
-const (
-	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
-	atomicTrieMemoryCap     = 64 * units.MiB
-)
-
-var _ AtomicTrie = &atomicTrie{}
-
-var (
-	// EmptyAtomicRootHash is the known root hash of an empty atomic merkle trie.
-	// TODO: this is a workaround to avoid importing types from core package
-	EmptyAtomicRootHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	lastCommittedKey    = []byte("atomicTrieLastCommittedBlock")
-)
-
 // atomicTrie implements the AtomicTrie interface
 type atomicTrie struct {
 	commitInterval      uint64                     // commit interval, same as commitHeightInterval by default
@@ -144,7 +110,7 @@ func NewAtomicTrie(
 	}
 	// initialize to EmptyRootHash if there is no committed root.
 	if root == (common.Hash{}) {
-		root = EmptyAtomicRootHash
+		root = types.EmptyAtomicRootHash
 	}
 	// If the last committed height is above the last accepted height, then we fall back to
 	// the last commit below the last accepted height.
