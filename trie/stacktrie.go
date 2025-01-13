@@ -32,7 +32,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )

@@ -17,10 +17,16 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMessageSignatureHandler(t *testing.T) {
+	metrics.Enabled = true
+	t.Cleanup(func() {
+		metrics.Enabled = false
+	})
+
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
 	blsSecretKey, err := bls.NewSigner()
@@ -125,6 +131,11 @@ func TestMessageSignatureHandler(t *testing.T) {
 }
 
 func TestBlockSignatureHandler(t *testing.T) {
+	metrics.Enabled = true
+	t.Cleanup(func() {
+		metrics.Enabled = false
+	})
+
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
 	blsSecretKey, err := bls.NewSigner()

@@ -34,8 +34,8 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/trie/trienode"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"

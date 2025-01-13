@@ -19,11 +19,17 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp/warptest"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestAddressedCallSignatures(t *testing.T) {
+	metrics.Enabled = true
+	t.Cleanup(func() {
+		metrics.Enabled = false
+	})
+
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
 	blsSecretKey, err := bls.NewSigner()
@@ -138,6 +144,11 @@ func TestAddressedCallSignatures(t *testing.T) {
 }
 
 func TestBlockSignatures(t *testing.T) {
+	metrics.Enabled = true
+	t.Cleanup(func() {
+		metrics.Enabled = false
+	})
+
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
 	blsSecretKey, err := bls.NewSigner()
