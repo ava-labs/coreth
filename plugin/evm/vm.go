@@ -394,7 +394,7 @@ func (vm *VM) Initialize(
 	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
-	if *vm.config.MetricsEnabled {
+	if vm.config.MetricsEnabled {
 		if err := vm.initializeMetrics(); err != nil {
 			return fmt.Errorf("failed to initialize metrics: %w", err)
 		}

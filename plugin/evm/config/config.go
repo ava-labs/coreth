@@ -126,8 +126,8 @@ type Config struct {
 	PruneWarpDB                     bool    `json:"prune-warp-db-enabled"`              // Determines if the warpDB should be cleared on startup
 
 	// Metric Settings
-	MetricsEnabled          *bool `json:"metrics-enabled,omitempty"`
-	MetricsExpensiveEnabled bool  `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
+	MetricsEnabled          bool `json:"metrics-enabled,omitempty"`
+	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
 
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
@@ -245,7 +245,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.EnabledEthAPIs = defaultEnabledAPIs
 	c.RPCGasCap = defaultRpcGasCap
 	c.RPCTxFeeCap = defaultRpcTxFeeCap
-	c.MetricsEnabled = defaultPointer(c.MetricsEnabled, defaultMetricsEnabled)
+	c.MetricsEnabled = defaultMetricsEnabled
 	c.MetricsExpensiveEnabled = defaultMetricsExpensiveEnabled
 
 	// TxPool settings
