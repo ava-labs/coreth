@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package state
 
 import (
 	"testing"
@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,7 @@ import (
 func TestIteratorCanIterate(t *testing.T) {
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
-	repo, err := NewAtomicTxRepository(db, testTxCodec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	assert.NoError(t, err)
 
 	// create state with multiple transactions
@@ -42,7 +43,7 @@ func TestIteratorCanIterate(t *testing.T) {
 	assert.NotEqual(t, common.Hash{}, lastCommittedHash1)
 	assert.EqualValues(t, 1000, lastCommittedHeight1)
 
-	verifyOperations(t, atomicTrie1, testTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
+	verifyOperations(t, atomicTrie1, atomictest.TestTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
 
 	// iterate on a new atomic trie to make sure there is no resident state affecting the data and the
 	// iterator
@@ -54,14 +55,14 @@ func TestIteratorCanIterate(t *testing.T) {
 	assert.NotEqual(t, common.Hash{}, lastCommittedHash2)
 	assert.EqualValues(t, 1000, lastCommittedHeight2)
 
-	verifyOperations(t, atomicTrie2, testTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
+	verifyOperations(t, atomicTrie2, atomictest.TestTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
 }
 
 func TestIteratorHandlesInvalidData(t *testing.T) {
 	require := require.New(t)
 	lastAcceptedHeight := uint64(1000)
 	db := versiondb.New(memdb.New())
-	repo, err := NewAtomicTxRepository(db, testTxCodec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	require.NoError(err)
 
 	// create state with multiple transactions
@@ -84,7 +85,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	require.NotEqual(common.Hash{}, lastCommittedHash)
 	require.EqualValues(1000, lastCommittedHeight)
 
-	verifyOperations(t, atomicTrie, testTxCodec, lastCommittedHash, 1, 1000, operationsMap)
+	verifyOperations(t, atomicTrie, atomictest.TestTxCodec, lastCommittedHash, 1, 1000, operationsMap)
 
 	// Add a random key-value pair to the atomic trie in order to test that the iterator correctly
 	// handles an error when it runs into an unexpected key-value pair in the trie.
