@@ -232,12 +232,6 @@ func slowDeleteStorage(
 }
 
 func (l *Legacy) PrefixDelete(prefix []byte) (int, error) {
-	if l.trackDeletedTries != nil {
-		if err := l.trackDeletedTries.Put(prefix, binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
-			return 0, fmt.Errorf("failed to track deleted trie %x: %w", prefix, err)
-		}
-	}
-
 	accounts, err := trie.New(trie.StateTrieID(l.root), l.triedb)
 	if err != nil {
 		return 0, err
@@ -248,6 +242,11 @@ func (l *Legacy) PrefixDelete(prefix []byte) (int, error) {
 	}
 	if origin == types.EmptyRootHash {
 		return 0, nil
+	}
+	if l.trackDeletedTries != nil {
+		if err := l.trackDeletedTries.Put(prefix, binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
+			return 0, fmt.Errorf("failed to track deleted trie %x: %w", prefix, err)
+		}
 	}
 	nodes := trienode.NewMergedNodeSet()
 	_, leafs, _, set, err := slowDeleteStorage(l.triedb, l.root, common.BytesToHash(prefix), origin)
