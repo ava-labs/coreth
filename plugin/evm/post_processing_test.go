@@ -466,7 +466,6 @@ func TestPostProcess(t *testing.T) {
 							}
 						}
 					}
-
 				}
 				evictedKs, evictedVs = evictedKs[:0], evictedVs[:0]
 
