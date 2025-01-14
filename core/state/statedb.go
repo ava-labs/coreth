@@ -1268,6 +1268,16 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 		if prev.Root == types.EmptyRootHash {
 			continue
 		}
+		tdbConfig := s.db.TrieDB().Config()
+		if tdbConfig.KeyValueDB != nil && tdbConfig.KeyValueDB.KVBackend != nil {
+			deleted, err := tdbConfig.KeyValueDB.KVBackend.PrefixDelete(addrHash[:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete storage from kv backend, err: %w", err)
+			}
+			if deleted > 0 {
+				log.Info("Deleted storage from kv backend", "addrHash", addrHash, "deleted", deleted)
+			}
+		}
 		// Remove storage slots belong to the account.
 		aborted, slots, set, err := s.deleteStorage(addr, addrHash, prev.Root)
 		if err != nil {
