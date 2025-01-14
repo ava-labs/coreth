@@ -107,7 +107,7 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 					for it.Next() {
 						keys++
 					}
-					fmt.Printf("::: dropped trie with %d pending updates for %x\n", keys, accHash)
+					fmt.Printf("::: dropped trie with %d pending updates for %x at idx %d\n", keys, accHash, i)
 					// Also any pending updates should not be apply
 					// Further updates shold apply to an empty trie
 					delete(tries, accHash)
@@ -138,7 +138,12 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 					return nil, fmt.Errorf("failed to check if account %x is deleted: %w", accHash, err)
 				}
 				if found {
-					return nil, fmt.Errorf("attempt to update deleted account %x", accHash)
+					got, err := l.trackDeletedTries.Get(accHash[:])
+					if err != nil {
+						return nil, fmt.Errorf("failed to get deleted trie %x: %w", accHash, err)
+					}
+					fmt.Println("::: found deleted trie", accHash, binary.BigEndian.Uint64(got), l.count, i)
+					return nil, fmt.Errorf("account %x is deleted", accHash)
 				}
 			}
 			root, err := getAccountRoot(accounts, accHash)
