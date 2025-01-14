@@ -24,7 +24,6 @@ import (
 
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/common"
-	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -112,7 +111,7 @@ func NewAtomicTrie(
 	}
 	// initialize to EmptyRootHash if there is no committed root.
 	if root == (common.Hash{}) {
-		root = gethtypes.EmptyRootHash
+		root = types.EmptyRootHash
 	}
 	// If the last committed height is above the last accepted height, then we fall back to
 	// the last commit below the last accepted height.
