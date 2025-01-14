@@ -90,14 +90,15 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// gas in.
 	if roll < rollupWindow {
 		var blockGasCost, parentExtraStateGasUsed uint64
+		parentExtra := types.HeaderExtras(parent)
 		switch {
 		case isApricotPhase5:
 			// [blockGasCost] has been removed in AP5, so it is left as 0.
 
 			// At the start of a new network, the parent
 			// may not have a populated [ExtDataGasUsed].
-			if parent.ExtDataGasUsed != nil {
-				parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
+			if parentExtra.ExtDataGasUsed != nil {
+				parentExtraStateGasUsed = parentExtra.ExtDataGasUsed.Uint64()
 			}
 		case isApricotPhase4:
 			// The [blockGasCost] is paid by the effective tips in the block using
@@ -107,14 +108,14 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 				ApricotPhase4MinBlockGasCost,
 				ApricotPhase4MaxBlockGasCost,
 				ApricotPhase4BlockGasCostStep,
-				parent.BlockGasCost,
+				parentExtra.BlockGasCost,
 				parent.Time, timestamp,
 			).Uint64()
 
 			// On the boundary of AP3 and AP4 or at the start of a new network, the parent
 			// may not have a populated [ExtDataGasUsed].
-			if parent.ExtDataGasUsed != nil {
-				parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
+			if parentExtra.ExtDataGasUsed != nil {
+				parentExtraStateGasUsed = parentExtra.ExtDataGasUsed.Uint64()
 			}
 		default:
 			blockGasCost = ApricotPhase3BlockGasFee
@@ -339,21 +340,22 @@ func MinRequiredTip(config *params.ChainConfig, header *types.Header) (*big.Int,
 	if header.BaseFee == nil {
 		return nil, errBaseFeeNil
 	}
-	if header.BlockGasCost == nil {
+	headerExtra := types.HeaderExtras(header)
+	if headerExtra.BlockGasCost == nil {
 		return nil, errBlockGasCostNil
 	}
-	if header.ExtDataGasUsed == nil {
+	if headerExtra.ExtDataGasUsed == nil {
 		return nil, errExtDataGasUsedNil
 	}
 
 	// minTip = requiredBlockFee/blockGasUsage
 	requiredBlockFee := new(big.Int).Mul(
-		header.BlockGasCost,
+		headerExtra.BlockGasCost,
 		header.BaseFee,
 	)
 	blockGasUsage := new(big.Int).Add(
 		new(big.Int).SetUint64(header.GasUsed),
-		header.ExtDataGasUsed,
+		headerExtra.ExtDataGasUsed,
 	)
 	return new(big.Int).Div(requiredBlockFee, blockGasUsage), nil
 }

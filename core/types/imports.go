@@ -23,11 +23,14 @@ type (
 	BlobTxSidecar     = ethtypes.BlobTxSidecar
 	Signer            = ethtypes.Signer
 	HomesteadSigner   = ethtypes.HomesteadSigner
-
-	Transaction  = ethtypes.Transaction
-	Transactions = ethtypes.Transactions
-	TxByNonce    = ethtypes.TxByNonce
-	TxData       = ethtypes.TxData
+	StateAccount      = ethtypes.StateAccount
+	SlimAccount       = ethtypes.SlimAccount
+	Header            = ethtypes.Header
+	BlockNonce        = ethtypes.BlockNonce
+	Transaction       = ethtypes.Transaction
+	Transactions      = ethtypes.Transactions
+	TxByNonce         = ethtypes.TxByNonce
+	TxData            = ethtypes.TxData
 )
 
 // The following constants are used directly as their upstream definitions.
@@ -46,12 +49,17 @@ const (
 
 // The following functions are used directly as their upstream definitions.
 var (
-	BloomLookup         = ethtypes.BloomLookup
-	BytesToBloom        = ethtypes.BytesToBloom
-	CreateBloom         = ethtypes.CreateBloom
-	NewReceipt          = ethtypes.NewReceipt
-	NewContractCreation = ethtypes.NewContractCreation
-	NewTransaction      = ethtypes.NewTransaction
+	BloomLookup          = ethtypes.BloomLookup
+	BytesToBloom         = ethtypes.BytesToBloom
+	CreateBloom          = ethtypes.CreateBloom
+	NewReceipt           = ethtypes.NewReceipt
+	NewContractCreation  = ethtypes.NewContractCreation
+	NewTransaction       = ethtypes.NewTransaction
+	EncodeNonce          = ethtypes.EncodeNonce
+	NewEmptyStateAccount = ethtypes.NewEmptyStateAccount
+	SlimAccountRLP       = ethtypes.SlimAccountRLP
+	FullAccount          = ethtypes.FullAccount
+	FullAccountRLP       = ethtypes.FullAccountRLP
 
 	// Signers
 	NewEIP155Signer        = ethtypes.NewEIP155Signer

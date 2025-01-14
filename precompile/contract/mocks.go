@@ -306,7 +306,7 @@ func (m *MockAccessibleState) EXPECT() *MockAccessibleStateMockRecorder {
 }
 
 // Call mocks base method.
-func (m *MockAccessibleState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...vm.CallOption) ([]byte, uint64, error) {
+func (m *MockAccessibleState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...vm.CallOption) ([]byte, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{addr, input, gas, value}
 	for _, a := range opts {
@@ -314,9 +314,8 @@ func (m *MockAccessibleState) Call(addr common.Address, input []byte, gas uint64
 	}
 	ret := m.ctrl.Call(m, "Call", varargs...)
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(uint64)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Call indicates an expected call of Call.
