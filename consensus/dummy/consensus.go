@@ -322,10 +322,10 @@ func (eng *DummyEngine) verifyBlockFee(
 		return nil
 	}
 	if baseFee == nil || baseFee.Sign() <= 0 {
-		return fmt.Errorf("invalid base fee (%d) in apricot phase 4", baseFee)
+		return fmt.Errorf("invalid base fee: expected a positive number, got (%d)", baseFee)
 	}
 	if requiredBlockGasCost == nil || !requiredBlockGasCost.IsUint64() {
-		return fmt.Errorf("invalid block gas cost (%d) in apricot phase 4", requiredBlockGasCost)
+		return fmt.Errorf("invalid block gas cost: expected a positive number, got (%d)", requiredBlockGasCost)
 	}
 
 	var (

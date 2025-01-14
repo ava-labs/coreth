@@ -398,7 +398,7 @@ func TestImportTxVerify(t *testing.T) {
 			},
 			ctx:         ctx,
 			rules:       banffRules,
-			expectedErr: atomic.ErrImportNonAVAXInputBanff.Error(),
+			expectedErr: atomic.ErrImportNonAVAXInput.Error(),
 		},
 		"non-AVAX output Banff": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
@@ -414,7 +414,7 @@ func TestImportTxVerify(t *testing.T) {
 			},
 			ctx:         ctx,
 			rules:       banffRules,
-			expectedErr: atomic.ErrImportNonAVAXOutputBanff.Error(),
+			expectedErr: atomic.ErrImportNonAVAXOutput.Error(),
 		},
 	}
 	for name, test := range tests {

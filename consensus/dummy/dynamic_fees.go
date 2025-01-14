@@ -329,12 +329,7 @@ func calcBlockGasCost(
 // subsidize the inclusion of low tip paying transactions. The only
 // correctness check performed is that the sum of all tips is >= the
 // required block fee.
-//
-// This function will return nil for all return values prior to Apricot Phase 4.
 func MinRequiredTip(config *params.ChainConfig, header *types.Header) (*big.Int, error) {
-	if !config.IsApricotPhase4(header.Time) {
-		return nil, nil
-	}
 	if header.BaseFee == nil {
 		return nil, errBaseFeeNil
 	}

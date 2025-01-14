@@ -330,18 +330,14 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 		blockContext vm.BlockContext
 	)
 
-	if env.rules.IsDurango {
-		results, err := core.CheckPredicates(env.rules, env.predicateContext, tx)
-		if err != nil {
-			log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
-			return nil, err
-		}
-		env.predicateResults.SetTxResults(tx.Hash(), results)
-
-		blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &coinbase, env.predicateResults)
-	} else {
-		blockContext = core.NewEVMBlockContext(env.header, w.chain, &coinbase)
+	results, err := core.CheckPredicates(env.rules, env.predicateContext, tx)
+	if err != nil {
+		log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
+		return nil, err
 	}
+	env.predicateResults.SetTxResults(tx.Hash(), results)
+
+	blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &coinbase, env.predicateResults)
 
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, blockContext, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
@@ -460,13 +456,11 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 func (w *worker) commit(env *environment) (*types.Block, error) {
-	if env.rules.IsDurango {
-		predicateResultsBytes, err := env.predicateResults.Bytes()
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal predicate results: %w", err)
-		}
-		env.header.Extra = append(env.header.Extra, predicateResultsBytes...)
+	predicateResultsBytes, err := env.predicateResults.Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
+	env.header.Extra = append(env.header.Extra, predicateResultsBytes...)
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(env.receipts)
 	block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.parent, env.state, env.txs, nil, receipts)
