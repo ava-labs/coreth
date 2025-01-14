@@ -393,13 +393,8 @@ func (vm *VM) Initialize(
 	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
-	if vm.config.MetricsEnabled {
-		if err := vm.initializeMetrics(); err != nil {
-			return fmt.Errorf("failed to initialize metrics: %w", err)
-		}
-	} else {
-		metrics.Enabled = false // reset global variable to false for tests
-		vm.sdkMetrics = &corethprometheus.NoopRegister{}
+	if err := vm.initializeMetrics(); err != nil {
+		return fmt.Errorf("failed to initialize metrics: %w", err)
 	}
 
 	// Initialize the database
