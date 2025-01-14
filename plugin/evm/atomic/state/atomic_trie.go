@@ -24,6 +24,7 @@ import (
 
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/common"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -31,7 +32,7 @@ import (
 var _ AtomicTrie = &atomicTrie{}
 
 const (
-	AtomicKeyLength = wrappers.LongLen + common.HashLength
+	AtomicTrieKeyLength = wrappers.LongLen + common.HashLength
 
 	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
 	atomicTrieMemoryCap     = 64 * units.MiB
@@ -111,7 +112,7 @@ func NewAtomicTrie(
 	}
 	// initialize to EmptyRootHash if there is no committed root.
 	if root == (common.Hash{}) {
-		root = types.EmptyRootHash
+		root = gethtypes.EmptyRootHash
 	}
 	// If the last committed height is above the last accepted height, then we fall back to
 	// the last commit below the last accepted height.
@@ -203,7 +204,7 @@ func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[id
 		}
 
 		// key is [height]+[blockchainID]
-		keyPacker := wrappers.Packer{Bytes: make([]byte, AtomicKeyLength)}
+		keyPacker := wrappers.Packer{Bytes: make([]byte, AtomicTrieKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
 		if err := trie.Update(keyPacker.Bytes, valueBytes); err != nil {

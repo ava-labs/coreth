@@ -75,7 +75,7 @@ type AtomicBackend interface {
 }
 
 // atomicBackend implements the AtomicBackend interface using
-// the interfaces.AtomicTrie, AtomicTxRepository, and the VM's shared memory.
+// the AtomicTrie, AtomicTxRepository, and the VM's shared memory.
 type atomicBackend struct {
 	codec        codec.Manager
 	bonusBlocks  map[uint64]ids.ID   // Map of height to blockID for blocks to skip indexing
