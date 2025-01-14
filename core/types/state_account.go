@@ -27,7 +27,10 @@
 package types
 
 import (
+	"io"
+
 	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 type (
@@ -44,13 +47,112 @@ var (
 	FullAccountRLP       = ethtypes.FullAccountRLP
 )
 
+type HeaderHooks Header_
+
+func updateFromEth(h *Header_, eth *ethtypes.Header) {
+	h.ParentHash = eth.ParentHash
+	h.UncleHash = eth.UncleHash
+	h.Coinbase = eth.Coinbase
+	h.Root = eth.Root
+	h.TxHash = eth.TxHash
+	h.ReceiptHash = eth.ReceiptHash
+	h.Bloom = eth.Bloom
+	h.Difficulty = eth.Difficulty
+	h.Number = eth.Number
+	h.GasLimit = eth.GasLimit
+	h.GasUsed = eth.GasUsed
+	h.Time = eth.Time
+	h.Extra = eth.Extra
+	h.MixDigest = eth.MixDigest
+	h.Nonce = eth.Nonce
+	h.BaseFee = eth.BaseFee
+	h.BlobGasUsed = eth.BlobGasUsed
+	h.ExcessBlobGas = eth.ExcessBlobGas
+	h.ParentBeaconRoot = eth.ParentBeaconRoot
+}
+
+func updateToEth(h *Header_, eth *ethtypes.Header) {
+	eth.ParentHash = h.ParentHash
+	eth.UncleHash = h.UncleHash
+	eth.Coinbase = h.Coinbase
+	eth.Root = h.Root
+	eth.TxHash = h.TxHash
+	eth.ReceiptHash = h.ReceiptHash
+	eth.Bloom = h.Bloom
+	eth.Difficulty = h.Difficulty
+	eth.Number = h.Number
+	eth.GasLimit = h.GasLimit
+	eth.GasUsed = h.GasUsed
+	eth.Time = h.Time
+	eth.Extra = h.Extra
+	eth.MixDigest = h.MixDigest
+	eth.Nonce = h.Nonce
+	eth.BaseFee = h.BaseFee
+	eth.BlobGasUsed = h.BlobGasUsed
+	eth.ExcessBlobGas = h.ExcessBlobGas
+	eth.ParentBeaconRoot = h.ParentBeaconRoot
+}
+
+func (hh *HeaderHooks) EncodeRLP(eth *ethtypes.Header, writer io.Writer) error {
+	// Write-back eth fields to the custom header
+	h := HeaderExtras(eth)
+	updateFromEth(h, eth)
+
+	// Encode the custom header
+	return h.EncodeRLP(writer)
+}
+
+func (hh *HeaderHooks) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error {
+	// First, decode into the custom header
+	h := HeaderExtras(eth)
+	if err := stream.Decode(h); err != nil {
+		return err
+	}
+
+	// Then, write-back the custom header fields to the eth header
+	updateToEth(h, eth)
+	return nil
+}
+
+//nolint:stdmethods
+func (hh *HeaderHooks) MarshalJSON(eth *ethtypes.Header) ([]byte, error) {
+	// Write-back eth fields to the custom header
+	h := HeaderExtras(eth)
+	updateFromEth(h, eth)
+
+	// Marshal the custom header
+	return h.MarshalJSON()
+}
+
+//nolint:stdmethods
+func (hh *HeaderHooks) UnmarshalJSON(eth *ethtypes.Header, input []byte) error {
+	// First, unmarshal into the custom header
+	h := HeaderExtras(eth)
+	if err := h.UnmarshalJSON(input); err != nil {
+		return err
+	}
+
+	// Then, write-back the custom header fields to the eth header
+	updateToEth(h, eth)
+	return nil
+}
+
 type isMultiCoin bool
 
 var (
-	extras              = ethtypes.RegisterExtras[ethtypes.NOOPHeaderHooks, *ethtypes.NOOPHeaderHooks, isMultiCoin]()
+	extras              = ethtypes.RegisterExtras[HeaderHooks, *HeaderHooks, isMultiCoin]()
 	IsMultiCoinPayloads = extras.StateAccount
 )
 
 func IsMultiCoin(s ethtypes.StateOrSlimAccount) bool {
 	return bool(extras.StateAccount.Get(s))
+}
+
+func HeaderExtras(h *Header) *Header_ {
+	return (*Header_)(extras.Header.Get(h))
+}
+
+func WithHeaderExtras(h *Header, extra *Header_) *Header {
+	extras.Header.Set(h, (*HeaderHooks)(extra))
+	return h
 }

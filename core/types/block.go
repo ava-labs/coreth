@@ -31,18 +31,18 @@ import (
 	"encoding/binary"
 	"io"
 	"math/big"
-	"reflect"
 	"sync/atomic"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
-type BlockNonce [8]byte
+type BlockNonce = ethtypes.BlockNonce
 
 // EncodeNonce converts the given integer to a block nonce.
 func EncodeNonce(i uint64) BlockNonce {
@@ -51,26 +51,13 @@ func EncodeNonce(i uint64) BlockNonce {
 	return n
 }
 
-// Uint64 returns the integer value of a block nonce.
-func (n BlockNonce) Uint64() uint64 {
-	return binary.BigEndian.Uint64(n[:])
-}
-
-// MarshalText encodes n as a hex string with 0x prefix.
-func (n BlockNonce) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(n[:]).MarshalText()
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (n *BlockNonce) UnmarshalText(input []byte) error {
-	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
-}
-
-//go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
-//go:generate go run github.com/ava-labs/libevm/rlp/rlpgen -type Header -out gen_header_rlp.go
+//go:generate go run github.com/fjl/gencodec -type Header_ -field-override headerMarshaling -out gen_header_json.go
+//go:generate go run github.com/ava-labs/libevm/rlp/rlpgen -type Header_ -out gen_header_rlp.go
 
 // Header represents a block header in the Ethereum blockchain.
-type Header struct {
+type Header = ethtypes.Header
+
+type Header_ struct {
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 	Coinbase    common.Address `json:"miner"            gencodec:"required"`
@@ -130,31 +117,8 @@ type headerMarshaling struct {
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
-func (h *Header) Hash() common.Hash {
+func (h *Header_) Hash() common.Hash {
 	return rlpHash(h)
-}
-
-var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
-
-// Size returns the approximate memory used by all internal contents. It is used
-// to approximate and limit the memory consumption of various caches.
-func (h *Header) Size() common.StorageSize {
-	var baseFeeBits int
-	if h.BaseFee != nil {
-		baseFeeBits = h.BaseFee.BitLen()
-	}
-	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
-}
-
-// EmptyBody returns true if there is no additional 'body' to complete the header
-// that is: no transactions and no uncles.
-func (h *Header) EmptyBody() bool {
-	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
-}
-
-// EmptyReceipts returns true if there are no receipts for this header/block.
-func (h *Header) EmptyReceipts() bool {
-	return h.ReceiptHash == EmptyReceiptsHash
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
@@ -249,6 +213,10 @@ func NewBlock(
 // CopyHeader creates a deep copy of a block header.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
+	extras.Header.Set(&cpy, &HeaderHooks{})
+	cpyExtra := HeaderExtras(&cpy)
+	*cpyExtra = *HeaderExtras(h)
+
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)
 	}
@@ -258,11 +226,12 @@ func CopyHeader(h *Header) *Header {
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 	}
-	if h.ExtDataGasUsed != nil {
-		cpy.ExtDataGasUsed = new(big.Int).Set(h.ExtDataGasUsed)
+	hExtra := HeaderExtras(h)
+	if hExtra.ExtDataGasUsed != nil {
+		cpyExtra.ExtDataGasUsed = new(big.Int).Set(hExtra.ExtDataGasUsed)
 	}
-	if h.BlockGasCost != nil {
-		cpy.BlockGasCost = new(big.Int).Set(h.BlockGasCost)
+	if hExtra.BlockGasCost != nil {
+		cpyExtra.BlockGasCost = new(big.Int).Set(hExtra.BlockGasCost)
 	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
@@ -381,10 +350,10 @@ func (b *Block) BlobGasUsed() *uint64 {
 }
 
 func (b *Block) BlockGasCost() *big.Int {
-	if b.header.BlockGasCost == nil {
+	if HeaderExtras(b.header).BlockGasCost == nil {
 		return nil
 	}
-	return new(big.Int).Set(b.header.BlockGasCost)
+	return new(big.Int).Set(HeaderExtras(b.header).BlockGasCost)
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
