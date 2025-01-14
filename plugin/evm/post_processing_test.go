@@ -235,6 +235,13 @@ func TestPostProcess(t *testing.T) {
 				store := prefixdb.New([]byte("trackDeletedTries"), dbs.metadata)
 				legacyStore.TrackDeletedTries(rawdb.NewDatabase(Database{store}))
 				t.Logf("Enabled trackDeletedTries")
+
+				it := store.NewIterator()
+				for it.Next() {
+					t.Logf("starting with trackDeletedTries: %x", it.Key())
+				}
+				require.NoError(t, it.Error())
+				it.Release()
 			}
 			storage = legacyStore
 		}
