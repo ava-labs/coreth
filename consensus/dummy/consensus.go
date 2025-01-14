@@ -322,10 +322,10 @@ func (eng *DummyEngine) verifyBlockFee(
 		return nil
 	}
 	if baseFee == nil || baseFee.Sign() <= 0 {
-		return fmt.Errorf("invalid base fee (%d) in apricot phase 4", baseFee)
+		return fmt.Errorf("invalid base fee: expected a positive number, got (%d)", baseFee)
 	}
 	if requiredBlockGasCost == nil || !requiredBlockGasCost.IsUint64() {
-		return fmt.Errorf("invalid block gas cost (%d) in apricot phase 4", requiredBlockGasCost)
+		return fmt.Errorf("invalid block gas cost: expected a positive number, got (%d)", requiredBlockGasCost)
 	}
 
 	var (
@@ -450,39 +450,42 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
-
-	header.ExtDataGasUsed = extDataGasUsed
-	if header.ExtDataGasUsed == nil {
-		header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
+	if chain.Config().IsApricotPhase4(header.Time) {
+		header.ExtDataGasUsed = extDataGasUsed
+		if header.ExtDataGasUsed == nil {
+			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
+		}
+		blockGasCostStep := ApricotPhase4BlockGasCostStep
+		if chain.Config().IsApricotPhase5(header.Time) {
+			blockGasCostStep = ApricotPhase5BlockGasCostStep
+		}
+		// Calculate the required block gas cost for this block.
+		header.BlockGasCost = calcBlockGasCost(
+			ApricotPhase4TargetBlockRate,
+			ApricotPhase4MinBlockGasCost,
+			ApricotPhase4MaxBlockGasCost,
+			blockGasCostStep,
+			parent.BlockGasCost,
+			parent.Time, header.Time,
+		)
+		// Verify that this block covers the block fee.
+		if err := eng.verifyBlockFee(
+			header.BaseFee,
+			header.BlockGasCost,
+			txs,
+			receipts,
+			contribution,
+		); err != nil {
+			return nil, err
+		}
 	}
-	blockGasCostStep := ApricotPhase5BlockGasCostStep
-	// Calculate the required block gas cost for this block.
-	header.BlockGasCost = calcBlockGasCost(
-		ApricotPhase4TargetBlockRate,
-		ApricotPhase4MinBlockGasCost,
-		ApricotPhase4MaxBlockGasCost,
-		blockGasCostStep,
-		parent.BlockGasCost,
-		parent.Time, header.Time,
-	)
-	// Verify that this block covers the block fee.
-	if err := eng.verifyBlockFee(
-		header.BaseFee,
-		header.BlockGasCost,
-		txs,
-		receipts,
-		contribution,
-	); err != nil {
-		return nil, err
-	}
-
 	// commit the final state root
-	header.Root = state.IntermediateRoot(true)
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlockWithExtData(
 		header, txs, uncles, receipts, trie.NewStackTrie(nil),
-		extraData, true,
+		extraData, chain.Config().IsApricotPhase1(header.Time),
 	), nil
 }
 
