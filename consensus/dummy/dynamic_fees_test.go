@@ -431,7 +431,7 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 			Number:  big.NewInt(int64(index) + 1),
 			BaseFee: nextBaseFee,
 			Extra:   nextExtraData,
-		}, &types.Header_{
+		}, &types.HeaderExtra{
 			ExtDataGasUsed: block.extDataGasUsed,
 		})
 

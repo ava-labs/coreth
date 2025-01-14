@@ -34,92 +34,8 @@ import (
 	"sync/atomic"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/common/hexutil"
-	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
 )
-
-// A BlockNonce is a 64-bit hash which proves (combined with the
-// mix-hash) that a sufficient amount of computation has been carried
-// out on a block.
-type BlockNonce = ethtypes.BlockNonce
-
-// EncodeNonce converts the given integer to a block nonce.
-func EncodeNonce(i uint64) BlockNonce {
-	var n BlockNonce
-	binary.BigEndian.PutUint64(n[:], i)
-	return n
-}
-
-//go:generate go run github.com/fjl/gencodec -type Header_ -field-override headerMarshaling -out gen_header_json.go
-//go:generate go run github.com/ava-labs/libevm/rlp/rlpgen -type Header_ -out gen_header_rlp.go
-
-// Header represents a block header in the Ethereum blockchain.
-type Header = ethtypes.Header
-
-type Header_ struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address `json:"miner"            gencodec:"required"`
-	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int       `json:"number"           gencodec:"required"`
-	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
-	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
-	Time        uint64         `json:"timestamp"        gencodec:"required"`
-	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
-	ExtDataHash common.Hash    `json:"extDataHash"      gencodec:"required"`
-
-	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
-	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
-
-	// ExtDataGasUsed was added by Apricot Phase 4 and is ignored in legacy
-	// headers.
-	//
-	// It is not a uint64 like GasLimit or GasUsed because it is not possible to
-	// correctly encode this field optionally with uint64.
-	ExtDataGasUsed *big.Int `json:"extDataGasUsed" rlp:"optional"`
-
-	// BlockGasCost was added by Apricot Phase 4 and is ignored in legacy
-	// headers.
-	BlockGasCost *big.Int `json:"blockGasCost" rlp:"optional"`
-
-	// BlobGasUsed was added by EIP-4844 and is ignored in legacy headers.
-	BlobGasUsed *uint64 `json:"blobGasUsed" rlp:"optional"`
-
-	// ExcessBlobGas was added by EIP-4844 and is ignored in legacy headers.
-	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
-
-	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
-	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
-}
-
-// field type overrides for gencodec
-type headerMarshaling struct {
-	Difficulty     *hexutil.Big
-	Number         *hexutil.Big
-	GasLimit       hexutil.Uint64
-	GasUsed        hexutil.Uint64
-	Time           hexutil.Uint64
-	Extra          hexutil.Bytes
-	BaseFee        *hexutil.Big
-	ExtDataGasUsed *hexutil.Big
-	BlockGasCost   *hexutil.Big
-	Hash           common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	BlobGasUsed    *hexutil.Uint64
-	ExcessBlobGas  *hexutil.Uint64
-}
-
-// Hash returns the block hash of the header, which is simply the keccak256 hash of its
-// RLP encoding.
-func (h *Header_) Hash() common.Hash {
-	return rlpHash(h)
-}
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
@@ -213,7 +129,7 @@ func NewBlock(
 // CopyHeader creates a deep copy of a block header.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
-	extras.Header.Set(&cpy, &HeaderHooks{})
+	extras.Header.Set(&cpy, &HeaderExtra{})
 	cpyExtra := HeaderExtras(&cpy)
 	*cpyExtra = *HeaderExtras(h)
 
