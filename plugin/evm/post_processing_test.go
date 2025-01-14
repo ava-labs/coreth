@@ -418,7 +418,9 @@ func TestPostProcess(t *testing.T) {
 				for k := range accsDeleted {
 					deleted, err := storage.PrefixDelete([]byte(k))
 					require.NoError(t, err)
-					t.Logf("Deleted %d keys with prefix %x from storage", deleted, k)
+					if deleted > 0 {
+						t.Logf("Deleted %d keys with prefix %x from storage", deleted, k)
+					}
 				}
 
 				now := time.Now()
@@ -442,7 +444,9 @@ func TestPostProcess(t *testing.T) {
 					for acc := range accsDeleted {
 						deleted, err := snapBackend.PrefixDelete([]byte(acc))
 						require.NoError(t, err)
-						t.Logf("Deleted %d keys with prefix %x from snapshot", deleted, acc)
+						if deleted > 0 {
+							t.Logf("Deleted %d keys with prefix %x from snapshot", deleted, acc)
+						}
 					}
 
 					_, err = snapBackend.Update(evictedKs, evictedVs)
