@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -336,12 +337,12 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 
 	serverAtomicTrie := serverVM.atomicTrie
 	require.True(serverAtomicTrie.AcceptTrie(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
-	require.NoError(serverVM.db.Commit())
+	require.NoError(serverVM.versiondb.Commit())
 
-	serverSharedMemories := atomic.NewSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
-	importOps, err := atomic.ConvertToAtomicOps(importTx)
+	serverSharedMemories := atomictest.NewSharedMemories(serverAtomicMemory, serverVM.ctx.ChainID, serverVM.ctx.XChainID)
+	importOps, err := atomictest.ConvertToAtomicOps(importTx)
 	require.NoError(err)
-	exportOps, err := atomic.ConvertToAtomicOps(exportTx)
+	exportOps, err := atomictest.ConvertToAtomicOps(exportTx)
 	require.NoError(err)
 	serverSharedMemories.AssertOpsApplied(t, importOps)
 	serverSharedMemories.AssertOpsApplied(t, exportOps)
@@ -562,10 +563,10 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	require.True(syncerVM.bootstrapped.Get())
 
 	// check atomic memory was synced properly
-	syncerSharedMemories := atomic.NewSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
+	syncerSharedMemories := atomictest.NewSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
 
 	for _, tx := range includedAtomicTxs {
-		ops, err := atomic.ConvertToAtomicOps(tx)
+		ops, err := atomictest.ConvertToAtomicOps(tx)
 		require.NoError(err)
 		syncerSharedMemories.AssertOpsApplied(t, ops)
 	}

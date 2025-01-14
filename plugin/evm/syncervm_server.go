@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -19,7 +19,7 @@ import (
 
 type StateSyncServerConfig struct {
 	Chain      *core.BlockChain
-	AtomicTrie atomic.AtomicTrie
+	AtomicTrie state.AtomicTrie
 
 	// SyncableInterval is the interval at which blocks are eligible to provide syncable block summaries.
 	SyncableInterval uint64
@@ -27,7 +27,7 @@ type StateSyncServerConfig struct {
 
 type stateSyncServer struct {
 	chain      *core.BlockChain
-	atomicTrie atomic.AtomicTrie
+	atomicTrie state.AtomicTrie
 
 	syncableInterval uint64
 }
