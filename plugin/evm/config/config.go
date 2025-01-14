@@ -293,13 +293,6 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
 }
 
-func defaultPointer[T any](existing *T, defaultValue T) (updated *T) {
-	if existing != nil {
-		return existing
-	}
-	return &defaultValue
-}
-
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
 	var v interface{}
 	if err := json.Unmarshal(data, &v); err != nil {
