@@ -63,6 +63,10 @@ type KVBackend interface {
 
 	// Close closes the backend and releases all held resources.
 	Close() error
+
+	// PrefixDelete should delete all keys with the given prefix, and return the
+	// number of keys deleted.
+	PrefixDelete(prefix []byte) (int, error)
 }
 
 type KVWriter interface {

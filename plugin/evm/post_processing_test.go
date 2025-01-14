@@ -13,12 +13,10 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/shim/legacy"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/maypok86/otter"
 	"github.com/stretchr/testify/require"
@@ -414,6 +412,15 @@ func TestPostProcess(t *testing.T) {
 						t.Logf("storing: %x -> %x", k, evictedVs[i])
 					}
 				}
+
+				var accsDeleted map[string]int
+				evictedKs, evictedVs, accsDeleted = processAccountDeletes(t, evictedKs, evictedVs)
+				for k := range accsDeleted {
+					deleted, err := storage.PrefixDelete([]byte(k))
+					require.NoError(t, err)
+					t.Logf("Deleted %d keys with prefix %x from storage", deleted, k)
+				}
+
 				now := time.Now()
 				// Get state commitment from storage backend
 				storageRootBytes, err := storage.Update(evictedKs, evictedVs)
@@ -431,42 +438,18 @@ func TestPostProcess(t *testing.T) {
 				sum.storageUpdateCount++
 
 				if writeSnapshot {
-					for i, k := range evictedKs {
-						v := evictedVs[i]
-						if len(k) == 32 {
-							if len(v) == 0 {
-								rawdb.DeleteAccountSnapshot(dbs.chain, common.BytesToHash(k))
-								it := dbs.chain.NewIterator(append(rawdb.SnapshotStoragePrefix, k...), nil)
-								keysDeleted := 0
-								for it.Next() {
-									k := it.Key()[len(rawdb.SnapshotStoragePrefix):]
-									rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
-									keysDeleted++
-								}
-								if err := it.Error(); err != nil {
-									t.Fatalf("Failed to iterate over snapshot account: %v", err)
-								}
-								it.Release()
-								if keysDeleted > 0 {
-									t.Logf("Deleted %d storage keys for account %x", keysDeleted, k)
-								}
-							} else {
-								var acc types.StateAccount
-								if err := rlp.DecodeBytes(v, &acc); err != nil {
-									t.Fatalf("Failed to decode account: %v", err)
-								}
-								data := types.SlimAccountRLP(acc)
-								rawdb.WriteAccountSnapshot(dbs.chain, common.BytesToHash(k), data)
-							}
-						} else {
-							if len(v) > 0 {
-								rawdb.WriteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]), v)
-							} else {
-								rawdb.DeleteStorageSnapshot(dbs.chain, common.BytesToHash(k[:32]), common.BytesToHash(k[32:]))
-							}
-						}
+					snapBackend := legacy.NewSnapshot(dbs.chain)
+					for acc := range accsDeleted {
+						deleted, err := snapBackend.PrefixDelete([]byte(acc))
+						require.NoError(t, err)
+						t.Logf("Deleted %d keys with prefix %x from snapshot", deleted, acc)
 					}
+
+					_, err = snapBackend.Update(evictedKs, evictedVs)
+					require.NoError(t, err)
 				}
+
+				// Reset evicted batch
 				evictedKs, evictedVs = evictedKs[:0], evictedVs[:0]
 
 				if sourceDb != nil {
@@ -605,6 +588,29 @@ func TestPostProcess(t *testing.T) {
 			lastReported = sum
 		}
 	}
+}
+
+func processAccountDeletes(t *testing.T, ks, vs [][]byte) ([][]byte, [][]byte, map[string]int) {
+	accsDeleted := make(map[string]int)
+	for i, k := range ks {
+		if len(k) == 32 && len(vs[i]) == 0 {
+			accsDeleted[string(k)] = i // all updates with prefix k that occur before i should be omitted from the return value
+		}
+	}
+	outIdx := 0
+	for i, k := range ks {
+		prefix := k[:32]
+		if idx, found := accsDeleted[string(prefix)]; found && i < idx {
+			continue
+		}
+		ks[outIdx] = k
+		vs[outIdx] = vs[i]
+		outIdx++
+	}
+	if outIdx < len(ks) {
+		t.Logf("Removed %d updates from pending batch", len(ks)-outIdx)
+	}
+	return ks[:outIdx], vs[:outIdx], accsDeleted
 }
 
 type tapeResult struct {

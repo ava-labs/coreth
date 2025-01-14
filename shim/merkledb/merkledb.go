@@ -138,3 +138,7 @@ func (m *MerkleDB) Close() error {
 
 	return m.db.Close()
 }
+
+func (m *MerkleDB) PrefixDelete(prefix []byte) (int, error) {
+	return 0, nil
+}

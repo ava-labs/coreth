@@ -70,59 +70,15 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 		accHash := common.BytesToHash(k[:32])
 		if len(k) == 32 {
 			if len(v) == 0 {
-				// this trie is DELETED. First we will remove it from storage:
-				// if it was updated before, we should have a trie for it
 				prevRoot, err := getAccountRoot(accounts, accHash)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get account root %x: %w", accHash, err)
 				}
 				if prevRoot != types.EmptyRootHash {
-					fmt.Printf(":: slow delete storage for %x\n", accHash)
-					_, leafs, _, set, err := slowDeleteStorage(l.triedb, l.root, accHash, prevRoot)
-					if err != nil {
-						return nil, err
-					}
-					if set != nil {
-						updates, deletes := set.Size()
-						fmt.Printf("::: set merged: %d updates, %d deletes (%d leafs deleted)\n", updates, deletes, leafs)
-						nodes.Merge(set)
-					}
-
-					// Track that this account is deleted
-					if l.trackDeletedTries != nil {
-						if err := l.trackDeletedTries.Put(accHash[:], binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
-							return nil, fmt.Errorf("failed to track deleted trie %x: %w", accHash, err)
-						}
-					}
+					return nil, fmt.Errorf("account %x is deleted but has non-empty storage trie", accHash)
 				}
-				// Remove the account from the account trie so we don't try to delete it again
-				accounts.MustDelete(k[:32])
-
-				if pending, ok := tries[accHash]; ok {
-					// If there are pending updates for this account, we should not apply them
-					// but log them for checking
-					nodeIt := pending.MustNodeIterator(nil)
-					it := trie.NewIterator(nodeIt)
-					keys := 0
-					for it.Next() {
-						keys++
-					}
-					fmt.Printf("::: dropped trie with %d pending updates for %x at idx %d\n", keys, accHash, i)
-					// Also any pending updates should not be apply
-					// Further updates shold apply to an empty trie
-					delete(tries, accHash)
-					// Previous code:
-					// tries[accHash], err = trie.New(trie.StorageTrieID(l.root, accHash, types.EmptyRootHash), l.triedb)
-					// if err != nil {
-					// 	return nil, fmt.Errorf("failed to create storage trie %x: %w", accHash, err)
-					// }
-
-					// Track that this account is deleted
-					if l.trackDeletedTries != nil {
-						if err := l.trackDeletedTries.Put(accHash[:], binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
-							return nil, fmt.Errorf("failed to track deleted trie %x: %w", accHash, err)
-						}
-					}
+				if _, ok := tries[accHash]; ok {
+					return nil, fmt.Errorf("account %x is deleted but has pending storage trie", accHash)
 				}
 			}
 
@@ -273,4 +229,46 @@ func slowDeleteStorage(
 		return false, 0, nil, nil, err
 	}
 	return false, leafs, slots, nodes, nil
+}
+
+func (l *Legacy) PrefixDelete(prefix []byte) (int, error) {
+	if l.trackDeletedTries != nil {
+		if err := l.trackDeletedTries.Put(prefix, binary.BigEndian.AppendUint64(nil, l.count)); err != nil {
+			return 0, fmt.Errorf("failed to track deleted trie %x: %w", prefix, err)
+		}
+	}
+
+	accounts, err := trie.New(trie.StateTrieID(l.root), l.triedb)
+	if err != nil {
+		return 0, err
+	}
+	origin, err := getAccountRoot(accounts, common.BytesToHash(prefix))
+	if err != nil {
+		return 0, err
+	}
+	if origin == types.EmptyRootHash {
+		return 0, nil
+	}
+	nodes := trienode.NewMergedNodeSet()
+	_, leafs, _, set, err := slowDeleteStorage(l.triedb, l.root, common.BytesToHash(prefix), origin)
+	if err != nil {
+		return 0, err
+	}
+	if set != nil {
+		nodes.Merge(set)
+	}
+	accounts.MustDelete(prefix)
+	next, set, err := accounts.Commit(true)
+	if err != nil {
+		return 0, err
+	}
+	if set != nil {
+		nodes.Merge(set)
+	}
+	if err := l.triedb.Update(next, l.root, l.count, nodes, nil); err != nil {
+		return 0, err
+	}
+	l.root = next
+	l.count++
+	return leafs, nil
 }

@@ -140,3 +140,7 @@ func (n *Nomt) Close() error {
 
 	return n.conn.Close()
 }
+
+func (n *Nomt) PrefixDelete(prefix []byte) (int, error) {
+	return 0, nil
+}
