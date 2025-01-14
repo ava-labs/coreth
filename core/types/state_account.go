@@ -96,10 +96,14 @@ func updateToEth(h *Header_, eth *ethtypes.Header) {
 func (hh *HeaderHooks) EncodeRLP(eth *ethtypes.Header, writer io.Writer) error {
 	// Write-back eth fields to the custom header
 	h := HeaderExtras(eth)
-	updateFromEth(h, eth)
+
+	// encode to a new variable to avoid races
+	out := new(Header_)
+	*out = *h
+	updateFromEth(out, eth)
 
 	// Encode the custom header
-	return h.EncodeRLP(writer)
+	return out.EncodeRLP(writer)
 }
 
 func (hh *HeaderHooks) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error {
@@ -118,10 +122,14 @@ func (hh *HeaderHooks) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error
 func (hh *HeaderHooks) MarshalJSON(eth *ethtypes.Header) ([]byte, error) {
 	// Write-back eth fields to the custom header
 	h := HeaderExtras(eth)
-	updateFromEth(h, eth)
+
+	// encode to a new variable to avoid races
+	out := new(Header_)
+	*out = *h
+	updateFromEth(out, eth)
 
 	// Marshal the custom header
-	return h.MarshalJSON()
+	return out.MarshalJSON()
 }
 
 //nolint:stdmethods
