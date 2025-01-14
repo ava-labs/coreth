@@ -1,13 +1,14 @@
 // (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package sync
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -45,7 +46,7 @@ func NewAtomicSyncSummaryParser() *AtomicSyncSummaryParser {
 
 func (a *AtomicSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
 	summary := AtomicBlockSyncSummary{}
-	if codecVersion, err := Codec.Unmarshal(summaryBytes, &summary); err != nil {
+	if codecVersion, err := atomic.Codec.Unmarshal(summaryBytes, &summary); err != nil {
 		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
 	} else if codecVersion != message.Version {
 		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (got %d, expected %d)", codecVersion, message.Version)
@@ -68,7 +69,7 @@ func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot c
 		BlockRoot:   blockRoot,
 		AtomicRoot:  atomicRoot,
 	}
-	bytes, err := Codec.Marshal(message.Version, &summary)
+	bytes, err := atomic.Codec.Marshal(message.Version, &summary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal syncable summary: %w", err)
 	}

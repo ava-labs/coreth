@@ -1,6 +1,6 @@
 // (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-package atomic
+package sync
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -16,10 +17,10 @@ var _ sync.SummaryProvider = &AtomicSyncProvider{}
 
 type AtomicSyncProvider struct {
 	chain      *core.BlockChain
-	atomicTrie AtomicTrie
+	atomicTrie state.AtomicTrie
 }
 
-func NewAtomicProvider(chain *core.BlockChain, atomicTrie AtomicTrie) *AtomicSyncProvider {
+func NewAtomicProvider(chain *core.BlockChain, atomicTrie state.AtomicTrie) *AtomicSyncProvider {
 	return &AtomicSyncProvider{chain: chain, atomicTrie: atomicTrie}
 }
 

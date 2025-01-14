@@ -10,7 +10,6 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -32,10 +31,7 @@ import (
 // The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 const StateSyncParentsToFetch = 256
 
-var (
-	metadataPrefix      = []byte("metadata")
-	stateSyncSummaryKey = []byte("stateSyncSummary")
-)
+var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
@@ -46,7 +42,7 @@ type EthBlockWrapper interface {
 }
 
 type Extender interface {
-	Sync(ctx context.Context, client syncclient.Client, syncSummary message.Syncable) error
+	Sync(ctx context.Context, client syncclient.Client, verdb *versiondb.Database, syncSummary message.Syncable) error
 	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
 	OnFinishAfterCommit(summaryHeight uint64) error
 }
@@ -63,11 +59,14 @@ type StateSyncClientConfig struct {
 
 	LastAcceptedHeight uint64
 
-	Chain          *eth.Ethereum
-	State          *chain.State
-	ChaindDB       ethdb.Database
-	Acceptor       BlockAcceptor
-	DB             *versiondb.Database
+	Chain      *eth.Ethereum
+	State      *chain.State
+	ChaindDB   ethdb.Database
+	Acceptor   BlockAcceptor
+	VerDB      *versiondb.Database
+	MetadataDB database.Database
+
+	// Extension points
 	SyncableParser message.SyncableParser
 	ExtraSyncer    Extender
 
@@ -87,13 +86,11 @@ type stateSyncerClient struct {
 	// State Sync results
 	syncSummary  message.Syncable
 	stateSyncErr error
-	metadataDB   database.Database
 }
 
 func NewStateSyncClient(config *StateSyncClientConfig) StateSyncClient {
 	return &stateSyncerClient{
 		StateSyncClientConfig: config,
-		metadataDB:            prefixdb.New(metadataPrefix, config.DB),
 	}
 }
 
@@ -131,7 +128,7 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 		return nil, database.ErrNotFound
 	}
 
-	summaryBytes, err := client.metadataDB.Get(stateSyncSummaryKey)
+	summaryBytes, err := client.MetadataDB.Get(stateSyncSummaryKey)
 	if err != nil {
 		return nil, err // includes the [database.ErrNotFound] case
 	}
@@ -146,10 +143,10 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 
 // ClearOngoingSummary clears any marker of an ongoing state sync summary
 func (client *stateSyncerClient) ClearOngoingSummary() error {
-	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {
+	if err := client.MetadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return fmt.Errorf("failed to clear ongoing summary: %w", err)
 	}
-	if err := client.DB.Commit(); err != nil {
+	if err := client.VerDB.Commit(); err != nil {
 		return fmt.Errorf("failed to commit db while clearing ongoing summary: %w", err)
 	}
 
@@ -174,7 +171,7 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	return client.StateSyncClientConfig.ExtraSyncer.Sync(ctx, client.Client, client.syncSummary)
+	return client.StateSyncClientConfig.ExtraSyncer.Sync(ctx, client.Client, client.VerDB, client.syncSummary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -212,10 +209,10 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.Synca
 	// Update the current state sync summary key in the database
 	// Note: this must be performed after WipeSnapshot finishes so that we do not start a state sync
 	// session from a partially wiped snapshot.
-	if err := client.metadataDB.Put(stateSyncSummaryKey, proposedSummary.Bytes()); err != nil {
+	if err := client.MetadataDB.Put(stateSyncSummaryKey, proposedSummary.Bytes()); err != nil {
 		return block.StateSyncSkipped, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
 	}
-	if err := client.DB.Commit(); err != nil {
+	if err := client.VerDB.Commit(); err != nil {
 		return block.StateSyncSkipped, fmt.Errorf("failed to commit db: %w", err)
 	}
 
@@ -399,10 +396,10 @@ func (client *stateSyncerClient) updateVMMarkers() error {
 	if err := client.Acceptor.PutLastAcceptedID(id); err != nil {
 		return err
 	}
-	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {
+	if err := client.MetadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return err
 	}
-	return client.DB.Commit()
+	return client.VerDB.Commit()
 }
 
 // Error returns a non-nil error if one occurred during the sync.

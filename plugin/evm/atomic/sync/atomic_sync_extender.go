@@ -1,14 +1,15 @@
 // (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-// TODO: move to separate package
-package atomic
+package sync
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ethereum/go-ethereum/log"
@@ -17,26 +18,33 @@ import (
 var _ sync.Extender = (*AtomicSyncExtender)(nil)
 
 type AtomicSyncExtender struct {
-	backend              AtomicBackend
+	backend              state.AtomicBackend
 	stateSyncRequestSize uint16
 }
 
-func NewAtomicSyncExtender(backend AtomicBackend, stateSyncRequestSize uint16) *AtomicSyncExtender {
+func NewAtomicSyncExtender(backend state.AtomicBackend, stateSyncRequestSize uint16) *AtomicSyncExtender {
 	return &AtomicSyncExtender{
 		backend:              backend,
 		stateSyncRequestSize: stateSyncRequestSize,
 	}
 }
 
-func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.Client, syncSummary message.Syncable) error {
+func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.Client, verDB *versiondb.Database, syncSummary message.Syncable) error {
 	atomicSyncSummary, ok := syncSummary.(*AtomicBlockSyncSummary)
 	if !ok {
 		return fmt.Errorf("expected *AtomicBlockSyncSummary, got %T", syncSummary)
 	}
 	log.Info("atomic tx: sync starting", "root", atomicSyncSummary)
-	atomicSyncer, err := a.backend.Syncer(client, atomicSyncSummary.AtomicRoot, atomicSyncSummary.BlockNumber, a.stateSyncRequestSize)
+	atomicSyncer, err := NewAtomicSyncer(
+		client,
+		verDB,
+		a.backend.AtomicTrie(),
+		atomicSyncSummary.AtomicRoot,
+		atomicSyncSummary.BlockNumber,
+		a.stateSyncRequestSize,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create atomic syncer: %w", err)
+		return err
 	}
 	if err := atomicSyncer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start atomic syncer: %w", err)
