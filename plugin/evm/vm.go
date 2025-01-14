@@ -24,7 +24,6 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
@@ -400,7 +399,7 @@ func (vm *VM) Initialize(
 		}
 	} else {
 		metrics.Enabled = false // reset global variable to false for tests
-		vm.sdkMetrics = &noopPrometheusRegister{}
+		vm.sdkMetrics = &corethprometheus.NoopRegister{}
 	}
 
 	// Initialize the database
@@ -647,13 +646,6 @@ func (vm *VM) initializeMetrics() error {
 	}
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
-
-type noopPrometheusRegister struct{}
-
-func (n *noopPrometheusRegister) Register(prometheus.Collector) error  { return nil }
-func (n *noopPrometheusRegister) MustRegister(...prometheus.Collector) {}
-func (n *noopPrometheusRegister) Unregister(prometheus.Collector) bool { return true }
-func (n *noopPrometheusRegister) Gather() ([]*dto.MetricFamily, error) { return nil, nil }
 
 func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	nodecfg := &node.Config{
