@@ -467,8 +467,9 @@ func TestPostProcess(t *testing.T) {
 						}
 					}
 
-					evictedKs, evictedVs = evictedKs[:0], evictedVs[:0]
 				}
+				evictedKs, evictedVs = evictedKs[:0], evictedVs[:0]
+
 				if sourceDb != nil {
 					// update block and metadata from source db
 					hash := rawdb.ReadCanonicalHash(sourceDb, blockNumber)
