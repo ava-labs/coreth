@@ -133,8 +133,8 @@ type Config struct {
 	HistoricalProofQueryWindow uint64 `json:"historical-proof-query-window,omitempty"`
 
 	// Metric Settings
-	MetricsEnabled          *bool `json:"metrics-enabled,omitempty"`
-	MetricsExpensiveEnabled bool  `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
+	MetricsEnabled          bool `json:"metrics-enabled,omitempty"`
+	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
 
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
@@ -252,7 +252,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.EnabledEthAPIs = defaultEnabledAPIs
 	c.RPCGasCap = defaultRpcGasCap
 	c.RPCTxFeeCap = defaultRpcTxFeeCap
-	c.MetricsEnabled = defaultPointer(c.MetricsEnabled, defaultMetricsEnabled)
+	c.MetricsEnabled = defaultMetricsEnabled
 	c.MetricsExpensiveEnabled = defaultMetricsExpensiveEnabled
 
 	// TxPool settings
@@ -299,13 +299,6 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
 	c.HistoricalProofQueryWindow = defaultHistoricalProofQueryWindow
-}
-
-func defaultPointer[T any](existing *T, defaultValue T) (updated *T) {
-	if existing != nil {
-		return existing
-	}
-	return &defaultValue
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

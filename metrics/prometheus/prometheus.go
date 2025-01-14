@@ -44,6 +44,9 @@ func (g *Gatherer) Gather() (mfs []*dto.MetricFamily, err error) {
 		if errors.Is(err, errMetricSkip) {
 			continue
 		}
+		if err != nil {
+			return nil, err
+		}
 		mfs = append(mfs, mf)
 	}
 

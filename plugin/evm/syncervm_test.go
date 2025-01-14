@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/api/metrics"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
@@ -35,7 +36,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -85,8 +85,6 @@ func TestStateSyncFromScratchExceedParent(t *testing.T) {
 	testSyncerVM(t, vmSetup, test)
 }
 
-func pointerTo[T any](x T) *T { return &x }
-
 func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	rand.Seed(1)
 
@@ -127,11 +125,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	test.responseIntercept = nil
 	test.expectedErr = nil
 
-	syncDisabledVM := &VM{
-		config: config.Config{
-			MetricsEnabled: pointerTo(false),
-		},
-	}
+	syncDisabledVM := &VM{}
 	appSender := &enginetest.Sender{T: t}
 	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 	appSender.SendAppRequestF = func(ctx context.Context, nodeSet set.Set[ids.NodeID], requestID uint32, request []byte) error {
@@ -142,7 +136,8 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		go vmSetup.serverVM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
 		return nil
 	}
-	// Disable metrics to prevent duplicate registerer
+	// Reset metrics to allow re-initialization
+	vmSetup.syncerVM.ctx.Metrics = metrics.NewPrefixGatherer()
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
 	if err := syncDisabledVM.Initialize(
 		context.Background(),
@@ -201,14 +196,14 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	syncDisabledVM.blockChain.DrainAcceptorQueue()
 
 	// Create a new VM from the same database with state sync enabled.
-	syncReEnabledVM := &VM{
-		config: config.Config{MetricsEnabled: pointerTo(false)},
-	}
+	syncReEnabledVM := &VM{}
 	// Enable state sync in configJSON
 	configJSON := fmt.Sprintf(
 		`{"state-sync-enabled":true, "state-sync-min-blocks":%d}`,
 		test.stateSyncMinBlocks,
 	)
+	// Reset metrics to allow re-initialization
+	vmSetup.syncerVM.ctx.Metrics = metrics.NewPrefixGatherer()
 	if err := syncReEnabledVM.Initialize(
 		context.Background(),
 		vmSetup.syncerVM.ctx,

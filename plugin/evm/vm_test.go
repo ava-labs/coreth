@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/api/metrics"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -295,13 +296,7 @@ func GenesisVMWithClock(
 	*avalancheatomic.Memory,
 	*enginetest.Sender,
 ) {
-	vmConfig := config.Config{
-		MetricsEnabled: pointerTo(false),
-	}
-	vm := &VM{
-		clock:  clock,
-		config: vmConfig,
-	}
+	vm := &VM{clock: clock}
 	ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
 	appSender := &enginetest.Sender{T: t}
 	appSender.CantSendAppGossip = true
@@ -397,7 +392,6 @@ func TestVMConfigDefaults(t *testing.T) {
 	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
 
 	var vmConfig config.Config
-	vmConfig.MetricsEnabled = pointerTo(false) // GenesisVM sets it to false
 	vmConfig.SetDefaults(defaultTxPoolConfig)
 	vmConfig.RPCTxFeeCap = txFeeCap
 	vmConfig.EnabledEthAPIs = enabledEthAPIs
@@ -410,7 +404,6 @@ func TestVMNilConfig(t *testing.T) {
 
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
-	vmConfig.MetricsEnabled = pointerTo(false) // GenesisVM sets it to false
 	vmConfig.SetDefaults(defaultTxPoolConfig)
 	require.Equal(t, vmConfig, vm.config, "VM Config should match default config")
 	require.NoError(t, vm.Shutdown(context.Background()))
@@ -3796,12 +3789,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(t, blk.Accept(context.Background()))
 
-	reinitVM := &VM{
-		// Hack: registering metrics uses global variables, so we need to disable metrics so that we can initialize the VM twice.
-		config: config.Config{
-			MetricsEnabled: pointerTo(false),
-		},
-	}
+	reinitVM := &VM{}
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}
@@ -3810,12 +3798,18 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 
+	// Reset metrics to allow re-initialization
+	vm.ctx.Metrics = metrics.NewPrefixGatherer()
+
 	// this will not be allowed
 	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, appSender)
 	require.ErrorContains(t, err, "mismatching ApricotPhase2 fork block timestamp in database")
 
+	// Reset metrics to allow re-initialization
+	vm.ctx.Metrics = metrics.NewPrefixGatherer()
+
 	// try again with skip-upgrade-check
-	config := []byte(`{"skip-upgrade-check": true, "metrics-enabled": false}`)
+	config := []byte(`{"skip-upgrade-check": true}`)
 	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, config, issuer, []*commonEng.Fx{}, appSender)
 	require.NoError(t, err)
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
