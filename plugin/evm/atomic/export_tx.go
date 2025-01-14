@@ -35,7 +35,6 @@ var (
 	ErrExportNonAVAXOutput                               = errors.New("export output cannot contain non-AVAX")
 	ErrNoExportOutputs                                   = errors.New("tx has no export outputs")
 	errPublicKeySignatureMismatch                        = errors.New("signature doesn't match public key")
-	errOverflowExport                                    = errors.New("overflow when computing export amount + txFee")
 	errInsufficientFunds                                 = errors.New("insufficient funds")
 	errInvalidNonce                                      = errors.New("invalid nonce")
 )
