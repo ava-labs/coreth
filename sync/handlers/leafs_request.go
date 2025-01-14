@@ -84,8 +84,8 @@ func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.N
 		lrh.stats.IncInvalidLeafsRequest()
 		return nil, nil
 	}
-	if len(leafsRequest.Start) != 0 && len(leafsRequest.Start) != lrh.trieKeyLength ||
-		len(leafsRequest.End) != 0 && len(leafsRequest.End) != lrh.trieKeyLength {
+	if (len(leafsRequest.Start) != 0 && len(leafsRequest.Start) != lrh.trieKeyLength) ||
+		(len(leafsRequest.End) != 0 && len(leafsRequest.End) != lrh.trieKeyLength) {
 		log.Debug("invalid length for leafs request range, dropping request", "startLen", len(leafsRequest.Start), "endLen", len(leafsRequest.End), "expected", lrh.trieKeyLength)
 		lrh.stats.IncInvalidLeafsRequest()
 		return nil, nil

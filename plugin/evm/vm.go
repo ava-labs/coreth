@@ -1230,11 +1230,11 @@ func (vm *VM) setAppRequestHandlers() error {
 		},
 	)
 	if err := vm.RegisterLeafRequestHandler(message.StateTrieNode, "sync_state_trie_leaves", evmTrieDB, message.StateTrieKeyLength, true); err != nil {
-		return err
+		return fmt.Errorf("failed to register leaf request handler for state trie: %w", err)
 	}
 	// Register atomic trieDB for serving atomic leafs requests.
 	if err := vm.RegisterLeafRequestHandler(atomicsync.AtomicTrieNode, "sync_atomic_trie_leaves", vm.atomicTrie.TrieDB(), atomicstate.AtomicTrieKeyLength, false); err != nil {
-		return err
+		return fmt.Errorf("failed to register leaf request handler for atomic trie: %w", err)
 	}
 
 	networkHandler := newNetworkHandler(
