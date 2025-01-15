@@ -1,4 +1,4 @@
-// (c) 2021-2025 Ava Labs, Inc. All rights reserved.
+// (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package prometheus
@@ -44,10 +44,10 @@ func (g *Gatherer) Gather() (mfs []*dto.MetricFamily, err error) {
 	mfs = make([]*dto.MetricFamily, 0, len(names))
 	for _, name := range names {
 		mf, err := metricFamily(g.registry, name)
-		if errors.Is(err, errMetricSkip) {
-			continue
-		}
 		if err != nil {
+			if errors.Is(err, errMetricSkip) {
+				continue
+			}
 			return nil, err
 		}
 		mfs = append(mfs, mf)
