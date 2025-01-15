@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/shim/legacy"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
@@ -231,7 +232,7 @@ func TestPostProcess(t *testing.T) {
 			// install selfdestruct re-use detection if requested
 			if trackDeletedTries {
 				store := prefixdb.New([]byte("trackDeletedTries"), dbs.metadata)
-				legacyStore.TrackDeletedTries(rawdb.NewDatabase(Database{store}))
+				legacyStore.TrackDeletedTries(rawdb.NewDatabase(database.WrapDatabase(store)))
 				t.Logf("Enabled trackDeletedTries")
 
 				it := store.NewIterator()

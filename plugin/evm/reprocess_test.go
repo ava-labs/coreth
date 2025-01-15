@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	evmdatabase "github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -314,11 +315,11 @@ func openDBs(t *testing.T) dbs {
 	var chaindb ethdb.Database
 	if len(prefix) > 0 {
 		chaindb = &prefixReader{
-			Database: rawdb.NewDatabase(Database{base}),
+			Database: rawdb.NewDatabase(evmdatabase.WrapDatabase(base)),
 			prefix:   prefix,
 		}
 	} else {
-		chaindb = rawdb.NewDatabase(Database{prefixdb.New(ethDBPrefix, base)})
+		chaindb = rawdb.NewDatabase(evmdatabase.WrapDatabase(prefixdb.New(ethDBPrefix, base)))
 	}
 	return dbs{
 		metadata: prefixdb.New(reprocessMetadataPrefix, base),
