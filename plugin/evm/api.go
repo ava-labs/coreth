@@ -32,10 +32,9 @@ const (
 )
 
 var (
-	errNoAddresses       = errors.New("no addresses provided")
-	errNoSourceChain     = errors.New("no source chain provided")
-	errNilTxID           = errors.New("nil transaction ID")
-	errMissingPrivateKey = errors.New("argument 'privateKey' not given")
+	errNoAddresses   = errors.New("no addresses provided")
+	errNoSourceChain = errors.New("no source chain provided")
+	errNilTxID       = errors.New("nil transaction ID")
 
 	initialBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
 )
