@@ -75,6 +75,7 @@ var (
 	testShortIDAddrs []ids.ShortID
 	username         = "Johns"
 	password         = "CjasdjhiPeirbSenfeI13" // #nosec G101
+	initialBaseFee   = big.NewInt(params.ApricotPhase3InitialBaseFee)
 
 	genesisJSON = func(cfg *params.ChainConfig) string {
 		g := new(core.Genesis)
@@ -613,6 +614,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		vm.ctx,
 		vm.currentRules(),
 		state,
+		vm.ctx.AVAXAssetID,
 		importAmount-(2*params.AvalancheAtomicTxFee),
 		vm.ctx.XChainID,
 		testShortIDAddrs[0],

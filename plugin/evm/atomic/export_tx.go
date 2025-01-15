@@ -287,14 +287,15 @@ func NewExportTx(
 	ctx *snow.Context,
 	rules params.Rules,
 	state StateDB,
-	amount uint64, // Amount of AVAX to export
+	assetID ids.ID, // AssetID of the tokens to export
+	amount uint64, // Amount of tokens to export
 	chainID ids.ID, // Chain to send the UTXOs to
 	to ids.ShortID, // Address of chain recipient
 	baseFee *big.Int, // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*Tx, error) {
 	outs := []*avax.TransferableOutput{{
-		Asset: avax.Asset{ID: ctx.AVAXAssetID},
+		Asset: avax.Asset{ID: assetID},
 		Out: &secp256k1fx.TransferOutput{
 			Amt: amount,
 			OutputOwners: secp256k1fx.OutputOwners{
@@ -306,10 +307,21 @@ func NewExportTx(
 	}}
 
 	var (
+		avaxNeeded           uint64 = 0
 		ins, avaxIns         []EVMInput
 		signers, avaxSigners [][]*secp256k1.PrivateKey
 		err                  error
 	)
+
+	// consume non-AVAX
+	if assetID != ctx.AVAXAssetID {
+		ins, signers, err = GetSpendableFunds(ctx, state, keys, assetID, amount)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
+		}
+	} else {
+		avaxNeeded = amount
+	}
 
 	switch {
 	case rules.IsApricotPhase3:
@@ -331,14 +343,14 @@ func NewExportTx(
 			return nil, err
 		}
 
-		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, amount, cost, baseFee)
+		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
 	default:
-		var avaxNeeded uint64
-		avaxNeeded, err = math.Add(amount, params.AvalancheAtomicTxFee)
+		var newAvaxNeeded uint64
+		newAvaxNeeded, err = math.Add64(avaxNeeded, params.AvalancheAtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}
-		avaxIns, avaxSigners, err = GetSpendableFunds(ctx, state, keys, avaxNeeded)
+		avaxIns, avaxSigners, err = GetSpendableFunds(ctx, state, keys, ctx.AVAXAssetID, newAvaxNeeded)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
@@ -408,6 +420,7 @@ func GetSpendableFunds(
 	ctx *snow.Context,
 	state StateDB,
 	keys []*secp256k1.PrivateKey,
+	assetID ids.ID,
 	amount uint64,
 ) ([]EVMInput, [][]*secp256k1.PrivateKey, error) {
 	inputs := []EVMInput{}
@@ -420,10 +433,13 @@ func GetSpendableFunds(
 		}
 		addr := key.EthAddress()
 		var balance uint64
-		// we divide by the x2cRate to convert back to the correct
-		// denomination of AVAX that can be exported.
-		balance = new(uint256.Int).Div(state.GetBalance(addr), X2CRate).Uint64()
-
+		if assetID == ctx.AVAXAssetID {
+			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
+			// denomination of AVAX that can be exported.
+			balance = new(uint256.Int).Div(state.GetBalance(addr), X2CRate).Uint64()
+		} else {
+			balance = state.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
+		}
 		if balance == 0 {
 			continue
 		}
@@ -435,7 +451,7 @@ func GetSpendableFunds(
 		inputs = append(inputs, EVMInput{
 			Address: addr,
 			Amount:  balance,
-			AssetID: ctx.AVAXAssetID,
+			AssetID: assetID,
 			Nonce:   nonce,
 		})
 		signers = append(signers, []*secp256k1.PrivateKey{key})
@@ -449,7 +465,7 @@ func GetSpendableFunds(
 	return inputs, signers, nil
 }
 
-// GetSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
+// getSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
 // order) to total [amount] + [fee] of [AVAX] owned by [keys].
 // This function accounts for the added cost of the additional inputs needed to
 // create the transaction and makes sure to skip any keys with a balance that is
@@ -457,7 +473,7 @@ func GetSpendableFunds(
 // Note: we return [][]*secp256k1.PrivateKey even though each input
 // corresponds to a single key, so that the signers can be passed in to
 // [tx.Sign] which supports multiple keys on a single input.
-func GetSpendableAVAXWithFee(
+func getSpendableAVAXWithFee(
 	ctx *snow.Context,
 	state StateDB,
 	keys []*secp256k1.PrivateKey,

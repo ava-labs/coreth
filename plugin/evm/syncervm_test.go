@@ -324,6 +324,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 				serverVM.ctx,
 				serverVM.currentRules(),
 				state,
+				serverVM.ctx.AVAXAssetID,
 				importAmount/2,
 				serverVM.ctx.XChainID,
 				testShortIDAddrs[0],
