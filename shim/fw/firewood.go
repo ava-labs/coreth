@@ -16,3 +16,13 @@ type Firewood struct {
 func (f *Firewood) PrefixDelete(prefix []byte) (int, error) {
 	return 0, nil
 }
+
+// Update updates the trie with the provided key-value pairs.
+// Firewood ffi does not accept empty batches, so if the keys are empty, the
+// root is returned.
+func (f *Firewood) Update(ks, vs [][]byte) ([]byte, error) {
+	if len(ks) == 0 {
+		return f.Firewood.Root(), nil
+	}
+	return f.Firewood.Update(ks, vs)
+}
