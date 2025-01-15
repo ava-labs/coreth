@@ -1,4 +1,4 @@
-package atomic
+package atomictest
 
 import (
 	"testing"
@@ -9,13 +9,13 @@ import (
 )
 
 type SharedMemories struct {
-	thisChain   atomic.SharedMemory
-	peerChain   atomic.SharedMemory
+	ThisChain   atomic.SharedMemory
+	PeerChain   atomic.SharedMemory
 	thisChainID ids.ID
 	peerChainID ids.ID
 }
 
-func (s *SharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.Requests) error {
+func (s *SharedMemories) AddItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.Requests) error {
 	for _, reqs := range ops {
 		puts := make(map[ids.ID]*atomic.Requests)
 		puts[s.thisChainID] = &atomic.Requests{}
@@ -23,7 +23,7 @@ func (s *SharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 			val := []byte{0x1}
 			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
 		}
-		if err := s.peerChain.Apply(puts); err != nil {
+		if err := s.PeerChain.Apply(puts); err != nil {
 			return err
 		}
 	}
@@ -35,7 +35,7 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 	for _, reqs := range ops {
 		// should be able to get put requests
 		for _, elem := range reqs.PutRequests {
-			val, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
+			val, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
 			if err != nil {
 				t.Fatalf("error finding puts in peerChainMemory: %s", err)
 			}
@@ -44,24 +44,24 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 
 		// should not be able to get remove requests
 		for _, key := range reqs.RemoveRequests {
-			_, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
+			_, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
 			assert.EqualError(t, err, "not found")
 		}
 	}
 }
 
-func (s *SharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
+func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomic.Requests) {
 	t.Helper()
 	for _, reqs := range ops {
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {
-			_, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
+			_, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
 			assert.EqualError(t, err, "not found")
 		}
 
 		// should be able to get remove requests (these were previously added as puts on peerChain)
 		for _, key := range reqs.RemoveRequests {
-			val, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
+			val, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
 			assert.NoError(t, err)
 			assert.Equal(t, []byte{0x1}, val[0])
 		}
@@ -71,8 +71,8 @@ func (s *SharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 // TODO: once tests are moved to atomic package, unexport this function
 func NewSharedMemories(atomicMemory *atomic.Memory, thisChainID, peerChainID ids.ID) *SharedMemories {
 	return &SharedMemories{
-		thisChain:   atomicMemory.NewSharedMemory(thisChainID),
-		peerChain:   atomicMemory.NewSharedMemory(peerChainID),
+		ThisChain:   atomicMemory.NewSharedMemory(thisChainID),
+		PeerChain:   atomicMemory.NewSharedMemory(peerChainID),
 		thisChainID: thisChainID,
 		peerChainID: peerChainID,
 	}

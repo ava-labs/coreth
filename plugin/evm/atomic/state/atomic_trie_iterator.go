@@ -1,22 +1,49 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package state
 
 import (
 	"encoding/binary"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
 	"github.com/ava-labs/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
 )
 
-const atomicTrieKeyLen = wrappers.LongLen + common.HashLength
+var _ AtomicTrieIterator = &atomicTrieIterator{}
+
+// AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie
+type AtomicTrieIterator interface {
+	// Next advances the iterator to the next node in the atomic trie and
+	// returns true if there are more leaves to iterate
+	Next() bool
+
+	// Key returns the current database key that the iterator is iterating
+	// returned []byte can be freely modified
+	Key() []byte
+
+	// Value returns the current database value that the iterator is iterating
+	Value() []byte
+
+	// BlockNumber returns the current block number
+	BlockNumber() uint64
+
+	// BlockchainID returns the current blockchain ID at the current block number
+	BlockchainID() ids.ID
+
+	// AtomicOps returns a map of blockchainIDs to the set of atomic requests
+	// for that blockchainID at the current block number
+	AtomicOps() *avalancheatomic.Requests
+
+	// Error returns error, if any encountered during this iteration
+	Error() error
+}
 
 // atomicTrieIterator is an implementation of types.AtomicTrieIterator that serves
 // parsed data with each iteration
@@ -30,7 +57,7 @@ type atomicTrieIterator struct {
 	err          error            // error if any has occurred
 }
 
-func NewAtomicTrieIterator(trieIterator *trie.Iterator, codec codec.Manager) AtomicTrieIterator {
+func NewAtomicTrieIterator(trieIterator *trie.Iterator, codec codec.Manager) *atomicTrieIterator {
 	return &atomicTrieIterator{trieIterator: trieIterator, codec: codec}
 }
 
@@ -55,8 +82,8 @@ func (a *atomicTrieIterator) Next() bool {
 	keyLen := len(a.trieIterator.Key)
 	// If the key has an unexpected length, set the error and stop the iteration since the data is
 	// no longer reliable.
-	if keyLen != atomicTrieKeyLen {
-		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", atomicTrieKeyLen, keyLen))
+	if keyLen != AtomicTrieKeyLength {
+		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", AtomicTrieKeyLength, keyLen))
 		return false
 	}
 

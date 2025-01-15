@@ -1,11 +1,10 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package state
 
 import (
 	"fmt"
-	"time"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
@@ -17,30 +16,28 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/triedb"
+
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var _ AtomicTrie = &atomicTrie{}
+
 const (
-	progressLogFrequency       = 30 * time.Second
-	atomicKeyLength            = wrappers.LongLen + common.HashLength
-	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
+	AtomicTrieKeyLength = wrappers.LongLen + common.HashLength
 
 	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
 	atomicTrieMemoryCap     = 64 * units.MiB
 )
 
-var (
-	_                            AtomicTrie = &atomicTrie{}
-	lastCommittedKey                        = []byte("atomicTrieLastCommittedBlock")
-	appliedSharedMemoryCursorKey            = []byte("atomicTrieLastAppliedToSharedMemory")
-)
+var lastCommittedKey = []byte("atomicTrieLastCommittedBlock")
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
 // height containing atomic transactions. The backing data structure for this index is
@@ -88,33 +85,6 @@ type AtomicTrie interface {
 	RejectTrie(root common.Hash) error
 }
 
-// AtomicTrieIterator is a stateful iterator that iterates the leafs of an AtomicTrie
-type AtomicTrieIterator interface {
-	// Next advances the iterator to the next node in the atomic trie and
-	// returns true if there are more leaves to iterate
-	Next() bool
-
-	// Key returns the current database key that the iterator is iterating
-	// returned []byte can be freely modified
-	Key() []byte
-
-	// Value returns the current database value that the iterator is iterating
-	Value() []byte
-
-	// BlockNumber returns the current block number
-	BlockNumber() uint64
-
-	// BlockchainID returns the current blockchain ID at the current block number
-	BlockchainID() ids.ID
-
-	// AtomicOps returns a map of blockchainIDs to the set of atomic requests
-	// for that blockchainID at the current block number
-	AtomicOps() *avalancheatomic.Requests
-
-	// Error returns error, if any encountered during this iteration
-	Error() error
-}
-
 // atomicTrie implements the AtomicTrie interface
 type atomicTrie struct {
 	commitInterval      uint64                     // commit interval, same as commitHeightInterval by default
@@ -125,12 +95,13 @@ type atomicTrie struct {
 	lastAcceptedRoot    common.Hash                // most recent trie root passed to accept trie or the root of the atomic trie on intialization.
 	codec               codec.Manager
 	memoryCap           common.StorageSize
-	tipBuffer           *core.BoundedBuffer[common.Hash]
+	// TODO: we don't really need this to be imported from core package
+	tipBuffer *core.BoundedBuffer[common.Hash]
 }
 
-// newAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
+// NewAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
 // Initializes the trie before returning it.
-func newAtomicTrie(
+func NewAtomicTrie(
 	atomicTrieDB avalanchedatabase.Database, metadataDB avalanchedatabase.Database,
 	codec codec.Manager, lastAcceptedHeight uint64, commitHeightInterval uint64,
 ) (*atomicTrie, error) {
@@ -224,7 +195,7 @@ func (a *atomicTrie) commit(height uint64, root common.Hash) error {
 
 func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
 	for blockchainID, requests := range atomicOps {
-		valueBytes, err := a.codec.Marshal(CodecVersion, requests)
+		valueBytes, err := a.codec.Marshal(atomic.CodecVersion, requests)
 		if err != nil {
 			// highly unlikely but possible if atomic.Element
 			// has a change that is unsupported by the codec
@@ -232,7 +203,7 @@ func (a *atomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[id
 		}
 
 		// key is [height]+[blockchainID]
-		keyPacker := wrappers.Packer{Bytes: make([]byte, atomicKeyLength)}
+		keyPacker := wrappers.Packer{Bytes: make([]byte, AtomicTrieKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
 		if err := trie.Update(keyPacker.Bytes, valueBytes); err != nil {
@@ -268,7 +239,7 @@ func (a *atomicTrie) updateLastCommitted(root common.Hash, height uint64) error 
 	return nil
 }
 
-// Iterator returns a types.AtomicTrieIterator that iterates the trie from the given
+// Iterator returns a AtomicTrieIterator that iterates the trie from the given
 // atomic trie root, starting at the specified [cursor].
 func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (AtomicTrieIterator, error) {
 	t, err := trie.New(trie.TrieID(root), a.trieDB)

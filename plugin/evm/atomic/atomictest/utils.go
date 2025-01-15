@@ -1,14 +1,15 @@
 // (c) 2019-2024, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package atomictest
 
 import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
-func ConvertToAtomicOps(tx *Tx) (map[ids.ID]*avalancheatomic.Requests, error) {
+func ConvertToAtomicOps(tx *atomic.Tx) (map[ids.ID]*avalancheatomic.Requests, error) {
 	id, reqs, err := tx.AtomicOps()
 	if err != nil {
 		return nil, err

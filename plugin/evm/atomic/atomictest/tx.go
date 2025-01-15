@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package atomictest
 
 import (
 	"math/big"
@@ -17,20 +17,21 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
 const testCodecVersion = 0
 
-var testTxCodec codec.Manager
+var TestTxCodec codec.Manager
 
 func init() {
-	testTxCodec = codec.NewDefaultManager()
+	TestTxCodec = codec.NewDefaultManager()
 	c := linearcodec.NewDefault()
 
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		testTxCodec.RegisterCodec(testCodecVersion, c),
+		TestTxCodec.RegisterCodec(testCodecVersion, c),
 	)
 
 	if errs.Errored() {
@@ -52,7 +53,7 @@ type TestUnsignedTx struct {
 	EVMStateTransferV           error
 }
 
-var _ UnsignedAtomicTx = &TestUnsignedTx{}
+var _ atomic.UnsignedAtomicTx = &TestUnsignedTx{}
 
 // GasUsed implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) GasUsed(fixedFee bool) (uint64, error) { return t.GasUsedV, nil }
@@ -84,19 +85,19 @@ func (t *TestUnsignedTx) SignedBytes() []byte { return t.SignedBytesV }
 func (t *TestUnsignedTx) InputUTXOs() set.Set[ids.ID] { return t.InputUTXOsV }
 
 // SemanticVerify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) SemanticVerify(backend *VerifierBackend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
+func (t *TestUnsignedTx) SemanticVerify(backend *atomic.VerifierBackend, stx *atomic.Tx, parent atomic.AtomicBlockContext, baseFee *big.Int) error {
 	return t.SemanticVerifyV
 }
 
 // EVMStateTransfer implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
+func (t *TestUnsignedTx) EVMStateTransfer(ctx *snow.Context, state atomic.StateDB) error {
 	return t.EVMStateTransferV
 }
 
 var TestBlockchainID = ids.GenerateTestID()
 
-func GenerateTestImportTxWithGas(gasUsed uint64, burned uint64) *Tx {
-	return &Tx{
+func GenerateTestImportTxWithGas(gasUsed uint64, burned uint64) *atomic.Tx {
+	return &atomic.Tx{
 		UnsignedAtomicTx: &TestUnsignedTx{
 			IDV:                         ids.GenerateTestID(),
 			GasUsedV:                    gasUsed,
@@ -112,8 +113,8 @@ func GenerateTestImportTxWithGas(gasUsed uint64, burned uint64) *Tx {
 	}
 }
 
-func GenerateTestImportTx() *Tx {
-	return &Tx{
+func GenerateTestImportTx() *atomic.Tx {
+	return &atomic.Tx{
 		UnsignedAtomicTx: &TestUnsignedTx{
 			IDV:                         ids.GenerateTestID(),
 			AcceptRequestsBlockchainIDV: TestBlockchainID,
@@ -127,8 +128,8 @@ func GenerateTestImportTx() *Tx {
 	}
 }
 
-func GenerateTestExportTx() *Tx {
-	return &Tx{
+func GenerateTestExportTx() *atomic.Tx {
+	return &atomic.Tx{
 		UnsignedAtomicTx: &TestUnsignedTx{
 			IDV:                         ids.GenerateTestID(),
 			AcceptRequestsBlockchainIDV: TestBlockchainID,
@@ -148,7 +149,7 @@ func GenerateTestExportTx() *Tx {
 	}
 }
 
-func NewTestTx() *Tx {
+func NewTestTx() *atomic.Tx {
 	txType := rand.Intn(2)
 	switch txType {
 	case 0:
@@ -160,8 +161,8 @@ func NewTestTx() *Tx {
 	}
 }
 
-func NewTestTxs(numTxs int) []*Tx {
-	txs := make([]*Tx, 0, numTxs)
+func NewTestTxs(numTxs int) []*atomic.Tx {
+	txs := make([]*atomic.Tx, 0, numTxs)
 	for i := 0; i < numTxs; i++ {
 		txs = append(txs, NewTestTx())
 	}

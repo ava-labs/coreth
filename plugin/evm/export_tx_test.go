@@ -1012,7 +1012,7 @@ func TestExportTxAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	commitBatch, err := vm.db.CommitBatch()
+	commitBatch, err := vm.versiondb.CommitBatch()
 	if err != nil {
 		t.Fatalf("Failed to create commit batch for VM due to %s", err)
 	}
@@ -1800,7 +1800,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatalf("burned wrong amount of AVAX - expected %d burned %d", test.expectedBurnedAVAX, burnedAVAX)
 			}
 
-			commitBatch, err := vm.db.CommitBatch()
+			commitBatch, err := vm.versiondb.CommitBatch()
 			if err != nil {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
@@ -1825,6 +1825,209 @@ func TestNewExportTx(t *testing.T) {
 			addr := testKeys[0].EthAddress()
 			if sdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), sdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
+			}
+		})
+	}
+}
+
+func TestNewExportTxMulticoin(t *testing.T) {
+	tests := []struct {
+		name    string
+		genesis string
+		rules   params.Rules
+		bal     uint64
+		balmc   uint64
+	}{
+		{
+			name:    "apricot phase 0",
+			genesis: genesisJSONApricotPhase0,
+			rules:   apricotRulesPhase0,
+			bal:     49000000,
+			balmc:   25000000,
+		},
+		{
+			name:    "apricot phase 1",
+			genesis: genesisJSONApricotPhase1,
+			rules:   apricotRulesPhase1,
+			bal:     49000000,
+			balmc:   25000000,
+		},
+		{
+			name:    "apricot phase 2",
+			genesis: genesisJSONApricotPhase2,
+			rules:   apricotRulesPhase2,
+			bal:     48000000,
+			balmc:   25000000,
+		},
+		{
+			name:    "apricot phase 3",
+			genesis: genesisJSONApricotPhase3,
+			rules:   apricotRulesPhase3,
+			bal:     48947900,
+			balmc:   25000000,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
+
+			defer func() {
+				if err := vm.Shutdown(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+			}()
+
+			parent := vm.LastAcceptedBlockInternal().(*Block)
+			importAmount := uint64(50000000)
+			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
+
+			utxo := &avax.UTXO{
+				UTXOID: utxoID,
+				Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+				Out: &secp256k1fx.TransferOutput{
+					Amt: importAmount,
+					OutputOwners: secp256k1fx.OutputOwners{
+						Threshold: 1,
+						Addrs:     []ids.ShortID{testKeys[0].Address()},
+					},
+				},
+			}
+			utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			inputID := utxo.InputID()
+
+			tid := ids.GenerateTestID()
+			importAmount2 := uint64(30000000)
+			utxoID2 := avax.UTXOID{TxID: ids.GenerateTestID()}
+			utxo2 := &avax.UTXO{
+				UTXOID: utxoID2,
+				Asset:  avax.Asset{ID: tid},
+				Out: &secp256k1fx.TransferOutput{
+					Amt: importAmount2,
+					OutputOwners: secp256k1fx.OutputOwners{
+						Threshold: 1,
+						Addrs:     []ids.ShortID{testKeys[0].Address()},
+					},
+				},
+			}
+			utxoBytes2, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo2)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+			inputID2 := utxo2.InputID()
+			if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{
+				{
+					Key:   inputID[:],
+					Value: utxoBytes,
+					Traits: [][]byte{
+						testKeys[0].Address().Bytes(),
+					},
+				},
+				{
+					Key:   inputID2[:],
+					Value: utxoBytes2,
+					Traits: [][]byte{
+						testKeys[0].Address().Bytes(),
+					},
+				},
+			}}}); err != nil {
+				t.Fatal(err)
+			}
+
+			tx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := vm.mempool.AddRemoteTx(tx); err != nil {
+				t.Fatal(err)
+			}
+
+			<-issuer
+
+			blk, err := vm.BuildBlock(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := blk.Verify(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := blk.Accept(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+
+			parent = vm.LastAcceptedBlockInternal().(*Block)
+			exportAmount := uint64(5000000)
+
+			testKeys0Addr := testKeys[0].EthAddress()
+			exportId, err := ids.ToShortID(testKeys0Addr[:])
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			state, err := vm.blockChain.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			exportTx := tx.UnsignedAtomicTx
+			backend := &atomic.VerifierBackend{
+				Ctx:          vm.ctx,
+				Fx:           &vm.fx,
+				Rules:        vm.currentRules(),
+				Bootstrapped: vm.bootstrapped.Get(),
+				BlockFetcher: vm,
+				SecpCache:    &vm.secpCache,
+			}
+
+			if err := exportTx.SemanticVerify(backend, tx, parent, parent.ethBlock.BaseFee()); err != nil {
+				t.Fatal("newExportTx created an invalid transaction", err)
+			}
+
+			commitBatch, err := vm.versiondb.CommitBatch()
+			if err != nil {
+				t.Fatalf("Failed to create commit batch for VM due to %s", err)
+			}
+			chainID, atomicRequests, err := exportTx.AtomicOps()
+			if err != nil {
+				t.Fatalf("Failed to accept export transaction due to: %s", err)
+			}
+
+			if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: {PutRequests: atomicRequests.PutRequests}}, commitBatch); err != nil {
+				t.Fatal(err)
+			}
+
+			stdb, err := vm.blockChain.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = exportTx.EVMStateTransfer(vm.ctx, stdb)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			addr := testKeys[0].EthAddress()
+			if stdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
+				t.Fatalf("address balance %s equal %s not %s", addr.String(), stdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
+			}
+			if stdb.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
+				t.Fatalf("address balance multicoin %s equal %s not %s", addr.String(), stdb.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
 			}
 		})
 	}
