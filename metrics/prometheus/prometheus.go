@@ -187,9 +187,7 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 			Metric: []*dto.Metric{{
 				Summary: &dto.Summary{
 					SampleCount: ptrTo(uint64(snapshot.Count())), //nolint:gosec
-					// TODO: do we need to specify SampleSum here? and if so
-					// what should that be?
-					Quantile: dtoQuantiles,
+					Quantile:    dtoQuantiles,
 				},
 			}},
 		}, nil
