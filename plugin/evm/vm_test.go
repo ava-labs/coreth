@@ -25,7 +25,7 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	stateinterfaces "github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/trie"
@@ -1470,7 +1470,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 type wrappedBackend struct {
-	state.AtomicBackend
+	stateinterfaces.AtomicBackend
 	registeredBonusBlocks map[uint64]common.Hash
 }
 

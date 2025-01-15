@@ -23,12 +23,12 @@ type stateSyncServer struct {
 	syncableInterval uint64
 }
 
-type StateSyncServer interface {
+type Server interface {
 	GetLastStateSummary(context.Context) (block.StateSummary, error)
 	GetStateSummary(context.Context, uint64) (block.StateSummary, error)
 }
 
-func NewStateSyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) StateSyncServer {
+func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
 	return &stateSyncServer{
 		chain:            chain,
 		provider:         provider,

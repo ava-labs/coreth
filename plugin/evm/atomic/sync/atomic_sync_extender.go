@@ -9,7 +9,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ethereum/go-ethereum/log"
@@ -18,18 +18,18 @@ import (
 var _ sync.Extender = (*AtomicSyncExtender)(nil)
 
 type AtomicSyncExtender struct {
-	backend              state.AtomicBackend
+	backend              interfaces.AtomicBackend
 	stateSyncRequestSize uint16
 }
 
-func NewAtomicSyncExtender(backend state.AtomicBackend, stateSyncRequestSize uint16) *AtomicSyncExtender {
+func NewAtomicSyncExtender(backend interfaces.AtomicBackend, stateSyncRequestSize uint16) *AtomicSyncExtender {
 	return &AtomicSyncExtender{
 		backend:              backend,
 		stateSyncRequestSize: stateSyncRequestSize,
 	}
 }
 
-func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.Client, verDB *versiondb.Database, syncSummary message.Syncable) error {
+func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {
 	atomicSyncSummary, ok := syncSummary.(*AtomicBlockSyncSummary)
 	if !ok {
 		return fmt.Errorf("expected *AtomicBlockSyncSummary, got %T", syncSummary)
@@ -44,7 +44,7 @@ func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.Client,
 		a.stateSyncRequestSize,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create atomic syncer: %w", err)
 	}
 	if err := atomicSyncer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start atomic syncer: %w", err)

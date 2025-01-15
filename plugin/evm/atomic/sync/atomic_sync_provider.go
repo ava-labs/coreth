@@ -8,7 +8,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -17,10 +17,10 @@ var _ sync.SummaryProvider = &AtomicSyncProvider{}
 
 type AtomicSyncProvider struct {
 	chain      *core.BlockChain
-	atomicTrie state.AtomicTrie
+	atomicTrie interfaces.AtomicTrie
 }
 
-func NewAtomicProvider(chain *core.BlockChain, atomicTrie state.AtomicTrie) *AtomicSyncProvider {
+func NewAtomicProvider(chain *core.BlockChain, atomicTrie interfaces.AtomicTrie) *AtomicSyncProvider {
 	return &AtomicSyncProvider{chain: chain, atomicTrie: atomicTrie}
 }
 

@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicstateinterfaces "github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
@@ -250,11 +251,9 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository atomicstate.AtomicTxRepository
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie atomicstate.AtomicTrie
+	atomicTxRepository atomicstateinterfaces.AtomicTxRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend atomicstate.AtomicBackend
+	atomicBackend atomicstateinterfaces.AtomicBackend
 
 	builder *blockBuilder
 
@@ -285,8 +284,8 @@ type VM struct {
 
 	logger CorethLogger
 	// State sync server and client
-	vmsync.StateSyncServer
-	vmsync.StateSyncClient
+	vmsync.Server
+	vmsync.Client
 
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
@@ -601,7 +600,6 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
-	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
@@ -620,8 +618,8 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	atomicProvider := atomicsync.NewAtomicProvider(vm.blockChain, vm.atomicTrie)
-	vm.StateSyncServer = vmsync.NewStateSyncServer(vm.blockChain, atomicProvider, vm.config.StateSyncCommitInterval)
+	atomicProvider := atomicsync.NewAtomicProvider(vm.blockChain, vm.atomicBackend.AtomicTrie())
+	vm.Server = vmsync.SyncServer(vm.blockChain, atomicProvider, vm.config.StateSyncCommitInterval)
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
@@ -697,7 +695,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	vm.StateSyncClient = vmsync.NewStateSyncClient(&vmsync.StateSyncClientConfig{
+	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
 		Chain:       vm.eth,
 		State:       vm.State,
 		ExtraSyncer: atomicsync.NewAtomicSyncExtender(vm.atomicBackend, vm.config.StateSyncRequestSize),
@@ -726,7 +724,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
 	// sync using a snapshot that has been modified by the node running normal operations.
 	if !stateSyncEnabled {
-		return vm.StateSyncClient.ClearOngoingSummary()
+		return vm.Client.ClearOngoingSummary()
 	}
 
 	return nil
@@ -1008,11 +1006,11 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 // onBootstrapStarted marks this VM as bootstrapping
 func (vm *VM) onBootstrapStarted() error {
 	vm.bootstrapped.Set(false)
-	if err := vm.StateSyncClient.Error(); err != nil {
+	if err := vm.Client.Error(); err != nil {
 		return err
 	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
-	if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
+	if err := vm.Client.ClearOngoingSummary(); err != nil {
 		return err
 	}
 	// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
@@ -1225,7 +1223,7 @@ func (vm *VM) setAppRequestHandlers() {
 		vm.blockChain,
 		vm.chaindb,
 		evmTrieDB,
-		vm.atomicTrie.TrieDB(),
+		vm.atomicBackend.AtomicTrie().TrieDB(),
 		vm.warpBackend,
 		vm.networkCodec,
 	)
@@ -1241,7 +1239,7 @@ func (vm *VM) Shutdown(context.Context) error {
 		vm.cancel()
 	}
 	vm.Network.Shutdown()
-	if err := vm.StateSyncClient.Shutdown(); err != nil {
+	if err := vm.Client.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)
 	}
 	close(vm.shutdownChan)
