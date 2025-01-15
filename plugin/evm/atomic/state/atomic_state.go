@@ -10,26 +10,12 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var _ AtomicState = &atomicState{}
-
-// AtomicState is an abstraction created through AtomicBackend
-// and can be used to apply the VM's state change for atomic txs
-// or reject them to free memory.
-// The root of the atomic trie after applying the state change
-// is accessible through this interface as well.
-type AtomicState interface {
-	// Root of the atomic trie after applying the state change.
-	Root() common.Hash
-	// Accept applies the state change to VM's persistent storage
-	// Changes are persisted atomically along with the provided [commitBatch].
-	Accept(commitBatch database.Batch, requests map[ids.ID]*avalancheatomic.Requests) error
-	// Reject frees memory associated with the state change.
-	Reject() error
-}
+var _ interfaces.AtomicState = &atomicState{}
 
 // atomicState implements the AtomicState interface using
 // a pointer to the atomicBackend.

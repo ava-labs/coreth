@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
@@ -28,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var _ AtomicTrie = &atomicTrie{}
+var _ interfaces.AtomicTrie = &atomicTrie{}
 
 const (
 	AtomicTrieKeyLength = wrappers.LongLen + common.HashLength
@@ -38,52 +39,6 @@ const (
 )
 
 var lastCommittedKey = []byte("atomicTrieLastCommittedBlock")
-
-// AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
-// height containing atomic transactions. The backing data structure for this index is
-// a Trie. The keys of the trie are block heights and the values (leaf nodes)
-// are the atomic operations applied to shared memory while processing the block accepted
-// at the corresponding height.
-type AtomicTrie interface {
-	// OpenTrie returns a modifiable instance of the atomic trie backed by trieDB
-	// opened at hash.
-	OpenTrie(hash common.Hash) (*trie.Trie, error)
-
-	// UpdateTrie updates [tr] to inlude atomicOps for height.
-	UpdateTrie(tr *trie.Trie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error
-
-	// Iterator returns an AtomicTrieIterator to iterate the trie at the given
-	// root hash starting at [cursor].
-	Iterator(hash common.Hash, cursor []byte) (AtomicTrieIterator, error)
-
-	// LastCommitted returns the last committed hash and corresponding block height
-	LastCommitted() (common.Hash, uint64)
-
-	// TrieDB returns the underlying trie database
-	TrieDB() *triedb.Database
-
-	// Root returns hash if it exists at specified height
-	// if trie was not committed at provided height, it returns
-	// common.Hash{} instead
-	Root(height uint64) (common.Hash, error)
-
-	// LastAcceptedRoot returns the most recent accepted root of the atomic trie,
-	// or the root it was initialized to if no new tries were accepted yet.
-	LastAcceptedRoot() common.Hash
-
-	// InsertTrie updates the trieDB with the provided node set and adds a reference
-	// to root in the trieDB. Once InsertTrie is called, it is expected either
-	// AcceptTrie or RejectTrie be called for the same root.
-	InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
-
-	// AcceptTrie marks root as the last accepted atomic trie root, and
-	// commits the trie to persistent storage if height is divisible by
-	// the commit interval. Returns true if the trie was committed.
-	AcceptTrie(height uint64, root common.Hash) (bool, error)
-
-	// RejectTrie dereferences root from the trieDB, freeing memory.
-	RejectTrie(root common.Hash) error
-}
 
 // atomicTrie implements the AtomicTrie interface
 type atomicTrie struct {
@@ -241,7 +196,7 @@ func (a *atomicTrie) updateLastCommitted(root common.Hash, height uint64) error 
 
 // Iterator returns a AtomicTrieIterator that iterates the trie from the given
 // atomic trie root, starting at the specified [cursor].
-func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (AtomicTrieIterator, error) {
+func (a *atomicTrie) Iterator(root common.Hash, cursor []byte) (interfaces.AtomicTrieIterator, error) {
 	t, err := trie.New(trie.TrieID(root), a.trieDB)
 	if err != nil {
 		return nil, err

@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/trie"
@@ -44,7 +45,7 @@ type Syncer interface {
 // the state of progress and writing the actual atomic trie to the trieDB.
 type atomicSyncer struct {
 	db           *versiondb.Database
-	atomicTrie   state.AtomicTrie
+	atomicTrie   interfaces.AtomicTrie
 	trie         *trie.Trie // used to update the atomic trie
 	targetRoot   common.Hash
 	targetHeight uint64
@@ -65,7 +66,7 @@ func addZeroes(height uint64) []byte {
 	return packer.Bytes
 }
 
-func NewAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie state.AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16) (*atomicSyncer, error) {
+func NewAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie interfaces.AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16) (*atomicSyncer, error) {
 	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
 	trie, err := atomicTrie.OpenTrie(lastCommittedRoot)
 	if err != nil {

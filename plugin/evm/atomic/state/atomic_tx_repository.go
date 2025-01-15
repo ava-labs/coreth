@@ -36,19 +36,6 @@ var (
 	// bonusBlocksRepairedKey     = []byte("bonusBlocksRepaired")
 )
 
-// AtomicTxRepository defines an entity that manages storage and indexing of
-// atomic transactions
-type AtomicTxRepository interface {
-	GetIndexHeight() (uint64, error)
-	GetByTxID(txID ids.ID) (*atomic.Tx, uint64, error)
-	GetByHeight(height uint64) ([]*atomic.Tx, error)
-	Write(height uint64, txs []*atomic.Tx) error
-	WriteBonus(height uint64, txs []*atomic.Tx) error
-
-	IterateByHeight(start uint64) database.Iterator
-	Codec() codec.Manager
-}
-
 // atomicTxRepository is a prefixdb implementation of the AtomicTxRepository interface
 type atomicTxRepository struct {
 	// [acceptedAtomicTxDB] maintains an index of [txID] => [height]+[atomic tx] for all accepted atomic txs.
