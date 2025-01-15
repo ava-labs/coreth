@@ -16,20 +16,23 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
+// Gatherer implements [prometheus.Gatherer] interface by
+// gathering all metrics from the given Prometheus registry.
 type Gatherer struct {
 	registry Registry
 }
 
 var _ prometheus.Gatherer = (*Gatherer)(nil)
 
-// NewGatherer returns a gatherer using the given registry.
-// Note this gatherer implements the [prometheus.Gatherer] interface.
+// NewGatherer returns a [Gatherer] using the given registry.
 func NewGatherer(registry Registry) *Gatherer {
 	return &Gatherer{
 		registry: registry,
 	}
 }
 
+// Gather gathers metrics from the registry and converts them to
+// a slice of metric families.
 func (g *Gatherer) Gather() (mfs []*dto.MetricFamily, err error) {
 	// Gather and pre-sort the metrics to avoid random listings
 	var names []string
