@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/constants"
-	"github.com/ava-labs/coreth/core/txpool/legacypool"
-	"github.com/ava-labs/coreth/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/spf13/cast"
@@ -61,6 +59,9 @@ const (
 	// - state sync time: ~6 hrs.
 	defaultStateSyncMinBlocks   = 300_000
 	DefaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
+
+	estimatedBlockAcceptPeriod        = 2 * time.Second
+	defaultHistoricalProofQueryWindow = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
 )
 
 var (
@@ -125,6 +126,10 @@ type Config struct {
 	PopulateMissingTries            *uint64 `json:"populate-missing-tries,omitempty"`   // Sets the starting point for re-populating missing tries. Disables re-generation if nil.
 	PopulateMissingTriesParallelism int     `json:"populate-missing-tries-parallelism"` // Number of concurrent readers to use when re-populating missing tries on startup.
 	PruneWarpDB                     bool    `json:"prune-warp-db-enabled"`              // Determines if the warpDB should be cleared on startup
+
+	// HistoricalProofQueryWindow is, when running in archive mode only, the number of blocks before the
+	// last accepted block to be accepted for proof state queries.
+	HistoricalProofQueryWindow uint64 `json:"historical-proof-query-window,omitempty"`
 
 	// Metric Settings
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
@@ -224,28 +229,37 @@ type Config struct {
 	HttpBodyLimit uint64 `json:"http-body-limit"`
 }
 
+// TxPoolConfig contains the transaction pool config to be passed
+// to [Config.SetDefaults].
+type TxPoolConfig struct {
+	PriceLimit   uint64
+	PriceBump    uint64
+	AccountSlots uint64
+	GlobalSlots  uint64
+	AccountQueue uint64
+	GlobalQueue  uint64
+	Lifetime     time.Duration
+}
+
 // EthAPIs returns an array of strings representing the Eth APIs that should be enabled
 func (c Config) EthAPIs() []string {
 	return c.EnabledEthAPIs
 }
 
-func (c Config) EthBackendSettings() eth.Settings {
-	return eth.Settings{MaxBlocksPerRequest: c.MaxBlocksPerRequest}
-}
-
-func (c *Config) SetDefaults() {
+func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.EnabledEthAPIs = defaultEnabledAPIs
 	c.RPCGasCap = defaultRpcGasCap
 	c.RPCTxFeeCap = defaultRpcTxFeeCap
 	c.MetricsExpensiveEnabled = defaultMetricsExpensiveEnabled
 
-	c.TxPoolPriceLimit = legacypool.DefaultConfig.PriceLimit
-	c.TxPoolPriceBump = legacypool.DefaultConfig.PriceBump
-	c.TxPoolAccountSlots = legacypool.DefaultConfig.AccountSlots
-	c.TxPoolGlobalSlots = legacypool.DefaultConfig.GlobalSlots
-	c.TxPoolAccountQueue = legacypool.DefaultConfig.AccountQueue
-	c.TxPoolGlobalQueue = legacypool.DefaultConfig.GlobalQueue
-	c.TxPoolLifetime.Duration = legacypool.DefaultConfig.Lifetime
+	// TxPool settings
+	c.TxPoolPriceLimit = txPoolConfig.PriceLimit
+	c.TxPoolPriceBump = txPoolConfig.PriceBump
+	c.TxPoolAccountSlots = txPoolConfig.AccountSlots
+	c.TxPoolGlobalSlots = txPoolConfig.GlobalSlots
+	c.TxPoolAccountQueue = txPoolConfig.AccountQueue
+	c.TxPoolGlobalQueue = txPoolConfig.GlobalQueue
+	c.TxPoolLifetime.Duration = txPoolConfig.Lifetime
 
 	c.APIMaxDuration.Duration = defaultApiMaxDuration
 	c.WSCPURefillRate.Duration = defaultWsCpuRefillRate
@@ -281,6 +295,7 @@ func (c *Config) SetDefaults() {
 	c.StateSyncRequestSize = DefaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
+	c.HistoricalProofQueryWindow = defaultHistoricalProofQueryWindow
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
