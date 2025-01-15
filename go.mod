@@ -6,6 +6,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
 	github.com/Yiling-J/theine-go v0.6.0
 	github.com/ava-labs/avalanchego v1.12.2-0.20241224181600-fade5be3051d
+	github.com/ava-labs/firewood/ffi/v2 v2.0.0-20250115224253-5544080dfc47
 	github.com/cespare/cp v0.1.0
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
@@ -140,3 +141,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+// replace github.com/ava-labs/firewood/ffi/v2 => /Users/darioush.jalali/git2/firewood/ffi

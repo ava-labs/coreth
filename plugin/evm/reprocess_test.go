@@ -67,6 +67,9 @@ var (
 	intermediateWriteBufferSizeKB = 1024
 	intermediateWriteBatchSizeKB  = 256
 
+	// firewood options
+	firewoodDBFile = "firewood_db"
+
 	// ipc options
 	socketPath = "/tmp/rust_socket"
 )
@@ -93,11 +96,12 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&readCacheBackend, "readCacheBackend", readCacheBackend, "read cache backend (theine, fastcache, otter, none)")
 	flag.Uint64Var(&writeCacheSize, "writeCacheSize", writeCacheSize, "write cache size in items")
 	flag.StringVar(&socketPath, "socketPath", socketPath, "socket path")
-	flag.StringVar(&storageBackend, "storageBackend", storageBackend, "storage backend (none, legacy, merkledb, nomt)")
+	flag.StringVar(&storageBackend, "storageBackend", storageBackend, "storage backend (none, legacy, merkledb, nomt, firewood)")
 	flag.IntVar(&commitEachBlocks, "commitEachBlocks", commitEachBlocks, "commit each N blocks")
 	flag.IntVar(&commitEachTxs, "commitEachTxs", commitEachTxs, "commit each N transactions")
 	flag.BoolVar(&forceStartWithMismatch, "forceStartWithMismatch", forceStartWithMismatch, "force start with mismatch")
 	flag.BoolVar(&trackDeletedTries, "trackDeletedTries", trackDeletedTries, "track deleted tries (detect re-use of SELFDESTRUCTed accounts)")
+	flag.StringVar(&firewoodDBFile, "firewoodDBFile", firewoodDBFile, "firewood DB file")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -402,7 +406,7 @@ func CleanupOnInterrupt(cleanup func()) {
 
 func TestReprocessGenesis(t *testing.T) {
 	// nomt commented out as needs separate process to function
-	for _, backend := range []string{"merkledb", "legacy" /* , "nomt" */} {
+	for _, backend := range []string{"merkledb", "legacy", "firewood" /* , "nomt" */} {
 		t.Run(backend, func(t *testing.T) { testReprocessGenesis(t, backend) })
 	}
 }
@@ -435,7 +439,7 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 		startBlock++
 	}
 
-	for _, backendName := range []string{"nomt", "merkledb", "legacy"} {
+	for _, backendName := range []string{"nomt", "merkledb", "legacy", "firewood"} {
 		t.Run(backendName, func(t *testing.T) {
 			backend := getMainnetBackend(t, backendName, source, dbs)
 			lastHash, lastRoot = reprocess(t, backend, lastHash, lastRoot, startBlock, endBlock)
