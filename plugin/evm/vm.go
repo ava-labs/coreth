@@ -279,10 +279,7 @@ type VM struct {
 	p2pValidators *p2p.Validators
 
 	// Metrics
-	sdkMetrics interface {
-		prometheus.Registerer
-		prometheus.Gatherer
-	}
+	sdkMetrics *prometheus.Registry
 
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
