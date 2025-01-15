@@ -17,21 +17,15 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp/warptest"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestAddressedCallSignatures(t *testing.T) {
-	metricsEnabled := metrics.Enabled
-	if !metricsEnabled {
-		metrics.Enabled = true
-		t.Cleanup(func() {
-			metrics.Enabled = false
-		})
-	}
+	testutils.WithMetrics(t)
 
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
@@ -147,13 +141,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 }
 
 func TestBlockSignatures(t *testing.T) {
-	metricsEnabled := metrics.Enabled
-	if !metricsEnabled {
-		metrics.Enabled = true
-		t.Cleanup(func() {
-			metrics.Enabled = false
-		})
-	}
+	testutils.WithMetrics(t)
 
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
