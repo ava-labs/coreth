@@ -21,7 +21,7 @@ var _ Request = LeafsRequest{}
 type NodeType uint8
 
 const (
-	StateTrieNode      = NodeType(0)
+	StateTrieNode      = NodeType(1)
 	StateTrieKeyLength = common.HashLength
 )
 

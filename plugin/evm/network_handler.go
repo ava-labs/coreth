@@ -5,7 +5,6 @@ package evm
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
@@ -17,12 +16,15 @@ import (
 	"github.com/ava-labs/coreth/warp"
 	warpHandlers "github.com/ava-labs/coreth/warp/handlers"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var _ message.RequestHandler = &networkHandler{}
 
+type LeafHandlers map[message.NodeType]*syncHandlers.LeafsRequestHandler
+
 type networkHandler struct {
-	leafRequestHandlers     map[message.NodeType]*syncHandlers.LeafsRequestHandler
+	leafRequestHandlers     LeafHandlers
 	blockRequestHandler     *syncHandlers.BlockRequestHandler
 	codeRequestHandler      *syncHandlers.CodeRequestHandler
 	signatureRequestHandler *warpHandlers.SignatureRequestHandler
@@ -45,7 +47,7 @@ func newNetworkHandler(
 	leafRequesTypeConfigs map[message.NodeType]LeafRequestTypeConfig,
 ) message.RequestHandler {
 	syncStats := syncStats.NewHandlerStats(metrics.Enabled)
-	leafRequestHandlers := make(map[message.NodeType]*syncHandlers.LeafsRequestHandler)
+	leafRequestHandlers := make(LeafHandlers)
 	for _, config := range leafRequesTypeConfigs {
 		snapshotProvider := provider
 		if !config.UseSnapshots {
@@ -65,7 +67,8 @@ func newNetworkHandler(
 func (n networkHandler) HandleLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
 	handler, ok := n.leafRequestHandlers[leafsRequest.NodeType]
 	if !ok {
-		return nil, fmt.Errorf("unknown node type %d", leafsRequest.NodeType)
+		log.Debug("node type is not recognised, dropping request", "nodeID", nodeID, "requestID", requestID, "nodeType", leafsRequest.NodeType)
+		return nil, nil
 	}
 	return handler.OnLeafsRequest(ctx, nodeID, requestID, leafsRequest)
 }
