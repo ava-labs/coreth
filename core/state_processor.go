@@ -208,7 +208,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 // This function is called within genesis setup to configure the starting state for precompiles enabled at genesis.
 // In block processing and building, ApplyUpgrades is called instead which also applies state upgrades.
 func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, blockContext contract.ConfigurationBlockContext, statedb *state.StateDB) error {
-	blockTimestamp := blockContext.Timestamp()
+	blockTimestamp := blockContext.Time()
 	// Note: RegisteredModules returns precompiles sorted by module addresses.
 	// This ensures that the order we call Configure for each precompile is consistent.
 	// This ensures even if precompiles read/write state other than their own they will observe

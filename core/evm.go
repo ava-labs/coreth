@@ -105,7 +105,7 @@ func newEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		PredicateResults:  predicateResults,
 		Coinbase:          beneficiary,
 		BlockNumber:       new(big.Int).Set(header.Number),
-		Time:              header.Time,
+		Time_:             header.Time,
 		Difficulty:        new(big.Int).Set(header.Difficulty),
 		BaseFee:           baseFee,
 		BlobBaseFee:       blobBaseFee,

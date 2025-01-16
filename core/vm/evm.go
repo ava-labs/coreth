@@ -130,7 +130,7 @@ type BlockContext struct {
 	Coinbase    common.Address // Provides information for COINBASE
 	GasLimit    uint64         // Provides information for GASLIMIT
 	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        uint64         // Provides information for TIME
+	Time_       uint64         // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
 	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
@@ -140,8 +140,8 @@ func (b *BlockContext) Number() *big.Int {
 	return b.BlockNumber
 }
 
-func (b *BlockContext) Timestamp() uint64 {
-	return b.Time
+func (b *BlockContext) Time() uint64 {
+	return b.Time_
 }
 
 func (b *BlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
@@ -217,7 +217,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time),
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time()),
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
