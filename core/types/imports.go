@@ -27,6 +27,8 @@ type (
 	StateAccount      = ethtypes.StateAccount
 	SlimAccount       = ethtypes.SlimAccount
 	Header            = ethtypes.Header
+	Block             = ethtypes.Block
+	Blocks            = ethtypes.Blocks
 	BlockNonce        = ethtypes.BlockNonce
 	Transaction       = ethtypes.Transaction
 	Transactions      = ethtypes.Transactions
@@ -52,9 +54,12 @@ const (
 var (
 	BloomLookup          = ethtypes.BloomLookup
 	BytesToBloom         = ethtypes.BytesToBloom
+	CalcUncleHash        = ethtypes.CalcUncleHash
 	CreateBloom          = ethtypes.CreateBloom
 	CopyHeader           = ethtypes.CopyHeader
 	NewReceipt           = ethtypes.NewReceipt
+	NewBlock             = ethtypes.NewBlock
+	NewBlockWithHeader   = ethtypes.NewBlockWithHeader
 	NewContractCreation  = ethtypes.NewContractCreation
 	NewTransaction       = ethtypes.NewTransaction
 	EncodeNonce          = ethtypes.EncodeNonce

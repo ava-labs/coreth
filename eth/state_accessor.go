@@ -284,7 +284,7 @@ func (eth *Ethereum) StateAtNextBlock(ctx context.Context, parent *types.Block, 
 	}
 
 	// Apply upgrades here for the [nextBlock]
-	err = core.ApplyUpgrades(eth.blockchain.Config(), &parent.Header().Time, nextBlock, statedb)
+	err = core.ApplyUpgrades(eth.blockchain.Config(), &parent.Header().Time, types.WrapWithTimestamp(nextBlock), statedb)
 	if err != nil {
 		release()
 		return nil, nil, err

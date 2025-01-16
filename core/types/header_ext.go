@@ -26,8 +26,8 @@ type HeaderExtra struct {
 func (h *HeaderExtra) EncodeRLP(eth *ethtypes.Header, writer io.Writer) error {
 	out := new(HeaderSerializable)
 
-	updateFromEth(out, eth)
-	updateFromExtras(out, h)
+	out.updateFromEth(eth)
+	out.updateFromExtras(h)
 
 	return rlp.Encode(writer, out)
 }
@@ -38,8 +38,8 @@ func (h *HeaderExtra) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error 
 		return err
 	}
 
-	updateToEth(in, eth)
-	updateToExtras(in, h)
+	in.updateToEth(eth)
+	in.updateToExtras(h)
 
 	return nil
 }
@@ -48,8 +48,8 @@ func (h *HeaderExtra) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error 
 func (h *HeaderExtra) MarshalJSON(eth *ethtypes.Header) ([]byte, error) {
 	out := new(HeaderSerializable)
 
-	updateFromEth(out, eth)
-	updateFromExtras(out, h)
+	out.updateFromEth(eth)
+	out.updateFromExtras(h)
 
 	return out.MarshalJSON()
 }
@@ -61,8 +61,8 @@ func (h *HeaderExtra) UnmarshalJSON(eth *ethtypes.Header, input []byte) error {
 		return err
 	}
 
-	updateToEth(in, eth)
-	updateToExtras(in, h)
+	in.updateToEth(eth)
+	in.updateToExtras(h)
 
 	return nil
 }
@@ -156,7 +156,7 @@ func (h *HeaderSerializable) Hash() common.Hash {
 }
 
 // updateFromEth updates the HeaderSerializable from the ethtypes.Header
-func updateFromEth(h *HeaderSerializable, eth *ethtypes.Header) {
+func (h *HeaderSerializable) updateFromEth(eth *ethtypes.Header) {
 	h.ParentHash = eth.ParentHash
 	h.UncleHash = eth.UncleHash
 	h.Coinbase = eth.Coinbase
@@ -179,7 +179,7 @@ func updateFromEth(h *HeaderSerializable, eth *ethtypes.Header) {
 }
 
 // updateToEth updates the ethtypes.Header from the HeaderSerializable
-func updateToEth(h *HeaderSerializable, eth *ethtypes.Header) {
+func (h *HeaderSerializable) updateToEth(eth *ethtypes.Header) {
 	eth.ParentHash = h.ParentHash
 	eth.UncleHash = h.UncleHash
 	eth.Coinbase = h.Coinbase
@@ -202,14 +202,14 @@ func updateToEth(h *HeaderSerializable, eth *ethtypes.Header) {
 }
 
 // updateFromExtras updates the HeaderSerializable from the HeaderExtra
-func updateFromExtras(h *HeaderSerializable, extras *HeaderExtra) {
+func (h *HeaderSerializable) updateFromExtras(extras *HeaderExtra) {
 	h.ExtDataHash = extras.ExtDataHash
 	h.ExtDataGasUsed = extras.ExtDataGasUsed
 	h.BlockGasCost = extras.BlockGasCost
 }
 
 // updateToExtras updates the HeaderExtra from the HeaderSerializable
-func updateToExtras(h *HeaderSerializable, extras *HeaderExtra) {
+func (h *HeaderSerializable) updateToExtras(extras *HeaderExtra) {
 	extras.ExtDataHash = h.ExtDataHash
 	extras.ExtDataGasUsed = h.ExtDataGasUsed
 	extras.BlockGasCost = h.BlockGasCost
