@@ -227,6 +227,9 @@ type Config struct {
 
 	// RPC settings
 	HttpBodyLimit uint64 `json:"http-body-limit"`
+
+	// Firewood settings
+	FirewoodDBFile string `json:"firewood-db-file"`
 }
 
 // TxPoolConfig contains the transaction pool config to be passed

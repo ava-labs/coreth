@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
+	firewood "github.com/ava-labs/firewood/ffi/v2"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -43,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/shim/fw"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
@@ -506,6 +508,16 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	if file := vm.config.FirewoodDBFile; file != "" {
+		var fwdb firewood.Firewood
+		if fileExists(file) {
+			fwdb = firewood.OpenDatabase(file)
+		} else {
+			fwdb = firewood.CreateDatabase(file)
+		}
+		vm.ethConfig.KVBackend = &fw.Firewood{Firewood: fwdb}
+		log.Warn("Using Firewood database (experimental)", "file", file)
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -1874,4 +1886,9 @@ func (vm *VM) newExportTx(
 	}
 
 	return tx, nil
+}
+
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil || !os.IsNotExist(err)
 }

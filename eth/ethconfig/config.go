@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/coreth/eth/gasprice"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -106,6 +107,9 @@ type Config struct {
 	TriePrefetcherParallelism int
 	SnapshotCache             int
 	Preimages                 bool
+
+	// KVBackend
+	KVBackend triedb.KVBackend
 
 	// AcceptedCacheSize is the depth of accepted headers cache and accepted
 	// logs cache at the accepted tip.

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"net"
-	"os"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/database"
@@ -193,11 +192,6 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 		Name:        name,
 		VerifyRoot:  name == "legacy",
 	}
-}
-
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return err == nil || !os.IsNotExist(err)
 }
 
 func getKVBackend(t *testing.T, name string, merkleKVStore database.Database) triedb.KVBackend {
