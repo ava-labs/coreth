@@ -21,6 +21,11 @@ import (
 	"github.com/ava-labs/coreth/trie"
 )
 
+const (
+	// AtomicTrieNode represents a leaf node that belongs to the atomic trie.
+	AtomicTrieNode message.NodeType = 2
+)
+
 var (
 	_ Syncer                  = &atomicSyncer{}
 	_ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
@@ -177,7 +182,7 @@ type atomicSyncerLeafTask struct {
 
 func (a *atomicSyncerLeafTask) Start() []byte                  { return addZeroes(a.atomicSyncer.lastHeight + 1) }
 func (a *atomicSyncerLeafTask) End() []byte                    { return nil }
-func (a *atomicSyncerLeafTask) NodeType() message.NodeType     { return message.AtomicTrieNode }
+func (a *atomicSyncerLeafTask) NodeType() message.NodeType     { return AtomicTrieNode }
 func (a *atomicSyncerLeafTask) OnFinish(context.Context) error { return a.atomicSyncer.onFinish() }
 func (a *atomicSyncerLeafTask) OnStart() (bool, error)         { return false, nil }
 func (a *atomicSyncerLeafTask) Root() common.Hash              { return a.atomicSyncer.targetRoot }

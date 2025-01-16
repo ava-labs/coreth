@@ -287,6 +287,8 @@ type VM struct {
 	vmsync.Server
 	vmsync.Client
 
+	leafRequestTypeConfigs map[message.NodeType]LeafRequestTypeConfig
+
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
@@ -695,6 +697,12 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
+	// Get leaf metrics from config
+	leafMetricsNames := make(map[message.NodeType]string, len(vm.leafRequestTypeConfigs))
+	for _, nodeType := range vm.leafRequestTypeConfigs {
+		leafMetricsNames[nodeType.NodeType] = nodeType.MetricName
+	}
+
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
 		Chain:       vm.eth,
 		State:       vm.State,
@@ -703,7 +711,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
 				Codec:            vm.networkCodec,
-				Stats:            stats.NewClientSyncerStats(),
+				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
 				BlockParser:      vm,
 			},
@@ -1207,7 +1215,7 @@ func (vm *VM) initBlockBuilding() error {
 
 // setAppRequestHandlers sets the request handlers for the VM to serve state sync
 // requests.
-func (vm *VM) setAppRequestHandlers() {
+func (vm *VM) setAppRequestHandlers() error {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
@@ -1219,15 +1227,41 @@ func (vm *VM) setAppRequestHandlers() {
 			},
 		},
 	)
+	if err := vm.RegisterLeafRequestHandler(message.StateTrieNode, "sync_state_trie_leaves", evmTrieDB, message.StateTrieKeyLength, true); err != nil {
+		return fmt.Errorf("failed to register leaf request handler for state trie: %w", err)
+	}
+	// Register atomic trieDB for serving atomic leafs requests.
+	if err := vm.RegisterLeafRequestHandler(atomicsync.AtomicTrieNode, "sync_atomic_trie_leaves", vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, false); err != nil {
+		return fmt.Errorf("failed to register leaf request handler for atomic trie: %w", err)
+	}
+
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
-		evmTrieDB,
-		vm.atomicBackend.AtomicTrie().TrieDB(),
 		vm.warpBackend,
 		vm.networkCodec,
+		vm.leafRequestTypeConfigs,
 	)
 	vm.Network.SetRequestHandler(networkHandler)
+	return nil
+}
+
+func (vm *VM) RegisterLeafRequestHandler(nodeType message.NodeType, metricName string, trieDB *triedb.Database, trieKeyLen int, useSnapshot bool) error {
+	if vm.leafRequestTypeConfigs == nil {
+		vm.leafRequestTypeConfigs = make(map[message.NodeType]LeafRequestTypeConfig)
+	}
+	if _, ok := vm.leafRequestTypeConfigs[nodeType]; ok {
+		return fmt.Errorf("leaf request handler for node type %d already registered", nodeType)
+	}
+	handlerConfig := LeafRequestTypeConfig{
+		NodeType:     nodeType,
+		TrieDB:       trieDB,
+		UseSnapshots: useSnapshot,
+		NodeKeyLen:   trieKeyLen,
+		MetricName:   metricName,
+	}
+	vm.leafRequestTypeConfigs[nodeType] = handlerConfig
+	return nil
 }
 
 // Shutdown implements the snowman.ChainVM interface

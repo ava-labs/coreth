@@ -48,7 +48,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	numLeaves := 0
 	mockClient := syncclient.NewMockClient(
 		message.Codec,
-		handlers.NewLeafsRequestHandler(serverTrieDB, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
+		handlers.NewLeafsRequestHandler(serverTrieDB, state.AtomicTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
 		nil,
 		nil,
 	)
