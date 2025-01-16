@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -213,6 +214,9 @@ func (wp *workerPool) Done() {
 }
 
 func WithConcurrentWorkers(prefetchers int) PrefetcherOption {
+	if prefetchers <= 0 {
+		return nil
+	}
 	pool := &workerPool{
 		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),
 	}
@@ -227,8 +231,13 @@ func (s *StateDB) StartPrefetcher(namespace string, opts ...PrefetcherOption) {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if s.snap != nil {
-		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, opts...)
+	if len(opts) == 0 || opts[0] == nil {
+		return // No prefetching
+	}
+	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, opts...)
+	kvConfig := s.db.TrieDB().Config().KeyValueDB
+	if kvConfig != nil && kvConfig.KVBackend != nil {
+		s.prefetcher.rootTrie = s.trie
 	}
 }
 
@@ -719,6 +728,15 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 		if data == nil {
 			return nil
+		}
+		if s.snap != nil {
+			bytes, err := rlp.EncodeToBytes(data)
+			if err != nil {
+				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+				return nil
+			}
+
+			fmt.Printf("Warning: account %v not found in snapshot but found in trie as %x\n", addr, bytes)
 		}
 	}
 	// Insert into the live set
@@ -1249,6 +1267,16 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 		// Short circuit if the storage was empty.
 		if prev.Root == types.EmptyRootHash {
 			continue
+		}
+		tdbConfig := s.db.TrieDB().Config()
+		if tdbConfig.KeyValueDB != nil && tdbConfig.KeyValueDB.KVBackend != nil {
+			deleted, err := tdbConfig.KeyValueDB.KVBackend.PrefixDelete(addrHash[:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete storage from kv backend, err: %w", err)
+			}
+			if deleted > 0 {
+				log.Info("Deleted storage from kv backend", "addrHash", addrHash, "deleted", deleted)
+			}
 		}
 		// Remove storage slots belong to the account.
 		aborted, slots, set, err := s.deleteStorage(addr, addrHash, prev.Root)

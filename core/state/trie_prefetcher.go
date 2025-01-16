@@ -37,6 +37,7 @@ var (
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
+	rootTrie Trie                   // Root trie for the state trie
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
@@ -158,10 +159,22 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.root, owner, root, addr, p.options...)
+		fetcher = newSubfetcher(p, p.db, p.root, owner, root, addr, p.options...)
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
+}
+
+func (p *triePrefetcher) getRootTrie() Trie {
+	if p.rootTrie != nil {
+		return p.rootTrie
+	}
+	rootTrie, err := p.db.OpenTrie(p.root)
+	if err != nil {
+		log.Warn("Trie prefetcher failed opening root trie", "root", p.root, "err", err)
+		return nil
+	}
+	return rootTrie
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
@@ -216,6 +229,8 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
+	p *triePrefetcher
+
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
 	owner common.Hash    // Owner of the trie, usually account hash
@@ -240,8 +255,9 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address, opts ...PrefetcherOption) *subfetcher {
+func newSubfetcher(p *triePrefetcher, db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address, opts ...PrefetcherOption) *subfetcher {
 	sf := &subfetcher{
+		p:     p,
 		db:    db,
 		state: state,
 		owner: owner,
@@ -312,16 +328,12 @@ func (sf *subfetcher) loop() {
 
 	// Start by opening the trie and stop processing if it fails
 	if sf.owner == (common.Hash{}) {
-		trie, err := sf.db.OpenTrie(sf.root)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			return
-		}
+		trie := sf.p.getRootTrie()
 		sf.trie = trie
 	} else {
 		// The trie argument can be nil as verkle doesn't support prefetching
 		// yet. TODO FIX IT(rjl493456442), otherwise code will panic here.
-		trie, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
+		trie, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, sf.p.getRootTrie())
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return

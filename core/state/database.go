@@ -32,6 +32,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/shim"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ava-labs/coreth/trie/utils"
@@ -81,8 +82,26 @@ type Database interface {
 	TrieDB() *triedb.Database
 }
 
-// Trie is a Ethereum Merkle Patricia trie.
 type Trie interface {
+	Itrie
+	PrefetchAccount(address common.Address) (*types.StateAccount, error)
+	PrefetchStorage(addr common.Address, key []byte) ([]byte, error)
+}
+
+type LegacyAdapter struct {
+	Itrie
+}
+
+func (a LegacyAdapter) PrefetchAccount(address common.Address) (*types.StateAccount, error) {
+	return a.Itrie.GetAccount(address)
+}
+
+func (a LegacyAdapter) PrefetchStorage(addr common.Address, key []byte) ([]byte, error) {
+	return a.Itrie.GetStorage(addr, key)
+}
+
+// Trie is a Ethereum Merkle Patricia trie.
+type Itrie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
 	//
@@ -189,18 +208,47 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if kvConfig := db.triedb.Config().KeyValueDB; kvConfig != nil {
+		if kvConfig.KVBackend != nil {
+			return shim.NewAccountTrieKV(root, kvConfig.KVBackend, db.triedb)
+		}
+		// Legacy backend maintains hash compatibility with geth
+		// to test the shim layer.
+		backend, err := shim.NewLegacyBackend(root, common.Hash{}, root, db.triedb, kvConfig.Writer)
+		if err != nil {
+			return nil, err
+		}
+		return shim.NewStateTrie(backend, db.triedb), nil
+	}
+
 	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+		tr, err := trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+		return LegacyAdapter{tr}, err
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
 	}
-	return tr, nil
+	return LegacyAdapter{tr}, nil
 }
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+	if kvConfig := db.triedb.Config().KeyValueDB; kvConfig != nil {
+		addrHash := crypto.Keccak256Hash(address.Bytes())
+
+		if kvConfig.KVBackend != nil {
+			accountTrie := self.(*shim.StateTrie)
+			return shim.NewStorageTrieKV(stateRoot, addrHash, accountTrie)
+		}
+		// Legacy backend maintains hash compatibility with geth
+		// to test the shim layer.
+		backend, err := shim.NewLegacyBackend(stateRoot, addrHash, root, db.triedb, kvConfig.Writer)
+		if err != nil {
+			return nil, err
+		}
+		return shim.NewStateTrie(backend, db.triedb), nil
+	}
 	// In the verkle case, there is only one tree. But the two-tree structure
 	// is hardcoded in the codebase. So we need to return the same trie in this
 	// case.
@@ -211,14 +259,16 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	if err != nil {
 		return nil, err
 	}
-	return tr, nil
+	return LegacyAdapter{tr}, nil
 }
 
 // CopyTrie returns an independent copy of the given trie.
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
-	case *trie.StateTrie:
+	case *shim.StateTrie:
 		return t.Copy()
+	case LegacyAdapter:
+		return LegacyAdapter{t.Itrie.(*trie.StateTrie).Copy()}
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}

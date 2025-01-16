@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
+	firewood "github.com/ava-labs/firewood/ffi/v2"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -43,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/shim/fw"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
@@ -374,6 +376,7 @@ func (vm *VM) Initialize(
 	}
 	vm.logger = corethLogger
 
+	log.Info("AVAX assetID", "assetID", vm.ctx.AVAXAssetID)
 	log.Info("Initializing Coreth VM", "Version", Version, "Config", vm.config)
 
 	if deprecateMsg != "" {
@@ -455,6 +458,7 @@ func (vm *VM) Initialize(
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
+	log.Info("Genesis bytes", "bytes", genesisBytes)
 	vm.ethConfig.NetworkId = vm.chainID.Uint64()
 	vm.genesisHash = vm.ethConfig.Genesis.ToBlock().Hash() // must create genesis hash before [vm.readLastAccepted]
 	lastAcceptedHash, lastAcceptedHeight, err := vm.readLastAccepted()
@@ -504,6 +508,16 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	if file := vm.config.FirewoodDBFile; file != "" {
+		var fwdb firewood.Firewood
+		if fileExists(file) {
+			fwdb = firewood.OpenDatabase(file)
+		} else {
+			fwdb = firewood.CreateDatabase(file)
+		}
+		vm.ethConfig.KVBackend = &fw.Firewood{Firewood: fwdb}
+		log.Warn("Using Firewood database (experimental)", "file", file)
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -576,6 +590,9 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
+
+	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
+
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
@@ -604,8 +621,6 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
 	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
-
-	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
@@ -1854,4 +1869,9 @@ func (vm *VM) newExportTx(
 	}
 
 	return tx, nil
+}
+
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil || !os.IsNotExist(err)
 }

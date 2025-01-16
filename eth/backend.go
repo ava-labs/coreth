@@ -55,6 +55,7 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -228,6 +229,9 @@ func New(
 			StateScheme:                     scheme,
 		}
 	)
+	if config.KVBackend != nil {
+		cacheConfig.KeyValueDB = &triedb.KeyValueConfig{KVBackend: config.KVBackend}
+	}
 
 	if err := eth.precheckPopulateMissingTries(); err != nil {
 		return nil, err
