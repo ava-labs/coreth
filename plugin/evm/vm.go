@@ -160,7 +160,7 @@ var (
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
 
-	networkCodec = atomicsync.CodecWithAtomicSync
+	networkCodec codec.Manager
 )
 
 var (
@@ -202,6 +202,13 @@ func init() {
 	// Preserving the log level allows us to update the root handler while writing to the original
 	// [os.Stderr] that is being piped through to the logger via the rpcchainvm.
 	originalStderr = os.Stderr
+
+	// Register the codec for the atomic block sync summary
+	var err error
+	networkCodec, err = message.NewCodec(atomicsync.AtomicBlockSyncSummary{})
+	if err != nil {
+		panic(fmt.Errorf("failed to create codec manager: %w", err))
+	}
 }
 
 // VM implements the snowman.ChainVM interface

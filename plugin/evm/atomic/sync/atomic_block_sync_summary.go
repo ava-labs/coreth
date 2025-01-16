@@ -22,14 +22,14 @@ var (
 	_ message.SyncableParser = (*AtomicSyncSummaryParser)(nil)
 )
 
-// CodecWithAtomicSync is the codec manager that contains the codec for AtomicBlockSyncSummary and
+// codecWithAtomicSync is the codec manager that contains the codec for AtomicBlockSyncSummary and
 // other message types that are used in the network protocol. This is to ensure that the codec
 // version is consistent across all message types and includes the codec for AtomicBlockSyncSummary.
-var CodecWithAtomicSync codec.Manager
+var codecWithAtomicSync codec.Manager
 
 func init() {
 	var err error
-	CodecWithAtomicSync, err = message.NewCodec(AtomicBlockSyncSummary{})
+	codecWithAtomicSync, err = message.NewCodec(AtomicBlockSyncSummary{})
 	if err != nil {
 		panic(fmt.Errorf("failed to create codec manager: %w", err))
 	}
