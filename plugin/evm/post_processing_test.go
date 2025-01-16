@@ -612,9 +612,9 @@ func processAccountDeletes(t *testing.T, ks, vs [][]byte) ([][]byte, [][]byte, m
 		vs[outIdx] = vs[i]
 		outIdx++
 	}
-	if outIdx < len(ks) {
-		t.Logf("Removed %d updates from pending batch", len(ks)-outIdx)
-	}
+	//if outIdx < len(ks) {
+	//	t.Logf("Removed %d updates from pending batch", len(ks)-outIdx)
+	//}
 	return ks[:outIdx], vs[:outIdx], accsDeleted
 }
 
