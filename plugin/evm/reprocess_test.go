@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
@@ -558,6 +559,7 @@ func reprocess(
 		bc.SetSnapWriter(tapeRecorder)
 	}
 
+	lastLogTime := time.Now()
 	for i := start; i <= stop; i++ {
 		block := backend.GetBlock(i)
 		isApricotPhase5 := backend.Genesis.Config.IsApricotPhase5(block.Time())
@@ -581,7 +583,9 @@ func reprocess(
 			tapeRecorder.Reset()
 		} else {
 			if i%uint64(logEach) == 0 {
-				t.Logf("Block: %d, Txs: %d (+ %d atomic), Parent State: %s", i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
+				took := time.Since(lastLogTime)
+				lastLogTime = time.Now()
+				t.Logf("(%v) Block: %d, Txs: %d (+ %d atomic), Parent State: %s", took.Truncate(time.Millisecond), i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
 			}
 		}
 
