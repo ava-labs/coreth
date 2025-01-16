@@ -5,6 +5,7 @@ package warp
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
@@ -47,7 +48,7 @@ func (*configurator) MakeConfig() precompileconfig.Config {
 }
 
 // Configure is a no-op for warp since it does not need to store any information in the state
-func (*configurator) Configure(chainConfig precompileconfig.ChainConfig, cfg precompileconfig.Config, state contract.StateDB, _ contract.ConfigurationBlockContext) error {
+func (*configurator) Configure(chainConfig precompileconfig.ChainConfig, cfg precompileconfig.Config, state contract.StateDB, _ *big.Int, _ uint64) error {
 	if _, ok := cfg.(*Config); !ok {
 		return fmt.Errorf("expected config type %T, got %T: %v", &Config{}, cfg, cfg)
 	}
