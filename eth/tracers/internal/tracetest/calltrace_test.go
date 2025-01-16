@@ -140,7 +140,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 					Transfer:    core.Transfer,
 					Coinbase:    test.Context.Miner,
 					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        uint64(test.Context.Time),
+					Time_:       uint64(test.Context.Time),
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
 					BaseFee:     test.Genesis.BaseFee,
@@ -239,7 +239,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		Transfer:    core.Transfer,
 		Coinbase:    test.Context.Miner,
 		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        uint64(test.Context.Time),
+		Time_:       uint64(test.Context.Time),
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
 	}
@@ -284,7 +284,7 @@ func TestInternals(t *testing.T) {
 			Transfer:    core.Transfer,
 			Coinbase:    common.Address{},
 			BlockNumber: new(big.Int).SetUint64(8000000),
-			Time:        5,
+			Time_:       5,
 			Difficulty:  big.NewInt(0x30000),
 			GasLimit:    uint64(6000000),
 		}
