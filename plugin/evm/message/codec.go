@@ -15,14 +15,11 @@ const (
 	maxMessageSize = 2*units.MiB - 64*units.KiB // Subtract 64 KiB from p2p network cap to leave room for encoding overhead from AvalancheGo
 )
 
-var (
-	Codec codec.Manager
-	// TODO: Remove this once we have a better way to register types (i.e use a different codec version or use build flags)
-	SyncSummaryType interface{} = BlockSyncSummary{}
-)
-
-func init() {
-	Codec = codec.NewManager(maxMessageSize)
+// NewCodec returns a codec manager that can be used to marshal and unmarshal
+// messages, including the provided syncSummaryType. syncSummaryType can be used
+// to register a type for sync summaries.
+func NewCodec(syncSummaryType interface{}) (codec.Manager, error) {
+	codec := codec.NewManager(maxMessageSize)
 	c := linearcodec.NewDefault()
 
 	errs := wrappers.Errs{}
@@ -30,7 +27,7 @@ func init() {
 	c.SkipRegistrations(2)
 	errs.Add(
 		// Types for state sync frontier consensus
-		c.RegisterType(SyncSummaryType),
+		c.RegisterType(syncSummaryType),
 
 		// state sync types
 		c.RegisterType(BlockRequest{}),
@@ -45,10 +42,12 @@ func init() {
 		c.RegisterType(BlockSignatureRequest{}),
 		c.RegisterType(SignatureResponse{}),
 
-		Codec.RegisterCodec(Version, c),
+		codec.RegisterCodec(Version, c),
 	)
 
 	if errs.Errored() {
-		panic(errs.Err)
+		return nil, errs.Err
 	}
+
+	return codec, nil
 }

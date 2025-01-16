@@ -55,7 +55,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 			return blk
 		},
 	}
-	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, mockHandlerStats)
+	blockRequestHandler := NewBlockRequestHandler(blockProvider, networkCodec, mockHandlerStats)
 
 	var blockRequest message.BlockRequest
 	if test.startBlockHash != (common.Hash{}) {
@@ -84,7 +84,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = networkCodec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling", err)
 	}
 	assert.Len(t, response.Blocks, test.expectedBlocks)
@@ -102,7 +102,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 }
 
 func TestBlockRequestHandler(t *testing.T) {
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
@@ -214,7 +214,7 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 }
 
 func TestBlockRequestHandlerCtxExpires(t *testing.T) {
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
@@ -252,7 +252,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 			return blk
 		},
 	}
-	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, stats.NewNoopHandlerStats())
+	blockRequestHandler := NewBlockRequestHandler(blockProvider, networkCodec, stats.NewNoopHandlerStats())
 
 	responseBytes, err := blockRequestHandler.OnBlockRequest(ctx, ids.GenerateTestNodeID(), 1, message.BlockRequest{
 		Hash:    blocks[10].Hash(),
@@ -265,7 +265,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = networkCodec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling", err)
 	}
 	// requested 8 blocks, received cancelAfterNumRequests because of timeout

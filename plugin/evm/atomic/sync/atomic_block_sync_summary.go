@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -21,6 +22,19 @@ var (
 	_ message.SyncableParser = (*AtomicSyncSummaryParser)(nil)
 )
 
+// CodecWithAtomicSync is the codec manager that contains the codec for AtomicBlockSyncSummary and
+// other message types that are used in the network protocol. This is to ensure that the codec
+// version is consistent across all message types and includes the codec for AtomicBlockSyncSummary.
+var CodecWithAtomicSync codec.Manager
+
+func init() {
+	var err error
+	CodecWithAtomicSync, err = message.NewCodec(AtomicBlockSyncSummary{})
+	if err != nil {
+		panic(fmt.Errorf("failed to create codec manager: %w", err))
+	}
+}
+
 // AtomicBlockSyncSummary provides the information necessary to sync a node starting
 // at the given block.
 type AtomicBlockSyncSummary struct {
@@ -32,10 +46,6 @@ type AtomicBlockSyncSummary struct {
 	summaryID  ids.ID
 	bytes      []byte
 	acceptImpl message.AcceptImplFn
-}
-
-func init() {
-	message.SyncSummaryType = &AtomicBlockSyncSummary{}
 }
 
 type AtomicSyncSummaryParser struct{}
