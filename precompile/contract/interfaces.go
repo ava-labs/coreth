@@ -54,14 +54,9 @@ type AccessibleState interface {
 	NativeAssetCall(caller common.Address, input []byte, suppliedGas uint64, gasCost uint64, readOnly bool) (ret []byte, remainingGas uint64, err error)
 }
 
-// ConfigurationBlockContext defines the interface required to configure a precompile.
-type ConfigurationBlockContext interface {
+type BlockContext interface {
 	Number() *big.Int
 	Time() uint64
-}
-
-type BlockContext interface {
-	ConfigurationBlockContext
 	// GetPredicateResults returns an arbitrary byte array result of verifying the predicates
 	// of the given transaction, precompile address pair.
 	GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte
@@ -73,6 +68,7 @@ type Configurator interface {
 		chainConfig precompileconfig.ChainConfig,
 		precompileconfig precompileconfig.Config,
 		state StateDB,
-		blockContext ConfigurationBlockContext,
+		blockNumber *big.Int,
+		blockTime uint64,
 	) error
 }

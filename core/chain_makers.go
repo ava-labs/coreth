@@ -185,8 +185,8 @@ func (b *BlockGen) Number() *big.Int {
 	return new(big.Int).Set(b.header.Number)
 }
 
-// Time returns the timestamp of the block being generated.
-func (b *BlockGen) Time() uint64 {
+// Timestamp returns the timestamp of the block being generated.
+func (b *BlockGen) Timestamp() uint64 {
 	return b.header.Time
 }
 
@@ -282,7 +282,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
 		b.header = cm.makeHeader(parent, gap, statedb, b.engine)
 
-		err := ApplyUpgrades(config, &parent.Header().Time, b, statedb)
+		err := ApplyUpgrades(config, &parent.Header().Time, b.Number(), b.Timestamp(), statedb)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to configure precompiles %w", err)
 		}

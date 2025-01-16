@@ -36,7 +36,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -81,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 	)
 
 	// Configure any upgrades that should go into effect during this block.
-	err := ApplyUpgrades(p.config, &parent.Time, block, statedb)
+	err := ApplyUpgrades(p.config, &parent.Time, blockNumber, block.Time(), statedb)
 	if err != nil {
 		log.Error("failed to configure precompiles processing block", "hash", block.Hash(), "number", block.NumberU64(), "timestamp", block.Time(), "err", err)
 		return nil, nil, 0, err
@@ -207,14 +206,13 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 // to apply the necessary state transitions for the upgrade.
 // This function is called within genesis setup to configure the starting state for precompiles enabled at genesis.
 // In block processing and building, ApplyUpgrades is called instead which also applies state upgrades.
-func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, blockContext contract.ConfigurationBlockContext, statedb *state.StateDB) error {
-	blockTimestamp := blockContext.Time()
+func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, blockNumber *big.Int, blockTime uint64, statedb *state.StateDB) error {
 	// Note: RegisteredModules returns precompiles sorted by module addresses.
 	// This ensures that the order we call Configure for each precompile is consistent.
 	// This ensures even if precompiles read/write state other than their own they will observe
 	// an identical global state in a deterministic order when they are configured.
 	for _, module := range modules.RegisteredModules() {
-		for _, activatingConfig := range c.GetActivatingPrecompileConfigs(module.Address, parentTimestamp, blockTimestamp, c.PrecompileUpgrades) {
+		for _, activatingConfig := range c.GetActivatingPrecompileConfigs(module.Address, parentTimestamp, blockTime, c.PrecompileUpgrades) {
 			// If this transition activates the upgrade, configure the stateful precompile.
 			// (or deconfigure it if it is being disabled.)
 			if activatingConfig.IsDisabled() {
@@ -242,7 +240,7 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 				// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
 				// that it does not attempt to invoke a non-existent contract.
 				statedb.SetCode(module.Address, []byte{0x1})
-				if err := module.Configure(c, activatingConfig, statedb, blockContext); err != nil {
+				if err := module.Configure(c, activatingConfig, statedb, blockNumber, blockTime); err != nil {
 					return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
 				}
 			}
@@ -257,6 +255,6 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 // This function is called:
 // - in block processing to update the state when processing a block.
 // - in the miner to apply the state upgrades when producing a block.
-func ApplyUpgrades(c *params.ChainConfig, parentTimestamp *uint64, blockContext contract.ConfigurationBlockContext, statedb *state.StateDB) error {
-	return ApplyPrecompileActivations(c, parentTimestamp, blockContext, statedb)
+func ApplyUpgrades(c *params.ChainConfig, parentTimestamp *uint64, blockNumber *big.Int, blockTime uint64, statedb *state.StateDB) error {
+	return ApplyPrecompileActivations(c, parentTimestamp, blockNumber, blockTime, statedb)
 }
