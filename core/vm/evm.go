@@ -46,7 +46,7 @@ import (
 
 var (
 	_ contract.AccessibleState = &EVM{}
-	_ contract.BlockContext    = &BlockContext{}
+	_ contract.BlockContext    = &PrecompileBlockContext{}
 )
 
 // IsProhibited returns true if [addr] is in the prohibited list of addresses which should
@@ -130,21 +130,23 @@ type BlockContext struct {
 	Coinbase    common.Address // Provides information for COINBASE
 	GasLimit    uint64         // Provides information for GASLIMIT
 	BlockNumber *big.Int       // Provides information for NUMBER
-	Time_       uint64         // Provides information for TIME
+	Time        uint64         // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
 	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
 }
 
-func (b *BlockContext) Number() *big.Int {
+type PrecompileBlockContext struct{ BlockContext }
+
+func (b *PrecompileBlockContext) Number() *big.Int {
 	return b.BlockNumber
 }
 
-func (b *BlockContext) Time() uint64 {
-	return b.Time_
+func (b *PrecompileBlockContext) Time() uint64 {
+	return b.BlockContext.Time
 }
 
-func (b *BlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
+func (b *PrecompileBlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
 	if b.PredicateResults == nil {
 		return nil
 	}
@@ -217,7 +219,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time()),
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time),
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
@@ -253,7 +255,7 @@ func (evm *EVM) GetStateDB() contract.StateDB {
 
 // GetBlockContext returns the evm's BlockContext
 func (evm *EVM) GetBlockContext() contract.BlockContext {
-	return &evm.Context
+	return &PrecompileBlockContext{evm.Context}
 }
 
 // Interpreter returns the current interpreter
