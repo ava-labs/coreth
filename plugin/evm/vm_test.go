@@ -25,7 +25,6 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	stateinterfaces "github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/trie"
@@ -1469,16 +1468,6 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	}
 }
 
-type wrappedBackend struct {
-	stateinterfaces.AtomicBackend
-	registeredBonusBlocks map[uint64]common.Hash
-}
-
-func (w *wrappedBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
-	hash, ok := w.registeredBonusBlocks[blockHeight]
-	return ok && blockHash.Cmp(hash) == 0
-}
-
 func TestBonusBlocksTxs(t *testing.T) {
 	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
@@ -1536,11 +1525,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	}
 
 	// Make [blk] a bonus block.
-	wrappedBackend := &wrappedBackend{
-		AtomicBackend:         vm.atomicBackend,
-		registeredBonusBlocks: map[uint64]common.Hash{blk.Height(): common.Hash(blk.ID())},
-	}
-	vm.atomicBackend = wrappedBackend
+	vm.atomicBackend.AddBonusBlock(blk.Height(), blk.ID())
 
 	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
 	if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}); err != nil {

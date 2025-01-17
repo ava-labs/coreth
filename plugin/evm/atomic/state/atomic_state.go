@@ -10,17 +10,14 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var _ interfaces.AtomicState = &atomicState{}
-
 // atomicState implements the AtomicState interface using
 // a pointer to the atomicBackend.
 type atomicState struct {
-	backend     *atomicBackend
+	backend     *AtomicBackend
 	blockHash   common.Hash
 	blockHeight uint64
 	txs         []*atomic.Tx
