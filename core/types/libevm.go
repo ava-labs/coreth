@@ -10,7 +10,10 @@ import (
 type isMultiCoin bool
 
 var (
-	extras              = ethtypes.RegisterExtras[HeaderExtra, *HeaderExtra, isMultiCoin]()
+	extras = ethtypes.RegisterExtras[
+		HeaderExtra, *HeaderExtra,
+		BodyExtra, *BodyExtra,
+		isMultiCoin]()
 	IsMultiCoinPayloads = extras.StateAccount
 )
 
@@ -25,4 +28,13 @@ func HeaderExtras(h *Header) *HeaderExtra {
 func WithHeaderExtras(h *Header, extra *HeaderExtra) *Header {
 	extras.Header.Set(h, extra)
 	return h
+}
+
+func GetBodyExtra(b *Body) *BodyExtra {
+	return extras.Body.Get(b)
+}
+
+func WithBodyExtra(b *Body, extra *BodyExtra) *Body {
+	extras.Body.Set(b, extra)
+	return b
 }
