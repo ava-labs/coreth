@@ -22,7 +22,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +32,7 @@ const testCommitInterval = 100
 // indexAtomicTxs updates [tr] with entries in [atomicOps] at height by creating
 // a new snapshot, calculating a new root, and calling InsertTrie followed
 // by AcceptTrie on the new root.
-func indexAtomicTxs(tr interfaces.AtomicTrie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
+func indexAtomicTxs(tr *AtomicTrie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
 	snapshot, err := tr.OpenTrie(tr.LastAcceptedRoot())
 	if err != nil {
 		return err
@@ -254,7 +253,7 @@ func TestIndexerInitializesOnlyOnce(t *testing.T) {
 	assert.Equal(t, hash, newHash, "hash should be the same")
 }
 
-func newTestAtomicTrie(t *testing.T) interfaces.AtomicTrie {
+func newTestAtomicTrie(t *testing.T) *AtomicTrie {
 	db := versiondb.New(memdb.New())
 	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, 0)
 	if err != nil {
@@ -410,7 +409,7 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 func TestApplyToSharedMemory(t *testing.T) {
 	type test struct {
 		commitInterval, lastAcceptedHeight uint64
-		setMarker                          func(*atomicBackend) error
+		setMarker                          func(*AtomicBackend) error
 		expectOpsApplied                   func(height uint64) bool
 		bonusBlockHeights                  map[uint64]ids.ID
 	}
@@ -419,13 +418,13 @@ func TestApplyToSharedMemory(t *testing.T) {
 		"marker is set to height": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker:          func(a *atomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
+			setMarker:          func(a *AtomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
 			expectOpsApplied:   func(height uint64) bool { return height > 10 && height <= 20 },
 		},
 		"marker is set to height, should skip bonus blocks": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker:          func(a *atomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
+			setMarker:          func(a *AtomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
 			bonusBlockHeights:  map[uint64]ids.ID{15: {}},
 			expectOpsApplied: func(height uint64) bool {
 				if height == 15 {
@@ -437,7 +436,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 		"marker is set to height + blockchain ID": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker: func(a *atomicBackend) error {
+			setMarker: func(a *AtomicBackend) error {
 				cursor := make([]byte, wrappers.LongLen+len(atomictest.TestBlockchainID[:]))
 				binary.BigEndian.PutUint64(cursor, 10)
 				copy(cursor[wrappers.LongLen:], atomictest.TestBlockchainID[:])
@@ -448,7 +447,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 		"marker not set": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker:          func(*atomicBackend) error { return nil },
+			setMarker:          func(*AtomicBackend) error { return nil },
 			expectOpsApplied:   func(uint64) bool { return false },
 		},
 	} {
@@ -464,7 +463,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 			sharedMemories := atomictest.NewSharedMemories(m, ids.GenerateTestID(), atomictest.TestBlockchainID)
 			backend, err := NewAtomicBackend(db, sharedMemories.ThisChain, test.bonusBlockHeights, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
 			assert.NoError(t, err)
-			atomicTrie := backend.AtomicTrie().(*atomicTrie)
+			atomicTrie := backend.AtomicTrie()
 
 			hash, height := atomicTrie.LastCommitted()
 			assert.NotEqual(t, common.Hash{}, hash)
@@ -529,7 +528,7 @@ func BenchmarkAtomicTrieInit(b *testing.B) {
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
 	var (
-		atomicTrie interfaces.AtomicTrie
+		atomicTrie *AtomicTrie
 		hash       common.Hash
 		height     uint64
 	)
@@ -665,7 +664,7 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 
 // verifyOperations creates an iterator over the atomicTrie at [rootHash] and verifies that the all of the operations in the trie in the interval [from, to] are identical to
 // the atomic operations contained in [operationsMap] on the same interval.
-func verifyOperations(t testing.TB, atomicTrie interfaces.AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
+func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
 	t.Helper()
 
 	// Start the iterator at [from]

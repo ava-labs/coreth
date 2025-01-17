@@ -42,7 +42,6 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	atomicstateinterfaces "github.com/ava-labs/coreth/plugin/evm/atomic/state/interfaces"
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
@@ -260,9 +259,9 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository atomicstateinterfaces.AtomicTxRepository
+	atomicTxRepository *atomicstate.AtomicTxRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend atomicstateinterfaces.AtomicBackend
+	atomicBackend *atomicstate.AtomicBackend
 
 	builder *blockBuilder
 
@@ -713,7 +712,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
 		Chain:       vm.eth,
 		State:       vm.State,
-		ExtraSyncer: atomicsync.NewAtomicSyncExtender(vm.atomicBackend, vm.config.StateSyncRequestSize),
+		ExtraSyncer: atomicsync.NewAtomicSyncExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
