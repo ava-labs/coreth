@@ -161,7 +161,7 @@ func (client *stateSyncerClient) ParseStateSummary(_ context.Context, summaryByt
 // stateSync blockingly performs the state sync for the EVM state and the atomic state
 // to [client.syncSummary]. returns an error if one occurred.
 func (client *stateSyncerClient) stateSync(ctx context.Context) error {
-	if err := client.syncBlocks(ctx, client.syncSummary.GetBlockHash(), client.syncSummary.GetBlockNumber(), ParentsToFetch); err != nil {
+	if err := client.syncBlocks(ctx, client.syncSummary.GetBlockHash(), client.syncSummary.Height(), ParentsToFetch); err != nil {
 		return err
 	}
 
@@ -345,8 +345,8 @@ func (client *stateSyncerClient) finishSync() error {
 	if block.Hash() != client.syncSummary.GetBlockHash() {
 		return fmt.Errorf("attempted to set last summary block to unexpected block hash: (%s != %s)", block.Hash(), client.syncSummary.GetBlockHash())
 	}
-	if block.NumberU64() != client.syncSummary.GetBlockNumber() {
-		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), client.syncSummary.GetBlockNumber())
+	if block.NumberU64() != client.syncSummary.Height() {
+		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), client.syncSummary.Height())
 	}
 
 	// BloomIndexer needs to know that some parts of the chain are not available
