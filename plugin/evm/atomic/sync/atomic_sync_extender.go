@@ -30,7 +30,7 @@ func NewAtomicSyncExtender(backend interfaces.AtomicBackend, stateSyncRequestSiz
 }
 
 func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {
-	atomicSyncSummary, ok := syncSummary.(*AtomicBlockSyncSummary)
+	atomicSyncSummary, ok := syncSummary.(*AtomicSyncSummary)
 	if !ok {
 		return fmt.Errorf("expected *AtomicBlockSyncSummary, got %T", syncSummary)
 	}

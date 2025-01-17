@@ -87,10 +87,6 @@ func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot co
 	return &summary, nil
 }
 
-func (s *BlockSyncSummary) GetBlockNumber() uint64 {
-	return s.BlockNumber
-}
-
 func (s *BlockSyncSummary) GetBlockHash() common.Hash {
 	return s.BlockHash
 }

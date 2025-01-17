@@ -205,7 +205,7 @@ func init() {
 
 	// Register the codec for the atomic block sync summary
 	var err error
-	networkCodec, err = message.NewCodec(atomicsync.AtomicBlockSyncSummary{})
+	networkCodec, err = message.NewCodec(atomicsync.AtomicSyncSummary{})
 	if err != nil {
 		panic(fmt.Errorf("failed to create codec manager: %w", err))
 	}

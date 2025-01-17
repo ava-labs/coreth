@@ -9,11 +9,8 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 )
 
-var _ Syncable = (*BlockSyncSummary)(nil)
-
 type Syncable interface {
 	block.StateSummary
-	GetBlockNumber() uint64
 	GetBlockHash() common.Hash
 	GetBlockRoot() common.Hash
 }
