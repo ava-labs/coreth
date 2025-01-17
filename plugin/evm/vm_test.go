@@ -2388,7 +2388,7 @@ func TestUncleBlock(t *testing.T) {
 		uncles,
 		nil,
 		trie.NewStackTrie(nil),
-		blkDEthBlock.ExtData(),
+		types.BlockExtData(blkDEthBlock),
 		false,
 	)
 	uncleBlock, err := vm2.newBlock(uncleEthBlock)
@@ -2449,7 +2449,7 @@ func TestEmptyBlock(t *testing.T) {
 		false,
 	)
 
-	if len(emptyEthBlock.ExtData()) != 0 || types.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash != (common.Hash{}) {
+	if len(types.BlockExtData(emptyEthBlock)) != 0 || types.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash != (common.Hash{}) {
 		t.Fatalf("emptyEthBlock should not have any extra data")
 	}
 
@@ -2715,7 +2715,7 @@ func TestFutureBlock(t *testing.T) {
 		nil,
 		nil,
 		new(trie.Trie),
-		internalBlkA.ethBlock.ExtData(),
+		types.BlockExtData(internalBlkA.ethBlock),
 		false,
 	)
 
@@ -3270,10 +3270,10 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 
 	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if eBlockGasCost := ethBlk.BlockGasCost(); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
+	if eBlockGasCost := types.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
-	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
+	if eExtDataGasUsed := types.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
 	}
 	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
@@ -3329,11 +3329,11 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 
 	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if ethBlk.BlockGasCost() == nil || ethBlk.BlockGasCost().Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", ethBlk.BlockGasCost())
+	if types.BlockGasCost(ethBlk) == nil || types.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
+		t.Fatalf("expected blockGasCost to be at least 100 but got %d", types.BlockGasCost(ethBlk))
 	}
-	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
+	if types.BlockExtDataGasUsed(ethBlk) == nil || types.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
+		t.Fatalf("expected extDataGasUsed to be 0 but got %d", types.BlockExtDataGasUsed(ethBlk))
 	}
 	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
@@ -3440,10 +3440,10 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	}
 
 	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if eBlockGasCost := ethBlk.BlockGasCost(); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
+	if eBlockGasCost := types.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
-	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
+	if eExtDataGasUsed := types.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
 	}
 	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
@@ -3491,11 +3491,11 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	}
 
 	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if ethBlk.BlockGasCost() == nil || ethBlk.BlockGasCost().Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", ethBlk.BlockGasCost())
+	if types.BlockGasCost(ethBlk) == nil || types.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
+		t.Fatalf("expected blockGasCost to be at least 100 but got %d", types.BlockGasCost(ethBlk))
 	}
-	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
+	if types.BlockExtDataGasUsed(ethBlk) == nil || types.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
+		t.Fatalf("expected extDataGasUsed to be 0 but got %d", types.BlockExtDataGasUsed(ethBlk))
 	}
 	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
@@ -3908,7 +3908,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				nil,
 				nil,
 				new(trie.Trie),
-				ethBlock.ExtData(),
+				types.BlockExtData(ethBlock),
 				false,
 			)
 
