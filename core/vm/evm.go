@@ -138,11 +138,11 @@ type BlockContext struct {
 
 type PrecompileBlockContext struct{ BlockContext }
 
-func (b *PrecompileBlockContext) Number() *big.Int {
+func (b PrecompileBlockContext) Number() *big.Int {
 	return b.BlockNumber
 }
 
-func (b *PrecompileBlockContext) Time() uint64 {
+func (b PrecompileBlockContext) Time() uint64 {
 	return b.BlockContext.Time
 }
 

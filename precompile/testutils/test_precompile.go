@@ -112,7 +112,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 	accessibleState.EXPECT().GetChainConfig().Return(chainConfig).AnyTimes()
 
 	if test.Config != nil {
-		err := module.Configure(chainConfig, test.Config, state, blockContext.Number(), blockContext.Time())
+		err := module.Configure(chainConfig, test.Config, state, blockContext)
 		require.NoError(t, err)
 	}
 
