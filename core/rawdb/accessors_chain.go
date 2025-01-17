@@ -524,7 +524,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	}
 	block := types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
 	bodyExtra := types.GetBodyExtra(body)
-	block = types.BlockWithExtData(block, bodyExtra.Version, bodyExtra.ExtData)
+	block = types.WithBlockExtras(block, bodyExtra.Version, bodyExtra.ExtData, false)
 	return block
 }
 

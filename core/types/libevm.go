@@ -45,7 +45,23 @@ func BlockExtras(b *Block) *BlockExtra {
 }
 
 func WithBlockExtras(b *Block, version uint32, extdata *[]byte, recalc bool) *Block {
-	BlockExtras(b).version = version
-	setExtDataHelper(b, extdata, recalc)
+	extras := BlockExtras(b)
+
+	extras.version = version
+
+	cpy := make([]byte, 0)
+	if extdata != nil {
+		cpy = make([]byte, len(*extdata))
+		copy(cpy, *extdata)
+	}
+
+	extras.extdata = &cpy
+	if recalc {
+		header := b.Header()
+		headerExtra := HeaderExtras(header)
+		headerExtra.ExtDataHash = CalcExtDataHash(cpy)
+		b.SetHeader(header)
+	}
+
 	return b
 }

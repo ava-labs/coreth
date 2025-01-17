@@ -92,33 +92,6 @@ func (b *blockSerializable) updateToExtras(extras *BlockExtra) {
 	extras.extdata = b.ExtData
 }
 
-func BlockWithExtData(b *Block, version uint32, extdata *[]byte) *Block {
-	BlockExtras(b).version = version
-	setExtDataHelper(b, extdata, false)
-	return b
-}
-
-func setExtDataHelper(b *Block, data *[]byte, recalc bool) {
-	if data == nil {
-		setExtData(b, nil, recalc)
-		return
-	}
-	setExtData(b, *data, recalc)
-}
-
-func setExtData(b *Block, data []byte, recalc bool) {
-	_data := make([]byte, len(data))
-	extras := BlockExtras(b)
-	extras.extdata = &_data
-	copy(*extras.extdata, data)
-	if recalc {
-		header := b.Header()
-		headerExtra := HeaderExtras(header)
-		headerExtra.ExtDataHash = CalcExtDataHash(_data)
-		b.SetHeader(header)
-	}
-}
-
 func BlockExtData(b *Block) []byte {
 	extras := BlockExtras(b)
 	if extras.extdata == nil {
@@ -155,7 +128,7 @@ func NewBlockWithExtData(
 	header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt,
 	hasher TrieHasher, extdata []byte, recalc bool,
 ) *Block {
-	b := ethtypes.NewBlock(header, txs, uncles, receipts, hasher)
+	b := NewBlock(header, txs, uncles, receipts, hasher)
 	const version = 0
 	return WithBlockExtras(b, version, &extdata, recalc)
 }
