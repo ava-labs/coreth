@@ -21,8 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var _ AtomicBackend = &atomicBackend{}
-
 var (
 	atomicTrieDBPrefix           = []byte("atomicTrieDB")
 	atomicTrieMetaDBPrefix       = []byte("atomicTrieMetaDB")
@@ -34,68 +32,28 @@ const (
 	progressLogFrequency = 30 * time.Second
 )
 
-// AtomicBackend abstracts the verification and processing
-// of atomic transactions
-type AtomicBackend interface {
-	// InsertTxs calculates the root of the atomic trie that would
-	// result from applying [txs] to the atomic trie, starting at the state
-	// corresponding to previously verified block [parentHash].
-	// If [blockHash] is provided, the modified atomic trie is pinned in memory
-	// and it's the caller's responsibility to call either Accept or Reject on
-	// the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
-	// changes or abort them and free memory.
-	InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*atomic.Tx) (common.Hash, error)
-
-	// Returns an AtomicState corresponding to a block hash that has been inserted
-	// but not Accepted or Rejected yet.
-	GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error)
-
-	// AtomicTrie returns the atomic trie managed by this backend.
-	AtomicTrie() AtomicTrie
-
-	// ApplyToSharedMemory applies the atomic operations that have been indexed into the trie
-	// but not yet applied to shared memory for heights less than or equal to [lastAcceptedBlock].
-	// This executes operations in the range [cursorHeight+1, lastAcceptedBlock].
-	// The cursor is initially set by  MarkApplyToSharedMemoryCursor to signal to the atomic trie
-	// the range of operations that were added to the trie without being executed on shared memory.
-	ApplyToSharedMemory(lastAcceptedBlock uint64) error
-
-	// MarkApplyToSharedMemoryCursor marks the atomic trie as containing atomic ops that
-	// have not been executed on shared memory starting at [previousLastAcceptedHeight+1].
-	// This is used when state sync syncs the atomic trie, such that the atomic operations
-	// from [previousLastAcceptedHeight+1] to the [lastAcceptedHeight] set by state sync
-	// will not have been executed on shared memory.
-	MarkApplyToSharedMemoryCursor(previousLastAcceptedHeight uint64) error
-
-	// SetLastAccepted is used after state-sync to reset the last accepted block.
-	SetLastAccepted(lastAcceptedHash common.Hash)
-
-	// IsBonus returns true if the block for atomicState is a bonus block
-	IsBonus(blockHeight uint64, blockHash common.Hash) bool
-}
-
-// atomicBackend implements the AtomicBackend interface using
+// AtomicBackend implements the AtomicBackend interface using
 // the AtomicTrie, AtomicTxRepository, and the VM's shared memory.
-type atomicBackend struct {
+type AtomicBackend struct {
 	codec        codec.Manager
 	bonusBlocks  map[uint64]ids.ID   // Map of height to blockID for blocks to skip indexing
 	db           *versiondb.Database // Underlying database
 	metadataDB   database.Database   // Underlying database containing the atomic trie metadata
 	sharedMemory avalancheatomic.SharedMemory
 
-	repo       AtomicTxRepository
-	atomicTrie *atomicTrie
+	repo       *AtomicTxRepository
+	atomicTrie *AtomicTrie
 
 	lastAcceptedHash common.Hash
-	verifiedRoots    map[common.Hash]AtomicState
+	verifiedRoots    map[common.Hash]*atomicState
 }
 
 // NewAtomicBackend creates an AtomicBackend from the specified dependencies
 func NewAtomicBackend(
 	db *versiondb.Database, sharedMemory avalancheatomic.SharedMemory,
-	bonusBlocks map[uint64]ids.ID, repo AtomicTxRepository,
+	bonusBlocks map[uint64]ids.ID, repo *AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
-) (*atomicBackend, error) {
+) (*AtomicBackend, error) {
 	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
 	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
 	codec := repo.Codec()
@@ -104,7 +62,7 @@ func NewAtomicBackend(
 	if err != nil {
 		return nil, err
 	}
-	atomicBackend := &atomicBackend{
+	atomicBackend := &AtomicBackend{
 		codec:            codec,
 		db:               db,
 		metadataDB:       metadataDB,
@@ -113,7 +71,7 @@ func NewAtomicBackend(
 		repo:             repo,
 		atomicTrie:       atomicTrie,
 		lastAcceptedHash: lastAcceptedHash,
-		verifiedRoots:    make(map[common.Hash]AtomicState),
+		verifiedRoots:    make(map[common.Hash]*atomicState),
 	}
 
 	// We call ApplyToSharedMemory here to ensure that if the node was shut down in the middle
@@ -132,7 +90,7 @@ func NewAtomicBackend(
 // most recent height divisible by the commitInterval.
 // Subsequent updates to this trie are made using the Index call as blocks are accepted.
 // Note: this method assumes no atomic txs are applied at genesis.
-func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
+func (a *AtomicBackend) initialize(lastAcceptedHeight uint64) error {
 	start := time.Now()
 
 	// track the last committed height and last committed root
@@ -235,7 +193,7 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 // This executes operations in the range [cursorHeight+1, lastAcceptedBlock].
 // The cursor is initially set by  MarkApplyToSharedMemoryCursor to signal to the atomic trie
 // the range of operations that were added to the trie without being executed on shared memory.
-func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
+func (a *AtomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 	sharedMemoryCursor, err := a.metadataDB.Get(appliedSharedMemoryCursorKey)
 	if err == database.ErrNotFound {
 		return nil
@@ -356,13 +314,13 @@ func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 // This is used when state sync syncs the atomic trie, such that the atomic operations
 // from [previousLastAcceptedHeight+1] to the [lastAcceptedHeight] set by state sync
 // will not have been executed on shared memory.
-func (a *atomicBackend) MarkApplyToSharedMemoryCursor(previousLastAcceptedHeight uint64) error {
+func (a *AtomicBackend) MarkApplyToSharedMemoryCursor(previousLastAcceptedHeight uint64) error {
 	// Set the cursor to [previousLastAcceptedHeight+1] so that we begin the iteration at the
 	// first item that has not been applied to shared memory.
 	return database.PutUInt64(a.metadataDB, appliedSharedMemoryCursorKey, previousLastAcceptedHeight+1)
 }
 
-func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicState, error) {
+func (a *AtomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (*atomicState, error) {
 	if state, ok := a.verifiedRoots[blockHash]; ok {
 		return state, nil
 	}
@@ -373,7 +331,7 @@ func (a *atomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (AtomicSta
 // - the last accepted block
 // - a block that has been verified but not accepted or rejected yet.
 // If [blockHash] is neither of the above, an error is returned.
-func (a *atomicBackend) getAtomicRootAt(blockHash common.Hash) (common.Hash, error) {
+func (a *AtomicBackend) getAtomicRootAt(blockHash common.Hash) (common.Hash, error) {
 	// TODO: we can implement this in a few ways.
 	if blockHash == a.lastAcceptedHash {
 		return a.atomicTrie.LastAcceptedRoot(), nil
@@ -386,7 +344,7 @@ func (a *atomicBackend) getAtomicRootAt(blockHash common.Hash) (common.Hash, err
 }
 
 // SetLastAccepted is used after state-sync to update the last accepted block hash.
-func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
+func (a *AtomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 	a.lastAcceptedHash = lastAcceptedHash
 }
 
@@ -397,7 +355,7 @@ func (a *atomicBackend) SetLastAccepted(lastAcceptedHash common.Hash) {
 // and it's the caller's responsibility to call either Accept or Reject on
 // the AtomicState which can be retreived from GetVerifiedAtomicState to commit the
 // changes or abort them and free memory.
-func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*atomic.Tx) (common.Hash, error) {
+func (a *AtomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, parentHash common.Hash, txs []*atomic.Tx) (common.Hash, error) {
 	// access the atomic trie at the parent block
 	parentRoot, err := a.getAtomicRootAt(parentHash)
 	if err != nil {
@@ -447,14 +405,14 @@ func (a *atomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 }
 
 // IsBonus returns true if the block for atomicState is a bonus block
-func (a *atomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
+func (a *AtomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
 	if bonusID, found := a.bonusBlocks[blockHeight]; found {
 		return bonusID == ids.ID(blockHash)
 	}
 	return false
 }
 
-func (a *atomicBackend) AtomicTrie() AtomicTrie {
+func (a *AtomicBackend) AtomicTrie() *AtomicTrie {
 	return a.atomicTrie
 }
 
@@ -489,4 +447,12 @@ func mergeAtomicOpsToMap(output map[ids.ID]*avalancheatomic.Requests, chainID id
 	} else {
 		output[chainID] = requests
 	}
+}
+
+// AddBonusBlock adds a bonus block to the atomic backend
+func (a *AtomicBackend) AddBonusBlock(height uint64, blockID ids.ID) {
+	if a.bonusBlocks == nil {
+		a.bonusBlocks = make(map[uint64]ids.ID)
+	}
+	a.bonusBlocks[height] = blockID
 }
