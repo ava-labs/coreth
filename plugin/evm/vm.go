@@ -502,6 +502,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SnapshotDelayInit = vm.stateSyncEnabled(lastAcceptedHeight)
 	vm.ethConfig.SnapshotWait = vm.config.SnapshotWait
 	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
+	vm.ethConfig.HistoricalProofQueryWindow = vm.config.HistoricalProofQueryWindow
 	vm.ethConfig.OfflinePruning = vm.config.OfflinePruning
 	vm.ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
@@ -1764,23 +1765,6 @@ func (vm *VM) startContinuousProfiler() {
 	}()
 	// Wait for shutdownChan to be closed
 	<-vm.shutdownChan
-}
-
-func (vm *VM) estimateBaseFee(ctx context.Context) (*big.Int, error) {
-	// Get the base fee to use
-	baseFee, err := vm.eth.APIBackend.EstimateBaseFee(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if baseFee == nil {
-		baseFee = initialBaseFee
-	} else {
-		// give some breathing room
-		baseFee.Mul(baseFee, big.NewInt(11))
-		baseFee.Div(baseFee, big.NewInt(10))
-	}
-
-	return baseFee, nil
 }
 
 // readLastAccepted reads the last accepted hash from [acceptedBlockDB] and returns the
