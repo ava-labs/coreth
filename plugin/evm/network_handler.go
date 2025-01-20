@@ -16,43 +16,61 @@ import (
 	"github.com/ava-labs/coreth/warp"
 	warpHandlers "github.com/ava-labs/coreth/warp/handlers"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var _ message.RequestHandler = &networkHandler{}
 
+type LeafHandlers map[message.NodeType]*syncHandlers.LeafsRequestHandler
+
 type networkHandler struct {
-	stateTrieLeafsRequestHandler  *syncHandlers.LeafsRequestHandler
-	atomicTrieLeafsRequestHandler *syncHandlers.LeafsRequestHandler
-	blockRequestHandler           *syncHandlers.BlockRequestHandler
-	codeRequestHandler            *syncHandlers.CodeRequestHandler
-	signatureRequestHandler       *warpHandlers.SignatureRequestHandler
+	leafRequestHandlers     LeafHandlers
+	blockRequestHandler     *syncHandlers.BlockRequestHandler
+	codeRequestHandler      *syncHandlers.CodeRequestHandler
+	signatureRequestHandler *warpHandlers.SignatureRequestHandler
+}
+
+type LeafRequestTypeConfig struct {
+	NodeType     message.NodeType
+	NodeKeyLen   int
+	TrieDB       *triedb.Database
+	UseSnapshots bool
+	MetricName   string
 }
 
 // newNetworkHandler constructs the handler for serving network requests.
 func newNetworkHandler(
 	provider syncHandlers.SyncDataProvider,
 	diskDB ethdb.KeyValueReader,
-	evmTrieDB *triedb.Database,
-	atomicTrieDB *triedb.Database,
 	warpBackend warp.Backend,
 	networkCodec codec.Manager,
+	leafRequesTypeConfigs map[message.NodeType]LeafRequestTypeConfig,
 ) message.RequestHandler {
 	syncStats := syncStats.NewHandlerStats(metrics.Enabled)
+	leafRequestHandlers := make(LeafHandlers)
+	for _, config := range leafRequesTypeConfigs {
+		snapshotProvider := provider
+		if !config.UseSnapshots {
+			snapshotProvider = nil
+		}
+		leafRequestHandler := syncHandlers.NewLeafsRequestHandler(config.TrieDB, config.NodeKeyLen, snapshotProvider, networkCodec, syncStats)
+		leafRequestHandlers[config.NodeType] = leafRequestHandler
+	}
 	return &networkHandler{
-		stateTrieLeafsRequestHandler:  syncHandlers.NewLeafsRequestHandler(evmTrieDB, provider, networkCodec, syncStats),
-		atomicTrieLeafsRequestHandler: syncHandlers.NewLeafsRequestHandler(atomicTrieDB, nil, networkCodec, syncStats),
-		blockRequestHandler:           syncHandlers.NewBlockRequestHandler(provider, networkCodec, syncStats),
-		codeRequestHandler:            syncHandlers.NewCodeRequestHandler(diskDB, networkCodec, syncStats),
-		signatureRequestHandler:       warpHandlers.NewSignatureRequestHandler(warpBackend, networkCodec),
+		leafRequestHandlers:     leafRequestHandlers,
+		blockRequestHandler:     syncHandlers.NewBlockRequestHandler(provider, networkCodec, syncStats),
+		codeRequestHandler:      syncHandlers.NewCodeRequestHandler(diskDB, networkCodec, syncStats),
+		signatureRequestHandler: warpHandlers.NewSignatureRequestHandler(warpBackend, networkCodec),
 	}
 }
 
-func (n networkHandler) HandleStateTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
-	return n.stateTrieLeafsRequestHandler.OnLeafsRequest(ctx, nodeID, requestID, leafsRequest)
-}
-
-func (n networkHandler) HandleAtomicTrieLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
-	return n.atomicTrieLeafsRequestHandler.OnLeafsRequest(ctx, nodeID, requestID, leafsRequest)
+func (n networkHandler) HandleLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
+	handler, ok := n.leafRequestHandlers[leafsRequest.NodeType]
+	if !ok {
+		log.Debug("node type is not recognised, dropping request", "nodeID", nodeID, "requestID", requestID, "nodeType", leafsRequest.NodeType)
+		return nil, nil
+	}
+	return handler.OnLeafsRequest(ctx, nodeID, requestID, leafsRequest)
 }
 
 func (n networkHandler) HandleBlockRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, blockRequest message.BlockRequest) ([]byte, error) {

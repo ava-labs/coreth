@@ -1,7 +1,6 @@
 // (c) 2021-2022, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-// TODO: move to separate package
-package evm
+package sync
 
 import (
 	"context"
@@ -21,8 +20,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,14 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// StateSyncParentsToFetch is the number of the block parents the state syncs to.
+// ParentsToFetch is the number of the block parents the state syncs to.
 // The last 256 block hashes are necessary to support the BLOCKHASH opcode.
-const StateSyncParentsToFetch = 256
+const ParentsToFetch = 256
 
-var (
-	metadataPrefix      = []byte("metadata")
-	stateSyncSummaryKey = []byte("stateSyncSummary")
-)
+var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
@@ -47,8 +41,14 @@ type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
-// StateSyncClientConfig defines the options and dependencies needed to construct a StateSyncClient
-type StateSyncClientConfig struct {
+type Extender interface {
+	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
+	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
+	OnFinishAfterCommit(summaryHeight uint64) error
+}
+
+// ClientConfig defines the options and dependencies needed to construct a Client
+type ClientConfig struct {
 	Enabled    bool
 	SkipResume bool
 	// Specifies the number of blocks behind the latest state summary that the chain must be
@@ -59,13 +59,16 @@ type StateSyncClientConfig struct {
 
 	LastAcceptedHeight uint64
 
-	Chain         *eth.Ethereum
-	State         *chain.State
-	ChaindDB      ethdb.Database
-	Acceptor      BlockAcceptor
-	VerDB         *versiondb.Database
-	MetadataDB    database.Database
-	AtomicBackend state.AtomicBackend
+	Chain      *eth.Ethereum
+	State      *chain.State
+	ChaindDB   ethdb.Database
+	Acceptor   BlockAcceptor
+	VerDB      *versiondb.Database
+	MetadataDB database.Database
+
+	// Extension points
+	SyncableParser message.SyncableParser
+	ExtraSyncer    Extender
 
 	Client syncclient.Client
 
@@ -73,25 +76,25 @@ type StateSyncClientConfig struct {
 }
 
 type stateSyncerClient struct {
-	*StateSyncClientConfig
+	*ClientConfig
 
-	resumableSummary message.SyncSummary
+	resumableSummary message.Syncable
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
 	// State Sync results
-	syncSummary  message.SyncSummary
+	syncSummary  message.Syncable
 	stateSyncErr error
 }
 
-func NewStateSyncClient(config *StateSyncClientConfig) StateSyncClient {
+func NewClient(config *ClientConfig) Client {
 	return &stateSyncerClient{
-		StateSyncClientConfig: config,
+		ClientConfig: config,
 	}
 }
 
-type StateSyncClient interface {
+type Client interface {
 	// methods that implement the client side of [block.StateSyncableVM]
 	StateSyncEnabled(context.Context) (bool, error)
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
@@ -130,7 +133,7 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 		return nil, err // includes the [database.ErrNotFound] case
 	}
 
-	summary, err := message.NewSyncSummaryFromBytes(summaryBytes, client.acceptSyncSummary)
+	summary, err := client.SyncableParser.ParseFromBytes(summaryBytes, client.acceptSyncSummary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncSummary: %w", err)
 	}
@@ -152,13 +155,13 @@ func (client *stateSyncerClient) ClearOngoingSummary() error {
 
 // ParseStateSummary parses [summaryBytes] to [commonEng.Summary]
 func (client *stateSyncerClient) ParseStateSummary(_ context.Context, summaryBytes []byte) (block.StateSummary, error) {
-	return message.NewSyncSummaryFromBytes(summaryBytes, client.acceptSyncSummary)
+	return client.SyncableParser.ParseFromBytes(summaryBytes, client.acceptSyncSummary)
 }
 
 // stateSync blockingly performs the state sync for the EVM state and the atomic state
 // to [client.syncSummary]. returns an error if one occurred.
 func (client *stateSyncerClient) stateSync(ctx context.Context) error {
-	if err := client.syncBlocks(ctx, client.syncSummary.BlockHash, client.syncSummary.BlockNumber, StateSyncParentsToFetch); err != nil {
+	if err := client.syncBlocks(ctx, client.syncSummary.GetBlockHash(), client.syncSummary.Height(), ParentsToFetch); err != nil {
 		return err
 	}
 
@@ -168,13 +171,14 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	return client.syncAtomicTrie(ctx)
+	return client.ClientConfig.ExtraSyncer.Sync(ctx, client.Client, client.VerDB, client.syncSummary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
 // in a goroutine.
-func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncSummary) (block.StateSyncMode, error) {
-	isResume := proposedSummary.BlockHash == client.resumableSummary.BlockHash
+func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.Syncable) (block.StateSyncMode, error) {
+	isResume := client.resumableSummary != nil &&
+		proposedSummary.GetBlockHash() == client.resumableSummary.GetBlockHash()
 	if !isResume {
 		// Skip syncing if the blockchain is not significantly ahead of local state,
 		// since bootstrapping would be faster.
@@ -287,32 +291,11 @@ func (client *stateSyncerClient) syncBlocks(ctx context.Context, fromHash common
 	return batch.Write()
 }
 
-func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
-	log.Info("atomic tx: sync starting", "root", client.syncSummary.AtomicRoot)
-	atomicSyncer, err := atomicsync.NewAtomicSyncer(
-		client.Client,
-		client.VerDB,
-		client.AtomicBackend.AtomicTrie(),
-		client.syncSummary.AtomicRoot,
-		client.syncSummary.BlockNumber,
-		client.StateSyncRequestSize,
-	)
-	if err != nil {
-		return err
-	}
-	if err := atomicSyncer.Start(ctx); err != nil {
-		return err
-	}
-	err = <-atomicSyncer.Done()
-	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
-	return err
-}
-
 func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
-	log.Info("state sync: sync starting", "root", client.syncSummary.BlockRoot)
+	log.Info("state sync: sync starting", "root", client.syncSummary.GetBlockRoot())
 	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
 		Client:                   client.Client,
-		Root:                     client.syncSummary.BlockRoot,
+		Root:                     client.syncSummary.GetBlockRoot(),
 		BatchSize:                ethdb.IdealBatchSize,
 		DB:                       client.ChaindDB,
 		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
@@ -326,7 +309,7 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 		return err
 	}
 	err = <-evmSyncer.Done()
-	log.Info("state sync: sync finished", "root", client.syncSummary.BlockRoot, "err", err)
+	log.Info("state sync: sync finished", "root", client.syncSummary.GetBlockRoot(), "err", err)
 	return err
 }
 
@@ -341,9 +324,9 @@ func (client *stateSyncerClient) Shutdown() error {
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
 func (client *stateSyncerClient) finishSync() error {
-	stateBlock, err := client.State.GetBlock(context.TODO(), ids.ID(client.syncSummary.BlockHash))
+	stateBlock, err := client.State.GetBlock(context.TODO(), ids.ID(client.syncSummary.GetBlockHash()))
 	if err != nil {
-		return fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
+		return fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.GetBlockHash())
 	}
 
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
@@ -359,11 +342,11 @@ func (client *stateSyncerClient) finishSync() error {
 
 	block := evmBlockGetter.GetEthBlock()
 
-	if block.Hash() != client.syncSummary.BlockHash {
-		return fmt.Errorf("attempted to set last summary block to unexpected block hash: (%s != %s)", block.Hash(), client.syncSummary.BlockHash)
+	if block.Hash() != client.syncSummary.GetBlockHash() {
+		return fmt.Errorf("attempted to set last summary block to unexpected block hash: (%s != %s)", block.Hash(), client.syncSummary.GetBlockHash())
 	}
-	if block.NumberU64() != client.syncSummary.BlockNumber {
-		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), client.syncSummary.BlockNumber)
+	if block.NumberU64() != client.syncSummary.Height() {
+		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), client.syncSummary.Height())
 	}
 
 	// BloomIndexer needs to know that some parts of the chain are not available
@@ -382,7 +365,11 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	if err := client.updateVMMarkers(); err != nil {
+	if err := client.ExtraSyncer.OnFinishBeforeCommit(client.LastAcceptedHeight, client.syncSummary); err != nil {
+		return err
+	}
+
+	if err := client.commitVMMarkers(); err != nil {
 		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
 	}
 
@@ -390,30 +377,20 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	// the chain state is already restored, and from this point on
-	// the block synced to is the accepted block. the last operation
-	// is updating shared memory with the atomic trie.
-	// ApplyToSharedMemory does this, and even if the VM is stopped
-	// (gracefully or ungracefully), since MarkApplyToSharedMemoryCursor
-	// is called, VM will resume ApplyToSharedMemory on Initialize.
-	return client.AtomicBackend.ApplyToSharedMemory(block.NumberU64())
+	return client.ExtraSyncer.OnFinishAfterCommit(block.NumberU64())
 }
 
-// updateVMMarkers updates the following markers in the VM's database
+// commitVMMarkers updates the following markers in the VM's database
 // and commits them atomically:
 // - updates atomic trie so it will have necessary metadata for the last committed root
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
 // - removes state sync progress markers
-func (client *stateSyncerClient) updateVMMarkers() error {
+func (client *stateSyncerClient) commitVMMarkers() error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.syncSummary] when ApplyToSharedMemory
 	// is called.
-	if err := client.AtomicBackend.MarkApplyToSharedMemoryCursor(client.LastAcceptedHeight); err != nil {
-		return err
-	}
-	client.AtomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
-	id, err := ids.ToID(client.syncSummary.BlockHash.Bytes())
+	id, err := ids.ToID(client.syncSummary.GetBlockHash().Bytes())
 	if err != nil {
 		return err
 	}

@@ -47,14 +47,14 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 
 	numLeaves := 0
 	mockClient := syncclient.NewMockClient(
-		message.Codec,
-		handlers.NewLeafsRequestHandler(serverTrieDB, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
+		codecWithAtomicSync,
+		handlers.NewLeafsRequestHandler(serverTrieDB, state.AtomicTrieKeyLength, nil, codecWithAtomicSync, handlerstats.NewNoopHandlerStats()),
 		nil,
 		nil,
 	)
 
 	clientDB := versiondb.New(memdb.New())
-	repo, err := state.NewAtomicTxRepository(clientDB, message.Codec, 0)
+	repo, err := state.NewAtomicTxRepository(clientDB, codecWithAtomicSync, 0)
 	if err != nil {
 		t.Fatal("could not initialize atomix tx repository", err)
 	}

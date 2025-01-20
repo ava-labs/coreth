@@ -1,75 +1,39 @@
 // (c) 2021-2022, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-// TODO: move to separate package
-package evm
+package sync
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type StateSyncServerConfig struct {
-	Chain      *core.BlockChain
-	AtomicTrie state.AtomicTrie
-
-	// SyncableInterval is the interval at which blocks are eligible to provide syncable block summaries.
-	SyncableInterval uint64
+type SummaryProvider interface {
+	StateSummaryAtHeight(height uint64) (block.StateSummary, error)
 }
 
 type stateSyncServer struct {
-	chain      *core.BlockChain
-	atomicTrie state.AtomicTrie
+	chain    *core.BlockChain
+	provider SummaryProvider
 
 	syncableInterval uint64
 }
 
-type StateSyncServer interface {
+type Server interface {
 	GetLastStateSummary(context.Context) (block.StateSummary, error)
 	GetStateSummary(context.Context, uint64) (block.StateSummary, error)
 }
 
-func NewStateSyncServer(config *StateSyncServerConfig) StateSyncServer {
+func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
 	return &stateSyncServer{
-		chain:            config.Chain,
-		atomicTrie:       config.AtomicTrie,
-		syncableInterval: config.SyncableInterval,
+		chain:            chain,
+		provider:         provider,
+		syncableInterval: syncableInterval,
 	}
-}
-
-// stateSummaryAtHeight returns the SyncSummary at [height] if valid and available.
-func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (message.SyncSummary, error) {
-	atomicRoot, err := server.atomicTrie.Root(height)
-	if err != nil {
-		return message.SyncSummary{}, fmt.Errorf("error getting atomic trie root for height (%d): %w", height, err)
-	}
-
-	if (atomicRoot == common.Hash{}) {
-		return message.SyncSummary{}, fmt.Errorf("atomic trie root not found for height (%d)", height)
-	}
-
-	blk := server.chain.GetBlockByNumber(height)
-	if blk == nil {
-		return message.SyncSummary{}, fmt.Errorf("block not found for height (%d)", height)
-	}
-
-	if !server.chain.HasState(blk.Root()) {
-		return message.SyncSummary{}, fmt.Errorf("block root does not exist for height (%d), root (%s)", height, blk.Root())
-	}
-
-	summary, err := message.NewSyncSummary(blk.Hash(), height, blk.Root(), atomicRoot)
-	if err != nil {
-		return message.SyncSummary{}, fmt.Errorf("failed to construct syncable block at height %d: %w", height, err)
-	}
-	return summary, nil
 }
 
 // GetLastStateSummary returns the latest state summary.
@@ -80,7 +44,7 @@ func (server *stateSyncServer) GetLastStateSummary(context.Context) (block.State
 	lastHeight := server.chain.LastAcceptedBlock().NumberU64()
 	lastSyncSummaryNumber := lastHeight - lastHeight%server.syncableInterval
 
-	summary, err := server.stateSummaryAtHeight(lastSyncSummaryNumber)
+	summary, err := server.provider.StateSummaryAtHeight(lastSyncSummaryNumber)
 	if err != nil {
 		log.Debug("could not get latest state summary", "err", err)
 		return nil, database.ErrNotFound
@@ -100,7 +64,7 @@ func (server *stateSyncServer) GetStateSummary(_ context.Context, height uint64)
 		return nil, database.ErrNotFound
 	}
 
-	summary, err := server.stateSummaryAtHeight(summaryBlock.NumberU64())
+	summary, err := server.provider.StateSummaryAtHeight(summaryBlock.NumberU64())
 	if err != nil {
 		log.Debug("could not get state summary", "height", height, "err", err)
 		return nil, database.ErrNotFound

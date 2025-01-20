@@ -25,7 +25,6 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/trie"
@@ -34,7 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/avalanchego/api/keystore"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -46,7 +44,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
-	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
@@ -73,8 +70,6 @@ var (
 	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
-	username         = "Johns"
-	password         = "CjasdjhiPeirbSenfeI13" // #nosec G101
 	initialBaseFee   = big.NewInt(params.ApricotPhase3InitialBaseFee)
 
 	genesisJSON = func(cfg *params.ChainConfig) string {
@@ -220,12 +215,6 @@ func setupGenesis(
 	// NB: this lock is intentionally left locked when this function returns.
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
-
-	userKeystore := keystore.New(logging.NoLog{}, memdb.New())
-	if err := userKeystore.CreateUser(username, password); err != nil {
-		t.Fatal(err)
-	}
-	ctx.Keystore = userKeystore.NewBlockchainKeyStore(ctx.ChainID)
 
 	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
@@ -1483,16 +1472,6 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	}
 }
 
-type wrappedBackend struct {
-	state.AtomicBackend
-	registeredBonusBlocks map[uint64]common.Hash
-}
-
-func (w *wrappedBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
-	hash, ok := w.registeredBonusBlocks[blockHeight]
-	return ok && blockHash.Cmp(hash) == 0
-}
-
 func TestBonusBlocksTxs(t *testing.T) {
 	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
@@ -1550,11 +1529,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	}
 
 	// Make [blk] a bonus block.
-	wrappedBackend := &wrappedBackend{
-		AtomicBackend:         vm.atomicBackend,
-		registeredBonusBlocks: map[uint64]common.Hash{blk.Height(): common.Hash(blk.ID())},
-	}
-	vm.atomicBackend = wrappedBackend
+	vm.atomicBackend.AddBonusBlock(blk.Height(), blk.ID())
 
 	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
 	if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}); err != nil {
