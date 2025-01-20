@@ -70,7 +70,6 @@ var (
 	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
-	testAvaxAssetID  = ids.ID{1, 2, 3}
 
 	genesisJSON = func(cfg *params.ChainConfig) string {
 		g := new(core.Genesis)
