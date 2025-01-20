@@ -5,8 +5,11 @@ package evm
 
 import (
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
+
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 )
 
 var (
@@ -16,8 +19,13 @@ var (
 	_ vms.Factory = &Factory{}
 )
 
+// TODO: either move this from plugin or move the VM itself
 type Factory struct{}
 
 func (*Factory) New(logging.Logger) (interface{}, error) {
-	return &VM{}, nil
+	return atomicvm.WrapVM(&VM{}), nil
+}
+
+func (*Factory) NewPlugin() block.ChainVM {
+	return atomicvm.WrapVM(&VM{IsPlugin: true})
 }

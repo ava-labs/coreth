@@ -29,6 +29,6 @@ func main() {
 		fmt.Printf("failed to set fd limit correctly due to: %s", err)
 		os.Exit(1)
 	}
-
-	rpcchainvm.Serve(context.Background(), &evm.VM{IsPlugin: true})
+	factory := evm.Factory{}
+	rpcchainvm.Serve(context.Background(), factory.NewPlugin())
 }
