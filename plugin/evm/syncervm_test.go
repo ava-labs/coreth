@@ -308,7 +308,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		switch i {
 		case 0:
 			// spend the UTXOs from shared memory
-			importTx, err = serverVM.newImportTx(serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			importTx, err = newImportTx(serverVM, serverVM.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			require.NoError(err)
 			require.NoError(serverVM.mempool.AddLocalTx(importTx))
 		case 1:

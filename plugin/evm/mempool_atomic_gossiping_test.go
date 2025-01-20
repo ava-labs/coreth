@@ -132,14 +132,14 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	mempool, err := atomictxpool.NewMempool(vm.ctx, prometheus.NewRegistry(), 1, vm.verifyTxAtTip)
 	assert.NoError(err)
 
-	tx1, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	tx1, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.NoError(mempool.AddRemoteTx(tx1))
 	assert.True(mempool.Has(tx1.ID()))
 
-	tx2, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
+	tx2, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	assert.True(mempool.Has(tx1.ID()))
 	assert.False(mempool.Has(tx2.ID()))
 
-	tx3, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], new(big.Int).Mul(initialBaseFee, big.NewInt(2)), []*secp256k1.PrivateKey{testKeys[1]})
+	tx3, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[1], new(big.Int).Mul(initialBaseFee, big.NewInt(2)), []*secp256k1.PrivateKey{testKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
