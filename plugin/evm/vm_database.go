@@ -17,7 +17,7 @@ import (
 
 // initializeDBs initializes the databases used by the VM.
 // coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
+func (vm *sharedEvm) initializeDBs(db avalanchedatabase.Database) error {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
 	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
@@ -32,7 +32,7 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	return nil
 }
 
-func (vm *VM) inspectDatabases() error {
+func (vm *sharedEvm) inspectDatabases() error {
 	start := time.Now()
 	log.Info("Starting database inspection")
 	if err := rawdb.InspectDatabase(vm.chaindb, nil, nil); err != nil {

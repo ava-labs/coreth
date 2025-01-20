@@ -22,12 +22,12 @@ var (
 	_ block.StateSyncableVM              = &VM{}
 )
 
-type ExtandableEVM interface {
+type ExtensibleEVM interface {
 	SetNetworkCodec(codec codec.Manager) error
 }
 
 type InnerVM interface {
-	ExtandableEVM
+	ExtensibleEVM
 	avalanchecommon.VM
 	secp256k1fx.VM
 	block.ChainVM

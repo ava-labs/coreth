@@ -25,7 +25,7 @@ import (
 
 // createImportTxOptions adds a UTXO to shared memory and generates a list of import transactions sending this UTXO
 // to each of the three test keys (conflicting transactions)
-func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
+func createImportTxOptions(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
 	utxo := &avax.UTXO{
 		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
 		Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
@@ -428,7 +428,7 @@ func TestNewImportTx(t *testing.T) {
 	importAmount := uint64(5000000)
 	// createNewImportAVAXTx adds a UTXO to shared memory and then constructs a new import transaction
 	// and checks that it has the correct fee for the base fee that has been used
-	createNewImportAVAXTx := func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+	createNewImportAVAXTx := func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 		txID := ids.GenerateTestID()
 		_, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
 		if err != nil {
@@ -468,7 +468,7 @@ func TestNewImportTx(t *testing.T) {
 
 		return tx
 	}
-	checkState := func(t *testing.T, vm *VM) {
+	checkState := func(t *testing.T, vm *sharedEvm) {
 		txs := vm.LastAcceptedBlockInternal().(*Block).atomicTxs
 		if len(txs) != 1 {
 			t.Fatalf("Expected one import tx to be in the last accepted block, but found %d", len(txs))
@@ -871,7 +871,7 @@ func TestImportTxGasCost(t *testing.T) {
 func TestImportTxSemanticVerify(t *testing.T) {
 	tests := map[string]atomicTxTest{
 		"UTXO not present during bootstrapping": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
 					NetworkID:    vm.ctx.NetworkID,
 					BlockchainID: vm.ctx.ChainID,
@@ -900,7 +900,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			bootstrapping: true,
 		},
 		"UTXO not present": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
 					NetworkID:    vm.ctx.NetworkID,
 					BlockchainID: vm.ctx.ChainID,
@@ -929,7 +929,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: "failed to fetch import UTXOs from",
 		},
 		"garbage UTXO": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 				xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
 				inputID := utxoID.InputID()
@@ -969,7 +969,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: "failed to unmarshal UTXO",
 		},
 		"UTXO AssetID mismatch": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				expectedAssetID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, expectedAssetID, 1, testShortIDAddrs[0])
@@ -1003,7 +1003,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: atomic.ErrAssetIDMismatch.Error(),
 		},
 		"insufficient AVAX funds": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
 				if err != nil {
@@ -1036,7 +1036,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: "import tx flow check failed due to",
 		},
 		"insufficient non-AVAX funds": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				assetID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, testShortIDAddrs[0])
@@ -1070,7 +1070,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: "import tx flow check failed due to",
 		},
 		"no signatures": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
 				if err != nil {
@@ -1103,7 +1103,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: "import tx contained mismatched number of inputs/credentials",
 		},
 		"incorrect signature": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
 				if err != nil {
@@ -1137,7 +1137,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			semanticVerifyErr: "import tx transfer failed verification",
 		},
 		"non-unique EVM Outputs": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 2, testShortIDAddrs[0])
 				if err != nil {
@@ -1190,7 +1190,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 	assetID := ids.GenerateTestID()
 	tests := map[string]atomicTxTest{
 		"AVAX UTXO": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
 				if err != nil {
@@ -1220,7 +1220,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				}
 				return tx
 			},
-			checkState: func(t *testing.T, vm *VM) {
+			checkState: func(t *testing.T, vm *sharedEvm) {
 				lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
 
 				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
@@ -1235,7 +1235,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 			},
 		},
 		"non-AVAX UTXO": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, testShortIDAddrs[0])
 				if err != nil {
@@ -1265,7 +1265,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				}
 				return tx
 			},
-			checkState: func(t *testing.T, vm *VM) {
+			checkState: func(t *testing.T, vm *sharedEvm) {
 				lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
 
 				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())

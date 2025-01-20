@@ -509,7 +509,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 }
 
 func testReceiveWarpMessage(
-	t *testing.T, issuer chan commonEng.Message, vm *VM,
+	t *testing.T, issuer chan commonEng.Message, vm *sharedEvm,
 	sourceChainID ids.ID,
 	msgFrom warpMsgFrom, useSigners useWarpMsgSigners,
 	blockTime time.Time,
@@ -847,7 +847,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 
 func TestClearWarpDB(t *testing.T) {
 	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, genesisJSONLatest)
-	vm := &VM{}
+	vm := NewDefaultEVM()
 	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
 
@@ -870,7 +870,7 @@ func TestClearWarpDB(t *testing.T) {
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// Restart VM with the same database default should not prune the warp db
-	vm = &VM{}
+	vm = NewDefaultEVM()
 	// we need new context since the previous one has registered metrics.
 	ctx, _, _, _, _ = setupGenesis(t, genesisJSONLatest)
 	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
@@ -886,7 +886,7 @@ func TestClearWarpDB(t *testing.T) {
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// restart the VM with pruning enabled
-	vm = &VM{}
+	vm = NewDefaultEVM()
 	config := `{"prune-warp-db-enabled": true}`
 	ctx, _, _, _, _ = setupGenesis(t, genesisJSONLatest)
 	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})

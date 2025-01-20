@@ -101,7 +101,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		syncMode:           block.StateSyncStatic,
-		responseIntercept: func(syncerVM *VM, nodeID ids.NodeID, requestID uint32, response []byte) {
+		responseIntercept: func(syncerVM *sharedEvm, nodeID ids.NodeID, requestID uint32, response []byte) {
 			lock.Lock()
 			defer lock.Unlock()
 
@@ -129,7 +129,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	test.responseIntercept = nil
 	test.expectedErr = nil
 
-	syncDisabledVM := &VM{}
+	syncDisabledVM := NewDefaultEVM()
 	appSender := &enginetest.Sender{T: t}
 	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 	appSender.SendAppRequestF = func(ctx context.Context, nodeSet set.Set[ids.NodeID], requestID uint32, request []byte) error {
@@ -199,7 +199,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	syncDisabledVM.blockChain.DrainAcceptorQueue()
 
 	// Create a new VM from the same database with state sync enabled.
-	syncReEnabledVM := &VM{}
+	syncReEnabledVM := NewDefaultEVM()
 	// Enable state sync in configJSON
 	configJSON := fmt.Sprintf(
 		`{"state-sync-enabled":true, "state-sync-min-blocks":%d}`,
@@ -255,7 +255,7 @@ func TestVMShutdownWhileSyncing(t *testing.T) {
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		syncMode:           block.StateSyncStatic,
-		responseIntercept: func(syncerVM *VM, nodeID ids.NodeID, requestID uint32, response []byte) {
+		responseIntercept: func(syncerVM *sharedEvm, nodeID ids.NodeID, requestID uint32, response []byte) {
 			lock.Lock()
 			defer lock.Unlock()
 
@@ -365,7 +365,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	syncerEngineChan, syncerVM, syncerDB, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
 		t, false, "", stateSyncEnabledJSON, "", alloc,
 	)
-	shutdownOnceSyncerVM := &shutdownOnceVM{VM: syncerVM}
+	shutdownOnceSyncerVM := &shutdownOnceVM{sharedEvm: syncerVM}
 	t.Cleanup(func() {
 		require.NoError(shutdownOnceSyncerVM.Shutdown(context.Background()))
 	})
@@ -422,13 +422,13 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 // syncVMSetup contains the required set up for a client VM to perform state sync
 // off of a server VM.
 type syncVMSetup struct {
-	serverVM        *VM
+	serverVM        *sharedEvm
 	serverAppSender *enginetest.Sender
 
 	includedAtomicTxs []*atomic.Tx
 	fundedAccounts    map[*keystore.Key]*types.StateAccount
 
-	syncerVM             *VM
+	syncerVM             *sharedEvm
 	syncerDB             avalanchedatabase.Database
 	syncerEngineChan     <-chan commonEng.Message
 	syncerAtomicMemory   *avalancheatomic.Memory
@@ -436,19 +436,19 @@ type syncVMSetup struct {
 }
 
 type shutdownOnceVM struct {
-	*VM
+	*sharedEvm
 	shutdownOnce sync.Once
 }
 
 func (vm *shutdownOnceVM) Shutdown(ctx context.Context) error {
 	var err error
-	vm.shutdownOnce.Do(func() { err = vm.VM.Shutdown(ctx) })
+	vm.shutdownOnce.Do(func() { err = vm.sharedEvm.Shutdown(ctx) })
 	return err
 }
 
 // syncTest contains both the actual VMs as well as the parameters with the expected output.
 type syncTest struct {
-	responseIntercept  func(vm *VM, nodeID ids.NodeID, requestID uint32, response []byte)
+	responseIntercept  func(vm *sharedEvm, nodeID ids.NodeID, requestID uint32, response []byte)
 	stateSyncMinBlocks uint64
 	syncableInterval   uint64
 	syncMode           block.StateSyncMode
@@ -617,7 +617,7 @@ func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Bl
 // generateAndAcceptBlocks uses [core.GenerateChain] to generate blocks, then
 // calls Verify and Accept on each generated block
 // TODO: consider using this helper function in vm_test.go and elsewhere in this package to clean up tests
-func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, *core.BlockGen), accepted func(*types.Block)) {
+func generateAndAcceptBlocks(t *testing.T, vm *sharedEvm, numBlocks int, gen func(int, *core.BlockGen), accepted func(*types.Block)) {
 	t.Helper()
 
 	// acceptExternalBlock defines a function to parse, verify, and accept a block once it has been

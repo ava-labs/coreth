@@ -40,7 +40,7 @@ var (
 )
 
 // SnowmanAPI introduces snowman specific functionality to the evm
-type SnowmanAPI struct{ vm *VM }
+type SnowmanAPI struct{ vm *sharedEvm }
 
 // GetAcceptedFrontReply defines the reply that will be sent from the
 // GetAcceptedFront API call
@@ -67,7 +67,7 @@ func (api *SnowmanAPI) IssueBlock(ctx context.Context) error {
 }
 
 // AvaxAPI offers Avalanche network related API methods
-type AvaxAPI struct{ vm *VM }
+type AvaxAPI struct{ vm *sharedEvm }
 
 type VersionReply struct {
 	Version string `json:"version"`

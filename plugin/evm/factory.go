@@ -23,9 +23,9 @@ var (
 type Factory struct{}
 
 func (*Factory) New(logging.Logger) (interface{}, error) {
-	return atomicvm.WrapVM(&VM{}), nil
+	return atomicvm.WrapVM(NewExtensibleEVM(false)), nil
 }
 
 func (*Factory) NewPlugin() block.ChainVM {
-	return atomicvm.WrapVM(&VM{IsPlugin: true})
+	return atomicvm.WrapVM(NewExtensibleEVM(true))
 }
