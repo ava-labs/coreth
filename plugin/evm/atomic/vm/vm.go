@@ -2,9 +2,13 @@ package vm
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ava-labs/avalanchego/codec"
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/sync"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
@@ -18,7 +22,12 @@ var (
 	_ block.StateSyncableVM              = &VM{}
 )
 
-type innerVM interface {
+type ExtandableEVM interface {
+	SetNetworkCodec(codec codec.Manager) error
+}
+
+type InnerVM interface {
+	ExtandableEVM
 	avalanchecommon.VM
 	secp256k1fx.VM
 	block.ChainVM
@@ -27,11 +36,11 @@ type innerVM interface {
 }
 
 type VM struct {
-	innerVM // Inner EVM
+	InnerVM // Inner EVM
 }
 
-func WrapVM(vm innerVM) *VM {
-	return &VM{innerVM: vm}
+func WrapVM(vm InnerVM) *VM {
+	return &VM{InnerVM: vm}
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -46,7 +55,16 @@ func (vm *VM) Initialize(
 	fxs []*avalanchecommon.Fx,
 	appSender avalanchecommon.AppSender,
 ) error {
-	return vm.innerVM.Initialize(
+	innerVM := vm.InnerVM
+	// Register the codec for the atomic block sync summary
+	networkCodec, err := message.NewCodec(sync.AtomicSyncSummary{})
+	if err != nil {
+		return fmt.Errorf("failed to create codec manager: %w", err)
+	}
+	if err := innerVM.SetNetworkCodec(networkCodec); err != nil {
+		return fmt.Errorf("failed to set network codec: %w", err)
+	}
+	return innerVM.Initialize(
 		ctx,
 		chainCtx,
 		db,

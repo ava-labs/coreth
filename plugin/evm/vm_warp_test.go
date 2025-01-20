@@ -12,6 +12,7 @@ import (
 
 	_ "embed"
 
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
@@ -61,6 +62,16 @@ const (
 	signersSubnet useWarpMsgSigners = iota
 	signersPrimary
 )
+
+var networkCodec codec.Manager
+
+func init() {
+	var err error
+	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
+	if err != nil {
+		panic(err)
+	}
+}
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)

@@ -158,8 +158,6 @@ var (
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	networkCodec codec.Manager
 )
 
 var (
@@ -201,13 +199,6 @@ func init() {
 	// Preserving the log level allows us to update the root handler while writing to the original
 	// [os.Stderr] that is being piped through to the logger via the rpcchainvm.
 	originalStderr = os.Stderr
-
-	// Register the codec for the atomic block sync summary
-	var err error
-	networkCodec, err = message.NewCodec(atomicsync.AtomicSyncSummary{})
-	if err != nil {
-		panic(fmt.Errorf("failed to create codec manager: %w", err))
-	}
 }
 
 // VM implements the snowman.ChainVM interface
@@ -226,6 +217,9 @@ type VM struct {
 	genesisHash common.Hash
 	chainConfig *params.ChainConfig
 	ethConfig   ethconfig.Config
+
+	// Extension Points
+	networkCodec codec.Manager
 
 	// pointers to eth constructs
 	eth        *eth.Ethereum
@@ -312,6 +306,14 @@ type VM struct {
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
 	rpcHandlers []interface{ Stop() }
+}
+
+func (vm *VM) SetNetworkCodec(codec codec.Manager) error {
+	if vm.networkCodec != nil {
+		return errors.New("network codec already set")
+	}
+	vm.networkCodec = codec
+	return nil
 }
 
 // CodecRegistry implements the secp256k1fx interface
@@ -549,7 +551,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
 	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// Initialize warp backend
@@ -717,7 +719,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
-				Codec:            networkCodec,
+				Codec:            vm.networkCodec,
 				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
 				BlockParser:      vm,
@@ -1246,7 +1248,7 @@ func (vm *VM) setAppRequestHandlers() error {
 		vm.blockChain,
 		vm.chaindb,
 		vm.warpBackend,
-		networkCodec,
+		vm.networkCodec,
 		vm.leafRequestTypeConfigs,
 	)
 	vm.Network.SetRequestHandler(networkHandler)
@@ -1500,7 +1502,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}
 
 	if vm.config.WarpAPIEnabled {
-		warpAPI := warp.NewAPI(vm.ctx, networkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
+		warpAPI := warp.NewAPI(vm.ctx, vm.networkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
 		if err := handler.RegisterName("warp", warpAPI); err != nil {
 			return nil, err
 		}
