@@ -130,7 +130,7 @@ func NewBlockWithExtData(
 ) *Block {
 	b := NewBlock(header, txs, uncles, receipts, hasher)
 	const version = 0
-	return WithBlockExtras(b, version, &extdata, recalc)
+	return WithBlockExtra(b, version, &extdata, recalc)
 }
 
 func WrapWithTimestamp(b *Block) *BlockWithTimestamp {

@@ -266,7 +266,7 @@ func (ec *client) getBlock(ctx context.Context, method string, args ...interface
 		txs[i] = tx.tx
 	}
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	block = types.WithBlockExtras(block, body.Version, (*[]byte)(body.BlockExtraData), false)
+	block = types.WithBlockExtra(block, body.Version, (*[]byte)(body.BlockExtraData), false)
 	return block, nil
 }
 

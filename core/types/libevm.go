@@ -44,7 +44,7 @@ func GetBlockExtra(b *Block) *BlockExtra {
 	return extras.Block.Get(b)
 }
 
-func WithBlockExtras(b *Block, version uint32, extdata *[]byte, recalc bool) *Block {
+func WithBlockExtra(b *Block, version uint32, extdata *[]byte, recalc bool) *Block {
 	extras := GetBlockExtra(b)
 
 	extras.version = version
