@@ -323,8 +323,7 @@ func NewDefaultEVM() *sharedEvm {
 }
 
 func NewExtensibleEVM(isPlugin bool) *sharedEvm {
-	vm := &sharedEvm{IsPlugin: isPlugin}
-	return vm
+	return &sharedEvm{IsPlugin: isPlugin}
 }
 
 func (vm *sharedEvm) SetNetworkCodec(codec codec.Manager) error {
