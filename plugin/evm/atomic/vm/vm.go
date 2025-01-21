@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	_ secp256k1fx.VM                     = &VM{}
-	_ block.ChainVM                      = &VM{}
-	_ block.BuildBlockWithContextChainVM = &VM{}
-	_ block.StateSyncableVM              = &VM{}
+	_ secp256k1fx.VM                     = (*VM)(nil)
+	_ block.ChainVM                      = (*VM)(nil)
+	_ block.BuildBlockWithContextChainVM = (*VM)(nil)
+	_ block.StateSyncableVM              = (*VM)(nil)
 )
 
 type ExtensibleEVM interface {
