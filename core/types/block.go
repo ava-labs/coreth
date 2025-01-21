@@ -126,48 +126,6 @@ func NewBlock(
 	return b
 }
 
-// CopyHeader creates a deep copy of a block header.
-func CopyHeader(h *Header) *Header {
-	cpy := *h
-	extras.Header.Set(&cpy, &HeaderExtra{})
-	cpyExtra := HeaderExtras(&cpy)
-	*cpyExtra = *HeaderExtras(h)
-
-	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
-		cpy.Difficulty.Set(h.Difficulty)
-	}
-	if cpy.Number = new(big.Int); h.Number != nil {
-		cpy.Number.Set(h.Number)
-	}
-	if h.BaseFee != nil {
-		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
-	}
-	hExtra := HeaderExtras(h)
-	if hExtra.ExtDataGasUsed != nil {
-		cpyExtra.ExtDataGasUsed = new(big.Int).Set(hExtra.ExtDataGasUsed)
-	}
-	if hExtra.BlockGasCost != nil {
-		cpyExtra.BlockGasCost = new(big.Int).Set(hExtra.BlockGasCost)
-	}
-	if len(h.Extra) > 0 {
-		cpy.Extra = make([]byte, len(h.Extra))
-		copy(cpy.Extra, h.Extra)
-	}
-	if h.ExcessBlobGas != nil {
-		cpy.ExcessBlobGas = new(uint64)
-		*cpy.ExcessBlobGas = *h.ExcessBlobGas
-	}
-	if h.BlobGasUsed != nil {
-		cpy.BlobGasUsed = new(uint64)
-		*cpy.BlobGasUsed = *h.BlobGasUsed
-	}
-	if h.ParentBeaconRoot != nil {
-		cpy.ParentBeaconRoot = new(common.Hash)
-		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
-	}
-	return &cpy
-}
-
 // DecodeRLP decodes a block from RLP.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock

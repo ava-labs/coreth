@@ -2179,7 +2179,7 @@ func golangBindings(t *testing.T, overload bool) {
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
-	replacer = exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ava-labs/libevm@v0.0.0", "-replace", "github.com/ava-labs/libevm=github.com/ava-labs/libevm@v0.0.0-20250113230013-d10c4a3d1ff2")
+	replacer = exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ava-labs/libevm@v0.0.0", "-replace", "github.com/ava-labs/libevm=github.com/ava-labs/libevm@v0.0.0-20250121161112-050824131de5")
 	replacer.Dir = pkg
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)

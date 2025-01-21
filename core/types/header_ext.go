@@ -67,6 +67,60 @@ func (h *HeaderExtra) UnmarshalJSON(eth *ethtypes.Header, input []byte) error {
 	return nil
 }
 
+func (h *HeaderExtra) Copy(header *Header) *Header {
+	extraCopy := &HeaderExtra{
+		ExtDataHash: h.ExtDataHash,
+	}
+
+	if h.BlockGasCost != nil {
+		extraCopy.BlockGasCost = big.NewInt(0)
+		extraCopy.BlockGasCost.SetBytes(h.BlockGasCost.Bytes())
+	}
+
+	if h.ExtDataGasUsed != nil {
+		extraCopy.ExtDataGasUsed = big.NewInt(0)
+		extraCopy.ExtDataGasUsed.SetBytes(h.ExtDataGasUsed.Bytes())
+	}
+
+	cpy := copyBaseHeader(header)
+	return WithHeaderExtras(cpy, extraCopy)
+}
+
+// TODO add test to make sure this mirrors copy with a no extra header.
+func copyBaseHeader(h *ethtypes.Header) *ethtypes.Header {
+	cpy := *h
+	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
+		cpy.Difficulty.Set(h.Difficulty)
+	}
+	if cpy.Number = new(big.Int); h.Number != nil {
+		cpy.Number.Set(h.Number)
+	}
+	if h.BaseFee != nil {
+		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
+	}
+	if len(h.Extra) > 0 {
+		cpy.Extra = make([]byte, len(h.Extra))
+		copy(cpy.Extra, h.Extra)
+	}
+	if h.WithdrawalsHash != nil {
+		cpy.WithdrawalsHash = new(common.Hash)
+		*cpy.WithdrawalsHash = *h.WithdrawalsHash
+	}
+	if h.ExcessBlobGas != nil {
+		cpy.ExcessBlobGas = new(uint64)
+		*cpy.ExcessBlobGas = *h.ExcessBlobGas
+	}
+	if h.BlobGasUsed != nil {
+		cpy.BlobGasUsed = new(uint64)
+		*cpy.BlobGasUsed = *h.BlobGasUsed
+	}
+	if h.ParentBeaconRoot != nil {
+		cpy.ParentBeaconRoot = new(common.Hash)
+		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
+	}
+	return &cpy
+}
+
 //go:generate go run github.com/fjl/gencodec -type HeaderSerializable -field-override headerMarshaling -out gen_header_json.go
 //go:generate go run github.com/ava-labs/libevm/rlp/rlpgen -type HeaderSerializable -out gen_header_rlp.go
 
