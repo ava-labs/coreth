@@ -36,7 +36,7 @@ type InnerVM interface {
 }
 
 type VM struct {
-	InnerVM // Inner EVM
+	InnerVM
 }
 
 func WrapVM(vm InnerVM) *VM {
