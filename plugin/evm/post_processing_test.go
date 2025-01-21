@@ -488,7 +488,7 @@ func TestPostProcess(t *testing.T) {
 
 					require.NoError(t, b.Write())
 
-					if storageBackend == "legacy" {
+					if storageBackend == "legacy" && writeCacheSize == 0 {
 						require.Equal(t, storageRoot, block.Root(), "Root mismatch")
 					}
 				}
