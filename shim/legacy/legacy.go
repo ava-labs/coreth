@@ -16,11 +16,12 @@ import (
 var _ triedb.KVBackend = &Legacy{}
 
 type Legacy struct {
-	triedb            *triedb.Database
-	root              common.Hash
-	count             uint64
-	dereference       bool
-	trackDeletedTries ethdb.KeyValueStore
+	triedb                   *triedb.Database
+	root                     common.Hash
+	count                    uint64
+	dereference              bool
+	trackDeletedTries        ethdb.KeyValueStore
+	accountRootCheckDisabled bool
 }
 
 func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bool) *Legacy {
@@ -34,6 +35,10 @@ func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bo
 
 func (l *Legacy) TrackDeletedTries(db ethdb.KeyValueStore) {
 	l.trackDeletedTries = db
+}
+
+func (l *Legacy) DisableAccountRootCheck() {
+	l.accountRootCheckDisabled = true
 }
 
 func getAccountRoot(tr *trie.Trie, accHash common.Hash) (common.Hash, error) {
@@ -50,6 +55,27 @@ func getAccountRoot(tr *trie.Trie, accHash common.Hash) (common.Hash, error) {
 		root = acc.Root
 	}
 	return root, nil
+}
+
+func setAccountRoot(tr *trie.Trie, accHash common.Hash, root common.Hash) error {
+	accBytes, err := tr.Get(accHash[:])
+	if err != nil {
+		return err
+	}
+	var acc types.StateAccount
+	if len(accBytes) == 0 {
+		return fmt.Errorf("account %x not found", accHash)
+	}
+	if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
+		return fmt.Errorf("failed to decode account: %w", err)
+	}
+	acc.Root = root
+	accBytes, err = rlp.EncodeToBytes(&acc)
+	if err != nil {
+		return fmt.Errorf("failed to encode account: %w", err)
+	}
+	tr.MustUpdate(accHash[:], accBytes)
+	return nil
 }
 
 func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
@@ -152,7 +178,13 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 			return nil, err
 		}
 		if root != tr.Hash() {
-			return nil, fmt.Errorf("account %x trie root mismatch (%x != %x)", accHash, root, tr.Hash())
+			if l.accountRootCheckDisabled {
+				if err := setAccountRoot(accounts, accHash, tr.Hash()); err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("account %x trie root mismatch (%x != %x)", accHash, root, tr.Hash())
+			}
 		}
 	}
 

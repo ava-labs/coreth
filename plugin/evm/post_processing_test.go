@@ -242,6 +242,11 @@ func TestPostProcess(t *testing.T) {
 				require.NoError(t, it.Error())
 				it.Release()
 			}
+			if writeCacheSize > 0 {
+				// Account roots will differ if we buffer writes. This tracks the actual
+				// roots (different from what is put in the trie in the tape).
+				legacyStore.DisableAccountRootCheck()
+			}
 			storage = legacyStore
 		}
 		require.Equal(t, lastRoot, common.BytesToHash(storage.Root()), "Root mismatch")
