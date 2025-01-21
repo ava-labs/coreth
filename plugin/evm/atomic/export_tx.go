@@ -137,12 +137,12 @@ func (utx *UnsignedExportTx) GasUsed(fixedFee bool) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	cost, err := math.Add64(byteCost, sigCost)
+	cost, err := math.Add(byteCost, sigCost)
 	if err != nil {
 		return 0, err
 	}
 	if fixedFee {
-		cost, err = math.Add64(cost, params.AtomicTxBaseCost)
+		cost, err = math.Add(cost, params.AtomicTxBaseCost)
 		if err != nil {
 			return 0, err
 		}
@@ -160,7 +160,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	)
 	for _, out := range utx.ExportedOutputs {
 		if out.AssetID() == assetID {
-			spent, err = math.Add64(spent, out.Output().Amount())
+			spent, err = math.Add(spent, out.Output().Amount())
 			if err != nil {
 				return 0, err
 			}
@@ -168,7 +168,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	}
 	for _, in := range utx.Ins {
 		if in.AssetID == assetID {
-			input, err = math.Add64(input, in.Amount)
+			input, err = math.Add(input, in.Amount)
 			if err != nil {
 				return 0, err
 			}
@@ -343,7 +343,7 @@ func NewExportTx(
 			return nil, err
 		}
 
-		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
+		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
 	default:
 		var newAvaxNeeded uint64
 		newAvaxNeeded, err = math.Add64(avaxNeeded, params.AvalancheAtomicTxFee)
@@ -465,7 +465,7 @@ func GetSpendableFunds(
 	return inputs, signers, nil
 }
 
-// GetSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
+// getSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
 // order) to total [amount] + [fee] of [AVAX] owned by [keys].
 // This function accounts for the added cost of the additional inputs needed to
 // create the transaction and makes sure to skip any keys with a balance that is
@@ -473,7 +473,7 @@ func GetSpendableFunds(
 // Note: we return [][]*secp256k1.PrivateKey even though each input
 // corresponds to a single key, so that the signers can be passed in to
 // [tx.Sign] which supports multiple keys on a single input.
-func GetSpendableAVAXWithFee(
+func getSpendableAVAXWithFee(
 	ctx *snow.Context,
 	state StateDB,
 	keys []*secp256k1.PrivateKey,
@@ -486,7 +486,7 @@ func GetSpendableAVAXWithFee(
 		return nil, nil, err
 	}
 
-	newAmount, err := math.Add64(amount, initialFee)
+	newAmount, err := math.Add(amount, initialFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -527,7 +527,7 @@ func GetSpendableAVAXWithFee(
 		// Update the cost for the next iteration
 		cost = newCost
 
-		newAmount, err := math.Add64(amount, additionalFee)
+		newAmount, err := math.Add(amount, additionalFee)
 		if err != nil {
 			return nil, nil, err
 		}
