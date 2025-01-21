@@ -308,21 +308,7 @@ type sharedEvm struct {
 	rpcHandlers []interface{ Stop() }
 }
 
-// NewDefaultEVM returns a new instance of the VM with default extensions
-// This should not be called if the VM is being extended
-func NewDefaultEVM() *sharedEvm {
-	vm := &sharedEvm{}
-	defaultCodec, err := message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		panic(err)
-	}
-	if err := vm.SetNetworkCodec(defaultCodec); err != nil {
-		panic(err)
-	}
-	return vm
-}
-
-func NewExtensibleEVM(isPlugin bool) *sharedEvm {
+func newExtensibleEVM(isPlugin bool) *sharedEvm {
 	vm := &sharedEvm{IsPlugin: isPlugin}
 	return vm
 }
@@ -1504,7 +1490,7 @@ func (vm *sharedEvm) CreateHandlers(context.Context) (map[string]http.Handler, e
 	apis[avaxEndpoint] = avaxAPI
 
 	if vm.config.AdminAPIEnabled {
-		adminAPI, err := newHandler("admin", NewAdminService(vm, os.ExpandEnv(fmt.Sprintf("%s_coreth_performance_%s", vm.config.AdminAPIDir, vm.chainAlias))))
+		adminAPI, err := newHandler("admin", newAdminService(vm, os.ExpandEnv(fmt.Sprintf("%s_coreth_performance_%s", vm.config.AdminAPIDir, vm.chainAlias))))
 		if err != nil {
 			return nil, fmt.Errorf("failed to register service for admin API due to %w", err)
 		}

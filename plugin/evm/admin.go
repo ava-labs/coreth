@@ -19,7 +19,7 @@ type Admin struct {
 	profiler profiler.Profiler
 }
 
-func NewAdminService(vm *sharedEvm, performanceDir string) *Admin {
+func newAdminService(vm *sharedEvm, performanceDir string) *Admin {
 	return &Admin{
 		vm:       vm,
 		profiler: profiler.New(performanceDir),

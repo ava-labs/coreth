@@ -57,7 +57,7 @@ func TestEthTxGossip(t *testing.T) {
 	responseSender := &enginetest.SenderStub{
 		SentAppResponse: make(chan []byte, 1),
 	}
-	vm := NewDefaultEVM()
+	vm := newDefaultTestVM()
 
 	vm.p2pSender = responseSender
 	vm.atomicTxGossipHandler = &p2p.NoOpHandler{}
@@ -191,7 +191,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	responseSender := &enginetest.SenderStub{
 		SentAppResponse: make(chan []byte, 1),
 	}
-	vm := NewDefaultEVM()
+	vm := newDefaultTestVM()
 	vm.p2pSender = responseSender
 	vm.ethTxGossipHandler = &p2p.NoOpHandler{}
 	vm.ethTxPullGossiper = &gossip.NoOpGossiper{}
@@ -319,7 +319,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 
-	vm := NewDefaultEVM()
+	vm := newDefaultTestVM()
 	vm.p2pSender = sender
 	vm.ethTxPullGossiper = gossip.NoOpGossiper{}
 	vm.atomicTxPullGossiper = gossip.NoOpGossiper{}
@@ -378,7 +378,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	snowCtx := utils.TestSnowContext()
 
 	sender := &enginetest.Sender{}
-	vm := NewDefaultEVM()
+	vm := newDefaultTestVM()
 	vm.p2pSender = sender
 	vm.ethTxPullGossiper = gossip.NoOpGossiper{}
 	vm.atomicTxPullGossiper = gossip.NoOpGossiper{}
@@ -452,7 +452,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	sender := &enginetest.SenderStub{
 		SentAppGossip: make(chan []byte, 1),
 	}
-	vm := NewDefaultEVM()
+	vm := newDefaultTestVM()
 	vm.p2pSender = sender
 	vm.ethTxPullGossiper = gossip.NoOpGossiper{}
 	vm.atomicTxPullGossiper = gossip.NoOpGossiper{}
@@ -522,7 +522,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require.NoError(err)
 
 	sender := &enginetest.Sender{}
-	vm := NewDefaultEVM()
+	vm := newDefaultTestVM()
 	vm.p2pSender = sender
 	vm.ethTxPullGossiper = gossip.NoOpGossiper{}
 	vm.atomicTxPullGossiper = gossip.NoOpGossiper{}
