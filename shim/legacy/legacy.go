@@ -64,7 +64,10 @@ func setAccountRoot(tr *trie.Trie, accHash common.Hash, root common.Hash) error 
 	}
 	var acc types.StateAccount
 	if len(accBytes) == 0 {
-		return fmt.Errorf("account %x not found", accHash)
+		if root == types.EmptyRootHash {
+			return nil
+		}
+		return fmt.Errorf("account %x not found (wanted to set root to %x)", accHash, root)
 	}
 	if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
 		return fmt.Errorf("failed to decode account: %w", err)
