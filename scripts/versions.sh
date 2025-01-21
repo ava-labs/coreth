@@ -6,4 +6,4 @@
 set -euo pipefail
 
 # Don't export them as they're used in the context of other calls
-AVALANCHE_VERSION=${AVALANCHE_VERSION:-'8885a5c44'}
+AVALANCHE_VERSION=${AVALANCHE_VERSION:-'55b6a3fa9'}
