@@ -309,13 +309,12 @@ type sharedEvm struct {
 }
 
 func newExtensibleEVM(isPlugin bool) *sharedEvm {
-	vm := &sharedEvm{IsPlugin: isPlugin}
-	return vm
+	return &sharedEvm{IsPlugin: isPlugin}
 }
 
 func (vm *sharedEvm) SetNetworkCodec(codec codec.Manager) error {
 	if vm.networkCodec != nil {
-		return errors.New("network codec already set")
+		return fmt.Errorf("network codec already set to %T", vm.networkCodec)
 	}
 	vm.networkCodec = codec
 	return nil
