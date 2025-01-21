@@ -40,12 +40,12 @@ func WithBodyExtra(b *Body, extra *BodyExtra) *Body {
 	return b
 }
 
-func BlockExtras(b *Block) *BlockExtra {
+func GetBlockExtra(b *Block) *BlockExtra {
 	return extras.Block.Get(b)
 }
 
 func WithBlockExtras(b *Block, version uint32, extdata *[]byte, recalc bool) *Block {
-	extras := BlockExtras(b)
+	extras := GetBlockExtra(b)
 
 	extras.version = version
 

@@ -93,7 +93,7 @@ func (b *blockSerializable) updateToExtras(extras *BlockExtra) {
 }
 
 func BlockExtData(b *Block) []byte {
-	extras := BlockExtras(b)
+	extras := GetBlockExtra(b)
 	if extras.extdata == nil {
 		return nil
 	}
@@ -101,7 +101,7 @@ func BlockExtData(b *Block) []byte {
 }
 
 func BlockVersion(b *Block) uint32 {
-	return BlockExtras(b).version
+	return GetBlockExtra(b).version
 }
 
 func BlockExtDataGasUsed(b *Block) *big.Int {
