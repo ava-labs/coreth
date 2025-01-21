@@ -63,14 +63,10 @@ func setAccountRoot(tr *trie.Trie, accHash common.Hash, root common.Hash) error 
 		return err
 	}
 	var acc types.StateAccount
-	if len(accBytes) == 0 {
-		if root == types.EmptyRootHash {
-			return nil
+	if len(accBytes) > 0 {
+		if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
+			return fmt.Errorf("failed to decode account: %w", err)
 		}
-		return fmt.Errorf("account %x not found (wanted to set root to %x)", accHash, root)
-	}
-	if err := rlp.DecodeBytes(accBytes, &acc); err != nil {
-		return fmt.Errorf("failed to decode account: %w", err)
 	}
 	acc.Root = root
 	accBytes, err = rlp.EncodeToBytes(&acc)
@@ -170,7 +166,30 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 		if len(v) == 0 {
 			accounts.MustDelete(k)
 		} else {
+			var (
+				root          common.Hash
+				shouldSetRoot bool
+			)
+			if l.accountRootCheckDisabled {
+				// If the trie is updated, the root will be set below
+				if _, ok := tries[common.BytesToHash(k[:32])]; !ok {
+					// Otherwise, avoid changing the root from it's current value
+					r, err := getAccountRoot(accounts, common.BytesToHash(k[:32]))
+					if err != nil {
+						return nil, err
+					}
+					root = r
+					shouldSetRoot = true
+				}
+			}
+
 			accounts.MustUpdate(k, v)
+
+			if shouldSetRoot {
+				if err := setAccountRoot(accounts, common.BytesToHash(k[:32]), root); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
