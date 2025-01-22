@@ -12,6 +12,7 @@ import (
 
 	_ "embed"
 
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
@@ -61,6 +62,16 @@ const (
 	signersSubnet useWarpMsgSigners = iota
 	signersPrimary
 )
+
+var networkCodec codec.Manager
+
+func init() {
+	var err error
+	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
+	if err != nil {
+		panic(err)
+	}
+}
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
@@ -836,7 +847,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 
 func TestClearWarpDB(t *testing.T) {
 	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, genesisJSONLatest)
-	vm := &VM{}
+	vm := newDefaultTestVM()
 	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
 
@@ -859,7 +870,7 @@ func TestClearWarpDB(t *testing.T) {
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// Restart VM with the same database default should not prune the warp db
-	vm = &VM{}
+	vm = newDefaultTestVM()
 	// we need new context since the previous one has registered metrics.
 	ctx, _, _, _, _ = setupGenesis(t, genesisJSONLatest)
 	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
@@ -875,7 +886,7 @@ func TestClearWarpDB(t *testing.T) {
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// restart the VM with pruning enabled
-	vm = &VM{}
+	vm = newDefaultTestVM()
 	config := `{"prune-warp-db-enabled": true}`
 	ctx, _, _, _, _ = setupGenesis(t, genesisJSONLatest)
 	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})

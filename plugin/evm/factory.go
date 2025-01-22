@@ -5,8 +5,11 @@ package evm
 
 import (
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
+
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 )
 
 var (
@@ -19,5 +22,17 @@ var (
 type Factory struct{}
 
 func (*Factory) New(logging.Logger) (interface{}, error) {
-	return &VM{}, nil
+	extensionCfg, err := atomicvm.NewAtomicExtensionConfig()
+	if err != nil {
+		return nil, err
+	}
+	return atomicvm.WrapVM(NewExtensibleEVM(false, extensionCfg)), nil
+}
+
+func NewPluginVM() (block.ChainVM, error) {
+	extensionCfg, err := atomicvm.NewAtomicExtensionConfig()
+	if err != nil {
+		return nil, err
+	}
+	return atomicvm.WrapVM(NewExtensibleEVM(true, extensionCfg)), nil
 }

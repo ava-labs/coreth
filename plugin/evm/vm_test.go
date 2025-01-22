@@ -27,6 +27,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
 
@@ -221,6 +223,19 @@ func setupGenesis(
 	return ctx, prefixedDB, genesisBytes, issuer, atomicMemory
 }
 
+// newDefaultTestVM returns a new instance of the VM with default extensions
+// This should not be called if the VM is being extended
+func newDefaultTestVM() *VM {
+	defaultCodec, err := message.NewCodec(message.BlockSyncSummary{})
+	if err != nil {
+		panic(err)
+	}
+
+	return NewExtensibleEVM(false, extension.ExtensionConfig{
+		NetworkCodec: defaultCodec,
+	})
+}
+
 // GenesisVM creates a VM instance with the genesis test bytes and returns
 // the channel use to send messages to the engine, the VM, database manager,
 // sender, and atomic memory.
@@ -256,7 +271,8 @@ func GenesisVMWithClock(
 	*avalancheatomic.Memory,
 	*enginetest.Sender,
 ) {
-	vm := &VM{clock: clock}
+	vm := newDefaultTestVM()
+	vm.clock = clock
 	ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
 	appSender := &enginetest.Sender{T: t}
 	appSender.CantSendAppGossip = true
@@ -767,7 +783,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		t.Fatalf("Found unexpected blkID for parent of blk2")
 	}
 
-	restartedVM := &VM{}
+	restartedVM := newDefaultTestVM()
 	if err := restartedVM.Initialize(
 		context.Background(),
 		utils.TestSnowContext(),
@@ -3107,7 +3123,7 @@ func TestConfigureLogLevel(t *testing.T) {
 	}
 	for _, test := range configTests {
 		t.Run(test.name, func(t *testing.T) {
-			vm := &VM{}
+			vm := newDefaultTestVM()
 			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, test.genesisJSON)
 			appSender := &enginetest.Sender{T: t}
 			appSender.CantSendAppGossip = true
@@ -3766,7 +3782,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(t, blk.Accept(context.Background()))
 
-	reinitVM := &VM{}
+	reinitVM := newDefaultTestVM()
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}

@@ -45,6 +45,7 @@ import (
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -158,8 +159,6 @@ var (
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	networkCodec codec.Manager
 )
 
 var (
@@ -201,13 +200,6 @@ func init() {
 	// Preserving the log level allows us to update the root handler while writing to the original
 	// [os.Stderr] that is being piped through to the logger via the rpcchainvm.
 	originalStderr = os.Stderr
-
-	// Register the codec for the atomic block sync summary
-	var err error
-	networkCodec, err = message.NewCodec(atomicsync.AtomicSyncSummary{})
-	if err != nil {
-		panic(fmt.Errorf("failed to create codec manager: %w", err))
-	}
 }
 
 // VM implements the snowman.ChainVM interface
@@ -226,6 +218,9 @@ type VM struct {
 	genesisHash common.Hash
 	chainConfig *params.ChainConfig
 	ethConfig   ethconfig.Config
+
+	// Extension Points
+	extensionConfig extension.ExtensionConfig
 
 	// pointers to eth constructs
 	eth        *eth.Ethereum
@@ -312,6 +307,10 @@ type VM struct {
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
 	rpcHandlers []interface{ Stop() }
+}
+
+func NewExtensibleEVM(isPlugin bool, extensionConfig extension.ExtensionConfig) *VM {
+	return &VM{IsPlugin: isPlugin, extensionConfig: extensionConfig}
 }
 
 // CodecRegistry implements the secp256k1fx interface
@@ -549,7 +548,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
 	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.extensionConfig.NetworkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// Initialize warp backend
@@ -717,7 +716,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
-				Codec:            networkCodec,
+				Codec:            vm.extensionConfig.NetworkCodec,
 				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
 				BlockParser:      vm,
@@ -1246,7 +1245,7 @@ func (vm *VM) setAppRequestHandlers() error {
 		vm.blockChain,
 		vm.chaindb,
 		vm.warpBackend,
-		networkCodec,
+		vm.extensionConfig.NetworkCodec,
 		vm.leafRequestTypeConfigs,
 	)
 	vm.Network.SetRequestHandler(networkHandler)
@@ -1483,7 +1482,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	apis[avaxEndpoint] = avaxAPI
 
 	if vm.config.AdminAPIEnabled {
-		adminAPI, err := newHandler("admin", NewAdminService(vm, os.ExpandEnv(fmt.Sprintf("%s_coreth_performance_%s", vm.config.AdminAPIDir, vm.chainAlias))))
+		adminAPI, err := newHandler("admin", newAdminService(vm, os.ExpandEnv(fmt.Sprintf("%s_coreth_performance_%s", vm.config.AdminAPIDir, vm.chainAlias))))
 		if err != nil {
 			return nil, fmt.Errorf("failed to register service for admin API due to %w", err)
 		}
@@ -1500,7 +1499,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}
 
 	if vm.config.WarpAPIEnabled {
-		warpAPI := warp.NewAPI(vm.ctx, networkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
+		warpAPI := warp.NewAPI(vm.ctx, vm.extensionConfig.NetworkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
 		if err := handler.RegisterName("warp", warpAPI); err != nil {
 			return nil, err
 		}
