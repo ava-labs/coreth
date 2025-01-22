@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // shows that a locally generated AtomicTx can be added to mempool and then
@@ -67,7 +68,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			// Show that BuildBlock generates a block containing [txID] and that it is
 			// still present in the mempool.
 			blk, err := vm.BuildBlock(context.Background())
-			assert.NoError(err, "could not build block out of mempool")
+			require.NoError(t, err, "could not build block out of mempool")
 
 			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(*Block)
 			assert.True(ok, "unknown block type")

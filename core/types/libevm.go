@@ -13,6 +13,7 @@ var (
 	extras = ethtypes.RegisterExtras[
 		HeaderExtra, *HeaderExtra,
 		BodyExtra, *BodyExtra,
+		BlockExtra, *BlockExtra,
 		isMultiCoin]()
 	IsMultiCoinPayloads = extras.StateAccount
 )
@@ -36,5 +37,31 @@ func GetBodyExtra(b *Body) *BodyExtra {
 
 func WithBodyExtra(b *Body, extra *BodyExtra) *Body {
 	extras.Body.Set(b, extra)
+	return b
+}
+
+func GetBlockExtra(b *Block) *BlockExtra {
+	return extras.Block.Get(b)
+}
+
+func WithBlockExtra(b *Block, version uint32, extdata *[]byte, recalc bool) *Block {
+	extras := GetBlockExtra(b)
+
+	extras.version = version
+
+	cpy := make([]byte, 0)
+	if extdata != nil {
+		cpy = make([]byte, len(*extdata))
+		copy(cpy, *extdata)
+	}
+
+	extras.extdata = &cpy
+	if recalc {
+		header := b.Header()
+		headerExtra := HeaderExtras(header)
+		headerExtra.ExtDataHash = CalcExtDataHash(cpy)
+		b.SetHeader(header)
+	}
+
 	return b
 }

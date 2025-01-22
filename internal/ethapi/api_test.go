@@ -526,8 +526,10 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	panic("unknown type rpc.BlockNumberOrHash")
 }
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
-	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
+	block := b.chain.GetBlock(hash, uint64(number.Int64()))
+	return block.Body(), nil
 }
+
 func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	if number == rpc.PendingBlockNumber {
 		panic("pending state not implemented")

@@ -48,7 +48,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	if !rulesExtra.IsApricotPhase1 {
 		if v.extDataHashes != nil {
-			extData := b.ethBlock.ExtData()
+			extData := types.BlockExtData(b.ethBlock)
 			extDataHash := types.CalcExtDataHash(extData)
 			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
 			// have a block that is unexpectedly missing extra data.
@@ -75,7 +75,9 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	// Verify the ExtDataHash field
 	headerExtra := types.HeaderExtras(ethHeader)
 	if rulesExtra.IsApricotPhase1 {
-		if hash := types.CalcExtDataHash(b.ethBlock.ExtData()); headerExtra.ExtDataHash != hash {
+		extraData := types.BlockExtData(b.ethBlock)
+		hash := types.CalcExtDataHash(extraData)
+		if headerExtra.ExtDataHash != hash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
 		}
 	} else {
@@ -155,8 +157,8 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	if b.ethBlock.Version() != 0 {
-		return fmt.Errorf("invalid version: %d", b.ethBlock.Version())
+	if types.BlockVersion(b.ethBlock) != 0 {
+		return fmt.Errorf("invalid version: %d", types.BlockVersion(b.ethBlock))
 	}
 
 	// Check that the tx hash in the header matches the body
