@@ -217,7 +217,10 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 	if set != nil {
 		nodes.Merge(set)
 	}
-
+	if l.root == next {
+		fmt.Println("::: root is the same", l.root, next)
+		return next[:], nil
+	}
 	if err := l.triedb.Update(next, l.root, l.count, nodes, nil); err != nil {
 		return nil, err
 	}
@@ -318,6 +321,10 @@ func (l *Legacy) PrefixDelete(prefix []byte) (int, error) {
 	}
 	if set != nil {
 		nodes.Merge(set)
+	}
+	if l.root == next {
+		fmt.Println("::: root is the same", l.root, next)
+		return leafs, nil
 	}
 	if err := l.triedb.Update(next, l.root, l.count, nodes, nil); err != nil {
 		return 0, err
