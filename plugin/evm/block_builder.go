@@ -53,7 +53,7 @@ type blockBuilder struct {
 	buildBlockTimer *timer.Timer
 }
 
-func (vm *sharedEvm) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message) *blockBuilder {
+func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message) *blockBuilder {
 	b := &blockBuilder{
 		ctx:                  vm.ctx,
 		chainConfig:          vm.chainConfig,

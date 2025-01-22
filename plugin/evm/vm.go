@@ -45,6 +45,7 @@ import (
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -103,12 +104,12 @@ import (
 )
 
 var (
-	_ block.ChainVM                      = &sharedEvm{}
-	_ block.BuildBlockWithContextChainVM = &sharedEvm{}
-	_ block.StateSyncableVM              = &sharedEvm{}
-	_ statesyncclient.EthBlockParser     = &sharedEvm{}
-	_ secp256k1fx.VM                     = &sharedEvm{}
-	_ vmsync.BlockAcceptor               = &sharedEvm{}
+	_ block.ChainVM                      = &VM{}
+	_ block.BuildBlockWithContextChainVM = &VM{}
+	_ block.StateSyncableVM              = &VM{}
+	_ statesyncclient.EthBlockParser     = &VM{}
+	_ secp256k1fx.VM                     = &VM{}
+	_ vmsync.BlockAcceptor               = &VM{}
 )
 
 const (
@@ -201,8 +202,8 @@ func init() {
 	originalStderr = os.Stderr
 }
 
-// sharedEvm implements the snowman.ChainVM interface
-type sharedEvm struct {
+// VM implements the snowman.ChainVM interface
+type VM struct {
 	ctx *snow.Context
 	// [cancel] may be nil until [snow.NormalOp] starts
 	cancel context.CancelFunc
@@ -219,7 +220,7 @@ type sharedEvm struct {
 	ethConfig   ethconfig.Config
 
 	// Extension Points
-	networkCodec codec.Manager
+	extensionConfig extension.ExtensionConfig
 
 	// pointers to eth constructs
 	eth        *eth.Ethereum
@@ -308,26 +309,18 @@ type sharedEvm struct {
 	rpcHandlers []interface{ Stop() }
 }
 
-func newExtensibleEVM(isPlugin bool) *sharedEvm {
-	return &sharedEvm{IsPlugin: isPlugin}
-}
-
-func (vm *sharedEvm) SetNetworkCodec(codec codec.Manager) error {
-	if vm.networkCodec != nil {
-		return fmt.Errorf("network codec already set to %T", vm.networkCodec)
-	}
-	vm.networkCodec = codec
-	return nil
+func NewExtensibleEVM(isPlugin bool, extensionConfig extension.ExtensionConfig) *VM {
+	return &VM{IsPlugin: isPlugin, extensionConfig: extensionConfig}
 }
 
 // CodecRegistry implements the secp256k1fx interface
-func (vm *sharedEvm) CodecRegistry() codec.Registry { return vm.baseCodec }
+func (vm *VM) CodecRegistry() codec.Registry { return vm.baseCodec }
 
 // Clock implements the secp256k1fx interface
-func (vm *sharedEvm) Clock() *mockable.Clock { return &vm.clock }
+func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 
 // Logger implements the secp256k1fx interface
-func (vm *sharedEvm) Logger() logging.Logger { return vm.ctx.Log }
+func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
 /*
  ******************************************************************************
@@ -336,12 +329,12 @@ func (vm *sharedEvm) Logger() logging.Logger { return vm.ctx.Log }
  */
 
 // implements SnowmanPlusPlusVM interface
-func (vm *sharedEvm) GetActivationTime() time.Time {
+func (vm *VM) GetActivationTime() time.Time {
 	return utils.Uint64ToTime(vm.chainConfig.ApricotPhase4BlockTimestamp)
 }
 
 // Initialize implements the snowman.ChainVM interface
-func (vm *sharedEvm) Initialize(
+func (vm *VM) Initialize(
 	_ context.Context,
 	chainCtx *snow.Context,
 	db avalanchedatabase.Database,
@@ -555,7 +548,7 @@ func (vm *sharedEvm) Initialize(
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
 	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.extensionConfig.NetworkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// Initialize warp backend
@@ -638,7 +631,7 @@ func (vm *sharedEvm) Initialize(
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
-func (vm *sharedEvm) initializeMetrics() error {
+func (vm *VM) initializeMetrics() error {
 	vm.sdkMetrics = prometheus.NewRegistry()
 	// If metrics are enabled, register the default metrics registry
 	if !metrics.Enabled {
@@ -652,7 +645,7 @@ func (vm *sharedEvm) initializeMetrics() error {
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
 
-func (vm *sharedEvm) initializeChain(lastAcceptedHash common.Hash) error {
+func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	nodecfg := &node.Config{
 		CorethVersion:         Version,
 		KeyStoreDir:           vm.config.KeystoreDirectory,
@@ -694,7 +687,7 @@ func (vm *sharedEvm) initializeChain(lastAcceptedHash common.Hash) error {
 // initializeStateSyncClient initializes the client for performing state sync.
 // If state sync is disabled, this function will wipe any ongoing summary from
 // disk to ensure that we do not continue syncing from an invalid snapshot.
-func (vm *sharedEvm) initializeStateSyncClient(lastAcceptedHeight uint64) error {
+func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
@@ -723,7 +716,7 @@ func (vm *sharedEvm) initializeStateSyncClient(lastAcceptedHeight uint64) error 
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
-				Codec:            vm.networkCodec,
+				Codec:            vm.extensionConfig.NetworkCodec,
 				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
 				BlockParser:      vm,
@@ -751,7 +744,7 @@ func (vm *sharedEvm) initializeStateSyncClient(lastAcceptedHeight uint64) error 
 	return nil
 }
 
-func (vm *sharedEvm) initChainState(lastAcceptedBlock *types.Block) error {
+func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 	block, err := vm.newBlock(lastAcceptedBlock)
 	if err != nil {
 		return fmt.Errorf("failed to create block wrapper for the last accepted block: %w", err)
@@ -784,14 +777,14 @@ func (vm *sharedEvm) initChainState(lastAcceptedBlock *types.Block) error {
 	return vm.ctx.Metrics.Register(chainStateMetricsPrefix, chainStateRegisterer)
 }
 
-func (vm *sharedEvm) createConsensusCallbacks() dummy.ConsensusCallbacks {
+func (vm *VM) createConsensusCallbacks() dummy.ConsensusCallbacks {
 	return dummy.ConsensusCallbacks{
 		OnFinalizeAndAssemble: vm.onFinalizeAndAssemble,
 		OnExtraStateChange:    vm.onExtraStateChange,
 	}
 }
 
-func (vm *sharedEvm) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
+func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
 	for {
 		tx, exists := vm.mempool.NextTx()
 		if !exists {
@@ -838,7 +831,7 @@ func (vm *sharedEvm) preBatchOnFinalizeAndAssemble(header *types.Header, state *
 }
 
 // assumes that we are in at least Apricot Phase 5.
-func (vm *sharedEvm) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
+func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
 	var (
 		batchAtomicTxs    []*atomic.Tx
 		batchAtomicUTXOs  set.Set[ids.ID]
@@ -938,14 +931,14 @@ func (vm *sharedEvm) postBatchOnFinalizeAndAssemble(header *types.Header, state 
 	return nil, nil, nil, nil
 }
 
-func (vm *sharedEvm) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
+func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
 	if !vm.chainConfig.IsApricotPhase5(header.Time) {
 		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
 	}
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
 }
 
-func (vm *sharedEvm) onExtraStateChange(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
@@ -1010,7 +1003,7 @@ func (vm *sharedEvm) onExtraStateChange(block *types.Block, state *state.StateDB
 	return batchContribution, batchGasUsed, nil
 }
 
-func (vm *sharedEvm) SetState(_ context.Context, state snow.State) error {
+func (vm *VM) SetState(_ context.Context, state snow.State) error {
 	switch state {
 	case snow.StateSyncing:
 		vm.bootstrapped.Set(false)
@@ -1025,7 +1018,7 @@ func (vm *sharedEvm) SetState(_ context.Context, state snow.State) error {
 }
 
 // onBootstrapStarted marks this VM as bootstrapping
-func (vm *sharedEvm) onBootstrapStarted() error {
+func (vm *VM) onBootstrapStarted() error {
 	vm.bootstrapped.Set(false)
 	if err := vm.Client.Error(); err != nil {
 		return err
@@ -1042,7 +1035,7 @@ func (vm *sharedEvm) onBootstrapStarted() error {
 }
 
 // onNormalOperationsStarted marks this VM as bootstrapped
-func (vm *sharedEvm) onNormalOperationsStarted() error {
+func (vm *VM) onNormalOperationsStarted() error {
 	if vm.bootstrapped.Get() {
 		return nil
 	}
@@ -1056,7 +1049,7 @@ func (vm *sharedEvm) onNormalOperationsStarted() error {
 }
 
 // initBlockBuilding starts goroutines to manage block building
-func (vm *sharedEvm) initBlockBuilding() error {
+func (vm *VM) initBlockBuilding() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
 
@@ -1228,7 +1221,7 @@ func (vm *sharedEvm) initBlockBuilding() error {
 
 // setAppRequestHandlers sets the request handlers for the VM to serve state sync
 // requests.
-func (vm *sharedEvm) setAppRequestHandlers() error {
+func (vm *VM) setAppRequestHandlers() error {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
@@ -1252,14 +1245,14 @@ func (vm *sharedEvm) setAppRequestHandlers() error {
 		vm.blockChain,
 		vm.chaindb,
 		vm.warpBackend,
-		vm.networkCodec,
+		vm.extensionConfig.NetworkCodec,
 		vm.leafRequestTypeConfigs,
 	)
 	vm.Network.SetRequestHandler(networkHandler)
 	return nil
 }
 
-func (vm *sharedEvm) RegisterLeafRequestHandler(nodeType message.NodeType, metricName string, trieDB *triedb.Database, trieKeyLen int, useSnapshot bool) error {
+func (vm *VM) RegisterLeafRequestHandler(nodeType message.NodeType, metricName string, trieDB *triedb.Database, trieKeyLen int, useSnapshot bool) error {
 	if vm.leafRequestTypeConfigs == nil {
 		vm.leafRequestTypeConfigs = make(map[message.NodeType]LeafRequestTypeConfig)
 	}
@@ -1278,7 +1271,7 @@ func (vm *sharedEvm) RegisterLeafRequestHandler(nodeType message.NodeType, metri
 }
 
 // Shutdown implements the snowman.ChainVM interface
-func (vm *sharedEvm) Shutdown(context.Context) error {
+func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
 		return nil
 	}
@@ -1300,11 +1293,11 @@ func (vm *sharedEvm) Shutdown(context.Context) error {
 }
 
 // buildBlock builds a block to be wrapped by ChainState
-func (vm *sharedEvm) buildBlock(ctx context.Context) (snowman.Block, error) {
+func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
 	return vm.buildBlockWithContext(ctx, nil)
 }
 
-func (vm *sharedEvm) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
+func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
 	if proposerVMBlockCtx != nil {
 		log.Debug("Building block with context", "pChainBlockHeight", proposerVMBlockCtx.PChainHeight)
 	} else {
@@ -1355,7 +1348,7 @@ func (vm *sharedEvm) buildBlockWithContext(ctx context.Context, proposerVMBlockC
 }
 
 // parseBlock parses [b] into a block to be wrapped by ChainState.
-func (vm *sharedEvm) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
+func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	ethBlock := new(types.Block)
 	if err := rlp.DecodeBytes(b, ethBlock); err != nil {
 		return nil, err
@@ -1374,7 +1367,7 @@ func (vm *sharedEvm) parseBlock(_ context.Context, b []byte) (snowman.Block, err
 	return block, nil
 }
 
-func (vm *sharedEvm) ParseEthBlock(b []byte) (*types.Block, error) {
+func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 	block, err := vm.parseBlock(context.TODO(), b)
 	if err != nil {
 		return nil, err
@@ -1385,7 +1378,7 @@ func (vm *sharedEvm) ParseEthBlock(b []byte) (*types.Block, error) {
 
 // getBlock attempts to retrieve block [id] from the VM to be wrapped
 // by ChainState.
-func (vm *sharedEvm) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
+func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 	ethBlock := vm.blockChain.GetBlockByHash(common.Hash(id))
 	// If [ethBlock] is nil, return [avalanchedatabase.ErrNotFound] here
 	// so that the miss is considered cacheable.
@@ -1398,7 +1391,7 @@ func (vm *sharedEvm) getBlock(_ context.Context, id ids.ID) (snowman.Block, erro
 
 // GetAcceptedBlock attempts to retrieve block [blkID] from the VM. This method
 // only returns accepted blocks.
-func (vm *sharedEvm) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block, error) {
+func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block, error) {
 	blk, err := vm.GetBlock(ctx, blkID)
 	if err != nil {
 		return nil, err
@@ -1418,7 +1411,7 @@ func (vm *sharedEvm) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowma
 }
 
 // SetPreference sets what the current tail of the chain is
-func (vm *sharedEvm) SetPreference(ctx context.Context, blkID ids.ID) error {
+func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	// Since each internal handler used by [vm.State] always returns a block
 	// with non-nil ethBlock value, GetBlockInternal should never return a
 	// (*Block) with a nil ethBlock value.
@@ -1432,7 +1425,7 @@ func (vm *sharedEvm) SetPreference(ctx context.Context, blkID ids.ID) error {
 
 // VerifyHeightIndex always returns a nil error since the index is maintained by
 // vm.blockChain.
-func (vm *sharedEvm) VerifyHeightIndex(context.Context) error {
+func (vm *VM) VerifyHeightIndex(context.Context) error {
 	return nil
 }
 
@@ -1440,7 +1433,7 @@ func (vm *sharedEvm) VerifyHeightIndex(context.Context) error {
 // Note: the engine assumes that if a block is not found at [height], then
 // [avalanchedatabase.ErrNotFound] will be returned. This indicates that the VM has state
 // synced and does not have all historical blocks available.
-func (vm *sharedEvm) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {
+func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {
 	lastAcceptedBlock := vm.LastAcceptedBlock()
 	if lastAcceptedBlock.Height() < height {
 		return ids.ID{}, avalanchedatabase.ErrNotFound
@@ -1453,7 +1446,7 @@ func (vm *sharedEvm) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.I
 	return ids.ID(hash), nil
 }
 
-func (vm *sharedEvm) Version(context.Context) (string, error) {
+func (vm *VM) Version(context.Context) (string, error) {
 	return Version, nil
 }
 
@@ -1469,7 +1462,7 @@ func newHandler(name string, service interface{}) (http.Handler, error) {
 }
 
 // CreateHandlers makes new http handlers that can handle API calls
-func (vm *sharedEvm) CreateHandlers(context.Context) (map[string]http.Handler, error) {
+func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
 	if vm.config.HttpBodyLimit > 0 {
 		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
@@ -1506,7 +1499,7 @@ func (vm *sharedEvm) CreateHandlers(context.Context) (map[string]http.Handler, e
 	}
 
 	if vm.config.WarpAPIEnabled {
-		warpAPI := warp.NewAPI(vm.ctx, vm.networkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
+		warpAPI := warp.NewAPI(vm.ctx, vm.extensionConfig.NetworkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
 		if err := handler.RegisterName("warp", warpAPI); err != nil {
 			return nil, err
 		}
@@ -1527,7 +1520,7 @@ func (vm *sharedEvm) CreateHandlers(context.Context) (map[string]http.Handler, e
 }
 
 // CreateStaticHandlers makes new http handlers that can handle API calls
-func (vm *sharedEvm) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
+func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(0)
 	if vm.config.HttpBodyLimit > 0 {
 		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
@@ -1550,7 +1543,7 @@ func (vm *sharedEvm) CreateStaticHandlers(context.Context) (map[string]http.Hand
 
 // getAtomicTx returns the requested transaction, status, and height.
 // If the status is Unknown, then the returned transaction will be nil.
-func (vm *sharedEvm) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
+func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
 	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
 		return tx, atomic.Accepted, height, nil
 	} else if err != avalanchedatabase.ErrNotFound {
@@ -1569,7 +1562,7 @@ func (vm *sharedEvm) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64
 
 // ParseAddress takes in an address and produces the ID of the chain it's for
 // the ID of the address
-func (vm *sharedEvm) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
+func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 	chainIDAlias, hrp, addrBytes, err := address.Parse(addrStr)
 	if err != nil {
 		return ids.ID{}, ids.ShortID{}, err
@@ -1594,7 +1587,7 @@ func (vm *sharedEvm) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
 }
 
 // verifyTxAtTip verifies that [tx] is valid to be issued on top of the currently preferred block
-func (vm *sharedEvm) verifyTxAtTip(tx *atomic.Tx) error {
+func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	if txByteLen := len(tx.SignedBytes()); txByteLen > targetAtomicTxsSize {
 		return fmt.Errorf("tx size (%d) exceeds total atomic txs size target (%d)", txByteLen, targetAtomicTxsSize)
 	}
@@ -1635,7 +1628,7 @@ func (vm *sharedEvm) verifyTxAtTip(tx *atomic.Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *sharedEvm) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1660,7 +1653,7 @@ func (vm *sharedEvm) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *bi
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
-func (vm *sharedEvm) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
+func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
 		return errRejectedParent
@@ -1707,7 +1700,7 @@ func (vm *sharedEvm) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee
 
 // GetAtomicUTXOs returns the utxos that at least one of the provided addresses is
 // referenced in.
-func (vm *sharedEvm) GetAtomicUTXOs(
+func (vm *VM) GetAtomicUTXOs(
 	chainID ids.ID,
 	addrs set.Set[ids.ShortID],
 	startAddr ids.ShortID,
@@ -1730,7 +1723,7 @@ func (vm *sharedEvm) GetAtomicUTXOs(
 }
 
 // currentRules returns the chain rules for the current block.
-func (vm *sharedEvm) currentRules() params.Rules {
+func (vm *VM) currentRules() params.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
 	return vm.chainConfig.Rules(header.Number, header.Time)
 }
@@ -1738,7 +1731,7 @@ func (vm *sharedEvm) currentRules() params.Rules {
 // requirePrimaryNetworkSigners returns true if warp messages from the primary
 // network must be signed by the primary network validators.
 // This is necessary when the subnet is not validating the primary network.
-func (vm *sharedEvm) requirePrimaryNetworkSigners() bool {
+func (vm *VM) requirePrimaryNetworkSigners() bool {
 	switch c := vm.currentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
 	case *warpcontract.Config:
 		return c.RequirePrimaryNetworkSigners
@@ -1747,7 +1740,7 @@ func (vm *sharedEvm) requirePrimaryNetworkSigners() bool {
 	}
 }
 
-func (vm *sharedEvm) startContinuousProfiler() {
+func (vm *VM) startContinuousProfiler() {
 	// If the profiler directory is empty, return immediately
 	// without creating or starting a continuous profiler.
 	if vm.config.ContinuousProfilerDir == "" {
@@ -1777,7 +1770,7 @@ func (vm *sharedEvm) startContinuousProfiler() {
 // last accepted block hash and height by reading directly from [vm.chaindb] instead of relying
 // on [chain].
 // Note: assumes [vm.chaindb] and [vm.genesisHash] have been initialized.
-func (vm *sharedEvm) readLastAccepted() (common.Hash, uint64, error) {
+func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 	// Attempt to load last accepted block to determine if it is necessary to
 	// initialize state with the genesis block.
 	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
@@ -1836,7 +1829,7 @@ func attachEthService(handler *rpc.Server, apis []rpc.API, names []string) error
 	return nil
 }
 
-func (vm *sharedEvm) stateSyncEnabled(lastAcceptedHeight uint64) bool {
+func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 	if vm.config.StateSyncEnabled != nil {
 		// if the config is set, use that
 		return *vm.config.StateSyncEnabled
@@ -1846,7 +1839,7 @@ func (vm *sharedEvm) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 	return lastAcceptedHeight == 0
 }
 
-func (vm *sharedEvm) newImportTx(
+func (vm *VM) newImportTx(
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
 	baseFee *big.Int, // fee to use post-AP3
@@ -1866,7 +1859,7 @@ func (vm *sharedEvm) newImportTx(
 }
 
 // newExportTx returns a new ExportTx
-func (vm *sharedEvm) newExportTx(
+func (vm *VM) newExportTx(
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export
 	chainID ids.ID, // Chain to send the UTXOs to
@@ -1898,6 +1891,6 @@ func (vm *sharedEvm) newExportTx(
 	return tx, nil
 }
 
-func (vm *sharedEvm) PutLastAcceptedID(ID ids.ID) error {
+func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
 	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
 }

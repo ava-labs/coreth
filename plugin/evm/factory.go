@@ -19,13 +19,20 @@ var (
 	_ vms.Factory = &Factory{}
 )
 
-// TODO: either move this from plugin or move the VM itself
 type Factory struct{}
 
 func (*Factory) New(logging.Logger) (interface{}, error) {
-	return atomicvm.WrapVM(newExtensibleEVM(false)), nil
+	extensionCfg, err := atomicvm.NewAtomicExtensionConfig()
+	if err != nil {
+		return nil, err
+	}
+	return atomicvm.WrapVM(NewExtensibleEVM(false, extensionCfg)), nil
 }
 
-func NewPluginVM() block.ChainVM {
-	return atomicvm.WrapVM(newExtensibleEVM(true))
+func NewPluginVM() (block.ChainVM, error) {
+	extensionCfg, err := atomicvm.NewAtomicExtensionConfig()
+	if err != nil {
+		return nil, err
+	}
+	return atomicvm.WrapVM(NewExtensibleEVM(true, extensionCfg)), nil
 }

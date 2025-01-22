@@ -27,6 +27,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
@@ -223,16 +224,15 @@ func setupGenesis(
 
 // newDefaultTestVM returns a new instance of the VM with default extensions
 // This should not be called if the VM is being extended
-func newDefaultTestVM() *sharedEvm {
-	vm := &sharedEvm{}
+func newDefaultTestVM() *VM {
 	defaultCodec, err := message.NewCodec(message.BlockSyncSummary{})
 	if err != nil {
 		panic(err)
 	}
-	if err := vm.SetNetworkCodec(defaultCodec); err != nil {
-		panic(err)
-	}
-	return vm
+
+	return NewExtensibleEVM(false, extension.ExtensionConfig{
+		NetworkCodec: defaultCodec,
+	})
 }
 
 // GenesisVM creates a VM instance with the genesis test bytes and returns
@@ -246,7 +246,7 @@ func GenesisVM(t *testing.T,
 	upgradeJSON string,
 ) (
 	chan commonEng.Message,
-	*sharedEvm,
+	*VM,
 	database.Database,
 	*avalancheatomic.Memory,
 	*enginetest.Sender,
@@ -265,7 +265,7 @@ func GenesisVMWithClock(
 	clock mockable.Clock,
 ) (
 	chan commonEng.Message,
-	*sharedEvm,
+	*VM,
 	database.Database,
 	*avalancheatomic.Memory,
 	*enginetest.Sender,
@@ -335,7 +335,7 @@ func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.I
 // GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map
 // Generates UTXOIDs by using a hash of the address in the [utxos] map such that the UTXOs will be generated deterministically.
 // If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
-func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (chan commonEng.Message, *sharedEvm, database.Database, *avalancheatomic.Memory, *enginetest.Sender) {
+func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (chan commonEng.Message, *VM, database.Database, *avalancheatomic.Memory, *enginetest.Sender) {
 	issuer, vm, db, sharedMemory, sender := GenesisVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON)
 	for addr, avaxAmount := range utxos {
 		txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
@@ -977,8 +977,8 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 	kc := secp256k1fx.NewKeychain(testKeys...)
 
-	for name, issueTxs := range map[string]func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
-		"single UTXO override": func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+	for name, issueTxs := range map[string]func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
+		"single UTXO override": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
 			if err != nil {
 				t.Fatal(err)
@@ -1001,7 +1001,7 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 
 			return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
 		},
-		"one of two UTXOs overrides": func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+		"one of two UTXOs overrides": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo1, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
 			if err != nil {
 				t.Fatal(err)
@@ -1028,7 +1028,7 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 
 			return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
 		},
-		"hola": func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+		"hola": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo1, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
 			if err != nil {
 				t.Fatal(err)

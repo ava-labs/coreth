@@ -509,7 +509,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 }
 
 func testReceiveWarpMessage(
-	t *testing.T, issuer chan commonEng.Message, vm *sharedEvm,
+	t *testing.T, issuer chan commonEng.Message, vm *VM,
 	sourceChainID ids.ID,
 	msgFrom warpMsgFrom, useSigners useWarpMsgSigners,
 	blockTime time.Time,

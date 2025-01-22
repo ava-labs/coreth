@@ -29,5 +29,10 @@ func main() {
 		fmt.Printf("failed to set fd limit correctly due to: %s", err)
 		os.Exit(1)
 	}
-	rpcchainvm.Serve(context.Background(), evm.NewPluginVM())
+	vm, err := evm.NewPluginVM()
+	if err != nil {
+		fmt.Printf("couldn't create evm plugin: %s", err)
+		os.Exit(1)
+	}
+	rpcchainvm.Serve(context.Background(), vm)
 }

@@ -14,7 +14,7 @@ import (
 // ParseServiceAddress get address ID from address string, being it either localized (using address manager,
 // doing also components validations), or not localized.
 // If both attempts fail, reports error from localized address parsing
-func (vm *sharedEvm) ParseServiceAddress(addrStr string) (ids.ShortID, error) {
+func (vm *VM) ParseServiceAddress(addrStr string) (ids.ShortID, error) {
 	addr, err := ids.ShortFromString(addrStr)
 	if err == nil {
 		return addr, nil
@@ -23,7 +23,7 @@ func (vm *sharedEvm) ParseServiceAddress(addrStr string) (ids.ShortID, error) {
 }
 
 // ParseLocalAddress takes in an address for this chain and produces the ID
-func (vm *sharedEvm) ParseLocalAddress(addrStr string) (ids.ShortID, error) {
+func (vm *VM) ParseLocalAddress(addrStr string) (ids.ShortID, error) {
 	chainID, addr, err := vm.ParseAddress(addrStr)
 	if err != nil {
 		return ids.ShortID{}, err
@@ -36,13 +36,13 @@ func (vm *sharedEvm) ParseLocalAddress(addrStr string) (ids.ShortID, error) {
 }
 
 // FormatLocalAddress takes in a raw address and produces the formatted address
-func (vm *sharedEvm) FormatLocalAddress(addr ids.ShortID) (string, error) {
+func (vm *VM) FormatLocalAddress(addr ids.ShortID) (string, error) {
 	return vm.FormatAddress(vm.ctx.ChainID, addr)
 }
 
 // FormatAddress takes in a chainID and a raw address and produces the formatted
 // address
-func (vm *sharedEvm) FormatAddress(chainID ids.ID, addr ids.ShortID) (string, error) {
+func (vm *VM) FormatAddress(chainID ids.ID, addr ids.ShortID) (string, error) {
 	chainIDAlias, err := vm.ctx.BCLookup.PrimaryAlias(chainID)
 	if err != nil {
 		return "", err

@@ -79,14 +79,14 @@ func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 
 type atomicTxTest struct {
 	// setup returns the atomic transaction for the test
-	setup func(t *testing.T, vm *sharedEvm, sharedMemory *avalancheatomic.Memory) *atomic.Tx
+	setup func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
 	// define a string that should be contained in the error message if the tx fails verification
 	// at some point. If the strings are empty, then the tx should pass verification at the
 	// respective step.
 	semanticVerifyErr, evmStateTransferErr, acceptErr string
 	// checkState is called iff building and verifying a block containing the transaction is successful. Verifies
 	// the state of the VM following the block's acceptance.
-	checkState func(t *testing.T, vm *sharedEvm)
+	checkState func(t *testing.T, vm *VM)
 
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool

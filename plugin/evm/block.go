@@ -112,12 +112,12 @@ func readMainnetBonusBlocks() (map[uint64]ids.ID, error) {
 type Block struct {
 	id        ids.ID
 	ethBlock  *types.Block
-	vm        *sharedEvm
+	vm        *VM
 	atomicTxs []*atomic.Tx
 }
 
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
-func (vm *sharedEvm) newBlock(ethBlock *types.Block) (*Block, error) {
+func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(ethBlock.Time())
 	atomicTxs, err := atomic.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, atomic.Codec)
 	if err != nil {

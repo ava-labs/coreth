@@ -15,11 +15,11 @@ import (
 
 // Admin is the API service for admin API calls
 type Admin struct {
-	vm       *sharedEvm
+	vm       *VM
 	profiler profiler.Profiler
 }
 
-func newAdminService(vm *sharedEvm, performanceDir string) *Admin {
+func newAdminService(vm *VM, performanceDir string) *Admin {
 	return &Admin{
 		vm:       vm,
 		profiler: profiler.New(performanceDir),

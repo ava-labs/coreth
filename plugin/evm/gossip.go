@@ -220,7 +220,7 @@ func (tx *GossipEthTx) GossipID() ids.ID {
 // EthPushGossiper is used by the ETH backend to push transactions issued over
 // the RPC and added to the mempool to peers.
 type EthPushGossiper struct {
-	vm *sharedEvm
+	vm *VM
 }
 
 func (e *EthPushGossiper) Add(tx *types.Transaction) {
