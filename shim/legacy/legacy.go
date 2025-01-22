@@ -22,6 +22,7 @@ type Legacy struct {
 	dereference              bool
 	trackDeletedTries        ethdb.KeyValueStore
 	accountRootCheckDisabled bool
+	needsCommit              bool
 }
 
 func New(triedb *triedb.Database, root common.Hash, count uint64, dereference bool) *Legacy {
@@ -228,10 +229,15 @@ func (l *Legacy) Update(ks, vs [][]byte) ([]byte, error) {
 	// TODO: fix hashdb scheme later
 	l.root = next
 	l.count++
+	l.needsCommit = true
 	return next[:], nil
 }
 
 func (l *Legacy) Commit(rootBytes []byte) error {
+	if !l.needsCommit {
+		fmt.Println("::: no need to commit")
+		return nil
+	}
 	root := common.BytesToHash(rootBytes)
 	return l.triedb.Commit(root, false)
 }
