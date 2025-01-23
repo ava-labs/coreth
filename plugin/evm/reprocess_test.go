@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/histogram"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -623,6 +624,9 @@ func TestCheckSnapshot(t *testing.T) {
 func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 	t.Helper()
 
+	accountHist := histogram.NewFast()
+	storageHist := histogram.NewFast()
+
 	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 	defer it.Release()
 	accounts := 0
@@ -631,6 +635,7 @@ func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 			continue
 		}
 		accounts++
+		accountHist.Update(float64(len(it.Value())))
 		if log {
 			t.Logf("Snapshot (account): %x, %x\n", it.Key(), it.Value())
 		}
@@ -644,9 +649,16 @@ func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 			continue
 		}
 		storages++
+		storageHist.Update(float64(len(it2.Value())))
 		if log {
 			t.Logf("Snapshot (storage): %x, %x", it2.Key(), it2.Value())
 		}
+	}
+
+	quantiles := []float64{0.5, 0.9, 0.99, 0.999}
+	for _, q := range quantiles {
+		t.Logf("Snapshot quantile %v (account): %.2f", q, accountHist.Quantile(q))
+		t.Logf("Snapshot quantile %v (storage): %.2f", q, storageHist.Quantile(q))
 	}
 	return accounts, storages
 }
