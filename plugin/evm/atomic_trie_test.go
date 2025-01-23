@@ -5,20 +5,24 @@ package evm
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
 	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -587,6 +591,170 @@ func TestApplyToSharedMemory(t *testing.T) {
 			hasMarker, err = atomicTrie.metadataDB.Has(appliedSharedMemoryCursorKey)
 			assert.NoError(t, err)
 			assert.False(t, hasMarker)
+		})
+	}
+}
+
+func Test_atomicTrie_AcceptTrie(t *testing.T) {
+	t.Parallel()
+
+	metadataHexPrefix := hex.EncodeToString(prefixdb.MakePrefix(atomicTrieMetaDBPrefix))
+
+	testCases := map[string]struct {
+		lastAcceptedRoot        common.Hash
+		lastCommittedRoot       common.Hash
+		lastCommittedHeight     uint64
+		commitInterval          uint64
+		height                  uint64
+		root                    common.Hash
+		wantHasCommitted        bool
+		wantErr                 string
+		wantLastCommittedHeight uint64
+		wantLastCommittedRoot   common.Hash
+		wantLastAcceptedRoot    common.Hash
+		wantTipBufferRoot       common.Hash
+		wantKeyValuePairs       map[string]string
+	}{
+		"no_committing": {
+			lastAcceptedRoot:        types.EmptyRootHash,
+			lastCommittedRoot:       common.Hash{2},
+			lastCommittedHeight:     100,
+			commitInterval:          10,
+			height:                  105,
+			root:                    common.Hash{3},
+			wantLastCommittedHeight: 100,
+			wantLastCommittedRoot:   common.Hash{2},
+			wantLastAcceptedRoot:    common.Hash{3},
+			wantTipBufferRoot:       common.Hash{3},
+			wantKeyValuePairs: map[string]string{
+				metadataHexPrefix + "0000000000000064":// height 100
+				"0200000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
+			},
+		},
+		"no_committing_with_previous_root": {
+			lastAcceptedRoot:        common.Hash{1},
+			lastCommittedRoot:       common.Hash{2},
+			lastCommittedHeight:     100,
+			commitInterval:          10,
+			height:                  105,
+			root:                    common.Hash{3},
+			wantLastCommittedHeight: 100,
+			wantLastCommittedRoot:   common.Hash{2},
+			wantLastAcceptedRoot:    common.Hash{3},
+			wantTipBufferRoot:       common.Hash{3},
+			wantKeyValuePairs: map[string]string{
+				metadataHexPrefix + "0000000000000064":// height 100
+				"0200000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
+			},
+		},
+		"commit_all_up_to_height_without_height": {
+			lastAcceptedRoot:        types.EmptyRootHash,
+			lastCommittedRoot:       common.Hash{2},
+			lastCommittedHeight:     60,
+			commitInterval:          10,
+			height:                  105,
+			root:                    common.Hash{3},
+			wantHasCommitted:        true,
+			wantLastCommittedHeight: 100,
+			wantLastCommittedRoot:   types.EmptyRootHash,
+			wantLastAcceptedRoot:    common.Hash{3},
+			wantTipBufferRoot:       common.Hash{3},
+			wantKeyValuePairs: map[string]string{
+				metadataHexPrefix + "000000000000003c":// height 60
+				"0200000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + "0000000000000046":// height 70
+				hex.EncodeToString(types.EmptyRootHash[:]),
+				metadataHexPrefix + "0000000000000050":// height 80
+				hex.EncodeToString(types.EmptyRootHash[:]),
+				metadataHexPrefix + "000000000000005a":// height 90
+				hex.EncodeToString(types.EmptyRootHash[:]),
+				metadataHexPrefix + "0000000000000064":// height 100
+				hex.EncodeToString(types.EmptyRootHash[:]),
+				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
+			},
+		},
+		"commit_root": {
+			lastAcceptedRoot:        types.EmptyRootHash,
+			lastCommittedRoot:       common.Hash{2},
+			lastCommittedHeight:     100,
+			commitInterval:          10,
+			height:                  110,
+			root:                    common.Hash{3},
+			wantHasCommitted:        true,
+			wantLastCommittedHeight: 110,
+			wantLastCommittedRoot:   common.Hash{3},
+			wantLastAcceptedRoot:    common.Hash{3},
+			wantTipBufferRoot:       common.Hash{3},
+			wantKeyValuePairs: map[string]string{
+				metadataHexPrefix + "0000000000000064":// height 100
+				"0200000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + "000000000000006e":// height 110
+				"0300000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "000000000000006e", // height 110
+			},
+		},
+		"commit_root_with_previous_root": {
+			lastAcceptedRoot:        common.Hash{1},
+			lastCommittedRoot:       common.Hash{2},
+			lastCommittedHeight:     100,
+			commitInterval:          10,
+			height:                  110,
+			root:                    common.Hash{3},
+			wantHasCommitted:        true,
+			wantLastCommittedHeight: 110,
+			wantLastCommittedRoot:   common.Hash{3},
+			wantLastAcceptedRoot:    common.Hash{3},
+			wantTipBufferRoot:       common.Hash{3},
+			wantKeyValuePairs: map[string]string{
+				metadataHexPrefix + "0000000000000064":// height 100
+				"0200000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + "000000000000006e":// height 110
+				"0300000000000000000000000000000000000000000000000000000000000000",
+				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "000000000000006e", // height 110
+			},
+		},
+	}
+
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			versionDB := versiondb.New(memdb.New())
+			atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, versionDB)
+			metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, versionDB)
+			const lastAcceptedHeight = 0 // no effect
+			atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, atomic.TestTxCodec,
+				lastAcceptedHeight, testCase.commitInterval)
+			atomicTrie.lastAcceptedRoot = testCase.lastAcceptedRoot
+			if testCase.lastAcceptedRoot != types.EmptyRootHash {
+				atomicTrie.tipBuffer.Insert(testCase.lastAcceptedRoot)
+			}
+			atomicTrie.updateLastCommitted(testCase.lastCommittedRoot, testCase.lastCommittedHeight)
+			require.NoError(t, err)
+
+			hasCommitted, err := atomicTrie.AcceptTrie(testCase.height, testCase.root)
+			if testCase.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, testCase.wantErr)
+			}
+
+			assert.Equal(t, testCase.wantHasCommitted, hasCommitted)
+			assert.Equal(t, testCase.wantLastCommittedHeight, atomicTrie.lastCommittedHeight)
+			assert.Equal(t, testCase.wantLastCommittedRoot, atomicTrie.lastCommittedRoot)
+			assert.Equal(t, testCase.wantLastAcceptedRoot, atomicTrie.lastAcceptedRoot)
+			tipBufferRoot, ok := atomicTrie.tipBuffer.Last()
+			require.True(t, ok)
+			assert.Equal(t, testCase.wantTipBufferRoot, tipBufferRoot)
+
+			keyValuePairs := make(map[string]string, len(testCase.wantKeyValuePairs))
+			it := versionDB.NewIterator()
+			for it.Next() {
+				keyValuePairs[hex.EncodeToString(it.Key())] = hex.EncodeToString(it.Value())
+			}
+			assert.Equal(t, testCase.wantKeyValuePairs, keyValuePairs)
 		})
 	}
 }
