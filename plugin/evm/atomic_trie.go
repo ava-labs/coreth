@@ -343,8 +343,7 @@ func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 
 // AcceptTrie commits the triedb at [root] if needed and returns true if a commit
 // was performed.
-func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
-	hasCommitted := false
+func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (hasCommitted bool, err error) {
 	// Because we do not accept the trie at every height, we may need to
 	// populate roots at prior commit heights that were skipped.
 	for nextCommitHeight := a.lastCommittedHeight + a.commitInterval; nextCommitHeight < height; nextCommitHeight += a.commitInterval {
@@ -354,10 +353,12 @@ func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 		hasCommitted = true
 	}
 
-	// Attempt to dereference roots at least [tipBufferSize] old
-	//
-	// Note: It is safe to dereference roots that have been committed to disk
-	// (they are no-ops).
+	// The following dereferences, if any, the previously inserted root.
+	// This one can be dereferenced whether it has been:
+	// - committed, in which case the dereference is a no-op
+	// - not committted, in which case the current root we are inserting contains
+	//   references all the relevant data from the previous root, so the previous
+	//   root can be dereferenced.
 	a.tipBuffer.Insert(root)
 
 	// Commit this root if we have reached the [commitInterval].
