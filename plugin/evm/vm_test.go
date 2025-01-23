@@ -375,6 +375,12 @@ func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON stri
 	return issuer, vm, db, sharedMemory, sender
 }
 
+// resetMetrics resets the vm avalanchego metrics, and allows
+// for the VM to be re-initialized in tests.
+func resetMetrics(vm *VM) {
+	vm.ctx.Metrics = metrics.NewPrefixGatherer()
+}
+
 func TestVMConfig(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
@@ -3798,15 +3804,13 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 
-	// Reset metrics to allow re-initialization
-	vm.ctx.Metrics = metrics.NewPrefixGatherer()
+	resetMetrics(vm)
 
 	// this will not be allowed
 	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, appSender)
 	require.ErrorContains(t, err, "mismatching ApricotPhase2 fork block timestamp in database")
 
-	// Reset metrics to allow re-initialization
-	vm.ctx.Metrics = metrics.NewPrefixGatherer()
+	resetMetrics(vm)
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)
