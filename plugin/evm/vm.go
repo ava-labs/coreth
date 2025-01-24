@@ -1079,7 +1079,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	ethTxPushGossiper := vm.ethTxPushGossiper.Get()
-	if ethTxPushGossiper == nil {
+	if ethTxPushGossiper == nil && !vm.config.DisableGossip {
 		ethTxPushGossiper, err = gossip.NewPushGossiper[*GossipEthTx](
 			ethTxGossipMarshaller,
 			ethTxPool,
@@ -1098,7 +1098,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 	}
 
-	if vm.atomicTxPushGossiper == nil {
+	if vm.atomicTxPushGossiper == nil && !vm.config.DisableGossip {
 		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.GossipAtomicTx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1121,7 +1121,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder.awaitSubmittedTxs()
 
 	if vm.ethTxGossipHandler == nil {
-		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
+		handler := newTxGossipHandler[*GossipEthTx](
 			vm.ctx.Log,
 			ethTxGossipMarshaller,
 			ethTxPool,
@@ -1131,6 +1131,10 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipThrottlingLimit,
 			vm.p2pValidators,
 		)
+		if vm.config.DisableGossip {
+			handler.appRequestHandler = nil // disable responding to pull gossip requests
+		}
+		vm.ethTxGossipHandler = handler
 	}
 
 	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, vm.ethTxGossipHandler); err != nil {
@@ -1138,7 +1142,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler = newTxGossipHandler[*atomic.GossipAtomicTx](
+		handler := newTxGossipHandler[*atomic.GossipAtomicTx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1148,10 +1152,18 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipThrottlingLimit,
 			vm.p2pValidators,
 		)
+		if vm.config.DisableGossip {
+			handler.appRequestHandler = nil // disable responding to pull gossip requests
+		}
+		vm.atomicTxGossipHandler = handler
 	}
 
 	if err := vm.Network.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
+	}
+
+	if vm.config.DisableGossip {
+		return nil // Disable periodic push and pull gossip
 	}
 
 	if vm.ethTxPullGossiper == nil {

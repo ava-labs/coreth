@@ -88,6 +88,9 @@ func (t txGossipHandler) AppGossip(ctx context.Context, nodeID ids.NodeID, gossi
 }
 
 func (t txGossipHandler) AppRequest(ctx context.Context, nodeID ids.NodeID, deadline time.Time, requestBytes []byte) ([]byte, *common.AppError) {
+	if t.appRequestHandler == nil {
+		return nil, nil
+	}
 	return t.appRequestHandler.AppRequest(ctx, nodeID, deadline, requestBytes)
 }
 

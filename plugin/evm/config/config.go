@@ -168,6 +168,7 @@ type Config struct {
 	PullGossipFrequency       Duration `json:"pull-gossip-frequency"`
 	RegossipFrequency         Duration `json:"regossip-frequency"`
 	TxRegossipFrequency       Duration `json:"tx-regossip-frequency"` // Deprecated: use RegossipFrequency instead
+	DisableGossip             bool     `json:"disable-gossip"`        // If true, disables gossiping of transactions
 
 	// Log
 	LogLevel      string `json:"log-level"`

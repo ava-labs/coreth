@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -73,6 +75,11 @@ func getValidEthTxs(key *ecdsa.PrivateKey, count int, gasPrice *big.Int) []*type
 // show that a geth tx discovered from gossip is requested to the same node that
 // gossiped it
 func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
+	testMempoolEthTxsAppGossipHandling(t, false)
+	testMempoolEthTxsAppGossipHandling(t, true)
+}
+
+func testMempoolEthTxsAppGossipHandling(t *testing.T, disabled bool) {
 	assert := assert.New(t)
 
 	key, err := crypto.GenerateKey()
@@ -83,7 +90,8 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
 	assert.NoError(err)
 
-	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, "", "")
+	config := fmt.Sprintf(`{"disable-gossip":%v}`, disabled)
+	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, config, "")
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
@@ -116,10 +124,11 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	assert.False(txRequested, "tx should not be requested")
 
 	// wait for transaction to be re-gossiped
-	attemptAwait(t, &wg, 5*time.Second)
+	got := attemptAwait(&wg, 5*time.Second)
+	require.Equal(t, !disabled, got)
 }
 
-func attemptAwait(t *testing.T, wg *sync.WaitGroup, delay time.Duration) {
+func attemptAwait(wg *sync.WaitGroup, delay time.Duration) bool {
 	ticker := make(chan struct{})
 
 	// Wait for [wg] and then close [ticket] to indicate that
@@ -131,8 +140,8 @@ func attemptAwait(t *testing.T, wg *sync.WaitGroup, delay time.Duration) {
 
 	select {
 	case <-time.After(delay):
-		t.Fatal("Timed out waiting for wait group to complete")
+		return false // Didn't get the tx
 	case <-ticker:
-		// The wait group completed without issue
+		return true // Got the tx
 	}
 }
