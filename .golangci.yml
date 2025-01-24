@@ -28,6 +28,5 @@ linters:
 
 linters-settings:
   goconst:
-    min-len: 3 # minimum length of string constant
     min-occurrences: 6 # minimum number of occurrences
     ignore-tests: true
