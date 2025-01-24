@@ -14,8 +14,3 @@ linters:
     - unconvert
     - unused
     - whitespace
-
-linters-settings:
-  goconst:
-    min-occurrences: 6 # minimum number of occurrences
-    ignore-tests: true
