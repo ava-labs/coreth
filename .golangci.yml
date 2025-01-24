@@ -25,8 +25,3 @@ linters:
     - reassign
     - mirror
     - tenv
-
-linters-settings:
-  goconst:
-    min-occurrences: 6 # minimum number of occurrences
-    ignore-tests: true
