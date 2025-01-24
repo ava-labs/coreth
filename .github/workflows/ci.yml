@@ -45,6 +45,7 @@ jobs:
         with:
           version: v1.56
           working-directory: .
+          only-new-issues: true
           args: --timeout 3m
           skip-pkg-cache: true
       - name: Run shellcheck
