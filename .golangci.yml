@@ -8,7 +8,12 @@ issues:
 
 linters:
   enable:
+    - errorlint
     - goimports
     - misspell
     - unconvert
     - whitespace
+
+linters-settings:
+  errorlint:
+    errorf: false
