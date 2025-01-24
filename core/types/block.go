@@ -37,15 +37,6 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-// Body is a simple (mutable, non-safe) data container for storing and moving
-// a block's data contents (transactions and uncles) together.
-type Body struct {
-	Transactions []*Transaction
-	Uncles       []*Header
-	Version      uint32
-	ExtData      *[]byte `rlp:"nil"`
-}
-
 // Block represents an Ethereum block.
 //
 // Note the Block type tries to be 'immutable', and contains certain caches that rely
@@ -152,7 +143,15 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.version, b.extdata}
+	body := &Body{
+		Transactions: b.transactions,
+		Uncles:       b.uncles,
+	}
+	extra := &BodyExtra{
+		Version: b.version,
+		ExtData: b.extdata,
+	}
+	return WithBodyExtra(body, extra)
 }
 
 // Accessors for body data. These do not return a copy because the content

@@ -14,6 +14,7 @@ type (
 	AccessTuple       = ethtypes.AccessTuple
 	AccessListTx      = ethtypes.AccessListTx
 	Bloom             = ethtypes.Bloom
+	Body              = ethtypes.Body
 	Receipt           = ethtypes.Receipt
 	Receipts          = ethtypes.Receipts
 	ReceiptForStorage = ethtypes.ReceiptForStorage
