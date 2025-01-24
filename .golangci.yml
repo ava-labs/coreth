@@ -7,13 +7,8 @@ issues:
   new: true
 
 linters:
-  disable-all: true
   enable:
     - goimports
-    - gosimple
-    - govet
-    - ineffassign
     - misspell
     - unconvert
-    - unused
     - whitespace
