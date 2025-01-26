@@ -107,13 +107,22 @@ func (n *Nomt) Update(ks, vs [][]byte) ([]byte, error) {
 	req := &nomt.Request{
 		Request: &nomt.Request_Update{
 			Update: &nomt.UpdateRequest{
-				Items: make([]*nomt.UpdateRequestItem, len(ks)),
+				Items: make([]*nomt.UpdateRequestItem, 0, len(ks)),
 			},
 		},
 	}
 
+	seen := make(map[string]struct{})
 	for i, k := range ks {
-		req.GetUpdate().Items[i] = &nomt.UpdateRequestItem{Key: k, Value: vs[i]}
+		_, found := seen[string(k)]
+		if found {
+			continue
+		}
+		req.GetUpdate().Items = append(
+			req.GetUpdate().Items,
+			&nomt.UpdateRequestItem{Key: k, Value: vs[i]},
+		)
+		seen[string(k)] = struct{}{}
 	}
 
 	resp, err := n.response(req)
