@@ -242,7 +242,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			if err != nil {
 				return err
 			}
-			totalGasUsed, err = safemath.Add64(totalGasUsed, gasUsed)
+			totalGasUsed, err = safemath.Add(totalGasUsed, gasUsed)
 			if err != nil {
 				return err
 			}
