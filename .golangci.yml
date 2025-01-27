@@ -10,6 +10,7 @@ linters:
   enable:
     - copyloopvar
     - errorlint
+    - exptostd
     - goimports
     - gosec
     - misspell
