@@ -13,6 +13,7 @@ linters:
     - misspell
     - nolintlint
     - unconvert
+    - wastedassign
     - whitespace
 
 linters-settings:
