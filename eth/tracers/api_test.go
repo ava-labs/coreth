@@ -181,7 +181,7 @@ func (b *testBackend) StateAtNextBlock(ctx context.Context, parent, nextBlock *t
 		return nil, nil, err
 	}
 	// Apply upgrades to the parent state
-	err = core.ApplyUpgrades(b.chainConfig, &parent.Header().Time, nextBlock, statedb)
+	err = core.ApplyUpgrades(b.chainConfig, &parent.Header().Time, nextBlock.Number(), nextBlock.Time(), statedb)
 	if err != nil {
 		release()
 		return nil, nil, err
