@@ -11,6 +11,7 @@ linters:
     - copyloopvar
     - errorlint
     - goimports
+    - gosec
     - misspell
     - nolintlint
     - unconvert
