@@ -753,7 +753,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 		appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			calledSendAppResponseFn = true
 			var response message.SignatureResponse
-			_, err := message.Codec.Unmarshal(responseBytes, &response)
+			_, err := networkCodec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedResponse, response.Signature)
 
@@ -764,7 +764,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 				MessageID: test.messageID,
 			}
 
-			requestBytes, err := message.Codec.Marshal(message.Version, &signatureRequest)
+			requestBytes, err := networkCodec.Marshal(message.Version, &signatureRequest)
 			require.NoError(t, err)
 
 			// Send the app request and make sure we called SendAppResponseFn
@@ -811,7 +811,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 		appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			calledSendAppResponseFn = true
 			var response message.SignatureResponse
-			_, err := message.Codec.Unmarshal(responseBytes, &response)
+			_, err := networkCodec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedResponse, response.Signature)
 
@@ -822,7 +822,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 				BlockID: test.blockID,
 			}
 
-			requestBytes, err := message.Codec.Marshal(message.Version, &signatureRequest)
+			requestBytes, err := networkCodec.Marshal(message.Version, &signatureRequest)
 			require.NoError(t, err)
 
 			// Send the app request and make sure we called SendAppResponseFn

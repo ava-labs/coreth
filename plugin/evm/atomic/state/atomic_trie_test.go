@@ -1,7 +1,7 @@
 // (c) 2020-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package state
 
 import (
 	"encoding/binary"
@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -20,24 +21,18 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 const testCommitInterval = 100
 
-func mustAtomicOps(tx *atomic.Tx) map[ids.ID]*avalancheatomic.Requests {
-	id, reqs, err := tx.AtomicOps()
-	if err != nil {
-		panic(err)
-	}
-	return map[ids.ID]*avalancheatomic.Requests{id: reqs}
-}
-
 // indexAtomicTxs updates [tr] with entries in [atomicOps] at height by creating
 // a new snapshot, calculating a new root, and calling InsertTrie followed
 // by AcceptTrie on the new root.
-func indexAtomicTxs(tr AtomicTrie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
+func indexAtomicTxs(tr *AtomicTrie, height uint64, atomicOps map[ids.ID]*avalancheatomic.Requests) error {
 	snapshot, err := tr.OpenTrie(tr.LastAcceptedRoot())
 	if err != nil {
 		return err
@@ -139,8 +134,7 @@ func TestAtomicTrieInitialize(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			db := versiondb.New(memdb.New())
-			codec := atomic.TestTxCodec
-			repo, err := NewAtomicTxRepository(db, codec, test.lastAcceptedHeight)
+			repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, test.lastAcceptedHeight)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -148,7 +142,7 @@ func TestAtomicTrieInitialize(t *testing.T) {
 			writeTxs(t, repo, 1, test.lastAcceptedHeight+1, test.numTxsPerBlock, nil, operationsMap)
 
 			// Construct the atomic trie for the first time
-			atomicBackend1, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
+			atomicBackend1, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -161,10 +155,10 @@ func TestAtomicTrieInitialize(t *testing.T) {
 			}
 
 			// Verify the operations up to the expected commit height
-			verifyOperations(t, atomicTrie1, codec, rootHash1, 1, test.expectedCommitHeight, operationsMap)
+			verifyOperations(t, atomicTrie1, atomictest.TestTxCodec, rootHash1, 1, test.expectedCommitHeight, operationsMap)
 
 			// Construct the atomic trie again (on the same database) and ensure the last accepted root is correct.
-			atomicBackend2, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
+			atomicBackend2, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -173,7 +167,7 @@ func TestAtomicTrieInitialize(t *testing.T) {
 
 			// Construct the atomic trie again (on an empty database) and ensure that it produces the same hash.
 			atomicBackend3, err := NewAtomicBackend(
-				versiondb.New(memdb.New()), testSharedMemory(), nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval,
+				versiondb.New(memdb.New()), utils.TestSnowContext().SharedMemory, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval,
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -188,7 +182,7 @@ func TestAtomicTrieInitialize(t *testing.T) {
 			// during the initialization phase will cause an invalid root when indexing continues.
 			nextCommitHeight := nearestCommitHeight(test.lastAcceptedHeight+test.commitInterval, test.commitInterval)
 			for i := test.lastAcceptedHeight + 1; i <= nextCommitHeight; i++ {
-				txs := atomic.NewTestTxs(test.numTxsPerBlock(i))
+				txs := atomictest.NewTestTxs(test.numTxsPerBlock(i))
 				if err := repo.Write(i, txs); err != nil {
 					t.Fatal(err)
 				}
@@ -207,11 +201,11 @@ func TestAtomicTrieInitialize(t *testing.T) {
 			assert.NotEqual(t, common.Hash{}, updatedRoot)
 
 			// Verify the operations up to the new expected commit height
-			verifyOperations(t, atomicTrie1, codec, updatedRoot, 1, updatedLastCommitHeight, operationsMap)
+			verifyOperations(t, atomicTrie1, atomictest.TestTxCodec, updatedRoot, 1, updatedLastCommitHeight, operationsMap)
 
 			// Generate a new atomic trie to compare the root against.
 			atomicBackend4, err := NewAtomicBackend(
-				versiondb.New(memdb.New()), testSharedMemory(), nil, repo, nextCommitHeight, common.Hash{}, test.commitInterval,
+				versiondb.New(memdb.New()), utils.TestSnowContext().SharedMemory, nil, repo, nextCommitHeight, common.Hash{}, test.commitInterval,
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -228,14 +222,13 @@ func TestAtomicTrieInitialize(t *testing.T) {
 func TestIndexerInitializesOnlyOnce(t *testing.T) {
 	lastAcceptedHeight := uint64(25)
 	db := versiondb.New(memdb.New())
-	codec := atomic.TestTxCodec
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	assert.NoError(t, err)
 	operationsMap := make(map[uint64]map[ids.ID]*avalancheatomic.Requests)
 	writeTxs(t, repo, 1, lastAcceptedHeight+1, constTxsPerHeight(2), nil, operationsMap)
 
 	// Initialize atomic repository
-	atomicBackend, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 10 /* commitInterval*/)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 10 /* commitInterval*/)
 	assert.NoError(t, err)
 	atomicTrie := atomicBackend.AtomicTrie()
 
@@ -247,11 +240,11 @@ func TestIndexerInitializesOnlyOnce(t *testing.T) {
 	// re-initialize the atomic trie since initialize is not supposed to run again the height
 	// at the trie should still be the old height with the old commit hash without any changes.
 	// This scenario is not realistic, but is used to test potential double initialization behavior.
-	err = repo.Write(15, []*atomic.Tx{atomic.GenerateTestExportTx()})
+	err = repo.Write(15, []*atomic.Tx{atomictest.GenerateTestExportTx()})
 	assert.NoError(t, err)
 
 	// Re-initialize the atomic trie
-	atomicBackend, err = NewAtomicBackend(db, testSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 10 /* commitInterval */)
+	atomicBackend, err = NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 10 /* commitInterval */)
 	assert.NoError(t, err)
 	atomicTrie = atomicBackend.AtomicTrie()
 
@@ -260,13 +253,13 @@ func TestIndexerInitializesOnlyOnce(t *testing.T) {
 	assert.Equal(t, hash, newHash, "hash should be the same")
 }
 
-func newTestAtomicTrie(t *testing.T) AtomicTrie {
+func newTestAtomicTrie(t *testing.T) *AtomicTrie {
 	db := versiondb.New(memdb.New())
-	repo, err := NewAtomicTxRepository(db, atomic.TestTxCodec, 0)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	atomicBackend, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, 0, common.Hash{}, testCommitInterval)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, 0, common.Hash{}, testCommitInterval)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,8 +275,9 @@ func TestIndexerWriteAndRead(t *testing.T) {
 
 	// process 305 blocks so that we get three commits (100, 200, 300)
 	for height := uint64(1); height <= testCommitInterval*3+5; /*=305*/ height++ {
-		atomicRequests := mustAtomicOps(atomic.GenerateTestImportTx())
-		err := indexAtomicTxs(atomicTrie, height, atomicRequests)
+		atomicRequests, err := atomictest.ConvertToAtomicOps(atomictest.GenerateTestImportTx())
+		assert.NoError(t, err)
+		err = indexAtomicTxs(atomicTrie, height, atomicRequests)
 		assert.NoError(t, err)
 		if height%testCommitInterval == 0 {
 			lastCommittedBlockHash, lastCommittedBlockHeight = atomicTrie.LastCommitted()
@@ -313,8 +307,8 @@ func TestAtomicOpsAreNotTxOrderDependent(t *testing.T) {
 	atomicTrie2 := newTestAtomicTrie(t)
 
 	for height := uint64(0); height <= testCommitInterval; /*=205*/ height++ {
-		tx1 := atomic.GenerateTestImportTx()
-		tx2 := atomic.GenerateTestImportTx()
+		tx1 := atomictest.GenerateTestImportTx()
+		tx2 := atomictest.GenerateTestImportTx()
 		atomicRequests1, err := mergeAtomicOps([]*atomic.Tx{tx1, tx2})
 		assert.NoError(t, err)
 		atomicRequests2, err := mergeAtomicOps([]*atomic.Tx{tx2, tx1})
@@ -339,8 +333,7 @@ func TestAtomicTrieDoesNotSkipBonusBlocks(t *testing.T) {
 	commitInterval := uint64(10)
 	expectedCommitHeight := uint64(100)
 	db := versiondb.New(memdb.New())
-	codec := atomic.TestTxCodec
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +346,7 @@ func TestAtomicTrieDoesNotSkipBonusBlocks(t *testing.T) {
 		14: {},
 	}
 	// Construct the atomic trie for the first time
-	atomicBackend, err := NewAtomicBackend(db, testSharedMemory(), bonusBlocks, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, bonusBlocks, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,14 +357,16 @@ func TestAtomicTrieDoesNotSkipBonusBlocks(t *testing.T) {
 	assert.NotEqual(t, common.Hash{}, rootHash)
 
 	// Verify the operations are as expected
-	verifyOperations(t, atomicTrie, codec, rootHash, 1, expectedCommitHeight, operationsMap)
+	verifyOperations(t, atomicTrie, atomictest.TestTxCodec, rootHash, 1, expectedCommitHeight, operationsMap)
 }
 
 func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 	// operations to index
 	ops := make([]map[ids.ID]*avalancheatomic.Requests, 0)
 	for i := 0; i <= testCommitInterval; i++ {
-		ops = append(ops, mustAtomicOps(atomic.GenerateTestImportTx()))
+		atomicOps, err := atomictest.ConvertToAtomicOps(atomictest.GenerateTestImportTx())
+		assert.NoError(t, err)
+		ops = append(ops, atomicOps)
 	}
 
 	// without nils
@@ -411,79 +406,10 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 	assert.Equal(t, root1, root2)
 }
 
-type sharedMemories struct {
-	thisChain   avalancheatomic.SharedMemory
-	peerChain   avalancheatomic.SharedMemory
-	thisChainID ids.ID
-	peerChainID ids.ID
-}
-
-func (s *sharedMemories) addItemsToBeRemovedToPeerChain(ops map[ids.ID]*avalancheatomic.Requests) error {
-	for _, reqs := range ops {
-		puts := make(map[ids.ID]*avalancheatomic.Requests)
-		puts[s.thisChainID] = &avalancheatomic.Requests{}
-		for _, key := range reqs.RemoveRequests {
-			val := []byte{0x1}
-			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &avalancheatomic.Element{Key: key, Value: val})
-		}
-		if err := s.peerChain.Apply(puts); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *sharedMemories) assertOpsApplied(t *testing.T, ops map[ids.ID]*avalancheatomic.Requests) {
-	t.Helper()
-	for _, reqs := range ops {
-		// should be able to get put requests
-		for _, elem := range reqs.PutRequests {
-			val, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			if err != nil {
-				t.Fatalf("error finding puts in peerChainMemory: %s", err)
-			}
-			assert.Equal(t, elem.Value, val[0])
-		}
-
-		// should not be able to get remove requests
-		for _, key := range reqs.RemoveRequests {
-			_, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
-			assert.EqualError(t, err, "not found")
-		}
-	}
-}
-
-func (s *sharedMemories) assertOpsNotApplied(t *testing.T, ops map[ids.ID]*avalancheatomic.Requests) {
-	t.Helper()
-	for _, reqs := range ops {
-		// should not be able to get put requests
-		for _, elem := range reqs.PutRequests {
-			_, err := s.peerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			assert.EqualError(t, err, "not found")
-		}
-
-		// should be able to get remove requests (these were previously added as puts on peerChain)
-		for _, key := range reqs.RemoveRequests {
-			val, err := s.thisChain.Get(s.peerChainID, [][]byte{key})
-			assert.NoError(t, err)
-			assert.Equal(t, []byte{0x1}, val[0])
-		}
-	}
-}
-
-func newSharedMemories(atomicMemory *avalancheatomic.Memory, thisChainID, peerChainID ids.ID) *sharedMemories {
-	return &sharedMemories{
-		thisChain:   atomicMemory.NewSharedMemory(thisChainID),
-		peerChain:   atomicMemory.NewSharedMemory(peerChainID),
-		thisChainID: thisChainID,
-		peerChainID: peerChainID,
-	}
-}
-
 func TestApplyToSharedMemory(t *testing.T) {
 	type test struct {
 		commitInterval, lastAcceptedHeight uint64
-		setMarker                          func(*atomicBackend) error
+		setMarker                          func(*AtomicBackend) error
 		expectOpsApplied                   func(height uint64) bool
 		bonusBlockHeights                  map[uint64]ids.ID
 	}
@@ -492,13 +418,13 @@ func TestApplyToSharedMemory(t *testing.T) {
 		"marker is set to height": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker:          func(a *atomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
+			setMarker:          func(a *AtomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
 			expectOpsApplied:   func(height uint64) bool { return height > 10 && height <= 20 },
 		},
 		"marker is set to height, should skip bonus blocks": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker:          func(a *atomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
+			setMarker:          func(a *AtomicBackend) error { return a.MarkApplyToSharedMemoryCursor(10) },
 			bonusBlockHeights:  map[uint64]ids.ID{15: {}},
 			expectOpsApplied: func(height uint64) bool {
 				if height == 15 {
@@ -510,10 +436,10 @@ func TestApplyToSharedMemory(t *testing.T) {
 		"marker is set to height + blockchain ID": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker: func(a *atomicBackend) error {
-				cursor := make([]byte, wrappers.LongLen+len(atomic.TestBlockchainID[:]))
+			setMarker: func(a *AtomicBackend) error {
+				cursor := make([]byte, wrappers.LongLen+len(atomictest.TestBlockchainID[:]))
 				binary.BigEndian.PutUint64(cursor, 10)
-				copy(cursor[wrappers.LongLen:], atomic.TestBlockchainID[:])
+				copy(cursor[wrappers.LongLen:], atomictest.TestBlockchainID[:])
 				return a.metadataDB.Put(appliedSharedMemoryCursorKey, cursor)
 			},
 			expectOpsApplied: func(height uint64) bool { return height > 10 && height <= 20 },
@@ -521,24 +447,23 @@ func TestApplyToSharedMemory(t *testing.T) {
 		"marker not set": {
 			commitInterval:     10,
 			lastAcceptedHeight: 25,
-			setMarker:          func(*atomicBackend) error { return nil },
+			setMarker:          func(*AtomicBackend) error { return nil },
 			expectOpsApplied:   func(uint64) bool { return false },
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			db := versiondb.New(memdb.New())
-			codec := atomic.TestTxCodec
-			repo, err := NewAtomicTxRepository(db, codec, test.lastAcceptedHeight)
+			repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, test.lastAcceptedHeight)
 			assert.NoError(t, err)
 			operationsMap := make(map[uint64]map[ids.ID]*avalancheatomic.Requests)
 			writeTxs(t, repo, 1, test.lastAcceptedHeight+1, constTxsPerHeight(2), nil, operationsMap)
 
 			// Initialize atomic repository
 			m := avalancheatomic.NewMemory(db)
-			sharedMemories := newSharedMemories(m, testCChainID, atomic.TestBlockchainID)
-			backend, err := NewAtomicBackend(db, sharedMemories.thisChain, test.bonusBlockHeights, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
+			sharedMemories := atomictest.NewSharedMemories(m, ids.GenerateTestID(), atomictest.TestBlockchainID)
+			backend, err := NewAtomicBackend(db, sharedMemories.ThisChain, test.bonusBlockHeights, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
 			assert.NoError(t, err)
-			atomicTrie := backend.AtomicTrie().(*atomicTrie)
+			atomicTrie := backend.AtomicTrie()
 
 			hash, height := atomicTrie.LastCommitted()
 			assert.NotEqual(t, common.Hash{}, hash)
@@ -546,21 +471,21 @@ func TestApplyToSharedMemory(t *testing.T) {
 
 			// prepare peer chain's shared memory by applying items we expect to remove as puts
 			for _, ops := range operationsMap {
-				if err := sharedMemories.addItemsToBeRemovedToPeerChain(ops); err != nil {
+				if err := sharedMemories.AddItemsToBeRemovedToPeerChain(ops); err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			assert.NoError(t, test.setMarker(backend.(*atomicBackend)))
+			assert.NoError(t, test.setMarker(backend))
 			assert.NoError(t, db.Commit())
 			assert.NoError(t, backend.ApplyToSharedMemory(test.lastAcceptedHeight))
 
 			// assert ops were applied as expected
 			for height, ops := range operationsMap {
 				if test.expectOpsApplied(height) {
-					sharedMemories.assertOpsApplied(t, ops)
+					sharedMemories.AssertOpsApplied(t, ops)
 				} else {
-					sharedMemories.assertOpsNotApplied(t, ops)
+					sharedMemories.AssertOpsNotApplied(t, ops)
 				}
 			}
 
@@ -570,16 +495,16 @@ func TestApplyToSharedMemory(t *testing.T) {
 			assert.False(t, hasMarker)
 			// reinitialize the atomic trie
 			backend, err = NewAtomicBackend(
-				db, sharedMemories.thisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval,
+				db, sharedMemories.ThisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval,
 			)
 			assert.NoError(t, err)
 			// no further changes should have occurred in shared memory
 			// assert they are as they were prior to reinitializing
 			for height, ops := range operationsMap {
 				if test.expectOpsApplied(height) {
-					sharedMemories.assertOpsApplied(t, ops)
+					sharedMemories.AssertOpsApplied(t, ops)
 				} else {
-					sharedMemories.assertOpsNotApplied(t, ops)
+					sharedMemories.AssertOpsNotApplied(t, ops)
 				}
 			}
 
@@ -593,25 +518,24 @@ func TestApplyToSharedMemory(t *testing.T) {
 
 func BenchmarkAtomicTrieInit(b *testing.B) {
 	db := versiondb.New(memdb.New())
-	codec := atomic.TestTxCodec
 
 	operationsMap := make(map[uint64]map[ids.ID]*avalancheatomic.Requests)
 
 	lastAcceptedHeight := uint64(25000)
 	// add 25000 * 3 = 75000 transactions
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
 	var (
-		atomicTrie AtomicTrie
+		atomicTrie *AtomicTrie
 		hash       common.Hash
 		height     uint64
 	)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sharedMemory := testSharedMemory()
+		sharedMemory := utils.TestSnowContext().SharedMemory
 		atomicBackend, err := NewAtomicBackend(db, sharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 5000)
 		assert.NoError(b, err)
 		atomicTrie = atomicBackend.AtomicTrie()
@@ -623,22 +547,21 @@ func BenchmarkAtomicTrieInit(b *testing.B) {
 	b.StopTimer()
 
 	// Verify operations
-	verifyOperations(b, atomicTrie, codec, hash, 1, lastAcceptedHeight, operationsMap)
+	verifyOperations(b, atomicTrie, atomictest.TestTxCodec, hash, 1, lastAcceptedHeight, operationsMap)
 }
 
 func BenchmarkAtomicTrieIterate(b *testing.B) {
 	db := versiondb.New(memdb.New())
-	codec := atomic.TestTxCodec
 
 	operationsMap := make(map[uint64]map[ids.ID]*avalancheatomic.Requests)
 
 	lastAcceptedHeight := uint64(25_000)
 	// add 25000 * 3 = 75000 transactions
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
-	atomicBackend, err := NewAtomicBackend(db, testSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 5000)
+	atomicBackend, err := NewAtomicBackend(db, utils.TestSnowContext().SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 5000)
 	assert.NoError(b, err)
 	atomicTrie := atomicBackend.AtomicTrie()
 
@@ -707,11 +630,10 @@ func BenchmarkApplyToSharedMemory(b *testing.B) {
 
 func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks uint64) {
 	db := versiondb.New(disk)
-	codec := atomic.TestTxCodec
-	sharedMemory := testSharedMemory()
+	sharedMemory := utils.TestSnowContext().SharedMemory
 
 	lastAcceptedHeight := blocks
-	repo, err := NewAtomicTxRepository(db, codec, lastAcceptedHeight)
+	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, lastAcceptedHeight)
 	assert.NoError(b, err)
 
 	backend, err := NewAtomicBackend(db, sharedMemory, nil, repo, 0, common.Hash{}, 5000)
@@ -720,7 +642,7 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 	}
 	trie := backend.AtomicTrie()
 	for height := uint64(1); height <= lastAcceptedHeight; height++ {
-		txs := atomic.NewTestTxs(constTxsPerHeight(3)(height))
+		txs := atomictest.NewTestTxs(constTxsPerHeight(3)(height))
 		ops, err := mergeAtomicOps(txs)
 		assert.NoError(b, err)
 		assert.NoError(b, indexAtomicTxs(trie, height, ops))
@@ -733,9 +655,76 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		backend.(*atomicBackend).sharedMemory = testSharedMemory()
+		backend.sharedMemory = utils.TestSnowContext().SharedMemory
 		assert.NoError(b, backend.MarkApplyToSharedMemoryCursor(0))
 		assert.NoError(b, db.Commit())
 		assert.NoError(b, backend.ApplyToSharedMemory(lastAcceptedHeight))
 	}
+}
+
+// verifyOperations creates an iterator over the atomicTrie at [rootHash] and verifies that the all of the operations in the trie in the interval [from, to] are identical to
+// the atomic operations contained in [operationsMap] on the same interval.
+func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
+	t.Helper()
+
+	// Start the iterator at [from]
+	fromBytes := make([]byte, wrappers.LongLen)
+	binary.BigEndian.PutUint64(fromBytes, from)
+	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Generate map of the marshalled atomic operations on the interval [from, to]
+	// based on [operationsMap].
+	marshalledOperationsMap := make(map[uint64]map[ids.ID][]byte)
+	for height, blockRequests := range operationsMap {
+		if height < from || height > to {
+			continue
+		}
+		for blockchainID, atomicRequests := range blockRequests {
+			b, err := codec.Marshal(0, atomicRequests)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if requestsMap, exists := marshalledOperationsMap[height]; exists {
+				requestsMap[blockchainID] = b
+			} else {
+				requestsMap = make(map[ids.ID][]byte)
+				requestsMap[blockchainID] = b
+				marshalledOperationsMap[height] = requestsMap
+			}
+		}
+	}
+
+	// Generate map of marshalled atomic operations on the interval [from, to]
+	// based on the contents of the trie.
+	iteratorMarshalledOperationsMap := make(map[uint64]map[ids.ID][]byte)
+	for iter.Next() {
+		height := iter.BlockNumber()
+		if height < from {
+			t.Fatalf("Iterator starting at (%d) found value at block height (%d)", from, height)
+		}
+		if height > to {
+			continue
+		}
+
+		blockchainID := iter.BlockchainID()
+		b, err := codec.Marshal(0, iter.AtomicOps())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if requestsMap, exists := iteratorMarshalledOperationsMap[height]; exists {
+			requestsMap[blockchainID] = b
+		} else {
+			requestsMap = make(map[ids.ID][]byte)
+			requestsMap[blockchainID] = b
+			iteratorMarshalledOperationsMap[height] = requestsMap
+		}
+	}
+	if err := iter.Error(); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, marshalledOperationsMap, iteratorMarshalledOperationsMap)
 }

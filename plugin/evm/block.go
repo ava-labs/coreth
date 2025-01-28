@@ -158,7 +158,7 @@ func (b *Block) Accept(context.Context) error {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
 	}
 
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+	if err := vm.PutLastAcceptedID(b.id); err != nil {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
@@ -428,3 +428,7 @@ func (b *Block) Bytes() []byte {
 }
 
 func (b *Block) String() string { return fmt.Sprintf("EVM block, ID = %s", b.ID()) }
+
+func (b *Block) GetEthBlock() *types.Block {
+	return b.ethBlock
+}

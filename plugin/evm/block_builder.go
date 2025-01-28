@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/avalanchego/snow"
@@ -30,7 +30,7 @@ type blockBuilder struct {
 	chainConfig *params.ChainConfig
 
 	txPool  *txpool.TxPool
-	mempool *atomic.Mempool
+	mempool *atomictxpool.Mempool
 
 	shutdownChan <-chan struct{}
 	shutdownWg   *sync.WaitGroup

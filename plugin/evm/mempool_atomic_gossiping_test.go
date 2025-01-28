@@ -15,6 +15,9 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,7 +58,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// try to add a conflicting tx
 			err = vm.mempool.AddLocalTx(conflictingTx)
-			assert.ErrorIs(err, atomic.ErrConflictingAtomicTx)
+			assert.ErrorIs(err, atomictxpool.ErrConflictingAtomicTx)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
@@ -94,10 +97,10 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	mempool, err := atomic.NewMempool(&snow.Context{}, prometheus.NewRegistry(), 1, nil)
+	mempool, err := atomictxpool.NewMempool(&snow.Context{}, prometheus.NewRegistry(), 1, nil)
 	assert.NoError(err)
 	// create candidate tx (we will drop before validation)
-	tx := atomic.GenerateTestImportTx()
+	tx := atomictest.GenerateTestImportTx()
 
 	assert.NoError(mempool.AddRemoteTx(tx))
 	assert.True(mempool.Has(tx.ID()))
@@ -107,8 +110,8 @@ func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	mempool.IssueCurrentTxs()
 
 	// try to add one more tx
-	tx2 := atomic.GenerateTestImportTx()
-	assert.ErrorIs(mempool.AddRemoteTx(tx2), atomic.ErrTooManyAtomicTx)
+	tx2 := atomictest.GenerateTestImportTx()
+	assert.ErrorIs(mempool.AddRemoteTx(tx2), atomictxpool.ErrTooManyAtomicTx)
 	assert.False(mempool.Has(tx2.ID()))
 }
 
@@ -126,25 +129,25 @@ func TestMempoolPriorityDrop(t *testing.T) {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	mempool, err := atomic.NewMempool(vm.ctx, prometheus.NewRegistry(), 1, vm.verifyTxAtTip)
+	mempool, err := atomictxpool.NewMempool(vm.ctx, prometheus.NewRegistry(), 1, vm.verifyTxAtTip)
 	assert.NoError(err)
 
-	tx1, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	tx1, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.NoError(mempool.AddRemoteTx(tx1))
 	assert.True(mempool.Has(tx1.ID()))
 
-	tx2, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
+	tx2, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.ErrorIs(mempool.AddRemoteTx(tx2), atomic.ErrInsufficientAtomicTxFee)
+	assert.ErrorIs(mempool.AddRemoteTx(tx2), atomictxpool.ErrInsufficientAtomicTxFee)
 	assert.True(mempool.Has(tx1.ID()))
 	assert.False(mempool.Has(tx2.ID()))
 
-	tx3, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], new(big.Int).Mul(initialBaseFee, big.NewInt(2)), []*secp256k1.PrivateKey{testKeys[1]})
+	tx3, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[1], new(big.Int).Mul(initialBaseFee, big.NewInt(2)), []*secp256k1.PrivateKey{testKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
