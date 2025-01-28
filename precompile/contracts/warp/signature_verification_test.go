@@ -660,7 +660,6 @@ func TestSignatureVerification(t *testing.T) {
 				return
 			}
 			err = msg.Signature.Verify(
-				context.Background(),
 				&msg.UnsignedMessage,
 				networkID,
 				validatorSet,
