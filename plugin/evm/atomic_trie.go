@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
-	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -33,8 +32,7 @@ const (
 	atomicKeyLength            = wrappers.LongLen + common.HashLength
 	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
 
-	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
-	atomicTrieMemoryCap     = 64 * units.MiB
+	atomicTrieMemoryCap = 64 * units.MiB
 )
 
 var (
@@ -126,7 +124,6 @@ type atomicTrie struct {
 	lastAcceptedRoot    common.Hash                // most recent trie root passed to accept trie or the root of the atomic trie on intialization.
 	codec               codec.Manager
 	memoryCap           common.StorageSize
-	tipBuffer           *core.BoundedBuffer[common.Hash]
 }
 
 // newAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
@@ -169,7 +166,6 @@ func newAtomicTrie(
 		codec:               codec,
 		lastCommittedRoot:   root,
 		lastCommittedHeight: height,
-		tipBuffer:           core.NewBoundedBuffer(atomicTrieTipBufferSize, trieDB.Dereference),
 		memoryCap:           atomicTrieMemoryCap,
 		// Initialize lastAcceptedRoot to the last committed root.
 		// If there were further blocks processed (ahead of the commit interval),
@@ -343,8 +339,7 @@ func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 
 // AcceptTrie commits the triedb at [root] if needed and returns true if a commit
 // was performed.
-func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
-	hasCommitted := false
+func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (hasCommitted bool, err error) {
 	// Because we do not accept the trie at every height, we may need to
 	// populate roots at prior commit heights that were skipped.
 	for nextCommitHeight := a.lastCommittedHeight + a.commitInterval; nextCommitHeight < height; nextCommitHeight += a.commitInterval {
@@ -354,11 +349,13 @@ func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 		hasCommitted = true
 	}
 
-	// Attempt to dereference roots at least [tipBufferSize] old
-	//
-	// Note: It is safe to dereference roots that have been committed to disk
-	// (they are no-ops).
-	a.tipBuffer.Insert(root)
+	// The following dereferences, if any, the previously inserted root.
+	// This one can be dereferenced whether it has been:
+	// - committed, in which case the dereference is a no-op
+	// - not committted, in which case the current root we are inserting contains
+	//   references all the relevant data from the previous root, so the previous
+	//   root can be dereferenced.
+	a.trieDB.Dereference(a.lastAcceptedRoot)
 
 	// Commit this root if we have reached the [commitInterval].
 	if height%a.commitInterval == 0 {
