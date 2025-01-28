@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 
-	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -33,8 +32,7 @@ const (
 	atomicKeyLength            = wrappers.LongLen + common.HashLength
 	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
 
-	atomicTrieTipBufferSize = 1 // No need to support a buffer of previously accepted tries for the atomic trie
-	atomicTrieMemoryCap     = 64 * units.MiB
+	atomicTrieMemoryCap = 64 * units.MiB
 )
 
 var (
@@ -126,7 +124,6 @@ type atomicTrie struct {
 	lastAcceptedRoot    common.Hash                // most recent trie root passed to accept trie or the root of the atomic trie on intialization.
 	codec               codec.Manager
 	memoryCap           common.StorageSize
-	tipBuffer           *core.BoundedBuffer[common.Hash]
 }
 
 // newAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
@@ -169,7 +166,6 @@ func newAtomicTrie(
 		codec:               codec,
 		lastCommittedRoot:   root,
 		lastCommittedHeight: height,
-		tipBuffer:           core.NewBoundedBuffer(atomicTrieTipBufferSize, trieDB.Dereference),
 		memoryCap:           atomicTrieMemoryCap,
 		// Initialize lastAcceptedRoot to the last committed root.
 		// If there were further blocks processed (ahead of the commit interval),
@@ -359,7 +355,7 @@ func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (hasCommitted b
 	// - not committted, in which case the current root we are inserting contains
 	//   references all the relevant data from the previous root, so the previous
 	//   root can be dereferenced.
-	a.tipBuffer.Insert(root)
+	a.trieDB.Dereference(a.lastAcceptedRoot)
 
 	// Commit this root if we have reached the [commitInterval].
 	if height%a.commitInterval == 0 {

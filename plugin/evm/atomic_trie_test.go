@@ -731,8 +731,6 @@ func Test_atomicTrie_AcceptTrie(t *testing.T) {
 				lastAcceptedHeight, testCase.commitInterval)
 			atomicTrie.lastAcceptedRoot = testCase.lastAcceptedRoot
 			if testCase.lastAcceptedRoot != types.EmptyRootHash {
-				atomicTrie.tipBuffer.Insert(testCase.lastAcceptedRoot)
-
 				// Generate trie node test blob
 				encoder := rlp.NewEncoderBuffer(nil)
 				offset := encoder.List()
@@ -765,9 +763,6 @@ func Test_atomicTrie_AcceptTrie(t *testing.T) {
 			assert.Equal(t, testCase.wantLastCommittedHeight, atomicTrie.lastCommittedHeight)
 			assert.Equal(t, testCase.wantLastCommittedRoot, atomicTrie.lastCommittedRoot)
 			assert.Equal(t, testCase.wantLastAcceptedRoot, atomicTrie.lastAcceptedRoot)
-			tipBufferRoot, ok := atomicTrie.tipBuffer.Last()
-			require.True(t, ok)
-			assert.Equal(t, testCase.wantTipBufferRoot, tipBufferRoot)
 
 			// Check dereferencing previous dirty root inserted occurred
 			_, storageSize, _ := atomicTrie.trieDB.Size()
