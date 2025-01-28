@@ -79,12 +79,13 @@ Therefore, we use the [Predicate Utils](https://github.com/ava-labs/coreth/blob/
 
 ### Performance Optimization: C-Chain to Avalanche L1
 
-For communication between the C-Chain and L1, as well as broader interactions between the Primary Network and Avalanche L1s, we've implemented special handling for the C-Chain. This special case is necessary since the Primary Network operates with the maximum number of possible validators.
+For communication between the C-Chain and L1, as well as broader interactions between the Primary Network and Avalanche L1s, we've implemented special handling for the C-Chain.
 
-This large validator set in the Primary Network creates a unique challenge for Avalanche Warp Messages. Since reaching the required stake threshold would demand collecting numerous signatures, verifying messages from the Primary Network would be computationally intensive and costly. However, we've developed a more efficient solution.
+The Primary Network has a large validator set, which creates a unique challenge for Avalanche Warp Messages: Since reaching the required stake threshold would demand collecting numerous signatures, and verifying messages from the Primary Network would be computationally costly. However, we've developed a more efficient solution.
 
-When an Avalanche L1 receives a message from a blockchain on the Primary Network, we use the validator set of the receiving L1 instead of the entire network when validating the message. This means that the C-Chain sending a message can be the exact same as Subnet to Subnet communication.
+When an Avalanche L1 receives a message from a blockchain on the Primary Network, we use the validator set of the receiving L1 instead of the entire network when validating the message. Note this is NOT possible if an L1 does not validate the Primary Network, in which case the Warp precompile must be configured with `requirePrimaryNetworkSigners`.
 
+Sending messages from the C-Chain remains unchanged.
 However, when L1 XYZ receives a message from the C-Chain, it changes the semantics to the following:
 
 1. Read the `SourceChainID` of the signed message (C-Chain)
