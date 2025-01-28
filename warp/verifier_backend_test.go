@@ -26,7 +26,7 @@ import (
 func TestAddressedCallSignatures(t *testing.T) {
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.NewSigner()
+	blsSecretKey, err := localsigner.New()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
 
@@ -140,7 +140,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 func TestBlockSignatures(t *testing.T) {
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.NewSigner()
+	blsSecretKey, err := localsigner.New()
 	require.NoError(t, err)
 
 	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)

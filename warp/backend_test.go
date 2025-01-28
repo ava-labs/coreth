@@ -41,7 +41,7 @@ func init() {
 func TestAddAndGetValidMessage(t *testing.T) {
 	db := memdb.New()
 
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(sk, networkID, sourceChainID)
 	messageSignatureCache := &cache.LRU[ids.ID, []byte]{Size: 500}
@@ -64,7 +64,7 @@ func TestAddAndGetValidMessage(t *testing.T) {
 func TestAddAndGetUnknownMessage(t *testing.T) {
 	db := memdb.New()
 
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(sk, networkID, sourceChainID)
 	messageSignatureCache := &cache.LRU[ids.ID, []byte]{Size: 500}
@@ -83,7 +83,7 @@ func TestGetBlockSignature(t *testing.T) {
 	blockClient := warptest.MakeBlockClient(blkID)
 	db := memdb.New()
 
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	require.NoError(err)
 	warpSigner := avalancheWarp.NewSigner(sk, networkID, sourceChainID)
 	messageSignatureCache := &cache.LRU[ids.ID, []byte]{Size: 500}
@@ -108,7 +108,7 @@ func TestGetBlockSignature(t *testing.T) {
 func TestZeroSizedCache(t *testing.T) {
 	db := memdb.New()
 
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(sk, networkID, sourceChainID)
 
@@ -136,7 +136,7 @@ func TestOffChainMessages(t *testing.T) {
 		check            func(require *require.Assertions, b Backend)
 		err              error
 	}
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(sk, networkID, sourceChainID)
 

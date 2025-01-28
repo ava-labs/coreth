@@ -220,7 +220,7 @@ func NewContext() *snow.Context {
 			return subnetID, nil
 		},
 	}
-	blsSecretKey, err := localsigner.NewSigner()
+	blsSecretKey, err := localsigner.New()
 	if err != nil {
 		panic(err)
 	}

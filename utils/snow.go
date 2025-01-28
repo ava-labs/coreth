@@ -25,7 +25,7 @@ var (
 )
 
 func TestSnowContext() *snow.Context {
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	if err != nil {
 		panic(err)
 	}

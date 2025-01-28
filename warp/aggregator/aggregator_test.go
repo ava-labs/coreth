@@ -19,7 +19,7 @@ import (
 )
 
 func newValidator(t testing.TB, weight uint64) (bls.Signer, *avalancheWarp.Validator) {
-	sk, err := localsigner.NewSigner()
+	sk, err := localsigner.New()
 	require.NoError(t, err)
 	pk := sk.PublicKey()
 	return sk, &avalancheWarp.Validator{
@@ -52,7 +52,7 @@ func TestAggregateSignatures(t *testing.T) {
 		vdr2: sig2,
 		vdr3: sig3,
 	}
-	nonVdrSk, err := localsigner.NewSigner()
+	nonVdrSk, err := localsigner.New()
 	require.NoError(t, err)
 	nonVdrSig := nonVdrSk.Sign(unsignedMsg.Bytes())
 	vdrs := []*avalancheWarp.Validator{

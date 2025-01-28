@@ -266,13 +266,13 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 	defer logsSub.Unsubscribe()
 
 	nodeID1 := ids.GenerateTestNodeID()
-	blsSecretKey1, err := localsigner.NewSigner()
+	blsSecretKey1, err := localsigner.New()
 	require.NoError(err)
 	blsPublicKey1 := blsSecretKey1.PublicKey()
 	blsSignature1 := blsSecretKey1.Sign(unsignedMessage.Bytes())
 
 	nodeID2 := ids.GenerateTestNodeID()
-	blsSecretKey2, err := localsigner.NewSigner()
+	blsSecretKey2, err := localsigner.New()
 	require.NoError(err)
 	blsPublicKey2 := blsSecretKey2.PublicKey()
 	blsSignature2 := blsSecretKey2.Sign(unsignedMessage.Bytes())
@@ -529,7 +529,7 @@ func testReceiveWarpMessage(
 		weight    uint64
 	}
 	newSigner := func(networkID ids.ID, weight uint64) signer {
-		secret, err := localsigner.NewSigner()
+		secret, err := localsigner.New()
 		require.NoError(err)
 		return signer{
 			networkID: networkID,

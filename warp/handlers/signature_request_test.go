@@ -24,7 +24,7 @@ import (
 func TestMessageSignatureHandler(t *testing.T) {
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.NewSigner()
+	blsSecretKey, err := localsigner.New()
 	require.NoError(t, err)
 	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
 
@@ -128,7 +128,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 func TestBlockSignatureHandler(t *testing.T) {
 	database := memdb.New()
 	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.NewSigner()
+	blsSecretKey, err := localsigner.New()
 	require.NoError(t, err)
 
 	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
