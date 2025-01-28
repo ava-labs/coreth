@@ -24,8 +24,10 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/trie/trienode"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const testCommitInterval = 100
@@ -730,6 +732,24 @@ func Test_atomicTrie_AcceptTrie(t *testing.T) {
 			atomicTrie.lastAcceptedRoot = testCase.lastAcceptedRoot
 			if testCase.lastAcceptedRoot != types.EmptyRootHash {
 				atomicTrie.tipBuffer.Insert(testCase.lastAcceptedRoot)
+
+				// Generate trie node test blob
+				encoder := rlp.NewEncoderBuffer(nil)
+				offset := encoder.List()
+				encoder.WriteBytes([]byte{1})        // key
+				encoder.WriteBytes(make([]byte, 32)) // value
+				encoder.ListEnd(offset)
+				testBlob := encoder.ToBytes()
+				err := encoder.Flush()
+				require.NoError(t, err)
+
+				nodeSet := trienode.NewNodeSet(testCase.lastAcceptedRoot)
+				nodeSet.AddNode([]byte("any"), trienode.New(testCase.lastAcceptedRoot, testBlob)) // dirty node
+				err = atomicTrie.InsertTrie(nodeSet, testCase.lastAcceptedRoot)
+				require.NoError(t, err)
+
+				_, storageSize, _ := atomicTrie.trieDB.Size()
+				require.NotZero(t, storageSize, "there should be a dirty node taking up storage space")
 			}
 			atomicTrie.updateLastCommitted(testCase.lastCommittedRoot, testCase.lastCommittedHeight)
 			require.NoError(t, err)
@@ -748,6 +768,10 @@ func Test_atomicTrie_AcceptTrie(t *testing.T) {
 			tipBufferRoot, ok := atomicTrie.tipBuffer.Last()
 			require.True(t, ok)
 			assert.Equal(t, testCase.wantTipBufferRoot, tipBufferRoot)
+
+			// Check dereferencing previous dirty root inserted occurred
+			_, storageSize, _ := atomicTrie.trieDB.Size()
+			assert.Zerof(t, storageSize, "storage size should be zero after accepting the trie due to the dirty nodes derefencing but is %s", storageSize)
 
 			keyValuePairs := make(map[string]string, len(testCase.wantKeyValuePairs))
 			it := versionDB.NewIterator()
