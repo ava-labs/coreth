@@ -42,7 +42,7 @@ var (
 	ErrAssetIDMismatch                                 = errors.New("asset IDs in the input don't match the utxo")
 	errNilBaseFeeApricotPhase3                         = errors.New("nil base fee is invalid after apricotPhase3")
 	errInsufficientFundsForFee                         = errors.New("insufficient AVAX funds to pay transaction fee")
-	errRejectedParent                                  = errors.New("rejected parent")
+	ErrRejectedParent                                  = errors.New("rejected parent")
 )
 
 // UnsignedImportTx is an unsigned ImportTx
@@ -463,13 +463,9 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor Atomic
 		// will be missing.
 		// If the ancestor is processing, then the block may have
 		// been verified.
-		nextAncestorIntf, err := fetcher.GetBlockInternal(context.TODO(), nextAncestorID)
+		nextAncestor, err := fetcher.GetAtomicBlock(context.TODO(), nextAncestorID)
 		if err != nil {
-			return errRejectedParent
-		}
-		nextAncestor, ok := nextAncestorIntf.(AtomicBlockContext)
-		if !ok {
-			return fmt.Errorf("ancestor block %s had unexpected type %T", nextAncestor.ID(), nextAncestorIntf)
+			return ErrRejectedParent
 		}
 		ancestor = nextAncestor
 	}

@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -281,7 +282,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		require      = require.New(t)
 		importAmount = 2000000 * units.Avax // 2M avax
 		alloc        = map[ids.ShortID]uint64{
-			testShortIDAddrs[0]: importAmount,
+			testutils.TestShortIDAddrs[0]: importAmount,
 		}
 	)
 	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
@@ -317,7 +318,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 				serverVM.ctx.AVAXAssetID,
 				importAmount/2,
 				serverVM.ctx.XChainID,
-				testShortIDAddrs[0],
+				testutils.TestShortIDAddrs[0],
 				initialBaseFee,
 				[]*secp256k1.PrivateKey{testKeys[0]},
 			)

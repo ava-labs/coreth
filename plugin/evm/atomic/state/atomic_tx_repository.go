@@ -27,10 +27,13 @@ const (
 )
 
 var (
-	atomicTxIDDBPrefix         = []byte("atomicTxDB")
-	atomicHeightTxDBPrefix     = []byte("atomicHeightTxDB")
-	atomicRepoMetadataDBPrefix = []byte("atomicRepoMetadataDB")
-	maxIndexedHeightKey        = []byte("maxIndexedAtomicTxHeight")
+	atomicTxIDDBPrefix           = []byte("atomicTxDB")
+	atomicHeightTxDBPrefix       = []byte("atomicHeightTxDB")
+	atomicRepoMetadataDBPrefix   = []byte("atomicRepoMetadataDB")
+	atomicTrieDBPrefix           = []byte("atomicTrieDB")
+	atomicTrieMetaDBPrefix       = []byte("atomicTrieMetaDB")
+	appliedSharedMemoryCursorKey = []byte("atomicTrieLastAppliedToSharedMemory")
+	maxIndexedHeightKey          = []byte("maxIndexedAtomicTxHeight")
 
 	// Historically used to track the completion of a migration
 	// bonusBlocksRepairedKey     = []byte("bonusBlocksRepaired")
@@ -48,6 +51,10 @@ type AtomicTxRepository struct {
 	// has indexed.
 	atomicRepoMetadataDB database.Database
 
+	metadataDB database.Database // Underlying database containing the atomic trie metadata
+
+	atomicTrieDB database.Database // Underlying database containing the atomic trie
+
 	// [db] is used to commit to the underlying versiondb.
 	db *versiondb.Database
 
@@ -59,6 +66,8 @@ func NewAtomicTxRepository(
 	db *versiondb.Database, codec codec.Manager, lastAcceptedHeight uint64,
 ) (*AtomicTxRepository, error) {
 	repo := &AtomicTxRepository{
+		atomicTrieDB:               prefixdb.New(atomicTrieDBPrefix, db),
+		metadataDB:                 prefixdb.New(atomicTrieMetaDBPrefix, db),
 		acceptedAtomicTxDB:         prefixdb.New(atomicTxIDDBPrefix, db),
 		acceptedAtomicTxByHeightDB: prefixdb.New(atomicHeightTxDBPrefix, db),
 		atomicRepoMetadataDB:       prefixdb.New(atomicRepoMetadataDBPrefix, db),
@@ -348,8 +357,4 @@ func (a *AtomicTxRepository) IterateByHeight(height uint64) database.Iterator {
 	heightBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(heightBytes, height)
 	return a.acceptedAtomicTxByHeightDB.NewIteratorWithStart(heightBytes)
-}
-
-func (a *AtomicTxRepository) Codec() codec.Manager {
-	return a.codec
 }

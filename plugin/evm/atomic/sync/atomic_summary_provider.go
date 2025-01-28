@@ -7,24 +7,24 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
-	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var _ sync.SummaryProvider = &AtomicSyncProvider{}
+var _ sync.SummaryProvider = &AtomicSummaryProvider{}
 
-type AtomicSyncProvider struct {
-	chain      *core.BlockChain
+type AtomicSummaryProvider struct {
 	atomicTrie AtomicTrie
 }
 
-func NewAtomicProvider(chain *core.BlockChain, atomicTrie AtomicTrie) *AtomicSyncProvider {
-	return &AtomicSyncProvider{chain: chain, atomicTrie: atomicTrie}
+func (a *AtomicSummaryProvider) Initialize(atomicTrie AtomicTrie) {
+	a.atomicTrie = atomicTrie
 }
 
-// StateSummaryAtHeight returns the block state summary  at [height] if valid and available.
-func (a *AtomicSyncProvider) StateSummaryAtHeight(height uint64) (block.StateSummary, error) {
+// StateSummaryAtBlock returns the block state summary at [block] if valid.
+func (a *AtomicSummaryProvider) StateSummaryAtBlock(blk *types.Block) (block.StateSummary, error) {
+	height := blk.NumberU64()
 	atomicRoot, err := a.atomicTrie.Root(height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve atomic trie root for height (%d): %w", height, err)
@@ -32,15 +32,6 @@ func (a *AtomicSyncProvider) StateSummaryAtHeight(height uint64) (block.StateSum
 
 	if atomicRoot == (common.Hash{}) {
 		return nil, fmt.Errorf("atomic trie root not found for height (%d)", height)
-	}
-
-	blk := a.chain.GetBlockByNumber(height)
-	if blk == nil {
-		return nil, fmt.Errorf("block not found for height (%d)", height)
-	}
-
-	if !a.chain.HasState(blk.Root()) {
-		return nil, fmt.Errorf("block root does not exist for height (%d), root (%s)", height, blk.Root())
 	}
 
 	summary, err := NewAtomicSyncSummary(blk.Hash(), height, blk.Root(), atomicRoot)

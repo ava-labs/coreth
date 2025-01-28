@@ -11,8 +11,6 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/database/prefixdb"
-	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -21,12 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var (
-	atomicTrieDBPrefix           = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix       = []byte("atomicTrieMetaDB")
-	appliedSharedMemoryCursorKey = []byte("atomicTrieLastAppliedToSharedMemory")
-	sharedMemoryApplyBatchSize   = 10_000 // specifies the number of atomic operations to batch progress updates
-)
+var sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
 
 const (
 	progressLogFrequency = 30 * time.Second
@@ -36,9 +29,7 @@ const (
 // the AtomicTrie, AtomicTxRepository, and the VM's shared memory.
 type AtomicBackend struct {
 	codec        codec.Manager
-	bonusBlocks  map[uint64]ids.ID   // Map of height to blockID for blocks to skip indexing
-	db           *versiondb.Database // Underlying database
-	metadataDB   database.Database   // Underlying database containing the atomic trie metadata
+	bonusBlocks  map[uint64]ids.ID // Map of height to blockID for blocks to skip indexing
 	sharedMemory avalancheatomic.SharedMemory
 
 	repo       *AtomicTxRepository
@@ -50,22 +41,18 @@ type AtomicBackend struct {
 
 // NewAtomicBackend creates an AtomicBackend from the specified dependencies
 func NewAtomicBackend(
-	db *versiondb.Database, sharedMemory avalancheatomic.SharedMemory,
+	sharedMemory avalancheatomic.SharedMemory,
 	bonusBlocks map[uint64]ids.ID, repo *AtomicTxRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (*AtomicBackend, error) {
-	atomicTrieDB := prefixdb.New(atomicTrieDBPrefix, db)
-	metadataDB := prefixdb.New(atomicTrieMetaDBPrefix, db)
-	codec := repo.Codec()
+	codec := repo.codec
 
-	atomicTrie, err := NewAtomicTrie(atomicTrieDB, metadataDB, codec, lastAcceptedHeight, commitInterval)
+	atomicTrie, err := NewAtomicTrie(repo.atomicTrieDB, repo.metadataDB, codec, lastAcceptedHeight, commitInterval)
 	if err != nil {
 		return nil, err
 	}
 	atomicBackend := &AtomicBackend{
 		codec:            codec,
-		db:               db,
-		metadataDB:       metadataDB,
 		sharedMemory:     sharedMemory,
 		bonusBlocks:      bonusBlocks,
 		repo:             repo,
@@ -144,7 +131,7 @@ func (a *AtomicBackend) initialize(lastAcceptedHeight uint64) error {
 			return err
 		}
 		if isCommit {
-			if err := a.db.Commit(); err != nil {
+			if err := a.repo.db.Commit(); err != nil {
 				return err
 			}
 		}
@@ -194,7 +181,7 @@ func (a *AtomicBackend) initialize(lastAcceptedHeight uint64) error {
 // The cursor is initially set by  MarkApplyToSharedMemoryCursor to signal to the atomic trie
 // the range of operations that were added to the trie without being executed on shared memory.
 func (a *AtomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
-	sharedMemoryCursor, err := a.metadataDB.Get(appliedSharedMemoryCursorKey)
+	sharedMemoryCursor, err := a.repo.metadataDB.Get(appliedSharedMemoryCursorKey)
 	if err == database.ErrNotFound {
 		return nil
 	} else if err != nil {
@@ -266,10 +253,10 @@ func (a *AtomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 			// Update the cursor to the key of the atomic operation being executed on shared memory.
 			// If the node shuts down in the middle of this function call, ApplyToSharedMemory will
 			// resume operation starting at the key immediately following [it.Key()].
-			if err = a.metadataDB.Put(appliedSharedMemoryCursorKey, it.Key()); err != nil {
+			if err = a.repo.metadataDB.Put(appliedSharedMemoryCursorKey, it.Key()); err != nil {
 				return err
 			}
-			batch, err := a.db.CommitBatch()
+			batch, err := a.repo.db.CommitBatch()
 			if err != nil {
 				return err
 			}
@@ -291,10 +278,10 @@ func (a *AtomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 		return err
 	}
 
-	if err = a.metadataDB.Delete(appliedSharedMemoryCursorKey); err != nil {
+	if err = a.repo.metadataDB.Delete(appliedSharedMemoryCursorKey); err != nil {
 		return err
 	}
-	batch, err := a.db.CommitBatch()
+	batch, err := a.repo.db.CommitBatch()
 	if err != nil {
 		return err
 	}
@@ -317,7 +304,7 @@ func (a *AtomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 func (a *AtomicBackend) MarkApplyToSharedMemoryCursor(previousLastAcceptedHeight uint64) error {
 	// Set the cursor to [previousLastAcceptedHeight+1] so that we begin the iteration at the
 	// first item that has not been applied to shared memory.
-	return database.PutUInt64(a.metadataDB, appliedSharedMemoryCursorKey, previousLastAcceptedHeight+1)
+	return database.PutUInt64(a.repo.metadataDB, appliedSharedMemoryCursorKey, previousLastAcceptedHeight+1)
 }
 
 func (a *AtomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (*atomicState, error) {

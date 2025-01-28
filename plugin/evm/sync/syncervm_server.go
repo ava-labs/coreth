@@ -4,22 +4,26 @@ package sync
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var errProviderNotSet = fmt.Errorf("provider not set")
+
 type SummaryProvider interface {
-	StateSummaryAtHeight(height uint64) (block.StateSummary, error)
+	StateSummaryAtBlock(ethBlock *types.Block) (block.StateSummary, error)
 }
 
 type stateSyncServer struct {
-	chain    *core.BlockChain
-	provider SummaryProvider
+	chain *core.BlockChain
 
+	provider         SummaryProvider
 	syncableInterval uint64
 }
 
@@ -31,8 +35,8 @@ type Server interface {
 func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
 	return &stateSyncServer{
 		chain:            chain,
-		provider:         provider,
 		syncableInterval: syncableInterval,
+		provider:         provider,
 	}
 }
 
@@ -44,7 +48,7 @@ func (server *stateSyncServer) GetLastStateSummary(context.Context) (block.State
 	lastHeight := server.chain.LastAcceptedBlock().NumberU64()
 	lastSyncSummaryNumber := lastHeight - lastHeight%server.syncableInterval
 
-	summary, err := server.provider.StateSummaryAtHeight(lastSyncSummaryNumber)
+	summary, err := server.stateSummaryAtHeight(lastSyncSummaryNumber)
 	if err != nil {
 		log.Debug("could not get latest state summary", "err", err)
 		return nil, database.ErrNotFound
@@ -64,7 +68,7 @@ func (server *stateSyncServer) GetStateSummary(_ context.Context, height uint64)
 		return nil, database.ErrNotFound
 	}
 
-	summary, err := server.provider.StateSummaryAtHeight(summaryBlock.NumberU64())
+	summary, err := server.stateSummaryAtHeight(summaryBlock.NumberU64())
 	if err != nil {
 		log.Debug("could not get state summary", "height", height, "err", err)
 		return nil, database.ErrNotFound
@@ -72,4 +76,19 @@ func (server *stateSyncServer) GetStateSummary(_ context.Context, height uint64)
 
 	log.Debug("Serving syncable block at requested height", "height", height, "summary", summary)
 	return summary, nil
+}
+
+func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (block.StateSummary, error) {
+	blk := server.chain.GetBlockByNumber(height)
+	if blk == nil {
+		return nil, fmt.Errorf("block not found for height (%d)", height)
+	}
+
+	if !server.chain.HasState(blk.Root()) {
+		return nil, fmt.Errorf("block root does not exist for height (%d), root (%s)", height, blk.Root())
+	}
+	if server.provider == nil {
+		return nil, errProviderNotSet
+	}
+	return server.provider.StateSummaryAtBlock(blk)
 }

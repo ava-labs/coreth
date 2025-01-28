@@ -22,17 +22,9 @@ var (
 type Factory struct{}
 
 func (*Factory) New(logging.Logger) (interface{}, error) {
-	extensionCfg, err := atomicvm.NewAtomicExtensionConfig()
-	if err != nil {
-		return nil, err
-	}
-	return atomicvm.WrapVM(NewExtensibleEVM(false, extensionCfg)), nil
+	return atomicvm.WrapVM(&VM{}), nil
 }
 
 func NewPluginVM() (block.ChainVM, error) {
-	extensionCfg, err := atomicvm.NewAtomicExtensionConfig()
-	if err != nil {
-		return nil, err
-	}
-	return atomicvm.WrapVM(NewExtensibleEVM(true, extensionCfg)), nil
+	return atomicvm.WrapVM(&VM{IsPlugin: true}), nil
 }

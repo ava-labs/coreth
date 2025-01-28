@@ -48,7 +48,7 @@ type (
 	}
 
 	DummyEngine struct {
-		cb            ConsensusCallbacks
+		cb            *ConsensusCallbacks
 		clock         *mockable.Clock
 		consensusMode Mode
 	}
@@ -67,21 +67,21 @@ func NewFaker() *DummyEngine {
 	}
 }
 
-func NewFakerWithClock(cb ConsensusCallbacks, clock *mockable.Clock) *DummyEngine {
+func NewFakerWithClock(cb *ConsensusCallbacks, clock *mockable.Clock) *DummyEngine {
 	return &DummyEngine{
 		cb:    cb,
 		clock: clock,
 	}
 }
 
-func NewFakerWithCallbacks(cb ConsensusCallbacks) *DummyEngine {
+func NewFakerWithCallbacks(cb *ConsensusCallbacks) *DummyEngine {
 	return &DummyEngine{
 		cb:    cb,
 		clock: &mockable.Clock{},
 	}
 }
 
-func NewFakerWithMode(cb ConsensusCallbacks, mode Mode) *DummyEngine {
+func NewFakerWithMode(cb *ConsensusCallbacks, mode Mode) *DummyEngine {
 	return &DummyEngine{
 		cb:            cb,
 		clock:         &mockable.Clock{},

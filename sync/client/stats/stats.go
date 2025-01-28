@@ -81,7 +81,7 @@ type clientSyncerStats struct {
 }
 
 // NewClientSyncerStats returns stats for the client syncer
-func NewClientSyncerStats(leafMetricNames map[message.NodeType]string) ClientSyncerStats {
+func NewClientSyncerStats(leafMetricNames map[message.NodeType]string) *clientSyncerStats {
 	leafMetrics := make(map[message.NodeType]MessageMetric, len(leafMetricNames))
 	for nodeType, name := range leafMetricNames {
 		leafMetrics[nodeType] = NewMessageMetric(name)

@@ -10,11 +10,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	safemath "github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/ids"
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/extension"
 	"github.com/ava-labs/coreth/trie"
 )
 
@@ -23,67 +24,34 @@ var (
 	apricotPhase1MinGasPrice = big.NewInt(params.ApricotPhase1MinGasPrice)
 )
 
-type BlockValidator interface {
-	SyntacticVerify(b *Block, rules params.Rules) error
+type blockManager struct {
+	blockExtension extension.BlockExtension
+	vm             *VM
 }
 
-type blockValidator struct {
-	extDataHashes map[common.Hash]common.Hash
-}
-
-func NewBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockValidator {
-	return &blockValidator{
-		extDataHashes: extDataHashes,
+func newBlockManager(vm *VM, blockExtension extension.BlockExtension) *blockManager {
+	return &blockManager{
+		blockExtension: blockExtension,
+		vm:             vm,
 	}
 }
 
-func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
-	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
+// newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
+func (bm *blockManager) newBlock(ethBlock *types.Block) (*Block, error) {
+	extraData, err := bm.blockExtension.InitializeExtraData(ethBlock, bm.vm.chainConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize block extension: %w", err)
 	}
+	return &Block{
+		id:           ids.ID(ethBlock.Hash()),
+		ethBlock:     ethBlock,
+		blockManager: bm,
+		extraData:    extraData,
+	}, nil
+}
 
+func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
 	ethHeader := b.ethBlock.Header()
-	blockHash := b.ethBlock.Hash()
-
-	if !rules.IsApricotPhase1 {
-		if v.extDataHashes != nil {
-			extData := b.ethBlock.ExtData()
-			extDataHash := types.CalcExtDataHash(extData)
-			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
-			// have a block that is unexpectedly missing extra data.
-			expectedExtDataHash, ok := v.extDataHashes[blockHash]
-			if len(extData) == 0 {
-				if ok {
-					return fmt.Errorf("found block with unexpected missing extra data (%s, %d), expected extra data hash: %s", blockHash, b.Height(), expectedExtDataHash)
-				}
-			} else {
-				// If there is extra data, check to make sure that the extra data hash matches the expected extra data hash for this
-				// block
-				if extDataHash != expectedExtDataHash {
-					return fmt.Errorf("extra data hash in block (%s, %d): %s, did not match the expected extra data hash: %s", blockHash, b.Height(), extDataHash, expectedExtDataHash)
-				}
-			}
-		}
-	}
-
-	// Skip verification of the genesis block since it should already be marked as accepted.
-	if blockHash == b.vm.genesisHash {
-		return nil
-	}
-
-	// Verify the ExtDataHash field
-	if rules.IsApricotPhase1 {
-		if hash := types.CalcExtDataHash(b.ethBlock.ExtData()); ethHeader.ExtDataHash != hash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", ethHeader.ExtDataHash, hash)
-		}
-	} else {
-		if ethHeader.ExtDataHash != (common.Hash{}) {
-			return fmt.Errorf(
-				"expected ExtDataHash to be empty but got %x",
-				ethHeader.ExtDataHash,
-			)
-		}
-	}
 
 	// Perform block and header sanity checks
 	if !ethHeader.Number.IsUint64() {
@@ -176,12 +144,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		return errUnclesUnsupported
 	}
 
-	// Block must not be empty
-	txs := b.ethBlock.Transactions()
-	if len(txs) == 0 && len(b.atomicTxs) == 0 {
-		return errEmptyBlock
-	}
-
 	// Enforce minimum gas prices here prior to dynamic fees going into effect.
 	switch {
 	case !rules.IsApricotPhase1:
@@ -203,7 +165,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	// Make sure the block isn't too far in the future
 	// TODO: move this to only be part of semantic verification.
 	blockTimestamp := b.ethBlock.Time()
-	if maxBlockTime := uint64(b.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
+	if maxBlockTime := uint64(bm.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
 		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", blockTimestamp, maxBlockTime)
 	}
 
@@ -218,40 +180,8 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
 	if rules.IsApricotPhase4 {
-		// Make sure ExtDataGasUsed is not nil and correct
-		if ethHeader.ExtDataGasUsed == nil {
-			return errNilExtDataGasUsedApricotPhase4
-		}
-		if rules.IsApricotPhase5 {
-			if ethHeader.ExtDataGasUsed.Cmp(params.AtomicGasLimit) == 1 {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
-			}
-		} else {
-			if !ethHeader.ExtDataGasUsed.IsUint64() {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
-			}
-		}
-		var totalGasUsed uint64
-		for _, atomicTx := range b.atomicTxs {
-			// We perform this check manually here to avoid the overhead of having to
-			// reparse the atomicTx in `CalcExtDataGasUsed`.
-			fixedFee := rules.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
-			gasUsed, err := atomicTx.GasUsed(fixedFee)
-			if err != nil {
-				return err
-			}
-			totalGasUsed, err = safemath.Add64(totalGasUsed, gasUsed)
-			if err != nil {
-				return err
-			}
-		}
-
 		switch {
-		case ethHeader.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0:
-			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", ethHeader.ExtDataGasUsed, totalGasUsed)
-
 		// Make sure BlockGasCost is not nil
 		// NOTE: ethHeader.BlockGasCost correctness is checked in header verification
 		case ethHeader.BlockGasCost == nil:
@@ -293,5 +223,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
 		}
 	}
-	return nil
+
+	return bm.blockExtension.SyntacticVerify(b, rules)
 }

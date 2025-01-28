@@ -58,7 +58,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	if err != nil {
 		t.Fatal("could not initialize atomix tx repository", err)
 	}
-	atomicBackend, err := state.NewAtomicBackend(clientDB, utils.TestSnowContext().SharedMemory, nil, repo, 0, common.Hash{}, commitInterval)
+	atomicBackend, err := state.NewAtomicBackend(utils.TestSnowContext().SharedMemory, nil, repo, 0, common.Hash{}, commitInterval)
 	if err != nil {
 		t.Fatal("could not initialize atomic backend", err)
 	}

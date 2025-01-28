@@ -138,7 +138,7 @@ type VerifierBackend struct {
 
 type BlockFetcher interface {
 	LastAcceptedBlockInternal() snowman.Block
-	GetBlockInternal(context.Context, ids.ID) (snowman.Block, error)
+	GetAtomicBlock(context.Context, ids.ID) (AtomicBlockContext, error)
 }
 
 type AtomicBlockContext interface {

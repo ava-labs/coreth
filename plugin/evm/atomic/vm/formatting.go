@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"fmt"
@@ -49,4 +49,30 @@ func (vm *VM) FormatAddress(chainID ids.ID, addr ids.ShortID) (string, error) {
 	}
 	hrp := constants.GetHRP(vm.ctx.NetworkID)
 	return address.Format(chainIDAlias, hrp, addr.Bytes())
+}
+
+// ParseAddress takes in an address and produces the ID of the chain it's for
+// the ID of the address
+func (vm *VM) ParseAddress(addrStr string) (ids.ID, ids.ShortID, error) {
+	chainIDAlias, hrp, addrBytes, err := address.Parse(addrStr)
+	if err != nil {
+		return ids.ID{}, ids.ShortID{}, err
+	}
+
+	chainID, err := vm.ctx.BCLookup.Lookup(chainIDAlias)
+	if err != nil {
+		return ids.ID{}, ids.ShortID{}, err
+	}
+
+	expectedHRP := constants.GetHRP(vm.ctx.NetworkID)
+	if hrp != expectedHRP {
+		return ids.ID{}, ids.ShortID{}, fmt.Errorf("expected hrp %q but got %q",
+			expectedHRP, hrp)
+	}
+
+	addr, err := ids.ToShortID(addrBytes)
+	if err != nil {
+		return ids.ID{}, ids.ShortID{}, err
+	}
+	return chainID, addr, nil
 }

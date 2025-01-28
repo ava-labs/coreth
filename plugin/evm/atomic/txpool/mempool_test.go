@@ -16,7 +16,8 @@ import (
 
 func TestMempoolAddTx(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(&snow.Context{}, prometheus.NewRegistry(), 5_000, nil)
+	m := &Mempool{}
+	err := m.Initialize(&snow.Context{}, prometheus.NewRegistry(), 5_000, nil)
 	require.NoError(err)
 
 	txs := make([]*atomic.GossipAtomicTx, 0)
@@ -41,7 +42,8 @@ func TestMempoolAddTx(t *testing.T) {
 // Add should return an error if a tx is already known
 func TestMempoolAdd(t *testing.T) {
 	require := require.New(t)
-	m, err := NewMempool(&snow.Context{}, prometheus.NewRegistry(), 5_000, nil)
+	m := &Mempool{}
+	err := m.Initialize(&snow.Context{}, prometheus.NewRegistry(), 5_000, nil)
 	require.NoError(err)
 
 	tx := &atomic.GossipAtomicTx{
@@ -110,7 +112,8 @@ func TestAtomicMempoolIterate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
-			m, err := NewMempool(&snow.Context{}, prometheus.NewRegistry(), 10, nil)
+			m := &Mempool{}
+			err := m.Initialize(&snow.Context{}, prometheus.NewRegistry(), 10, nil)
 			require.NoError(err)
 
 			for _, add := range tt.add {

@@ -31,7 +31,11 @@ import (
 // The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 const ParentsToFetch = 256
 
-var stateSyncSummaryKey = []byte("stateSyncSummary")
+var (
+	stateSyncSummaryKey = []byte("stateSyncSummary")
+
+	errExtenderAlreadySet = fmt.Errorf("sync extender already set")
+)
 
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
@@ -39,12 +43,6 @@ type BlockAcceptor interface {
 
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
-}
-
-type Extender interface {
-	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
-	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
-	OnFinishAfterCommit(summaryHeight uint64) error
 }
 
 // ClientConfig defines the options and dependencies needed to construct a Client
@@ -68,7 +66,7 @@ type ClientConfig struct {
 
 	// Extension points
 	SyncableParser message.SyncableParser
-	ExtraSyncer    Extender
+	SyncExtender   Extender
 
 	Client syncclient.Client
 
@@ -171,7 +169,10 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	return client.ClientConfig.ExtraSyncer.Sync(ctx, client.Client, client.VerDB, client.syncSummary)
+	if client.SyncExtender != nil {
+		return client.SyncExtender.Sync(ctx, client.Client, client.VerDB, client.syncSummary)
+	}
+	return nil
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -365,8 +366,10 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	if err := client.ExtraSyncer.OnFinishBeforeCommit(client.LastAcceptedHeight, client.syncSummary); err != nil {
-		return err
+	if client.SyncExtender != nil {
+		if err := client.SyncExtender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.syncSummary); err != nil {
+			return err
+		}
 	}
 
 	if err := client.commitVMMarkers(); err != nil {
@@ -377,7 +380,11 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	return client.ExtraSyncer.OnFinishAfterCommit(block.NumberU64())
+	if client.SyncExtender != nil {
+		return client.SyncExtender.OnFinishAfterCommit(block.NumberU64())
+	}
+
+	return nil
 }
 
 // commitVMMarkers updates the following markers in the VM's database
