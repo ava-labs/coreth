@@ -79,9 +79,9 @@ Therefore, we use the [Predicate Utils](https://github.com/ava-labs/coreth/blob/
 
 ### Performance Optimization: C-Chain to Avalanche L1
 
-For communication between the C-Chain and L1, as well as broader interactions between the Primary Network and Avalanche L1s, we've implemented special handling for the C-Chain.
+For communication between the C-Chain and an L1, as well as broader interactions between the Primary Network and Avalanche L1s, we have implemented special handling for the C-Chain.
 
-The Primary Network has a large validator set, which creates a unique challenge for Avalanche Warp Messages: Since reaching the required stake threshold would demand collecting numerous signatures, and verifying messages from the Primary Network would be computationally costly. However, we've developed a more efficient solution.
+The Primary Network has a large validator set, which creates a unique challenge for Avalanche Warp messages. To reach the required stake threshold, numerous signatures would need to be collected and verifying messages from the Primary Network would be computationally costly. However, we have developed a more efficient solution.
 
 When an Avalanche L1 receives a message from a blockchain on the Primary Network, we use the validator set of the receiving L1 instead of the entire network when validating the message. Note this is NOT possible if an L1 does not validate the Primary Network, in which case the Warp precompile must be configured with `requirePrimaryNetworkSigners`.
 
