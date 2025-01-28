@@ -19,13 +19,13 @@ import (
 )
 
 type signatureTest struct {
-	name               string
-	stateF             func(*gomock.Controller) validators.State
-	quorumNum          uint64
-	quorumDen          uint64
-	msgF               func(*require.Assertions) *avalancheWarp.Message
-	verifyErr          error
-	getValidatorSetErr error
+	name         string
+	stateF       func(*gomock.Controller) validators.State
+	quorumNum    uint64
+	quorumDen    uint64
+	msgF         func(*require.Assertions) *avalancheWarp.Message
+	verifyErr    error
+	canonicalErr error
 }
 
 // This test copies the test coverage from https://github.com/ava-labs/avalanchego/blob/0117ab96/vms/platformvm/warp/signature_test.go#L137.
@@ -56,7 +56,7 @@ func TestSignatureVerification(t *testing.T) {
 				require.NoError(err)
 				return msg
 			},
-			getValidatorSetErr: errTest,
+			canonicalErr: errTest,
 		},
 		{
 			name: "can't get validator set",
@@ -83,7 +83,7 @@ func TestSignatureVerification(t *testing.T) {
 				require.NoError(err)
 				return msg
 			},
-			getValidatorSetErr: errTest,
+			canonicalErr: errTest,
 		},
 		{
 			name: "weight overflow",
@@ -123,7 +123,7 @@ func TestSignatureVerification(t *testing.T) {
 				require.NoError(err)
 				return msg
 			},
-			getValidatorSetErr: avalancheWarp.ErrWeightOverflow,
+			canonicalErr: avalancheWarp.ErrWeightOverflow,
 		},
 		{
 			name: "invalid bit set index",
@@ -655,7 +655,7 @@ func TestSignatureVerification(t *testing.T) {
 				pChainHeight,
 				msg.UnsignedMessage.SourceChainID,
 			)
-			require.ErrorIs(err, tt.getValidatorSetErr)
+			require.ErrorIs(err, tt.canonicalErr)
 			if err != nil {
 				return
 			}
