@@ -210,7 +210,7 @@ func (c *Config) VerifyPredicate(predicateContext *precompileconfig.PredicateCon
 		c.RequirePrimaryNetworkSigners,
 	)
 
-	validatorSet, err := warp.GetCanonicalValidatorSetFromState(
+	validatorSet, err := warp.GetCanonicalValidatorSetFromChainID(
 		context.Background(),
 		state,
 		predicateContext.ProposerVMBlockCtx.PChainHeight,

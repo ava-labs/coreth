@@ -649,7 +649,7 @@ func TestSignatureVerification(t *testing.T) {
 			msg := tt.msgF(require)
 			pChainState := tt.stateF(ctrl)
 
-			validatorSet, err := avalancheWarp.GetCanonicalValidatorSetFromState(
+			validatorSet, err := avalancheWarp.GetCanonicalValidatorSetFromChainID(
 				context.Background(),
 				pChainState,
 				pChainHeight,
