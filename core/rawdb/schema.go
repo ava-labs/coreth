@@ -273,7 +273,7 @@ func skeletonHeaderKey(number uint64) []byte {
 	return append(skeletonHeaderPrefix, encodeBlockNumber(number)...)
 }
 
-// preimageKey = preimagePrefix + hash
+// preimageKey = PreimagePrefix + hash
 func preimageKey(hash common.Hash) []byte {
 	return append(PreimagePrefix, hash.Bytes()...)
 }

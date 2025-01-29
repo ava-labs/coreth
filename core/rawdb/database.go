@@ -570,7 +570,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			logged = time.Now()
 		}
 	}
-	// Display the database statistic.
+	// Display the database statistic of key-value store.
 	stats := [][]string{
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
 		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},
