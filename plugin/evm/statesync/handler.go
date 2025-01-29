@@ -51,7 +51,7 @@ func (h *Handler) AppRequest(
 	requestBytes []byte,
 ) ([]byte, *common.AppError) {
 	log.Debug("statesync AppRequest called", "nodeID", nodeID, "requestBytes", len(requestBytes))
-	rw := &rw{requestBytes: requestBytes}
+	rw := &rw{readBytes: requestBytes}
 	p := snap.NewFakePeer(protocolVersion, nodeID.String(), rw)
 	err := snap.HandleMessage(h, p)
 	log.Debug("statesync AppRequest handled", "nodeID", nodeID, "err", err)
@@ -61,8 +61,8 @@ func (h *Handler) AppRequest(
 			Message: err.Error(),
 		}
 	}
-	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(rw.responseBytes))
-	return rw.responseBytes, nil
+	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(rw.writeBytes))
+	return rw.writeBytes, nil
 }
 
 // AppGossip implements p2p.Handler.
@@ -86,21 +86,21 @@ func (h *Handler) PeerInfo(id enode.ID) interface{} { panic("calling not expecte
 
 // rw is a helper struct that implements ethp2p.MsgReadWriter.
 type rw struct {
-	requestBytes  []byte
-	responseBytes []byte
+	readBytes  []byte
+	writeBytes []byte
 }
 
 // ReadMsg implements ethp2p.MsgReadWriter.
 // It is expected to be called exactly once, immediately after the request is received.
 func (rw *rw) ReadMsg() (ethp2p.Msg, error) {
-	return fromBytes(rw.requestBytes)
+	return fromBytes(rw.readBytes)
 }
 
 // WriteMsg implements ethp2p.MsgReadWriter.
 // It is expected to be called exactly once, immediately after the response is prepared.
 func (rw *rw) WriteMsg(msg ethp2p.Msg) error {
 	var err error
-	rw.responseBytes, err = toBytes(msg)
+	rw.writeBytes, err = toBytes(msg)
 	return err
 }
 
