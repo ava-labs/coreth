@@ -24,11 +24,13 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
 	"github.com/ava-labs/libevm/p2p/enr"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/trie/trienode"
 )
@@ -286,12 +288,20 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	// Retrieve the requested state and bail out if non existent
 	tr, err := trie.New(trie.StateTrieID(req.Root), chain.TrieDB())
 	if err != nil {
+		log.Debug("Failed to open account trie", "root", req.Root, "err", err)
 		return nil, nil
 	}
-	it, err := chain.Snapshots().AccountIterator(req.Root, req.Origin, false)
+	nodeIt, err := tr.NodeIterator(req.Origin[:])
 	if err != nil {
+		log.Debug("Failed to iterate over account range", "origin", req.Origin, "err", err)
 		return nil, nil
 	}
+	it := trie.NewIterator(nodeIt)
+	// XXX: restore these
+	//it, err := chain.Snapshots().AccountIterator(req.Root, req.Origin, false)
+	//if err != nil {
+	//	return nil, nil
+	//}
 	// Iterate over the requested range and pile accounts up
 	var (
 		accounts []*AccountData
@@ -299,7 +309,14 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		last     common.Hash
 	)
 	for it.Next() {
-		hash, account := it.Hash(), common.CopyBytes(it.Account())
+		//hash, account := it.Hash(), common.CopyBytes(it.Account())
+		hash, account := common.BytesToHash(it.Key), it.Value
+		acc := new(types.StateAccount)
+		if err := rlp.DecodeBytes(account, &acc); err != nil {
+			log.Warn("Failed to unmarshal account", "hash", hash, "err", err)
+			continue
+		}
+		account = types.SlimAccountRLP(*acc)
 
 		// Track the returned interval for the Merkle proofs
 		last = hash
@@ -318,7 +335,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 			break
 		}
 	}
-	it.Release()
+	//it.Release()
 
 	// Generate the Merkle proofs for the first and last account
 	proof := trienode.NewProofSet()
@@ -371,11 +388,35 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if len(req.Limit) > 0 {
 			limit, req.Limit = common.BytesToHash(req.Limit), nil
 		}
-		// Retrieve the requested state and bail out if non existent
-		it, err := chain.Snapshots().StorageIterator(req.Root, account, origin)
+
+		// XXX: put this back
+		accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.TrieDB())
 		if err != nil {
 			return nil, nil
 		}
+		acc, err := accTrie.GetAccountByHash(account)
+		if err != nil || acc == nil {
+			return nil, nil
+		}
+		id := trie.StorageTrieID(req.Root, account, acc.Root)
+		stTrie, err := trie.NewStateTrie(id, chain.TrieDB())
+		if err != nil {
+			return nil, nil
+		}
+
+		// XXX: put this back
+		// Retrieve the requested state and bail out if non existent
+		//it, err := chain.Snapshots().StorageIterator(req.Root, account, origin)
+		//if err != nil {
+		//	return nil, nil
+		//}
+		nodeIt, err := stTrie.NodeIterator(origin[:])
+		if err != nil {
+			log.Debug("Failed to iterate over storage range", "origin", origin, "err", err)
+			return nil, nil
+		}
+		it := trie.NewIterator(nodeIt)
+
 		// Iterate over the requested range and pile slots up
 		var (
 			storage []*StorageData
@@ -387,7 +428,8 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				abort = true
 				break
 			}
-			hash, slot := it.Hash(), common.CopyBytes(it.Slot())
+			//hash, slot := it.Hash(), common.CopyBytes(it.Slot())
+			hash, slot := common.BytesToHash(it.Key), common.CopyBytes(it.Value)
 
 			// Track the returned interval for the Merkle proofs
 			last = hash
@@ -406,7 +448,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if len(storage) > 0 {
 			slots = append(slots, storage)
 		}
-		it.Release()
+		//it.Release()
 
 		// Generate the Merkle proofs for the first and last storage slot, but
 		// only if the response was capped. If the entire storage trie included
@@ -414,19 +456,6 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.TrieDB())
-			if err != nil {
-				return nil, nil
-			}
-			acc, err := accTrie.GetAccountByHash(account)
-			if err != nil || acc == nil {
-				return nil, nil
-			}
-			id := trie.StorageTrieID(req.Root, account, acc.Root)
-			stTrie, err := trie.NewStateTrie(id, chain.TrieDB())
-			if err != nil {
-				return nil, nil
-			}
 			proof := trienode.NewProofSet()
 			if err := stTrie.Prove(origin[:], proof); err != nil {
 				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
