@@ -5,6 +5,7 @@ package statesync
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
@@ -53,7 +54,7 @@ func NewOutboundPeer(nodeID ids.NodeID, sender common.AppSender) *snap.Peer {
 func (o *outbound) WriteMsg(msg ethp2p.Msg) error {
 	bytes, err := toBytes(msg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to convert message to bytes: %w, expected: %d", err, msg.Size)
 	}
 
 	nodeIDs := set.NewSet[ids.NodeID](1)

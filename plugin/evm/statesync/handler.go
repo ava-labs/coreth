@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth/protocols/snap"
+	"github.com/ava-labs/libevm/log"
 	ethp2p "github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
 )
@@ -113,6 +114,7 @@ func (rw *rw) WriteMsg(msg ethp2p.Msg) error {
 func toBytes(msg ethp2p.Msg) ([]byte, error) {
 	bytes := make([]byte, msg.Size+wrappers.LongLen)
 	binary.BigEndian.PutUint64(bytes, msg.Code)
-	_, err := msg.Payload.Read(bytes[wrappers.LongLen:])
+	n, err := msg.Payload.Read(bytes[wrappers.LongLen:])
+	log.Debug("toBytes", "n", n, "err", err)
 	return bytes, err
 }
