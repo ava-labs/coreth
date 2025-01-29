@@ -50,6 +50,7 @@ func (h *Handler) AppRequest(
 	deadline time.Time,
 	requestBytes []byte,
 ) ([]byte, *common.AppError) {
+	start := time.Now()
 	log.Debug("statesync AppRequest called", "nodeID", nodeID, "requestBytes", len(requestBytes))
 	rw := &rw{readBytes: requestBytes}
 	p := snap.NewFakePeer(protocolVersion, nodeID.String(), rw)
@@ -61,7 +62,7 @@ func (h *Handler) AppRequest(
 			Message: err.Error(),
 		}
 	}
-	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(rw.writeBytes))
+	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(rw.writeBytes), "duration", time.Since(start))
 	return rw.writeBytes, nil
 }
 
