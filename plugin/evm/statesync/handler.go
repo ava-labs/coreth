@@ -30,7 +30,7 @@ var (
 )
 
 const (
-	HandlerID                = 128 // ID for the state sync handler, leaving earlier IDs reserved
+	ProtocolID               = 128 // ID for the state sync handler, leaving earlier IDs reserved
 	ErrCodeSnapHandlerFailed = 1
 
 	protocolVersion = 0
@@ -53,7 +53,7 @@ func (h *Handler) AppRequest(
 	log.Debug("statesync AppRequest called", "nodeID", nodeID, "requestBytes", len(requestBytes))
 	rw := &rw{requestBytes: requestBytes}
 	p := snap.NewFakePeer(protocolVersion, nodeID.String(), rw)
-	err := snap.Handle(h, p)
+	err := snap.HandleMessage(h, p)
 	log.Debug("statesync AppRequest handled", "nodeID", nodeID, "err", err)
 	if err != nil {
 		return nil, &common.AppError{
@@ -93,19 +93,7 @@ type rw struct {
 // ReadMsg implements ethp2p.MsgReadWriter.
 // It is expected to be called exactly once, immediately after the request is received.
 func (rw *rw) ReadMsg() (ethp2p.Msg, error) {
-	// parse first uint64 as code
-	if len(rw.requestBytes) < wrappers.LongLen {
-		return ethp2p.Msg{}, fmt.Errorf("request too short: %d", len(rw.requestBytes))
-	}
-	code := binary.BigEndian.Uint64(rw.requestBytes)
-	rw.requestBytes = rw.requestBytes[wrappers.LongLen:]
-
-	return ethp2p.Msg{
-		Code:       code,
-		Size:       uint32(len(rw.requestBytes)),
-		Payload:    bytes.NewReader(rw.requestBytes),
-		ReceivedAt: time.Now(),
-	}, nil
+	return fromBytes(rw.requestBytes)
 }
 
 // WriteMsg implements ethp2p.MsgReadWriter.
@@ -114,6 +102,19 @@ func (rw *rw) WriteMsg(msg ethp2p.Msg) error {
 	var err error
 	rw.responseBytes, err = toBytes(msg)
 	return err
+}
+
+func fromBytes(msgBytes []byte) (ethp2p.Msg, error) {
+	if len(msgBytes) < wrappers.LongLen {
+		return ethp2p.Msg{}, fmt.Errorf("bytes too short: %d", len(msgBytes))
+	}
+	code := binary.BigEndian.Uint64(msgBytes)
+	return ethp2p.Msg{
+		Code:       code,
+		Size:       uint32(len(msgBytes) - wrappers.LongLen),
+		Payload:    bytes.NewReader(msgBytes[wrappers.LongLen:]),
+		ReceivedAt: time.Now(),
+	}, nil
 }
 
 func toBytes(msg ethp2p.Msg) ([]byte, error) {
