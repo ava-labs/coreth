@@ -24,7 +24,7 @@ const (
 	defaultTrieDirtyCommitTarget                  = 20
 	defaultTriePrefetcherParallelism              = 16
 	defaultSnapshotCache                          = 256
-	defaultSyncableCommitInterval                 = defaultCommitInterval * 4
+	defaultSyncableCommitInterval                 = defaultCommitInterval
 	defaultSnapshotWait                           = false
 	defaultRpcGasCap                              = 50_000_000 // Default to 50M Gas Limit
 	defaultRpcTxFeeCap                            = 100        // 100 AVAX
