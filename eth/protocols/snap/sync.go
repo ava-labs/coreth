@@ -1046,7 +1046,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 			limit:   task.Last,
 			task:    task,
 		}
-		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout()+20*time.Second, func() {
 			peer.Log().Debug("Account range request timed out", "reqid", reqid)
 			s.rates.Update(idle, AccountRangeMsg, 0, 0)
 			s.scheduleRevertAccountRequest(req)
@@ -1304,7 +1304,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			req.origin = subtask.Next
 			req.limit = subtask.Last
 		}
-		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout()+20*time.Second, func() {
 			peer.Log().Debug("Storage request timed out", "reqid", reqid)
 			s.rates.Update(idle, StorageRangesMsg, 0, 0)
 			s.scheduleRevertStorageRequest(req)
