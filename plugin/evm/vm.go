@@ -623,7 +623,7 @@ func (vm *VM) Initialize(
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
 	//////
-	vm.Network.AddHandler(statesync.HandlerID, statesync.NewHandler(vm.blockChain))
+	vm.Network.AddHandler(statesync.ProtocolID, statesync.NewHandler(vm.blockChain))
 
 	vm.setAppRequestHandlers()
 
