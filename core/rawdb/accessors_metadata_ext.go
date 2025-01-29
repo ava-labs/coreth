@@ -88,12 +88,6 @@ func HasPruningDisabled(db ethdb.KeyValueStore) (bool, error) {
 	return db.Has(pruningDisabledKey)
 }
 
-// DeletePruningDisabled deletes the marker indicating that the node has
-// run with pruning disabled.
-func DeletePruningDisabled(db ethdb.KeyValueStore) error {
-	return db.Delete(pruningDisabledKey)
-}
-
 // WriteAcceptorTip writes [hash] as the last accepted block that has been fully processed.
 func WriteAcceptorTip(db ethdb.KeyValueWriter, hash common.Hash) error {
 	return db.Put(acceptorTipKey, hash[:])
