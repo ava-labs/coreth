@@ -53,8 +53,13 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 
 // ReadCode retrieves the contract code of the provided code hash.
 func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	// Try with the prefixed code scheme first and only. The legacy scheme was never used in coreth.
-	data, _ := db.Get(codeKey(hash))
+	// Try with the prefixed code scheme first, if not then try with legacy
+	// scheme.
+	data := ReadCodeWithPrefix(db, hash)
+	if len(data) != 0 {
+		return data
+	}
+	data, _ = db.Get(hash.Bytes())
 	return data
 }
 
@@ -69,8 +74,12 @@ func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 // HasCode checks if the contract code corresponding to the
 // provided code hash is present in the db.
 func HasCode(db ethdb.KeyValueReader, hash common.Hash) bool {
-	// Try with the prefixed code scheme first and only. The legacy scheme was never used in coreth.
-	ok, _ := db.Has(codeKey(hash))
+	// Try with the prefixed code scheme first, if not then try with legacy
+	// scheme.
+	if ok := HasCodeWithPrefix(db, hash); ok {
+		return true
+	}
+	ok, _ := db.Has(hash.Bytes())
 	return ok
 }
 
