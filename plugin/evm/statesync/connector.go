@@ -26,7 +26,7 @@ type Connector struct {
 }
 
 func NewConnector(sync *snap.Syncer, sender common.AppSender) *Connector {
-	return &Connector{sync: sync}
+	return &Connector{sync: sync, sender: sender}
 }
 
 func (c *Connector) Connected(ctx context.Context, nodeID ids.NodeID, version *version.Application) error {
