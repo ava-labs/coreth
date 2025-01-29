@@ -6,9 +6,11 @@ package statesync
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
@@ -17,6 +19,11 @@ import (
 	"github.com/ava-labs/libevm/log"
 	ethp2p "github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
+)
+
+const (
+	maxRetries                 = 5
+	failedRequestSleepInterval = 10 * time.Millisecond
 )
 
 var (
@@ -42,9 +49,11 @@ func (c *Connector) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 }
 
 type outbound struct {
-	peerID ids.NodeID
-	sync   *snap.Syncer
-	sender *p2p.Client
+	peerID   ids.NodeID
+	sync     *snap.Syncer
+	sender   *p2p.Client
+	outBytes []byte
+	retries  int
 }
 
 func NewOutboundPeer(nodeID ids.NodeID, sync *snap.Syncer, sender *p2p.Client) *snap.Peer {
@@ -60,11 +69,15 @@ func (o *outbound) WriteMsg(msg ethp2p.Msg) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert message to bytes: %w, expected: %d", err, msg.Size)
 	}
+	o.outBytes = bytes
+	return o.send()
+}
 
+func (o *outbound) send() error {
 	nodeIDs := set.NewSet[ids.NodeID](1)
 	nodeIDs.Add(o.peerID)
 
-	return o.sender.AppRequest(context.Background(), nodeIDs, bytes, o.handleResponse)
+	return o.sender.AppRequest(context.Background(), nodeIDs, o.outBytes, o.handleResponse)
 }
 
 // ReadMsg implements the ethp2p.MsgReadWriter interface.
@@ -77,15 +90,39 @@ func (o *outbound) handleResponse(
 	responseBytes []byte,
 	err error,
 ) {
-	if err != nil {
-		log.Warn("got error response from peer", "peer", nodeID, "err", err)
+	if err == nil { // Handle successful response
+		log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(responseBytes))
+		p := snap.NewFakePeer(protocolVersion, nodeID.String(), &rw{readBytes: responseBytes})
+		if err := snap.HandleMessage(o, p); err != nil {
+			log.Warn("failed to handle response", "peer", nodeID, "err", err)
+		}
 		return
 	}
 
-	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(responseBytes))
-	p := snap.NewFakePeer(protocolVersion, nodeID.String(), &rw{readBytes: responseBytes})
-	if err := snap.HandleMessage(o, p); err != nil {
-		log.Warn("failed to handle response", "peer", nodeID, "err", err)
+	// Handle retry
+
+	log.Warn("got error response from peer", "peer", nodeID, "err", err)
+	// TODO: Is this the right way to check for AppError?
+	// Notably errors.As expects a ptr to a type that implements error interface,
+	// but *AppError implements error, not AppError.
+	appErr, ok := err.(*common.AppError)
+	if !ok {
+		log.Warn("unexpected error type", "err", err)
+		return
+	}
+	if appErr.Code != common.ErrTimeout.Code {
+		log.Debug("dropping non-timeout error", "peer", nodeID, "err", err)
+		return // only retry on timeout
+	}
+	if o.retries >= maxRetries {
+		log.Warn("reached max retries", "peer", nodeID)
+		return
+	}
+	o.retries++
+	log.Debug("retrying request", "peer", nodeID, "retries", o.retries)
+	time.Sleep(failedRequestSleepInterval)
+	if err := o.send(); err != nil {
+		log.Warn("failed to retry request, dropping", "peer", nodeID, "err", err)
 	}
 }
 
