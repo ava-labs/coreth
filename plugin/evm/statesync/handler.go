@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth/protocols/snap"
+	"github.com/ava-labs/libevm/log"
 	ethp2p "github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
 )
@@ -49,15 +50,18 @@ func (h *Handler) AppRequest(
 	deadline time.Time,
 	requestBytes []byte,
 ) ([]byte, *common.AppError) {
+	log.Debug("statesync AppRequest called", "nodeID", nodeID, "requestBytes", len(requestBytes))
 	rw := &rw{requestBytes: requestBytes}
 	p := snap.NewFakePeer(protocolVersion, nodeID.String(), rw)
 	err := snap.Handle(h, p)
+	log.Debug("statesync AppRequest handled", "nodeID", nodeID, "err", err)
 	if err != nil {
 		return nil, &common.AppError{
 			Code:    ErrCodeSnapHandlerFailed,
 			Message: err.Error(),
 		}
 	}
+	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(rw.responseBytes))
 	return rw.responseBytes, nil
 }
 
