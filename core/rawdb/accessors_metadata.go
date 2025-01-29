@@ -91,6 +91,20 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
+// ReadGenesisStateSpec retrieves the genesis state specification based on the
+// given genesis (block-)hash.
+func ReadGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) []byte {
+	data, _ := db.Get(genesisStateSpecKey(blockhash))
+	return data
+}
+
+// WriteGenesisStateSpec writes the genesis state specification into the disk.
+func WriteGenesisStateSpec(db ethdb.KeyValueWriter, blockhash common.Hash, data []byte) {
+	if err := db.Put(genesisStateSpecKey(blockhash), data); err != nil {
+		log.Crit("Failed to store genesis state", "err", err)
+	}
+}
+
 // crashList is a list of unclean-shutdown-markers, for rlp-encoding to the
 // database
 type crashList struct {
@@ -168,6 +182,19 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
+	}
+}
+
+// ReadTransitionStatus retrieves the eth2 transition status from the database
+func ReadTransitionStatus(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(transitionStatusKey)
+	return data
+}
+
+// WriteTransitionStatus stores the eth2 transition status to the database
+func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
+	if err := db.Put(transitionStatusKey, data); err != nil {
+		log.Crit("Failed to store the eth2 transition status", "err", err)
 	}
 }
 
