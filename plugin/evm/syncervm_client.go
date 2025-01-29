@@ -163,12 +163,13 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 	if client.useUpstream {
 		log.Warn("Using upstream state syncer (untested)")
 		syncer := snap.NewSyncer(client.chaindb, rawdb.HashScheme)
+		p2pClient := client.network.NewClient(ethstatesync.ProtocolID)
 		if len(client.stateSyncNodes) > 0 {
 			for _, nodeID := range client.stateSyncNodes {
-				syncer.Register(ethstatesync.NewOutboundPeer(nodeID, client.appSender))
+				syncer.Register(ethstatesync.NewOutboundPeer(nodeID, syncer, p2pClient))
 			}
 		} else {
-			client.network.AddConnector(ethstatesync.NewConnector(syncer, client.appSender))
+			client.network.AddConnector(ethstatesync.NewConnector(syncer, p2pClient))
 		}
 		if err := syncer.Sync(client.syncSummary.BlockRoot, convertReadOnlyToBidirectional(ctx.Done())); err != nil {
 			return err
