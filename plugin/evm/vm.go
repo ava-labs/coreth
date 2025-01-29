@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -624,6 +625,9 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
+	//////
+	vm.Network.AddHandler(statesync.HandlerID, statesync.NewHandler(vm.blockChain))
+
 	vm.setAppRequestHandlers()
 
 	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
@@ -739,6 +743,10 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		db:                   vm.versiondb,
 		atomicBackend:        vm.atomicBackend,
 		toEngine:             vm.toEngine,
+		network:              vm.Network,
+		appSender:            vm.p2pSender,
+		stateSyncNodes:       stateSyncIDs,
+		useUpstream:          vm.config.StateSyncUseUpstream,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
