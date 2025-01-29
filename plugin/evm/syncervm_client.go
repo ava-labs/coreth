@@ -17,8 +17,11 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/eth/protocols/snap"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	ethstatesync "github.com/ava-labs/coreth/plugin/evm/statesync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
@@ -57,6 +60,12 @@ type stateSyncClientConfig struct {
 	client syncclient.Client
 
 	toEngine chan<- commonEng.Message
+
+	///
+	useUpstream    bool
+	network        peer.Network
+	appSender      commonEng.AppSender
+	stateSyncNodes []ids.NodeID
 }
 
 type stateSyncerClient struct {
@@ -151,11 +160,40 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 
 	// Sync the EVM trie and then the atomic trie. These steps could be done
 	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
-	if err := client.syncStateTrie(ctx); err != nil {
-		return err
+	if client.useUpstream {
+		log.Warn("Using upstream state syncer (untested)")
+		syncer := snap.NewSyncer(client.chaindb, rawdb.HashScheme)
+		if len(client.stateSyncNodes) > 0 {
+			for _, nodeID := range client.stateSyncNodes {
+				syncer.Register(ethstatesync.NewOutboundPeer(nodeID, client.appSender))
+			}
+		} else {
+			client.network.AddConnector(ethstatesync.NewConnector(syncer, client.appSender))
+		}
+		if err := syncer.Sync(client.syncSummary.BlockRoot, convertReadOnlyToBidirectional(ctx.Done())); err != nil {
+			return err
+		}
+		log.Info("Upstream state syncer completed")
+	} else {
+		if err := client.syncStateTrie(ctx); err != nil {
+			return err
+		}
 	}
 
 	return client.syncAtomicTrie(ctx)
+}
+
+func convertReadOnlyToBidirectional[T any](readOnly <-chan T) chan T {
+	bidirectional := make(chan T)
+
+	go func() {
+		defer close(bidirectional)
+		for value := range readOnly {
+			bidirectional <- value
+		}
+	}()
+
+	return bidirectional
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
