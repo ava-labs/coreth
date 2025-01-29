@@ -52,21 +52,22 @@ const (
 
 // The following functions are used directly as their upstream definitions.
 var (
-	BloomLookup          = ethtypes.BloomLookup
-	BytesToBloom         = ethtypes.BytesToBloom
-	CalcUncleHash        = ethtypes.CalcUncleHash
-	CreateBloom          = ethtypes.CreateBloom
-	CopyHeader           = ethtypes.CopyHeader
-	NewReceipt           = ethtypes.NewReceipt
-	NewBlock             = ethtypes.NewBlock
-	NewBlockWithHeader   = ethtypes.NewBlockWithHeader
-	NewContractCreation  = ethtypes.NewContractCreation
-	NewTransaction       = ethtypes.NewTransaction
-	EncodeNonce          = ethtypes.EncodeNonce
-	NewEmptyStateAccount = ethtypes.NewEmptyStateAccount
-	SlimAccountRLP       = ethtypes.SlimAccountRLP
-	FullAccount          = ethtypes.FullAccount
-	FullAccountRLP       = ethtypes.FullAccountRLP
+	BloomLookup             = ethtypes.BloomLookup
+	BytesToBloom            = ethtypes.BytesToBloom
+	CalcUncleHash           = ethtypes.CalcUncleHash
+	CreateBloom             = ethtypes.CreateBloom
+	CopyHeader              = ethtypes.CopyHeader
+	NewReceipt              = ethtypes.NewReceipt
+	NewBlock                = ethtypes.NewBlock
+	NewBlockWithHeader      = ethtypes.NewBlockWithHeader
+	NewContractCreation     = ethtypes.NewContractCreation
+	NewTransaction          = ethtypes.NewTransaction
+	EncodeNonce             = ethtypes.EncodeNonce
+	NewEmptyStateAccount    = ethtypes.NewEmptyStateAccount
+	SlimAccountRLP          = ethtypes.SlimAccountRLP
+	FullAccount             = ethtypes.FullAccount
+	FullAccountRLP          = ethtypes.FullAccountRLP
+	HeaderParentHashFromRLP = ethtypes.HeaderParentHashFromRLP
 
 	// Signers
 	NewEIP155Signer        = ethtypes.NewEIP155Signer
