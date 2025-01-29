@@ -82,34 +82,6 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 	}
 }
 
-// ReadSnapshotBlockHash retrieves the hash of the block whose state is contained in
-// the persisted snapshot.
-func ReadSnapshotBlockHash(db ethdb.KeyValueReader) common.Hash {
-	data, _ := db.Get(snapshotBlockHashKey)
-	if len(data) != common.HashLength {
-		return common.Hash{}
-	}
-	return common.BytesToHash(data)
-}
-
-// WriteSnapshotBlockHash stores the root of the block whose state is contained in
-// the persisted snapshot.
-func WriteSnapshotBlockHash(db ethdb.KeyValueWriter, blockHash common.Hash) {
-	if err := db.Put(snapshotBlockHashKey, blockHash[:]); err != nil {
-		log.Crit("Failed to store snapshot block hash", "err", err)
-	}
-}
-
-// DeleteSnapshotBlockHash deletes the hash of the block whose state is contained in
-// the persisted snapshot. Since snapshots are not immutable, this  method can
-// be used during updates, so a crash or failure will mark the entire snapshot
-// invalid.
-func DeleteSnapshotBlockHash(db ethdb.KeyValueWriter) {
-	if err := db.Delete(snapshotBlockHashKey); err != nil {
-		log.Crit("Failed to remove snapshot block hash", "err", err)
-	}
-}
-
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(accountSnapshotKey(hash))
@@ -154,11 +126,6 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 // space of a specific account.
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
 	return NewKeyLengthIterator(db.NewIterator(storageSnapshotsKey(accountHash), nil), len(SnapshotStoragePrefix)+2*common.HashLength)
-}
-
-// IterateAccountSnapshots returns an iterator for walking all of the accounts in the snapshot
-func IterateAccountSnapshots(db ethdb.Iteratee) ethdb.Iterator {
-	return NewKeyLengthIterator(db.NewIterator(SnapshotAccountPrefix, nil), len(SnapshotAccountPrefix)+common.HashLength)
 }
 
 // ReadSnapshotJournal retrieves the serialized in-memory diff layers saved at
