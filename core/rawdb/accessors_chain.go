@@ -46,10 +46,15 @@ import (
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
-	data, _ := db.Get(headerHashKey(number))
-	if len(data) == 0 {
-		return common.Hash{}
-	}
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		data, _ = reader.Ancient(ChainFreezerHashTable, number)
+		if len(data) == 0 {
+			// Get it by hash from leveldb
+			data, _ = db.Get(headerHashKey(number))
+		}
+		return nil
+	})
 	return common.BytesToHash(data)
 }
 
@@ -450,12 +455,20 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 // ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
 // block at number, in RLP encoding.
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
-	// Need to get the hash
-	data, _ := db.Get(blockBodyKey(number, ReadCanonicalHash(db, number)))
-	if len(data) > 0 {
-		return data
-	}
-	return nil
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		data, _ = reader.Ancient(ChainFreezerBodiesTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Block is not in ancients, read from leveldb by hash and number.
+		// Note: ReadCanonicalHash cannot be used here because it also
+		// calls ReadAncients internally.
+		hash, _ := db.Get(headerHashKey(number))
+		data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hash)))
+		return nil
+	})
+	return data
 }
 
 // WriteBodyRLP stores an RLP encoded block body into the database.
