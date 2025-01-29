@@ -72,7 +72,7 @@ func WriteSnapshotRoot(db ethdb.KeyValueWriter, root common.Hash) {
 	}
 }
 
-// DeleteSnapshotRoot deletes the root of the block whose state is contained in
+// DeleteSnapshotRoot deletes the hash of the block whose state is contained in
 // the persisted snapshot. Since snapshots are not immutable, this  method can
 // be used during updates, so a crash or failure will mark the entire snapshot
 // invalid.
