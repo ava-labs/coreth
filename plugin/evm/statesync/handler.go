@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -16,7 +18,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth/protocols/snap"
-	"github.com/ava-labs/libevm/log"
 	ethp2p "github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
 )
@@ -115,6 +116,8 @@ func toBytes(msg ethp2p.Msg) ([]byte, error) {
 	bytes := make([]byte, msg.Size+wrappers.LongLen)
 	binary.BigEndian.PutUint64(bytes, msg.Code)
 	n, err := msg.Payload.Read(bytes[wrappers.LongLen:])
-	log.Debug("toBytes", "n", n, "err", err)
+	if n == int(msg.Size) && errors.Is(err, io.EOF) {
+		err = nil
+	}
 	return bytes, err
 }
