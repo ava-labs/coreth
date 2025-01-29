@@ -528,6 +528,7 @@ func TestCanonicalHashIteration(t *testing.T) {
 	// Fill database with testing data.
 	for i := uint64(1); i <= 8; i++ {
 		WriteCanonicalHash(db, common.Hash{}, i)
+		WriteTd(db, common.Hash{}, i, big.NewInt(10)) // Write some interferential data
 	}
 	for i, c := range cases {
 		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)
