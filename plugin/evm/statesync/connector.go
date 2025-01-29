@@ -82,6 +82,7 @@ func (o *outbound) handleResponse(
 		return
 	}
 
+	log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(responseBytes))
 	p := snap.NewFakePeer(protocolVersion, nodeID.String(), &rw{responseBytes: responseBytes})
 	if err := snap.HandleMessage(o, p); err != nil {
 		log.Warn("failed to handle response", "peer", nodeID, "err", err)
