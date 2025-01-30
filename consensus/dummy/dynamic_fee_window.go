@@ -15,6 +15,11 @@ import (
 
 var ErrInsufficientDynamicFeeWindowLength = errors.New("insufficient length for dynamic fee window")
 
+// DynamicFeeWindow is a window of the last [params.RollupWindow] seconds of gas
+// usage.
+//
+// Index 0 is the oldest entry, and [params.RollupWindow-1] is the current
+// entry.
 type DynamicFeeWindow [params.RollupWindow]uint64
 
 func ParseDynamicFeeWindow(bytes []byte) (DynamicFeeWindow, error) {
