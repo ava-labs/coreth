@@ -1815,9 +1815,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatalf("Block failed verification on VM1: %s", err)
 	}
 
-	if _, err := vm1.GetBlockIDAtHeight(context.Background(), vm1BlkA.Height()); err != database.ErrNotFound {
-		t.Fatalf("Expected unaccepted block not to be indexed by height, but found %s", err)
-	}
+	_, err = vm1.GetBlockIDAtHeight(context.Background(), vm1BlkA.Height())
+	assert.NotErrorIs(t, err, database.ErrNotFound, "Expected unaccepted block not to be indexed by height")
 
 	if err := vm1.SetPreference(context.Background(), vm1BlkA.ID()); err != nil {
 		t.Fatal(err)
@@ -1830,9 +1829,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 	if err := vm2BlkA.Verify(context.Background()); err != nil {
 		t.Fatalf("Block failed verification on VM2: %s", err)
 	}
-	if _, err := vm2.GetBlockIDAtHeight(context.Background(), vm2BlkA.Height()); err != database.ErrNotFound {
-		t.Fatalf("Expected unaccepted block not to be indexed by height, but found %s", err)
-	}
+	_, err = vm2.GetBlockIDAtHeight(context.Background(), vm2BlkA.Height())
+	assert.NotErrorIs(t, err, database.ErrNotFound, "Expected unaccepted block not to be indexed by height")
 	if err := vm2.SetPreference(context.Background(), vm2BlkA.ID()); err != nil {
 		t.Fatal(err)
 	}
@@ -1896,9 +1894,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := vm1.GetBlockIDAtHeight(context.Background(), vm1BlkB.Height()); err != database.ErrNotFound {
-		t.Fatalf("Expected unaccepted block not to be indexed by height, but found %s", err)
-	}
+	_, err = vm1.GetBlockIDAtHeight(context.Background(), vm1BlkB.Height())
+	assert.NotErrorIs(t, err, database.ErrNotFound, "Expected unaccepted block not to be indexed by height")
 
 	if err := vm1.SetPreference(context.Background(), vm1BlkB.ID()); err != nil {
 		t.Fatal(err)
@@ -1934,9 +1931,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatalf("Block failed verification on VM1: %s", err)
 	}
 
-	if _, err := vm1.GetBlockIDAtHeight(context.Background(), vm1BlkC.Height()); err != database.ErrNotFound {
-		t.Fatalf("Expected unaccepted block not to be indexed by height, but found %s", err)
-	}
+	_, err = vm1.GetBlockIDAtHeight(context.Background(), vm1BlkC.Height())
+	assert.NotErrorIs(t, err, database.ErrNotFound, "Expected unaccepted block not to be indexed by height")
 
 	if err := vm1BlkC.Accept(context.Background()); err != nil {
 		t.Fatalf("VM1 failed to accept block: %s", err)
