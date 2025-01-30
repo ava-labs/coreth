@@ -773,6 +773,9 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			for it.Next() {
 				keyValuePairs[hex.EncodeToString(it.Key())] = hex.EncodeToString(it.Value())
 			}
+			err = it.Error()
+			assert.NoError(t, err)
+			it.Release()
 			assert.Equal(t, testCase.wantKeyValuePairs, keyValuePairs)
 		})
 	}
