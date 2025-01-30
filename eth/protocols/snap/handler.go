@@ -432,8 +432,8 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		leafsRequest := &message.LeafsRequest{
 			Root:     req.Root,
 			Account:  account,
-			Start:    req.Origin[:],
-			End:      req.Limit[:],
+			Start:    origin[:],
+			End:      limit[:],
 			NodeType: message.StateTrieNode,
 		}
 		stateKeyLength := common.HashLength
