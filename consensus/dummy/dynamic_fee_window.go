@@ -72,7 +72,7 @@ func (w *DynamicFeeWindow) Sum() uint64 {
 }
 
 func (w *DynamicFeeWindow) Bytes() []byte {
-	bytes := make([]byte, len(w)*wrappers.LongLen)
+	bytes := make([]byte, params.DynamicFeeExtraDataSize)
 	for i, v := range w {
 		offset := i * wrappers.LongLen
 		binary.BigEndian.PutUint64(bytes[offset:], v)
