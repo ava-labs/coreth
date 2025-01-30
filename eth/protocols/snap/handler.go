@@ -447,9 +447,6 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		ctx, cancel := context.WithTimeout(context.Background(), responseTime)
 		defer cancel() // don't leak a goroutine
 		handler.HandleRequest(ctx)
-		log.Debug(
-			"leafs", "request", leafsRequest, "response", leafsResponse,
-		)
 
 		// XXX: put this back
 		// Retrieve the requested state and bail out if non existent
