@@ -18,11 +18,15 @@ package snap
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	ethtypes "github.com/ava-labs/libevm/core/types"
@@ -291,13 +295,32 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		log.Debug("Failed to open account trie", "root", req.Root, "err", err)
 		return nil, nil
 	}
-	nodeIt, err := tr.NodeIterator(req.Origin[:])
-	if err != nil {
-		log.Debug("Failed to iterate over account range", "origin", req.Origin, "err", err)
-		return nil, nil
-	}
-	it := trie.NewIterator(nodeIt)
+	//nodeIt, err := tr.NodeIterator(req.Origin[:])
+	//if err != nil {
+	//	log.Debug("Failed to iterate over account range", "origin", req.Origin, "err", err)
+	//	return nil, nil
+	//}
+	//it := trie.NewIterator(nodeIt)
 	// XXX: restore these
+	// Patching in the existing response mechanism for now
+	leafsRequest := &message.LeafsRequest{
+		Root:     req.Root,
+		Start:    req.Origin[:],
+		End:      req.Limit[:],
+		NodeType: message.StateTrieNode,
+	}
+	stateKeyLength := common.HashLength
+	leafsResponse := &message.LeafsResponse{}
+	maxLeavesLimit := uint16(1024)
+	handlerStats := stats.NewNoopHandlerStats()
+	handler := handlers.NewResponseBuilder(
+		leafsRequest, leafsResponse, tr, chain.Snapshots(), stateKeyLength, maxLeavesLimit, handlerStats,
+	)
+	responseTime := 1200 * time.Millisecond // 2s is the AppRequest timeout, better be conservative here
+	ctx, cancel := context.WithTimeout(context.Background(), responseTime)
+	defer cancel() // don't leak a goroutine
+	handler.HandleRequest(ctx)
+
 	//it, err := chain.Snapshots().AccountIterator(req.Root, req.Origin, false)
 	//if err != nil {
 	//	return nil, nil
@@ -308,9 +331,11 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		size     uint64
 		last     common.Hash
 	)
-	for it.Next() {
+	for i, leafResponseKey := range leafsResponse.Keys {
+		//for it.Next() {
 		//hash, account := it.Hash(), common.CopyBytes(it.Account())
-		hash, account := common.BytesToHash(it.Key), it.Value
+		//hash, account := common.BytesToHash(it.Key), it.Value
+		hash, account := common.BytesToHash(leafResponseKey), leafsResponse.Vals[i]
 		acc := new(types.StateAccount)
 		if err := rlp.DecodeBytes(account, &acc); err != nil {
 			log.Warn("Failed to unmarshal account", "hash", hash, "err", err)
@@ -399,10 +424,29 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			return nil, nil
 		}
 		id := trie.StorageTrieID(req.Root, account, acc.Root)
-		stTrie, err := trie.NewStateTrie(id, chain.TrieDB())
+		stTrie, err := trie.New(id, chain.TrieDB()) // XXX: put this back (was trie.NewStateTrie)
 		if err != nil {
 			return nil, nil
 		}
+		// Patching in the existing response mechanism for now
+		leafsRequest := &message.LeafsRequest{
+			Root:     req.Root,
+			Account:  account,
+			Start:    req.Origin[:],
+			End:      req.Limit[:],
+			NodeType: message.StateTrieNode,
+		}
+		stateKeyLength := common.HashLength
+		leafsResponse := &message.LeafsResponse{}
+		maxLeavesLimit := uint16(1024)
+		handlerStats := stats.NewNoopHandlerStats()
+		handler := handlers.NewResponseBuilder(
+			leafsRequest, leafsResponse, stTrie, chain.Snapshots(), stateKeyLength, maxLeavesLimit, handlerStats,
+		)
+		responseTime := 1200 * time.Millisecond // 2s is the AppRequest timeout, better be conservative here
+		ctx, cancel := context.WithTimeout(context.Background(), responseTime)
+		defer cancel() // don't leak a goroutine
+		handler.HandleRequest(ctx)
 
 		// XXX: put this back
 		// Retrieve the requested state and bail out if non existent
@@ -410,12 +454,12 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		//if err != nil {
 		//	return nil, nil
 		//}
-		nodeIt, err := stTrie.NodeIterator(origin[:])
-		if err != nil {
-			log.Debug("Failed to iterate over storage range", "origin", origin, "err", err)
-			return nil, nil
-		}
-		it := trie.NewIterator(nodeIt)
+		//nodeIt, err := stTrie.NodeIterator(origin[:])
+		//if err != nil {
+		//	log.Debug("Failed to iterate over storage range", "origin", origin, "err", err)
+		//	return nil, nil
+		//}
+		//it := trie.NewIterator(nodeIt)
 
 		// Iterate over the requested range and pile slots up
 		var (
@@ -423,13 +467,15 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			last    common.Hash
 			abort   bool
 		)
-		for it.Next() {
+		//for it.Next() {
+		for i, leafResponseKey := range leafsResponse.Keys {
 			if size >= hardLimit {
 				abort = true
 				break
 			}
 			//hash, slot := it.Hash(), common.CopyBytes(it.Slot())
-			hash, slot := common.BytesToHash(it.Key), common.CopyBytes(it.Value)
+			//hash, slot := common.BytesToHash(it.Key), common.CopyBytes(it.Value)
+			hash, slot := common.BytesToHash(leafResponseKey), leafsResponse.Vals[i]
 
 			// Track the returned interval for the Merkle proofs
 			last = hash
