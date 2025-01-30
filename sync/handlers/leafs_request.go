@@ -185,6 +185,30 @@ type responseBuilder struct {
 	stats        stats.LeafsRequestHandlerStats
 }
 
+func NewResponseBuilder(
+	request *message.LeafsRequest,
+	response *message.LeafsResponse,
+	t *trie.Trie,
+	snap *snapshot.Tree,
+	keyLength int,
+	limit uint16,
+	stats stats.LeafsRequestHandlerStats,
+) *responseBuilder {
+	return &responseBuilder{
+		request:   request,
+		response:  response,
+		t:         t,
+		snap:      snap,
+		keyLength: keyLength,
+		limit:     limit,
+		stats:     stats,
+	}
+}
+
+func (rb *responseBuilder) HandleRequest(ctx context.Context) error {
+	return rb.handleRequest(ctx)
+}
+
 func (rb *responseBuilder) handleRequest(ctx context.Context) error {
 	// Read from snapshot if a [snapshot.Tree] was provided in initialization
 	if rb.snap != nil {
