@@ -469,7 +469,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		)
 		//for it.Next() {
 		for i, leafResponseKey := range leafsResponse.Keys {
-			abort = true
+			abort = i < len(leafsResponse.Keys)-1
 			if size >= hardLimit {
 				break
 			}
