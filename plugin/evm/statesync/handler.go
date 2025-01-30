@@ -51,12 +51,11 @@ func (h *Handler) AppRequest(
 	requestBytes []byte,
 ) ([]byte, *common.AppError) {
 	start := time.Now()
-	log.Debug("statesync AppRequest called", "nodeID", nodeID, "requestBytes", len(requestBytes))
 	rw := &rw{readBytes: requestBytes}
 	p := snap.NewFakePeer(protocolVersion, nodeID.String(), rw)
 	err := snap.HandleMessage(h, p)
-	log.Debug("statesync AppRequest handled", "nodeID", nodeID, "err", err)
 	if err != nil {
+		log.Debug("statesync AppRequest err", "nodeID", nodeID, "err", err)
 		return nil, &common.AppError{
 			Code:    ErrCodeSnapHandlerFailed,
 			Message: err.Error(),

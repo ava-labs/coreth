@@ -247,6 +247,7 @@ func (rb *responseBuilder) handleRequest(ctx context.Context) error {
 		rb.stats.IncProofError()
 		return err
 	}
+	rb.response.More = true // set to signal a proof is needed
 
 	return nil
 }
@@ -291,12 +292,12 @@ func (rb *responseBuilder) fillFromSnapshot(ctx context.Context) (bool, error) {
 	defer proof.Close() // closing memdb does not error
 	if ok {
 		rb.response.Keys, rb.response.Vals = snapKeys, snapVals
-		rb.response.More = more
 		if len(rb.request.Start) == 0 && !more {
 			// omit proof via early return
 			rb.stats.IncSnapshotReadSuccess()
 			return true, nil
 		}
+		rb.response.More = true // set to signal a proof is needed
 		rb.response.ProofVals, err = iterateVals(proof)
 		if err != nil {
 			rb.stats.IncProofError()
@@ -462,7 +463,7 @@ func (rb *responseBuilder) fillFromTrie(ctx context.Context, end []byte) (bool, 
 	more := false
 	for it.Next() {
 		// if we're at the end, break this loop
-		if len(end) > 0 && bytes.Compare(it.Key, end) > 0 {
+		if len(rb.response.Keys) > 0 && len(end) > 0 && bytes.Compare(it.Key, end) > 0 {
 			more = true
 			break
 		}
@@ -513,7 +514,7 @@ func (rb *responseBuilder) readLeafsFromSnapshot(ctx context.Context) ([][]byte,
 	defer snapIt.Release()
 	for snapIt.Next() {
 		// if we're at the end, break this loop
-		if len(rb.request.End) > 0 && bytes.Compare(snapIt.Key(), rb.request.End) > 0 {
+		if len(keys) > 0 && len(rb.request.End) > 0 && bytes.Compare(snapIt.Key(), rb.request.End) > 0 {
 			break
 		}
 		// If we've returned enough data or run out of time, set the more flag and exit
