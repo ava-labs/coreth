@@ -597,7 +597,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 	}
 }
 
-func Test_atomicTrie_AcceptTrie(t *testing.T) {
+func TestAtomicTrie_AcceptTrie(t *testing.T) {
 	t.Parallel()
 
 	metadataHexPrefix := hex.EncodeToString(prefixdb.MakePrefix(atomicTrieMetaDBPrefix))
