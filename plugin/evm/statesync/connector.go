@@ -49,11 +49,9 @@ func (c *Connector) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 }
 
 type outbound struct {
-	peerID   ids.NodeID
-	sync     *snap.Syncer
-	sender   *p2p.Client
-	outBytes []byte
-	retries  int
+	peerID ids.NodeID
+	sync   *snap.Syncer
+	sender *p2p.Client
 }
 
 func NewOutboundPeer(nodeID ids.NodeID, sync *snap.Syncer, sender *p2p.Client) *snap.Peer {
@@ -64,27 +62,34 @@ func NewOutboundPeer(nodeID ids.NodeID, sync *snap.Syncer, sender *p2p.Client) *
 	})
 }
 
+// ReadMsg implements the ethp2p.MsgReadWriter interface.
+// It is not expected to be called in the used code path.
+func (o *outbound) ReadMsg() (ethp2p.Msg, error) { panic("not expected to be called") }
+
 func (o *outbound) WriteMsg(msg ethp2p.Msg) error {
 	bytes, err := toBytes(msg)
 	if err != nil {
 		return fmt.Errorf("failed to convert message to bytes: %w, expected: %d", err, msg.Size)
 	}
-	o.outBytes = bytes
-	return o.send()
+
+	message := &retryableMessage{outbound: o, outBytes: bytes}
+	return message.send()
 }
 
-func (o *outbound) send() error {
+type retryableMessage struct {
+	outbound *outbound
+	outBytes []byte
+	retries  int
+}
+
+func (r *retryableMessage) send() error {
 	nodeIDs := set.NewSet[ids.NodeID](1)
-	nodeIDs.Add(o.peerID)
+	nodeIDs.Add(r.outbound.peerID)
 
-	return o.sender.AppRequest(context.Background(), nodeIDs, o.outBytes, o.handleResponse)
+	return r.outbound.sender.AppRequest(context.Background(), nodeIDs, r.outBytes, r.handleResponse)
 }
 
-// ReadMsg implements the ethp2p.MsgReadWriter interface.
-// It is not expected to be called in the used code path.
-func (o *outbound) ReadMsg() (ethp2p.Msg, error) { panic("not expected to be called") }
-
-func (o *outbound) handleResponse(
+func (r *retryableMessage) handleResponse(
 	ctx context.Context,
 	nodeID ids.NodeID,
 	responseBytes []byte,
@@ -93,7 +98,7 @@ func (o *outbound) handleResponse(
 	if err == nil { // Handle successful response
 		log.Debug("statesync AppRequest response", "nodeID", nodeID, "responseBytes", len(responseBytes))
 		p := snap.NewFakePeer(protocolVersion, nodeID.String(), &rw{readBytes: responseBytes})
-		if err := snap.HandleMessage(o, p); err != nil {
+		if err := snap.HandleMessage(r.outbound, p); err != nil {
 			log.Warn("failed to handle response", "peer", nodeID, "err", err)
 		}
 		return
@@ -114,14 +119,14 @@ func (o *outbound) handleResponse(
 		log.Debug("dropping non-timeout error", "peer", nodeID, "err", err)
 		return // only retry on timeout
 	}
-	if o.retries >= maxRetries {
+	if r.retries >= maxRetries {
 		log.Warn("reached max retries", "peer", nodeID)
 		return
 	}
-	o.retries++
-	log.Debug("retrying request", "peer", nodeID, "retries", o.retries)
+	r.retries++
+	log.Debug("retrying request", "peer", nodeID, "retries", r.retries)
 	time.Sleep(failedRequestSleepInterval)
-	if err := o.send(); err != nil {
+	if err := r.send(); err != nil {
 		log.Warn("failed to retry request, dropping", "peer", nodeID, "err", err)
 	}
 }
