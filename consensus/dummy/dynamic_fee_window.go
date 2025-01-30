@@ -18,7 +18,7 @@ var ErrInsufficientDynamicFeeWindowLength = errors.New("insufficient length for 
 // DynamicFeeWindow is a window of the last [params.RollupWindow] seconds of gas
 // usage.
 //
-// Index 0 is the oldest entry, and [params.RollupWindow-1] is the current
+// Index 0 is the oldest entry, and [params.RollupWindow]-1 is the current
 // entry.
 type DynamicFeeWindow [params.RollupWindow]uint64
 
