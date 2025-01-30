@@ -30,5 +30,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	rpcchainvm.Serve(context.Background(), &evm.VM{IsPlugin: true})
+	err = rpcchainvm.Serve(context.Background(), &evm.VM{IsPlugin: true})
+	if err != nil {
+		fmt.Printf("failed serving RPC: %s", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
 }

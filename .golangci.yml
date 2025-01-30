@@ -4,13 +4,16 @@ run:
   timeout: 10m
 
 linters:
-  disable-all: true
   enable:
     - goimports
-    - gosimple
-    - govet
     - ineffassign
     - misspell
     - unconvert
-    - unused
     - whitespace
+
+issues:
+  exclude-rules:
+    - path-except: "(plugin\\/.+\\.go|.+_ext\\.go)"
+      linters:
+        - errcheck
+        - staticcheck
