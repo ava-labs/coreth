@@ -491,6 +491,8 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				break
 			}
 		}
+		abort = abort || leafsResponse.More
+
 		if len(storage) > 0 {
 			slots = append(slots, storage)
 		}
