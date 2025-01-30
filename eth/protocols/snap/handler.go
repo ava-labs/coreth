@@ -472,8 +472,8 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		)
 		//for it.Next() {
 		for i, leafResponseKey := range leafsResponse.Keys {
+			abort = true
 			if size >= hardLimit {
-				abort = true
 				break
 			}
 			//hash, slot := it.Hash(), common.CopyBytes(it.Slot())
@@ -491,10 +491,10 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			})
 			// If we've exceeded the request threshold, abort
 			if bytes.Compare(hash[:], limit[:]) >= 0 {
+				abort = false
 				break
 			}
 		}
-		abort = abort || leafsResponse.More
 
 		if len(storage) > 0 {
 			slots = append(slots, storage)
