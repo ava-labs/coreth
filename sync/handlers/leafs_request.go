@@ -247,6 +247,11 @@ func (rb *responseBuilder) handleRequest(ctx context.Context) error {
 		rb.stats.IncProofError()
 		return err
 	}
+
+	// There is more data in the trie
+	// This is not serialized, but set here as a hint to the upstream sync handler
+	rb.response.More = true
+
 	return nil
 }
 
