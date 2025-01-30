@@ -26,6 +26,11 @@ linters:
     - mirror
     - tenv
     - errcheck
+    - errorlint
+
+linters-settings:
+  errorlint:
+    errorf: false
 
 issues:
   exclude-rules:
@@ -37,6 +42,7 @@ issues:
     - path-except: "(plugin\\/.+\\.go|.+_ext\\.go)"
       linters:
         - errcheck
+        - errorlint
         - gosimple
         - govet
         - staticcheck

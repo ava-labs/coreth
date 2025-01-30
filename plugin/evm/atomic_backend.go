@@ -5,6 +5,7 @@ package evm
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -226,7 +227,7 @@ func (a *atomicBackend) initialize(lastAcceptedHeight uint64) error {
 // the range of operations that were added to the trie without being executed on shared memory.
 func (a *atomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 	sharedMemoryCursor, err := a.metadataDB.Get(appliedSharedMemoryCursorKey)
-	if err == database.ErrNotFound {
+	if errors.Is(err, database.ErrNotFound) {
 		return nil
 	} else if err != nil {
 		return err

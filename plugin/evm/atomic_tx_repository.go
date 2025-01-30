@@ -5,6 +5,7 @@ package evm
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -94,12 +95,9 @@ func (a *atomicTxRepository) initializeHeightIndex(lastAcceptedHeight uint64) er
 	// if we are part way through a migration.
 	var lastTxID ids.ID
 	indexHeightBytes, err := a.atomicRepoMetadataDB.Get(maxIndexedHeightKey)
-	switch err {
-	case nil:
-		break
-	case database.ErrNotFound:
-		break
-	default: // unexpected value in the database
+	switch {
+	case errors.Is(err, database.ErrNotFound):
+	case err != nil: // unexpected value in the database
 		return fmt.Errorf("found invalid value at max indexed height: %v", indexHeightBytes)
 	}
 
@@ -274,11 +272,12 @@ func (a *atomicTxRepository) write(height uint64, txs []*atomic.Tx, bonus bool) 
 	if len(txs) > 0 {
 		for _, tx := range txs {
 			if bonus {
-				switch _, _, err := a.GetByTxID(tx.ID()); err {
-				case nil:
+				_, _, err := a.GetByTxID(tx.ID())
+				switch {
+				case err == nil:
 					// avoid overwriting existing value if [bonus] is true
 					continue
-				case database.ErrNotFound:
+				case errors.Is(err, database.ErrNotFound):
 					// no existing value to overwrite, proceed as normal
 				default:
 					// unexpected error
@@ -338,7 +337,7 @@ func (a *atomicTxRepository) indexTxsAtHeight(heightBytes []byte, txs []*atomic.
 // by txID into the height -> txs index.
 func (a *atomicTxRepository) appendTxToHeightIndex(heightBytes []byte, tx *atomic.Tx) error {
 	txs, err := a.getByHeightBytes(heightBytes)
-	if err != nil && err != database.ErrNotFound {
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return err
 	}
 

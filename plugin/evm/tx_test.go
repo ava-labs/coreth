@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -51,9 +52,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 				t.Fatalf("Expected value: %d, found: %d", test.expectedValue, cost)
 			}
 		} else {
-			if err != test.expectedErr {
-				t.Fatalf("Expected error: %s, found error: %s", test.expectedErr, err)
-			}
+			assert.ErrorIs(t, err, test.expectedErr)
 		}
 	}
 }

@@ -1523,7 +1523,7 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
 func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
 	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
 		return tx, atomic.Accepted, height, nil
-	} else if err != database.ErrNotFound {
+	} else if !errors.Is(err, database.ErrNotFound) {
 		return nil, atomic.Unknown, 0, err
 	}
 	tx, dropped, found := vm.mempool.GetTx(txID)
@@ -1752,7 +1752,7 @@ func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 	// initialize state with the genesis block.
 	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
 	switch {
-	case lastAcceptedErr == database.ErrNotFound:
+	case errors.Is(lastAcceptedErr, database.ErrNotFound):
 		// If there is nothing in the database, return the genesis block hash and height
 		return vm.genesisHash, 0, nil
 	case lastAcceptedErr != nil:
