@@ -40,8 +40,13 @@ import (
 )
 
 const (
+	maxLeavesLimit = uint16(2048)
+	stateKeyLength = common.HashLength
+)
+
+const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
-	softResponseLimit = 50 * 1024 // 2 * 1024 * 1024
+	softResponseLimit = 1 * 1024 * 1024
 
 	// maxCodeLookups is the maximum number of bytecodes to serve. This number is
 	// there to limit the number of disk lookups.
@@ -309,9 +314,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		End:      req.Limit[:],
 		NodeType: message.StateTrieNode,
 	}
-	stateKeyLength := common.HashLength
 	leafsResponse := &message.LeafsResponse{}
-	maxLeavesLimit := uint16(1024)
 	handlerStats := stats.NewNoopHandlerStats()
 	handler := handlers.NewResponseBuilder(
 		leafsRequest, leafsResponse, tr, chain.Snapshots(), stateKeyLength, maxLeavesLimit, handlerStats,
@@ -436,9 +439,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			End:      limit[:],
 			NodeType: message.StateTrieNode,
 		}
-		stateKeyLength := common.HashLength
 		leafsResponse := &message.LeafsResponse{}
-		maxLeavesLimit := uint16(1024)
 		handlerStats := stats.NewNoopHandlerStats()
 		handler := handlers.NewResponseBuilder(
 			leafsRequest, leafsResponse, stTrie, chain.Snapshots(), stateKeyLength, maxLeavesLimit, handlerStats,
@@ -469,8 +470,8 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		)
 		//for it.Next() {
 		for i, leafResponseKey := range leafsResponse.Keys {
-			abort = i < len(leafsResponse.Keys)-1
 			if size >= hardLimit {
+				abort = true
 				break
 			}
 			//hash, slot := it.Hash(), common.CopyBytes(it.Slot())
@@ -488,10 +489,10 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			})
 			// If we've exceeded the request threshold, abort
 			if bytes.Compare(hash[:], limit[:]) >= 0 {
-				abort = false
 				break
 			}
 		}
+		abort = abort || leafsResponse.More
 
 		if len(storage) > 0 {
 			slots = append(slots, storage)
