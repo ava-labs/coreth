@@ -47,6 +47,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -119,7 +120,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			GasLimit: gasLimit,
 			GasUsed:  0,
 			BaseFee:  mid,
-			Extra:    make([]byte, params.DynamicFeeExtraDataSize),
+			Extra:    make([]byte, header.DynamicFeeWindowSize),
 		}
 		_, baseFee, err := dummy.CalcBaseFee(
 			bc.config, parent, blockTime,
@@ -158,7 +159,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
-		Extra:         make([]byte, params.DynamicFeeExtraDataSize),
+		Extra:         make([]byte, header.DynamicFeeWindowSize),
 	}
 }
 

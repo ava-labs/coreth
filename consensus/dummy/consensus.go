@@ -18,6 +18,8 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ethereum/go-ethereum/common"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 var (
@@ -219,12 +221,12 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 	}
 	switch {
 	case config.IsDurango(header.Time):
-		if len(header.Extra) < params.DynamicFeeExtraDataSize {
-			return fmt.Errorf("expected extra-data field length >= %d, found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
+		if len(header.Extra) < customheader.DynamicFeeWindowSize {
+			return fmt.Errorf("expected extra-data field length >= %d, found %d", customheader.DynamicFeeWindowSize, len(header.Extra))
 		}
 	case config.IsApricotPhase3(header.Time):
-		if len(header.Extra) != params.DynamicFeeExtraDataSize {
-			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
+		if len(header.Extra) != customheader.DynamicFeeWindowSize {
+			return fmt.Errorf("expected extra-data field to be: %d, but found %d", customheader.DynamicFeeWindowSize, len(header.Extra))
 		}
 	default:
 		if uint64(len(header.Extra)) > params.MaximumExtraDataSize {

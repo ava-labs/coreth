@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
@@ -443,14 +444,14 @@ func TestDynamicFeesEtna(t *testing.T) {
 
 func TestCalcBaseFeeRegression(t *testing.T) {
 	parentTimestamp := uint64(1)
-	timestamp := parentTimestamp + params.RollupWindow + 1000
+	timestamp := parentTimestamp + header.DynamicFeeWindowLen + 1000
 
 	parentHeader := &types.Header{
 		Time:    parentTimestamp,
 		GasUsed: 14_999_999,
 		Number:  big.NewInt(1),
 		BaseFee: big.NewInt(1),
-		Extra:   make([]byte, params.DynamicFeeExtraDataSize),
+		Extra:   make([]byte, header.DynamicFeeWindowSize),
 	}
 
 	_, _, err := CalcBaseFee(params.TestChainConfig, parentHeader, timestamp)

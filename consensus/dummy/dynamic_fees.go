@@ -143,9 +143,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		// for the interval during which no blocks were produced.
 		// We use roll/rollupWindow, so that the transition is applied for every [rollupWindow] seconds
 		// that has elapsed between the parent and this block.
-		if roll > params.RollupWindow {
+		if roll > header.DynamicFeeWindowLen {
 			// Note: roll/rollupWindow must be greater than 1 since we've checked that roll > rollupWindow
-			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(roll/params.RollupWindow))
+			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(roll/header.DynamicFeeWindowLen))
 		}
 		baseFee.Sub(baseFee, baseFeeDelta)
 	}

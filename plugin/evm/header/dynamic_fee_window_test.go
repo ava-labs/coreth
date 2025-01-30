@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/require"
 )
@@ -125,7 +124,7 @@ func TestDynamicFeeWindow_Shift(t *testing.T) {
 			},
 		},
 		{
-			amount:   params.RollupWindow,
+			amount:   DynamicFeeWindowLen,
 			expected: DynamicFeeWindow{},
 		},
 		{
@@ -184,18 +183,18 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 	}{
 		{
 			name:     "insufficient length",
-			bytes:    make([]byte, params.DynamicFeeExtraDataSize-1),
+			bytes:    make([]byte, DynamicFeeWindowSize-1),
 			parseErr: ErrInsufficientDynamicFeeWindowLength,
 		},
 		{
 			name:   "zero window",
-			bytes:  make([]byte, params.DynamicFeeExtraDataSize),
+			bytes:  make([]byte, DynamicFeeWindowSize),
 			window: DynamicFeeWindow{},
 		},
 		{
 			name: "truncate bytes",
 			bytes: []byte{
-				params.DynamicFeeExtraDataSize: 1,
+				DynamicFeeWindowSize: 1,
 			},
 			window: DynamicFeeWindow{},
 		},
@@ -238,7 +237,7 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 				return
 			}
 
-			expectedBytes := test.bytes[:params.DynamicFeeExtraDataSize]
+			expectedBytes := test.bytes[:DynamicFeeWindowSize]
 			bytes := window.Bytes()
 			require.Equal(expectedBytes, bytes)
 		})

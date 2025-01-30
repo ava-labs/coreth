@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/trie"
 )
 
@@ -124,17 +125,17 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	headerExtraDataSize := len(ethHeader.Extra)
 	switch {
 	case rules.IsDurango:
-		if headerExtraDataSize < params.DynamicFeeExtraDataSize {
+		if headerExtraDataSize < header.DynamicFeeWindowSize {
 			return fmt.Errorf(
 				"expected header ExtraData to be len >= %d but got %d",
-				params.DynamicFeeExtraDataSize, len(ethHeader.Extra),
+				header.DynamicFeeWindowSize, len(ethHeader.Extra),
 			)
 		}
 	case rules.IsApricotPhase3:
-		if headerExtraDataSize != params.DynamicFeeExtraDataSize {
+		if headerExtraDataSize != header.DynamicFeeWindowSize {
 			return fmt.Errorf(
 				"expected header ExtraData to be len %d but got %d",
-				params.DynamicFeeExtraDataSize, headerExtraDataSize,
+				header.DynamicFeeWindowSize, headerExtraDataSize,
 			)
 		}
 	case rules.IsApricotPhase1:
