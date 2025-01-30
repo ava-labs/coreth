@@ -41,6 +41,7 @@ import (
 	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
@@ -125,6 +126,7 @@ type BlockContext struct {
 	// PredicateResults are the results of predicate verification available throughout the EVM's execution.
 	// PredicateResults may be nil if it is not encoded in the block's header.
 	PredicateResults *predicate.Results
+	Extra            []byte
 
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
@@ -220,6 +222,18 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time),
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
+
+	if blockCtx.PredicateResults == nil {
+		predicateBytes, ok := predicate.GetPredicateResultBytes(blockCtx.Extra)
+		if ok {
+			results, err := predicate.ParseResults(predicateBytes)
+			if err != nil {
+				log.Error("Unexpected error parsing predicate results", "err", err) // VM verifies the correctness of the results in header validation
+				results = nil
+			}
+			evm.Context.PredicateResults = results
+		}
+	}
 	return evm
 }
 
