@@ -214,24 +214,15 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 
 // modified from consensus.go
 func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
-	config := chain.Config()
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
 	}
-	switch {
-	case config.IsDurango(header.Time):
-		if len(header.Extra) < customheader.DynamicFeeWindowSize {
-			return fmt.Errorf("expected extra-data field length >= %d, found %d", customheader.DynamicFeeWindowSize, len(header.Extra))
-		}
-	case config.IsApricotPhase3(header.Time):
-		if len(header.Extra) != customheader.DynamicFeeWindowSize {
-			return fmt.Errorf("expected extra-data field to be: %d, but found %d", customheader.DynamicFeeWindowSize, len(header.Extra))
-		}
-	default:
-		if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
-			return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
-		}
+
+	config := chain.Config()
+	rules := config.GetAvalancheRules(header.Time)
+	if err := customheader.VerifyExtra(rules, header.Extra); err != nil {
+		return err
 	}
 	// Ensure gas-related header fields are correct
 	if err := eng.verifyHeaderGasFields(config, header, parent); err != nil {
