@@ -5,17 +5,23 @@ run:
 
 linters:
   enable:
+    - errorlint
     - goimports
     - ineffassign
     - misspell
     - unconvert
     - whitespace
 
+linters-settings:
+  errorlint:
+    errorf: false
+
 issues:
   exclude-rules:
     - path-except: "(plugin\\/.+\\.go|.+_ext\\.go)"
       linters:
         - errcheck
+        - errorlint
         - gosimple
         - govet
         - staticcheck

@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -183,7 +184,7 @@ func lastCommittedRootIfExists(db avalanchedatabase.Database) (common.Hash, uint
 	// read the last committed entry if it exists and set the root hash
 	lastCommittedHeightBytes, err := db.Get(lastCommittedKey)
 	switch {
-	case err == avalanchedatabase.ErrNotFound:
+	case errors.Is(err, avalanchedatabase.ErrNotFound):
 		return common.Hash{}, 0, nil
 	case err != nil:
 		return common.Hash{}, 0, err
@@ -305,7 +306,7 @@ func getRoot(metadataDB avalanchedatabase.Database, height uint64) (common.Hash,
 	heightBytes := avalanchedatabase.PackUInt64(height)
 	hash, err := metadataDB.Get(heightBytes)
 	switch {
-	case err == avalanchedatabase.ErrNotFound:
+	case errors.Is(err, avalanchedatabase.ErrNotFound):
 		return common.Hash{}, nil
 	case err != nil:
 		return common.Hash{}, err
