@@ -630,7 +630,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantTipBufferRoot:       common.Hash{3},
 			wantKeyValuePairs: map[string]string{
 				metadataHexPrefix + "0000000000000064":// height 100
-				"0200000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{2}.Bytes()),
 				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
 			},
 		},
@@ -647,7 +647,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantTipBufferRoot:       common.Hash{3},
 			wantKeyValuePairs: map[string]string{
 				metadataHexPrefix + "0000000000000064":// height 100
-				"0200000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{2}.Bytes()),
 				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
 			},
 		},
@@ -665,7 +665,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantTipBufferRoot:       common.Hash{3},
 			wantKeyValuePairs: map[string]string{
 				metadataHexPrefix + "000000000000003c":// height 60
-				"0200000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{2}.Bytes()),
 				metadataHexPrefix + "0000000000000046":// height 70
 				hex.EncodeToString(types.EmptyRootHash[:]),
 				metadataHexPrefix + "0000000000000050":// height 80
@@ -691,9 +691,9 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantTipBufferRoot:       common.Hash{3},
 			wantKeyValuePairs: map[string]string{
 				metadataHexPrefix + "0000000000000064":// height 100
-				"0200000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{2}.Bytes()),
 				metadataHexPrefix + "000000000000006e":// height 110
-				"0300000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{3}.Bytes()),
 				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "000000000000006e", // height 110
 			},
 		},
@@ -711,9 +711,9 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantTipBufferRoot:       common.Hash{3},
 			wantKeyValuePairs: map[string]string{
 				metadataHexPrefix + "0000000000000064":// height 100
-				"0200000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{2}.Bytes()),
 				metadataHexPrefix + "000000000000006e":// height 110
-				"0300000000000000000000000000000000000000000000000000000000000000",
+				hex.EncodeToString(common.Hash{3}.Bytes()),
 				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "000000000000006e", // height 110
 			},
 		},
@@ -729,6 +729,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			const lastAcceptedHeight = 0 // no effect
 			atomicTrie, err := newAtomicTrie(atomicTrieDB, metadataDB, atomic.TestTxCodec,
 				lastAcceptedHeight, testCase.commitInterval)
+			require.NoError(t, err)
 			atomicTrie.lastAcceptedRoot = testCase.lastAcceptedRoot
 			if testCase.lastAcceptedRoot != types.EmptyRootHash {
 				// Generate trie node test blob
@@ -750,7 +751,6 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 				require.NotZero(t, storageSize, "there should be a dirty node taking up storage space")
 			}
 			atomicTrie.updateLastCommitted(testCase.lastCommittedRoot, testCase.lastCommittedHeight)
-			require.NoError(t, err)
 
 			hasCommitted, err := atomicTrie.AcceptTrie(testCase.height, testCase.root)
 			if testCase.wantErr == "" {
