@@ -248,10 +248,6 @@ func (rb *responseBuilder) handleRequest(ctx context.Context) error {
 		return err
 	}
 
-	// There is more data in the trie
-	// This is not serialized, but set here as a hint to the upstream sync handler
-	rb.response.More = true
-
 	return nil
 }
 
@@ -295,6 +291,7 @@ func (rb *responseBuilder) fillFromSnapshot(ctx context.Context) (bool, error) {
 	defer proof.Close() // closing memdb does not error
 	if ok {
 		rb.response.Keys, rb.response.Vals = snapKeys, snapVals
+		rb.response.More = more
 		if len(rb.request.Start) == 0 && !more {
 			// omit proof via early return
 			rb.stats.IncSnapshotReadSuccess()
