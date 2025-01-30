@@ -430,7 +430,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		}
 		// Patching in the existing response mechanism for now
 		leafsRequest := &message.LeafsRequest{
-			Root:     req.Root,
+			Root:     acc.Root,
 			Account:  account,
 			Start:    origin[:],
 			End:      limit[:],
