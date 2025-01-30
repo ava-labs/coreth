@@ -251,7 +251,6 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		log.Debug("forwarding AppRequest to SDK network", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
 		return n.p2pNetwork.AppRequest(ctx, nodeID, requestID, deadline, request)
 	}
 
