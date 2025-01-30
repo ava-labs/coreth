@@ -39,12 +39,12 @@ func ParseDynamicFeeWindow(bytes []byte) (DynamicFeeWindow, error) {
 	return window, nil
 }
 
-// Add adds the amount to the most recent entry in the window.
+// Add adds the amounts to the most recent entry in the window.
 //
 // If the most recent entry overflows, it is set to [math.MaxUint64].
-func (w *DynamicFeeWindow) Add(amount uint64) {
+func (w *DynamicFeeWindow) Add(amounts ...uint64) {
 	const lastIndex uint = params.RollupWindow - 1
-	(*w)[lastIndex] = add(w[lastIndex], amount)
+	(*w)[lastIndex] = add(w[lastIndex], amounts...)
 }
 
 // Shift removes the oldest amount entries from the window and adds amount new

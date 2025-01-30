@@ -102,8 +102,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	}
 
 	// Compute the new state of the gas rolling window.
-	addedGas := add(parent.GasUsed, parentExtraStateGasUsed, blockGasCost)
-	dynamicFeeWindow.Add(addedGas)
+	dynamicFeeWindow.Add(parent.GasUsed, parentExtraStateGasUsed, blockGasCost)
 
 	if timestamp < parent.Time {
 		return nil, nil, fmt.Errorf("cannot calculate base fee for timestamp (%d) prior to parent timestamp (%d)", timestamp, parent.Time)
