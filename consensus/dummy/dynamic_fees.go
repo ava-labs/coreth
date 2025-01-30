@@ -40,22 +40,19 @@ var (
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
-	var (
-		isApricotPhase3 = config.IsApricotPhase3(parent.Time)
-		isApricotPhase4 = config.IsApricotPhase4(parent.Time)
-		isApricotPhase5 = config.IsApricotPhase5(parent.Time)
-		isEtna          = config.IsEtna(parent.Time)
-	)
-	if !isApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
+	rules := config.GetAvalancheRules(parent.Time)
+	if !rules.IsApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
 		initialSlice := (&header.DynamicFeeWindow{}).Bytes()
 		initialBaseFee := big.NewInt(params.ApricotPhase3InitialBaseFee)
 		return initialSlice, initialBaseFee, nil
 	}
 
-	dynamicFeeWindow, err := header.ParseDynamicFeeWindow(parent.Extra)
+	extra, err := header.ParseExtra(rules, parent.Extra)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	dynamicFeeWindow := extra.DynamicFeeWindow
 
 	// If AP5, use a less responsive [BaseFeeChangeDenominator] and a higher gas
 	// block limit
@@ -64,7 +61,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		baseFeeChangeDenominator = ApricotPhase4BaseFeeChangeDenominator
 		parentGasTarget          = params.ApricotPhase3TargetGas
 	)
-	if isApricotPhase5 {
+	if rules.IsApricotPhase5 {
 		baseFeeChangeDenominator = ApricotPhase5BaseFeeChangeDenominator
 		parentGasTarget = params.ApricotPhase5TargetGas
 	}
@@ -73,7 +70,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// Add in parent's consumed gas
 	var blockGasCost, parentExtraStateGasUsed uint64
 	switch {
-	case isApricotPhase5:
+	case rules.IsApricotPhase5:
 		// [blockGasCost] has been removed in AP5, so it is left as 0.
 
 		// At the start of a new network, the parent
@@ -81,7 +78,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		if parent.ExtDataGasUsed != nil {
 			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
 		}
-	case isApricotPhase4:
+	case rules.IsApricotPhase4:
 		// The [blockGasCost] is paid by the effective tips in the block using
 		// the block's value of [baseFee].
 		blockGasCost = calcBlockGasCost(
@@ -152,11 +149,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 
 	// Ensure that the base fee does not increase/decrease outside of the bounds
 	switch {
-	case isEtna:
+	case rules.IsEtna:
 		baseFee = selectBigWithinBounds(EtnaMinBaseFee, baseFee, nil)
-	case isApricotPhase5:
+	case rules.IsApricotPhase5:
 		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, nil)
-	case isApricotPhase4:
+	case rules.IsApricotPhase4:
 		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, ApricotPhase4MaxBaseFee)
 	default:
 		baseFee = selectBigWithinBounds(ApricotPhase3MinBaseFee, baseFee, ApricotPhase3MaxBaseFee)
