@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
@@ -46,12 +47,12 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		isEtna          = config.IsEtna(parent.Time)
 	)
 	if !isApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
-		initialSlice := (&DynamicFeeWindow{}).Bytes()
+		initialSlice := (&header.DynamicFeeWindow{}).Bytes()
 		initialBaseFee := big.NewInt(params.ApricotPhase3InitialBaseFee)
 		return initialSlice, initialBaseFee, nil
 	}
 
-	dynamicFeeWindow, err := ParseDynamicFeeWindow(parent.Extra)
+	dynamicFeeWindow, err := header.ParseDynamicFeeWindow(parent.Extra)
 	if err != nil {
 		return nil, nil, err
 	}

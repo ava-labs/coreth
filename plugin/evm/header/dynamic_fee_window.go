@@ -1,7 +1,7 @@
 // (c) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package dummy
+package header
 
 import (
 	"encoding/binary"
@@ -9,24 +9,28 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common/math"
+)
+
+const (
+	DynamicFeeWindowLen  = 10 // in seconds
+	DynamicFeeWindowSize = wrappers.LongLen * DynamicFeeWindowLen
 )
 
 var ErrInsufficientDynamicFeeWindowLength = errors.New("insufficient length for dynamic fee window")
 
-// DynamicFeeWindow is a window of the last [params.RollupWindow] seconds of gas
+// DynamicFeeWindow is a window of the last [DynamicFeeWindowLen] seconds of gas
 // usage.
 //
-// Index 0 is the oldest entry, and [params.RollupWindow-1] is the current
+// Index 0 is the oldest entry, and [DynamicFeeWindowLen]-1 is the current
 // entry.
-type DynamicFeeWindow [params.RollupWindow]uint64
+type DynamicFeeWindow [DynamicFeeWindowLen]uint64
 
 func ParseDynamicFeeWindow(bytes []byte) (DynamicFeeWindow, error) {
-	if len(bytes) < params.DynamicFeeExtraDataSize {
+	if len(bytes) < DynamicFeeWindowSize {
 		return DynamicFeeWindow{}, fmt.Errorf("%w expected at least %d, but found %d",
 			ErrInsufficientDynamicFeeWindowLength,
-			params.DynamicFeeExtraDataSize,
+			DynamicFeeWindowSize,
 			len(bytes),
 		)
 	}
@@ -43,14 +47,14 @@ func ParseDynamicFeeWindow(bytes []byte) (DynamicFeeWindow, error) {
 //
 // If the most recent entry overflows, it is set to [math.MaxUint64].
 func (w *DynamicFeeWindow) Add(amounts ...uint64) {
-	const lastIndex uint = params.RollupWindow - 1
+	const lastIndex uint = DynamicFeeWindowLen - 1
 	(*w)[lastIndex] = add(w[lastIndex], amounts...)
 }
 
 // Shift removes the oldest amount entries from the window and adds amount new
 // empty entries.
 func (w *DynamicFeeWindow) Shift(amount uint64) {
-	if amount >= params.RollupWindow {
+	if amount >= DynamicFeeWindowLen {
 		*w = DynamicFeeWindow{}
 		return
 	}
@@ -72,7 +76,7 @@ func (w *DynamicFeeWindow) Sum() uint64 {
 }
 
 func (w *DynamicFeeWindow) Bytes() []byte {
-	bytes := make([]byte, params.DynamicFeeExtraDataSize)
+	bytes := make([]byte, DynamicFeeWindowSize)
 	for i, v := range w {
 		offset := i * wrappers.LongLen
 		binary.BigEndian.PutUint64(bytes[offset:], v)
