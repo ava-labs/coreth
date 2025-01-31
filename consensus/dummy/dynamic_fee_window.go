@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// (c) 2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package dummy
@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-var ErrInsufficientDynamicFeeWindowLength = errors.New("insufficient length for dynamic fee window")
+var ErrDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 
 // DynamicFeeWindow is a window of the last [params.RollupWindow] seconds of gas
 // usage.
@@ -24,8 +24,8 @@ type DynamicFeeWindow [params.RollupWindow]uint64
 
 func ParseDynamicFeeWindow(bytes []byte) (DynamicFeeWindow, error) {
 	if len(bytes) < params.DynamicFeeExtraDataSize {
-		return DynamicFeeWindow{}, fmt.Errorf("%w expected at least %d, but found %d",
-			ErrInsufficientDynamicFeeWindowLength,
+		return DynamicFeeWindow{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
+			ErrDynamicFeeWindowInsufficientLength,
 			params.DynamicFeeExtraDataSize,
 			len(bytes),
 		)
@@ -44,7 +44,7 @@ func ParseDynamicFeeWindow(bytes []byte) (DynamicFeeWindow, error) {
 // If the most recent entry overflows, it is set to [math.MaxUint64].
 func (w *DynamicFeeWindow) Add(amounts ...uint64) {
 	const lastIndex uint = params.RollupWindow - 1
-	(*w)[lastIndex] = add(w[lastIndex], amounts...)
+	w[lastIndex] = add(w[lastIndex], amounts...)
 }
 
 // Shift removes the oldest amount entries from the window and adds amount new
@@ -64,11 +64,7 @@ func (w *DynamicFeeWindow) Shift(amount uint64) {
 //
 // If the sum overflows, [math.MaxUint64] is returned.
 func (w *DynamicFeeWindow) Sum() uint64 {
-	var sum uint64
-	for _, v := range w {
-		sum = add(sum, v)
-	}
-	return sum
+	return add(0, w[:]...)
 }
 
 func (w *DynamicFeeWindow) Bytes() []byte {

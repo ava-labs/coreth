@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// (c) 2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package dummy
@@ -20,7 +20,7 @@ func TestDynamicFeeWindow_Add(t *testing.T) {
 		expected DynamicFeeWindow
 	}{
 		{
-			name: "normal addition",
+			name: "normal_addition",
 			window: DynamicFeeWindow{
 				1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 			},
@@ -30,7 +30,7 @@ func TestDynamicFeeWindow_Add(t *testing.T) {
 			},
 		},
 		{
-			name: "amount overflow",
+			name: "amount_overflow",
 			window: DynamicFeeWindow{
 				1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 			},
@@ -40,7 +40,7 @@ func TestDynamicFeeWindow_Add(t *testing.T) {
 			},
 		},
 		{
-			name: "window overflow",
+			name: "window_overflow",
 			window: DynamicFeeWindow{
 				1, 2, 3, 4, 5, 6, 7, 8, 9, math.MaxUint64,
 			},
@@ -183,24 +183,24 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 		parseErr error
 	}{
 		{
-			name:     "insufficient length",
+			name:     "insufficient_length",
 			bytes:    make([]byte, params.DynamicFeeExtraDataSize-1),
-			parseErr: ErrInsufficientDynamicFeeWindowLength,
+			parseErr: ErrDynamicFeeWindowInsufficientLength,
 		},
 		{
-			name:   "zero window",
+			name:   "zero_window",
 			bytes:  make([]byte, params.DynamicFeeExtraDataSize),
 			window: DynamicFeeWindow{},
 		},
 		{
-			name: "truncate bytes",
+			name: "truncate_bytes",
 			bytes: []byte{
 				params.DynamicFeeExtraDataSize: 1,
 			},
 			window: DynamicFeeWindow{},
 		},
 		{
-			name: "non-zero",
+			name: "endianess",
 			bytes: []byte{
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 				0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
