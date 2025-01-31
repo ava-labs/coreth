@@ -610,7 +610,6 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 		height                  uint64
 		root                    common.Hash
 		wantHasCommitted        bool
-		wantErr                 string
 		wantLastCommittedHeight uint64
 		wantLastCommittedRoot   common.Hash
 		wantLastAcceptedRoot    common.Hash
@@ -753,11 +752,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			atomicTrie.updateLastCommitted(testCase.lastCommittedRoot, testCase.lastCommittedHeight)
 
 			hasCommitted, err := atomicTrie.AcceptTrie(testCase.height, testCase.root)
-			if testCase.wantErr == "" {
-				require.NoError(t, err)
-			} else {
-				assert.EqualError(t, err, testCase.wantErr)
-			}
+			require.NoError(t, err)
 
 			assert.Equal(t, testCase.wantHasCommitted, hasCommitted)
 			assert.Equal(t, testCase.wantLastCommittedHeight, atomicTrie.lastCommittedHeight)
