@@ -34,7 +34,7 @@ import (
 	"github.com/ava-labs/coreth/accounts"
 	"github.com/ava-labs/coreth/accounts/external"
 	"github.com/ava-labs/coreth/accounts/keystore"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/log"
 )
 
 // Config represents a small collection of configuration values to fine tune the

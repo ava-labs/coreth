@@ -19,8 +19,8 @@ package state
 import (
 	"github.com/ava-labs/coreth/libevm/options"
 	"github.com/ava-labs/coreth/libevm/sync"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
 )
 
 // A PrefetcherOption configures behaviour of trie prefetching.

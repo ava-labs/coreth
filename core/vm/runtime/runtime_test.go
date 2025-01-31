@@ -43,8 +43,8 @@ import (
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/asm"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/asm"
 
 	// force-load js tracers to trigger registration
 	_ "github.com/ava-labs/coreth/eth/tracers/js"

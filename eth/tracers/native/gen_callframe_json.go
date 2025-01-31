@@ -7,8 +7,8 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
 )
 
 var _ = (*callFrameMarshaling)(nil)
