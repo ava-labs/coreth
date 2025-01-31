@@ -474,6 +474,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		headers         stat
 		bodies          stat
 		receipts        stat
+		tds             stat
 		numHashPairings stat
 		hashNumPairings stat
 		legacyTries     stat
@@ -486,6 +487,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		storageSnaps    stat
 		preimages       stat
 		bloomBits       stat
+		beaconHeaders   stat
 		cliqueSnaps     stat
 
 		// State sync statistics
@@ -519,6 +521,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bodies.Add(size)
 		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 			receipts.Add(size)
+		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+			tds.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
 			numHashPairings.Add(size)
 		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
@@ -543,10 +547,24 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			preimages.Add(size)
 		case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
 			metadata.Add(size)
+		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
+			metadata.Add(size)
 		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 			bloomBits.Add(size)
 		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
 			bloomBits.Add(size)
+		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
+			beaconHeaders.Add(size)
+		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
+			cliqueSnaps.Add(size)
+		case bytes.HasPrefix(key, ChtTablePrefix) ||
+			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
+			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
+			chtTrieNodes.Add(size)
+		case bytes.HasPrefix(key, BloomTrieTablePrefix) ||
+			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
+			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
+			bloomTrieNodes.Add(size)
 		case bytes.HasPrefix(key, syncStorageTriesPrefix) && len(key) == syncStorageTriesKeyLength:
 			syncProgress.Add(size)
 		case bytes.HasPrefix(key, syncSegmentsPrefix) && len(key) == syncSegmentsKeyLength:
@@ -558,10 +576,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey,
-				SnapshotRootKey, snapshotBlockHashKey, snapshotGeneratorKey,
-				uncleanShutdownKey, syncRootKey, txIndexTailKey,
-				persistentStateIDKey, trieJournalKey,
+				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
+				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
+				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
+				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
+				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+				snapshotBlockHashKey, syncRootKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
@@ -604,6 +624,22 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"State sync", "Storage tries to fetch", syncProgress.Size(), syncProgress.Count()},
 		{"State sync", "Code to fetch", codeToFetch.Size(), codeToFetch.Count()},
 		{"State sync", "Block numbers synced to", syncPerformed.Size(), syncPerformed.Count()},
+	}
+	// Inspect all registered append-only file store then.
+	ancients, err := inspectFreezers(db)
+	if err != nil {
+		return err
+	}
+	for _, ancient := range ancients {
+		for _, table := range ancient.sizes {
+			stats = append(stats, []string{
+				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
+				strings.Title(table.name),
+				table.size.String(),
+				fmt.Sprintf("%d", ancient.count()),
+			})
+		}
+		total += ancient.size()
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
