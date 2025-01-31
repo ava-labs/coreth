@@ -67,6 +67,24 @@ func (h *HeaderExtra) UnmarshalJSON(eth *ethtypes.Header, input []byte) error {
 	return nil
 }
 
+func (h *HeaderExtra) PostCopy(dst *Header) {
+	extraCopy := &HeaderExtra{
+		ExtDataHash: h.ExtDataHash,
+	}
+
+	if h.BlockGasCost != nil {
+		extraCopy.BlockGasCost = big.NewInt(0)
+		extraCopy.BlockGasCost.SetBytes(h.BlockGasCost.Bytes())
+	}
+
+	if h.ExtDataGasUsed != nil {
+		extraCopy.ExtDataGasUsed = big.NewInt(0)
+		extraCopy.ExtDataGasUsed.SetBytes(h.ExtDataGasUsed.Bytes())
+	}
+
+	_ = WithHeaderExtras(dst, extraCopy)
+}
+
 //go:generate go run github.com/fjl/gencodec -type HeaderSerializable -field-override headerMarshaling -out gen_header_json.go
 //go:generate go run github.com/ava-labs/libevm/rlp/rlpgen -type HeaderSerializable -out gen_header_rlp.go
 

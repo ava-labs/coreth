@@ -52,6 +52,7 @@ var (
 	BloomLookup          = ethtypes.BloomLookup
 	BytesToBloom         = ethtypes.BytesToBloom
 	CreateBloom          = ethtypes.CreateBloom
+	CopyHeader           = ethtypes.CopyHeader
 	NewReceipt           = ethtypes.NewReceipt
 	NewContractCreation  = ethtypes.NewContractCreation
 	NewTransaction       = ethtypes.NewTransaction
