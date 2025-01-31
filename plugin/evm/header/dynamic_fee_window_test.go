@@ -19,7 +19,7 @@ func TestDynamicFeeWindow_Add(t *testing.T) {
 		expected DynamicFeeWindow
 	}{
 		{
-			name: "normal addition",
+			name: "normal_addition",
 			window: DynamicFeeWindow{
 				1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 			},
@@ -29,7 +29,7 @@ func TestDynamicFeeWindow_Add(t *testing.T) {
 			},
 		},
 		{
-			name: "amount overflow",
+			name: "amount_overflow",
 			window: DynamicFeeWindow{
 				1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 			},
@@ -39,7 +39,7 @@ func TestDynamicFeeWindow_Add(t *testing.T) {
 			},
 		},
 		{
-			name: "window overflow",
+			name: "window_overflow",
 			window: DynamicFeeWindow{
 				1, 2, 3, 4, 5, 6, 7, 8, 9, math.MaxUint64,
 			},
@@ -62,80 +62,80 @@ func TestDynamicFeeWindow_Shift(t *testing.T) {
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 	}
 	tests := []struct {
-		amount   uint64
+		n        uint64
 		expected DynamicFeeWindow
 	}{
 		{
-			amount:   0,
+			n:        0,
 			expected: window,
 		},
 		{
-			amount: 1,
+			n: 1,
 			expected: DynamicFeeWindow{
 				2, 3, 4, 5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 2,
+			n: 2,
 			expected: DynamicFeeWindow{
 				3, 4, 5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 3,
+			n: 3,
 			expected: DynamicFeeWindow{
 				4, 5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 4,
+			n: 4,
 			expected: DynamicFeeWindow{
 				5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 5,
+			n: 5,
 			expected: DynamicFeeWindow{
 				6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 6,
+			n: 6,
 			expected: DynamicFeeWindow{
 				7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 7,
+			n: 7,
 			expected: DynamicFeeWindow{
 				8, 9, 10,
 			},
 		},
 		{
-			amount: 8,
+			n: 8,
 			expected: DynamicFeeWindow{
 				9, 10,
 			},
 		},
 		{
-			amount: 9,
+			n: 9,
 			expected: DynamicFeeWindow{
 				10,
 			},
 		},
 		{
-			amount:   DynamicFeeWindowLen,
+			n:        10,
 			expected: DynamicFeeWindow{},
 		},
 		{
-			amount:   100,
+			n:        100,
 			expected: DynamicFeeWindow{},
 		},
 	}
 	for _, test := range tests {
-		t.Run(strconv.FormatUint(test.amount, 10), func(t *testing.T) {
+		t.Run(strconv.FormatUint(test.n, 10), func(t *testing.T) {
 			window := window
-			window.Shift(test.amount)
+			window.Shift(test.n)
 			require.Equal(t, test.expected, window)
 		})
 	}
@@ -182,24 +182,24 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 		parseErr error
 	}{
 		{
-			name:     "insufficient length",
+			name:     "insufficient_length",
 			bytes:    make([]byte, DynamicFeeWindowSize-1),
-			parseErr: ErrInsufficientDynamicFeeWindowLength,
+			parseErr: ErrDynamicFeeWindowInsufficientLength,
 		},
 		{
-			name:   "zero window",
+			name:   "zero_window",
 			bytes:  make([]byte, DynamicFeeWindowSize),
 			window: DynamicFeeWindow{},
 		},
 		{
-			name: "truncate bytes",
+			name: "truncate_bytes",
 			bytes: []byte{
 				DynamicFeeWindowSize: 1,
 			},
 			window: DynamicFeeWindow{},
 		},
 		{
-			name: "non-zero",
+			name: "endianess",
 			bytes: []byte{
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 				0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
