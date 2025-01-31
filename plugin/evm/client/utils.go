@@ -3,7 +3,7 @@
 
 package client
 
-import "github.com/ethereum/go-ethereum/common"
+import "github.com/ava-labs/libevm/common"
 
 func ParseEthAddress(addrStr string) (common.Address, error) {
 	if !common.IsHexAddress(addrStr) {

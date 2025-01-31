@@ -5,7 +5,7 @@ package vm
 
 import (
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
 
 // wrappedPrecompiledContract implements StatefulPrecompiledContract by wrapping stateless native precompiled contracts

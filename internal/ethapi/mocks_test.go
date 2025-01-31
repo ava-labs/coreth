@@ -24,9 +24,9 @@ import (
 	vm "github.com/ava-labs/coreth/core/vm"
 	params "github.com/ava-labs/coreth/params"
 	rpc "github.com/ava-labs/coreth/rpc"
-	common "github.com/ethereum/go-ethereum/common"
-	ethdb "github.com/ethereum/go-ethereum/ethdb"
-	event "github.com/ethereum/go-ethereum/event"
+	common "github.com/ava-labs/libevm/common"
+	ethdb "github.com/ava-labs/libevm/ethdb"
+	event "github.com/ava-labs/libevm/event"
 	gomock "go.uber.org/mock/gomock"
 )
 

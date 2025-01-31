@@ -21,8 +21,8 @@ import (
 
 	"github.com/ava-labs/coreth/libevm/options"
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
 )
 
 var (
