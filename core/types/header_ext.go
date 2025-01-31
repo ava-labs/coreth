@@ -67,7 +67,7 @@ func (h *HeaderExtra) UnmarshalJSON(eth *ethtypes.Header, input []byte) error {
 	return nil
 }
 
-func (h *HeaderExtra) Copy(header *Header) *Header {
+func (h *HeaderExtra) PostCopy(dst *Header) {
 	extraCopy := &HeaderExtra{
 		ExtDataHash: h.ExtDataHash,
 	}
@@ -82,8 +82,7 @@ func (h *HeaderExtra) Copy(header *Header) *Header {
 		extraCopy.ExtDataGasUsed.SetBytes(h.ExtDataGasUsed.Bytes())
 	}
 
-	cpy := ethtypes.CopyEthHeader(header)
-	return WithHeaderExtras(cpy, extraCopy)
+	_ = WithHeaderExtras(dst, extraCopy)
 }
 
 //go:generate go run github.com/fjl/gencodec -type HeaderSerializable -field-override headerMarshaling -out gen_header_json.go
