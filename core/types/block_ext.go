@@ -56,6 +56,13 @@ func (b *BlockExtra) Body(block *Block) *Body {
 	return WithBodyExtra(body, extra)
 }
 
+func (b *BlockExtra) WithExtra(block *Block, body *Body) *Block {
+	bodyExtra := GetBodyExtra(body)
+	const recalc = false
+	block = WithBlockExtra(block, bodyExtra.Version, bodyExtra.ExtData, recalc)
+	return block
+}
+
 // blockSerializable defines the block in the Ethereum blockchain,
 // as it is to be serialized into RLP.
 type blockSerializable struct {
