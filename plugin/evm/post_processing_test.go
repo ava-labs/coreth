@@ -430,6 +430,18 @@ func TestPostProcess(t *testing.T) {
 				}
 
 				now := time.Now()
+				// Verify that the key value lengths are within reason
+				for _, k := range evictedKs {
+					if len(k) != 32 && len(k) != 64 {
+						panic(fmt.Sprintf("Invalid key length: %d", len(k)))
+					}
+				}
+				for _, v := range evictedVs {
+					if len(v) > 256 {
+						panic(fmt.Sprintf("Invalid value length: %d", len(v)))
+					}
+				}
+
 				// Get state commitment from storage backend
 				storageRootBytes, err := storage.Update(evictedKs, evictedVs)
 				require.NoError(t, err)
