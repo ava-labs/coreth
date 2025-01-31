@@ -46,7 +46,7 @@ import (
 
 var (
 	_ contract.AccessibleState = &EVM{}
-	_ contract.BlockContext    = &BlockContext{}
+	_ contract.BlockContext    = &PrecompileBlockContext{}
 )
 
 // IsProhibited returns true if [addr] is in the prohibited list of addresses which should
@@ -136,15 +136,17 @@ type BlockContext struct {
 	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
 }
 
-func (b *BlockContext) Number() *big.Int {
+type PrecompileBlockContext struct{ BlockContext }
+
+func (b *PrecompileBlockContext) Number() *big.Int {
 	return b.BlockNumber
 }
 
-func (b *BlockContext) Timestamp() uint64 {
-	return b.Time
+func (b *PrecompileBlockContext) Time() uint64 {
+	return b.BlockContext.Time
 }
 
-func (b *BlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
+func (b *PrecompileBlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
 	if b.PredicateResults == nil {
 		return nil
 	}
@@ -253,7 +255,7 @@ func (evm *EVM) GetStateDB() contract.StateDB {
 
 // GetBlockContext returns the evm's BlockContext
 func (evm *EVM) GetBlockContext() contract.BlockContext {
-	return &evm.Context
+	return &PrecompileBlockContext{evm.Context}
 }
 
 // Interpreter returns the current interpreter

@@ -101,7 +101,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 		test.SetupBlockContext(blockContext)
 	} else {
 		blockContext.EXPECT().Number().Return(big.NewInt(0)).AnyTimes()
-		blockContext.EXPECT().Timestamp().Return(uint64(time.Now().Unix())).AnyTimes()
+		blockContext.EXPECT().Time().Return(uint64(time.Now().Unix())).AnyTimes()
 	}
 	snowContext := utils.TestSnowContext()
 
@@ -112,7 +112,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 	accessibleState.EXPECT().GetChainConfig().Return(chainConfig).AnyTimes()
 
 	if test.Config != nil {
-		err := module.Configure(chainConfig, test.Config, state, blockContext)
+		err := module.Configure(chainConfig, test.Config, state, blockContext.Number(), blockContext.Time())
 		require.NoError(t, err)
 	}
 
