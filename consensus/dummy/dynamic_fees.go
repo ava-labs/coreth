@@ -54,7 +54,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 
 	dynamicFeeWindow := extra.DynamicFeeWindow
 
-	// If AP5, use a less responsive [BaseFeeChangeDenominator] and a higher gas
+	// If AP5, use a less responsive BaseFeeChangeDenominator and a higher gas
 	// block limit
 	var (
 		baseFee                  = new(big.Int).Set(parent.BaseFee)
@@ -71,16 +71,16 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	var blockGasCost, parentExtraStateGasUsed uint64
 	switch {
 	case rules.IsApricotPhase5:
-		// [blockGasCost] has been removed in AP5, so it is left as 0.
+		// blockGasCost has been removed in AP5, so it is left as 0.
 
 		// At the start of a new network, the parent
-		// may not have a populated [ExtDataGasUsed].
+		// may not have a populated ExtDataGasUsed.
 		if parent.ExtDataGasUsed != nil {
 			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
 		}
 	case rules.IsApricotPhase4:
-		// The [blockGasCost] is paid by the effective tips in the block using
-		// the block's value of [baseFee].
+		// The blockGasCost is paid by the effective tips in the block using
+		// the block's value of baseFee.
 		blockGasCost = calcBlockGasCost(
 			ApricotPhase4TargetBlockRate,
 			ApricotPhase4MinBlockGasCost,
@@ -90,8 +90,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 			parent.Time, timestamp,
 		).Uint64()
 
-		// On the boundary of AP3 and AP4 or at the start of a new network, the parent
-		// may not have a populated [ExtDataGasUsed].
+		// On the boundary of AP3 and AP4 or at the start of a new network, the
+		// parent may not have a populated ExtDataGasUsed.
 		if parent.ExtDataGasUsed != nil {
 			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
 		}
@@ -103,7 +103,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	dynamicFeeWindow.Add(parent.GasUsed, parentExtraStateGasUsed, blockGasCost)
 
 	if timestamp < parent.Time {
-		return nil, nil, fmt.Errorf("cannot calculate base fee for timestamp (%d) prior to parent timestamp (%d)", timestamp, parent.Time)
+		return nil, nil, fmt.Errorf("cannot calculate base fee for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
 	}
 	roll := timestamp - parent.Time
 
