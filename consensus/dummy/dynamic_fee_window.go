@@ -47,16 +47,16 @@ func (w *DynamicFeeWindow) Add(amounts ...uint64) {
 	w[lastIndex] = add(w[lastIndex], amounts...)
 }
 
-// Shift removes the oldest amount entries from the window and adds amount new
-// empty entries.
-func (w *DynamicFeeWindow) Shift(amount uint64) {
-	if amount >= params.RollupWindow {
+// Shift removes the oldest n entries from the window and adds n new empty
+// entries.
+func (w *DynamicFeeWindow) Shift(n uint64) {
+	if n >= params.RollupWindow {
 		*w = DynamicFeeWindow{}
 		return
 	}
 
 	var newWindow DynamicFeeWindow
-	copy(newWindow[:], w[amount:])
+	copy(newWindow[:], w[n:])
 	*w = newWindow
 }
 

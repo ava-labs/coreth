@@ -63,80 +63,80 @@ func TestDynamicFeeWindow_Shift(t *testing.T) {
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 	}
 	tests := []struct {
-		amount   uint64
+		n        uint64
 		expected DynamicFeeWindow
 	}{
 		{
-			amount:   0,
+			n:        0,
 			expected: window,
 		},
 		{
-			amount: 1,
+			n: 1,
 			expected: DynamicFeeWindow{
 				2, 3, 4, 5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 2,
+			n: 2,
 			expected: DynamicFeeWindow{
 				3, 4, 5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 3,
+			n: 3,
 			expected: DynamicFeeWindow{
 				4, 5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 4,
+			n: 4,
 			expected: DynamicFeeWindow{
 				5, 6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 5,
+			n: 5,
 			expected: DynamicFeeWindow{
 				6, 7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 6,
+			n: 6,
 			expected: DynamicFeeWindow{
 				7, 8, 9, 10,
 			},
 		},
 		{
-			amount: 7,
+			n: 7,
 			expected: DynamicFeeWindow{
 				8, 9, 10,
 			},
 		},
 		{
-			amount: 8,
+			n: 8,
 			expected: DynamicFeeWindow{
 				9, 10,
 			},
 		},
 		{
-			amount: 9,
+			n: 9,
 			expected: DynamicFeeWindow{
 				10,
 			},
 		},
 		{
-			amount:   params.RollupWindow,
+			n:        10,
 			expected: DynamicFeeWindow{},
 		},
 		{
-			amount:   100,
+			n:        100,
 			expected: DynamicFeeWindow{},
 		},
 	}
 	for _, test := range tests {
-		t.Run(strconv.FormatUint(test.amount, 10), func(t *testing.T) {
+		t.Run(strconv.FormatUint(test.n, 10), func(t *testing.T) {
 			window := window
-			window.Shift(test.amount)
+			window.Shift(test.n)
 			require.Equal(t, test.expected, window)
 		})
 	}
