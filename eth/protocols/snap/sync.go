@@ -1890,25 +1890,25 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		}
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != ethtypes.EmptyRootHash {
-			if !ethrawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
-				// If there was a previous large state retrieval in progress,
-				// don't restart it from scratch. This happens if a sync cycle
-				// is interrupted and resumed later. However, *do* update the
-				// previous root hash.
-				if subtasks, ok := res.task.SubTasks[res.hashes[i]]; ok {
-					log.Debug("Resuming large storage retrieval", "account", res.hashes[i], "root", account.Root)
-					for _, subtask := range subtasks {
-						subtask.root = account.Root
-					}
-					res.task.needHeal[i] = true
-					resumed[res.hashes[i]] = struct{}{}
-				} else {
-					res.task.stateTasks[res.hashes[i]] = account.Root
+			//if !ethrawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
+			// If there was a previous large state retrieval in progress,
+			// don't restart it from scratch. This happens if a sync cycle
+			// is interrupted and resumed later. However, *do* update the
+			// previous root hash.
+			if subtasks, ok := res.task.SubTasks[res.hashes[i]]; ok {
+				log.Debug("Resuming large storage retrieval", "account", res.hashes[i], "root", account.Root)
+				for _, subtask := range subtasks {
+					subtask.root = account.Root
 				}
-				res.task.needState[i] = true
-				res.task.pend++
+				res.task.needHeal[i] = true
+				resumed[res.hashes[i]] = struct{}{}
+			} else {
+				res.task.stateTasks[res.hashes[i]] = account.Root
 			}
+			res.task.needState[i] = true
+			res.task.pend++
 		}
+		//}
 	}
 	// Delete any subtasks that have been aborted but not resumed. This may undo
 	// some progress if a new peer gives us less accounts than an old one, but for
@@ -2439,7 +2439,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		size += common.StorageSize(len(node))
 	}
 	logger := peer.Log().New("reqid", id)
-	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
+	logger.Debug("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
@@ -2662,7 +2662,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		size += common.StorageSize(len(node))
 	}
 	logger := peer.Log().New("reqid", id)
-	logger.Trace("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
+	logger.Debug("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
