@@ -1046,7 +1046,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 			limit:   task.Last,
 			task:    task,
 		}
-		req.timeout = time.AfterFunc(s.rates.TargetTimeout()+20*time.Second, func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Account range request timed out", "reqid", reqid)
 			s.rates.Update(idle, AccountRangeMsg, 0, 0)
 			s.scheduleRevertAccountRequest(req)
