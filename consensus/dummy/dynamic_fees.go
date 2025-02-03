@@ -46,11 +46,15 @@ func BigEqual(a, b *big.Int) bool {
 // and calculates the expected base fee as well as the encoding of the past
 // pricing information for the child block.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
-	if !config.IsApricotPhase3(timestamp) {
-		// If the block is before AP3, the base fee should be nil.
+	switch {
+	case config.IsApricotPhase3(timestamp):
+		return calcBaseFeeWithWindow(config, parent, timestamp)
+	default:
 		return nil, nil, nil
 	}
+}
 
+func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	var (
