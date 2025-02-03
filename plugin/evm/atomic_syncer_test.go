@@ -7,10 +7,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -80,7 +80,9 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 			return leafsResponse, nil
 		}
 
-		syncer.Start(ctx)
+		err = syncer.Start(ctx)
+		require.NoError(t, err)
+
 		if err := <-syncer.Done(); err == nil {
 			t.Fatalf("Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 		}
@@ -104,7 +106,9 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 		return leafsResponse, nil
 	}
 
-	syncer.Start(ctx)
+	err = syncer.Start(ctx)
+	require.NoError(t, err)
+
 	if err := <-syncer.Done(); err != nil {
 		t.Fatalf("Expected syncer to finish successfully but failed due to %s", err)
 	}
@@ -153,7 +157,6 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 }
 
 func TestAtomicSyncer(t *testing.T) {
-	rand.Seed(1)
 	targetHeight := 10 * uint64(commitInterval)
 	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	root, _, _ := syncutils.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicKeyLength)
@@ -162,7 +165,6 @@ func TestAtomicSyncer(t *testing.T) {
 }
 
 func TestAtomicSyncerResume(t *testing.T) {
-	rand.Seed(1)
 	targetHeight := 10 * uint64(commitInterval)
 	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
@@ -179,7 +181,6 @@ func TestAtomicSyncerResume(t *testing.T) {
 }
 
 func TestAtomicSyncerResumeNewRootCheckpoint(t *testing.T) {
-	rand.Seed(1)
 	targetHeight1 := 10 * uint64(commitInterval)
 	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis

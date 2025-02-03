@@ -381,8 +381,6 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 			if err := indexAtomicTxs(a1, i, ops[i]); err != nil {
 				t.Fatal(err)
 			}
-		} else {
-			// do nothing
 		}
 	}
 
@@ -569,7 +567,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 			assert.NoError(t, err)
 			assert.False(t, hasMarker)
 			// reinitialize the atomic trie
-			backend, err = NewAtomicBackend(
+			_, err = NewAtomicBackend(
 				db, sharedMemories.thisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval,
 			)
 			assert.NoError(t, err)
