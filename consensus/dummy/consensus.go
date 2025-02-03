@@ -140,30 +140,15 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 		}
 	}
 
-	if !config.IsApricotPhase3(header.Time) {
-		// Verify BaseFee is not present before AP3
-		if header.BaseFee != nil {
-			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
-		}
-	} else {
-		// Verify baseFee and rollupWindow encoding as part of header verification
-		// starting in AP3
-		expectedRollupWindowBytes, expectedBaseFee, err := CalcBaseFee(config, parent, header.Time)
-		if err != nil {
-			return fmt.Errorf("failed to calculate base fee: %w", err)
-		}
-		if len(header.Extra) < len(expectedRollupWindowBytes) || !bytes.Equal(expectedRollupWindowBytes, header.Extra[:len(expectedRollupWindowBytes)]) {
-			return fmt.Errorf("expected rollup window bytes: %x, found %x", expectedRollupWindowBytes, header.Extra)
-		}
-		if header.BaseFee == nil {
-			return errors.New("expected baseFee to be non-nil")
-		}
-		if bfLen := header.BaseFee.BitLen(); bfLen > 256 {
-			return fmt.Errorf("too large base fee: bitlen %d", bfLen)
-		}
-		if header.BaseFee.Cmp(expectedBaseFee) != 0 {
-			return fmt.Errorf("expected base fee (%d), found (%d)", expectedBaseFee, header.BaseFee)
-		}
+	expectedExtraPrefix, expectedBaseFee, err := CalcBaseFee(config, parent, header.Time)
+	if err != nil {
+		return fmt.Errorf("failed to calculate base fee: %w", err)
+	}
+	if !bytes.HasPrefix(header.Extra, expectedExtraPrefix) {
+		return fmt.Errorf("expected header prefix: %x, found %x", expectedExtraPrefix, header.Extra)
+	}
+	if !BigEqual(header.BaseFee, expectedBaseFee) {
+		return fmt.Errorf("expected base fee: %d, found %d", expectedBaseFee, header.BaseFee)
 	}
 
 	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
