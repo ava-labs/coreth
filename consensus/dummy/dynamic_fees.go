@@ -65,12 +65,10 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 		return initialSlice, initialBaseFee, nil
 	}
 
-	extra, err := header.ParseExtra(rules, parent.Extra)
+	dynamicFeeWindow, err := header.ParseDynamicFeeWindow(parent.Extra)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	dynamicFeeWindow := extra.DynamicFeeWindow
 
 	// If AP5, use a less responsive BaseFeeChangeDenominator and a higher gas
 	// block limit
