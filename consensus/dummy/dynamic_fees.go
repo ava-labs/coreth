@@ -15,6 +15,9 @@ import (
 )
 
 var (
+	Big2Pow256    = new(big.Int).Lsh(common.Big1, 256)
+	BigMaxUint256 = new(big.Int).Sub(Big2Pow256, common.Big1)
+
 	ApricotPhase3MinBaseFee     = big.NewInt(params.ApricotPhase3MinBaseFee)
 	ApricotPhase3MaxBaseFee     = big.NewInt(params.ApricotPhase3MaxBaseFee)
 	ApricotPhase4MinBaseFee     = big.NewInt(params.ApricotPhase4MinBaseFee)
@@ -33,11 +36,26 @@ var (
 	ApricotPhase5BlockGasCostStep        = big.NewInt(200_000)
 )
 
+func BigEqual(a, b *big.Int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Cmp(b) == 0
+}
+
 // CalcBaseFee takes the previous header and the timestamp of its child block
 // and calculates the expected base fee as well as the encoding of the past
 // pricing information for the child block.
-// CalcBaseFee should only be called if [timestamp] >= [config.ApricotPhase3Timestamp]
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
+	switch {
+	case config.IsApricotPhase3(timestamp):
+		return calcBaseFeeWithWindow(config, parent, timestamp)
+	default:
+		return nil, nil, nil
+	}
+}
+
+func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, *big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	rules := config.GetAvalancheRules(parent.Time)
@@ -150,9 +168,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// Ensure that the base fee does not increase/decrease outside of the bounds
 	switch {
 	case rules.IsEtna:
-		baseFee = selectBigWithinBounds(EtnaMinBaseFee, baseFee, nil)
+		baseFee = selectBigWithinBounds(EtnaMinBaseFee, baseFee, BigMaxUint256)
 	case rules.IsApricotPhase5:
-		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, nil)
+		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, BigMaxUint256)
 	case rules.IsApricotPhase4:
 		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, ApricotPhase4MaxBaseFee)
 	default:
