@@ -17,15 +17,14 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/extension"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 )
 
-var _ extension.BlockExtension = (*blockExtension)(nil)
+var _ extension.BlockManagerExtension = (*blockExtension)(nil)
 
 var (
 	errNilExtDataGasUsedApricotPhase4 = errors.New("nil extDataGasUsed is invalid after apricotPhase4")
 	errNilEthBlock                    = errors.New("nil ethBlock")
-	errNilExtraData                   = errors.New("nil extra data")
 	errMissingUTXOs                   = errors.New("missing UTXOs")
 	errEmptyBlock                     = errors.New("empty block")
 )
@@ -47,17 +46,7 @@ func newBlockExtension(
 	}
 }
 
-func (be *blockExtension) InitializeExtraData(ethBlock *types.Block, chainConfig *params.ChainConfig) (interface{}, error) {
-	isApricotPhase5 := chainConfig.IsApricotPhase5(ethBlock.Time())
-	atomicTxs, err := atomic.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, atomic.Codec)
-	if err != nil {
-		return nil, err
-	}
-
-	return atomicTxs, nil
-}
-
-func (be *blockExtension) SyntacticVerify(b extension.ExtendedBlock, rules params.Rules) error {
+func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rules) error {
 	ethBlock := b.GetEthBlock()
 	if ethBlock == nil {
 		return errNilEthBlock
@@ -102,7 +91,7 @@ func (be *blockExtension) SyntacticVerify(b extension.ExtendedBlock, rules param
 
 	// Block must not be empty
 	txs := ethBlock.Transactions()
-	atomicTxs, err := getAtomicFromExtra(b)
+	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
 		return err
 	}
@@ -153,8 +142,8 @@ func (be *blockExtension) SyntacticVerify(b extension.ExtendedBlock, rules param
 	return nil
 }
 
-func (be *blockExtension) Accept(b extension.ExtendedBlock, acceptedBatch database.Batch) error {
-	atomicTxs, err := getAtomicFromExtra(b)
+func (be *blockExtension) Accept(b extension.VMBlock, acceptedBatch database.Batch) error {
+	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
 		return err
 	}
@@ -174,8 +163,8 @@ func (be *blockExtension) Accept(b extension.ExtendedBlock, acceptedBatch databa
 	return atomicState.Accept(acceptedBatch)
 }
 
-func (be *blockExtension) Reject(b extension.ExtendedBlock) error {
-	atomicTxs, err := getAtomicFromExtra(b)
+func (be *blockExtension) Reject(b extension.VMBlock) error {
+	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
 		return err
 	}
@@ -194,21 +183,7 @@ func (be *blockExtension) Reject(b extension.ExtendedBlock) error {
 	return atomicState.Reject()
 }
 
-func getAtomicFromExtra(b extension.ExtendedBlock) ([]*atomic.Tx, error) {
-	extraData := b.GetExtraData()
-	if extraData == nil {
-		return nil, errNilExtraData
-	}
-
-	atomicTxs, ok := extraData.([]*atomic.Tx)
-	if !ok {
-		return nil, fmt.Errorf("expected extra data to be of type []*atomic.Tx but got %T", extraData)
-	}
-
-	return atomicTxs, nil
-}
-
-func (be *blockExtension) Cleanup(b extension.ExtendedBlock) {
+func (be *blockExtension) Cleanup(b extension.VMBlock) {
 	if atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(b.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
@@ -216,7 +191,7 @@ func (be *blockExtension) Cleanup(b extension.ExtendedBlock) {
 
 // verifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
 // are not present in shared memory.
-func (be *blockExtension) verifyUTXOsPresent(b extension.ExtendedBlock, atomicTxs []*atomic.Tx) error {
+func (be *blockExtension) verifyUTXOsPresent(b extension.VMBlock, atomicTxs []*atomic.Tx) error {
 	blockHash := common.Hash(b.ID())
 	if be.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
 		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
@@ -237,24 +212,16 @@ func (be *blockExtension) verifyUTXOsPresent(b extension.ExtendedBlock, atomicTx
 	return nil
 }
 
-var _ atomic.AtomicBlockContext = (*atomicBlock)(nil)
-
-type atomicBlock struct {
-	extension.ExtendedBlock
-	atomicTxs []*atomic.Tx
-}
-
-func wrapAtomicBlock(b extension.ExtendedBlock) (*atomicBlock, error) {
-	txs, err := getAtomicFromExtra(b)
+func extractAtomicTxsFromBlock(b extension.VMBlock, chainConfig *params.ChainConfig) ([]*atomic.Tx, error) {
+	ethBlock := b.GetEthBlock()
+	if ethBlock == nil {
+		return nil, errNilEthBlock
+	}
+	isApricotPhase5 := chainConfig.IsApricotPhase5(ethBlock.Time())
+	atomicTxs, err := atomic.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, err
 	}
-	return &atomicBlock{
-		ExtendedBlock: b,
-		atomicTxs:     txs,
-	}, nil
-}
 
-func (ab *atomicBlock) AtomicTxs() []*atomic.Tx {
-	return ab.atomicTxs
+	return atomicTxs, nil
 }

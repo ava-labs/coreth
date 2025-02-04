@@ -33,8 +33,8 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/extension"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
@@ -140,7 +140,6 @@ var (
 	errInvalidBlock                  = errors.New("invalid block")
 	errInvalidNonce                  = errors.New("invalid nonce")
 	errUnclesUnsupported             = errors.New("uncles unsupported")
-	errRejectedParent                = errors.New("rejected parent")
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
@@ -257,7 +256,6 @@ type VM struct {
 	warpBackend warp.Backend
 
 	// Initialize only sets these if nil so they can be overridden in tests
-	p2pSender          commonEng.AppSender
 	ethTxGossipHandler p2p.Handler
 	ethTxPushGossiper  avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
 	ethTxPullGossiper  avalanchegossip.Gossiper
@@ -444,13 +442,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
-	// initialize peer network
-	if vm.p2pSender == nil {
-		vm.p2pSender = appSender
-	}
-
-	// TODO: move all network stuff to peer.NewNetwork
-	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, vm.p2pSender, vm.sdkMetrics, "p2p")
+	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
@@ -580,12 +572,15 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 			syncStats,
 		),
 	})
-	leafConfigs = append(leafConfigs, vm.extensionConfig.SyncLeafType)
+
+	if vm.extensionConfig.SyncLeafType != nil {
+		leafConfigs = append(leafConfigs, vm.extensionConfig.SyncLeafType)
+	}
 
 	leafHandlers := make(LeafHandlers, len(leafConfigs))
 	for _, leafConfig := range leafConfigs {
 		if _, exists := leafHandlers[leafConfig.LeafType]; exists {
-			return fmt.Errorf("duplicate leaf type %s", leafConfig.LeafType)
+			return fmt.Errorf("duplicate leaf type %v", leafConfig.LeafType)
 		}
 		leafHandlers[leafConfig.LeafType] = leafConfig.Handler
 	}
@@ -831,12 +826,6 @@ func (vm *VM) initBlockBuilding() error {
 	return nil
 }
 
-// setAppRequestHandlers sets the request handlers for the VM to serve state sync
-// requests.
-func (vm *VM) setAppRequestHandlers(leafConfigs []*extension.LeafRequestConfig, syncStats handlerstats.HandlerStats) error {
-	return nil
-}
-
 // Shutdown implements the snowman.ChainVM interface
 func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
@@ -973,15 +962,12 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 
 // SetPreference sets what the current tail of the chain is
 func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
-	// Since each internal handler used by [vm.State] always returns a block
-	// with non-nil ethBlock value, GetBlockInternal should never return a
-	// (*Block) with a nil ethBlock value.
-	block, err := vm.GetBlockInternal(ctx, blkID)
+	block, err := vm.GetVMBlock(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
 
-	return vm.blockChain.SetPreference(block.(*Block).ethBlock)
+	return vm.blockChain.SetPreference(block.GetEthBlock())
 }
 
 // VerifyHeightIndex always returns a nil error since the index is maintained by
@@ -1083,17 +1069,11 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
  *********************************** Helpers **********************************
  */
 
-// currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() params.Rules {
-	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.chainConfig.Rules(header.Number, header.Time)
-}
-
 // requirePrimaryNetworkSigners returns true if warp messages from the primary
 // network must be signed by the primary network validators.
 // This is necessary when the subnet is not validating the primary network.
 func (vm *VM) requirePrimaryNetworkSigners() bool {
-	switch c := vm.currentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
+	switch c := vm.CurrentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
 	case *warpcontract.Config:
 		return c.RequirePrimaryNetworkSigners
 	default: // includes nil due to non-presence
@@ -1209,20 +1189,47 @@ func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
  // All these methods assumes that VM is already initialized
 */
 
-func (vm *VM) Blockchain() *core.BlockChain {
-	return vm.blockChain
+func (vm *VM) GetVMBlock(ctx context.Context, blkID ids.ID) (extension.VMBlock, error) {
+	// Since each internal handler used by [vm.State] always returns a block
+	// with non-nil ethBlock value, GetBlockInternal should never return a
+	// (*Block) with a nil ethBlock value.
+	blk, err := vm.GetBlockInternal(ctx, blkID)
+	if err != nil {
+		return nil, err
+	}
+
+	return blk.(*Block), nil
+}
+
+func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
+	lastAcceptedBlock := vm.LastAcceptedBlockInternal()
+	if lastAcceptedBlock == nil {
+		return nil
+	}
+	return lastAcceptedBlock.(*Block)
+}
+
+func (vm *VM) NewVMBlock(ethBlock *types.Block) (extension.VMBlock, error) {
+	blk, err := vm.blockManager.newBlock(ethBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	return blk, nil
+}
+
+// CurrentRules returns the chain rules for the current block.
+func (vm *VM) CurrentRules() params.Rules {
+	header := vm.eth.BlockChain().CurrentHeader()
+	return vm.chainConfig.Rules(header.Number, header.Time)
+}
+
+func (vm *VM) Ethereum() *eth.Ethereum {
+	return vm.eth
 }
 
 func (vm *VM) Config() *config.Config {
 	return &vm.config
-}
-
-func (vm *VM) GetBlockExtended(ctx context.Context, blkID ids.ID) (extension.ExtendedBlock, error) {
-	blk, err := vm.GetBlock(ctx, blkID)
-	if err != nil {
-		return nil, err
-	}
-	return blk.(*Block), nil
 }
 
 func (vm *VM) MetricRegistry() *prometheus.Registry {
@@ -1235,4 +1242,12 @@ func (vm *VM) Validators() *p2p.Validators {
 
 func (vm *VM) VersionDB() *versiondb.Database {
 	return vm.versiondb
+}
+
+func (vm *VM) EthChainDB() ethdb.Database {
+	return vm.chaindb
+}
+
+func (vm *VM) SyncerClient() vmsync.Client {
+	return vm.Client
 }

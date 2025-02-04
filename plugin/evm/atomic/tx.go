@@ -5,7 +5,6 @@ package atomic
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -20,13 +19,11 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
-	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 )
 
@@ -117,6 +114,12 @@ func (in *EVMInput) Verify() error {
 	return nil
 }
 
+// Allow vm to execute custom logic against the underlying transaction types.
+type Visitor interface {
+	ImportTx(*UnsignedImportTx) error
+	ExportTx(*UnsignedExportTx) error
+}
+
 // UnsignedTx is an unsigned transaction
 type UnsignedTx interface {
 	Initialize(unsignedBytes, signedBytes []byte)
@@ -125,25 +128,6 @@ type UnsignedTx interface {
 	Burned(assetID ids.ID) (uint64, error)
 	Bytes() []byte
 	SignedBytes() []byte
-}
-
-type VerifierBackend struct {
-	Ctx          *snow.Context
-	Fx           fx.Fx
-	Rules        params.Rules
-	Bootstrapped bool
-	BlockFetcher BlockFetcher
-	SecpCache    *secp256k1.RecoverCache
-}
-
-type BlockFetcher interface {
-	LastAcceptedBlockInternal() snowman.Block
-	GetAtomicBlock(context.Context, ids.ID) (AtomicBlockContext, error)
-}
-
-type AtomicBlockContext interface {
-	AtomicTxs() []*Tx
-	snowman.Block
 }
 
 type StateDB interface {
@@ -168,9 +152,8 @@ type UnsignedAtomicTx interface {
 	InputUTXOs() set.Set[ids.ID]
 	// Verify attempts to verify that the transaction is well formed
 	Verify(ctx *snow.Context, rules params.Rules) error
-	// Attempts to verify this transaction with the provided state.
-	// SemanticVerify this transaction is valid.
-	SemanticVerify(backend *VerifierBackend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error
+	// Allow vm to execute custom logic against the underlying transaction types.
+	Visit(v Visitor) error
 	// AtomicOps returns the blockchainID and set of atomic requests that
 	// must be applied to shared memory for this transaction to be accepted.
 	// The set of atomic requests must be returned in a consistent order.

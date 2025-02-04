@@ -45,6 +45,12 @@ type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
+type Extender interface {
+	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
+	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
+	OnFinishAfterCommit(summaryHeight uint64) error
+}
+
 // ClientConfig defines the options and dependencies needed to construct a Client
 type ClientConfig struct {
 	Enabled    bool

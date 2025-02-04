@@ -25,6 +25,19 @@ import (
 	"github.com/holiman/uint256"
 )
 
+var nonExistentID = ids.ID{'F'}
+
+var (
+	apricotRulesPhase0 = params.Rules{}
+	apricotRulesPhase1 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true}}
+	apricotRulesPhase2 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true}}
+	apricotRulesPhase3 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true}}
+	apricotRulesPhase4 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true}}
+	apricotRulesPhase5 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true}}
+	apricotRulesPhase6 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true}}
+	banffRules         = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true}}
+)
+
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
 // that attempt to send the funds to each of the test keys (list of length 3).
 func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
@@ -88,12 +101,12 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 
 	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
 	exportTxs := make([]*atomic.Tx, 0, 3)
-	state, err := vm.blockChain.State()
+	state, err := vm.Ethereum().BlockChain().State()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, addr := range testShortIDAddrs {
-		exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+	for _, addr := range testutils.TestShortIDAddrs {
+		exportTx, err := atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, testutils.InitialBaseFee, testutils.TestKeys[0:1])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -325,7 +338,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
@@ -406,7 +419,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				Ins: test.tx,
 			}
 
-			stateDB, err := vm.blockChain.State()
+			stateDB, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -442,7 +455,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 }
 
 func TestExportTxSemanticVerify(t *testing.T) {
-	_, vm, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	_, vm, _, _, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -450,7 +463,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		}
 	}()
 
-	parent := vm.LastAcceptedBlockInternal().(*Block)
+	parent := vm.LastAcceptedVMBlock()
 
 	key := testutils.TestKeys[0]
 	addr := key.Address()
@@ -914,10 +927,11 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		backend := &atomic.VerifierBackend{
+		backend := &VerifierBackend{
 			Ctx:          vm.ctx,
 			Fx:           &vm.fx,
 			Rules:        test.rules,
+			ChainConfig:  vm.Ethereum().BlockChain().Config(),
 			Bootstrapped: vm.bootstrapped.Get(),
 			BlockFetcher: vm,
 			SecpCache:    &vm.secpCache,
@@ -927,7 +941,12 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			tx := test.tx
 			exportTx := tx.UnsignedAtomicTx
 
-			err := exportTx.SemanticVerify(backend, tx, parent, test.baseFee)
+			err := exportTx.Visit(&semanticVerifier{
+				backend: backend,
+				atx:     tx,
+				parent:  parent,
+				baseFee: test.baseFee,
+			})
 			if test.shouldErr && err == nil {
 				t.Fatalf("should have errored but returned valid")
 			}
@@ -939,7 +958,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 }
 
 func TestExportTxAccept(t *testing.T) {
-	_, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	_, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
 
 	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
 
@@ -1013,7 +1032,7 @@ func TestExportTxAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	commitBatch, err := vm.versiondb.CommitBatch()
+	commitBatch, err := vm.VersionDB().CommitBatch()
 	if err != nil {
 		t.Fatalf("Failed to create commit batch for VM due to %s", err)
 	}
@@ -1116,7 +1135,7 @@ func TestExportTxVerify(t *testing.T) {
 					OutputOwners: secp256k1fx.OutputOwners{
 						Locktime:  0,
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+						Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 					},
 				},
 			},
@@ -1127,7 +1146,7 @@ func TestExportTxVerify(t *testing.T) {
 					OutputOwners: secp256k1fx.OutputOwners{
 						Locktime:  0,
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testShortIDAddrs[1]},
+						Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[1]},
 					},
 				},
 			},
@@ -1320,7 +1339,7 @@ func TestExportTxVerify(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1359,7 +1378,7 @@ func TestExportTxVerify(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1418,7 +1437,7 @@ func TestExportTxGasCost(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1450,7 +1469,7 @@ func TestExportTxGasCost(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1483,7 +1502,7 @@ func TestExportTxGasCost(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1515,7 +1534,7 @@ func TestExportTxGasCost(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1559,7 +1578,7 @@ func TestExportTxGasCost(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1603,7 +1622,7 @@ func TestExportTxGasCost(t *testing.T) {
 							OutputOwners: secp256k1fx.OutputOwners{
 								Locktime:  0,
 								Threshold: 1,
-								Addrs:     []ids.ShortID{testShortIDAddrs[0]},
+								Addrs:     []ids.ShortID{testutils.TestShortIDAddrs[0]},
 							},
 						},
 					},
@@ -1654,42 +1673,42 @@ func TestNewExportTx(t *testing.T) {
 	}{
 		{
 			name:               "apricot phase 0",
-			genesis:            genesisJSONApricotPhase0,
+			genesis:            testutils.GenesisJSONApricotPhase0,
 			rules:              apricotRulesPhase0,
 			bal:                44000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
 			name:               "apricot phase 1",
-			genesis:            genesisJSONApricotPhase1,
+			genesis:            testutils.GenesisJSONApricotPhase1,
 			rules:              apricotRulesPhase1,
 			bal:                44000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
 			name:               "apricot phase 2",
-			genesis:            genesisJSONApricotPhase2,
+			genesis:            testutils.GenesisJSONApricotPhase2,
 			rules:              apricotRulesPhase2,
 			bal:                43000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
 			name:               "apricot phase 3",
-			genesis:            genesisJSONApricotPhase3,
+			genesis:            testutils.GenesisJSONApricotPhase3,
 			rules:              apricotRulesPhase3,
 			bal:                44446500,
 			expectedBurnedAVAX: 276750,
 		},
 		{
 			name:               "apricot phase 4",
-			genesis:            genesisJSONApricotPhase4,
+			genesis:            testutils.GenesisJSONApricotPhase4,
 			rules:              apricotRulesPhase4,
 			bal:                44446500,
 			expectedBurnedAVAX: 276750,
 		},
 		{
 			name:               "apricot phase 5",
-			genesis:            genesisJSONApricotPhase5,
+			genesis:            testutils.GenesisJSONApricotPhase5,
 			rules:              apricotRulesPhase5,
 			bal:                39946500,
 			expectedBurnedAVAX: 2526750,
@@ -1697,7 +1716,7 @@ func TestNewExportTx(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
+			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, test.genesis, "", "")
 
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
@@ -1705,7 +1724,7 @@ func TestNewExportTx(t *testing.T) {
 				}
 			}()
 
-			parent := vm.LastAcceptedBlockInternal().(*Block)
+			parent := vm.LastAcceptedVMBlock()
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1765,31 +1784,37 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = vm.LastAcceptedBlockInternal().(*Block)
+			parent = vm.LastAcceptedVMBlock()
 			exportAmount := uint64(5000000)
 
-			state, err := vm.blockChain.State()
+			state, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, test.rules, state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, testShortIDAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err = atomic.NewExportTx(vm.ctx, test.rules, state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, testutils.TestShortIDAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			exportTx := tx.UnsignedAtomicTx
 
-			backend := &atomic.VerifierBackend{
+			backend := &VerifierBackend{
 				Ctx:          vm.ctx,
 				Fx:           &vm.fx,
-				Rules:        vm.currentRules(),
+				Rules:        vm.CurrentRules(),
+				ChainConfig:  vm.Ethereum().BlockChain().Config(),
 				Bootstrapped: vm.bootstrapped.Get(),
 				BlockFetcher: vm,
 				SecpCache:    &vm.secpCache,
 			}
 
-			if err := exportTx.SemanticVerify(backend, tx, parent, parent.ethBlock.BaseFee()); err != nil {
+			if err := exportTx.Visit(&semanticVerifier{
+				backend: backend,
+				atx:     tx,
+				parent:  parent,
+				baseFee: parent.GetEthBlock().BaseFee(),
+			}); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
@@ -1801,7 +1826,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatalf("burned wrong amount of AVAX - expected %d burned %d", test.expectedBurnedAVAX, burnedAVAX)
 			}
 
-			commitBatch, err := vm.versiondb.CommitBatch()
+			commitBatch, err := vm.VersionDB().CommitBatch()
 			if err != nil {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
@@ -1814,7 +1839,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			sdb, err := vm.blockChain.State()
+			sdb, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1841,28 +1866,28 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	}{
 		{
 			name:    "apricot phase 0",
-			genesis: genesisJSONApricotPhase0,
+			genesis: testutils.GenesisJSONApricotPhase0,
 			rules:   apricotRulesPhase0,
 			bal:     49000000,
 			balmc:   25000000,
 		},
 		{
 			name:    "apricot phase 1",
-			genesis: genesisJSONApricotPhase1,
+			genesis: testutils.GenesisJSONApricotPhase1,
 			rules:   apricotRulesPhase1,
 			bal:     49000000,
 			balmc:   25000000,
 		},
 		{
 			name:    "apricot phase 2",
-			genesis: genesisJSONApricotPhase2,
+			genesis: testutils.GenesisJSONApricotPhase2,
 			rules:   apricotRulesPhase2,
 			bal:     48000000,
 			balmc:   25000000,
 		},
 		{
 			name:    "apricot phase 3",
-			genesis: genesisJSONApricotPhase3,
+			genesis: testutils.GenesisJSONApricotPhase3,
 			rules:   apricotRulesPhase3,
 			bal:     48947900,
 			balmc:   25000000,
@@ -1870,7 +1895,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
+			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, test.genesis, "", "")
 
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
@@ -1878,7 +1903,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				}
 			}()
 
-			parent := vm.LastAcceptedBlockInternal().(*Block)
+			parent := vm.LastAcceptedVMBlock()
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1968,40 +1993,46 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = vm.LastAcceptedBlockInternal().(*Block)
+			parent = vm.LastAcceptedVMBlock()
 			exportAmount := uint64(5000000)
 
-			testutils.TestKeys0Addr := testutils.TestKeys[0].EthAddress()
-			exportId, err := ids.ToShortID(testutils.TestKeys0Addr[:])
+			testKeys0Addr := testutils.TestKeys[0].EthAddress()
+			exportId, err := ids.ToShortID(testKeys0Addr[:])
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			state, err := vm.blockChain.State()
+			state, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err = atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			exportTx := tx.UnsignedAtomicTx
-			backend := &atomic.VerifierBackend{
+			backend := &VerifierBackend{
 				Ctx:          vm.ctx,
 				Fx:           &vm.fx,
-				Rules:        vm.currentRules(),
+				Rules:        vm.CurrentRules(),
+				ChainConfig:  vm.Ethereum().BlockChain().Config(),
 				Bootstrapped: vm.bootstrapped.Get(),
 				BlockFetcher: vm,
 				SecpCache:    &vm.secpCache,
 			}
 
-			if err := exportTx.SemanticVerify(backend, tx, parent, parent.ethBlock.BaseFee()); err != nil {
+			if err := exportTx.Visit(&semanticVerifier{
+				backend: backend,
+				atx:     tx,
+				parent:  parent,
+				baseFee: parent.GetEthBlock().BaseFee(),
+			}); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
-			commitBatch, err := vm.versiondb.CommitBatch()
+			commitBatch, err := vm.VersionDB().CommitBatch()
 			if err != nil {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
@@ -2014,7 +2045,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			stdb, err := vm.blockChain.State()
+			stdb, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}

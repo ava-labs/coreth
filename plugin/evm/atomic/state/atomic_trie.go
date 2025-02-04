@@ -136,8 +136,8 @@ func (a *AtomicTrie) OpenTrie(root common.Hash) (*trie.Trie, error) {
 	return trie.New(trie.TrieID(root), a.trieDB)
 }
 
-// commit calls commit on the underlying trieDB and updates metadata pointers.
-func (a *AtomicTrie) commit(height uint64, root common.Hash) error {
+// Commit calls Commit on the underlying trieDB and updates metadata pointers.
+func (a *AtomicTrie) Commit(height uint64, root common.Hash) error {
 	if err := a.trieDB.Commit(root, false); err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func (a *AtomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 	// Because we do not accept the trie at every height, we may need to
 	// populate roots at prior commit heights that were skipped.
 	for nextCommitHeight := a.lastCommittedHeight + a.commitInterval; nextCommitHeight < height; nextCommitHeight += a.commitInterval {
-		if err := a.commit(nextCommitHeight, a.lastAcceptedRoot); err != nil {
+		if err := a.Commit(nextCommitHeight, a.lastAcceptedRoot); err != nil {
 			return false, err
 		}
 		hasCommitted = true
@@ -284,7 +284,7 @@ func (a *AtomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 
 	// Commit this root if we have reached the [commitInterval].
 	if height%a.commitInterval == 0 {
-		if err := a.commit(height, root); err != nil {
+		if err := a.Commit(height, root); err != nil {
 			return false, err
 		}
 		hasCommitted = true

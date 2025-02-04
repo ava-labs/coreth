@@ -35,7 +35,6 @@ type Block struct {
 	id           ids.ID
 	ethBlock     *types.Block
 	blockManager *blockManager
-	extraData    any
 }
 
 // ID implements the snowman.Block interface
@@ -287,8 +286,4 @@ func (b *Block) String() string { return fmt.Sprintf("EVM block, ID = %s", b.ID(
 
 func (b *Block) GetEthBlock() *types.Block {
 	return b.ethBlock
-}
-
-func (b *Block) GetExtraData() interface{} {
-	return b.extraData
 }

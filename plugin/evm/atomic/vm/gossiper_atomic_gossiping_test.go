@@ -1,7 +1,7 @@
 // (c) 2019-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
+	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, "", "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -118,7 +118,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
+	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, "", "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()

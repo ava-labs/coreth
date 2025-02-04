@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package main
 
 import (
 	"github.com/ava-labs/avalanchego/ids"
@@ -9,6 +9,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
 
+	"github.com/ava-labs/coreth/plugin/evm"
 	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 )
 
@@ -22,9 +23,9 @@ var (
 type Factory struct{}
 
 func (*Factory) New(logging.Logger) (interface{}, error) {
-	return atomicvm.WrapVM(&VM{}), nil
+	return atomicvm.WrapVM(&evm.VM{}), nil
 }
 
 func NewPluginVM() (block.ChainVM, error) {
-	return atomicvm.WrapVM(&VM{IsPlugin: true}), nil
+	return atomicvm.WrapVM(&evm.VM{IsPlugin: true}), nil
 }

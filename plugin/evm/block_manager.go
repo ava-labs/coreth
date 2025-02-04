@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/extension"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/trie"
 )
 
@@ -25,11 +25,11 @@ var (
 )
 
 type blockManager struct {
-	blockExtension extension.BlockExtension
+	blockExtension extension.BlockManagerExtension
 	vm             *VM
 }
 
-func newBlockManager(vm *VM, blockExtension extension.BlockExtension) *blockManager {
+func newBlockManager(vm *VM, blockExtension extension.BlockManagerExtension) *blockManager {
 	return &blockManager{
 		blockExtension: blockExtension,
 		vm:             vm,
@@ -38,15 +38,10 @@ func newBlockManager(vm *VM, blockExtension extension.BlockExtension) *blockMana
 
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
 func (bm *blockManager) newBlock(ethBlock *types.Block) (*Block, error) {
-	extraData, err := bm.blockExtension.InitializeExtraData(ethBlock, bm.vm.chainConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize block extension: %w", err)
-	}
 	return &Block{
 		id:           ids.ID(ethBlock.Hash()),
 		ethBlock:     ethBlock,
 		blockManager: bm,
-		extraData:    extraData,
 	}, nil
 }
 
@@ -208,8 +203,7 @@ func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
 	if !cancun && ethHeader.ParentBeaconRoot != nil {
 		return fmt.Errorf("invalid parentBeaconRoot: have %x, expected nil", *ethHeader.ParentBeaconRoot)
 	}
-	// TODO: decide what to do after Cancun
-	// currently we are enforcing it to be empty hash
+
 	if cancun {
 		switch {
 		case ethHeader.ParentBeaconRoot == nil:

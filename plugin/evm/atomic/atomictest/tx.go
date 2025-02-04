@@ -4,7 +4,6 @@
 package atomictest
 
 import (
-	"math/big"
 	"math/rand"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -49,7 +48,7 @@ type TestUnsignedTx struct {
 	UnsignedBytesV              []byte
 	SignedBytesV                []byte
 	InputUTXOsV                 set.Set[ids.ID]
-	SemanticVerifyV             error
+	VisitV                      error
 	EVMStateTransferV           error
 }
 
@@ -85,8 +84,8 @@ func (t *TestUnsignedTx) SignedBytes() []byte { return t.SignedBytesV }
 func (t *TestUnsignedTx) InputUTXOs() set.Set[ids.ID] { return t.InputUTXOsV }
 
 // SemanticVerify implements the UnsignedAtomicTx interface
-func (t *TestUnsignedTx) SemanticVerify(backend *atomic.VerifierBackend, stx *atomic.Tx, parent atomic.AtomicBlockContext, baseFee *big.Int) error {
-	return t.SemanticVerifyV
+func (t *TestUnsignedTx) Visit(v atomic.Visitor) error {
+	return t.VisitV
 }
 
 // EVMStateTransfer implements the UnsignedAtomicTx interface

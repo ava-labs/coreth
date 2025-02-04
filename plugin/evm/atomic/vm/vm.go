@@ -34,11 +34,11 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/extension"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/utils"
@@ -186,18 +186,18 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	lastAcceptedHash, lastAcceptedHeight, err := vm.InnerVM.ReadLastAccepted()
+	lastAcceptedHash, lastAcceptedHeight, err := innerVM.ReadLastAccepted()
 	if err != nil {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(vm.InnerVM.VersionDB(), codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(innerVM.VersionDB(), codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
 	vm.atomicBackend, err = atomicstate.NewAtomicBackend(
 		vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
-		vm.InnerVM.Config().CommitInterval,
+		innerVM.Config().CommitInterval,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
@@ -205,7 +205,7 @@ func (vm *VM) Initialize(
 
 	// Atomic backend is available now, we can initialize structs that depend on it
 	syncProvider.Initialize(vm.atomicBackend.AtomicTrie())
-	syncExtender.Initialize(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.InnerVM.Config().StateSyncRequestSize)
+	syncExtender.Initialize(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), innerVM.Config().StateSyncRequestSize)
 	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, codec)
 	vm.secpCache = secp256k1.RecoverCache{
 		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
@@ -262,36 +262,36 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
-
+	innerVM := vm.InnerVM
 	atomicTxGossipMarshaller := atomic.GossipAtomicTxMarshaller{}
-	atomicTxGossipClient := vm.InnerVM.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.InnerVM.Validators()))
-	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.InnerVM.MetricRegistry(), atomicTxGossipNamespace)
+	atomicTxGossipClient := innerVM.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(innerVM.Validators()))
+	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(innerVM.MetricRegistry(), atomicTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
 	}
 
 	pushGossipParams := avalanchegossip.BranchingFactor{
-		StakePercentage: vm.InnerVM.Config().PushGossipPercentStake,
-		Validators:      vm.InnerVM.Config().PushGossipNumValidators,
-		Peers:           vm.InnerVM.Config().PushGossipNumPeers,
+		StakePercentage: innerVM.Config().PushGossipPercentStake,
+		Validators:      innerVM.Config().PushGossipNumValidators,
+		Peers:           innerVM.Config().PushGossipNumPeers,
 	}
 	pushRegossipParams := avalanchegossip.BranchingFactor{
-		Validators: vm.InnerVM.Config().PushRegossipNumValidators,
-		Peers:      vm.InnerVM.Config().PushRegossipNumPeers,
+		Validators: innerVM.Config().PushRegossipNumValidators,
+		Peers:      innerVM.Config().PushRegossipNumPeers,
 	}
 
 	if vm.atomicTxPushGossiper == nil {
 		vm.atomicTxPushGossiper, err = avalanchegossip.NewPushGossiper[*atomic.GossipAtomicTx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
-			vm.InnerVM.Validators(),
+			innerVM.Validators(),
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
 			pushGossipParams,
 			pushRegossipParams,
 			config.PushGossipDiscardedElements,
 			config.TxGossipTargetMessageSize,
-			vm.InnerVM.Config().RegossipFrequency.Duration,
+			innerVM.Config().RegossipFrequency.Duration,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
@@ -307,11 +307,11 @@ func (vm *VM) onNormalOperationsStarted() error {
 			config.TxGossipTargetMessageSize,
 			config.TxGossipThrottlingPeriod,
 			config.TxGossipThrottlingLimit,
-			vm.InnerVM.Validators(),
+			innerVM.Validators(),
 		)
 	}
 
-	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
+	if err := innerVM.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
 	}
 
@@ -328,17 +328,17 @@ func (vm *VM) onNormalOperationsStarted() error {
 		vm.atomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
 			Gossiper:   atomicTxPullGossiper,
 			NodeID:     vm.ctx.NodeID,
-			Validators: vm.InnerVM.Validators(),
+			Validators: innerVM.Validators(),
 		}
 	}
 
 	vm.shutdownWg.Add(2)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, vm.InnerVM.Config().PushGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, innerVM.Config().PushGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, vm.InnerVM.Config().PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, innerVM.Config().PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 	return nil
@@ -384,16 +384,17 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	if new(big.Int).SetUint64(gasUsed).Cmp(params.AtomicGasLimit) > 0 {
 		return fmt.Errorf("tx gas usage (%d) exceeds atomic gas limit (%d)", gasUsed, params.AtomicGasLimit.Uint64())
 	}
-
+	innerVM := vm.InnerVM
+	blockchain := innerVM.Ethereum().BlockChain()
 	// Note: we fetch the current block and then the state at that block instead of the current state directly
 	// since we need the header of the current block below.
-	preferredBlock := vm.InnerVM.Blockchain().CurrentBlock()
-	preferredState, err := vm.InnerVM.Blockchain().StateAt(preferredBlock.Root)
+	preferredBlock := blockchain.CurrentBlock()
+	preferredState, err := blockchain.StateAt(preferredBlock.Root)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve block state at tip while verifying atomic tx: %w", err)
 	}
-	chainConfig := vm.InnerVM.Blockchain().Config()
-	rules := vm.InnerVM.Blockchain().Config().Rules(preferredBlock.Number, preferredBlock.Time)
+	chainConfig := blockchain.Config()
+	rules := blockchain.Config().Rules(preferredBlock.Number, preferredBlock.Time)
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
@@ -414,39 +415,36 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
 func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
-	parent, err := vm.GetAtomicBlock(context.TODO(), ids.ID(parentHash))
+	parent, err := vm.InnerVM.GetVMBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
 	}
-	atomicBackend := &atomic.VerifierBackend{
+	atomicBackend := &VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
+		ChainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
 		Bootstrapped: vm.bootstrapped.Get(),
-		BlockFetcher: vm,
+		BlockFetcher: vm.InnerVM,
 		SecpCache:    &vm.secpCache,
 	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(atomicBackend, tx, parent, baseFee); err != nil {
+	if err := tx.UnsignedAtomicTx.Visit(&semanticVerifier{
+		backend: atomicBackend,
+		atx:     tx,
+		parent:  parent,
+		baseFee: baseFee,
+	}); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
-}
-
-func (vm *VM) GetAtomicBlock(ctx context.Context, id ids.ID) (atomic.AtomicBlockContext, error) {
-	extendedBlock, err := vm.InnerVM.GetBlockExtended(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return wrapAtomicBlock(extendedBlock)
 }
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
 func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
-	if !vm.InnerVM.Blockchain().HasBlock(parentHash, height-1) {
-		return atomic.ErrRejectedParent
+	if !vm.InnerVM.Ethereum().BlockChain().HasBlock(parentHash, height-1) {
+		return errRejectedParent
 	}
 
 	ancestorID := ids.ID(parentHash)
@@ -454,30 +452,36 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// it was called.
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
-	ancestor, err := vm.GetAtomicBlock(context.TODO(), ancestorID)
+	ancestor, err := vm.GetVMBlock(context.TODO(), ancestorID)
 	if err != nil {
-		return atomic.ErrRejectedParent
+		return errRejectedParent
 	}
 
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := &atomic.VerifierBackend{
+	atomicBackend := &VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
+		ChainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
 		Bootstrapped: vm.bootstrapped.Get(),
 		BlockFetcher: vm,
 		SecpCache:    &vm.secpCache,
 	}
+
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.SemanticVerify(atomicBackend, atomicTx, ancestor, baseFee); err != nil {
+		if err := utx.Visit(&semanticVerifier{
+			backend: atomicBackend,
+			atx:     atomicTx,
+			parent:  ancestor,
+		}); err != nil {
 			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
-			return atomic.ErrConflictingAtomicInputs
+			return errConflictingAtomicInputs
 		}
 		inputs.Union(txInputs)
 	}
@@ -493,8 +497,8 @@ func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
-func (vm *VM) createConsensusCallbacks() *dummy.ConsensusCallbacks {
-	return &dummy.ConsensusCallbacks{
+func (vm *VM) createConsensusCallbacks() dummy.ConsensusCallbacks {
+	return dummy.ConsensusCallbacks{
 		OnFinalizeAndAssemble: vm.onFinalizeAndAssemble,
 		OnExtraStateChange:    vm.onExtraStateChange,
 	}
@@ -511,7 +515,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules := vm.InnerVM.Blockchain().Config().Rules(header.Number, header.Time)
+		rules := vm.InnerVM.Ethereum().BlockChain().Config().Rules(header.Number, header.Time)
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
@@ -553,7 +557,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.InnerVM.Blockchain().Config().Rules(header.Number, header.Time)
+		rules                      = vm.InnerVM.Ethereum().BlockChain().Config().Rules(header.Number, header.Time)
 		size              int
 	)
 
@@ -648,7 +652,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 }
 
 func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	if !vm.InnerVM.Blockchain().Config().IsApricotPhase5(header.Time) {
+	if !vm.InnerVM.Ethereum().BlockChain().Config().IsApricotPhase5(header.Time) {
 		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
 	}
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
@@ -659,7 +663,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules                      = vm.InnerVM.Blockchain().Config().Rules(header.Number, header.Time)
+		rules                      = vm.InnerVM.Ethereum().BlockChain().Config().Rules(header.Number, header.Time)
 	)
 
 	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, atomic.Codec)
@@ -778,9 +782,7 @@ func (vm *VM) newImportTx(
 		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
 	}
 
-	currentHeader := vm.InnerVM.Blockchain().CurrentHeader()
-	currentRules := vm.InnerVM.Blockchain().Config().Rules(currentHeader.Number, currentHeader.Time)
-	return atomic.NewImportTx(vm.ctx, currentRules, vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
+	return atomic.NewImportTx(vm.ctx, vm.InnerVM.CurrentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 func (vm *VM) BuildBlock(ctx context.Context) (snowman.Block, error) {
