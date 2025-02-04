@@ -95,9 +95,8 @@ func (s *EthereumAPI) BaseFee(ctx context.Context) (*hexutil.Big, error) {
 }
 
 type Price struct {
-	BaseFee *hexutil.Big `json:"maxBaseFeePerGas"`
-	GasTip  *hexutil.Big `json:"maxPriorityFeePerGas"`
-	GasFee  *hexutil.Big `json:"maxFeePerGas"`
+	GasTip *hexutil.Big `json:"maxPriorityFeePerGas"`
+	GasFee *hexutil.Big `json:"maxFeePerGas"`
 }
 
 type PriceOptions struct {
@@ -110,9 +109,12 @@ var (
 	minBaseFee = new(big.Int).SetUint64(1_000_000_000)   // 1 nAVAX
 	maxBaseFee = new(big.Int).SetUint64(100_000_000_000) // 100 nAVAX
 
-	slowBaseFeeNum = new(big.Int).SetUint64(19)
-	fastBaseFeeNum = new(big.Int).SetUint64(21)
-	baseFeeDen     = new(big.Int).SetUint64(20)
+	minGasTip = common.Big1
+	maxGasTip = new(big.Int).SetUint64(20_000_000_000) // 100 nAVAX
+
+	slowFeeNum = new(big.Int).SetUint64(19)
+	fastFeeNum = new(big.Int).SetUint64(21)
+	feeDen     = new(big.Int).SetUint64(20)
 )
 
 // SuggestPriceOptions returns suggestions for what to display to a user for
@@ -127,40 +129,53 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 		return nil, err
 	}
 
-	// Cap the base fee to keep slow and normal options reasonable during fee
-	// spikes.
-	cappedBaseFee := math.BigMin(baseFee, maxBaseFee)
-
-	slowBaseFee := new(big.Int).Set(cappedBaseFee)
-	slowBaseFee.Mul(slowBaseFee, slowBaseFeeNum)
-	slowBaseFee.Div(slowBaseFee, baseFeeDen)
-	slowBaseFee = math.BigMax(slowBaseFee, minBaseFee)
-	slowGasFee := new(big.Int).Add(slowBaseFee, gasTip)
-
-	normalBaseFee := cappedBaseFee
-	normalGasFee := new(big.Int).Add(normalBaseFee, gasTip)
-
-	fastBaseFee := new(big.Int).Set(baseFee)
-	fastBaseFee.Mul(fastBaseFee, fastBaseFeeNum)
-	fastBaseFee.Div(fastBaseFee, baseFeeDen)
-	fastGasFee := new(big.Int).Add(fastBaseFee, gasTip)
+	slowBaseFee, normalBaseFee, fastBaseFee := priceOptions(
+		minBaseFee,
+		baseFee,
+		maxBaseFee,
+	)
+	slowGasTip, normalGasTip, fastGasTip := priceOptions(
+		minGasTip,
+		gasTip,
+		maxGasTip,
+	)
+	slowGasFee := new(big.Int).Add(slowBaseFee, slowGasTip)
+	normalGasFee := new(big.Int).Add(normalBaseFee, normalGasTip)
+	fastGasFee := new(big.Int).Add(fastBaseFee, fastGasTip)
 	return &PriceOptions{
 		Slow: &Price{
-			BaseFee: (*hexutil.Big)(slowBaseFee),
-			GasTip:  (*hexutil.Big)(gasTip),
-			GasFee:  (*hexutil.Big)(slowGasFee),
+			GasTip: (*hexutil.Big)(slowGasTip),
+			GasFee: (*hexutil.Big)(slowGasFee),
 		},
 		Normal: &Price{
-			BaseFee: (*hexutil.Big)(normalBaseFee),
-			GasTip:  (*hexutil.Big)(gasTip),
-			GasFee:  (*hexutil.Big)(normalGasFee),
+			GasTip: (*hexutil.Big)(normalGasTip),
+			GasFee: (*hexutil.Big)(normalGasFee),
 		},
 		Fast: &Price{
-			BaseFee: (*hexutil.Big)(fastBaseFee),
-			GasTip:  (*hexutil.Big)(gasTip),
-			GasFee:  (*hexutil.Big)(fastGasFee),
+			GasTip: (*hexutil.Big)(fastGasTip),
+			GasFee: (*hexutil.Big)(fastGasFee),
 		},
 	}, nil
+}
+func priceOptions(
+	minFee *big.Int,
+	estimate *big.Int,
+	maxFee *big.Int,
+) (*big.Int, *big.Int, *big.Int) {
+	// Cap the fee to keep slow and normal options reasonable during fee spikes.
+	cappedFee := math.BigMin(estimate, maxFee)
+
+	slowFee := new(big.Int).Set(cappedFee)
+	slowFee.Mul(slowFee, slowFeeNum)
+	slowFee.Div(slowFee, feeDen)
+	slowFee = math.BigMax(slowFee, minBaseFee)
+
+	normalFee := cappedFee
+
+	fastFee := new(big.Int).Set(estimate)
+	fastFee.Mul(fastFee, fastFeeNum)
+	fastFee.Div(fastFee, feeDen)
+	return slowFee, normalFee, fastFee
 }
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
