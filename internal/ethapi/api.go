@@ -94,6 +94,73 @@ func (s *EthereumAPI) BaseFee(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(baseFee), err
 }
 
+type Price struct {
+	BaseFee *hexutil.Big `json:"maxBaseFeePerGas"`
+	GasTip  *hexutil.Big `json:"maxPriorityFeePerGas"`
+	GasFee  *hexutil.Big `json:"maxFeePerGas"`
+}
+
+type PriceOptions struct {
+	Slow   *Price `json:"slow"`
+	Normal *Price `json:"normal"`
+	Fast   *Price `json:"fast"`
+}
+
+var (
+	minBaseFee = new(big.Int).SetUint64(1_000_000_000)   // 1 nAVAX
+	maxBaseFee = new(big.Int).SetUint64(100_000_000_000) // 100 nAVAX
+
+	slowBaseFeeNum = new(big.Int).SetUint64(19)
+	fastBaseFeeNum = new(big.Int).SetUint64(21)
+	baseFeeDen     = new(big.Int).SetUint64(20)
+)
+
+// BaseFee returns an estimate for what the base fee will be on the next block if
+// it is produced now.
+func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, error) {
+	baseFee, err := s.b.EstimateBaseFee(ctx)
+	if err != nil || baseFee == nil {
+		return nil, err
+	}
+	gasTip, err := s.b.SuggestGasTipCap(ctx)
+	if err != nil || gasTip == nil {
+		return nil, err
+	}
+
+	cappedBaseFee := math.BigMin(baseFee, maxBaseFee)
+
+	slowBaseFee := new(big.Int).Set(cappedBaseFee)
+	slowBaseFee.Mul(slowBaseFee, slowBaseFeeNum)
+	slowBaseFee.Div(slowBaseFee, baseFeeDen)
+	slowBaseFee = math.BigMax(slowBaseFee, minBaseFee)
+	slowGasFee := new(big.Int).Add(slowBaseFee, gasTip)
+
+	normalBaseFee := cappedBaseFee
+	normalGasFee := new(big.Int).Add(normalBaseFee, gasTip)
+
+	fastBaseFee := new(big.Int).Set(baseFee)
+	fastBaseFee.Mul(fastBaseFee, fastBaseFeeNum)
+	fastBaseFee.Div(fastBaseFee, baseFeeDen)
+	fastGasFee := new(big.Int).Add(fastBaseFee, gasTip)
+	return &PriceOptions{
+		Slow: &Price{
+			BaseFee: (*hexutil.Big)(slowBaseFee),
+			GasTip:  (*hexutil.Big)(gasTip),
+			GasFee:  (*hexutil.Big)(slowGasFee),
+		},
+		Normal: &Price{
+			BaseFee: (*hexutil.Big)(normalBaseFee),
+			GasTip:  (*hexutil.Big)(gasTip),
+			GasFee:  (*hexutil.Big)(normalGasFee),
+		},
+		Fast: &Price{
+			BaseFee: (*hexutil.Big)(fastBaseFee),
+			GasTip:  (*hexutil.Big)(gasTip),
+			GasFee:  (*hexutil.Big)(fastGasFee),
+		},
+	}, nil
+}
+
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (s *EthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	tipcap, err := s.b.SuggestGasTipCap(ctx)
