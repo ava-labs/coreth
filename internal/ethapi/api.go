@@ -168,7 +168,7 @@ func priceOptions(
 	slowFee := new(big.Int).Set(cappedFee)
 	slowFee.Mul(slowFee, slowFeeNum)
 	slowFee.Div(slowFee, feeDen)
-	slowFee = math.BigMax(slowFee, minBaseFee)
+	slowFee = math.BigMax(slowFee, minFee)
 
 	normalFee := cappedFee
 
