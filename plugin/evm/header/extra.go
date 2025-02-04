@@ -7,17 +7,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/params"
 )
 
 var (
 	ErrInvalidExtraLength = errors.New("invalid header.Extra length")
 
-	ErrUnstructuredDataNotSupported = errors.New("unstructured data is not supported")
-	ErrDynamicFeeWindowNotSupported = errors.New("dynamic fee window is not supported")
-	ErrDynamicFeeStateNotSupported  = errors.New("dynamic fee state is not supported")
-	ErrPredicatesNotSupported       = errors.New("predicates are not supported")
+	ErrUnstructuredDataNotSupported      = errors.New("unstructured data is not supported")
+	ErrDynamicFeeWindowNotSupported      = errors.New("dynamic fee window is not supported")
+	ErrDynamicFeeAccumulatorNotSupported = errors.New("dynamic fee accumulator is not supported")
+	ErrPredicatesNotSupported            = errors.New("predicates are not supported")
 )
 
 type Extra struct {
@@ -26,7 +25,7 @@ type Extra struct {
 	// DynamicFeeWindow was introduced in ApricotPhase3 and removed in FUpgrade.
 	DynamicFeeWindow DynamicFeeWindow
 	// DynamicFeeWindow was introduced in FUpgrade.
-	DynamicFeeState gas.State
+	DynamicFeeAccumulator DynamicFeeAccumulator
 	// Predicates was introduced in Durango.
 	Predicates []byte
 }
@@ -51,11 +50,11 @@ func ParseExtra(rules params.AvalancheRules, extra []byte) (Extra, error) {
 	}
 	if rules.IsFUpgrade {
 		var err error
-		e.DynamicFeeState, err = ParseDynamicFeeState(extra)
+		e.DynamicFeeAccumulator, err = ParseDynamicFeeAccumulator(extra)
 		if err != nil {
 			return Extra{}, err
 		}
-		offset = DynamicFeeStateSize
+		offset = ErrDynamicFeeAccumulatorSize
 	}
 	if rules.IsDurango {
 		e.Predicates = extra[offset:]
@@ -69,11 +68,11 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsFUpgrade:
-		if extraLen < DynamicFeeStateSize {
+		if extraLen < ErrDynamicFeeAccumulatorSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				ErrInvalidExtraLength,
-				DynamicFeeStateSize,
+				ErrDynamicFeeAccumulatorSize,
 				extraLen,
 			)
 		}
@@ -123,8 +122,8 @@ func (e *Extra) Verify(rules params.AvalancheRules) error {
 	if (!rules.IsApricotPhase3 || rules.IsFUpgrade) && e.DynamicFeeWindow != (DynamicFeeWindow{}) {
 		return ErrDynamicFeeWindowNotSupported
 	}
-	if !rules.IsFUpgrade && e.DynamicFeeState != (gas.State{}) {
-		return ErrDynamicFeeStateNotSupported
+	if !rules.IsFUpgrade && e.DynamicFeeAccumulator != (DynamicFeeAccumulator{}) {
+		return ErrDynamicFeeAccumulatorNotSupported
 	}
 	if !rules.IsDurango && len(e.Predicates) != 0 {
 		return ErrPredicatesNotSupported
@@ -141,7 +140,7 @@ func (e *Extra) Bytes(rules params.AvalancheRules) []byte {
 		result = append(result, e.DynamicFeeWindow.Bytes()...)
 	}
 	if rules.IsFUpgrade {
-		result = append(result, DynamicFeeStateBytes(e.DynamicFeeState)...)
+		result = append(result, e.DynamicFeeAccumulator.Bytes()...)
 	}
 	if rules.IsDurango {
 		result = append(result, e.Predicates...)

@@ -12,28 +12,37 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 )
 
-const DynamicFeeStateSize = wrappers.LongLen * 2
+const ErrDynamicFeeAccumulatorSize = wrappers.LongLen * 3
 
-var ErrDynamicFeeStateInsufficientLength = errors.New("insufficient length for dynamic fee state")
+var ErrDynamicFeeAccumulatorInsufficientLength = errors.New("insufficient length for dynamic fee accumulator")
 
-func ParseDynamicFeeState(bytes []byte) (gas.State, error) {
+type DynamicFeeAccumulator struct {
+	GasState     gas.State
+	TargetExcess gas.Gas
+}
+
+func ParseDynamicFeeAccumulator(bytes []byte) (DynamicFeeAccumulator, error) {
 	if len(bytes) < DynamicFeeWindowSize {
-		return gas.State{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
-			ErrDynamicFeeStateInsufficientLength,
-			DynamicFeeStateSize,
+		return DynamicFeeAccumulator{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
+			ErrDynamicFeeAccumulatorInsufficientLength,
+			ErrDynamicFeeAccumulatorSize,
 			len(bytes),
 		)
 	}
 
-	return gas.State{
-		Capacity: gas.Gas(binary.BigEndian.Uint64(bytes)),
-		Excess:   gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),
+	return DynamicFeeAccumulator{
+		GasState: gas.State{
+			Capacity: gas.Gas(binary.BigEndian.Uint64(bytes)),
+			Excess:   gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),
+		},
+		TargetExcess: gas.Gas(binary.BigEndian.Uint64(bytes[2*wrappers.LongLen:])),
 	}, nil
 }
 
-func DynamicFeeStateBytes(s gas.State) []byte {
-	bytes := make([]byte, DynamicFeeStateSize)
-	binary.BigEndian.PutUint64(bytes, uint64(s.Capacity))
-	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(s.Excess))
+func (d *DynamicFeeAccumulator) Bytes() []byte {
+	bytes := make([]byte, ErrDynamicFeeAccumulatorSize)
+	binary.BigEndian.PutUint64(bytes, uint64(d.GasState.Capacity))
+	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(d.GasState.Excess))
+	binary.BigEndian.PutUint64(bytes[2*wrappers.LongLen:], uint64(d.TargetExcess))
 	return bytes
 }

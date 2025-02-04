@@ -122,7 +122,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			BaseFee:  mid,
 			Extra:    make([]byte, header.DynamicFeeWindowSize),
 		}
-		_, baseFee, err := dummy.CalcBaseFee(
+		baseFee, err := dummy.CalcBaseFee(
 			bc.config, parent, blockTime,
 		)
 		if err != nil {
