@@ -192,7 +192,7 @@ func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    big.NewInt(0),
-		NetworkUpgrades:     getNetworkUpgrades(agoUpgrade),
+		NetworkUpgrades:     GetNetworkUpgrades(agoUpgrade),
 	}
 	return c
 }

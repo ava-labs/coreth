@@ -1,4 +1,4 @@
-package evm
+package vm
 
 import (
 	_ "embed"

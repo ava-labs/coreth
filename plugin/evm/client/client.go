@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 )
 
+// TODO: this should be defined per chain vm (coreth, subnet-evm) in their relative pkgs.
 // Interface compliance
 var _ Client = (*client)(nil)
 

@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -99,12 +100,8 @@ type atomicTxTest struct {
 }
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
-	genesisJSON := test.genesisJSON
-	if len(genesisJSON) == 0 {
-		genesisJSON = genesisJSONApricotPhase0
-	}
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, !test.bootstrapping, genesisJSON, test.configJSON, test.upgradeJSON)
-	rules := vm.currentRules()
+	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, !test.bootstrapping, test.genesisJSON, test.configJSON, test.upgradeJSON)
+	rules := vm.CurrentRules()
 
 	tx := test.setup(t, vm, sharedMemory)
 
@@ -112,19 +109,26 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
 	switch {
 	case rules.IsApricotPhase3:
-		baseFee = initialBaseFee
+		baseFee = testutils.InitialBaseFee
 	}
 
-	lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
-	backend := &atomic.VerifierBackend{
+	lastAcceptedBlock := vm.LastAcceptedVMBlock()
+	backend := &VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
+		ChainConfig:  vm.Ethereum().BlockChain().Config(),
 		Bootstrapped: vm.bootstrapped.Get(),
 		BlockFetcher: vm,
 		SecpCache:    &vm.secpCache,
 	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(backend, tx, lastAcceptedBlock, baseFee); len(test.semanticVerifyErr) == 0 && err != nil {
+	if err := tx.UnsignedAtomicTx.Visit(
+		&semanticVerifier{
+			backend: backend,
+			atx:     tx,
+			parent:  lastAcceptedBlock,
+			baseFee: baseFee,
+		}); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
 	} else if len(test.semanticVerifyErr) != 0 {
 		if err == nil {
@@ -138,7 +142,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+	sdb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +163,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		// If this test simulates processing txs during bootstrapping (where some verification is skipped),
 		// initialize the block building goroutines normally initialized in SetState(snow.NormalOps).
 		// This ensures that the VM can build a block correctly during the test.
-		if err := vm.initBlockBuilding(); err != nil {
+		if err := vm.SetState(context.Background(), snow.NormalOp); err != nil {
 			t.Fatal(err)
 		}
 	}

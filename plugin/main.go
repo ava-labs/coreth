@@ -29,7 +29,7 @@ func main() {
 		fmt.Printf("failed to set fd limit correctly due to: %s", err)
 		os.Exit(1)
 	}
-	vm, err := evm.NewPluginVM()
+	vm, err := NewPluginVM()
 	if err != nil {
 		fmt.Printf("couldn't create evm plugin: %s", err)
 		os.Exit(1)

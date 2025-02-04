@@ -1,7 +1,7 @@
 // (c) 2019-2021, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
@@ -29,7 +31,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			assert := assert.New(t)
 
 			// we use AP3 genesis here to not trip any block fees
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase3, "", "")
+			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase3, "", "")
 			defer func() {
 				err := vm.Shutdown(context.Background())
 				assert.NoError(err)
@@ -72,10 +74,12 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			blk, err := vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
-			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(*Block)
+			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
 			assert.True(ok, "unknown block type")
 
-			assert.Equal(txID, evmBlk.atomicTxs[0].ID(), "block does not include expected transaction")
+			atomicTxs, err := extractAtomicTxsFromBlock(evmBlk, vm.Ethereum().BlockChain().Config())
+			assert.NoError(err)
+			assert.Equal(txID, atomicTxs[0].ID(), "block does not include expected transaction")
 
 			has = mempool.Has(txID)
 			assert.True(has, "tx should stay in mempool until block is accepted")
@@ -97,7 +101,8 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	mempool, err := atomictxpool.NewMempool(&snow.Context{}, prometheus.NewRegistry(), 1, nil)
+	mempool := atomictxpool.Mempool{}
+	err := mempool.Initialize(&snow.Context{}, prometheus.NewRegistry(), 1, nil)
 	assert.NoError(err)
 	// create candidate tx (we will drop before validation)
 	tx := atomictest.GenerateTestImportTx()
@@ -121,25 +126,26 @@ func TestMempoolPriorityDrop(t *testing.T) {
 
 	// we use AP3 genesis here to not trip any block fees
 	importAmount := uint64(50000000)
-	_, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase3, "", "", map[ids.ShortID]uint64{
-		testShortIDAddrs[0]: importAmount,
-		testShortIDAddrs[1]: importAmount,
+	_, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase3, "", "", map[ids.ShortID]uint64{
+		testutils.TestShortIDAddrs[0]: importAmount,
+		testutils.TestShortIDAddrs[1]: importAmount,
 	})
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
-	mempool, err := atomictxpool.NewMempool(vm.ctx, prometheus.NewRegistry(), 1, vm.verifyTxAtTip)
+	mempool := atomictxpool.Mempool{}
+	err := mempool.Initialize(vm.ctx, prometheus.NewRegistry(), 1, vm.verifyTxAtTip)
 	assert.NoError(err)
 
-	tx1, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	tx1, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.NoError(mempool.AddRemoteTx(tx1))
 	assert.True(mempool.Has(tx1.ID()))
 
-	tx2, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
+	tx2, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[1], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +153,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	assert.True(mempool.Has(tx1.ID()))
 	assert.False(mempool.Has(tx2.ID()))
 
-	tx3, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[1], new(big.Int).Mul(initialBaseFee, big.NewInt(2)), []*secp256k1.PrivateKey{testKeys[1]})
+	tx3, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[1], new(big.Int).Mul(testutils.InitialBaseFee, big.NewInt(2)), []*secp256k1.PrivateKey{testutils.TestKeys[1]})
 	if err != nil {
 		t.Fatal(err)
 	}

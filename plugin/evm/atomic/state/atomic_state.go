@@ -30,11 +30,7 @@ func (a *atomicState) Root() common.Hash {
 }
 
 // Accept applies the state change to VM's persistent storage.
-func (a *atomicState) Accept(commitBatch database.Batch, requests map[ids.ID]*avalancheatomic.Requests) error {
-	// Add the new requests to the batch to be accepted
-	for chainID, requests := range requests {
-		mergeAtomicOpsToMap(a.atomicOps, chainID, requests)
-	}
+func (a *atomicState) Accept(commitBatch database.Batch) error {
 	// Update the atomic tx repository. Note it is necessary to invoke
 	// the correct method taking bonus blocks into consideration.
 	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
@@ -58,7 +54,7 @@ func (a *atomicState) Accept(commitBatch database.Batch, requests map[ids.ID]*av
 
 	// get changes from the atomic trie and repository in a batch
 	// to be committed atomically with [commitBatch] and shared memory.
-	atomicChangesBatch, err := a.backend.db.CommitBatch()
+	atomicChangesBatch, err := a.backend.repo.db.CommitBatch()
 	if err != nil {
 		return fmt.Errorf("could not create commit batch in atomicState accept: %w", err)
 	}
