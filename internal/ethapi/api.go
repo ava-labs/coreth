@@ -115,8 +115,8 @@ var (
 	baseFeeDen     = new(big.Int).SetUint64(20)
 )
 
-// BaseFee returns an estimate for what the base fee will be on the next block if
-// it is produced now.
+// SuggestPriceOptions returns suggestions for what to display to a user for
+// current transaction fees.
 func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, error) {
 	baseFee, err := s.b.EstimateBaseFee(ctx)
 	if err != nil || baseFee == nil {
@@ -127,6 +127,8 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 		return nil, err
 	}
 
+	// Cap the base fee to keep slow and normal options reasonable during fee
+	// spikes.
 	cappedBaseFee := math.BigMin(baseFee, maxBaseFee)
 
 	slowBaseFee := new(big.Int).Set(cappedBaseFee)
