@@ -367,7 +367,6 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		Time:      parent.Time() + 10,
 		UncleHash: types.EmptyUncleHash,
 	}
-	header.Extra, _ = dummy.CalcHeaderExtra(config, parent.Header(), header.Time)
 	header.BaseFee, _ = dummy.CalcBaseFee(config, parent.Header(), header.Time)
 	if config.IsApricotPhase4(header.Time) {
 		header.BlockGasCost = big.NewInt(0)
@@ -390,6 +389,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		cumulativeGas += tx.Gas()
 		nBlobs += len(tx.BlobHashes())
 	}
+	header.Extra, _ = dummy.CalcHeaderExtra(config, parent.Header(), header.Time)
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
 		var pExcess, pUsed = uint64(0), uint64(0)

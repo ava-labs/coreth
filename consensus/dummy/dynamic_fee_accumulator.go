@@ -45,24 +45,12 @@ func CalcACP176GasState(
 
 	var gasAccumulator header.DynamicFeeAccumulator
 	if config.IsFUpgrade(parent.Time) && parent.Number.Cmp(common.Big0) != 0 {
-		// If the parent block was running with ACP-176, we need to take the
-		// prior gas state and consume the gas as expected.
+		// If the parent block was running with ACP-176, we start with the
+		// parent's fee state.
 		var err error
 		gasAccumulator, err = header.ParseDynamicFeeAccumulator(parent.Extra)
 		if err != nil {
 			return header.DynamicFeeAccumulator{}, 0, err
-		}
-
-		gasAccumulator.GasState, err = gasAccumulator.GasState.ConsumeGas(gas.Gas(parent.GasUsed))
-		if err != nil {
-			return header.DynamicFeeAccumulator{}, 0, err
-		}
-
-		if parent.ExtDataGasUsed != nil {
-			gasAccumulator.GasState, err = gasAccumulator.GasState.ConsumeGas(gas.Gas(parent.ExtDataGasUsed.Uint64()))
-			if err != nil {
-				return header.DynamicFeeAccumulator{}, 0, err
-			}
 		}
 	}
 

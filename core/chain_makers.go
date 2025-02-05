@@ -387,10 +387,6 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 	if err != nil {
 		panic(err)
 	}
-	header.Extra, err = dummy.CalcHeaderExtra(cm.config, parentHeader, time)
-	if err != nil {
-		panic(err)
-	}
 	header.BaseFee, err = dummy.CalcBaseFee(cm.config, parentHeader, time)
 	if err != nil {
 		panic(err)

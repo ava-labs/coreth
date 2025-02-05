@@ -330,10 +330,16 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt,
 ) (*types.Block, error) {
+	config := chain.Config()
+	extraPrefix, err := CalcHeaderExtra(config, parent, header.Time)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
+	}
+	header.Extra = append(extraPrefix, header.Extra...)
+
 	var (
 		contribution, extDataGasUsed *big.Int
 		extraData                    []byte
-		err                          error
 	)
 	if eng.cb.OnFinalizeAndAssemble != nil {
 		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, state, txs)

@@ -105,7 +105,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	}
 }
 
-func CalcHeaderExtra(config *params.ChainConfig, parent *types.Header, timestamp uint64) ([]byte, error) {
+func CalcHeaderExtra(
+	config *params.ChainConfig,
+	parent *types.Header,
+	timestamp uint64,
+) ([]byte, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
 		gasState, _, err := CalcACP176GasState(config, parent, timestamp)

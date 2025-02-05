@@ -158,10 +158,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
 	}
-	header.Extra, err = dummy.CalcHeaderExtra(w.chainConfig, parent, timestamp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
-	}
 	header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
