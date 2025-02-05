@@ -291,7 +291,9 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 
 	for index, event := range events {
 		block := event.block
-		nextExtraData, nextBaseFee, err := CalcBaseFee(params.TestApricotPhase4Config, header, block.timestamp)
+		nextExtraData, err := CalcHeaderExtra(params.TestApricotPhase4Config, header, block.timestamp)
+		assert.NoError(t, err)
+		nextBaseFee, err := CalcBaseFee(params.TestApricotPhase4Config, header, block.timestamp)
 		assert.NoError(t, err)
 		log.Info("Update", "baseFee", nextBaseFee)
 		header = &types.Header{
@@ -302,7 +304,9 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 			Extra:   nextExtraData,
 		}
 
-		nextExtraData, nextBaseFee, err = CalcBaseFee(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
+		nextExtraData, err = CalcHeaderExtra(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
+		assert.NoError(t, err)
+		nextBaseFee, err = CalcBaseFee(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
 		assert.NoError(t, err)
 		log.Info("Update", "baseFee (w/extData)", nextBaseFee)
 		extDataHeader = &types.Header{
@@ -427,7 +431,10 @@ func TestDynamicFeesEtna(t *testing.T) {
 	}
 
 	timestamp := uint64(1)
-	extra, nextBaseFee, err := CalcBaseFee(params.TestEtnaChainConfig, header, timestamp)
+
+	extra, err := CalcHeaderExtra(params.TestEtnaChainConfig, header, timestamp)
+	require.NoError(err)
+	nextBaseFee, err := CalcBaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// Genesis matches the initial base fee
 	require.Equal(params.ApricotPhase3InitialBaseFee, nextBaseFee.Int64())
@@ -439,7 +446,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 		BaseFee: nextBaseFee,
 		Extra:   extra,
 	}
-	_, nextBaseFee, err = CalcBaseFee(params.TestEtnaChainConfig, header, timestamp)
+	nextBaseFee, err = CalcBaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// After some time has passed in the Etna phase, the base fee should drop
 	// lower than the prior base fee minimum.
@@ -458,7 +465,7 @@ func TestCalcBaseFeeRegression(t *testing.T) {
 		Extra:   make([]byte, header.DynamicFeeWindowSize),
 	}
 
-	_, _, err := CalcBaseFee(params.TestChainConfig, parentHeader, timestamp)
+	_, err := CalcBaseFee(params.TestEtnaChainConfig, parentHeader, timestamp)
 	require.NoError(t, err)
 	require.Equalf(t, 0, common.Big1.Cmp(big.NewInt(1)), "big1 should be 1, got %s", common.Big1)
 }
