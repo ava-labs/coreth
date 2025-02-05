@@ -170,7 +170,7 @@ func VerifyHeaderGasFields(
 		if err != nil {
 			return err
 		}
-		gasState, err := customheader.ParseDynamicFeeAccumulator(parent.Extra)
+		gasState, err := customheader.ParseDynamicFeeAccumulator(header.Extra)
 		if err != nil {
 			return err
 		}
