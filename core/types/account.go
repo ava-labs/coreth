@@ -19,13 +19,12 @@ package types
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"math/big"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/common/math"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Account -field-override accountMarshaling -out gen_account.go
@@ -33,15 +32,7 @@ import (
 // Account represents an Ethereum account and its attached data.
 // This type is used to specify accounts in the genesis block state, and
 // is also useful for JSON encoding/decoding of accounts.
-type Account struct {
-	Code    []byte                      `json:"code,omitempty"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance *big.Int                    `json:"balance" gencodec:"required"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
-
-	// used in tests
-	PrivateKey []byte `json:"secretKey,omitempty"`
-}
+type Account = ethtypes.Account
 
 type accountMarshaling struct {
 	Code       hexutil.Bytes
@@ -72,16 +63,4 @@ func (h storageJSON) MarshalText() ([]byte, error) {
 }
 
 // GenesisAlloc specifies the initial state of a genesis block.
-type GenesisAlloc map[common.Address]Account
-
-func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
-	m := make(map[common.UnprefixedAddress]Account)
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	*ga = make(GenesisAlloc)
-	for addr, a := range m {
-		(*ga)[common.Address(addr)] = a
-	}
-	return nil
-}
+type GenesisAlloc = ethtypes.GenesisAlloc

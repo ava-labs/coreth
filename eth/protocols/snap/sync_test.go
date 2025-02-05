@@ -27,10 +27,10 @@ import (
 	"testing"
 	"time"
 
-	ethrawdb "github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
-	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
@@ -565,8 +565,8 @@ func noProofStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 func TestSyncBloatedProof(t *testing.T) {
 	t.Parallel()
 
-	testSyncBloatedProof(t, ethrawdb.HashScheme)
-	testSyncBloatedProof(t, ethrawdb.PathScheme)
+	testSyncBloatedProof(t, rawdb.HashScheme)
+	testSyncBloatedProof(t, rawdb.PathScheme)
 }
 
 func testSyncBloatedProof(t *testing.T, scheme string) {
@@ -635,7 +635,7 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 }
 
 func setupSyncer(scheme string, peers ...*testPeer) *Syncer {
-	stateDb := ethrawdb.NewMemoryDatabase()
+	stateDb := rawdb.NewMemoryDatabase()
 	syncer := NewSyncer(stateDb, scheme)
 	for _, peer := range peers {
 		syncer.Register(peer)
@@ -648,8 +648,8 @@ func setupSyncer(scheme string, peers ...*testPeer) *Syncer {
 func TestSync(t *testing.T) {
 	t.Parallel()
 
-	testSync(t, ethrawdb.HashScheme)
-	testSync(t, ethrawdb.PathScheme)
+	testSync(t, rawdb.HashScheme)
+	testSync(t, rawdb.PathScheme)
 }
 
 func testSync(t *testing.T, scheme string) {
@@ -682,8 +682,8 @@ func testSync(t *testing.T, scheme string) {
 func TestSyncTinyTriePanic(t *testing.T) {
 	t.Parallel()
 
-	testSyncTinyTriePanic(t, ethrawdb.HashScheme)
-	testSyncTinyTriePanic(t, ethrawdb.PathScheme)
+	testSyncTinyTriePanic(t, rawdb.HashScheme)
+	testSyncTinyTriePanic(t, rawdb.PathScheme)
 }
 
 func testSyncTinyTriePanic(t *testing.T, scheme string) {
@@ -717,8 +717,8 @@ func testSyncTinyTriePanic(t *testing.T, scheme string) {
 func TestMultiSync(t *testing.T) {
 	t.Parallel()
 
-	testMultiSync(t, ethrawdb.HashScheme)
-	testMultiSync(t, ethrawdb.PathScheme)
+	testMultiSync(t, rawdb.HashScheme)
+	testMultiSync(t, rawdb.PathScheme)
 }
 
 func testMultiSync(t *testing.T, scheme string) {
@@ -752,8 +752,8 @@ func testMultiSync(t *testing.T, scheme string) {
 func TestSyncWithStorage(t *testing.T) {
 	t.Parallel()
 
-	testSyncWithStorage(t, ethrawdb.HashScheme)
-	testSyncWithStorage(t, ethrawdb.PathScheme)
+	testSyncWithStorage(t, rawdb.HashScheme)
+	testSyncWithStorage(t, rawdb.PathScheme)
 }
 
 func testSyncWithStorage(t *testing.T, scheme string) {
@@ -789,8 +789,8 @@ func testSyncWithStorage(t *testing.T, scheme string) {
 func TestMultiSyncManyUseless(t *testing.T) {
 	t.Parallel()
 
-	testMultiSyncManyUseless(t, ethrawdb.HashScheme)
-	testMultiSyncManyUseless(t, ethrawdb.PathScheme)
+	testMultiSyncManyUseless(t, rawdb.HashScheme)
+	testMultiSyncManyUseless(t, rawdb.PathScheme)
 }
 
 func testMultiSyncManyUseless(t *testing.T, scheme string) {
@@ -843,8 +843,8 @@ func testMultiSyncManyUseless(t *testing.T, scheme string) {
 func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	t.Parallel()
 
-	testMultiSyncManyUselessWithLowTimeout(t, ethrawdb.HashScheme)
-	testMultiSyncManyUselessWithLowTimeout(t, ethrawdb.PathScheme)
+	testMultiSyncManyUselessWithLowTimeout(t, rawdb.HashScheme)
+	testMultiSyncManyUselessWithLowTimeout(t, rawdb.PathScheme)
 }
 
 func testMultiSyncManyUselessWithLowTimeout(t *testing.T, scheme string) {
@@ -902,8 +902,8 @@ func testMultiSyncManyUselessWithLowTimeout(t *testing.T, scheme string) {
 func TestMultiSyncManyUnresponsive(t *testing.T) {
 	t.Parallel()
 
-	testMultiSyncManyUnresponsive(t, ethrawdb.HashScheme)
-	testMultiSyncManyUnresponsive(t, ethrawdb.PathScheme)
+	testMultiSyncManyUnresponsive(t, rawdb.HashScheme)
+	testMultiSyncManyUnresponsive(t, rawdb.PathScheme)
 }
 
 func testMultiSyncManyUnresponsive(t *testing.T, scheme string) {
@@ -974,8 +974,8 @@ func checkStall(t *testing.T, term func()) chan struct{} {
 func TestSyncBoundaryAccountTrie(t *testing.T) {
 	t.Parallel()
 
-	testSyncBoundaryAccountTrie(t, ethrawdb.HashScheme)
-	testSyncBoundaryAccountTrie(t, ethrawdb.PathScheme)
+	testSyncBoundaryAccountTrie(t, rawdb.HashScheme)
+	testSyncBoundaryAccountTrie(t, rawdb.PathScheme)
 }
 
 func testSyncBoundaryAccountTrie(t *testing.T, scheme string) {
@@ -1014,8 +1014,8 @@ func testSyncBoundaryAccountTrie(t *testing.T, scheme string) {
 func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncNoStorageAndOneCappedPeer(t, ethrawdb.HashScheme)
-	testSyncNoStorageAndOneCappedPeer(t, ethrawdb.PathScheme)
+	testSyncNoStorageAndOneCappedPeer(t, rawdb.HashScheme)
+	testSyncNoStorageAndOneCappedPeer(t, rawdb.PathScheme)
 }
 
 func testSyncNoStorageAndOneCappedPeer(t *testing.T, scheme string) {
@@ -1061,8 +1061,8 @@ func testSyncNoStorageAndOneCappedPeer(t *testing.T, scheme string) {
 func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncNoStorageAndOneCodeCorruptPeer(t, ethrawdb.HashScheme)
-	testSyncNoStorageAndOneCodeCorruptPeer(t, ethrawdb.PathScheme)
+	testSyncNoStorageAndOneCodeCorruptPeer(t, rawdb.HashScheme)
+	testSyncNoStorageAndOneCodeCorruptPeer(t, rawdb.PathScheme)
 }
 
 func testSyncNoStorageAndOneCodeCorruptPeer(t *testing.T, scheme string) {
@@ -1104,8 +1104,8 @@ func testSyncNoStorageAndOneCodeCorruptPeer(t *testing.T, scheme string) {
 func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncNoStorageAndOneAccountCorruptPeer(t, ethrawdb.HashScheme)
-	testSyncNoStorageAndOneAccountCorruptPeer(t, ethrawdb.PathScheme)
+	testSyncNoStorageAndOneAccountCorruptPeer(t, rawdb.HashScheme)
+	testSyncNoStorageAndOneAccountCorruptPeer(t, rawdb.PathScheme)
 }
 
 func testSyncNoStorageAndOneAccountCorruptPeer(t *testing.T, scheme string) {
@@ -1149,8 +1149,8 @@ func testSyncNoStorageAndOneAccountCorruptPeer(t *testing.T, scheme string) {
 func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncNoStorageAndOneCodeCappedPeer(t, ethrawdb.HashScheme)
-	testSyncNoStorageAndOneCodeCappedPeer(t, ethrawdb.PathScheme)
+	testSyncNoStorageAndOneCodeCappedPeer(t, rawdb.HashScheme)
+	testSyncNoStorageAndOneCodeCappedPeer(t, rawdb.PathScheme)
 }
 
 func testSyncNoStorageAndOneCodeCappedPeer(t *testing.T, scheme string) {
@@ -1205,8 +1205,8 @@ func testSyncNoStorageAndOneCodeCappedPeer(t *testing.T, scheme string) {
 func TestSyncBoundaryStorageTrie(t *testing.T) {
 	t.Parallel()
 
-	testSyncBoundaryStorageTrie(t, ethrawdb.HashScheme)
-	testSyncBoundaryStorageTrie(t, ethrawdb.PathScheme)
+	testSyncBoundaryStorageTrie(t, rawdb.HashScheme)
+	testSyncBoundaryStorageTrie(t, rawdb.PathScheme)
 }
 
 func testSyncBoundaryStorageTrie(t *testing.T, scheme string) {
@@ -1247,8 +1247,8 @@ func testSyncBoundaryStorageTrie(t *testing.T, scheme string) {
 func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncWithStorageAndOneCappedPeer(t, ethrawdb.HashScheme)
-	testSyncWithStorageAndOneCappedPeer(t, ethrawdb.PathScheme)
+	testSyncWithStorageAndOneCappedPeer(t, rawdb.HashScheme)
+	testSyncWithStorageAndOneCappedPeer(t, rawdb.PathScheme)
 }
 
 func testSyncWithStorageAndOneCappedPeer(t *testing.T, scheme string) {
@@ -1294,8 +1294,8 @@ func testSyncWithStorageAndOneCappedPeer(t *testing.T, scheme string) {
 func TestSyncWithStorageAndCorruptPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncWithStorageAndCorruptPeer(t, ethrawdb.HashScheme)
-	testSyncWithStorageAndCorruptPeer(t, ethrawdb.PathScheme)
+	testSyncWithStorageAndCorruptPeer(t, rawdb.HashScheme)
+	testSyncWithStorageAndCorruptPeer(t, rawdb.PathScheme)
 }
 
 func testSyncWithStorageAndCorruptPeer(t *testing.T, scheme string) {
@@ -1338,8 +1338,8 @@ func testSyncWithStorageAndCorruptPeer(t *testing.T, scheme string) {
 func TestSyncWithStorageAndNonProvingPeer(t *testing.T) {
 	t.Parallel()
 
-	testSyncWithStorageAndNonProvingPeer(t, ethrawdb.HashScheme)
-	testSyncWithStorageAndNonProvingPeer(t, ethrawdb.PathScheme)
+	testSyncWithStorageAndNonProvingPeer(t, rawdb.HashScheme)
+	testSyncWithStorageAndNonProvingPeer(t, rawdb.PathScheme)
 }
 
 func testSyncWithStorageAndNonProvingPeer(t *testing.T, scheme string) {
@@ -1385,8 +1385,8 @@ func testSyncWithStorageAndNonProvingPeer(t *testing.T, scheme string) {
 func TestSyncWithStorageMisbehavingProve(t *testing.T) {
 	t.Parallel()
 
-	testSyncWithStorageMisbehavingProve(t, ethrawdb.HashScheme)
-	testSyncWithStorageMisbehavingProve(t, ethrawdb.PathScheme)
+	testSyncWithStorageMisbehavingProve(t, rawdb.HashScheme)
+	testSyncWithStorageMisbehavingProve(t, rawdb.PathScheme)
 }
 
 func testSyncWithStorageMisbehavingProve(t *testing.T, scheme string) {
@@ -1422,8 +1422,8 @@ func testSyncWithStorageMisbehavingProve(t *testing.T, scheme string) {
 func TestSyncWithUnevenStorage(t *testing.T) {
 	t.Parallel()
 
-	testSyncWithUnevenStorage(t, ethrawdb.HashScheme)
-	testSyncWithUnevenStorage(t, ethrawdb.PathScheme)
+	testSyncWithUnevenStorage(t, rawdb.HashScheme)
+	testSyncWithUnevenStorage(t, rawdb.PathScheme)
 }
 
 func testSyncWithUnevenStorage(t *testing.T, scheme string) {
@@ -1491,7 +1491,7 @@ func getCodeHash(i uint64) []byte {
 
 // getCodeByHash convenience function to lookup the code from the code hash
 func getCodeByHash(hash common.Hash) []byte {
-	if hash == ethtypes.EmptyCodeHash {
+	if hash == types.EmptyCodeHash {
 		return nil
 	}
 	for i, h := range codehashes {
@@ -1505,15 +1505,15 @@ func getCodeByHash(hash common.Hash) []byte {
 // makeAccountTrieNoStorage spits out a trie, along with the leafs
 func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) {
 	var (
-		db      = triedb.NewDatabase(ethrawdb.NewMemoryDatabase(), newDbConfig(scheme))
+		db      = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie = trie.NewEmpty(db)
 		entries []*kv
 	)
 	for i := uint64(1); i <= uint64(n); i++ {
-		value, _ := rlp.EncodeToBytes(&ethtypes.StateAccount{
+		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
 			Balance:  uint256.NewInt(i),
-			Root:     ethtypes.EmptyRootHash,
+			Root:     types.EmptyRootHash,
 			CodeHash: getCodeHash(i),
 		})
 		key := key32(i)
@@ -1526,7 +1526,7 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
 	root, nodes, _ := accTrie.Commit(false)
-	db.Update(root, ethtypes.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
+	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
 	return db.Scheme(), accTrie, entries
@@ -1540,7 +1540,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 		entries    []*kv
 		boundaries []common.Hash
 
-		db      = triedb.NewDatabase(ethrawdb.NewMemoryDatabase(), newDbConfig(scheme))
+		db      = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie = trie.NewEmpty(db)
 	)
 	// Initialize boundaries
@@ -1561,10 +1561,10 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	}
 	// Fill boundary accounts
 	for i := 0; i < len(boundaries); i++ {
-		value, _ := rlp.EncodeToBytes(&ethtypes.StateAccount{
+		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    uint64(0),
 			Balance:  uint256.NewInt(uint64(i)),
-			Root:     ethtypes.EmptyRootHash,
+			Root:     types.EmptyRootHash,
 			CodeHash: getCodeHash(uint64(i)),
 		})
 		elem := &kv{boundaries[i].Bytes(), value}
@@ -1573,10 +1573,10 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	}
 	// Fill other accounts if required
 	for i := uint64(1); i <= uint64(n); i++ {
-		value, _ := rlp.EncodeToBytes(&ethtypes.StateAccount{
+		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
 			Balance:  uint256.NewInt(i),
-			Root:     ethtypes.EmptyRootHash,
+			Root:     types.EmptyRootHash,
 			CodeHash: getCodeHash(i),
 		})
 		elem := &kv{key32(i), value}
@@ -1588,7 +1588,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
 	root, nodes, _ := accTrie.Commit(false)
-	db.Update(root, ethtypes.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
+	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
 	return db.Scheme(), accTrie, entries
@@ -1598,7 +1598,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 // has a unique storage set.
 func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots int, code bool) (string, *trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
 	var (
-		db             = triedb.NewDatabase(ethrawdb.NewMemoryDatabase(), newDbConfig(scheme))
+		db             = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie        = trie.NewEmpty(db)
 		entries        []*kv
 		storageRoots   = make(map[common.Hash]common.Hash)
@@ -1609,7 +1609,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := ethtypes.EmptyCodeHash.Bytes()
+		codehash := types.EmptyCodeHash.Bytes()
 		if code {
 			codehash = getCodeHash(i)
 		}
@@ -1617,7 +1617,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 		stRoot, stNodes, stEntries := makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), i, db)
 		nodes.Merge(stNodes)
 
-		value, _ := rlp.EncodeToBytes(&ethtypes.StateAccount{
+		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
 			Balance:  uint256.NewInt(i),
 			Root:     stRoot,
@@ -1637,7 +1637,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
-	db.Update(root, ethtypes.EmptyRootHash, 0, nodes, nil)
+	db.Update(root, types.EmptyRootHash, 0, nodes, nil)
 
 	// Re-create tries with new root
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
@@ -1653,7 +1653,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
 func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, boundary bool, uneven bool) (*trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
 	var (
-		db             = triedb.NewDatabase(ethrawdb.NewMemoryDatabase(), newDbConfig(scheme))
+		db             = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie        = trie.NewEmpty(db)
 		entries        []*kv
 		storageRoots   = make(map[common.Hash]common.Hash)
@@ -1664,7 +1664,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := ethtypes.EmptyCodeHash.Bytes()
+		codehash := types.EmptyCodeHash.Bytes()
 		if code {
 			codehash = getCodeHash(i)
 		}
@@ -1683,7 +1683,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 		}
 		nodes.Merge(stNodes)
 
-		value, _ := rlp.EncodeToBytes(&ethtypes.StateAccount{
+		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
 			Balance:  uint256.NewInt(i),
 			Root:     stRoot,
@@ -1704,7 +1704,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 	nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
-	db.Update(root, ethtypes.EmptyRootHash, 0, nodes, nil)
+	db.Update(root, types.EmptyRootHash, 0, nodes, nil)
 
 	// Re-create tries with new root
 	accTrie, err := trie.New(trie.StateTrieID(root), db)
@@ -1727,7 +1727,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 // not-yet-committed trie and the sorted entries. The seeds can be used to ensure
 // that tries are unique.
 func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *triedb.Database) (common.Hash, *trienode.NodeSet, []*kv) {
-	trie, _ := trie.New(trie.StorageTrieID(ethtypes.EmptyRootHash, owner, ethtypes.EmptyRootHash), db)
+	trie, _ := trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
 	var entries []*kv
 	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
@@ -1753,7 +1753,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *triedb.Database) (com
 	var (
 		entries    []*kv
 		boundaries []common.Hash
-		trie, _    = trie.New(trie.StorageTrieID(ethtypes.EmptyRootHash, owner, ethtypes.EmptyRootHash), db)
+		trie, _    = trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
 	)
 	// Initialize boundaries
 	var next common.Hash
@@ -1802,7 +1802,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *triedb.Database) (com
 func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (common.Hash, *trienode.NodeSet, []*kv) {
 	var (
 		entries []*kv
-		tr, _   = trie.New(trie.StorageTrieID(ethtypes.EmptyRootHash, owner, ethtypes.EmptyRootHash), db)
+		tr, _   = trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
 		chosen  = make(map[byte]struct{})
 	)
 	for i := 0; i < 3; i++ {
@@ -1831,7 +1831,7 @@ func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (c
 
 func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Helper()
-	triedb := triedb.NewDatabase(ethrawdb.NewDatabase(db), newDbConfig(scheme))
+	triedb := triedb.NewDatabase(rawdb.NewDatabase(db), newDbConfig(scheme))
 	accTrie, err := trie.New(trie.StateTrieID(root), triedb)
 	if err != nil {
 		t.Fatal(err)
@@ -1839,12 +1839,12 @@ func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *test
 	accounts, slots := 0, 0
 	accIt := trie.NewIterator(accTrie.MustNodeIterator(nil))
 	for accIt.Next() {
-		var acc ethtypes.StateAccount
+		var acc types.StateAccount
 		if err := rlp.DecodeBytes(accIt.Value, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
 		accounts++
-		if acc.Root != ethtypes.EmptyRootHash {
+		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIt.Key), acc.Root)
 			storeTrie, err := trie.NewStateTrie(id, triedb)
 			if err != nil {
@@ -1870,8 +1870,8 @@ func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *test
 func TestSyncAccountPerformance(t *testing.T) {
 	t.Parallel()
 
-	testSyncAccountPerformance(t, ethrawdb.HashScheme)
-	testSyncAccountPerformance(t, ethrawdb.PathScheme)
+	testSyncAccountPerformance(t, rawdb.HashScheme)
+	testSyncAccountPerformance(t, rawdb.PathScheme)
 }
 
 func testSyncAccountPerformance(t *testing.T, scheme string) {
@@ -1964,7 +1964,7 @@ func TestSlotEstimation(t *testing.T) {
 }
 
 func newDbConfig(scheme string) *triedb.Config {
-	if scheme == ethrawdb.HashScheme {
+	if scheme == rawdb.HashScheme {
 		return &triedb.Config{}
 	}
 	return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}

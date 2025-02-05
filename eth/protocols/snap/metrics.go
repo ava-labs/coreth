@@ -17,41 +17,41 @@
 package snap
 
 import (
-	ethmetrics "github.com/ava-labs/libevm/metrics"
+	metrics "github.com/ava-labs/libevm/metrics"
 )
 
 var (
 	ingressRegistrationErrorName = "eth/protocols/snap/ingress/registration/error"
 	egressRegistrationErrorName  = "eth/protocols/snap/egress/registration/error"
 
-	IngressRegistrationErrorMeter = ethmetrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
-	EgressRegistrationErrorMeter  = ethmetrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
+	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
+	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
 
 	// deletionGauge is the metric to track how many trie node deletions
 	// are performed in total during the sync process.
-	deletionGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/delete", nil)
+	deletionGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete", nil)
 
 	// lookupGauge is the metric to track how many trie node lookups are
 	// performed to determine if node needs to be deleted.
-	lookupGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/lookup", nil)
+	lookupGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/lookup", nil)
 
 	// boundaryAccountNodesGauge is the metric to track how many boundary trie
 	// nodes in account trie are met.
-	boundaryAccountNodesGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/account", nil)
+	boundaryAccountNodesGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/account", nil)
 
 	// boundaryAccountNodesGauge is the metric to track how many boundary trie
 	// nodes in storage tries are met.
-	boundaryStorageNodesGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/storage", nil)
+	boundaryStorageNodesGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/storage", nil)
 
 	// smallStorageGauge is the metric to track how many storages are small enough
 	// to retrieved in one or two request.
-	smallStorageGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/small", nil)
+	smallStorageGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/small", nil)
 
 	// largeStorageGauge is the metric to track how many storages are large enough
 	// to retrieved concurrently.
-	largeStorageGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/large", nil)
+	largeStorageGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/large", nil)
 
 	// skipStorageHealingGauge is the metric to track how many storages are retrieved
 	// in multiple requests but healing is not necessary.
-	skipStorageHealingGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/noheal", nil)
+	skipStorageHealingGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/noheal", nil)
 )

@@ -31,9 +31,9 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
-	ethrawdb "github.com/ava-labs/libevm/core/rawdb"
-	ethstate "github.com/ava-labs/libevm/core/state"
-	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
@@ -142,8 +142,8 @@ type accountRequest struct {
 type accountResponse struct {
 	task *accountTask // Task which this request is filling
 
-	hashes   []common.Hash            // Account hashes in the returned range
-	accounts []*ethtypes.StateAccount // Expanded accounts in the returned range
+	hashes   []common.Hash         // Account hashes in the returned range
+	accounts []*types.StateAccount // Expanded accounts in the returned range
 
 	cont bool // Whether the account range has a continuation
 }
@@ -574,7 +574,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	s.lock.Lock()
 	s.root = root
 	s.healer = &healTask{
-		scheduler: ethstate.NewStateSync(root, s.db, s.onHealState, s.scheme),
+		scheduler: state.NewStateSync(root, s.db, s.onHealState, s.scheme),
 		trieTasks: make(map[string]common.Hash),
 		codeTasks: make(map[common.Hash]struct{}),
 	}
@@ -718,12 +718,12 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 // cleanPath is used to remove the dangling nodes in the stackTrie.
 func (s *Syncer) cleanPath(batch ethdb.Batch, owner common.Hash, path []byte) {
-	if owner == (common.Hash{}) && ethrawdb.ExistsAccountTrieNode(s.db, path) {
-		ethrawdb.DeleteAccountTrieNode(batch, path)
+	if owner == (common.Hash{}) && rawdb.ExistsAccountTrieNode(s.db, path) {
+		rawdb.DeleteAccountTrieNode(batch, path)
 		deletionGauge.Inc(1)
 	}
-	if owner != (common.Hash{}) && ethrawdb.ExistsStorageTrieNode(s.db, owner, path) {
-		ethrawdb.DeleteStorageTrieNode(batch, owner, path)
+	if owner != (common.Hash{}) && rawdb.ExistsStorageTrieNode(s.db, owner, path) {
+		rawdb.DeleteStorageTrieNode(batch, owner, path)
 		deletionGauge.Inc(1)
 	}
 	lookupGauge.Inc(1)
@@ -734,7 +734,7 @@ func (s *Syncer) cleanPath(batch ethdb.Batch, owner common.Hash, path []byte) {
 func (s *Syncer) loadSyncStatus() {
 	var progress SyncProgress
 
-	if status := ethrawdb.ReadSnapshotSyncStatus(s.db); status != nil {
+	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
 		if err := json.Unmarshal(status, &progress); err != nil {
 			log.Error("Failed to decode snap sync status", "err", err)
 		} else {
@@ -753,9 +753,9 @@ func (s *Syncer) loadSyncStatus() {
 				}
 				options := trie.NewStackTrieOptions()
 				options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-					ethrawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, blob, s.scheme)
+					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, blob, s.scheme)
 				})
-				if s.scheme == ethrawdb.PathScheme {
+				if s.scheme == rawdb.PathScheme {
 					// Configure the dangling node cleaner and also filter out boundary nodes
 					// only in the context of the path scheme. Deletion is forbidden in the
 					// hash scheme, as it can disrupt state completeness.
@@ -780,9 +780,9 @@ func (s *Syncer) loadSyncStatus() {
 						owner := accountHash // local assignment for stacktrie writer closure
 						options := trie.NewStackTrieOptions()
 						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-							ethrawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, blob, s.scheme)
+							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, blob, s.scheme)
 						})
-						if s.scheme == ethrawdb.PathScheme {
+						if s.scheme == rawdb.PathScheme {
 							// Configure the dangling node cleaner and also filter out boundary nodes
 							// only in the context of the path scheme. Deletion is forbidden in the
 							// hash scheme, as it can disrupt state completeness.
@@ -847,9 +847,9 @@ func (s *Syncer) loadSyncStatus() {
 		}
 		options := trie.NewStackTrieOptions()
 		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-			ethrawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, s.scheme)
+			rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, s.scheme)
 		})
-		if s.scheme == ethrawdb.PathScheme {
+		if s.scheme == rawdb.PathScheme {
 			// Configure the dangling node cleaner and also filter out boundary nodes
 			// only in the context of the path scheme. Deletion is forbidden in the
 			// hash scheme, as it can disrupt state completeness.
@@ -905,7 +905,7 @@ func (s *Syncer) saveSyncStatus() {
 	if err != nil {
 		panic(err) // This can only fail during implementation
 	}
-	ethrawdb.WriteSnapshotSyncStatus(s.db, status)
+	rawdb.WriteSnapshotSyncStatus(s.db, status)
 }
 
 // Progress returns the snap sync status statistics.
@@ -1881,15 +1881,15 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.pend = 0
 	for i, account := range res.accounts {
 		// Check if the account is a contract with an unknown code
-		if !bytes.Equal(account.CodeHash, ethtypes.EmptyCodeHash.Bytes()) {
-			if !ethrawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
+		if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
+			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
 				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
 				res.task.needCode[i] = true
 				res.task.pend++
 			}
 		}
 		// Check if the account is a contract with an unknown storage trie
-		if account.Root != ethtypes.EmptyRootHash {
+		if account.Root != types.EmptyRootHash {
 			//if !ethrawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
 			// If there was a previous large state retrieval in progress,
 			// don't restart it from scratch. This happens if a sync cycle
@@ -1954,7 +1954,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 		}
 		// Push the bytecode into a database batch
 		codes++
-		ethrawdb.WriteCode(batch, hash, code)
+		rawdb.WriteCode(batch, hash, code)
 	}
 	bytes := common.StorageSize(batch.ValueSize())
 	if err := batch.Write(); err != nil {
@@ -2065,9 +2065,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 					owner := account // local assignment for stacktrie writer closure
 					options := trie.NewStackTrieOptions()
 					options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-						ethrawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
+						rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
 					})
-					if s.scheme == ethrawdb.PathScheme {
+					if s.scheme == rawdb.PathScheme {
 						options = options.WithCleaner(func(path []byte) {
 							s.cleanPath(batch, owner, path)
 						})
@@ -2091,9 +2091,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						}
 						options := trie.NewStackTrieOptions()
 						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-							ethrawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
+							rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
 						})
-						if s.scheme == ethrawdb.PathScheme {
+						if s.scheme == rawdb.PathScheme {
 							// Configure the dangling node cleaner and also filter out boundary nodes
 							// only in the context of the path scheme. Deletion is forbidden in the
 							// hash scheme, as it can disrupt state completeness.
@@ -2157,9 +2157,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			// no need to make local reassignment of account: this closure does not outlive the loop
 			options := trie.NewStackTrieOptions()
 			options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-				ethrawdb.WriteTrieNode(batch, account, path, hash, blob, s.scheme)
+				rawdb.WriteTrieNode(batch, account, path, hash, blob, s.scheme)
 			})
-			if s.scheme == ethrawdb.PathScheme {
+			if s.scheme == rawdb.PathScheme {
 				// Configure the dangling node cleaner only in the context of the
 				// path scheme. Deletion is forbidden in the hash scheme, as it can
 				// disrupt state completeness.
@@ -2180,7 +2180,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
-			ethrawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
 
 			// If we're storing large contracts, generate the trie nodes
 			// on the fly to not trash the gluing points
@@ -2201,7 +2201,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			// If the chunk's root is an overflown but full delivery,
 			// clear the heal request.
 			accountHash := res.accounts[len(res.accounts)-1]
-			if root == res.subTask.root && ethrawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
+			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
 				for i, account := range res.mainTask.res.hashes {
 					if account == accountHash {
 						res.mainTask.needHeal[i] = false
@@ -2383,13 +2383,13 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		if task.needCode[i] || task.needState[i] {
 			break
 		}
-		slim := ethtypes.SlimAccountRLP(*res.accounts[i])
-		ethrawdb.WriteAccountSnapshot(batch, hash, slim)
+		slim := types.SlimAccountRLP(*res.accounts[i])
+		rawdb.WriteAccountSnapshot(batch, hash, slim)
 
 		// If the task is complete, drop it into the stack trie to generate
 		// account trie nodes for it
 		if !task.needHeal[i] {
-			full, err := ethtypes.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
+			full, err := types.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}
@@ -2439,7 +2439,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		size += common.StorageSize(len(node))
 	}
 	logger := peer.Log().New("reqid", id)
-	logger.Debug("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
+	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
@@ -2506,9 +2506,9 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		s.scheduleRevertAccountRequest(req)
 		return err
 	}
-	accs := make([]*ethtypes.StateAccount, len(accounts))
+	accs := make([]*types.StateAccount, len(accounts))
 	for i, account := range accounts {
-		acc := new(ethtypes.StateAccount)
+		acc := new(types.StateAccount)
 		if err := rlp.DecodeBytes(account, acc); err != nil {
 			panic(err) // We created these blobs, we must be able to decode them
 		}
@@ -2662,7 +2662,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		size += common.StorageSize(len(node))
 	}
 	logger := peer.Log().New("reqid", id)
-	logger.Debug("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
+	logger.Trace("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
@@ -2999,17 +2999,17 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 // Note it's not concurrent safe, please handle the concurrent issue outside.
 func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
-		var account ethtypes.StateAccount
+		var account types.StateAccount
 		if err := rlp.DecodeBytes(value, &account); err != nil {
 			return nil // Returning the error here would drop the remote peer
 		}
-		blob := ethtypes.SlimAccountRLP(account)
-		ethrawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
+		blob := types.SlimAccountRLP(account)
+		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
 		s.accountHealed += 1
 		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
 	if len(paths) == 2 {
-		ethrawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
+		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
 	}

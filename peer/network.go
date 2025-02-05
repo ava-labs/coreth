@@ -247,8 +247,11 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 		return nil
 	}
 
+	log.Debug("received AppRequest from node", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request))
+
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
+		log.Debug("forwarding AppRequest to SDK network", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
 		return n.p2pNetwork.AppRequest(ctx, nodeID, requestID, deadline, request)
 	}
 
@@ -280,6 +283,8 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
+	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
+
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
 		log.Debug("forwarding AppResponse to SDK network", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
