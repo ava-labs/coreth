@@ -123,7 +123,7 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		return err
 	}
 	// Ensure gas-related header fields are correct
-	if err := VerifyHeaderGasFields(config, header, parent); err != nil {
+	if err := VerifyHeaderGasFields(config, parent, header); err != nil {
 		return err
 	}
 
