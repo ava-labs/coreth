@@ -41,7 +41,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/cb58"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls"
+	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
@@ -126,7 +126,8 @@ var (
 	genesisJSONCortina           = genesisJSON(params.TestCortinaChainConfig)
 	genesisJSONDurango           = genesisJSON(params.TestDurangoChainConfig)
 	genesisJSONEtna              = genesisJSON(params.TestEtnaChainConfig)
-	genesisJSONLatest            = genesisJSONEtna
+	genesisJSONFUpgrade          = genesisJSON(params.TestFUpgradeChainConfig)
+	genesisJSONLatest            = genesisJSONFUpgrade
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
@@ -220,7 +221,7 @@ func NewContext() *snow.Context {
 			return subnetID, nil
 		},
 	}
-	blsSecretKey, err := bls.NewSigner()
+	blsSecretKey, err := localsigner.New()
 	if err != nil {
 		panic(err)
 	}
