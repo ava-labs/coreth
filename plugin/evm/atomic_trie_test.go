@@ -600,8 +600,6 @@ func TestApplyToSharedMemory(t *testing.T) {
 func TestAtomicTrie_AcceptTrie(t *testing.T) {
 	t.Parallel()
 
-	metadataHexPrefix := hex.EncodeToString(prefixdb.MakePrefix(atomicTrieMetaDBPrefix))
-
 	testCases := map[string]struct {
 		lastAcceptedRoot        common.Hash
 		lastCommittedRoot       common.Hash
@@ -614,7 +612,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 		wantLastCommittedRoot   common.Hash
 		wantLastAcceptedRoot    common.Hash
 		wantTipBufferRoot       common.Hash
-		wantKeyValuePairs       map[string]string
+		wantMetadataDBKVs       map[string]string
 	}{
 		"no_committing": {
 			lastAcceptedRoot:        types.EmptyRootHash,
@@ -627,10 +625,9 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantLastCommittedRoot:   common.Hash{2},
 			wantLastAcceptedRoot:    common.Hash{3},
 			wantTipBufferRoot:       common.Hash{3},
-			wantKeyValuePairs: map[string]string{
-				metadataHexPrefix + "0000000000000064":// height 100
-				hex.EncodeToString(common.Hash{2}.Bytes()),
-				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
+			wantMetadataDBKVs: map[string]string{
+				"0000000000000064":                   hex.EncodeToString(common.Hash{2}.Bytes()), // height 100
+				hex.EncodeToString(lastCommittedKey): "0000000000000064",                         // height 100
 			},
 		},
 		"no_committing_with_previous_root": {
@@ -644,10 +641,9 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantLastCommittedRoot:   common.Hash{2},
 			wantLastAcceptedRoot:    common.Hash{3},
 			wantTipBufferRoot:       common.Hash{3},
-			wantKeyValuePairs: map[string]string{
-				metadataHexPrefix + "0000000000000064":// height 100
-				hex.EncodeToString(common.Hash{2}.Bytes()),
-				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
+			wantMetadataDBKVs: map[string]string{
+				"0000000000000064":                   hex.EncodeToString(common.Hash{2}.Bytes()), // height 100
+				hex.EncodeToString(lastCommittedKey): "0000000000000064",                         // height 100
 			},
 		},
 		"commit_all_up_to_height_without_height": {
@@ -662,18 +658,13 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantLastCommittedRoot:   types.EmptyRootHash,
 			wantLastAcceptedRoot:    common.Hash{3},
 			wantTipBufferRoot:       common.Hash{3},
-			wantKeyValuePairs: map[string]string{
-				metadataHexPrefix + "000000000000003c":// height 60
-				hex.EncodeToString(common.Hash{2}.Bytes()),
-				metadataHexPrefix + "0000000000000046":// height 70
-				hex.EncodeToString(types.EmptyRootHash[:]),
-				metadataHexPrefix + "0000000000000050":// height 80
-				hex.EncodeToString(types.EmptyRootHash[:]),
-				metadataHexPrefix + "000000000000005a":// height 90
-				hex.EncodeToString(types.EmptyRootHash[:]),
-				metadataHexPrefix + "0000000000000064":// height 100
-				hex.EncodeToString(types.EmptyRootHash[:]),
-				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "0000000000000064", // height 100
+			wantMetadataDBKVs: map[string]string{
+				"000000000000003c":                   hex.EncodeToString(common.Hash{2}.Bytes()), // height 60
+				"0000000000000046":                   hex.EncodeToString(types.EmptyRootHash[:]), // height 70
+				"0000000000000050":                   hex.EncodeToString(types.EmptyRootHash[:]), // height 80
+				"000000000000005a":                   hex.EncodeToString(types.EmptyRootHash[:]), // height 90
+				"0000000000000064":                   hex.EncodeToString(types.EmptyRootHash[:]), // height 100
+				hex.EncodeToString(lastCommittedKey): "0000000000000064",                         // height 100
 			},
 		},
 		"commit_root": {
@@ -688,12 +679,10 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantLastCommittedRoot:   common.Hash{3},
 			wantLastAcceptedRoot:    common.Hash{3},
 			wantTipBufferRoot:       common.Hash{3},
-			wantKeyValuePairs: map[string]string{
-				metadataHexPrefix + "0000000000000064":// height 100
-				hex.EncodeToString(common.Hash{2}.Bytes()),
-				metadataHexPrefix + "000000000000006e":// height 110
-				hex.EncodeToString(common.Hash{3}.Bytes()),
-				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "000000000000006e", // height 110
+			wantMetadataDBKVs: map[string]string{
+				"0000000000000064":                   hex.EncodeToString(common.Hash{2}.Bytes()), // height 100
+				"000000000000006e":                   hex.EncodeToString(common.Hash{3}.Bytes()), // height 110
+				hex.EncodeToString(lastCommittedKey): "000000000000006e",                         // height 110
 			},
 		},
 		"commit_root_with_previous_root": {
@@ -708,12 +697,10 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			wantLastCommittedRoot:   common.Hash{3},
 			wantLastAcceptedRoot:    common.Hash{3},
 			wantTipBufferRoot:       common.Hash{3},
-			wantKeyValuePairs: map[string]string{
-				metadataHexPrefix + "0000000000000064":// height 100
-				hex.EncodeToString(common.Hash{2}.Bytes()),
-				metadataHexPrefix + "000000000000006e":// height 110
-				hex.EncodeToString(common.Hash{3}.Bytes()),
-				metadataHexPrefix + hex.EncodeToString(lastCommittedKey): "000000000000006e", // height 110
+			wantMetadataDBKVs: map[string]string{
+				"0000000000000064":                   hex.EncodeToString(common.Hash{2}.Bytes()), // height 100
+				"000000000000006e":                   hex.EncodeToString(common.Hash{3}.Bytes()), // height 110
+				hex.EncodeToString(lastCommittedKey): "000000000000006e",                         // height 110
 			},
 		},
 	}
@@ -764,15 +751,15 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			_, storageSize, _ := atomicTrie.trieDB.Size()
 			assert.Zerof(t, storageSize, "storage size should be zero after accepting the trie due to the dirty nodes derefencing but is %s", storageSize)
 
-			keyValuePairs := make(map[string]string, len(testCase.wantKeyValuePairs))
-			it := versionDB.NewIterator()
+			keyValuePairs := make(map[string]string, len(testCase.wantMetadataDBKVs))
+			it := metadataDB.NewIterator()
 			for it.Next() {
 				keyValuePairs[hex.EncodeToString(it.Key())] = hex.EncodeToString(it.Value())
 			}
 			err = it.Error()
 			assert.NoError(t, err)
 			it.Release()
-			assert.Equal(t, testCase.wantKeyValuePairs, keyValuePairs)
+			assert.Equal(t, testCase.wantMetadataDBKVs, keyValuePairs)
 		})
 	}
 }
