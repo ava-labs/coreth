@@ -22,7 +22,7 @@ type DynamicFeeAccumulator struct {
 }
 
 func ParseDynamicFeeAccumulator(bytes []byte) (DynamicFeeAccumulator, error) {
-	if len(bytes) < DynamicFeeWindowSize {
+	if len(bytes) < ErrDynamicFeeAccumulatorSize {
 		return DynamicFeeAccumulator{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
 			ErrDynamicFeeAccumulatorInsufficientLength,
 			ErrDynamicFeeAccumulatorSize,
