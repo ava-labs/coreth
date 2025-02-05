@@ -70,6 +70,10 @@ type Network interface {
 	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
+
+	// AddConnector adds a listener for Connected/Disconnected events.
+	// When a connector is added it will be called for all currently connected peers.
+	AddConnector(validators.Connector) error
 }
 
 // network is an implementation of Network that processes message requests for
@@ -86,6 +90,7 @@ type network struct {
 	appRequestHandler          message.RequestHandler    // maps request type => handler
 	peers                      *peerTracker              // tracking of peers & bandwidth
 	appStats                   stats.RequestHandlerStats // Provide request handler metrics
+	connectors                 []validators.Connector    // List of connectors to notify on Connected/Disconnected events
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
@@ -110,6 +115,22 @@ func NewNetwork(p2pNetwork *p2p.Network, appSender common.AppSender, codec codec
 		peers:                      NewPeerTracker(),
 		appStats:                   stats.NewRequestHandlerStats(),
 	}
+}
+
+func (n *network) AddConnector(connector validators.Connector) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	n.connectors = append(n.connectors, connector)
+
+	// Notify the connector of all currently connected peers
+	for peerID, peer := range n.peers.peers {
+		if err := connector.Connected(context.Background(), peerID, peer.version); err != nil {
+			return fmt.Errorf("failed to notify connector of connected peer %s: %w", peerID, err)
+		}
+	}
+
+	return nil
 }
 
 // SendAppRequestAny synchronously sends request to an arbitrary peer with a
@@ -359,6 +380,12 @@ func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion 
 		n.peers.Connected(nodeID, nodeVersion)
 	}
 
+	for _, connector := range n.connectors {
+		if err := connector.Connected(ctx, nodeID, nodeVersion); err != nil {
+			return fmt.Errorf("failed to notify connector of connected peer %s: %w", nodeID, err)
+		}
+	}
+
 	return n.p2pNetwork.Connected(ctx, nodeID, nodeVersion)
 }
 
@@ -375,6 +402,12 @@ func (n *network) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 	if nodeID != n.self {
 		// The legacy peer tracker doesn't expect to be connected to itself.
 		n.peers.Disconnected(nodeID)
+	}
+
+	for _, connector := range n.connectors {
+		if err := connector.Disconnected(ctx, nodeID); err != nil {
+			return fmt.Errorf("failed to notify connector of disconnected peer %s: %w", nodeID, err)
+		}
 	}
 
 	return n.p2pNetwork.Disconnected(ctx, nodeID)

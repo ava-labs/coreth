@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,16 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package snap
 
 import (
-	ethtypes "github.com/ava-labs/libevm/core/types"
+	"time"
+
+	"github.com/ava-labs/libevm/p2p/tracker"
 )
 
-// Account represents an Ethereum account and its attached data.
-// This type is used to specify accounts in the genesis block state, and
-// is also useful for JSON encoding/decoding of accounts.
-type Account = ethtypes.Account
-
-// GenesisAlloc specifies the initial state of a genesis block.
-type GenesisAlloc = ethtypes.GenesisAlloc
+// requestTracker is a singleton tracker for request times.
+var requestTracker = tracker.New(ProtocolName, time.Minute)

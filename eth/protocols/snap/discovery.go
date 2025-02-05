@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,16 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package snap
 
 import (
-	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
 )
 
-// Account represents an Ethereum account and its attached data.
-// This type is used to specify accounts in the genesis block state, and
-// is also useful for JSON encoding/decoding of accounts.
-type Account = ethtypes.Account
+// enrEntry is the ENR entry which advertises `snap` protocol on the discovery.
+type enrEntry struct {
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
 
-// GenesisAlloc specifies the initial state of a genesis block.
-type GenesisAlloc = ethtypes.GenesisAlloc
+// ENRKey implements enr.Entry.
+func (e enrEntry) ENRKey() string {
+	return "snap"
+}
