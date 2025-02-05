@@ -372,30 +372,30 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
-
-	var gasLimit uint64
-	if cm.config.IsCortina(time) {
-		gasLimit = params.CortinaGasLimit
-	} else if cm.config.IsApricotPhase1(time) {
-		gasLimit = params.ApricotPhase1GasLimit
-	} else {
-		gasLimit = CalcGasLimit(parent.GasUsed(), parent.GasLimit(), parent.GasLimit(), parent.GasLimit())
-	}
-
+	parentHeader := parent.Header()
 	header := &types.Header{
 		Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(cm, time, parent.Header()),
-		GasLimit:   gasLimit,
+		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
 	}
+
 	var err error
-	header.Extra, header.BaseFee, err = dummy.CalcBaseFee(cm.config, parent.Header(), time)
+	header.GasLimit, err = dummy.CalcGasLimit(cm.config, parentHeader, time)
 	if err != nil {
 		panic(err)
 	}
+	header.Extra, err = dummy.CalcHeaderExtra(cm.config, parentHeader, time)
+	if err != nil {
+		panic(err)
+	}
+	header.BaseFee, err = dummy.CalcBaseFee(cm.config, parentHeader, time)
+	if err != nil {
+		panic(err)
+	}
+
 	if cm.config.IsCancun(header.Number, header.Time) {
 		var (
 			parentExcessBlobGas uint64

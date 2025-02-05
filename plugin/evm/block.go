@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 
@@ -380,13 +381,14 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 	if err != nil {
 		return fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
+
 	extraData := b.ethBlock.Extra()
-	headerPredicateResultsBytes, ok := predicate.GetPredicateResultBytes(extraData)
-	if !ok {
-		return fmt.Errorf("failed to find predicate results in extra data: %x", extraData)
+	extra, err := header.ParseExtra(rules.AvalancheRules, extraData)
+	if err != nil {
+		return fmt.Errorf("failed to parse header.Extra: %w", err)
 	}
-	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {
-		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, headerPredicateResultsBytes, predicateResultsBytes)
+	if !bytes.Equal(extra.Predicates, predicateResultsBytes) {
+		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, extra.Predicates, predicateResultsBytes)
 	}
 	return nil
 }

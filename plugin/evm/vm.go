@@ -1588,10 +1588,9 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	}
 	rules := vm.currentRules()
 
-	var nextBaseFee *big.Int
 	parentHeader := preferredBlock
 	timestamp := uint64(vm.clock.Time().Unix())
-	_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+	nextBaseFee, err := dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
 	if err != nil {
 		// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 		return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)

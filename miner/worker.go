@@ -146,29 +146,27 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		timestamp = parent.Time
 	}
 
-	var gasLimit uint64
-	if w.chainConfig.IsCortina(timestamp) {
-		gasLimit = params.CortinaGasLimit
-	} else if w.chainConfig.IsApricotPhase1(timestamp) {
-		gasLimit = params.ApricotPhase1GasLimit
-	} else {
-		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the ceiling and floor were set to the same value
-		// such that the gas limit converged to it. Since this is hardbaked now, we remove the ability to configure it.
-		gasLimit = core.CalcGasLimit(parent.GasUsed, parent.GasLimit, params.ApricotPhase1GasLimit, params.ApricotPhase1GasLimit)
-	}
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   gasLimit,
-		Extra:      nil,
 		Time:       timestamp,
 	}
-	// Set BaseFee and Extra data field
+
+	// Set custom gas logic
 	var err error
-	header.Extra, header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
+	header.GasLimit, err = dummy.CalcGasLimit(w.chainConfig, parent, timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
+	}
+	header.Extra, err = dummy.CalcHeaderExtra(w.chainConfig, parent, timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
+	}
+	header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
+
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
