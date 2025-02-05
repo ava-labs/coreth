@@ -60,7 +60,8 @@ func defaultExtensions() (*extension.Config, error) {
 			OnExtraStateChange:    nil,
 		},
 		SyncExtender:   nil,
-		BlockExtension: extension.NewNoOpBlockExtension(),
+		BlockExtension: nil,
+		ExtraMempool:   nil,
 	}, nil
 }
 
@@ -104,7 +105,7 @@ func TestVMConfig(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": %s}`, txFeeCap, fmt.Sprintf("[%q]", enabledEthAPIs[0]))
-	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
+	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, configJSON, "")
 	require.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
 	require.Equal(t, vm.config.EthAPIs(), enabledEthAPIs, "EnabledEthAPIs should be set")
 	require.NoError(t, vm.Shutdown(context.Background()))
@@ -114,23 +115,23 @@ func TestVMConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": %s}`, txFeeCap, fmt.Sprintf("[%q]", enabledEthAPIs[0]))
-	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
+	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, configJSON, "")
 
 	var vmConfig config.Config
 	vmConfig.SetDefaults(defaultTxPoolConfig)
 	vmConfig.RPCTxFeeCap = txFeeCap
 	vmConfig.EnabledEthAPIs = enabledEthAPIs
-	require.Equal(t, vmConfig, vm.Config, "VM Config should match default with overrides")
+	require.Equal(t, vmConfig, vm.Config(), "VM Config should match default with overrides")
 	require.NoError(t, vm.Shutdown(context.Background()))
 }
 
 func TestVMNilConfig(t *testing.T) {
-	_, vm, _, _, _ := GenesisVM(t, false, "", "", "")
+	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, "", "")
 
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
 	vmConfig.SetDefaults(defaultTxPoolConfig)
-	require.Equal(t, vmConfig, vm.Config, "VM Config should match default config")
+	require.Equal(t, vmConfig, vm.Config(), "VM Config should match default config")
 	require.NoError(t, vm.Shutdown(context.Background()))
 }
 
@@ -138,7 +139,7 @@ func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
 	configJSON := fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir)
-	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
+	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, configJSON, "")
 	require.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
 	require.Equal(t, vm.config.ContinuousProfilerFrequency.Duration, profilerFrequency, "profiler frequency should be set")
 
@@ -310,7 +311,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
 		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[0], big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), testutils.TestKeys[0].ToECDSA())
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), testutils.TestKeys[1].ToECDSA())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -431,7 +432,7 @@ func TestSetPreferenceRace(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -660,10 +661,10 @@ func TestReorgProtection(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[0].ToECDSA()
-	address := testutils.TestEthAddrs[0]
+	key := testutils.TestKeys[1].ToECDSA()
+	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -824,10 +825,10 @@ func TestNonCanonicalAccept(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[0].ToECDSA()
-	address := testutils.TestEthAddrs[0]
+	key := testutils.TestKeys[1].ToECDSA()
+	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1015,10 +1016,10 @@ func TestStickyPreference(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[0].ToECDSA()
-	address := testutils.TestEthAddrs[0]
+	key := testutils.TestKeys[1].ToECDSA()
+	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1269,10 +1270,10 @@ func TestUncleBlock(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[0].ToECDSA()
-	address := testutils.TestEthAddrs[0]
+	key := testutils.TestKeys[1].ToECDSA()
+	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1454,10 +1455,10 @@ func TestAcceptReorg(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[0].ToECDSA()
-	address := testutils.TestEthAddrs[0]
+	key := testutils.TestKeys[1].ToECDSA()
+	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1641,7 +1642,7 @@ func TestFutureBlock(t *testing.T) {
 		}
 	}()
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1702,11 +1703,11 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	key := testutils.TestKeys[0].ToECDSA()
-	address := testutils.TestEthAddrs[0]
+	key := testutils.TestKeys[1].ToECDSA()
+	address := testutils.TestEthAddrs[1]
 
 	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), key)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1809,7 +1810,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		}
 	}()
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1948,7 +1949,6 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	defer func() { metrics.Enabled = true }()
 
 	issuer, vm, dbManager, _, appSender := GenesisVM(t, true, testutils.GenesisJSONApricotPhase1, "", "")
-	defer func() { require.NoError(t, vm.Shutdown(context.Background())) }()
 
 	// Since rewinding is permitted for last accepted height of 0, we must
 	// accept one block to test the SkipUpgradeCheck functionality.
@@ -1979,6 +1979,8 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	genesisWithUpgrade.Config.ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
+
+	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// this will not be allowed
 	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, appSender)
@@ -2073,15 +2075,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
 			header := types.CopyHeader(ethBlock.Header())
 			header.ParentBeaconRoot = test.beaconRoot
-			parentBeaconEthBlock := types.NewBlockWithExtData(
-				header,
-				nil,
-				nil,
-				nil,
-				new(trie.Trie),
-				ethBlock.ExtData(),
-				false,
-			)
+			parentBeaconEthBlock := ethBlock.WithSeal(header)
 
 			parentBeaconBlock, err := vm.blockManager.newBlock(parentBeaconEthBlock)
 			if err != nil {

@@ -218,5 +218,8 @@ func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	return bm.blockExtension.SyntacticVerify(b, rules)
+	if bm.blockExtension != nil {
+		return bm.blockExtension.SyntacticVerify(b, rules)
+	}
+	return nil
 }

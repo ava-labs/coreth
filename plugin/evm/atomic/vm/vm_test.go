@@ -591,8 +591,8 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		}
 	}()
 
-	newHeadChan := make(chan core.ChainHeadEvent, 1)
-	vm.Ethereum().BlockChain().SubscribeChainHeadEvent(newHeadChan)
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.Ethereum().TxPool().SubscribeNewReorgEvent(newTxPoolHeadChan)
 
 	importTx0A, err := vm.newImportTx(vm.ctx.XChainID, key.Address, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key0})
 	if err != nil {
@@ -623,8 +623,8 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newHead := <-newHeadChan
-	if newHead.Block.Hash() != common.Hash(blk0.ID()) {
+	newHead := <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk0.ID()) {
 		t.Fatalf("Expected new block to match")
 	}
 
@@ -1178,7 +1178,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	}
 
 	// Hack: test [onExtraStateChange] directly to ensure it catches the atomic gas limit error correctly.
-	if _, _, err := vm2.onExtraStateChange(ethBlk2, state); err == nil || !strings.Contains(err.Error(), "exceeds atomic gas limit") {
+	if _, _, err := vm2.onExtraStateChange(ethBlk2, state, vm2.Ethereum().BlockChain().Config()); err == nil || !strings.Contains(err.Error(), "exceeds atomic gas limit") {
 		t.Fatalf("Expected block to fail verification due to exceeded atomic gas limit, but found error: %v", err)
 	}
 }

@@ -92,7 +92,6 @@ type atomicTxTest struct {
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool
 	// genesisJSON to use for the VM genesis (also defines the rule set that will be used in verification)
-	// If this is left empty, [genesisJSONApricotPhase0], will be used
 	genesisJSON string
 
 	// passed directly into GenesisVM
@@ -113,14 +112,14 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	lastAcceptedBlock := vm.LastAcceptedVMBlock()
-	backend := &VerifierBackend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.fx,
-		Rules:        rules,
-		ChainConfig:  vm.Ethereum().BlockChain().Config(),
-		Bootstrapped: vm.bootstrapped.Get(),
-		BlockFetcher: vm,
-		SecpCache:    &vm.secpCache,
+	backend := &verifierBackend{
+		ctx:          vm.ctx,
+		fx:           &vm.fx,
+		rules:        rules,
+		chainConfig:  vm.Ethereum().BlockChain().Config(),
+		bootstrapped: vm.IsBootstrapped(),
+		blockFetcher: vm,
+		secpCache:    &vm.secpCache,
 	}
 	if err := tx.UnsignedAtomicTx.Visit(
 		&semanticVerifier{
@@ -160,12 +159,12 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	if test.bootstrapping {
-		// If this test simulates processing txs during bootstrapping (where some verification is skipped),
-		// initialize the block building goroutines normally initialized in SetState(snow.NormalOps).
-		// This ensures that the VM can build a block correctly during the test.
-		if err := vm.SetState(context.Background(), snow.NormalOp); err != nil {
-			t.Fatal(err)
-		}
+		// If the test is in bootstrapping mode, we return early as we don't expect the transaction to be accepted
+		return
+	}
+
+	if err := vm.SetState(context.Background(), snow.NormalOp); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := vm.mempool.AddLocalTx(tx); err != nil {

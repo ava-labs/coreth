@@ -40,7 +40,7 @@ type Mode struct {
 
 type (
 	OnFinalizeAndAssembleCallbackType = func(header *types.Header, state *state.StateDB, txs []*types.Transaction) (extraData []byte, blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
-	OnExtraStateChangeType            = func(block *types.Block, statedb *state.StateDB) (blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
+	OnExtraStateChangeType            = func(block *types.Block, statedb *state.StateDB, config *params.ChainConfig) (blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
 
 	ConsensusCallbacks struct {
 		OnFinalizeAndAssemble OnFinalizeAndAssembleCallbackType
@@ -387,7 +387,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		err                          error
 	)
 	if eng.cb.OnExtraStateChange != nil {
-		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, state)
+		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, state, chain.Config())
 		if err != nil {
 			return err
 		}

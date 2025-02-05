@@ -6,6 +6,8 @@ package vm
 import (
 	"testing"
 
+	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -74,19 +76,35 @@ func TestAtomicSyncerVM(t *testing.T) {
 				return vm, vm.createConsensusCallbacks()
 			}
 
-			afterInit := func(t *testing.T, params testutils.SyncTestParams, vm extension.InnerVM) {
-				atomicVM, ok := vm.(*VM)
+			afterInit := func(t *testing.T, params testutils.SyncTestParams, vmSetup testutils.VMSetup, isServer bool) {
+				atomicVM, ok := vmSetup.VM.(*VM)
 				require.True(t, ok)
-				serverAtomicTrie := atomicVM.atomicBackend.AtomicTrie()
-				require.NoError(t, serverAtomicTrie.Commit(params.SyncableInterval, serverAtomicTrie.LastAcceptedRoot()))
-				require.NoError(t, atomicVM.VersionDB().Commit())
+
+				alloc := map[ids.ShortID]uint64{
+					testutils.TestShortIDAddrs[0]: importAmount,
+				}
+
+				for addr, avaxAmount := range alloc {
+					txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
+					if err != nil {
+						t.Fatalf("Failed to generate txID from addr: %s", err)
+					}
+					if _, err := addUTXO(vmSetup.AtomicMemory, vmSetup.SnowCtx, txID, 0, vmSetup.SnowCtx.AVAXAssetID, avaxAmount, addr); err != nil {
+						t.Fatalf("Failed to add UTXO to shared memory: %s", err)
+					}
+				}
+				if isServer {
+					serverAtomicTrie := atomicVM.atomicBackend.AtomicTrie()
+					require.NoError(t, serverAtomicTrie.Commit(params.SyncableInterval, serverAtomicTrie.LastAcceptedRoot()))
+					require.NoError(t, atomicVM.VersionDB().Commit())
+				}
 			}
 
 			testSetup := &testutils.SyncTestSetup{
 				NewVM:     newVMFn,
 				GenFn:     genFn,
 				AfterInit: afterInit,
-				ExtraSyncerVMTest: func(t *testing.T, syncerVMSetup testutils.SyncerVMSetup) {
+				ExtraSyncerVMTest: func(t *testing.T, syncerVMSetup testutils.VMSetup) {
 					// check atomic memory was synced properly
 					syncerVM := syncerVMSetup.VM
 					atomicVM, ok := syncerVM.(*VM)

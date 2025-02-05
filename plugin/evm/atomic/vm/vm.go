@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -74,8 +73,6 @@ type VM struct {
 	fx        secp256k1fx.Fx
 	ctx       *snow.Context
 
-	bootstrapped *avalancheutils.Atomic[bool]
-
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
@@ -126,7 +123,7 @@ func (vm *VM) Initialize(
 	fujiExtDataHashes = nil
 	mainnetExtDataHashes = nil
 
-	codec, err := message.NewCodec(atomicsync.AtomicSyncSummary{})
+	networkCodec, err := message.NewCodec(atomicsync.AtomicSyncSummary{})
 	if err != nil {
 		return fmt.Errorf("failed to create codec manager: %w", err)
 	}
@@ -144,20 +141,21 @@ func (vm *VM) Initialize(
 	vm.mempool = &txpool.Mempool{}
 
 	extensionConfig := &extension.Config{
-		NetworkCodec:        codec,
+		NetworkCodec:        networkCodec,
 		ConsensusCallbacks:  vm.createConsensusCallbacks(),
 		BlockExtension:      blockExtension,
 		SyncableParser:      atomicsync.NewAtomicSyncSummaryParser(),
 		SyncExtender:        syncExtender,
 		SyncSummaryProvider: syncProvider,
-		SyncLeafType:        atomicLeafTypeConfig,
+		ExtraSyncLeafConfig: atomicLeafTypeConfig,
 		ExtraMempool:        vm.mempool,
+		Clock:               &vm.clock,
 	}
 	if err := innerVM.SetExtensionConfig(extensionConfig); err != nil {
 		return fmt.Errorf("failed to set extension config: %w", err)
 	}
 
-	innerVM.Initialize(
+	if err := innerVM.Initialize(
 		ctx,
 		chainCtx,
 		db,
@@ -167,7 +165,9 @@ func (vm *VM) Initialize(
 		toEngine,
 		fxs,
 		appSender,
-	)
+	); err != nil {
+		return fmt.Errorf("failed to initialize inner VM: %w", err)
+	}
 
 	err = vm.mempool.Initialize(chainCtx, innerVM.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
@@ -190,7 +190,7 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(innerVM.VersionDB(), codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(innerVM.VersionDB(), atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
@@ -206,7 +206,7 @@ func (vm *VM) Initialize(
 	// Atomic backend is available now, we can initialize structs that depend on it
 	syncProvider.Initialize(vm.atomicBackend.AtomicTrie())
 	syncExtender.Initialize(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), innerVM.Config().StateSyncRequestSize)
-	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, codec)
+	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, networkCodec)
 	vm.secpCache = secp256k1.RecoverCache{
 		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
 			Size: secpCacheSize,
@@ -226,8 +226,6 @@ func (vm *VM) Initialize(
 
 func (vm *VM) SetState(ctx context.Context, state snow.State) error {
 	switch state {
-	case snow.StateSyncing:
-		vm.bootstrapped.Set(false)
 	case snow.Bootstrapping:
 		if err := vm.onBootstrapStarted(); err != nil {
 			return err
@@ -236,26 +234,19 @@ func (vm *VM) SetState(ctx context.Context, state snow.State) error {
 		if err := vm.onNormalOperationsStarted(); err != nil {
 			return err
 		}
-	default:
-		return snow.ErrUnknownState
 	}
 
 	return vm.InnerVM.SetState(ctx, state)
 }
 
-// onBootstrapStarted marks this VM as bootstrapping
 func (vm *VM) onBootstrapStarted() error {
-	vm.bootstrapped.Set(false)
-
 	return vm.fx.Bootstrapping()
 }
 
-// onNormalOperationsStarted marks this VM as bootstrapped
 func (vm *VM) onNormalOperationsStarted() error {
-	if vm.bootstrapped.Get() {
+	if vm.IsBootstrapped() {
 		return nil
 	}
-	vm.bootstrapped.Set(true)
 	if err := vm.fx.Bootstrapped(); err != nil {
 		return err
 	}
@@ -419,14 +410,14 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
 	}
-	atomicBackend := &VerifierBackend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.fx,
-		Rules:        rules,
-		ChainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
-		Bootstrapped: vm.bootstrapped.Get(),
-		BlockFetcher: vm.InnerVM,
-		SecpCache:    &vm.secpCache,
+	atomicBackend := &verifierBackend{
+		ctx:          vm.ctx,
+		fx:           &vm.fx,
+		rules:        rules,
+		chainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
+		bootstrapped: vm.IsBootstrapped(),
+		blockFetcher: vm.InnerVM,
+		secpCache:    &vm.secpCache,
 	}
 	if err := tx.UnsignedAtomicTx.Visit(&semanticVerifier{
 		backend: atomicBackend,
@@ -460,14 +451,14 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := &VerifierBackend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.fx,
-		Rules:        rules,
-		ChainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
-		Bootstrapped: vm.bootstrapped.Get(),
-		BlockFetcher: vm,
-		SecpCache:    &vm.secpCache,
+	atomicBackend := &verifierBackend{
+		ctx:          vm.ctx,
+		fx:           &vm.fx,
+		rules:        rules,
+		chainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
+		bootstrapped: vm.IsBootstrapped(),
+		blockFetcher: vm,
+		secpCache:    &vm.secpCache,
 	}
 
 	for _, atomicTx := range txs {
@@ -476,8 +467,9 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 			backend: atomicBackend,
 			atx:     atomicTx,
 			parent:  ancestor,
+			baseFee: baseFee,
 		}); err != nil {
-			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
+			return fmt.Errorf("invalid block due to failed semantic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
@@ -658,12 +650,12 @@ func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, 
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB, chainConfig *params.ChainConfig) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules                      = vm.InnerVM.Ethereum().BlockChain().Config().Rules(header.Number, header.Time)
+		rules                      = chainConfig.Rules(header.Number, header.Time)
 	)
 
 	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, atomic.Codec)

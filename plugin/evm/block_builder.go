@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/avalanchego/snow"
@@ -24,17 +25,12 @@ const (
 	minBlockBuildingRetryDelay = 500 * time.Millisecond
 )
 
-type BuilderMempool interface {
-	Len() int
-	SubscribePendingTxs() <-chan struct{}
-}
-
 type blockBuilder struct {
 	ctx         *snow.Context
 	chainConfig *params.ChainConfig
 
 	txPool       *txpool.TxPool
-	extraMempool BuilderMempool
+	extraMempool extension.BuilderMempool
 
 	shutdownChan <-chan struct{}
 	shutdownWg   *sync.WaitGroup
@@ -59,7 +55,7 @@ type blockBuilder struct {
 
 // NewBlockBuilder creates a new block builder. extraMempool is an optional mempool (can be nil) that
 // can be used to add transactions to the block builder, in addition to the txPool.
-func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message, extraMempool BuilderMempool) *blockBuilder {
+func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message, extraMempool extension.BuilderMempool) *blockBuilder {
 	b := &blockBuilder{
 		ctx:                  vm.ctx,
 		chainConfig:          vm.chainConfig,
@@ -111,7 +107,7 @@ func (b *blockBuilder) needToBuild() bool {
 	size := b.txPool.PendingSize(txpool.PendingFilter{
 		MinTip: uint256.MustFromBig(b.txPool.GasTip()),
 	})
-	return size > 0 || (b.extraMempool != nil && b.extraMempool.Len() > 0)
+	return size > 0 || (b.extraMempool != nil && b.extraMempool.PendingLen() > 0)
 }
 
 // markBuilding adds a PendingTxs message to the toEngine channel.

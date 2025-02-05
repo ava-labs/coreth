@@ -24,6 +24,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/vms/components/chain"
 
 	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -163,12 +164,10 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		if !hasItem {
 			t.Fatal("expected nodeSet to contain at least 1 nodeID")
 		}
-		go testSyncVMSetup.serverVM.vm.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
+		go testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
 		return nil
 	}
-	// Disable metrics to prevent duplicate registerer
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
-	SetupVM(t, false, GenesisJSONLatest, stateSyncDisabledConfigJSON, "", syncDisabledVM)
 	if err := syncDisabledVM.Initialize(
 		context.Background(),
 		testSyncVMSetup.syncerVM.SnowCtx,
@@ -189,7 +188,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		}
 	}()
 
-	if height := syncDisabledVM.LastAcceptedBlockInternal().Height(); height != 0 {
+	if height := syncDisabledVM.LastAcceptedVMBlock().Height(); height != 0 {
 		t.Fatalf("Unexpected last accepted height: %d", height)
 	}
 
@@ -199,7 +198,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 
 	// Process the first 10 blocks from the serverVM
 	for i := uint64(1); i < 10; i++ {
-		ethBlock := testSyncVMSetup.serverVM.vm.Ethereum().BlockChain().GetBlockByNumber(i)
+		ethBlock := testSyncVMSetup.serverVM.VM.Ethereum().BlockChain().GetBlockByNumber(i)
 		if ethBlock == nil {
 			t.Fatalf("VM Server did not have a block available at height %d", i)
 		}
@@ -247,7 +246,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	}
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
-	testSyncVMSetup.serverVM.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
+	testSyncVMSetup.serverVM.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response)
 		} else {
@@ -260,7 +259,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	// connect peer to [syncerVM]
 	assert.NoError(t, syncReEnabledVM.Connected(
 		context.Background(),
-		testSyncVMSetup.serverVM.ctx.NodeID,
+		testSyncVMSetup.serverVM.SnowCtx.NodeID,
 		statesyncclient.StateSyncVersion,
 	))
 
@@ -305,9 +304,9 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 
 type SyncTestSetup struct {
 	NewVM             func() (extension.InnerVM, dummy.ConsensusCallbacks) // should not be initialized
-	AfterInit         func(t *testing.T, testParams SyncTestParams, vm extension.InnerVM)
+	AfterInit         func(t *testing.T, testParams SyncTestParams, vmSetup VMSetup, isServer bool)
 	GenFn             func(i int, vm extension.InnerVM, gen *core.BlockGen)
-	ExtraSyncerVMTest func(t *testing.T, syncerVM SyncerVMSetup)
+	ExtraSyncerVMTest func(t *testing.T, syncerVM VMSetup)
 }
 
 func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int, testSetup *SyncTestSetup) *testSyncVMSetup {
@@ -317,14 +316,23 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	// This is necessary to support fetching a state summary.
 	config := fmt.Sprintf(`{"commit-interval": %d, "state-sync-commit-interval": %d}`, test.SyncableInterval, test.SyncableInterval)
 	serverVM, cb := testSetup.NewVM()
-	_, _, _, serverAppSender, serverCtx := SetupVM(t, true, GenesisJSONLatest, config, "", serverVM)
+	serverChan, serverDB, serverAtomicMem, serverAppSender, serverCtx := SetupVM(t, true, GenesisJSONLatest, config, "", serverVM)
 	t.Cleanup(func() {
 		log.Info("Shutting down server VM")
 		require.NoError(serverVM.Shutdown(context.Background()))
 	})
+	serverVmSetup := VMSetup{
+		VM:                 serverVM,
+		AppSender:          serverAppSender,
+		SnowCtx:            serverCtx,
+		ConsensusCallbacks: cb,
+		DB:                 serverDB,
+		EngineChan:         serverChan,
+		AtomicMemory:       serverAtomicMem,
+	}
 	var err error
 	if testSetup.AfterInit != nil {
-		testSetup.AfterInit(t, test, serverVM)
+		testSetup.AfterInit(t, test, serverVmSetup, true)
 	}
 	generateAndAcceptBlocks(t, serverVM, numBlocks, testSetup.GenFn, nil, cb)
 
@@ -338,9 +346,11 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	patchedBlock := patchBlock(lastAccepted, root, serverVM.Ethereum().ChainDb())
 	blockBytes, err := rlp.EncodeToBytes(patchedBlock)
 	require.NoError(err)
-	internalBlock, err := serverVM.ParseBlock(context.Background(), blockBytes)
+	internalWrappedBlock, err := serverVM.ParseBlock(context.Background(), blockBytes)
 	require.NoError(err)
-	require.NoError(serverVM.SetLastAcceptedBlock(internalBlock))
+	internalBlock, ok := internalWrappedBlock.(*chain.BlockWrapper)
+	require.True(ok)
+	require.NoError(serverVM.SetLastAcceptedBlock(internalBlock.Block))
 
 	// initialise [syncerVM] with blank genesis state
 	// we also override [syncerVM]'s commit interval so the atomic trie works correctly.
@@ -352,6 +362,20 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	t.Cleanup(func() {
 		require.NoError(shutdownOnceSyncerVM.Shutdown(context.Background()))
 	})
+	syncerVmSetup := syncerVMSetup{
+		VMSetup: VMSetup{
+			VM:                 syncerVM,
+			ConsensusCallbacks: syncerCB,
+			SnowCtx:            chainCtx,
+			DB:                 syncerDB,
+			EngineChan:         syncerEngineChan,
+			AtomicMemory:       syncerAtomicMemory,
+		},
+		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
+	}
+	if testSetup.AfterInit != nil {
+		testSetup.AfterInit(t, test, syncerVmSetup.VMSetup, false)
+	}
 	require.NoError(syncerVM.SetState(context.Background(), snow.StateSyncing))
 	enabled, err := syncerVM.StateSyncEnabled(context.Background())
 	require.NoError(err)
@@ -372,7 +396,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	require.NoError(
 		syncerVM.Connected(
 			context.Background(),
-			chainCtx.NodeID,
+			serverCtx.NodeID,
 			statesyncclient.StateSyncVersion,
 		),
 	)
@@ -387,46 +411,37 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	}
 
 	return &testSyncVMSetup{
-		serverVM: serverVMSetup{
-			vm:        serverVM,
-			appSender: serverAppSender,
-			ctx:       serverCtx,
+		serverVM: VMSetup{
+			VM:        serverVM,
+			AppSender: serverAppSender,
+			SnowCtx:   serverCtx,
 		},
 		fundedAccounts: accounts,
-		syncerVM: SyncerVMSetup{
-			VM:                   syncerVM,
-			ConsensusCallbacks:   syncerCB,
-			SnowCtx:              chainCtx,
-			DB:                   syncerDB,
-			EngineChan:           syncerEngineChan,
-			AtomicMemory:         syncerAtomicMemory,
-			shutdownOnceSyncerVM: shutdownOnceSyncerVM,
-		},
+		syncerVM:       syncerVmSetup,
 	}
 }
 
 // testSyncVMSetup contains the required set up for a client VM to perform state sync
 // off of a server VM.
 type testSyncVMSetup struct {
-	serverVM serverVMSetup
-	syncerVM SyncerVMSetup
+	serverVM VMSetup
+	syncerVM syncerVMSetup
 
 	fundedAccounts map[*keystore.Key]*types.StateAccount
 }
 
-type serverVMSetup struct {
-	vm        extension.InnerVM
-	ctx       *snow.Context
-	appSender *enginetest.Sender
+type VMSetup struct {
+	VM                 extension.InnerVM
+	SnowCtx            *snow.Context
+	ConsensusCallbacks dummy.ConsensusCallbacks
+	DB                 avalanchedatabase.Database
+	EngineChan         chan commonEng.Message
+	AtomicMemory       *avalancheatomic.Memory
+	AppSender          *enginetest.Sender
 }
 
-type SyncerVMSetup struct {
-	VM                   extension.InnerVM
-	SnowCtx              *snow.Context
-	ConsensusCallbacks   dummy.ConsensusCallbacks
-	DB                   avalanchedatabase.Database
-	EngineChan           chan commonEng.Message
-	AtomicMemory         *avalancheatomic.Memory
+type syncerVMSetup struct {
+	VMSetup
 	shutdownOnceSyncerVM *shutdownOnceVM
 }
 
@@ -450,11 +465,11 @@ type SyncTestParams struct {
 	expectedErr        error
 }
 
-func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestParams, extraSyncerVMTest func(t *testing.T, syncerVMSetup SyncerVMSetup)) {
+func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestParams, extraSyncerVMTest func(t *testing.T, syncerVMSetup VMSetup)) {
 	t.Helper()
 	var (
 		require          = require.New(t)
-		serverVM         = testSyncVMSetup.serverVM.vm
+		serverVM         = testSyncVMSetup.serverVM.VM
 		fundedAccounts   = testSyncVMSetup.fundedAccounts
 		syncerVM         = testSyncVMSetup.syncerVM.VM
 		syncerEngineChan = testSyncVMSetup.syncerVM.EngineChan
@@ -502,6 +517,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	lastNumber := syncerVM.Ethereum().BlockChain().LastAcceptedBlock().NumberU64()
 	// check the last block is indexed
 	lastSyncedBlock := rawdb.ReadBlock(syncerVM.Ethereum().ChainDb(), rawdb.ReadCanonicalHash(syncerVM.Ethereum().ChainDb(), lastNumber), lastNumber)
+	require.NotNil(lastSyncedBlock, "last synced block not found")
 	for _, tx := range lastSyncedBlock.Transactions() {
 		index := rawdb.ReadTxLookupEntry(syncerVM.Ethereum().ChainDb(), tx.Hash())
 		require.NotNilf(index, "Miss transaction indices, number %d hash %s", lastNumber, tx.Hash().Hex())
@@ -584,7 +600,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	)
 
 	if extraSyncerVMTest != nil {
-		extraSyncerVMTest(t, testSyncVMSetup.syncerVM)
+		extraSyncerVMTest(t, testSyncVMSetup.syncerVM.VMSetup)
 	}
 }
 

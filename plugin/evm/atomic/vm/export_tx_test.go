@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var nonExistentID = ids.ID{'F'}
@@ -41,6 +42,9 @@ var (
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
 // that attempt to send the funds to each of the test keys (list of length 3).
 func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
+	ethAddr := key.EthAddress()
 	// Add a UTXO to shared memory
 	utxo := &avax.UTXO{
 		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
@@ -49,7 +53,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 			Amt: uint64(50000000),
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testutils.TestKeys[0].Address()},
+				Addrs:     []ids.ShortID{key.Address()},
 			},
 		},
 	}
@@ -64,14 +68,14 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testutils.TestKeys[0].Address().Bytes(),
+			key.Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Import the funds
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, ethAddr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +110,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 	for _, addr := range testutils.TestShortIDAddrs {
-		exportTx, err := atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, testutils.InitialBaseFee, testutils.TestKeys[0:1])
+		exportTx, err := atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +121,8 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 }
 
 func TestExportTxEVMStateTransfer(t *testing.T) {
-	key := testutils.TestKeys[0]
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
 	addr := key.Address()
 	ethAddr := key.EthAddress()
 
@@ -387,7 +392,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err := vm.newImportTx(vm.ctx.XChainID, ethAddr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -927,14 +932,14 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		backend := &VerifierBackend{
-			Ctx:          vm.ctx,
-			Fx:           &vm.fx,
-			Rules:        test.rules,
-			ChainConfig:  vm.Ethereum().BlockChain().Config(),
-			Bootstrapped: vm.bootstrapped.Get(),
-			BlockFetcher: vm,
-			SecpCache:    &vm.secpCache,
+		backend := &verifierBackend{
+			ctx:          vm.ctx,
+			fx:           &vm.fx,
+			rules:        test.rules,
+			chainConfig:  vm.Ethereum().BlockChain().Config(),
+			bootstrapped: vm.IsBootstrapped(),
+			blockFetcher: vm,
+			secpCache:    &vm.secpCache,
 		}
 
 		t.Run(test.name, func(t *testing.T) {
@@ -1664,6 +1669,9 @@ func TestExportTxGasCost(t *testing.T) {
 }
 
 func TestNewExportTx(t *testing.T) {
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
+	ethAddress := key.PublicKey().EthAddress()
 	tests := []struct {
 		name               string
 		genesis            string
@@ -1735,7 +1743,7 @@ func TestNewExportTx(t *testing.T) {
 					Amt: importAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testutils.TestKeys[0].Address()},
+						Addrs:     []ids.ShortID{key.Address()},
 					},
 				},
 			}
@@ -1750,13 +1758,13 @@ func TestNewExportTx(t *testing.T) {
 				Key:   inputID[:],
 				Value: utxoBytes,
 				Traits: [][]byte{
-					testutils.TestKeys[0].Address().Bytes(),
+					key.Address().Bytes(),
 				},
 			}}}}); err != nil {
 				t.Fatal(err)
 			}
 
-			tx, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err := vm.newImportTx(vm.ctx.XChainID, ethAddress, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1792,21 +1800,21 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, test.rules, state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, testutils.TestShortIDAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err = atomic.NewExportTx(vm.ctx, test.rules, state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, key.Address(), testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			exportTx := tx.UnsignedAtomicTx
 
-			backend := &VerifierBackend{
-				Ctx:          vm.ctx,
-				Fx:           &vm.fx,
-				Rules:        vm.CurrentRules(),
-				ChainConfig:  vm.Ethereum().BlockChain().Config(),
-				Bootstrapped: vm.bootstrapped.Get(),
-				BlockFetcher: vm,
-				SecpCache:    &vm.secpCache,
+			backend := &verifierBackend{
+				ctx:          vm.ctx,
+				fx:           &vm.fx,
+				rules:        vm.CurrentRules(),
+				chainConfig:  vm.Ethereum().BlockChain().Config(),
+				bootstrapped: vm.IsBootstrapped(),
+				blockFetcher: vm,
+				secpCache:    &vm.secpCache,
 			}
 
 			if err := exportTx.Visit(&semanticVerifier{
@@ -1848,15 +1856,17 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addr := testutils.TestKeys[0].EthAddress()
-			if sdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
-				t.Fatalf("address balance %s equal %s not %s", addr.String(), sdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
+			if sdb.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
+				t.Fatalf("address balance %s equal %s not %s", ethAddress.String(), sdb.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
 		})
 	}
 }
 
 func TestNewExportTxMulticoin(t *testing.T) {
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
+	ethAddress := key.PublicKey().EthAddress()
 	tests := []struct {
 		name    string
 		genesis string
@@ -1914,7 +1924,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					Amt: importAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testutils.TestKeys[0].Address()},
+						Addrs:     []ids.ShortID{key.Address()},
 					},
 				},
 			}
@@ -1935,7 +1945,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					Amt: importAmount2,
 					OutputOwners: secp256k1fx.OutputOwners{
 						Threshold: 1,
-						Addrs:     []ids.ShortID{testutils.TestKeys[0].Address()},
+						Addrs:     []ids.ShortID{key.Address()},
 					},
 				},
 			}
@@ -1951,21 +1961,21 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					Key:   inputID[:],
 					Value: utxoBytes,
 					Traits: [][]byte{
-						testutils.TestKeys[0].Address().Bytes(),
+						key.Address().Bytes(),
 					},
 				},
 				{
 					Key:   inputID2[:],
 					Value: utxoBytes2,
 					Traits: [][]byte{
-						testutils.TestKeys[0].Address().Bytes(),
+						key.Address().Bytes(),
 					},
 				},
 			}}}); err != nil {
 				t.Fatal(err)
 			}
 
-			tx, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err := vm.newImportTx(vm.ctx.XChainID, ethAddress, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2007,20 +2017,20 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
+			tx, err = atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			exportTx := tx.UnsignedAtomicTx
-			backend := &VerifierBackend{
-				Ctx:          vm.ctx,
-				Fx:           &vm.fx,
-				Rules:        vm.CurrentRules(),
-				ChainConfig:  vm.Ethereum().BlockChain().Config(),
-				Bootstrapped: vm.bootstrapped.Get(),
-				BlockFetcher: vm,
-				SecpCache:    &vm.secpCache,
+			backend := &verifierBackend{
+				ctx:          vm.ctx,
+				fx:           &vm.fx,
+				rules:        vm.CurrentRules(),
+				chainConfig:  vm.Ethereum().BlockChain().Config(),
+				bootstrapped: vm.IsBootstrapped(),
+				blockFetcher: vm,
+				secpCache:    &vm.secpCache,
 			}
 
 			if err := exportTx.Visit(&semanticVerifier{
@@ -2054,12 +2064,11 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addr := testutils.TestKeys[0].EthAddress()
-			if stdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
-				t.Fatalf("address balance %s equal %s not %s", addr.String(), stdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
+			if stdb.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
+				t.Fatalf("address balance %s equal %s not %s", ethAddress.String(), stdb.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
-			if stdb.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
-				t.Fatalf("address balance multicoin %s equal %s not %s", addr.String(), stdb.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
+			if stdb.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
+				t.Fatalf("address balance multicoin %s equal %s not %s", ethAddress.String(), stdb.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
 			}
 		})
 	}

@@ -31,23 +31,24 @@ import (
 // The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 const ParentsToFetch = 256
 
-var (
-	stateSyncSummaryKey = []byte("stateSyncSummary")
-
-	errExtenderAlreadySet = fmt.Errorf("sync extender already set")
-)
+var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
 }
 
+// EthBlockWrapper is an interface that wraps the GetEthBlock method.
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
+// Extender is an interface that allows for extending the state sync process.
 type Extender interface {
+	// Sync is called to perform any extension-specific state sync logic.
 	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
+	// OnFinishBeforeCommit is called after the state sync process has completed but before the state sync summary is committed.
 	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
+	// OnFinishAfterCommit is called after the state sync process has completed and the state sync summary is committed.
 	OnFinishAfterCommit(summaryHeight uint64) error
 }
 
@@ -72,7 +73,8 @@ type ClientConfig struct {
 
 	// Extension points
 	SyncableParser message.SyncableParser
-	SyncExtender   Extender
+	// SyncExtender is an optional extension point for the state sync process, and can be nil.
+	SyncExtender Extender
 
 	Client syncclient.Client
 
@@ -169,8 +171,7 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	// Sync the EVM trie and then the atomic trie. These steps could be done
-	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
+	// Sync the EVM trie.
 	if err := client.syncStateTrie(ctx); err != nil {
 		return err
 	}

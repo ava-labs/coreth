@@ -20,6 +20,7 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 )
 
 // show that a txID discovered from gossip is requested to the same node only if
@@ -27,7 +28,7 @@ import (
 func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, "", "", "")
+	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -118,7 +119,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, "", "", "")
+	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()

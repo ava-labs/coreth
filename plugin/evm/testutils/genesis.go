@@ -12,6 +12,8 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	commoneng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/utils/cb58"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
@@ -62,9 +64,12 @@ func genesisJSON(cfg *params.ChainConfig) string {
 	}
 
 	// Fund the test keys
-	for _, addr := range TestEthAddrs {
+	var b []byte
+	for _, key := range keys {
+		b, _ = cb58.Decode(key)
+		pk, _ := secp256k1.ToPrivateKey(b)
 		balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
-		g.Alloc[addr] = types.GenesisAccount{Balance: balance}
+		g.Alloc[pk.EthAddress()] = types.GenesisAccount{Balance: balance}
 	}
 
 	b, err := json.Marshal(g)

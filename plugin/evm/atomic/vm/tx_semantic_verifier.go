@@ -32,18 +32,18 @@ type BlockFetcher interface {
 	GetVMBlock(context.Context, ids.ID) (extension.VMBlock, error)
 }
 
-type VerifierBackend struct {
-	Ctx          *snow.Context
-	Fx           fx.Fx
-	Rules        params.Rules
-	ChainConfig  *params.ChainConfig
-	Bootstrapped bool
-	BlockFetcher BlockFetcher
-	SecpCache    *secp256k1.RecoverCache
+type verifierBackend struct {
+	ctx          *snow.Context
+	fx           fx.Fx
+	rules        params.Rules
+	chainConfig  *params.ChainConfig
+	bootstrapped bool
+	blockFetcher BlockFetcher
+	secpCache    *secp256k1.RecoverCache
 }
 
 type semanticVerifier struct {
-	backend *VerifierBackend
+	backend *verifierBackend
 	atx     *atomic.Tx
 	parent  extension.VMBlock
 	baseFee *big.Int
@@ -52,8 +52,8 @@ type semanticVerifier struct {
 // SemanticVerify this transaction is valid.
 func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 	backend := s.backend
-	ctx := backend.Ctx
-	rules := backend.Rules
+	ctx := backend.ctx
+	rules := backend.rules
 	stx := s.atx
 	if err := utx.Verify(ctx, rules); err != nil {
 		return err
@@ -93,7 +93,7 @@ func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 		return fmt.Errorf("import tx contained mismatched number of inputs/credentials (%d vs. %d)", len(utx.ImportedInputs), len(stx.Creds))
 	}
 
-	if !backend.Bootstrapped {
+	if !backend.bootstrapped {
 		// Allow for force committing during bootstrapping
 		return nil
 	}
@@ -125,7 +125,7 @@ func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 			return errAssetIDMismatch
 		}
 
-		if err := backend.Fx.VerifyTransfer(utx, in.In, cred, utxo.Out); err != nil {
+		if err := backend.fx.VerifyTransfer(utx, in.In, cred, utxo.Out); err != nil {
 			return fmt.Errorf("import tx transfer failed verification: %w", err)
 		}
 	}
@@ -137,11 +137,11 @@ func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 // or any of its ancestor blocks going back to the last accepted block in its ancestry. If [ancestor] is
 // accepted, then nil will be returned immediately.
 // If the ancestry of [ancestor] cannot be fetched, then [errRejectedParent] may be returned.
-func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extension.VMBlock) error {
-	lastAcceptedBlock := backend.BlockFetcher.LastAcceptedVMBlock()
+func conflicts(backend *verifierBackend, inputs set.Set[ids.ID], ancestor extension.VMBlock) error {
+	lastAcceptedBlock := backend.blockFetcher.LastAcceptedVMBlock()
 	lastAcceptedHeight := lastAcceptedBlock.Height()
 	for ancestor.Height() > lastAcceptedHeight {
-		atomicTxs, err := extractAtomicTxsFromBlock(ancestor, backend.ChainConfig)
+		atomicTxs, err := extractAtomicTxsFromBlock(ancestor, backend.chainConfig)
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extens
 		// will be missing.
 		// If the ancestor is processing, then the block may have
 		// been verified.
-		nextAncestor, err := backend.BlockFetcher.GetVMBlock(context.TODO(), nextAncestorID)
+		nextAncestor, err := backend.blockFetcher.GetVMBlock(context.TODO(), nextAncestorID)
 		if err != nil {
 			return errRejectedParent
 		}
@@ -174,8 +174,8 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extens
 
 // SemanticVerify this transaction is valid.
 func (s *semanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
-	ctx := s.backend.Ctx
-	rules := s.backend.Rules
+	ctx := s.backend.ctx
+	rules := s.backend.rules
 	stx := s.atx
 	if err := utx.Verify(ctx, rules); err != nil {
 		return err
@@ -226,7 +226,7 @@ func (s *semanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
 		if len(cred.Sigs) != 1 {
 			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
 		}
-		pubKey, err := s.backend.SecpCache.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
+		pubKey, err := s.backend.secpCache.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
 		if err != nil {
 			return err
 		}

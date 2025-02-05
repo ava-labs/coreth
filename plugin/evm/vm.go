@@ -78,6 +78,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
@@ -227,7 +228,7 @@ type VM struct {
 
 	builder *blockBuilder
 
-	clock mockable.Clock
+	clock *mockable.Clock
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -288,6 +289,15 @@ func (vm *VM) Initialize(
 	fxs []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
+	if vm.extensionConfig == nil {
+		return errors.New("extension config not set")
+	}
+
+	vm.clock = &mockable.Clock{}
+	if vm.extensionConfig.Clock != nil {
+		vm.clock = vm.extensionConfig.Clock
+	}
+
 	vm.config.SetDefaults(defaultTxPoolConfig)
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
@@ -355,11 +365,14 @@ func (vm *VM) Initialize(
 
 	g := new(core.Genesis)
 	if err := json.Unmarshal(genesisBytes, g); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal genesis %s", err)
 	}
 
-	g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
-
+	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
+	// normally it should not be empty, but some tests may not set it
+	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
+		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
+	}
 	// If the Durango is activated, activate the Warp Precompile at the same time
 	if g.Config.DurangoBlockTimestamp != nil {
 		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
@@ -525,8 +538,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		vm.chaindb,
 		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
-		dummy.NewFakerWithClock(vm.extensionConfig.ConsensusCallbacks, &vm.clock),
-		&vm.clock,
+		dummy.NewFakerWithClock(vm.extensionConfig.ConsensusCallbacks, vm.clock),
+		vm.clock,
 	)
 	if err != nil {
 		return err
@@ -573,8 +586,8 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		),
 	})
 
-	if vm.extensionConfig.SyncLeafType != nil {
-		leafConfigs = append(leafConfigs, vm.extensionConfig.SyncLeafType)
+	if vm.extensionConfig.ExtraSyncLeafConfig != nil {
+		leafConfigs = append(leafConfigs, vm.extensionConfig.ExtraSyncLeafConfig)
 	}
 
 	leafHandlers := make(LeafHandlers, len(leafConfigs))
@@ -889,7 +902,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
+	if err := blk.semanticVerify(predicateCtx, false /*=writes*/); err != nil {
 		return nil, fmt.Errorf("%w: %w", vmerrs.ErrBlockVerificationFailed, err)
 	}
 
@@ -1218,6 +1231,11 @@ func (vm *VM) NewVMBlock(ethBlock *types.Block) (extension.VMBlock, error) {
 	return blk, nil
 }
 
+// IsBootstrapped returns true if the VM has finished bootstrapping
+func (vm *VM) IsBootstrapped() bool {
+	return vm.bootstrapped.Get()
+}
+
 // CurrentRules returns the chain rules for the current block.
 func (vm *VM) CurrentRules() params.Rules {
 	header := vm.eth.BlockChain().CurrentHeader()
@@ -1228,8 +1246,8 @@ func (vm *VM) Ethereum() *eth.Ethereum {
 	return vm.eth
 }
 
-func (vm *VM) Config() *config.Config {
-	return &vm.config
+func (vm *VM) Config() config.Config {
+	return vm.config
 }
 
 func (vm *VM) MetricRegistry() *prometheus.Registry {

@@ -110,6 +110,12 @@ func (m *Mempool) Initialize(ctx *snow.Context, registerer prometheus.Registerer
 	return nil
 }
 
+// PendingLen returns the number of pending transactions in the mempool
+// it implements the BuilderMempool interface
+func (m *Mempool) PendingLen() int {
+	return m.Len()
+}
+
 // Len returns the number of transactions in the mempool
 func (m *Mempool) Len() int {
 	m.lock.RLock()

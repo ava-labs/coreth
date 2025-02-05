@@ -72,9 +72,13 @@ func (b *Block) Accept(context.Context) error {
 		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
 	}
 
-	// Apply any changes atomically with other pending changes to
-	// the vm's versionDB.
-	return b.blockManager.blockExtension.Accept(b, vdbBatch)
+	if b.blockManager.blockExtension != nil {
+		// Apply any changes atomically with other pending changes to
+		// the vm's versionDB.
+		return b.blockManager.blockExtension.OnAccept(b, vdbBatch)
+	}
+
+	return vdbBatch.Write()
 }
 
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
@@ -122,7 +126,10 @@ func (b *Block) Reject(context.Context) error {
 		return fmt.Errorf("chain could not reject %s: %w", b.ID(), err)
 	}
 
-	return b.blockManager.blockExtension.Reject(b)
+	if b.blockManager.blockExtension != nil {
+		return b.blockManager.blockExtension.OnReject(b)
+	}
+	return nil
 }
 
 // Parent implements the snowman.Block interface
@@ -160,7 +167,7 @@ func (b *Block) syntacticVerify() error {
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
-	return b.verify(&precompileconfig.PredicateContext{
+	return b.semanticVerify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.blockManager.vm.ctx,
 		ProposerVMBlockCtx: nil,
 	}, true)
@@ -191,7 +198,7 @@ func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
 
 // VerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
-	return b.verify(&precompileconfig.PredicateContext{
+	return b.semanticVerify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.blockManager.vm.ctx,
 		ProposerVMBlockCtx: proposerVMBlockCtx,
 	}, true)
@@ -200,7 +207,7 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Verify the block is valid.
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
-func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
+func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
 	vm := b.blockManager.vm
 	if predicateContext.ProposerVMBlockCtx != nil {
 		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
@@ -221,6 +228,12 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		}
 	}
 
+	if b.blockManager.blockExtension != nil {
+		if err := b.blockManager.blockExtension.SemanticVerify(b); err != nil {
+			return fmt.Errorf("failed to verify block extension: %w", err)
+		}
+	}
+
 	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
 	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
 	// Additionally, if a block is already in processing, then it has already passed verification and
@@ -231,8 +244,8 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 	}
 
 	err := vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if err != nil || !writes {
-		b.blockManager.blockExtension.Cleanup(b)
+	if b.blockManager.blockExtension != nil && (err != nil || !writes) {
+		b.blockManager.blockExtension.OnCleanup(b)
 	}
 	return err
 }

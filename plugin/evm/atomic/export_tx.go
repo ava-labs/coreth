@@ -37,7 +37,6 @@ var (
 	errOverflowExport                                  = errors.New("overflow when computing export amount + txFee")
 	errInsufficientFunds                               = errors.New("insufficient funds")
 	errInvalidNonce                                    = errors.New("invalid nonce")
-	errAssetIDMismatch                                 = errors.New("asset IDs in the input don't match the utxo")
 )
 
 // UnsignedExportTx is an unsigned ExportTx

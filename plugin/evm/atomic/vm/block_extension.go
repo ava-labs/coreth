@@ -134,15 +134,18 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 		}
 	}
 
-	// if bootstrapped, verify UTXOs named in atomic txs are present in shared memory
-	if be.vm.bootstrapped.Get() {
-		return be.verifyUTXOsPresent(b, atomicTxs)
-	}
-
 	return nil
 }
 
-func (be *blockExtension) Accept(b extension.VMBlock, acceptedBatch database.Batch) error {
+func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
+	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
+	if err != nil {
+		return err
+	}
+	return be.verifyUTXOsPresent(b, atomicTxs)
+}
+
+func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.Batch) error {
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
 		return err
@@ -163,7 +166,7 @@ func (be *blockExtension) Accept(b extension.VMBlock, acceptedBatch database.Bat
 	return atomicState.Accept(acceptedBatch)
 }
 
-func (be *blockExtension) Reject(b extension.VMBlock) error {
+func (be *blockExtension) OnReject(b extension.VMBlock) error {
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
 		return err
@@ -183,7 +186,7 @@ func (be *blockExtension) Reject(b extension.VMBlock) error {
 	return atomicState.Reject()
 }
 
-func (be *blockExtension) Cleanup(b extension.VMBlock) {
+func (be *blockExtension) OnCleanup(b extension.VMBlock) {
 	if atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(b.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
