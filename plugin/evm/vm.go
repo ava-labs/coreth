@@ -144,8 +144,6 @@ var (
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
-	errEthAlreadyInitialized         = errors.New("ethereum already initialized")
-	errConsensusCallbacksAlreadySet  = errors.New("consensus callbacks already set")
 	errVMAlreadyInitialized          = errors.New("vm already initialized")
 	errExtensionConfigAlreadySet     = errors.New("extension config already set")
 )
