@@ -612,7 +612,7 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 		wantLastCommittedRoot   common.Hash
 		wantLastAcceptedRoot    common.Hash
 		wantTipBufferRoot       common.Hash
-		wantMetadataDBKVs       map[string]string
+		wantMetadataDBKVs       map[string]string // hex to hex
 	}{
 		"no_committing": {
 			lastAcceptedRoot:        types.EmptyRootHash,
@@ -751,15 +751,13 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 			_, storageSize, _ := atomicTrie.trieDB.Size()
 			assert.Zerof(t, storageSize, "storage size should be zero after accepting the trie due to the dirty nodes derefencing but is %s", storageSize)
 
-			keyValuePairs := make(map[string]string, len(testCase.wantMetadataDBKVs))
-			it := metadataDB.NewIterator()
-			for it.Next() {
-				keyValuePairs[hex.EncodeToString(it.Key())] = hex.EncodeToString(it.Value())
+			for wantKeyHex, wantValueHex := range testCase.wantMetadataDBKVs {
+				wantKey, err := hex.DecodeString(wantKeyHex)
+				require.NoError(t, err)
+				value, err := metadataDB.Get(wantKey)
+				assert.NoErrorf(t, err, "getting key %s from metadata database", wantKeyHex)
+				assert.Equalf(t, wantValueHex, hex.EncodeToString(value), "value for key %s", wantKeyHex)
 			}
-			err = it.Error()
-			assert.NoError(t, err)
-			it.Release()
-			assert.Equal(t, testCase.wantMetadataDBKVs, keyValuePairs)
 		})
 	}
 }
