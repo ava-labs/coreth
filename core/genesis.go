@@ -258,11 +258,6 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
-		if account.MCBalance != nil {
-			for coinID, value := range account.MCBalance {
-				statedb.AddBalanceMultiCoin(addr, coinID, value)
-			}
-		}
 	}
 	root := statedb.IntermediateRoot(false)
 	head.Root = root

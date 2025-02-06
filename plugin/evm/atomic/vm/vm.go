@@ -289,6 +289,11 @@ func (vm *VM) onNormalOperationsStarted() error {
 		}
 	}
 
+	var p2pValidators p2p.ValidatorSet = &gossip.ValidatorSet{}
+	if vm.Config().PullGossipFrequency.Duration > 0 {
+		p2pValidators = vm.Validators()
+	}
+
 	if vm.atomicTxGossipHandler == nil {
 		vm.atomicTxGossipHandler = gossip.NewTxGossipHandler[*atomic.GossipAtomicTx](
 			vm.ctx.Log,
@@ -298,7 +303,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 			config.TxGossipTargetMessageSize,
 			config.TxGossipThrottlingPeriod,
 			config.TxGossipThrottlingLimit,
-			innerVM.Validators(),
+			p2pValidators,
 		)
 	}
 
@@ -323,15 +328,20 @@ func (vm *VM) onNormalOperationsStarted() error {
 		}
 	}
 
-	vm.shutdownWg.Add(2)
-	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, innerVM.Config().PushGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, innerVM.Config().PullGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
+	if innerVM.Config().PushGossipFrequency.Duration > 0 {
+		vm.shutdownWg.Add(1)
+		go func() {
+			avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, innerVM.Config().PushGossipFrequency.Duration)
+			vm.shutdownWg.Done()
+		}()
+	}
+	if innerVM.Config().PullGossipFrequency.Duration > 0 {
+		vm.shutdownWg.Add(1)
+		go func() {
+			avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, innerVM.Config().PullGossipFrequency.Duration)
+			vm.shutdownWg.Done()
+		}()
+	}
 	return nil
 }
 

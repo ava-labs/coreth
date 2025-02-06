@@ -141,13 +141,13 @@ func (utx *UnsignedImportTx) GasUsed(fixedFee bool) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		cost, err = math.Add64(cost, inCost)
+		cost, err = math.Add(cost, inCost)
 		if err != nil {
 			return 0, err
 		}
 	}
 	if fixedFee {
-		cost, err = math.Add64(cost, params.AtomicTxBaseCost)
+		cost, err = math.Add(cost, params.AtomicTxBaseCost)
 		if err != nil {
 			return 0, err
 		}
@@ -164,7 +164,7 @@ func (utx *UnsignedImportTx) Burned(assetID ids.ID) (uint64, error) {
 	)
 	for _, out := range utx.Outs {
 		if out.AssetID == assetID {
-			spent, err = math.Add64(spent, out.Amount)
+			spent, err = math.Add(spent, out.Amount)
 			if err != nil {
 				return 0, err
 			}
@@ -172,7 +172,7 @@ func (utx *UnsignedImportTx) Burned(assetID ids.ID) (uint64, error) {
 	}
 	for _, in := range utx.ImportedInputs {
 		if in.AssetID() == assetID {
-			input, err = math.Add64(input, in.Input().Amount())
+			input, err = math.Add(input, in.Input().Amount())
 			if err != nil {
 				return 0, err
 			}
@@ -221,7 +221,7 @@ func NewImportTx(
 			continue
 		}
 		aid := utxo.AssetID()
-		importedAmount[aid], err = math.Add64(importedAmount[aid], input.Amount())
+		importedAmount[aid], err = math.Add(importedAmount[aid], input.Amount())
 		if err != nil {
 			return nil, err
 		}

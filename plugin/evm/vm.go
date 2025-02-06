@@ -790,6 +790,11 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder = vm.NewBlockBuilder(vm.toEngine, vm.extensionConfig.ExtraMempool)
 	vm.builder.awaitSubmittedTxs()
 
+	var p2pValidators p2p.ValidatorSet = &gossip.ValidatorSet{}
+	if vm.config.PullGossipFrequency.Duration > 0 {
+		p2pValidators = vm.p2pValidators
+	}
+
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
 			vm.ctx.Log,
@@ -799,7 +804,7 @@ func (vm *VM) initBlockBuilding() error {
 			config.TxGossipTargetMessageSize,
 			config.TxGossipThrottlingPeriod,
 			config.TxGossipThrottlingLimit,
-			vm.p2pValidators,
+			p2pValidators,
 		)
 	}
 
@@ -822,6 +827,21 @@ func (vm *VM) initBlockBuilding() error {
 			NodeID:     vm.ctx.NodeID,
 			Validators: vm.p2pValidators,
 		}
+	}
+
+	if vm.config.PushGossipFrequency.Duration > 0 {
+		vm.shutdownWg.Add(1)
+		go func() {
+			avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
+			vm.shutdownWg.Done()
+		}()
+	}
+	if vm.config.PullGossipFrequency.Duration > 0 {
+		vm.shutdownWg.Add(1)
+		go func() {
+			avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+			vm.shutdownWg.Done()
+		}()
 	}
 
 	vm.shutdownWg.Add(2)

@@ -64,11 +64,9 @@ type DumpAccount struct {
 	Root        hexutil.Bytes          `json:"root"`
 	CodeHash    hexutil.Bytes          `json:"codeHash"`
 	Code        hexutil.Bytes          `json:"code,omitempty"`
-	IsMultiCoin bool                   `json:"isMultiCoin"`
 	Storage     map[common.Hash]string `json:"storage,omitempty"`
 	Address     *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
 	AddressHash hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
-
 }
 
 // Dump represents the full dump in a collected format, as one large map.
@@ -107,7 +105,6 @@ func (d iterativeDump) OnAccount(addr *common.Address, account DumpAccount) {
 		Nonce:       account.Nonce,
 		Root:        account.Root,
 		CodeHash:    account.CodeHash,
-		IsMultiCoin: account.IsMultiCoin,
 		Code:        account.Code,
 		Storage:     account.Storage,
 		AddressHash: account.AddressHash,
@@ -156,7 +153,6 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				Nonce:       data.Nonce,
 				Root:        data.Root[:],
 				CodeHash:    data.CodeHash,
-				IsMultiCoin: data.IsMultiCoin,
 				AddressHash: it.Key,
 			}
 			address   *common.Address
