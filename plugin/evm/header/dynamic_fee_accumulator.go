@@ -42,6 +42,8 @@ type DynamicFeeAccumulator struct {
 
 func ParseDynamicFeeAccumulator(
 	limit uint64,
+	gasUsed uint64,
+	extraGasUsed *big.Int,
 	bytes []byte,
 ) (DynamicFeeAccumulator, error) {
 	if len(bytes) < ErrDynamicFeeAccumulatorSize {
@@ -52,9 +54,20 @@ func ParseDynamicFeeAccumulator(
 		)
 	}
 
+	capacity, err := safemath.Sub(limit, gasUsed)
+	if err != nil {
+		return DynamicFeeAccumulator{}, err
+	}
+	if extraGasUsed != nil {
+		capacity, err = safemath.Sub(capacity, extraGasUsed.Uint64())
+		if err != nil {
+			return DynamicFeeAccumulator{}, err
+		}
+	}
+
 	return DynamicFeeAccumulator{
 		GasState: gas.State{
-			Capacity: gas.Gas(limit),
+			Capacity: gas.Gas(capacity),
 			Excess:   gas.Gas(binary.BigEndian.Uint64(bytes)),
 		},
 		TargetExcess: gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),

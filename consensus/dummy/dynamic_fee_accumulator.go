@@ -29,7 +29,12 @@ func CalcACP176GasState(
 		// If the parent block was running with ACP-176, we start with the
 		// parent's fee state.
 		var err error
-		gasAccumulator, err = header.ParseDynamicFeeAccumulator(parent.GasLimit, parent.Extra)
+		gasAccumulator, err = header.ParseDynamicFeeAccumulator(
+			parent.GasLimit,
+			parent.GasUsed,
+			parent.ExtDataGasUsed,
+			parent.Extra,
+		)
 		if err != nil {
 			return header.DynamicFeeAccumulator{}, err
 		}
