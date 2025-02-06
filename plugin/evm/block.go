@@ -383,12 +383,12 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 	}
 
 	extraData := b.ethBlock.Extra()
-	extra, err := header.ParseExtra(rules.AvalancheRules, extraData)
+	predicates, err := header.ParsePredicates(rules.AvalancheRules, extraData)
 	if err != nil {
 		return fmt.Errorf("failed to parse header.Extra: %w", err)
 	}
-	if !bytes.Equal(extra.Predicates, predicateResultsBytes) {
-		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, extra.Predicates, predicateResultsBytes)
+	if !bytes.Equal(predicates, predicateResultsBytes) {
+		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, predicates, predicateResultsBytes)
 	}
 	return nil
 }

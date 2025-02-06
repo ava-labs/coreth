@@ -648,9 +648,9 @@ func testReceiveWarpMessage(
 	// Require the block was built with a successful predicate result
 	ethBlock := block2.(*chain.BlockWrapper).Block.(*Block).ethBlock
 
-	extra, err := header.ParseExtra(vm.chainConfig.GetAvalancheRules(ethBlock.Time()), ethBlock.Extra())
+	predicates, err := header.ParsePredicates(vm.chainConfig.GetAvalancheRules(ethBlock.Time()), ethBlock.Extra())
 	require.NoError(err)
-	results, err := predicate.ParseResults(extra.Predicates)
+	results, err := predicate.ParseResults(predicates)
 	require.NoError(err)
 
 	// Predicate results encode the index of invalid warp messages in a bitset.

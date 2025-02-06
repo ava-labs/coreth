@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ErrDynamicFeeAccumulatorSize = wrappers.LongLen * 3
+	ErrDynamicFeeAccumulatorSize = wrappers.LongLen * 2
 
 	FUpgradeMinTargetPerSecond          = 1_000_000
 	FUpgradeTimeToFillCapacity          = 10      // in seconds
@@ -40,7 +40,10 @@ type DynamicFeeAccumulator struct {
 	TargetExcess gas.Gas
 }
 
-func ParseDynamicFeeAccumulator(bytes []byte) (DynamicFeeAccumulator, error) {
+func ParseDynamicFeeAccumulator(
+	limit uint64,
+	bytes []byte,
+) (DynamicFeeAccumulator, error) {
 	if len(bytes) < ErrDynamicFeeAccumulatorSize {
 		return DynamicFeeAccumulator{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
 			ErrDynamicFeeAccumulatorInsufficientLength,
@@ -51,10 +54,10 @@ func ParseDynamicFeeAccumulator(bytes []byte) (DynamicFeeAccumulator, error) {
 
 	return DynamicFeeAccumulator{
 		GasState: gas.State{
-			Capacity: gas.Gas(binary.BigEndian.Uint64(bytes)),
-			Excess:   gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),
+			Capacity: gas.Gas(limit),
+			Excess:   gas.Gas(binary.BigEndian.Uint64(bytes)),
 		},
-		TargetExcess: gas.Gas(binary.BigEndian.Uint64(bytes[2*wrappers.LongLen:])),
+		TargetExcess: gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),
 	}, nil
 }
 
@@ -173,9 +176,8 @@ func modifyExcess(
 
 func (d *DynamicFeeAccumulator) Bytes() []byte {
 	bytes := make([]byte, ErrDynamicFeeAccumulatorSize)
-	binary.BigEndian.PutUint64(bytes, uint64(d.GasState.Capacity))
-	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(d.GasState.Excess))
-	binary.BigEndian.PutUint64(bytes[2*wrappers.LongLen:], uint64(d.TargetExcess))
+	binary.BigEndian.PutUint64(bytes, uint64(d.GasState.Excess))
+	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(d.TargetExcess))
 	return bytes
 }
 

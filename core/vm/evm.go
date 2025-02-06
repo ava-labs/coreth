@@ -228,20 +228,20 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		return evm
 	}
 
-	extra, err := header.ParseExtra(evm.chainRules.AvalancheRules, blockCtx.Extra)
+	predicates, err := header.ParsePredicates(evm.chainRules.AvalancheRules, blockCtx.Extra)
 	if err != nil {
 		log.Error("Unexpected error parsing header.Extra",
 			"err", err,
 		)
 		return evm
 	}
-	if len(extra.Predicates) == 0 {
+	if len(predicates) == 0 {
 		return evm
 	}
 
 	// The VM has already verified the correctness of the results during header
 	// validation.
-	results, err := predicate.ParseResults(extra.Predicates)
+	results, err := predicate.ParseResults(predicates)
 	if err != nil {
 		log.Error("Unexpected error parsing predicate results",
 			"err", err,

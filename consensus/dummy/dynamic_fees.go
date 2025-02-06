@@ -152,13 +152,7 @@ func VerifyHeaderGasFields(
 
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := CalcACP176GasState(config, parent, header.Time)
-		if err != nil {
-			return err
-		}
-		if header.GasLimit != uint64(gasState.GasState.Capacity) {
-			return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit, gasState.GasState.Capacity)
-		}
+		// Checked below with the rest of the gas state
 	case config.IsCortina(header.Time):
 		if header.GasLimit != params.CortinaGasLimit {
 			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", params.CortinaGasLimit, header.GasLimit)
@@ -178,7 +172,7 @@ func VerifyHeaderGasFields(
 
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := customheader.ParseDynamicFeeAccumulator(header.Extra)
+		gasState, err := customheader.ParseDynamicFeeAccumulator(header.GasLimit, header.Extra)
 		if err != nil {
 			return err
 		}
