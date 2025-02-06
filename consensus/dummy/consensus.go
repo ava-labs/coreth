@@ -331,7 +331,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	uncles []*types.Header, receipts []*types.Receipt,
 ) (*types.Block, error) {
 	config := chain.Config()
-	extraPrefix, err := CalcHeaderExtra(config, parent, header.Time)
+	extraPrefix, err := CalcHeaderExtraPrefix(config, parent, header, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	}

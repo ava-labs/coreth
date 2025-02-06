@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 
@@ -25,7 +26,7 @@ func BigEqual(a, b *big.Int) bool {
 func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp uint64) (uint64, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, _, err := CalcACP176GasState(config, parent, timestamp)
+		gasState, err := CalcACP176GasState(config, parent, timestamp)
 		if err != nil {
 			return 0, err
 		}
@@ -89,11 +90,11 @@ func calcGasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint6
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, targetPerSecond, err := CalcACP176GasState(config, parent, timestamp)
+		gasState, err := CalcACP176GasState(config, parent, timestamp)
 		if err != nil {
 			return nil, err
 		}
-		return CalcACP176BaseFee(gasState.GasState.Excess, targetPerSecond), nil
+		return gasState.BaseFee(), nil
 	case config.IsApricotPhase3(timestamp):
 		feeWindow, err := CalcFeeWindow(config, parent, timestamp)
 		if err != nil {
@@ -105,20 +106,27 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	}
 }
 
-func CalcHeaderExtra(
+func CalcHeaderExtraPrefix(
 	config *params.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	header *types.Header,
+	desiredTargetExcess gas.Gas,
 ) ([]byte, error) {
 	switch {
-	case config.IsFUpgrade(timestamp):
-		gasState, _, err := CalcACP176GasState(config, parent, timestamp)
+	case config.IsFUpgrade(header.Time):
+		// Calculate the gas state for the start of the block
+		gasState, err := CalcACP176GasState(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
+		if err := gasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
+			return nil, err
+		}
+		gasState.UpdateTargetExcess(desiredTargetExcess)
+
 		return gasState.Bytes(), nil
-	case config.IsApricotPhase3(timestamp):
-		feeWindow, err := CalcFeeWindow(config, parent, timestamp)
+	case config.IsApricotPhase3(header.Time):
+		feeWindow, err := CalcFeeWindow(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +152,7 @@ func VerifyHeaderGasFields(
 
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, _, err := CalcACP176GasState(config, parent, header.Time)
+		gasState, err := CalcACP176GasState(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
@@ -170,21 +178,23 @@ func VerifyHeaderGasFields(
 
 	switch {
 	case config.IsFUpgrade(header.Time):
-		expectedGasState, _, err := CalcACP176GasState(config, parent, header.Time)
-		if err != nil {
-			return err
-		}
 		gasState, err := customheader.ParseDynamicFeeAccumulator(header.Extra)
 		if err != nil {
 			return err
 		}
-		if gasState.GasState != expectedGasState.GasState {
-			return fmt.Errorf("invalid gas state: have %v, want %v", gasState.GasState, expectedGasState.GasState)
-		}
 
-		targetDiff := math.AbsDiff(gasState.TargetExcess, expectedGasState.TargetExcess)
-		if targetDiff > FUpgradeMaxTargetDiff {
-			return fmt.Errorf("invalid target excess: have %d, want %d += %d", gasState.TargetExcess, expectedGasState.TargetExcess, FUpgradeMaxTargetDiff)
+		// Calculate the gas state for the start of the block
+		expectedGasState, err := CalcACP176GasState(config, parent, header.Time)
+		if err != nil {
+			return err
+		}
+		if err := expectedGasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
+			return err
+		}
+		expectedGasState.UpdateTargetExcess(gasState.TargetExcess)
+
+		if gasState != expectedGasState {
+			return fmt.Errorf("invalid gas state: have %v, want %v", gasState.GasState, expectedGasState.GasState)
 		}
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := CalcFeeWindow(config, parent, header.Time)
