@@ -40,9 +40,9 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
+	"github.com/ava-labs/coreth/plugin/evm/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
-	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -668,7 +668,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 			callbacks,
 			dummy.Mode{},
 			&vm.clock,
-			header.DesiredTargetExcess(1_500_000),
+			acp176.DesiredTargetExcess(1_500_000),
 		),
 		&vm.clock,
 	)

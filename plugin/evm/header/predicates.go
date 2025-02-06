@@ -22,7 +22,7 @@ func ParsePredicates(rules params.AvalancheRules, extra []byte) ([]byte, error) 
 		offset = DynamicFeeWindowSize
 	}
 	if rules.IsFUpgrade {
-		offset = ErrDynamicFeeAccumulatorSize
+		offset = DynamicFeeAccumulatorSize
 	}
 	if rules.IsDurango {
 		return extra[offset:], nil
@@ -36,11 +36,11 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsFUpgrade:
-		if extraLen < ErrDynamicFeeAccumulatorSize {
+		if extraLen < DynamicFeeAccumulatorSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				ErrInvalidExtraLength,
-				ErrDynamicFeeAccumulatorSize,
+				DynamicFeeAccumulatorSize,
 				extraLen,
 			)
 		}

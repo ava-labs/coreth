@@ -30,7 +30,7 @@ func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp ui
 		if err != nil {
 			return 0, err
 		}
-		return uint64(gasState.GasState.Capacity), nil
+		return uint64(gasState.Gas.Capacity), nil
 	case config.IsCortina(timestamp):
 		return params.CortinaGasLimit, nil
 	case config.IsApricotPhase1(timestamp):
@@ -124,7 +124,7 @@ func CalcHeaderExtraPrefix(
 		}
 		gasState.UpdateTargetExcess(desiredTargetExcess)
 
-		return gasState.Bytes(), nil
+		return customheader.DynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := CalcFeeWindow(config, parent, header.Time)
 		if err != nil {
@@ -156,8 +156,8 @@ func VerifyHeaderGasFields(
 		if err != nil {
 			return err
 		}
-		if header.GasLimit != uint64(gasState.GasState.Capacity) {
-			return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit, gasState.GasState.Capacity)
+		if header.GasLimit != uint64(gasState.Gas.Capacity) {
+			return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit, gasState.Gas.Capacity)
 		}
 	case config.IsCortina(header.Time):
 		if header.GasLimit != params.CortinaGasLimit {
@@ -198,8 +198,8 @@ func VerifyHeaderGasFields(
 		}
 		expectedGasState.UpdateTargetExcess(gasState.TargetExcess)
 
-		if gasState.GasState.Excess != expectedGasState.GasState.Excess {
-			return fmt.Errorf("invalid gas state excess: have %v, want %v", gasState.GasState.Excess, expectedGasState.GasState.Excess)
+		if gasState.Gas.Excess != expectedGasState.Gas.Excess {
+			return fmt.Errorf("invalid gas state excess: have %v, want %v", gasState.Gas.Excess, expectedGasState.Gas.Excess)
 		}
 		if gasState.TargetExcess != expectedGasState.TargetExcess {
 			return fmt.Errorf("invalid gas state target excess: have %v, want %v", gasState.TargetExcess, expectedGasState.TargetExcess)
