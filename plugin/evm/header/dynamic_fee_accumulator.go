@@ -150,7 +150,7 @@ func targetExcess(excess, desired gas.Gas) gas.Gas {
 	return excess - change
 }
 
-// Returns excess * newTargetPerSecond / previousTargetPerSecond
+// Returns x * T_{n+1} / T_n
 //
 // DO NOT MERGE: The spec should be updated to use target rather than K because
 // K is always a multiple of FUpgradeTargetToPriceUpdateFraction
@@ -177,4 +177,9 @@ func (d *DynamicFeeAccumulator) Bytes() []byte {
 	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(d.GasState.Excess))
 	binary.BigEndian.PutUint64(bytes[2*wrappers.LongLen:], uint64(d.TargetExcess))
 	return bytes
+}
+
+// returns D * ln(desiredTarget / P)
+func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
+	return gas.Gas(FUpgradeTargetConversionFraction * math.Log(float64(desiredTarget)/FUpgradeMinTargetPerSecond))
 }

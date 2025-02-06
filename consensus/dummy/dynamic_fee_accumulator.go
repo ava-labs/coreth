@@ -12,17 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const (
-	FUpgradeMinTargetPerSecond          = 1_000_000
-	FUpgradeTimeToFillCapacity          = 10      // in seconds
-	FUpgradeTargetToPriceUpdateFraction = 43      // 43 ~= 30 * ln(2) which makes the price double at most every ~30 seconds
-	FUpgradeMaxTargetRate               = 1024    // Controls the rate that the target can change per block.
-	FUpgradeMaxTargetDiff               = 1 << 15 // Provides the block builder flexibility when changing the target
-	FUpgradeTargetConversionFraction    = FUpgradeMaxTargetRate * FUpgradeMaxTargetDiff
-)
-
-var fUpgradeMinBaseFee = common.Big1
-
 func CalcACP176GasState(
 	config *params.ChainConfig,
 	parent *types.Header,

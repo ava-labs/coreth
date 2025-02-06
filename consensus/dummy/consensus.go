@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
@@ -48,11 +49,26 @@ type (
 	}
 
 	DummyEngine struct {
-		cb            ConsensusCallbacks
-		clock         *mockable.Clock
-		consensusMode Mode
+		cb                  ConsensusCallbacks
+		clock               *mockable.Clock
+		consensusMode       Mode
+		desiredTargetExcess gas.Gas
 	}
 )
+
+func NewDummyEngine(
+	cb ConsensusCallbacks,
+	mode Mode,
+	clock *mockable.Clock,
+	desiredTargetExcess gas.Gas,
+) *DummyEngine {
+	return &DummyEngine{
+		cb:                  cb,
+		clock:               clock,
+		consensusMode:       mode,
+		desiredTargetExcess: desiredTargetExcess,
+	}
+}
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
@@ -330,16 +346,11 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt,
 ) (*types.Block, error) {
-	config := chain.Config()
-	extraPrefix, err := CalcHeaderExtraPrefix(config, parent, header, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
-	}
-	header.Extra = append(extraPrefix, header.Extra...)
-
 	var (
+		config                       = chain.Config()
 		contribution, extDataGasUsed *big.Int
 		extraData                    []byte
+		err                          error
 	)
 	if eng.cb.OnFinalizeAndAssemble != nil {
 		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, state, txs)
@@ -347,13 +358,13 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
-	if chain.Config().IsApricotPhase4(header.Time) {
+	if config.IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
 			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
 		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(header.Time) {
+		if config.IsApricotPhase5(header.Time) {
 			blockGasCostStep = ApricotPhase5BlockGasCostStep
 		}
 		// Calculate the required block gas cost for this block.
@@ -376,13 +387,21 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
+
+	// finalize the header.Extra
+	extraPrefix, err := CalcHeaderExtraPrefix(config, parent, header, eng.desiredTargetExcess)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
+	}
+	header.Extra = append(extraPrefix, header.Extra...)
+
 	// commit the final state root
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(config.IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlockWithExtData(
 		header, txs, uncles, receipts, trie.NewStackTrie(nil),
-		extraData, chain.Config().IsApricotPhase1(header.Time),
+		extraData, config.IsApricotPhase1(header.Time),
 	), nil
 }
 

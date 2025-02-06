@@ -42,6 +42,7 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -663,7 +664,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		vm.chaindb,
 		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
-		dummy.NewFakerWithClock(callbacks, &vm.clock),
+		dummy.NewDummyEngine(
+			callbacks,
+			dummy.Mode{},
+			&vm.clock,
+			header.DesiredTargetExcess(1_500_000),
+		),
 		&vm.clock,
 	)
 	if err != nil {
