@@ -116,7 +116,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
-	backend := &atomic.Backend{
+	backend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
