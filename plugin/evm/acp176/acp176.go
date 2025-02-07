@@ -60,10 +60,6 @@ func (s *State) MaxCapacity() gas.Gas {
 }
 
 // BaseFee returns the current required fee per gas.
-//
-// p = M * e ** (excess / (TargetToPriceUpdateConversion * target))
-// (TargetToPriceUpdateConversion * target) * ln(p/M) = excess
-// 2p = M * e ** ((excess + 1) / (TargetToPriceUpdateConversion * target))
 func (s *State) BaseFee() *big.Int {
 	target := s.Target()
 	priceUpdateConversion, err := safemath.Mul(TargetToPriceUpdateConversion, target)
