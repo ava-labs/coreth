@@ -126,7 +126,7 @@ func (s *State) UpdateTargetExcess(desiredTargetExcess gas.Gas) {
 	previousTargetPerSecond := s.Target()
 	s.TargetExcess = targetExcess(s.TargetExcess, desiredTargetExcess)
 	newTargetPerSecond := s.Target()
-	s.Gas.Excess = modifyExcess(
+	s.Gas.Excess = scaleExcess(
 		s.Gas.Excess,
 		newTargetPerSecond,
 		previousTargetPerSecond,
@@ -149,7 +149,8 @@ func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
-// Taylor expansion.
+// Taylor expansion:
+// e^x = 1 + x/1! + x^2/2! + x^3/3! + ...
 func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 	var (
 		output = new(big.Int)
@@ -176,9 +177,9 @@ func targetExcess(excess, desired gas.Gas) gas.Gas {
 	return excess - change
 }
 
-// modifyExcess scales the excess during gas target modifications to keep the
+// scaleExcess scales the excess during gas target modifications to keep the
 // price constant.
-func modifyExcess(
+func scaleExcess(
 	excess,
 	newTargetPerSecond,
 	previousTargetPerSecond gas.Gas,
