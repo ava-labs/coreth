@@ -110,7 +110,10 @@ func (s *State) ConsumeGas(
 	}
 	if extraGasUsed != nil {
 		if !extraGasUsed.IsUint64() {
-			return fmt.Errorf("%w: extraGasUsed (%d) exceeds MaxUint64", gas.ErrInsufficientCapacity, extraGasUsed)
+			return fmt.Errorf("%w: extraGasUsed (%d) exceeds MaxUint64",
+				gas.ErrInsufficientCapacity,
+				extraGasUsed,
+			)
 		}
 		s.Gas, err = s.Gas.ConsumeGas(gas.Gas(extraGasUsed.Uint64()))
 	}
