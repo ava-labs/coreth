@@ -128,16 +128,19 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to create codec manager: %w", err)
 	}
 
+	// Create the atomic extension structs
+	// some of them need to be initialized after the inner VM is initialized
 	blockExtension := newBlockExtension(extDataHashes, vm)
 	syncExtender := &atomicsync.AtomicSyncExtender{}
 	syncProvider := &atomicsync.AtomicSummaryProvider{}
+	// Create and pass the leaf handler to the atomic extension
+	// it will be initialized after the inner VM is initialized
 	leafHandler := NewAtomicLeafHandler()
 	atomicLeafTypeConfig := &extension.LeafRequestConfig{
 		LeafType:   atomicsync.AtomicTrieNode,
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
-
 	vm.mempool = &txpool.Mempool{}
 
 	extensionConfig := &extension.Config{
@@ -155,6 +158,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to set extension config: %w", err)
 	}
 
+	// Initialize inner vm with the provided parameters
 	if err := innerVM.Initialize(
 		ctx,
 		chainCtx,
@@ -169,6 +173,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize inner VM: %w", err)
 	}
 
+	// Now we can initialize the mempool and so
 	err = vm.mempool.Initialize(chainCtx, innerVM.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
@@ -217,11 +222,7 @@ func (vm *VM) Initialize(
 	// interface. The fx will register all of its types, which can be safely
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
-
-	if err := vm.fx.Initialize(vm); err != nil {
-		return err
-	}
-	return nil
+	return vm.fx.Initialize(vm)
 }
 
 func (vm *VM) SetState(ctx context.Context, state snow.State) error {
@@ -766,25 +767,6 @@ func (vm *VM) GetAtomicUTXOs(
 		startUTXOID,
 		limit,
 	)
-}
-
-func (vm *VM) newImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
-	keys []*secp256k1.PrivateKey, // Keys to import the funds
-) (*atomic.Tx, error) {
-	kc := secp256k1fx.NewKeychain()
-	for _, key := range keys {
-		kc.Add(key)
-	}
-
-	atomicUTXOs, _, _, err := vm.GetAtomicUTXOs(chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, -1)
-	if err != nil {
-		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
-	}
-
-	return atomic.NewImportTx(vm.ctx, vm.InnerVM.CurrentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 func (vm *VM) BuildBlock(ctx context.Context) (snowman.Block, error) {

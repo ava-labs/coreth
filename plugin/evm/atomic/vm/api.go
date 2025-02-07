@@ -67,7 +67,7 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 
 	addrSet := set.Set[ids.ShortID]{}
 	for _, addrStr := range args.Addresses {
-		addr, err := service.vm.ParseServiceAddress(addrStr)
+		addr, err := ParseServiceAddress(service.vm.ctx, addrStr)
 		if err != nil {
 			return fmt.Errorf("couldn't parse address %q: %w", addrStr, err)
 		}
@@ -77,7 +77,7 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 	startAddr := ids.ShortEmpty
 	startUTXO := ids.Empty
 	if args.StartIndex.Address != "" || args.StartIndex.UTXO != "" {
-		startAddr, err = service.vm.ParseServiceAddress(args.StartIndex.Address)
+		startAddr, err = ParseServiceAddress(service.vm.ctx, args.StartIndex.Address)
 		if err != nil {
 			return fmt.Errorf("couldn't parse start index address %q: %w", args.StartIndex.Address, err)
 		}
@@ -114,7 +114,7 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 		reply.UTXOs[i] = str
 	}
 
-	endAddress, err := service.vm.FormatLocalAddress(endAddr)
+	endAddress, err := FormatLocalAddress(service.vm.ctx, endAddr)
 	if err != nil {
 		return fmt.Errorf("problem formatting address: %w", err)
 	}

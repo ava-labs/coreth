@@ -2,6 +2,7 @@ package extension
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
@@ -24,6 +25,13 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/sync/handlers"
+)
+
+var (
+	errNilConfig              = errors.New("nil config")
+	errNilNetworkCodec        = errors.New("nil network codec")
+	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
+	errNilSyncableParser      = errors.New("nil syncable parser")
 )
 
 type ExtensibleVM interface {
@@ -125,7 +133,7 @@ type Config struct {
 	NetworkCodec codec.Manager
 	// ConsensusCallbacks is the consensus callbacks to use
 	// for the VM to be used in consensus engine.
-	// It's required and should be non-nil
+	// Callback functions can be nil.
 	ConsensusCallbacks dummy.ConsensusCallbacks
 	// SyncSummaryProvider is the sync summary provider to use
 	// for the VM to be used in syncer.
@@ -150,4 +158,20 @@ type Config struct {
 	// Clock is the clock to use for time related operations.
 	// It's optional and can be nil
 	Clock *mockable.Clock
+}
+
+func (c *Config) Validate() error {
+	if c == nil {
+		return errNilConfig
+	}
+	if c.NetworkCodec == nil {
+		return errNilNetworkCodec
+	}
+	if c.SyncSummaryProvider == nil {
+		return errNilSyncSummaryProvider
+	}
+	if c.SyncableParser == nil {
+		return errNilSyncableParser
+	}
+	return nil
 }

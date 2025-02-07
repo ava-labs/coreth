@@ -34,6 +34,7 @@ type blockExtension struct {
 	vm            *VM
 }
 
+// newBlockExtension returns a new block extension.
 func newBlockExtension(
 	extDataHashes map[common.Hash]common.Hash,
 	vm *VM,
@@ -46,8 +47,11 @@ func newBlockExtension(
 	}
 }
 
+// SyntacticVerify checks the syntactic validity of the block. This is called the wrapper
+// block manager's SyntacticVerify method.
 func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rules) error {
 	ethBlock := b.GetEthBlock()
+	// should not happen
 	if ethBlock == nil {
 		return errNilEthBlock
 	}
@@ -137,6 +141,8 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 	return nil
 }
 
+// SemanticVerify checks the semantic validity of the block. This is called the wrapper
+// block manager's SemanticVerify method.
 func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
@@ -145,6 +151,10 @@ func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
 	return be.verifyUTXOsPresent(b, atomicTxs)
 }
 
+// OnAccept is called when the block is accepted. This is called the wrapper
+// block manager's OnAccept method. The acceptedBatch contains the changes that
+// were made to the database as a result of accepting the block, and it's flushed
+// to the database in this method.
 func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.Batch) error {
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
@@ -166,6 +176,8 @@ func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.B
 	return atomicState.Accept(acceptedBatch)
 }
 
+// OnReject is called when the block is rejected. This is called the wrapper
+// block manager's OnReject method.
 func (be *blockExtension) OnReject(b extension.VMBlock) error {
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
@@ -186,6 +198,8 @@ func (be *blockExtension) OnReject(b extension.VMBlock) error {
 	return atomicState.Reject()
 }
 
+// OnCleanup is called when the block is cleaned up. This is called the wrapper
+// block manager's OnCleanup method.
 func (be *blockExtension) OnCleanup(b extension.VMBlock) {
 	if atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(b.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
@@ -215,6 +229,7 @@ func (be *blockExtension) verifyUTXOsPresent(b extension.VMBlock, atomicTxs []*a
 	return nil
 }
 
+// extractAtomicTxsFromBlock extracts atomic transactions from the block's extra data.
 func extractAtomicTxsFromBlock(b extension.VMBlock, chainConfig *params.ChainConfig) ([]*atomic.Tx, error) {
 	ethBlock := b.GetEthBlock()
 	if ethBlock == nil {

@@ -228,10 +228,8 @@ func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateConte
 		}
 	}
 
-	if b.blockManager.blockExtension != nil {
-		if err := b.blockManager.blockExtension.SemanticVerify(b); err != nil {
-			return fmt.Errorf("failed to verify block extension: %w", err)
-		}
+	if err := b.blockManager.SemanticVerify(b); err != nil {
+		return fmt.Errorf("failed to verify block extension: %w", err)
 	}
 
 	// The engine may call VerifyWithContext multiple times on the same block with different contexts.

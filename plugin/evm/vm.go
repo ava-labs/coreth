@@ -287,7 +287,7 @@ func (vm *VM) Initialize(
 	fxs []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
-	if vm.extensionConfig == nil {
+	if vm.extensionConfig.Validate() == nil {
 		return errors.New("extension config not set")
 	}
 

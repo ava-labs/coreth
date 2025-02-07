@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -43,6 +44,25 @@ import (
 
 func newAtomicTestVM() *VM {
 	return WrapVM(&evm.VM{})
+}
+
+func (vm *VM) newImportTx(
+	chainID ids.ID, // chain to import from
+	to common.Address, // Address of recipient
+	baseFee *big.Int, // fee to use post-AP3
+	keys []*secp256k1.PrivateKey, // Keys to import the funds
+) (*atomic.Tx, error) {
+	kc := secp256k1fx.NewKeychain()
+	for _, key := range keys {
+		kc.Add(key)
+	}
+
+	atomicUTXOs, _, _, err := vm.GetAtomicUTXOs(chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, -1)
+	if err != nil {
+		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
+	}
+
+	return atomic.NewImportTx(vm.ctx, vm.InnerVM.CurrentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 func GenesisAtomicVM(t *testing.T,
