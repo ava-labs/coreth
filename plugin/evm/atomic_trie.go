@@ -339,7 +339,8 @@ func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 
 // AcceptTrie commits the triedb at [root] if needed and returns true if a commit
 // was performed.
-func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (hasCommitted bool, err error) {
+func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
+	hasCommitted := false
 	// Because we do not accept the trie at every height, we may need to
 	// populate roots at prior commit heights that were skipped.
 	for nextCommitHeight := a.lastCommittedHeight + a.commitInterval; nextCommitHeight < height; nextCommitHeight += a.commitInterval {
