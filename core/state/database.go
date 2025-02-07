@@ -171,6 +171,10 @@ func (db *cachingDB) ContractCode(address common.Address, codeHash common.Hash) 
 	return nil, errors.New("not found")
 }
 
+func (db *cachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) ([]byte, error) {
+	return db.ContractCode(address, codeHash)
+}
+
 // ContractCodeSize retrieves a particular contracts code's size.
 func (db *cachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
