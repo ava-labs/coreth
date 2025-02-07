@@ -349,14 +349,6 @@ func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (hasCommitted b
 		hasCommitted = true
 	}
 
-	// The following dereferences, if any, the previously inserted root.
-	// This one can be dereferenced whether it has been:
-	// - committed, in which case the dereference is a no-op
-	// - not committted, in which case the current root we are inserting contains
-	//   references all the relevant data from the previous root, so the previous
-	//   root can be dereferenced.
-	a.trieDB.Dereference(a.lastAcceptedRoot)
-
 	// Commit this root if we have reached the [commitInterval].
 	if height%a.commitInterval == 0 {
 		if err := a.commit(height, root); err != nil {
@@ -365,6 +357,13 @@ func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (hasCommitted b
 		hasCommitted = true
 	}
 
+	// The following dereferences, if any, the previously inserted root.
+	// This one can be dereferenced whether it has been:
+	// - committed, in which case the dereference is a no-op
+	// - not committted, in which case the current root we are inserting contains
+	//   references to all the relevant data from the previous root, so the previous
+	//   root can be dereferenced.
+	a.trieDB.Dereference(a.lastAcceptedRoot)
 	a.lastAcceptedRoot = root
 	return hasCommitted, nil
 }
