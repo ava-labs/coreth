@@ -95,7 +95,10 @@ func TestAtomicSyncerVM(t *testing.T) {
 				}
 				if isServer {
 					serverAtomicTrie := atomicVM.atomicBackend.AtomicTrie()
-					require.NoError(t, serverAtomicTrie.Commit(params.SyncableInterval, serverAtomicTrie.LastAcceptedRoot()))
+					// Calling AcceptTrie with SyncableInterval creates a commit for the atomic trie
+					committed, err := serverAtomicTrie.AcceptTrie(params.SyncableInterval, serverAtomicTrie.LastAcceptedRoot())
+					require.NoError(t, err)
+					require.True(t, committed)
 					require.NoError(t, atomicVM.VersionDB().Commit())
 				}
 			}
