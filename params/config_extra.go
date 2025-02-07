@@ -178,8 +178,9 @@ func (c *ChainConfig) ToWithUpgradesJSON() *ChainConfigWithUpgradesJSON {
 	}
 }
 
-func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
+func GetTestChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
 	c := &ChainConfig{
+		AvalancheContext:    AvalancheContext{utils.TestSnowContext()},
 		ChainID:             chainID,
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        big.NewInt(0),
@@ -192,8 +193,9 @@ func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    big.NewInt(0),
-		NetworkUpgrades:     getNetworkUpgrades(agoUpgrade),
+		NetworkUpgrades:     GetNetworkUpgrades(agoUpgrade),
 	}
+	c.SetEthUpgrades()
 	return c
 }
 
