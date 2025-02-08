@@ -586,6 +586,8 @@ func (m *Mempool) addPending() {
 	}
 }
 
+// SubscribePendingTxs implements the BuilderMempool interface and returns a channel
+// that signals when there are pending transactions in the mempool and a block should be built.
 func (m *Mempool) SubscribePendingTxs() <-chan struct{} {
 	return m.Pending
 }

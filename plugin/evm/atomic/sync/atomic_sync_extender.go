@@ -42,6 +42,7 @@ type AtomicSyncExtender struct {
 	stateSyncRequestSize uint16
 }
 
+// Initialize initializes the atomic sync extender with the atomic backend and atomic trie.
 func (a *AtomicSyncExtender) Initialize(backend AtomicBackend, atomicTrie AtomicTrie, stateSyncRequestSize uint16) {
 	a.backend = backend
 	a.atomicTrie = atomicTrie

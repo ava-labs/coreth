@@ -31,9 +31,10 @@ func (a *atomicState) Root() common.Hash {
 
 // Accept applies the state change to VM's persistent storage.
 func (a *atomicState) Accept(commitBatch database.Batch) error {
+	isBonus := a.backend.IsBonus(a.blockHeight, a.blockHash)
 	// Update the atomic tx repository. Note it is necessary to invoke
 	// the correct method taking bonus blocks into consideration.
-	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
+	if isBonus {
 		if err := a.backend.repo.WriteBonus(a.blockHeight, a.txs); err != nil {
 			return err
 		}
@@ -61,7 +62,7 @@ func (a *atomicState) Accept(commitBatch database.Batch) error {
 
 	// If this is a bonus block, write [commitBatch] without applying atomic ops
 	// to shared memory.
-	if a.backend.IsBonus(a.blockHeight, a.blockHash) {
+	if isBonus {
 		log.Info("skipping atomic tx acceptance on bonus block", "block", a.blockHash)
 		return avalancheatomic.WriteAll(commitBatch, atomicChangesBatch)
 	}

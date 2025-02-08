@@ -42,6 +42,7 @@ type verifierBackend struct {
 	secpCache    *secp256k1.RecoverCache
 }
 
+// semanticVerifier is a visitor that checks the semantic validity of atomic transactions.
 type semanticVerifier struct {
 	backend *verifierBackend
 	atx     *atomic.Tx

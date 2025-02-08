@@ -287,8 +287,8 @@ func (vm *VM) Initialize(
 	fxs []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
-	if vm.extensionConfig == nil {
-		return errors.New("extension config not set")
+	if err := vm.extensionConfig.Validate(); err != nil {
+		return fmt.Errorf("failed to validate extension config: %w", err)
 	}
 
 	vm.clock = &mockable.Clock{}

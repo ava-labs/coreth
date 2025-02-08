@@ -157,13 +157,6 @@ func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	// Make sure the block isn't too far in the future
-	// TODO: move this to only be part of semantic verification.
-	blockTimestamp := b.ethBlock.Time()
-	if maxBlockTime := uint64(bm.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
-		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", blockTimestamp, maxBlockTime)
-	}
-
 	// Ensure BaseFee is non-nil as of ApricotPhase3.
 	if rules.IsApricotPhase3 {
 		if ethHeader.BaseFee == nil {
@@ -220,6 +213,19 @@ func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	if bm.blockExtension != nil {
 		return bm.blockExtension.SyntacticVerify(b, rules)
+	}
+	return nil
+}
+
+func (bm *blockManager) SemanticVerify(b *Block) error {
+	// Make sure the block isn't too far in the future
+	blockTimestamp := b.ethBlock.Time()
+	if maxBlockTime := uint64(bm.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
+		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", blockTimestamp, maxBlockTime)
+	}
+
+	if bm.blockExtension != nil {
+		return bm.blockExtension.SemanticVerify(b)
 	}
 	return nil
 }
