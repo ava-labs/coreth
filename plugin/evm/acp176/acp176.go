@@ -41,6 +41,8 @@ type State struct {
 }
 
 // Target returns the target gas consumed per second.
+//
+// Target = MinTargetPerSecond * e^(TargetExcess / TargetConversion)
 func (s *State) Target() gas.Gas {
 	return gas.Gas(gas.CalculatePrice(
 		MinTargetPerSecond,
@@ -60,6 +62,8 @@ func (s *State) MaxCapacity() gas.Gas {
 }
 
 // BaseFee returns the current required fee per gas.
+//
+// BaseFee = MinBaseFee * e^(Excess / (Target() * TargetToPriceUpdateConversion))
 func (s *State) BaseFee() *big.Int {
 	target := s.Target()
 	priceUpdateConversion, err := safemath.Mul(TargetToPriceUpdateConversion, target)
@@ -68,8 +72,8 @@ func (s *State) BaseFee() *big.Int {
 	}
 
 	bigExcess := new(big.Int).SetUint64(uint64(s.Gas.Excess))
-	bigPriceUpdateFraction := new(big.Int).SetUint64(uint64(priceUpdateConversion))
-	return fakeExponential(minBaseFee, bigExcess, bigPriceUpdateFraction)
+	bigPriceUpdateConversion := new(big.Int).SetUint64(uint64(priceUpdateConversion))
+	return fakeExponential(minBaseFee, bigExcess, bigPriceUpdateConversion)
 }
 
 // AdvanceTime increases the gas capacity and decreases the gas excess based on
