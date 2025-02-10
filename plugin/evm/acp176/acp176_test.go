@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// (c) 2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package acp176
@@ -22,7 +22,7 @@ var (
 		skipTestDesiredTargetExcess bool
 		target                      gas.Gas
 		maxCapacity                 gas.Gas
-		baseFee                     *big.Int
+		gasPrice                    gas.Price
 	}{
 		{
 			name: "zero",
@@ -34,7 +34,7 @@ var (
 			},
 			target:      MinTargetPerSecond,
 			maxCapacity: targetToMaxCapacity * MinTargetPerSecond,
-			baseFee:     minBaseFee,
+			gasPrice:    MinGasPrice,
 		},
 		{
 			name: "almost_excess_change",
@@ -47,7 +47,7 @@ var (
 			skipTestDesiredTargetExcess: true,
 			target:                      MinTargetPerSecond,
 			maxCapacity:                 targetToMaxCapacity * MinTargetPerSecond,
-			baseFee:                     big.NewInt(2 * MinBaseFee),
+			gasPrice:                    2 * MinGasPrice,
 		},
 		{
 			name: "small_excess_change",
@@ -59,7 +59,7 @@ var (
 			},
 			target:      MinTargetPerSecond + 1,
 			maxCapacity: targetToMaxCapacity * (MinTargetPerSecond + 1),
-			baseFee:     big.NewInt(2 * MinBaseFee),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "max_initial_excess_change",
@@ -72,7 +72,7 @@ var (
 			skipTestDesiredTargetExcess: true,
 			target:                      MinTargetPerSecond + 977,
 			maxCapacity:                 targetToMaxCapacity * (MinTargetPerSecond + 977),
-			baseFee:                     big.NewInt(3 * MinBaseFee),
+			gasPrice:                    3 * MinGasPrice,
 		},
 		{
 			name: "current_target",
@@ -84,7 +84,7 @@ var (
 			},
 			target:      1_500_000,
 			maxCapacity: targetToMaxCapacity * 1_500_000,
-			baseFee:     big.NewInt((nAVAX + 7) * MinBaseFee), // +7 due to approximation
+			gasPrice:    (nAVAX + 7) * MinGasPrice, // +7 due to approximation
 		},
 		{
 			name: "3m_target",
@@ -96,7 +96,7 @@ var (
 			},
 			target:      3_000_000,
 			maxCapacity: targetToMaxCapacity * 3_000_000,
-			baseFee:     big.NewInt((100*nAVAX + 31) * MinBaseFee), // +31 due to approximation
+			gasPrice:    (100*nAVAX + 31) * MinGasPrice, // +31 due to approximation
 		},
 		{
 			name: "6m_target",
@@ -108,7 +108,7 @@ var (
 			},
 			target:      6_000_000,
 			maxCapacity: targetToMaxCapacity * 6_000_000,
-			baseFee:     big.NewInt((100*nAVAX + 31) * MinBaseFee), // +31 due to approximation
+			gasPrice:    (100*nAVAX + 31) * MinGasPrice, // +31 due to approximation
 		},
 		{
 			name: "10m_target",
@@ -120,7 +120,7 @@ var (
 			},
 			target:      10_000_000,
 			maxCapacity: targetToMaxCapacity * 10_000_000,
-			baseFee:     big.NewInt((100*nAVAX + 31) * MinBaseFee), // +31 due to approximation
+			gasPrice:    (100*nAVAX + 31) * MinGasPrice, // +31 due to approximation
 		},
 		{
 			name: "100m_target",
@@ -132,7 +132,7 @@ var (
 			},
 			target:      100_000_000,
 			maxCapacity: targetToMaxCapacity * 100_000_000,
-			baseFee:     big.NewInt((100*nAVAX + 8) * MinBaseFee), // +8 due to approximation
+			gasPrice:    (100*nAVAX + 8) * MinGasPrice, // +8 due to approximation
 		},
 		{
 			name: "low_1b_target",
@@ -144,7 +144,7 @@ var (
 			},
 			target:      1_000_000_000 - 24,
 			maxCapacity: targetToMaxCapacity * (1_000_000_000 - 24),
-			baseFee:     big.NewInt((100*nAVAX + 1) * MinBaseFee), // +1 due to approximation
+			gasPrice:    (100*nAVAX + 1) * MinGasPrice, // +1 due to approximation
 		},
 		{
 			name: "high_1b_target",
@@ -156,7 +156,7 @@ var (
 			},
 			target:      1_000_000_000 + 6,
 			maxCapacity: targetToMaxCapacity * (1_000_000_000 + 6),
-			baseFee:     big.NewInt((100 * nAVAX) * MinBaseFee),
+			gasPrice:    (100 * nAVAX) * MinGasPrice,
 		},
 		{
 			name: "largest_max_capacity",
@@ -168,7 +168,7 @@ var (
 			},
 			target:      922_337_190_378_117_171,
 			maxCapacity: 18_446_743_807_562_343_420,
-			baseFee:     big.NewInt(2 * MinBaseFee),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "largest_int64_target",
@@ -180,7 +180,7 @@ var (
 			},
 			target:      9_223_371_923_824_614_091,
 			maxCapacity: math.MaxUint64,
-			baseFee:     big.NewInt(2 * MinBaseFee),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "second_largest_uint64_target",
@@ -192,7 +192,7 @@ var (
 			},
 			target:      18_446_743_882_783_898_031,
 			maxCapacity: math.MaxUint64,
-			baseFee:     big.NewInt(2 * MinBaseFee),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "largest_uint64_target",
@@ -204,7 +204,7 @@ var (
 			},
 			target:      math.MaxUint64,
 			maxCapacity: math.MaxUint64,
-			baseFee:     big.NewInt(2 * MinBaseFee),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "largest_excess",
@@ -217,7 +217,7 @@ var (
 			skipTestDesiredTargetExcess: true,
 			target:                      math.MaxUint64,
 			maxCapacity:                 math.MaxUint64,
-			baseFee:                     big.NewInt(2 * MinBaseFee),
+			gasPrice:                    2 * MinGasPrice,
 		},
 	}
 	advanceTimeTests = []struct {
@@ -428,7 +428,12 @@ var (
 			gasUsed:      1_000_001,
 			extraGasUsed: nil,
 			expectedErr:  gas.ErrInsufficientCapacity,
-			expected:     State{},
+			expected: State{
+				Gas: gas.State{
+					Capacity: 1_000_000,
+					Excess:   2_000_000,
+				},
+			},
 		},
 		{
 			name: "massive_extra_gas_used",
@@ -459,7 +464,12 @@ var (
 			gasUsed:      0,
 			extraGasUsed: big.NewInt(1_000_001),
 			expectedErr:  gas.ErrInsufficientCapacity,
-			expected:     State{},
+			expected: State{
+				Gas: gas.State{
+					Capacity: 1_000_000,
+					Excess:   2_000_000,
+				},
+			},
 		},
 	}
 	updateTargetExcessTests = []struct {
@@ -587,19 +597,19 @@ func BenchmarkMaxCapacity(b *testing.B) {
 	}
 }
 
-func TestBaseFee(t *testing.T) {
+func TestGasPrice(t *testing.T) {
 	for _, test := range readerTests {
 		t.Run(test.name, func(t *testing.T) {
-			require.Equal(t, test.baseFee, test.state.BaseFee())
+			require.Equal(t, test.gasPrice, test.state.GasPrice())
 		})
 	}
 }
 
-func BenchmarkBaseFee(b *testing.B) {
+func BenchmarkGasPrice(b *testing.B) {
 	for _, test := range readerTests {
 		b.Run(test.name, func(b *testing.B) {
 			for range b.N {
-				test.state.BaseFee()
+				test.state.GasPrice()
 			}
 		})
 	}
