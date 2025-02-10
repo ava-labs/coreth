@@ -653,6 +653,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		return err
 	}
 	callbacks := vm.createConsensusCallbacks()
+
+	desiredTargetExcess := acp176.DesiredTargetExcess(1_500_000)
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -664,7 +666,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 			callbacks,
 			dummy.Mode{},
 			&vm.clock,
-			acp176.DesiredTargetExcess(1_500_000),
+			&desiredTargetExcess,
 		),
 		&vm.clock,
 	)

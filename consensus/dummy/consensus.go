@@ -52,7 +52,7 @@ type (
 		cb                  ConsensusCallbacks
 		clock               *mockable.Clock
 		consensusMode       Mode
-		desiredTargetExcess gas.Gas
+		desiredTargetExcess *gas.Gas
 	}
 )
 
@@ -60,7 +60,7 @@ func NewDummyEngine(
 	cb ConsensusCallbacks,
 	mode Mode,
 	clock *mockable.Clock,
-	desiredTargetExcess gas.Gas,
+	desiredTargetExcess *gas.Gas,
 ) *DummyEngine {
 	return &DummyEngine{
 		cb:                  cb,

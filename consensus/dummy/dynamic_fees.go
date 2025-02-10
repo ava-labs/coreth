@@ -110,7 +110,7 @@ func CalcHeaderExtraPrefix(
 	config *params.ChainConfig,
 	parent *types.Header,
 	header *types.Header,
-	desiredTargetExcess gas.Gas,
+	desiredTargetExcess *gas.Gas,
 ) ([]byte, error) {
 	switch {
 	case config.IsFUpgrade(header.Time):
@@ -122,7 +122,11 @@ func CalcHeaderExtraPrefix(
 		if err := gasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
 			return nil, err
 		}
-		gasState.UpdateTargetExcess(desiredTargetExcess)
+		// If the desired target excess isn't specified, default to the current
+		// target excess.
+		if desiredTargetExcess != nil {
+			gasState.UpdateTargetExcess(*desiredTargetExcess)
+		}
 
 		return customheader.DynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
