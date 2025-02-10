@@ -32,14 +32,7 @@ import (
 
 type isMultiCoin bool
 
-var (
-	extras = ethtypes.RegisterExtras[
-		ethtypes.NOOPHeaderHooks, *ethtypes.NOOPHeaderHooks,
-		ethtypes.NOOPBlockBodyHooks, *ethtypes.NOOPBlockBodyHooks,
-		isMultiCoin,
-	]()
-	IsMultiCoinPayloads = extras.StateAccount
-)
+var IsMultiCoinPayloads = extras.StateAccount
 
 func IsMultiCoin(s ethtypes.StateOrSlimAccount) bool {
 	return bool(IsMultiCoinPayloads.Get(s))
