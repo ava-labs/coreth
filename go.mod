@@ -135,3 +135,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/ava-labs/libevm => github.com/ava-labs/libevm v0.0.0-20250210135835-d3f6a5e75e05
