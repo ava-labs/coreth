@@ -23,6 +23,8 @@ type (
 	ReceiptForStorage = ethtypes.ReceiptForStorage
 	Receipts          = ethtypes.Receipts
 	Signer            = ethtypes.Signer
+	SlimAccount       = ethtypes.SlimAccount
+	StateAccount      = ethtypes.StateAccount
 	Transaction       = ethtypes.Transaction
 	Transactions      = ethtypes.Transactions
 	TxByNonce         = ethtypes.TxByNonce
@@ -45,12 +47,16 @@ const (
 
 // The following functions are used directly as their upstream definitions.
 var (
-	BloomLookup         = ethtypes.BloomLookup
-	BytesToBloom        = ethtypes.BytesToBloom
-	CreateBloom         = ethtypes.CreateBloom
-	NewContractCreation = ethtypes.NewContractCreation
-	NewReceipt          = ethtypes.NewReceipt
-	NewTransaction      = ethtypes.NewTransaction
+	BloomLookup          = ethtypes.BloomLookup
+	BytesToBloom         = ethtypes.BytesToBloom
+	CreateBloom          = ethtypes.CreateBloom
+	FullAccount          = ethtypes.FullAccount
+	FullAccountRLP       = ethtypes.FullAccountRLP
+	NewContractCreation  = ethtypes.NewContractCreation
+	NewEmptyStateAccount = ethtypes.NewEmptyStateAccount
+	NewReceipt           = ethtypes.NewReceipt
+	NewTransaction       = ethtypes.NewTransaction
+	SlimAccountRLP       = ethtypes.SlimAccountRLP
 
 	// Signers
 	LatestSigner           = ethtypes.LatestSigner
