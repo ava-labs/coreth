@@ -147,7 +147,7 @@ func testDynamicFeesStaysWithinRange(t *testing.T, test test) {
 			Number:  big.NewInt(int64(index) + 1),
 			BaseFee: nextBaseFee,
 		}
-		header.Extra, err = CalcHeaderExtraPrefix(params.TestApricotPhase3Config, parent, header, 0)
+		header.Extra, err = CalcHeaderExtraPrefix(params.TestApricotPhase3Config, parent, header, nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate header.Extra at index %d: %s", index, err)
 		}
@@ -302,7 +302,7 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 			Number:  big.NewInt(int64(index) + 1),
 			BaseFee: nextBaseFee,
 		}
-		header.Extra, err = CalcHeaderExtraPrefix(params.TestApricotPhase4Config, parent, header, 0)
+		header.Extra, err = CalcHeaderExtraPrefix(params.TestApricotPhase4Config, parent, header, nil)
 		assert.NoError(t, err)
 
 		nextBaseFee, err = CalcBaseFee(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
@@ -317,7 +317,7 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 			BaseFee:        nextBaseFee,
 			ExtDataGasUsed: block.extDataGasUsed,
 		}
-		extDataHeader.Extra, err = CalcHeaderExtraPrefix(params.TestApricotPhase4Config, extDataParent, extDataHeader, 0)
+		extDataHeader.Extra, err = CalcHeaderExtraPrefix(params.TestApricotPhase4Config, extDataParent, extDataHeader, nil)
 		assert.NoError(t, err)
 
 		assert.Equal(t, event.extDataFeeGreater, extDataHeader.BaseFee.Cmp(header.BaseFee) == 1, "unexpected cmp for index %d", index)
@@ -444,7 +444,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 		Time:    parent.Time,
 		BaseFee: nextBaseFee,
 	}
-	header.Extra, err = CalcHeaderExtraPrefix(params.TestEtnaChainConfig, parent, header, 0)
+	header.Extra, err = CalcHeaderExtraPrefix(params.TestEtnaChainConfig, parent, header, nil)
 	require.NoError(err)
 
 	timestamp = uint64(10_000)
