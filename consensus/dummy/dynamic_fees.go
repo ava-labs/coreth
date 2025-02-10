@@ -94,7 +94,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		if err != nil {
 			return nil, err
 		}
-		return gasState.BaseFee(), nil
+		return new(big.Int).SetUint64(uint64(gasState.GasPrice())), nil
 	case config.IsApricotPhase3(timestamp):
 		feeWindow, err := CalcFeeWindow(config, parent, timestamp)
 		if err != nil {
