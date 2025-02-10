@@ -179,12 +179,15 @@ func TestBaseFee(t *testing.T) {
 		{
 			name:     "ap4_decrease",
 			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
-			parent: &types.Header{
-				Number:       big.NewInt(1),
-				Extra:        feeWindowBytes(ap3.Window{}),
-				BaseFee:      big.NewInt(ap4.MaxBaseFee),
-				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
-			},
+			parent: types.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					Extra:   feeWindowBytes(ap3.Window{}),
+					BaseFee: big.NewInt(ap4.MaxBaseFee),
+				},
+				&types.HeaderExtra{
+					BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
+				}),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -203,14 +206,17 @@ func TestBaseFee(t *testing.T) {
 		{
 			name:     "ap4_increase",
 			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
-			parent: &types.Header{
-				Number:         big.NewInt(1),
-				GasUsed:        ap3.TargetGas,
-				Extra:          feeWindowBytes(ap3.Window{}),
-				BaseFee:        big.NewInt(ap4.MinBaseFee),
-				ExtDataGasUsed: big.NewInt(ap3.TargetGas),
-				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
-			},
+			parent: types.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					GasUsed: ap3.TargetGas,
+					Extra:   feeWindowBytes(ap3.Window{}),
+					BaseFee: big.NewInt(ap4.MinBaseFee),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(ap3.TargetGas),
+					BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
+				}),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -260,13 +266,16 @@ func TestBaseFee(t *testing.T) {
 		{
 			name:     "ap5_increase",
 			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
-			parent: &types.Header{
-				Number:         big.NewInt(1),
-				GasUsed:        ap5.TargetGas,
-				Extra:          feeWindowBytes(ap3.Window{}),
-				BaseFee:        big.NewInt(ap4.MinBaseFee),
-				ExtDataGasUsed: big.NewInt(ap5.TargetGas),
-			},
+			parent: types.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					GasUsed: ap5.TargetGas,
+					Extra:   feeWindowBytes(ap3.Window{}),
+					BaseFee: big.NewInt(ap4.MinBaseFee),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(ap5.TargetGas),
+				}),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -293,13 +302,16 @@ func TestBaseFee(t *testing.T) {
 		{
 			name:     "etna_increase",
 			upgrades: params.GetExtra(params.TestEtnaChainConfig).NetworkUpgrades,
-			parent: &types.Header{
-				Number:         big.NewInt(1),
-				GasUsed:        ap5.TargetGas,
-				Extra:          feeWindowBytes(ap3.Window{}),
-				BaseFee:        big.NewInt(etna.MinBaseFee),
-				ExtDataGasUsed: big.NewInt(ap5.TargetGas),
-			},
+			parent: types.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					GasUsed: ap5.TargetGas,
+					Extra:   feeWindowBytes(ap3.Window{}),
+					BaseFee: big.NewInt(etna.MinBaseFee),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(ap5.TargetGas),
+				}),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (

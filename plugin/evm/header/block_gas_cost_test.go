@@ -56,10 +56,13 @@ func TestBlockGasCost(t *testing.T) {
 					ApricotPhase5BlockTimestamp: test.ap5Timestamp,
 				},
 			}
-			parent := &types.Header{
-				Time:         test.parentTime,
-				BlockGasCost: test.parentCost,
-			}
+			parent := types.WithHeaderExtra(
+				&types.Header{
+					Time: test.parentTime,
+				},
+				&types.HeaderExtra{
+					BlockGasCost: test.parentCost,
+				})
 
 			assert.Equal(t, test.expected, BlockGasCost(
 				config,
@@ -178,39 +181,50 @@ func TestEstimateRequiredTip(t *testing.T) {
 		{
 			name:         "nil_base_fee",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				ExtDataGasUsed: big.NewInt(1),
-				BlockGasCost:   big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(1),
+					BlockGasCost:   big.NewInt(1),
+				}),
 			wantErr: errBaseFeeNil,
 		},
 		{
 			name:         "nil_block_gas_cost",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee:        big.NewInt(1),
-				ExtDataGasUsed: big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(1),
+				}),
 			wantErr: errBlockGasCostNil,
 		},
 		{
 			name:         "nil_extra_data_gas_used",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee:      big.NewInt(1),
-				BlockGasCost: big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					BlockGasCost: big.NewInt(1),
+				}),
 			wantErr: errExtDataGasUsedNil,
 		},
 		{
 			name:         "success",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				GasUsed:        123,
-				ExtDataGasUsed: big.NewInt(789),
-				BaseFee:        big.NewInt(456),
-				BlockGasCost:   big.NewInt(101112),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					GasUsed: 123,
+					BaseFee: big.NewInt(456),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(789),
+					BlockGasCost:   big.NewInt(101112),
+				}),
 			// totalGasUsed = GasUsed + ExtDataGasUsed
 			// totalRequiredTips = BlockGasCost * BaseFee
 			// estimatedTip = totalRequiredTips / totalGasUsed
