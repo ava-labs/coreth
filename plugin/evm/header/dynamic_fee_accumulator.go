@@ -39,6 +39,9 @@ func ParseDynamicFeeAccumulator(
 	}
 	if extraGasUsed != nil {
 		capacity, err = math.Sub(capacity, extraGasUsed.Uint64())
+		if err != nil {
+			return acp176.State{}, err
+		}
 	}
 
 	return acp176.State{
@@ -47,7 +50,7 @@ func ParseDynamicFeeAccumulator(
 			Excess:   gas.Gas(binary.BigEndian.Uint64(bytes)),
 		},
 		TargetExcess: gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),
-	}, err
+	}, nil
 }
 
 func DynamicFeeAccumulatorBytes(s acp176.State) []byte {
