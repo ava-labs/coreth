@@ -40,8 +40,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/vmerrs"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -778,9 +778,9 @@ func (vm *VM) BuildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 
 	// Handle errors and signal the mempool to take appropriate action
 	switch {
-	case errors.Is(err, vmerrs.ErrGenerateBlockFailed), errors.Is(err, vmerrs.ErrBlockVerificationFailed):
+	case errors.Is(err, vmerrors.ErrGenerateBlockFailed), errors.Is(err, vmerrors.ErrBlockVerificationFailed):
 		vm.mempool.CancelCurrentTxs()
-	case errors.Is(err, vmerrs.ErrMakeNewBlockFailed):
+	case errors.Is(err, vmerrors.ErrMakeNewBlockFailed):
 		vm.mempool.DiscardCurrentTxs()
 	case err != nil:
 		// Marks the current transactions from the mempool as being successfully issued

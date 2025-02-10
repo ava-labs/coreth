@@ -34,18 +34,16 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var (
-	// blobTxMinBlobGasPrice is the big.Int version of the configured protocol
-	// parameter to avoid constucting a new big integer for every transaction.
-	blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
-)
+// blobTxMinBlobGasPrice is the big.Int version of the configured protocol
+// parameter to avoid constucting a new big integer for every transaction.
+var blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
 
 // ValidationOptions define certain differences between transaction validation
 // across the different pools without having to duplicate those checks.
@@ -85,7 +83,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Check whether the init code size has been exceeded
 	if opts.Config.IsDurango(head.Time) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-		return fmt.Errorf("%w: code size %v, limit %v", vmerrs.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
+		return fmt.Errorf("%w: code size %v, limit %v", coreerrors.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur for transactions created using the RPC.

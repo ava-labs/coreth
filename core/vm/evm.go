@@ -33,12 +33,12 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
@@ -268,11 +268,11 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, vmerrs.ErrDepth
+		return nil, gas, coreerrors.ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, gas, vmerrs.ErrInsufficientBalance
+		return nil, gas, coreerrors.ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
@@ -335,7 +335,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
+		if err != coreerrors.ErrExecutionReverted {
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -355,7 +355,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, vmerrs.ErrDepth
+		return nil, gas, coreerrors.ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	// Note although it's noop to transfer X ether to caller itself. But
@@ -365,9 +365,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// that [value] will be popped from the stack and decoded to a *big.Int, which will
 	// always yield a positive result.
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, gas, vmerrs.ErrInsufficientBalance
+		return nil, gas, coreerrors.ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
@@ -391,7 +391,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
+		if err != coreerrors.ErrExecutionReverted {
 			gas = 0
 		}
 	}
@@ -406,9 +406,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, vmerrs.ErrDepth
+		return nil, gas, coreerrors.ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
@@ -435,7 +435,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
+		if err != coreerrors.ErrExecutionReverted {
 			gas = 0
 		}
 	}
@@ -449,14 +449,14 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, vmerrs.ErrDepth
+		return nil, gas, coreerrors.ErrDepth
 	}
 	// We take a snapshot here. This is a bit counter-intuitive, and could probably be skipped.
 	// However, even a staticcall is considered a 'touch'. On mainnet, static calls were introduced
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -491,7 +491,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
+		if err != coreerrors.ErrExecutionReverted {
 			gas = 0
 		}
 	}
@@ -515,22 +515,22 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, common.Address{}, gas, vmerrs.ErrDepth
+		return nil, common.Address{}, gas, coreerrors.ErrDepth
 	}
 	// Note: it is not possible for a negative value to be passed in here due to the fact
 	// that [value] will be popped from the stack and decoded to a *big.Int, which will
 	// always yield a positive result.
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, common.Address{}, gas, vmerrs.ErrInsufficientBalance
+		return nil, common.Address{}, gas, coreerrors.ErrInsufficientBalance
 	}
 	// If there is any collision with a prohibited address, return an error instead
 	// of allowing the contract to be created.
 	if IsProhibited(address) {
-		return nil, common.Address{}, gas, vmerrs.ErrAddrProhibited
+		return nil, common.Address{}, gas, coreerrors.ErrAddrProhibited
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	if nonce+1 < nonce {
-		return nil, common.Address{}, gas, vmerrs.ErrNonceUintOverflow
+		return nil, common.Address{}, gas, coreerrors.ErrNonceUintOverflow
 	}
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
@@ -541,7 +541,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
-		return nil, common.Address{}, 0, vmerrs.ErrContractAddressCollision
+		return nil, common.Address{}, 0, coreerrors.ErrContractAddressCollision
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
@@ -568,12 +568,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Check whether the max code size has been exceeded, assign err if the case.
 	if err == nil && evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
-		err = vmerrs.ErrMaxCodeSizeExceeded
+		err = coreerrors.ErrMaxCodeSizeExceeded
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsApricotPhase3 {
-		err = vmerrs.ErrInvalidCode
+		err = coreerrors.ErrInvalidCode
 	}
 
 	// if the contract creation ran successfully and no errors were returned
@@ -585,16 +585,16 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if contract.UseGas(createDataGas) {
 			evm.StateDB.SetCode(address, ret)
 		} else {
-			err = vmerrs.ErrCodeStoreOutOfGas
+			err = coreerrors.ErrCodeStoreOutOfGas
 		}
 	}
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil && (evm.chainRules.IsHomestead || err != vmerrs.ErrCodeStoreOutOfGas) {
+	if err != nil && (evm.chainRules.IsHomestead || err != coreerrors.ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
+		if err != coreerrors.ErrExecutionReverted {
 			contract.UseGas(contract.Gas)
 		}
 	}
@@ -633,30 +633,30 @@ func (evm *EVM) GetChainConfig() precompileconfig.ChainConfig { return evm.chain
 
 func (evm *EVM) NativeAssetCall(caller common.Address, input []byte, suppliedGas uint64, gasCost uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	if suppliedGas < gasCost {
-		return nil, 0, vmerrs.ErrOutOfGas
+		return nil, 0, coreerrors.ErrOutOfGas
 	}
 	remainingGas = suppliedGas - gasCost
 
 	if readOnly {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
+		return nil, remainingGas, coreerrors.ErrExecutionReverted
 	}
 
 	to, assetID, assetAmount, callData, err := UnpackNativeAssetCallInput(input)
 	if err != nil {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
+		return nil, remainingGas, coreerrors.ErrExecutionReverted
 	}
 
 	// Note: it is not possible for a negative assetAmount to be passed in here due to the fact that decoding a
 	// byte slice into a *big.Int type will always return a positive value.
 	if assetAmount.Sign() != 0 && !evm.Context.CanTransferMC(evm.StateDB, caller, to, assetID, assetAmount) {
-		return nil, remainingGas, vmerrs.ErrInsufficientBalance
+		return nil, remainingGas, coreerrors.ErrInsufficientBalance
 	}
 
 	snapshot := evm.StateDB.Snapshot()
 
 	if !evm.StateDB.Exist(to) {
 		if remainingGas < params.CallNewAccountGas {
-			return nil, 0, vmerrs.ErrOutOfGas
+			return nil, 0, coreerrors.ErrOutOfGas
 		}
 		remainingGas -= params.CallNewAccountGas
 		evm.StateDB.CreateAccount(to)
@@ -669,13 +669,12 @@ func (evm *EVM) NativeAssetCall(caller common.Address, input []byte, suppliedGas
 	// Send [assetAmount] of [assetID] to [to] address
 	evm.Context.TransferMultiCoin(evm.StateDB, caller, to, assetID, assetAmount)
 	ret, remainingGas, err = evm.Call(AccountRef(caller), to, callData, remainingGas, new(uint256.Int))
-
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != vmerrs.ErrExecutionReverted {
+		if err != coreerrors.ErrExecutionReverted {
 			remainingGas = 0
 		}
 		// TODO: consider clearing up unused snapshots:

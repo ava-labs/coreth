@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -54,18 +54,18 @@ func UnpackNativeAssetBalanceInput(input []byte) (common.Address, common.Hash, e
 func (b *nativeAssetBalance) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes)
 	if suppliedGas < b.gasCost {
-		return nil, 0, vmerrs.ErrOutOfGas
+		return nil, 0, coreerrors.ErrOutOfGas
 	}
 	remainingGas = suppliedGas - b.gasCost
 
 	address, assetID, err := UnpackNativeAssetBalanceInput(input)
 	if err != nil {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
+		return nil, remainingGas, coreerrors.ErrExecutionReverted
 	}
 
 	res, overflow := uint256.FromBig(accessibleState.GetStateDB().GetBalanceMultiCoin(address, assetID))
 	if overflow {
-		return nil, remainingGas, vmerrs.ErrExecutionReverted
+		return nil, remainingGas, coreerrors.ErrExecutionReverted
 	}
 	return common.LeftPadBytes(res.Bytes(), 32), remainingGas, nil
 }
@@ -109,5 +109,5 @@ func (c *nativeAssetCall) Run(accessibleState contract.AccessibleState, caller c
 type deprecatedContract struct{}
 
 func (*deprecatedContract) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	return nil, suppliedGas, vmerrs.ErrExecutionReverted
+	return nil, suppliedGas, coreerrors.ErrExecutionReverted
 }

@@ -10,8 +10,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/vmerrs"
 
 	_ "embed"
 
@@ -236,13 +236,13 @@ func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Add
 	// This ensures that we charge gas before we unpack the variable sized input.
 	payloadGas, overflow := math.SafeMul(SendWarpMessageGasCostPerByte, uint64(len(input)))
 	if overflow {
-		return nil, 0, vmerrs.ErrOutOfGas
+		return nil, 0, coreerrors.ErrOutOfGas
 	}
 	if remainingGas, err = contract.DeductGas(remainingGas, payloadGas); err != nil {
 		return nil, 0, err
 	}
 	if readOnly {
-		return nil, remainingGas, vmerrs.ErrWriteProtection
+		return nil, remainingGas, coreerrors.ErrWriteProtection
 	}
 	// unpack the arguments
 	payloadData, err := UnpackSendWarpMessageInput(input)

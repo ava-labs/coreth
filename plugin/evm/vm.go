@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
+	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -47,7 +48,6 @@ import (
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ava-labs/coreth/warp"
 
 	// Force-load tracer engine to trigger registration
@@ -898,14 +898,14 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	block, err := vm.miner.GenerateBlock(predicateCtx)
 	vm.builder.handleGenerateBlock()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", vmerrs.ErrGenerateBlockFailed, err)
+		return nil, fmt.Errorf("%w: %w", vmerrors.ErrGenerateBlockFailed, err)
 	}
 
 	// Note: the status of block is set by ChainState
 	blk, err := vm.blockManager.newBlock(block)
 	if err != nil {
 		log.Debug("discarding txs due to error making new block", "err", err)
-		return nil, fmt.Errorf("%w: %w", vmerrs.ErrMakeNewBlockFailed, err)
+		return nil, fmt.Errorf("%w: %w", vmerrors.ErrMakeNewBlockFailed, err)
 	}
 
 	// Verify is called on a non-wr apped block here, such that this
@@ -921,7 +921,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
 	if err := blk.semanticVerify(predicateCtx, false /*=writes*/); err != nil {
-		return nil, fmt.Errorf("%w: %w", vmerrs.ErrBlockVerificationFailed, err)
+		return nil, fmt.Errorf("%w: %w", vmerrors.ErrBlockVerificationFailed, err)
 	}
 
 	log.Debug(fmt.Sprintf("Built block %s", blk.ID()))

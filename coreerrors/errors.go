@@ -24,7 +24,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vmerrs
+package coreerrors
 
 import (
 	"errors"
@@ -47,7 +47,4 @@ var (
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
 	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
 	ErrAddrProhibited           = errors.New("prohibited address cannot be sender or created contract address")
-	ErrGenerateBlockFailed      = errors.New("failed to generate block")
-	ErrBlockVerificationFailed  = errors.New("failed to verify block")
-	ErrMakeNewBlockFailed       = errors.New("failed to make new block")
 )

@@ -36,8 +36,8 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/holiman/uint256"
@@ -54,8 +54,8 @@ func TestMemoryGasCost(t *testing.T) {
 	}
 	for i, tt := range tests {
 		v, err := memoryGasCost(&Memory{}, tt.size)
-		if (err == vmerrs.ErrGasUintOverflow) != tt.overflow {
-			t.Errorf("test %d: overflow mismatch: have %v, want %v", i, err == vmerrs.ErrGasUintOverflow, tt.overflow)
+		if (err == coreerrors.ErrGasUintOverflow) != tt.overflow {
+			t.Errorf("test %d: overflow mismatch: have %v, want %v", i, err == coreerrors.ErrGasUintOverflow, tt.overflow)
 		}
 		if v != tt.cost {
 			t.Errorf("test %d: gas cost mismatch: have %v, want %v", i, v, tt.cost)
@@ -88,7 +88,7 @@ var eip2200Tests = []struct {
 	{1, math.MaxUint64, "0x60016000556001600055", 1612, 0, nil},                // 1 -> 1 -> 1
 	{0, math.MaxUint64, "0x600160005560006000556001600055", 40818, 19200, nil}, // 0 -> 1 -> 0 -> 1
 	{1, math.MaxUint64, "0x600060005560016000556000600055", 10818, 19200, nil}, // 1 -> 0 -> 1 -> 0
-	{1, 2306, "0x6001600055", 2306, 0, vmerrs.ErrOutOfGas},                     // 1 -> 1 (2300 sentry + 2xPUSH)
+	{1, 2306, "0x6001600055", 2306, 0, coreerrors.ErrOutOfGas},                 // 1 -> 1 (2300 sentry + 2xPUSH)
 	{1, 2307, "0x6001600055", 806, 0, nil},                                     // 1 -> 1 (2301 sentry + 2xPUSH)
 }
 
@@ -145,7 +145,7 @@ var createGasTests = []struct {
 
 func TestCreateGas(t *testing.T) {
 	for i, tt := range createGasTests {
-		var gasUsed = uint64(0)
+		gasUsed := uint64(0)
 		doCheck := func(testGas int) bool {
 			address := common.BytesToAddress([]byte("contract"))
 			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -165,7 +165,7 @@ func TestCreateGas(t *testing.T) {
 			// Note: we use Cortina instead of AllEthashProtocolChanges (upstream)
 			// because it is the last fork before the activation of EIP-3860
 			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.TestCortinaChainConfig, config)
-			var startGas = uint64(testGas)
+			startGas := uint64(testGas)
 			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(uint256.Int))
 			if err != nil {
 				return false
