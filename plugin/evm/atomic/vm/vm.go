@@ -40,8 +40,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/utils"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
-	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -76,7 +76,7 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository *atomicstate.AtomicTxRepository
+	atomicTxRepository *atomicstate.AtomicRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
 	atomicBackend *atomicstate.AtomicBackend
 
@@ -144,15 +144,15 @@ func (vm *VM) Initialize(
 	vm.mempool = &txpool.Mempool{}
 
 	extensionConfig := &extension.Config{
-		NetworkCodec:        networkCodec,
-		ConsensusCallbacks:  vm.createConsensusCallbacks(),
-		BlockExtension:      blockExtension,
-		SyncableParser:      atomicsync.NewAtomicSyncSummaryParser(),
-		SyncExtender:        syncExtender,
-		SyncSummaryProvider: syncProvider,
-		ExtraSyncLeafConfig: atomicLeafTypeConfig,
-		ExtraMempool:        vm.mempool,
-		Clock:               &vm.clock,
+		NetworkCodec:               networkCodec,
+		ConsensusCallbacks:         vm.createConsensusCallbacks(),
+		BlockExtension:             blockExtension,
+		SyncableParser:             atomicsync.NewAtomicSyncSummaryParser(),
+		SyncExtender:               syncExtender,
+		SyncSummaryProvider:        syncProvider,
+		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
+		ExtraMempool:               vm.mempool,
+		Clock:                      &vm.clock,
 	}
 	if err := innerVM.SetExtensionConfig(extensionConfig); err != nil {
 		return fmt.Errorf("failed to set extension config: %w", err)
@@ -432,7 +432,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	}
 	if err := tx.UnsignedAtomicTx.Visit(&semanticVerifier{
 		backend: atomicBackend,
-		atx:     tx,
+		tx:      tx,
 		parent:  parent,
 		baseFee: baseFee,
 	}); err != nil {
@@ -476,7 +476,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		utx := atomicTx.UnsignedAtomicTx
 		if err := utx.Visit(&semanticVerifier{
 			backend: atomicBackend,
-			atx:     atomicTx,
+			tx:      atomicTx,
 			parent:  ancestor,
 			baseFee: baseFee,
 		}); err != nil {
@@ -788,4 +788,11 @@ func (vm *VM) BuildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 		vm.mempool.IssueCurrentTxs()
 	}
 	return blk, err
+}
+
+// currentRules returns the chain rules for the current block.
+func (vm *VM) currentRules() params.Rules {
+	header := vm.Ethereum().BlockChain().CurrentHeader()
+	chainConfig := vm.Ethereum().BlockChain().Config()
+	return chainConfig.Rules(header.Number, header.Time)
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
+	"github.com/ava-labs/coreth/plugin/evm/utils"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
@@ -47,7 +48,6 @@ import (
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 
 	// Force-load tracer engine to trigger registration
@@ -144,8 +144,6 @@ var (
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
-	errVMAlreadyInitialized          = errors.New("vm already initialized")
-	errExtensionConfigAlreadySet     = errors.New("extension config already set")
 )
 
 var originalStderr *os.File
@@ -262,17 +260,6 @@ type VM struct {
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
 	rpcHandlers []interface{ Stop() }
-}
-
-func (vm *VM) SetExtensionConfig(config *extension.Config) error {
-	if vm.ctx != nil {
-		return errVMAlreadyInitialized
-	}
-	if vm.extensionConfig != nil {
-		return errExtensionConfigAlreadySet
-	}
-	vm.extensionConfig = config
-	return nil
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -429,6 +416,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SnapshotDelayInit = vm.stateSyncEnabled(lastAcceptedHeight)
 	vm.ethConfig.SnapshotWait = vm.config.SnapshotWait
 	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
+	vm.ethConfig.HistoricalProofQueryWindow = vm.config.HistoricalProofQueryWindow
 	vm.ethConfig.OfflinePruning = vm.config.OfflinePruning
 	vm.ethConfig.OfflinePruningBloomFilterSize = vm.config.OfflinePruningBloomFilterSize
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
@@ -571,10 +559,10 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 			},
 		},
 	)
-	var leafConfigs []*extension.LeafRequestConfig
-	syncStats := handlerstats.NewHandlerStats(metrics.Enabled)
+	var leafHandlerConfigs []*extension.LeafRequestConfig
+	syncStats := handlerstats.GetOrRegisterHandlerStats(metrics.Enabled)
 	// register default leaf request handler for state trie
-	leafConfigs = append(leafConfigs, &extension.LeafRequestConfig{
+	leafHandlerConfigs = append(leafHandlerConfigs, &extension.LeafRequestConfig{
 		LeafType:   message.StateTrieNode,
 		MetricName: "sync_state_trie_leaves",
 		Handler: handlers.NewLeafsRequestHandler(evmTrieDB,
@@ -584,12 +572,12 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		),
 	})
 
-	if vm.extensionConfig.ExtraSyncLeafConfig != nil {
-		leafConfigs = append(leafConfigs, vm.extensionConfig.ExtraSyncLeafConfig)
+	if vm.extensionConfig.ExtraSyncLeafHandlerConfig != nil {
+		leafHandlerConfigs = append(leafHandlerConfigs, vm.extensionConfig.ExtraSyncLeafHandlerConfig)
 	}
 
-	leafHandlers := make(LeafHandlers, len(leafConfigs))
-	for _, leafConfig := range leafConfigs {
+	leafHandlers := make(LeafHandlers, len(leafHandlerConfigs))
+	for _, leafConfig := range leafHandlerConfigs {
 		if _, exists := leafHandlers[leafConfig.LeafType]; exists {
 			return fmt.Errorf("duplicate leaf type %v", leafConfig.LeafType)
 		}
@@ -622,8 +610,8 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	}
 
 	// Initialize the state sync client
-	leafMetricsNames := make(map[message.NodeType]string, len(leafConfigs))
-	for _, leafConfig := range leafConfigs {
+	leafMetricsNames := make(map[message.NodeType]string, len(leafHandlerConfigs))
+	for _, leafConfig := range leafHandlerConfigs {
 		leafMetricsNames[leafConfig.LeafType] = leafConfig.MetricName
 	}
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
@@ -1024,10 +1012,6 @@ func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, erro
 	return ids.ID(hash), nil
 }
 
-func (vm *VM) Version(context.Context) (string, error) {
-	return Version, nil
-}
-
 // CreateHandlers makes new http handlers that can handle API calls
 func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
@@ -1096,6 +1080,12 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
 	}, nil
 }
 
+// currentRules returns the chain rules for the current block.
+func (vm *VM) currentRules() params.Rules {
+	header := vm.eth.BlockChain().CurrentHeader()
+	return vm.chainConfig.Rules(header.Number, header.Time)
+}
+
 /*
  *********************************** Helpers **********************************
  */
@@ -1104,7 +1094,7 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
 // network must be signed by the primary network validators.
 // This is necessary when the subnet is not validating the primary network.
 func (vm *VM) requirePrimaryNetworkSigners() bool {
-	switch c := vm.CurrentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
+	switch c := vm.currentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
 	case *warpcontract.Config:
 		return c.RequirePrimaryNetworkSigners
 	default: // includes nil due to non-presence
@@ -1213,77 +1203,4 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
 	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
-}
-
-/*
- *********************************** ExtensibleVM functions  **********************************
- // All these methods assumes that VM is already initialized
-*/
-
-func (vm *VM) GetVMBlock(ctx context.Context, blkID ids.ID) (extension.VMBlock, error) {
-	// Since each internal handler used by [vm.State] always returns a block
-	// with non-nil ethBlock value, GetBlockInternal should never return a
-	// (*Block) with a nil ethBlock value.
-	blk, err := vm.GetBlockInternal(ctx, blkID)
-	if err != nil {
-		return nil, err
-	}
-
-	return blk.(*Block), nil
-}
-
-func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
-	lastAcceptedBlock := vm.LastAcceptedBlockInternal()
-	if lastAcceptedBlock == nil {
-		return nil
-	}
-	return lastAcceptedBlock.(*Block)
-}
-
-func (vm *VM) NewVMBlock(ethBlock *types.Block) (extension.VMBlock, error) {
-	blk, err := vm.blockManager.newBlock(ethBlock)
-	if err != nil {
-		return nil, err
-	}
-
-	return blk, nil
-}
-
-// IsBootstrapped returns true if the VM has finished bootstrapping
-func (vm *VM) IsBootstrapped() bool {
-	return vm.bootstrapped.Get()
-}
-
-// CurrentRules returns the chain rules for the current block.
-func (vm *VM) CurrentRules() params.Rules {
-	header := vm.eth.BlockChain().CurrentHeader()
-	return vm.chainConfig.Rules(header.Number, header.Time)
-}
-
-func (vm *VM) Ethereum() *eth.Ethereum {
-	return vm.eth
-}
-
-func (vm *VM) Config() config.Config {
-	return vm.config
-}
-
-func (vm *VM) MetricRegistry() *prometheus.Registry {
-	return vm.sdkMetrics
-}
-
-func (vm *VM) Validators() *p2p.Validators {
-	return vm.p2pValidators
-}
-
-func (vm *VM) VersionDB() *versiondb.Database {
-	return vm.versiondb
-}
-
-func (vm *VM) EthChainDB() ethdb.Database {
-	return vm.chaindb
-}
-
-func (vm *VM) SyncerClient() vmsync.Client {
-	return vm.Client
 }

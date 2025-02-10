@@ -26,13 +26,13 @@ const (
 )
 
 // AtomicBackend implements the AtomicBackend interface using
-// the AtomicTrie, AtomicTxRepository, and the VM's shared memory.
+// the AtomicTrie, AtomicRepository, and the VM's shared memory.
 type AtomicBackend struct {
 	codec        codec.Manager
 	bonusBlocks  map[uint64]ids.ID // Map of height to blockID for blocks to skip indexing
 	sharedMemory avalancheatomic.SharedMemory
 
-	repo       *AtomicTxRepository
+	repo       *AtomicRepository
 	atomicTrie *AtomicTrie
 
 	lastAcceptedHash common.Hash
@@ -42,7 +42,7 @@ type AtomicBackend struct {
 // NewAtomicBackend creates an AtomicBackend from the specified dependencies
 func NewAtomicBackend(
 	sharedMemory avalancheatomic.SharedMemory,
-	bonusBlocks map[uint64]ids.ID, repo *AtomicTxRepository,
+	bonusBlocks map[uint64]ids.ID, repo *AtomicRepository,
 	lastAcceptedHeight uint64, lastAcceptedHash common.Hash, commitInterval uint64,
 ) (*AtomicBackend, error) {
 	codec := repo.codec

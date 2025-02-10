@@ -62,7 +62,7 @@ func (vm *VM) newImportTx(
 		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
 	}
 
-	return atomic.NewImportTx(vm.ctx, vm.InnerVM.CurrentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
+	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
 }
 
 func GenesisAtomicVM(t *testing.T,
@@ -226,7 +226,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exportTx, err := atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testutils.TestShortIDAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
+	exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testutils.TestShortIDAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +375,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 
 	validEthBlock := validBlock.(*chain.BlockWrapper).Block.(extension.VMBlock).GetEthBlock()
 
-	rules := vm.CurrentRules()
+	rules := vm.currentRules()
 	var extraData []byte
 	switch {
 	case rules.IsApricotPhase5:
@@ -457,11 +457,11 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx1, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo})
+			tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo})
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx2, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(common.Big2, testutils.InitialBaseFee), kc, []*avax.UTXO{utxo})
+			tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(common.Big2, testutils.InitialBaseFee), kc, []*avax.UTXO{utxo})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -484,11 +484,11 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx1, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
+			tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
-			tx2, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(common.Big2, testutils.InitialBaseFee), kc, []*avax.UTXO{utxo1})
+			tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(common.Big2, testutils.InitialBaseFee), kc, []*avax.UTXO{utxo1})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -512,17 +512,17 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			importTx1, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo1})
+			importTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo1})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			importTx2, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(3), testutils.InitialBaseFee), kc, []*avax.UTXO{utxo2})
+			importTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(3), testutils.InitialBaseFee), kc, []*avax.UTXO{utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			reissuanceTx1, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(2), testutils.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
+			reissuanceTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(2), testutils.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -542,7 +542,7 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 			assert.True(t, vm.mempool.Has(importTx2.ID()))
 			assert.False(t, vm.mempool.Has(reissuanceTx1.ID()))
 
-			reissuanceTx2, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(4), testutils.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
+			reissuanceTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(4), testutils.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1095,7 +1095,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
 		assert.NoError(t, err)
 
-		importTx, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo})
+		importTx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1366,7 +1366,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
 		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice*3), nil)
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.CurrentRules().ChainID), key)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.currentRules().ChainID), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1532,7 +1532,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 5; i++ {
 		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.CurrentRules().ChainID), key)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.currentRules().ChainID), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1540,7 +1540,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 	for i := 5; i < 10; i++ {
 		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.ApricotPhase1MinGasPrice), nil)
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.CurrentRules().ChainID), key)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.currentRules().ChainID), key)
 		if err != nil {
 			t.Fatal(err)
 		}

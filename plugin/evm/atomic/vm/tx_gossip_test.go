@@ -144,7 +144,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, testutils.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, testutils.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 
@@ -226,7 +226,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, testutils.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, testutils.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: tx})
@@ -294,7 +294,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.CurrentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, testutils.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, testutils.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 

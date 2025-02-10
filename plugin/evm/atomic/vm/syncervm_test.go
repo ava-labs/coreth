@@ -51,7 +51,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 					}
 					exportTx, err := atomic.NewExportTx(
 						atomicVM.ctx,
-						atomicVM.CurrentRules(),
+						atomicVM.currentRules(),
 						state,
 						atomicVM.ctx.AVAXAssetID,
 						importAmount/2,

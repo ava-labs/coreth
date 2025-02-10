@@ -12,7 +12,6 @@ import (
 
 	_ "embed"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
@@ -33,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/precompile/contract"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -69,15 +69,7 @@ const (
 	testNetworkID uint32 = 10
 )
 
-var networkCodec codec.Manager
-
-func init() {
-	var err error
-	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		panic(err)
-	}
-}
+var networkCodec = messagetest.TestBlockSyncSummaryCodec
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)

@@ -183,8 +183,8 @@ func (utx *UnsignedImportTx) Burned(assetID ids.ID) (uint64, error) {
 }
 
 // AtomicOps returns imported inputs spent on this transaction
-// We spend imported UTXOs here rather than in semanticVerify because
-// we don't want to remove an imported UTXO in semanticVerify
+// We spend imported UTXOs here rather than in verification because
+// we don't want to remove an imported UTXO in verification
 // only to have the transaction not be Accepted. This would be inconsistent.
 // Recall that imported UTXOs are not kept in a versionDB.
 func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {

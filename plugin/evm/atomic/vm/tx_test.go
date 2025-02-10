@@ -100,7 +100,7 @@ type atomicTxTest struct {
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
 	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, !test.bootstrapping, test.genesisJSON, test.configJSON, test.upgradeJSON)
-	rules := vm.CurrentRules()
+	rules := vm.currentRules()
 
 	tx := test.setup(t, vm, sharedMemory)
 
@@ -124,7 +124,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if err := tx.UnsignedAtomicTx.Visit(
 		&semanticVerifier{
 			backend: backend,
-			atx:     tx,
+			tx:      tx,
 			parent:  lastAcceptedBlock,
 			baseFee: baseFee,
 		}); len(test.semanticVerifyErr) == 0 && err != nil {

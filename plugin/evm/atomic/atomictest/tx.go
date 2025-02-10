@@ -83,7 +83,7 @@ func (t *TestUnsignedTx) SignedBytes() []byte { return t.SignedBytesV }
 // InputUTXOs implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) InputUTXOs() set.Set[ids.ID] { return t.InputUTXOsV }
 
-// SemanticVerify implements the UnsignedAtomicTx interface
+// Visit implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) Visit(v atomic.Visitor) error {
 	return t.VisitV
 }

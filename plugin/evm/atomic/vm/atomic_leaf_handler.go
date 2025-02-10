@@ -1,3 +1,6 @@
+// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package vm
 
 import (
@@ -35,6 +38,6 @@ func NewAtomicLeafHandler() *atomicLeafHandler {
 
 // Initialize initializes the atomicLeafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
 func (a *atomicLeafHandler) Initialize(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) {
-	handlerStats := stats.NewHandlerStats(metrics.Enabled)
+	handlerStats := stats.GetOrRegisterHandlerStats(metrics.Enabled)
 	a.LeafRequestHandler = handlers.NewLeafsRequestHandler(atomicTrieDB, trieKeyLength, nil, networkCodec, handlerStats)
 }

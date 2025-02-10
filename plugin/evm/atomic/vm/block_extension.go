@@ -198,9 +198,8 @@ func (be *blockExtension) OnReject(b extension.VMBlock) error {
 	return atomicState.Reject()
 }
 
-// OnCleanup is called when the block is cleaned up. This is called the wrapper
-// block manager's OnCleanup method.
-func (be *blockExtension) OnCleanup(b extension.VMBlock) {
+// OnError is called when the block is cleaned up after a failed insertion.
+func (be *blockExtension) OnError(b extension.VMBlock) {
 	if atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(b.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}

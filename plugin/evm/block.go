@@ -243,7 +243,7 @@ func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateConte
 
 	err := vm.blockChain.InsertBlockManual(b.ethBlock, writes)
 	if b.blockManager.blockExtension != nil && (err != nil || !writes) {
-		b.blockManager.blockExtension.OnCleanup(b)
+		b.blockManager.blockExtension.OnError(b)
 	}
 	return err
 }

@@ -110,7 +110,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 	for _, addr := range testutils.TestShortIDAddrs {
-		exportTx, err := atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
+		exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -948,7 +948,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 
 			err := exportTx.Visit(&semanticVerifier{
 				backend: backend,
-				atx:     tx,
+				tx:      tx,
 				parent:  parent,
 				baseFee: test.baseFee,
 			})
@@ -1810,7 +1810,7 @@ func TestNewExportTx(t *testing.T) {
 			backend := &verifierBackend{
 				ctx:          vm.ctx,
 				fx:           &vm.fx,
-				rules:        vm.CurrentRules(),
+				rules:        vm.currentRules(),
 				chainConfig:  vm.Ethereum().BlockChain().Config(),
 				bootstrapped: vm.IsBootstrapped(),
 				blockFetcher: vm,
@@ -1819,7 +1819,7 @@ func TestNewExportTx(t *testing.T) {
 
 			if err := exportTx.Visit(&semanticVerifier{
 				backend: backend,
-				atx:     tx,
+				tx:      tx,
 				parent:  parent,
 				baseFee: parent.GetEthBlock().BaseFee(),
 			}); err != nil {
@@ -2017,7 +2017,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, vm.CurrentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
+			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2026,7 +2026,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			backend := &verifierBackend{
 				ctx:          vm.ctx,
 				fx:           &vm.fx,
-				rules:        vm.CurrentRules(),
+				rules:        vm.currentRules(),
 				chainConfig:  vm.Ethereum().BlockChain().Config(),
 				bootstrapped: vm.IsBootstrapped(),
 				blockFetcher: vm,
@@ -2035,7 +2035,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 
 			if err := exportTx.Visit(&semanticVerifier{
 				backend: backend,
-				atx:     tx,
+				tx:      tx,
 				parent:  parent,
 				baseFee: parent.GetEthBlock().BaseFee(),
 			}); err != nil {

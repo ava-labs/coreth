@@ -37,7 +37,9 @@ type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
 }
 
-// EthBlockWrapper is an interface that wraps the GetEthBlock method.
+// EthBlockWrapper can be implemented by a concrete block wrapper type to
+// return *types.Block, which is needed to update chain pointers at the
+// end of the sync operation.
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }

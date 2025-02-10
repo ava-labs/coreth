@@ -45,17 +45,17 @@ type verifierBackend struct {
 // semanticVerifier is a visitor that checks the semantic validity of atomic transactions.
 type semanticVerifier struct {
 	backend *verifierBackend
-	atx     *atomic.Tx
+	tx      *atomic.Tx
 	parent  extension.VMBlock
 	baseFee *big.Int
 }
 
-// SemanticVerify this transaction is valid.
+// ImportTx verifies this transaction is valid.
 func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 	backend := s.backend
 	ctx := backend.ctx
 	rules := backend.rules
-	stx := s.atx
+	stx := s.tx
 	if err := utx.Verify(ctx, rules); err != nil {
 		return err
 	}
@@ -173,11 +173,11 @@ func conflicts(backend *verifierBackend, inputs set.Set[ids.ID], ancestor extens
 	return nil
 }
 
-// SemanticVerify this transaction is valid.
+// ExportTx verifies this transaction is valid.
 func (s *semanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
 	ctx := s.backend.ctx
 	rules := s.backend.rules
-	stx := s.atx
+	stx := s.tx
 	if err := utx.Verify(ctx, rules); err != nil {
 		return err
 	}

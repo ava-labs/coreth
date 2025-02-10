@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var _ sync.SummaryProvider = &AtomicSummaryProvider{}
+var _ sync.SummaryProvider = (*AtomicSummaryProvider)(nil)
 
 type AtomicSummaryProvider struct {
 	atomicTrie AtomicTrie

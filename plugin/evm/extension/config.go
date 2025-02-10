@@ -64,8 +64,6 @@ type ExtensibleVM interface {
 	MetricRegistry() *prometheus.Registry
 	// ReadLastAccepted returns the last accepted block hash and height
 	ReadLastAccepted() (common.Hash, uint64, error)
-	// CurrentRules returns the current rules for the VM
-	CurrentRules() params.Rules
 	// VersionDB returns the versioned database for the VM
 	VersionDB() *versiondb.Database
 	// SyncerClient returns the syncer client for the VM
@@ -91,18 +89,21 @@ type VMBlock interface {
 // BlockManagerExtension is an extension for the block manager
 // to handle BlockManager events
 type BlockManagerExtension interface {
-	// SemanticVerify verifies the block semantically
-	// it can be implemented to extend inner block verification
-	SemanticVerify(b VMBlock) error
 	// SyntacticVerify verifies the block syntactically
 	// it can be implemented to extend inner block verification
 	SyntacticVerify(b VMBlock, rules params.Rules) error
+	// SemanticVerify verifies the block semantically
+	// it can be implemented to extend inner block verification
+	SemanticVerify(b VMBlock) error
+	// OnError is called when a block has passed SemanticVerify and SynctacticVerify,
+	// but failed insertion in the chain. This allows the block manager to perform any
+	// needed cleanup. This does not return any error because the block manager
+	// propagates the original error.
+	OnError(b VMBlock)
 	// OnAccept is called when a block is accepted by the block manager
 	OnAccept(b VMBlock, acceptedBatch database.Batch) error
 	// OnReject is called when a block is rejected by the block manager
 	OnReject(b VMBlock) error
-	// OnCleanup is called when a block cleanup is requested from the block manager
-	OnCleanup(b VMBlock)
 }
 
 // BuilderMempool is a mempool that's used in the block builder
@@ -149,9 +150,9 @@ type Config struct {
 	// to handle block manager events.
 	// It's optional and can be nil
 	BlockExtension BlockManagerExtension
-	// ExtraSyncLeafConfig is the extra configuration to handle leaf requests
+	// ExtraSyncLeafHandlerConfig is the extra configuration to handle leaf requests
 	// in the network and syncer. It's optional and can be nil
-	ExtraSyncLeafConfig *LeafRequestConfig
+	ExtraSyncLeafHandlerConfig *LeafRequestConfig
 	// ExtraMempool is the mempool to be used in the block builder.
 	// It's optional and can be nil
 	ExtraMempool BuilderMempool

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/cache"
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -16,21 +15,14 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
 	"github.com/stretchr/testify/require"
 )
 
-var networkCodec codec.Manager
-
-func init() {
-	var err error
-	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		panic(err)
-	}
-}
+var networkCodec = messagetest.TestBlockSyncSummaryCodec
 
 func TestMessageSignatureHandler(t *testing.T) {
 	database := memdb.New()

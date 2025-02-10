@@ -152,7 +152,8 @@ type UnsignedAtomicTx interface {
 	InputUTXOs() set.Set[ids.ID]
 	// Verify attempts to verify that the transaction is well formed
 	Verify(ctx *snow.Context, rules params.Rules) error
-	// Allow vm to execute custom logic against the underlying transaction types.
+	// Visit calls the corresponding method for the underlying transaction type.
+	// This is used in semantic verification of the tx.
 	Visit(v Visitor) error
 	// AtomicOps returns the blockchainID and set of atomic requests that
 	// must be applied to shared memory for this transaction to be accepted.

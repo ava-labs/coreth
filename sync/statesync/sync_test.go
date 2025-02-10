@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -35,15 +35,7 @@ const testSyncTimeout = 30 * time.Second
 
 var errInterrupted = errors.New("interrupted sync")
 
-var networkCodec codec.Manager
-
-func init() {
-	var err error
-	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		panic(err)
-	}
-}
+var networkCodec = messagetest.TestBlockSyncSummaryCodec
 
 type syncTest struct {
 	ctx               context.Context
