@@ -28,7 +28,7 @@ func (b *Block) setExtData(data []byte, recalc bool) {
 	b.extdata = &_data
 	copy(*b.extdata, data)
 	if recalc {
-		b.header.ExtDataHash = CalcExtDataHash(*b.extdata)
+		GetHeaderExtra(b.header).ExtDataHash = CalcExtDataHash(*b.extdata)
 	}
 }
 
@@ -44,10 +44,10 @@ func (b *Block) Version() uint32 {
 }
 
 func (b *Block) ExtDataGasUsed() *big.Int {
-	if b.header.ExtDataGasUsed == nil {
+	if GetHeaderExtra(b.header).ExtDataGasUsed == nil {
 		return nil
 	}
-	return new(big.Int).Set(b.header.ExtDataGasUsed)
+	return new(big.Int).Set(GetHeaderExtra(b.header).ExtDataGasUsed)
 }
 
 func CalcExtDataHash(extdata []byte) common.Hash {
