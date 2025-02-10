@@ -22,7 +22,7 @@ var (
 		skipTestDesiredTargetExcess bool
 		target                      gas.Gas
 		maxCapacity                 gas.Gas
-		gasPrice                    *big.Int
+		gasPrice                    gas.Price
 	}{
 		{
 			name: "zero",
@@ -34,7 +34,7 @@ var (
 			},
 			target:      MinTargetPerSecond,
 			maxCapacity: targetToMaxCapacity * MinTargetPerSecond,
-			gasPrice:    bigMinGasPrice,
+			gasPrice:    MinGasPrice,
 		},
 		{
 			name: "almost_excess_change",
@@ -47,7 +47,7 @@ var (
 			skipTestDesiredTargetExcess: true,
 			target:                      MinTargetPerSecond,
 			maxCapacity:                 targetToMaxCapacity * MinTargetPerSecond,
-			gasPrice:                    big.NewInt(2 * MinGasPrice),
+			gasPrice:                    2 * MinGasPrice,
 		},
 		{
 			name: "small_excess_change",
@@ -59,7 +59,7 @@ var (
 			},
 			target:      MinTargetPerSecond + 1,
 			maxCapacity: targetToMaxCapacity * (MinTargetPerSecond + 1),
-			gasPrice:    big.NewInt(2 * MinGasPrice),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "max_initial_excess_change",
@@ -72,7 +72,7 @@ var (
 			skipTestDesiredTargetExcess: true,
 			target:                      MinTargetPerSecond + 977,
 			maxCapacity:                 targetToMaxCapacity * (MinTargetPerSecond + 977),
-			gasPrice:                    big.NewInt(3 * MinGasPrice),
+			gasPrice:                    3 * MinGasPrice,
 		},
 		{
 			name: "current_target",
@@ -84,7 +84,7 @@ var (
 			},
 			target:      1_500_000,
 			maxCapacity: targetToMaxCapacity * 1_500_000,
-			gasPrice:    big.NewInt((nAVAX + 7) * MinGasPrice), // +7 due to approximation
+			gasPrice:    (nAVAX + 7) * MinGasPrice, // +7 due to approximation
 		},
 		{
 			name: "3m_target",
@@ -96,7 +96,7 @@ var (
 			},
 			target:      3_000_000,
 			maxCapacity: targetToMaxCapacity * 3_000_000,
-			gasPrice:    big.NewInt((100*nAVAX + 31) * MinGasPrice), // +31 due to approximation
+			gasPrice:    (100*nAVAX + 31) * MinGasPrice, // +31 due to approximation
 		},
 		{
 			name: "6m_target",
@@ -108,7 +108,7 @@ var (
 			},
 			target:      6_000_000,
 			maxCapacity: targetToMaxCapacity * 6_000_000,
-			gasPrice:    big.NewInt((100*nAVAX + 31) * MinGasPrice), // +31 due to approximation
+			gasPrice:    (100*nAVAX + 31) * MinGasPrice, // +31 due to approximation
 		},
 		{
 			name: "10m_target",
@@ -120,7 +120,7 @@ var (
 			},
 			target:      10_000_000,
 			maxCapacity: targetToMaxCapacity * 10_000_000,
-			gasPrice:    big.NewInt((100*nAVAX + 31) * MinGasPrice), // +31 due to approximation
+			gasPrice:    (100*nAVAX + 31) * MinGasPrice, // +31 due to approximation
 		},
 		{
 			name: "100m_target",
@@ -132,7 +132,7 @@ var (
 			},
 			target:      100_000_000,
 			maxCapacity: targetToMaxCapacity * 100_000_000,
-			gasPrice:    big.NewInt((100*nAVAX + 8) * MinGasPrice), // +8 due to approximation
+			gasPrice:    (100*nAVAX + 8) * MinGasPrice, // +8 due to approximation
 		},
 		{
 			name: "low_1b_target",
@@ -144,7 +144,7 @@ var (
 			},
 			target:      1_000_000_000 - 24,
 			maxCapacity: targetToMaxCapacity * (1_000_000_000 - 24),
-			gasPrice:    big.NewInt((100*nAVAX + 1) * MinGasPrice), // +1 due to approximation
+			gasPrice:    (100*nAVAX + 1) * MinGasPrice, // +1 due to approximation
 		},
 		{
 			name: "high_1b_target",
@@ -156,7 +156,7 @@ var (
 			},
 			target:      1_000_000_000 + 6,
 			maxCapacity: targetToMaxCapacity * (1_000_000_000 + 6),
-			gasPrice:    big.NewInt((100 * nAVAX) * MinGasPrice),
+			gasPrice:    (100 * nAVAX) * MinGasPrice,
 		},
 		{
 			name: "largest_max_capacity",
@@ -168,7 +168,7 @@ var (
 			},
 			target:      922_337_190_378_117_171,
 			maxCapacity: 18_446_743_807_562_343_420,
-			gasPrice:    big.NewInt(2 * MinGasPrice),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "largest_int64_target",
@@ -180,7 +180,7 @@ var (
 			},
 			target:      9_223_371_923_824_614_091,
 			maxCapacity: math.MaxUint64,
-			gasPrice:    big.NewInt(2 * MinGasPrice),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "second_largest_uint64_target",
@@ -192,7 +192,7 @@ var (
 			},
 			target:      18_446_743_882_783_898_031,
 			maxCapacity: math.MaxUint64,
-			gasPrice:    big.NewInt(2 * MinGasPrice),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "largest_uint64_target",
@@ -204,7 +204,7 @@ var (
 			},
 			target:      math.MaxUint64,
 			maxCapacity: math.MaxUint64,
-			gasPrice:    big.NewInt(2 * MinGasPrice),
+			gasPrice:    2 * MinGasPrice,
 		},
 		{
 			name: "largest_excess",
@@ -217,7 +217,7 @@ var (
 			skipTestDesiredTargetExcess: true,
 			target:                      math.MaxUint64,
 			maxCapacity:                 math.MaxUint64,
-			gasPrice:                    big.NewInt(2 * MinGasPrice),
+			gasPrice:                    2 * MinGasPrice,
 		},
 	}
 	advanceTimeTests = []struct {

@@ -32,8 +32,6 @@ const (
 	maxTargetExcess     = 1_024_950_627 // TargetConversion * ln(MaxUint64 / MinTargetPerSecond) + 1
 )
 
-var bigMinGasPrice = big.NewInt(MinGasPrice)
-
 // State represents the current state of the gas pricing and constraints.
 type State struct {
 	Gas          gas.State
@@ -64,16 +62,14 @@ func (s *State) MaxCapacity() gas.Gas {
 // GasPrice returns the current required fee per gas.
 //
 // GasPrice = MinGasPrice * e^(Excess / (Target() * TargetToPriceUpdateConversion))
-func (s *State) GasPrice() *big.Int {
+func (s *State) GasPrice() gas.Price {
 	target := s.Target()
 	priceUpdateConversion, err := safemath.Mul(TargetToPriceUpdateConversion, target) // K
 	if err != nil {
 		priceUpdateConversion = math.MaxUint64
 	}
 
-	bigExcess := new(big.Int).SetUint64(uint64(s.Gas.Excess))
-	bigPriceUpdateConversion := new(big.Int).SetUint64(uint64(priceUpdateConversion))
-	return fakeExponential(bigMinGasPrice, bigExcess, bigPriceUpdateConversion)
+	return gas.CalculatePrice(MinGasPrice, s.Gas.Excess, priceUpdateConversion)
 }
 
 // AdvanceTime increases the gas capacity and decreases the gas excess based on
@@ -153,26 +149,6 @@ func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
 		}
 		return state.Target() >= desiredTarget
 	}))
-}
-
-// fakeExponential approximates factor * e ** (numerator / denominator) using
-// Taylor expansion:
-// e^x = 1 + x/1! + x^2/2! + x^3/3! + ...
-//
-// This code is copied from the EIP-4844 package in go-ethereum.
-func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
-	var (
-		output = new(big.Int)
-		accum  = new(big.Int).Mul(factor, denominator)
-	)
-	for i := 1; accum.Sign() > 0; i++ {
-		output.Add(output, accum)
-
-		accum.Mul(accum, numerator)
-		accum.Div(accum, denominator)
-		accum.Div(accum, big.NewInt(int64(i)))
-	}
-	return output.Div(output, denominator)
 }
 
 // targetExcess calculates the optimal new targetExcess for a block proposer to
