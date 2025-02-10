@@ -21,7 +21,7 @@ const (
 	MinTargetPerSecond  = 1_000_000                                 // P
 	TargetConversion    = MaxTargetChangeRate * MaxTargetExcessDiff // D
 	MaxTargetExcessDiff = 1 << 15                                   // Q
-	MinBaseFee          = 1                                         // M
+	MinGasPrice         = 1                                         // M
 
 	TimeToFillCapacity            = 10   // in seconds
 	TargetToMax                   = 2    // multiplier to convert from target per second to max per second
@@ -32,15 +32,15 @@ const (
 	maxTargetExcess     = 1_024_950_627 // TargetConversion * ln(MaxUint64 / MinTargetPerSecond) + 1
 )
 
-var minBaseFee = big.NewInt(MinBaseFee)
+var bigMinGasPrice = big.NewInt(MinGasPrice)
 
 // State represents the current state of the gas pricing and constraints.
 type State struct {
 	Gas          gas.State
-	TargetExcess gas.Gas
+	TargetExcess gas.Gas // q
 }
 
-// Target returns the target gas consumed per second.
+// Target returns the target gas consumed per second, `T`.
 //
 // Target = MinTargetPerSecond * e^(TargetExcess / TargetConversion)
 func (s *State) Target() gas.Gas {
@@ -51,7 +51,7 @@ func (s *State) Target() gas.Gas {
 	))
 }
 
-// MaxCapacity returns the maximum possible accrued gas capacity.
+// MaxCapacity returns the maximum possible accrued gas capacity, `C`.
 func (s *State) MaxCapacity() gas.Gas {
 	targetPerSecond := s.Target()
 	maxCapacity, err := safemath.Mul(targetToMaxCapacity, targetPerSecond)
@@ -61,30 +61,30 @@ func (s *State) MaxCapacity() gas.Gas {
 	return maxCapacity
 }
 
-// BaseFee returns the current required fee per gas.
+// GasPrice returns the current required fee per gas.
 //
-// BaseFee = MinBaseFee * e^(Excess / (Target() * TargetToPriceUpdateConversion))
-func (s *State) BaseFee() *big.Int {
+// GasPrice = MinGasPrice * e^(Excess / (Target() * TargetToPriceUpdateConversion))
+func (s *State) GasPrice() *big.Int {
 	target := s.Target()
-	priceUpdateConversion, err := safemath.Mul(TargetToPriceUpdateConversion, target)
+	priceUpdateConversion, err := safemath.Mul(TargetToPriceUpdateConversion, target) // K
 	if err != nil {
 		priceUpdateConversion = math.MaxUint64
 	}
 
 	bigExcess := new(big.Int).SetUint64(uint64(s.Gas.Excess))
 	bigPriceUpdateConversion := new(big.Int).SetUint64(uint64(priceUpdateConversion))
-	return fakeExponential(minBaseFee, bigExcess, bigPriceUpdateConversion)
+	return fakeExponential(bigMinGasPrice, bigExcess, bigPriceUpdateConversion)
 }
 
 // AdvanceTime increases the gas capacity and decreases the gas excess based on
 // the elapsed seconds.
 func (s *State) AdvanceTime(seconds uint64) {
 	targetPerSecond := s.Target()
-	maxPerSecond, err := safemath.Mul(TargetToMax, targetPerSecond)
+	maxPerSecond, err := safemath.Mul(TargetToMax, targetPerSecond) // R
 	if err != nil {
 		maxPerSecond = math.MaxUint64
 	}
-	maxCapacity, err := safemath.Mul(TimeToFillCapacity, maxPerSecond)
+	maxCapacity, err := safemath.Mul(TimeToFillCapacity, maxPerSecond) // C
 	if err != nil {
 		maxCapacity = math.MaxUint64
 	}
@@ -103,21 +103,28 @@ func (s *State) ConsumeGas(
 	gasUsed uint64,
 	extraGasUsed *big.Int,
 ) error {
-	var err error
-	s.Gas, err = s.Gas.ConsumeGas(gas.Gas(gasUsed))
+	newGas, err := s.Gas.ConsumeGas(gas.Gas(gasUsed))
 	if err != nil {
 		return err
 	}
-	if extraGasUsed != nil {
-		if !extraGasUsed.IsUint64() {
-			return fmt.Errorf("%w: extraGasUsed (%d) exceeds MaxUint64",
-				gas.ErrInsufficientCapacity,
-				extraGasUsed,
-			)
-		}
-		s.Gas, err = s.Gas.ConsumeGas(gas.Gas(extraGasUsed.Uint64()))
+
+	if extraGasUsed == nil {
+		s.Gas = newGas
+		return nil
 	}
-	return err
+	if !extraGasUsed.IsUint64() {
+		return fmt.Errorf("%w: extraGasUsed (%d) exceeds MaxUint64",
+			gas.ErrInsufficientCapacity,
+			extraGasUsed,
+		)
+	}
+	newGas, err = newGas.ConsumeGas(gas.Gas(extraGasUsed.Uint64()))
+	if err != nil {
+		return err
+	}
+
+	s.Gas = newGas
+	return nil
 }
 
 // UpdateTargetExcess updates the targetExcess to be as close as possible to the
@@ -151,6 +158,8 @@ func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
 // fakeExponential approximates factor * e ** (numerator / denominator) using
 // Taylor expansion:
 // e^x = 1 + x/1! + x^2/2! + x^3/3! + ...
+//
+// This code is copied from the EIP-4844 package in go-ethereum.
 func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 	var (
 		output = new(big.Int)
