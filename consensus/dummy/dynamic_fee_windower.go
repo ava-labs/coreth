@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -36,21 +37,21 @@ var (
 	ApricotPhase5BlockGasCostStep        = big.NewInt(200_000)
 )
 
-func CalcFeeWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (header.DynamicFeeWindow, error) {
+func CalcFeeWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (ap3.Window, error) {
 	if timestamp < parent.Time {
-		return header.DynamicFeeWindow{}, fmt.Errorf("cannot calculate fee window for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
+		return ap3.Window{}, fmt.Errorf("cannot calculate fee window for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
 	}
 
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	rules := config.GetAvalancheRules(parent.Time)
 	if !rules.IsApricotPhase3 || parent.Number.Cmp(common.Big0) == 0 {
-		return header.DynamicFeeWindow{}, nil
+		return ap3.Window{}, nil
 	}
 
 	dynamicFeeWindow, err := header.ParseDynamicFeeWindow(parent.Extra)
 	if err != nil {
-		return header.DynamicFeeWindow{}, err
+		return ap3.Window{}, err
 	}
 
 	// Add in parent's consumed gas
@@ -135,7 +136,7 @@ func CalcFeeWindowBaseFee(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
-	window header.DynamicFeeWindow,
+	window ap3.Window,
 ) (*big.Int, error) {
 	if timestamp < parent.Time {
 		return nil, fmt.Errorf("cannot calculate base fee for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
@@ -190,9 +191,9 @@ func CalcFeeWindowBaseFee(
 		// We use roll/rollupWindow, so that the transition is applied for every [rollupWindow] seconds
 		// that has elapsed between the parent and this block.
 		roll := timestamp - parent.Time
-		if roll > header.DynamicFeeWindowLen {
+		if roll > ap3.WindowLen {
 			// Note: roll/rollupWindow must be greater than 1 since we've checked that roll > rollupWindow
-			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(roll/header.DynamicFeeWindowLen))
+			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(roll/ap3.WindowLen))
 		}
 		baseFee.Sub(baseFee, baseFeeDelta)
 	}

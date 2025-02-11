@@ -26,7 +26,7 @@ func BigEqual(a, b *big.Int) bool {
 func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp uint64) (uint64, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, err := CalcACP176GasState(config, parent, timestamp)
+		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, timestamp)
 		if err != nil {
 			return 0, err
 		}
@@ -90,7 +90,7 @@ func calcGasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint6
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, err := CalcACP176GasState(config, parent, timestamp)
+		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, timestamp)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func CalcHeaderExtraPrefix(
 	switch {
 	case config.IsFUpgrade(header.Time):
 		// Calculate the gas state for the start of the block
-		gasState, err := CalcACP176GasState(config, parent, header.Time)
+		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +134,8 @@ func CalcHeaderExtraPrefix(
 		if err != nil {
 			return nil, err
 		}
-		return feeWindow.Bytes(), nil
+
+		return customheader.DynamicFeeWindowBytes(feeWindow), nil
 	default:
 		return nil, nil
 	}
@@ -156,7 +157,7 @@ func VerifyHeaderGasFields(
 
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := CalcACP176GasState(config, parent, header.Time)
+		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
@@ -193,7 +194,7 @@ func VerifyHeaderGasFields(
 		}
 
 		// Calculate the gas state for the start of the block
-		expectedGasState, err := CalcACP176GasState(config, parent, header.Time)
+		expectedGasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
@@ -213,7 +214,7 @@ func VerifyHeaderGasFields(
 		if err != nil {
 			return err
 		}
-		feeWindowBytes := feeWindow.Bytes()
+		feeWindowBytes := customheader.DynamicFeeWindowBytes(feeWindow)
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
 			return fmt.Errorf("expected header prefix: %x, found %x", feeWindowBytes, header.Extra)
 		}
