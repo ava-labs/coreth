@@ -865,6 +865,16 @@ func (vm *VM) Shutdown(context.Context) error {
 	return nil
 }
 
+// newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
+func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
+	return &Block{
+		id:        ids.ID(ethBlock.Hash()),
+		ethBlock:  ethBlock,
+		extension: vm.extensionConfig.BlockExtension,
+		vm:        vm,
+	}, nil
+}
+
 // buildBlock builds a block to be wrapped by ChainState
 func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
 	return vm.buildBlockWithContext(ctx, nil)
@@ -906,7 +916,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.semanticVerify(predicateCtx, false /*=writes*/); err != nil {
+	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
 		return nil, fmt.Errorf("%w: %w", vmerrors.ErrBlockVerificationFailed, err)
 	}
 
@@ -928,7 +938,7 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	}
 	// Performing syntactic verification in ParseBlock allows for
 	// short-circuiting bad blocks before they are processed by the VM.
-	if err := block.syntacticVerify(); err != nil {
+	if err := block.SyntacticVerify(); err != nil {
 		return nil, fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 	return block, nil
