@@ -128,11 +128,13 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		return errUnclesUnsupported
 	}
 
+	// Verify the extra data is well-formed.
 	config := chain.Config()
 	rules := config.GetAvalancheRules(header.Time)
 	if err := customheader.VerifyExtra(rules, header.Extra); err != nil {
 		return err
 	}
+
 	// Ensure gas-related header fields are correct
 	if err := VerifyHeaderGasFields(config, parent, header); err != nil {
 		return err
@@ -152,7 +154,7 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		return consensus.ErrInvalidNumber
 	}
 	// Verify the existence / non-existence of excessBlobGas
-	cancun := chain.Config().IsCancun(header.Number, header.Time)
+	cancun := config.IsCancun(header.Number, header.Time)
 	if !cancun {
 		switch {
 		case header.ExcessBlobGas != nil:
