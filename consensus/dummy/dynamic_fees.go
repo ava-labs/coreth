@@ -5,6 +5,7 @@ package dummy
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -16,11 +17,25 @@ import (
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
+var (
+	errBlockGasCostNil        = errors.New("block gas cost is nil")
+	errBaseFeeNil             = errors.New("base fee is nil")
+	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
+	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+)
+
 func BigEqual(a, b *big.Int) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
 	return a.Cmp(b) == 0
+}
+
+func BigEqualUint64(a *big.Int, b uint64) bool {
+	if a == nil || !a.IsUint64() {
+		return false
+	}
+	return a.Uint64() == b
 }
 
 func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp uint64) (uint64, error) {
@@ -96,7 +111,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		}
 		return new(big.Int).SetUint64(uint64(gasState.GasPrice())), nil
 	case config.IsApricotPhase3(timestamp):
-		feeWindow, err := CalcFeeWindow(config, parent, timestamp)
+		feeWindow, err := customheader.CalculateDynamicFeeWindow(config, parent, timestamp)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +145,7 @@ func CalcHeaderExtraPrefix(
 
 		return customheader.DynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := CalcFeeWindow(config, parent, header.Time)
+		feeWindow, err := customheader.CalculateDynamicFeeWindow(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +225,7 @@ func VerifyHeaderGasFields(
 			return fmt.Errorf("invalid gas state target excess: have %v, want %v", gasState.TargetExcess, expectedGasState.TargetExcess)
 		}
 	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := CalcFeeWindow(config, parent, header.Time)
+		feeWindow, err := customheader.CalculateDynamicFeeWindow(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
@@ -240,25 +255,8 @@ func VerifyHeaderGasFields(
 	}
 
 	// Enforce BlockGasCost constraints
-	blockGasCostStep := ApricotPhase4BlockGasCostStep
-	if config.IsApricotPhase5(header.Time) {
-		blockGasCostStep = ApricotPhase5BlockGasCostStep
-	}
-	expectedBlockGasCost := calcBlockGasCost(
-		ApricotPhase4TargetBlockRate,
-		ApricotPhase4MinBlockGasCost,
-		ApricotPhase4MaxBlockGasCost,
-		blockGasCostStep,
-		parent.BlockGasCost,
-		parent.Time, header.Time,
-	)
-	if header.BlockGasCost == nil {
-		return errBlockGasCostNil
-	}
-	if !header.BlockGasCost.IsUint64() {
-		return errBlockGasCostTooLarge
-	}
-	if header.BlockGasCost.Cmp(expectedBlockGasCost) != 0 {
+	expectedBlockGasCost := customheader.BlockGasCost(config, parent, header.Time)
+	if !BigEqualUint64(header.BlockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
 	}
 	// ExtDataGasUsed correctness is checked during block validation

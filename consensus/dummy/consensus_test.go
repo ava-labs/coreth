@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -178,16 +179,15 @@ func TestVerifyBlockFee(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			blockGasCost := calcBlockGasCost(
-				ApricotPhase4TargetBlockRate,
-				ApricotPhase4MinBlockGasCost,
-				ApricotPhase4MaxBlockGasCost,
-				ApricotPhase4BlockGasCostStep,
+			blockGasCost := header.BlockGasCostWithStep(
 				test.parentBlockGasCost,
-				test.parentTime, test.currentTime,
+				header.ApricotPhase4BlockGasCostStep,
+				test.parentTime,
+				test.currentTime,
 			)
+			bigBlockGasCost := new(big.Int).SetUint64(blockGasCost)
 			engine := NewFaker()
-			if err := engine.verifyBlockFee(test.baseFee, blockGasCost, test.txs, test.receipts, test.extraStateContribution); err != nil {
+			if err := engine.verifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution); err != nil {
 				if !test.shouldErr {
 					t.Fatalf("Unexpected error: %s", err)
 				}

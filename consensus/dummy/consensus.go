@@ -24,13 +24,8 @@ import (
 var (
 	allowedFutureBlockTime = 10 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
 
-	errInvalidBlockTime       = errors.New("timestamp less than parent's")
-	errUnclesUnsupported      = errors.New("uncles unsupported")
-	errBlockGasCostNil        = errors.New("block gas cost is nil")
-	errBlockGasCostTooLarge   = errors.New("block gas cost is not uint64")
-	errBaseFeeNil             = errors.New("base fee is nil")
-	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
-	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockTime  = errors.New("timestamp less than parent's")
+	errUnclesUnsupported = errors.New("uncles unsupported")
 )
 
 type Mode struct {
@@ -299,7 +294,9 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 			return err
 		}
 	}
-	if chain.Config().IsApricotPhase4(block.Time()) {
+
+	config := chain.Config()
+	if config.IsApricotPhase4(block.Time()) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
@@ -310,22 +307,12 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		if blockExtDataGasUsed := block.ExtDataGasUsed(); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
 		}
-		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if chain.Config().IsApricotPhase5(block.Time()) {
-			blockGasCostStep = ApricotPhase5BlockGasCostStep
-		}
+
 		// Calculate the expected blockGasCost for this block.
-		// Note: this is a deterministic transtion that defines an exact block fee for this block.
-		blockGasCost := calcBlockGasCost(
-			ApricotPhase4TargetBlockRate,
-			ApricotPhase4MinBlockGasCost,
-			ApricotPhase4MaxBlockGasCost,
-			blockGasCostStep,
-			parent.BlockGasCost,
-			parent.Time, block.Time(),
-		)
+		// Note: this is a deterministic transition that defines an exact block fee for this block.
+		blockGasCost := customheader.BlockGasCost(config, parent, block.Time())
 		// Verify the BlockGasCost set in the header matches the calculated value.
-		if blockBlockGasCost := block.BlockGasCost(); blockBlockGasCost == nil || !blockBlockGasCost.IsUint64() || blockBlockGasCost.Cmp(blockGasCost) != 0 {
+		if blockBlockGasCost := block.BlockGasCost(); !BigEqualUint64(blockBlockGasCost, blockGasCost) {
 			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockBlockGasCost, blockGasCost)
 		}
 		// Verify the block fee was paid.
@@ -363,18 +350,10 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		if header.ExtDataGasUsed == nil {
 			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
-		blockGasCostStep := ApricotPhase4BlockGasCostStep
-		if config.IsApricotPhase5(header.Time) {
-			blockGasCostStep = ApricotPhase5BlockGasCostStep
-		}
+
 		// Calculate the required block gas cost for this block.
-		header.BlockGasCost = calcBlockGasCost(
-			ApricotPhase4TargetBlockRate,
-			ApricotPhase4MinBlockGasCost,
-			ApricotPhase4MaxBlockGasCost,
-			blockGasCostStep,
-			parent.BlockGasCost,
-			parent.Time, header.Time,
+		header.BlockGasCost = new(big.Int).SetUint64(
+			customheader.BlockGasCost(config, parent, header.Time),
 		)
 		// Verify that this block covers the block fee.
 		if err := eng.verifyBlockFee(
