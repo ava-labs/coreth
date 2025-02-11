@@ -16,7 +16,7 @@ const (
 	ApricotPhase5BlockGasCostStep = 200_000
 )
 
-func BlockGasCost(
+func BlockGasCostFromHeader(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
@@ -25,29 +25,26 @@ func BlockGasCost(
 	if config.IsApricotPhase5(timestamp) {
 		step = ApricotPhase5BlockGasCostStep
 	}
-	return BlockGasCostWithStep(
+	// Treat an invalid parent/current time combination as 0 elapsed time.
+	var timeElapsed uint64
+	if parent.Time <= timestamp {
+		timeElapsed = timestamp - parent.Time
+	}
+	return BlockGasCost(
 		parent.BlockGasCost,
 		step,
-		parent.Time,
-		timestamp,
+		timeElapsed,
 	)
 }
 
-func BlockGasCostWithStep(
+func BlockGasCost(
 	parentCost *big.Int,
 	step uint64,
-	parentTime uint64,
-	timestamp uint64,
+	timeElapsed uint64,
 ) uint64 {
 	// Handle AP3/AP4 boundary by returning the minimum value as the boundary.
 	if parentCost == nil {
 		return ap4.MinBlockGasCost
-	}
-
-	// Treat an invalid parent/current time combination as 0 elapsed time.
-	var timeElapsed uint64
-	if parentTime <= timestamp {
-		timeElapsed = timestamp - parentTime
 	}
 
 	return ap4.BlockGasCost(

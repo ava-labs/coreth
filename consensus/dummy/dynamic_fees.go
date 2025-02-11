@@ -255,7 +255,7 @@ func VerifyHeaderGasFields(
 	}
 
 	// Enforce BlockGasCost constraints
-	expectedBlockGasCost := customheader.BlockGasCost(config, parent, header.Time)
+	expectedBlockGasCost := customheader.BlockGasCostFromHeader(config, parent, header.Time)
 	if !BigEqualUint64(header.BlockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
 	}

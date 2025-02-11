@@ -310,7 +310,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 
 		// Calculate the expected blockGasCost for this block.
 		// Note: this is a deterministic transition that defines an exact block fee for this block.
-		blockGasCost := customheader.BlockGasCost(config, parent, block.Time())
+		blockGasCost := customheader.BlockGasCostFromHeader(config, parent, block.Time())
 		// Verify the BlockGasCost set in the header matches the calculated value.
 		if blockBlockGasCost := block.BlockGasCost(); !BigEqualUint64(blockBlockGasCost, blockGasCost) {
 			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockBlockGasCost, blockGasCost)
@@ -353,7 +353,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 
 		// Calculate the required block gas cost for this block.
 		header.BlockGasCost = new(big.Int).SetUint64(
-			customheader.BlockGasCost(config, parent, header.Time),
+			customheader.BlockGasCostFromHeader(config, parent, header.Time),
 		)
 		// Verify that this block covers the block fee.
 		if err := eng.verifyBlockFee(

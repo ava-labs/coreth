@@ -47,6 +47,8 @@ func CalculateDynamicFeeWindow(
 		return ap3.Window{}, err
 	}
 
+	timeElapsed := timestamp - parent.Time
+
 	// Add in parent's consumed gas
 	var blockGasCost, parentExtraStateGasUsed uint64
 	switch {
@@ -61,11 +63,10 @@ func CalculateDynamicFeeWindow(
 	case rules.IsApricotPhase4:
 		// The blockGasCost is paid by the effective tips in the block using
 		// the block's value of baseFee.
-		blockGasCost = BlockGasCostWithStep(
+		blockGasCost = BlockGasCost(
 			parent.BlockGasCost,
 			ApricotPhase4BlockGasCostStep,
-			parent.Time,
-			timestamp,
+			timeElapsed,
 		)
 
 		// On the boundary of AP3 and AP4 or at the start of a new network, the
