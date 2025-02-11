@@ -49,7 +49,7 @@ func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
 }
 
 func (vm *VM) NewVMBlock(ethBlock *types.Block) (extension.VMBlock, error) {
-	blk, err := vm.blockManager.newBlock(ethBlock)
+	blk, err := vm.newBlock(ethBlock)
 	if err != nil {
 		return nil, err
 	}

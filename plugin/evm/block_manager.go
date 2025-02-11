@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/trie"
 )
 
@@ -24,28 +23,17 @@ var (
 	apricotPhase1MinGasPrice = big.NewInt(params.ApricotPhase1MinGasPrice)
 )
 
-type blockManager struct {
-	blockExtension extension.BlockManagerExtension
-	vm             *VM
-}
-
-func newBlockManager(vm *VM, blockExtension extension.BlockManagerExtension) *blockManager {
-	return &blockManager{
-		blockExtension: blockExtension,
-		vm:             vm,
-	}
-}
-
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
-func (bm *blockManager) newBlock(ethBlock *types.Block) (*Block, error) {
+func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 	return &Block{
-		id:           ids.ID(ethBlock.Hash()),
-		ethBlock:     ethBlock,
-		blockManager: bm,
+		id:        ids.ID(ethBlock.Hash()),
+		ethBlock:  ethBlock,
+		extension: vm.extensionConfig.BlockExtension,
+		vm:        vm,
 	}, nil
 }
 
-func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
+func (b *Block) SyntacticVerify(rules params.Rules) error {
 	ethHeader := b.ethBlock.Header()
 
 	// Perform block and header sanity checks
@@ -211,21 +199,21 @@ func (bm *blockManager) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	if bm.blockExtension != nil {
-		return bm.blockExtension.SyntacticVerify(b, rules)
+	if b.extension != nil {
+		return b.extension.SyntacticVerify(b, rules)
 	}
 	return nil
 }
 
-func (bm *blockManager) SemanticVerify(b *Block) error {
+func (b *Block) SemanticVerify() error {
 	// Make sure the block isn't too far in the future
 	blockTimestamp := b.ethBlock.Time()
-	if maxBlockTime := uint64(bm.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
+	if maxBlockTime := uint64(b.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
 		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", blockTimestamp, maxBlockTime)
 	}
 
-	if bm.blockExtension != nil {
-		return bm.blockExtension.SemanticVerify(b)
+	if b.extension != nil {
+		return b.extension.SemanticVerify(b)
 	}
 	return nil
 }

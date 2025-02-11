@@ -193,7 +193,6 @@ type VM struct {
 
 	// Extension Points
 	extensionConfig *extension.Config
-	blockManager    *blockManager
 
 	// pointers to eth constructs
 	eth        *eth.Ethereum
@@ -650,8 +649,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
-	vm.blockManager = newBlockManager(vm, vm.extensionConfig.BlockExtension)
-	block, err := vm.blockManager.newBlock(lastAcceptedBlock)
+	block, err := vm.newBlock(lastAcceptedBlock)
 	if err != nil {
 		return fmt.Errorf("failed to create block wrapper for the last accepted block: %w", err)
 	}
@@ -890,7 +888,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	}
 
 	// Note: the status of block is set by ChainState
-	blk, err := vm.blockManager.newBlock(block)
+	blk, err := vm.newBlock(block)
 	if err != nil {
 		log.Debug("discarding txs due to error making new block", "err", err)
 		return nil, fmt.Errorf("%w: %w", vmerrors.ErrMakeNewBlockFailed, err)
@@ -924,7 +922,7 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	}
 
 	// Note: the status of block is set by ChainState
-	block, err := vm.blockManager.newBlock(ethBlock)
+	block, err := vm.newBlock(ethBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -955,7 +953,7 @@ func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 		return nil, avalanchedatabase.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
-	return vm.blockManager.newBlock(ethBlock)
+	return vm.newBlock(ethBlock)
 }
 
 // GetAcceptedBlock attempts to retrieve block [blkID] from the VM. This method
