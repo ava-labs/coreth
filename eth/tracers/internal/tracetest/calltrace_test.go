@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/require"
 )
 
 type callContext struct {
@@ -289,6 +290,8 @@ func TestInternals(t *testing.T) {
 			GasLimit:    uint64(6000000),
 		}
 	)
+	config2 := params.TestApricotPhase2Config
+	require.Equal(t, config, config2)
 	mkTracer := func(name string, cfg json.RawMessage) tracers.Tracer {
 		tr, err := tracers.DefaultDirectory.New(name, nil, cfg)
 		if err != nil {

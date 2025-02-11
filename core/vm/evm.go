@@ -669,6 +669,7 @@ func (evm *EVM) NativeAssetCall(caller common.Address, input []byte, suppliedGas
 	// Send [assetAmount] of [assetID] to [to] address
 	evm.Context.TransferMultiCoin(evm.StateDB, caller, to, assetID, assetAmount)
 	ret, remainingGas, err = evm.Call(AccountRef(caller), to, callData, remainingGas, new(uint256.Int))
+
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.

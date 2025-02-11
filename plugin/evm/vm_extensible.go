@@ -25,7 +25,6 @@ var (
 )
 
 /*
- *********************************** ExtensibleVM functions  **********************************
  // All these methods assumes that VM is already initialized
 */
 
