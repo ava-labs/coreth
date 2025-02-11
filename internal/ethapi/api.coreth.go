@@ -8,23 +8,34 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-const nAVAX = 1_000_000_000
+const (
+	nAVAX = 1_000_000_000
+
+	minBaseFee       = params.EtnaMinBaseFee // 1 nAVAX
+	maxNormalBaseFee = 100 * nAVAX
+
+	minGasTip       = 1 // 1 wei
+	maxNormalGasTip = 20 * nAVAX
+
+	slowFeeNum = 19
+	fastFeeNum = 21
+	feeDen     = 20
+)
 
 var (
-	minBaseFee       = big.NewInt(params.EtnaMinBaseFee) // 1 nAVAX
-	maxNormalBaseFee = big.NewInt(100 * nAVAX)
+	bigMinBaseFee       = big.NewInt(minBaseFee)
+	bigMaxNormalBaseFee = big.NewInt(maxNormalBaseFee)
 
-	minGasTip       = common.Big1
-	maxNormalGasTip = big.NewInt(20 * nAVAX)
+	bigMinGasTip       = big.NewInt(minGasTip)
+	bigMaxNormalGasTip = big.NewInt(maxNormalGasTip)
 
-	slowFeeNum = big.NewInt(19) // 19/20 = 0.95
-	fastFeeNum = big.NewInt(21) // 21/20 = 1.05
-	feeDen     = big.NewInt(20)
+	bigSlowFeeNum = big.NewInt(slowFeeNum) // 19/20 = 0.95
+	bigFastFeeNum = big.NewInt(fastFeeNum) // 21/20 = 1.05
+	bigFeeDen     = big.NewInt(feeDen)
 )
 
 type Price struct {
@@ -51,14 +62,14 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 	}
 
 	slowBaseFee, normalBaseFee, fastBaseFee := priceOptions(
-		minBaseFee,
+		bigMinBaseFee,
 		baseFee,
-		maxNormalBaseFee,
+		bigMaxNormalBaseFee,
 	)
 	slowGasTip, normalGasTip, fastGasTip := priceOptions(
-		minGasTip,
+		bigMinGasTip,
 		gasTip,
-		maxNormalGasTip,
+		bigMaxNormalGasTip,
 	)
 	slowGasFee := new(big.Int).Add(slowBaseFee, slowGasTip)
 	normalGasFee := new(big.Int).Add(normalBaseFee, normalGasTip)
@@ -88,14 +99,14 @@ func priceOptions(
 	cappedFee := math.BigMin(estimate, maxFee)
 
 	slowFee := new(big.Int).Set(cappedFee)
-	slowFee.Mul(slowFee, slowFeeNum)
-	slowFee.Div(slowFee, feeDen)
+	slowFee.Mul(slowFee, bigSlowFeeNum)
+	slowFee.Div(slowFee, bigFeeDen)
 	slowFee = math.BigMax(slowFee, minFee)
 
 	normalFee := cappedFee
 
 	fastFee := new(big.Int).Set(estimate)
-	fastFee.Mul(fastFee, fastFeeNum)
-	fastFee.Div(fastFee, feeDen)
+	fastFee.Mul(fastFee, bigFastFeeNum)
+	fastFee.Div(fastFee, bigFeeDen)
 	return slowFee, normalFee, fastFee
 }
