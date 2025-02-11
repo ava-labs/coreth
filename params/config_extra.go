@@ -35,11 +35,20 @@ type AvalancheContext struct {
 
 // SetEthUpgrades enables Etheruem network upgrades using the same time as
 // the Avalanche network upgrade that enables them.
-//
-// TODO: Prior to Cancun, Avalanche upgrades are referenced inline in the
-// code in place of their Ethereum counterparts. The original Ethereum names
-// should be restored for maintainability.
 func (c *ChainConfig) SetEthUpgrades() {
+	// Set Ethereum block upgrades to initially activated as they were already activated on launch.
+	c.HomesteadBlock = big.NewInt(0)
+	c.DAOForkBlock = big.NewInt(0)
+	c.DAOForkSupport = true
+	c.EIP150Block = big.NewInt(0)
+	c.EIP155Block = big.NewInt(0)
+	c.EIP158Block = big.NewInt(0)
+	c.ByzantiumBlock = big.NewInt(0)
+	c.ConstantinopleBlock = big.NewInt(0)
+	c.PetersburgBlock = big.NewInt(0)
+	c.IstanbulBlock = big.NewInt(0)
+	c.MuirGlacierBlock = big.NewInt(0)
+
 	if c.ChainID != nil && AvalancheFujiChainID.Cmp(c.ChainID) == 0 {
 		c.BerlinBlock = big.NewInt(184985) // https://testnet.snowtrace.io/block/184985?chainid=43113, AP2 activation block
 		c.LondonBlock = big.NewInt(805078) // https://testnet.snowtrace.io/block/805078?chainid=43113, AP3 activation block
