@@ -86,8 +86,7 @@ type VMBlock interface {
 	GetEthBlock() *types.Block
 }
 
-// BlockExtension is an extension for the block manager
-// to handle BlockManager events
+// BlockExtension allows the VM extension to handle block processing events.
 type BlockExtension interface {
 	// SyntacticVerify verifies the block syntactically
 	// it can be implemented to extend inner block verification
