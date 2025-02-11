@@ -27,7 +27,7 @@ func TestVerifyExtra(t *testing.T) {
 			name:     "initial_invalid",
 			rules:    params.AvalancheRules{},
 			extra:    make([]byte, params.MaximumExtraDataSize+1),
-			expected: ErrInvalidExtraLength,
+			expected: errInvalidExtraLength,
 		},
 		{
 			name: "ap1_valid",
@@ -43,7 +43,7 @@ func TestVerifyExtra(t *testing.T) {
 				IsApricotPhase1: true,
 			},
 			extra:    make([]byte, 1),
-			expected: ErrInvalidExtraLength,
+			expected: errInvalidExtraLength,
 		},
 		{
 			name: "ap3_valid",
@@ -59,7 +59,7 @@ func TestVerifyExtra(t *testing.T) {
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize-1),
-			expected: ErrInvalidExtraLength,
+			expected: errInvalidExtraLength,
 		},
 		{
 			name: "ap3_invalid_more",
@@ -67,7 +67,7 @@ func TestVerifyExtra(t *testing.T) {
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize+1),
-			expected: ErrInvalidExtraLength,
+			expected: errInvalidExtraLength,
 		},
 		{
 			name: "durango_valid_min",
@@ -91,7 +91,7 @@ func TestVerifyExtra(t *testing.T) {
 				IsDurango: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize-1),
-			expected: ErrInvalidExtraLength,
+			expected: errInvalidExtraLength,
 		},
 	}
 	for _, test := range tests {

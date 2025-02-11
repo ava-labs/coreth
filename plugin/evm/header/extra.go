@@ -10,7 +10,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 )
 
-var ErrInvalidExtraLength = errors.New("invalid header.Extra length")
+var errInvalidExtraLength = errors.New("invalid header.Extra length")
 
 // VerifyExtra verifies that the header's Extra field is correctly formatted for
 // [rules].
@@ -21,7 +21,7 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 		if extraLen < params.DynamicFeeExtraDataSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
-				ErrInvalidExtraLength,
+				errInvalidExtraLength,
 				params.DynamicFeeExtraDataSize,
 				extraLen,
 			)
@@ -30,7 +30,7 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 		if extraLen != params.DynamicFeeExtraDataSize {
 			return fmt.Errorf(
 				"%w: expected %d but got %d",
-				ErrInvalidExtraLength,
+				errInvalidExtraLength,
 				params.DynamicFeeExtraDataSize,
 				extraLen,
 			)
@@ -39,7 +39,7 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 		if extraLen != 0 {
 			return fmt.Errorf(
 				"%w: expected 0 but got %d",
-				ErrInvalidExtraLength,
+				errInvalidExtraLength,
 				extraLen,
 			)
 		}
@@ -47,7 +47,7 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 		if uint64(extraLen) > params.MaximumExtraDataSize {
 			return fmt.Errorf(
 				"%w: expected <= %d but got %d",
-				ErrInvalidExtraLength,
+				errInvalidExtraLength,
 				params.MaximumExtraDataSize,
 				extraLen,
 			)
