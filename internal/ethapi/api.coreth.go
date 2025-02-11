@@ -21,8 +21,8 @@ const (
 	minGasTip       = 1 // 1 wei
 	maxNormalGasTip = 20 * nAVAX
 
-	slowFeeNum = 19
-	fastFeeNum = 21
+	slowFeeNum = 19 // 19/20 = 0.95
+	fastFeeNum = 21 // 21/20 = 1.05
 	feeDen     = 20
 )
 
@@ -33,8 +33,8 @@ var (
 	bigMinGasTip       = big.NewInt(minGasTip)
 	bigMaxNormalGasTip = big.NewInt(maxNormalGasTip)
 
-	bigSlowFeeNum = big.NewInt(slowFeeNum) // 19/20 = 0.95
-	bigFastFeeNum = big.NewInt(fastFeeNum) // 21/20 = 1.05
+	bigSlowFeeNum = big.NewInt(slowFeeNum)
+	bigFastFeeNum = big.NewInt(fastFeeNum)
 	bigFeeDen     = big.NewInt(feeDen)
 )
 
