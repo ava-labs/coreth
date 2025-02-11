@@ -90,6 +90,12 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 	}, nil
 }
 
+// priceOptions returns the slow, normal, and fast price options for a given
+// min, estimate, and max,
+//
+// slow   = max(0.95 * min(estimate, maxFee), minFee)
+// normal = min(estimate, maxFee)
+// fast   = 1.05 * estimate
 func priceOptions(
 	minFee *big.Int,
 	estimate *big.Int,
