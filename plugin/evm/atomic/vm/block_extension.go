@@ -20,7 +20,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 )
 
-var _ extension.BlockManagerExtension = (*blockExtension)(nil)
+var _ extension.BlockExtension = (*blockExtension)(nil)
 
 var (
 	errNilExtDataGasUsedApricotPhase4 = errors.New("nil extDataGasUsed is invalid after apricotPhase4")

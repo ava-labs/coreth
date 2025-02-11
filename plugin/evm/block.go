@@ -35,7 +35,7 @@ var (
 type Block struct {
 	id        ids.ID
 	ethBlock  *types.Block
-	extension extension.BlockManagerExtension
+	extension extension.BlockExtension
 	vm        *VM
 }
 

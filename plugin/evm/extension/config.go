@@ -86,9 +86,9 @@ type VMBlock interface {
 	GetEthBlock() *types.Block
 }
 
-// BlockManagerExtension is an extension for the block manager
+// BlockExtension is an extension for the block manager
 // to handle BlockManager events
-type BlockManagerExtension interface {
+type BlockExtension interface {
 	// SyntacticVerify verifies the block syntactically
 	// it can be implemented to extend inner block verification
 	SyntacticVerify(b VMBlock, rules params.Rules) error
@@ -146,10 +146,9 @@ type Config struct {
 	// SyncableParser is to parse summary messages from the network.
 	// It's required and should be non-nil
 	SyncableParser message.SyncableParser
-	// BlockManagerExtension is the extension for the block manager
-	// to handle block manager events.
+	// BlockExtension allows the VM extension to handle block processing events.
 	// It's optional and can be nil
-	BlockExtension BlockManagerExtension
+	BlockExtension BlockExtension
 	// ExtraSyncLeafHandlerConfig is the extra configuration to handle leaf requests
 	// in the network and syncer. It's optional and can be nil
 	ExtraSyncLeafHandlerConfig *LeafRequestConfig
