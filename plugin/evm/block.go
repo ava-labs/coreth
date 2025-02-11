@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 
@@ -32,9 +33,10 @@ var (
 
 // Block implements the snowman.Block interface
 type Block struct {
-	id           ids.ID
-	ethBlock     *types.Block
-	blockManager *blockManager
+	id        ids.ID
+	ethBlock  *types.Block
+	extension extension.BlockManagerExtension
+	vm        *VM
 }
 
 // ID implements the snowman.Block interface
@@ -42,7 +44,7 @@ func (b *Block) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
 func (b *Block) Accept(context.Context) error {
-	vm := b.blockManager.vm
+	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
@@ -72,10 +74,10 @@ func (b *Block) Accept(context.Context) error {
 		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
 	}
 
-	if b.blockManager.blockExtension != nil {
+	if b.extension != nil {
 		// Apply any changes atomically with other pending changes to
 		// the vm's versionDB.
-		return b.blockManager.blockExtension.OnAccept(b, vdbBatch)
+		return b.extension.OnAccept(b, vdbBatch)
 	}
 
 	return vdbBatch.Write()
@@ -84,7 +86,7 @@ func (b *Block) Accept(context.Context) error {
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
 // contract.Accepter
 func (b *Block) handlePrecompileAccept(rules params.Rules) error {
-	vm := b.blockManager.vm
+	vm := b.vm
 	// Short circuit early if there are no precompile accepters to execute
 	if len(rules.AccepterPrecompiles) == 0 {
 		return nil
@@ -119,15 +121,14 @@ func (b *Block) handlePrecompileAccept(rules params.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
-	vm := b.blockManager.vm
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 
-	if err := vm.blockChain.Reject(b.ethBlock); err != nil {
+	if err := b.vm.blockChain.Reject(b.ethBlock); err != nil {
 		return fmt.Errorf("chain could not reject %s: %w", b.ID(), err)
 	}
 
-	if b.blockManager.blockExtension != nil {
-		return b.blockManager.blockExtension.OnReject(b)
+	if b.extension != nil {
+		return b.extension.OnReject(b)
 	}
 	return nil
 }
@@ -153,29 +154,27 @@ func (b *Block) syntacticVerify() error {
 		return errInvalidBlock
 	}
 
-	vm := b.blockManager.vm
-
 	header := b.ethBlock.Header()
 
 	// Skip verification of the genesis block since it should already be marked as accepted.
-	if b.ethBlock.Hash() == vm.genesisHash {
+	if b.ethBlock.Hash() == b.vm.genesisHash {
 		return nil
 	}
-	rules := vm.chainConfig.Rules(header.Number, header.Time)
-	return b.blockManager.SyntacticVerify(b, rules)
+	rules := b.vm.chainConfig.Rules(header.Number, header.Time)
+	return b.SyntacticVerify(rules)
 }
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
 	return b.semanticVerify(&precompileconfig.PredicateContext{
-		SnowCtx:            b.blockManager.vm.ctx,
+		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: nil,
 	}, true)
 }
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
-	predicates := b.blockManager.vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp()).Predicaters
+	predicates := b.vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp()).Predicaters
 	// Short circuit early if there are no predicates to verify
 	if len(predicates) == 0 {
 		return false, nil
@@ -199,7 +198,7 @@ func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
 // VerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
 	return b.semanticVerify(&precompileconfig.PredicateContext{
-		SnowCtx:            b.blockManager.vm.ctx,
+		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: proposerVMBlockCtx,
 	}, true)
 }
@@ -208,7 +207,6 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
-	vm := b.blockManager.vm
 	if predicateContext.ProposerVMBlockCtx != nil {
 		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
 	} else {
@@ -222,13 +220,13 @@ func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateConte
 	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
 	// been accepted by the network (so the predicate was validated by the network when the
 	// block was originally verified).
-	if vm.bootstrapped.Get() {
+	if b.vm.bootstrapped.Get() {
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
 	}
 
-	if err := b.blockManager.SemanticVerify(b); err != nil {
+	if err := b.SemanticVerify(); err != nil {
 		return fmt.Errorf("failed to verify block extension: %w", err)
 	}
 
@@ -237,21 +235,20 @@ func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateConte
 	// Additionally, if a block is already in processing, then it has already passed verification and
 	// at this point we have checked the predicates are still valid in the different context so we
 	// can return nil.
-	if vm.State.IsProcessing(b.id) {
+	if b.vm.State.IsProcessing(b.id) {
 		return nil
 	}
 
-	err := vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if b.blockManager.blockExtension != nil && (err != nil || !writes) {
-		b.blockManager.blockExtension.OnError(b)
+	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+	if b.extension != nil && (err != nil || !writes) {
+		b.extension.OnError(b)
 	}
 	return err
 }
 
 // verifyPredicates verifies the predicates in the block are valid according to predicateContext.
 func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateContext) error {
-	vm := b.blockManager.vm
-	rules := vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp())
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp())
 
 	switch {
 	case !rules.IsDurango && rules.PredicatersExist():

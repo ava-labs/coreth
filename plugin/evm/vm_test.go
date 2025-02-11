@@ -1413,7 +1413,7 @@ func TestUncleBlock(t *testing.T) {
 		blkDEthBlock.ExtData(),
 		false,
 	)
-	uncleBlock, err := vm2.blockManager.newBlock(uncleEthBlock)
+	uncleBlock, err := vm2.newBlock(uncleEthBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1678,7 +1678,7 @@ func TestFutureBlock(t *testing.T) {
 		false,
 	)
 
-	futureBlock, err := vm.blockManager.newBlock(modifiedBlock)
+	futureBlock, err := vm.newBlock(modifiedBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2077,7 +2077,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			header.ParentBeaconRoot = test.beaconRoot
 			parentBeaconEthBlock := ethBlock.WithSeal(header)
 
-			parentBeaconBlock, err := vm.blockManager.newBlock(parentBeaconEthBlock)
+			parentBeaconBlock, err := vm.newBlock(parentBeaconEthBlock)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2138,7 +2138,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail
-	vmBlock, err := vm.blockManager.newBlock(blocks[0])
+	vmBlock, err := vm.newBlock(blocks[0])
 	require.NoError(err)
 	_, err = vm.ParseBlock(ctx, vmBlock.Bytes())
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
