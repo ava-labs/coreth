@@ -13,10 +13,13 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
+// GetHeaderExtra returns the [HeaderExtra] from the given [Header].
 func GetHeaderExtra(h *Header) *HeaderExtra {
 	return extras.Header.Get(h)
 }
 
+// WithHeaderExtra sets the given [HeaderExtra] on the [Header],
+// and returns the header `h`. Note `h` is modified in place.
 func WithHeaderExtra(h *Header, extra *HeaderExtra) *Header {
 	extras.Header.Set(h, extra)
 	return h
@@ -32,6 +35,8 @@ type HeaderExtra struct {
 	BlockGasCost   *big.Int
 }
 
+// EncodeRLP RLP encodes the given [ethtypes.Header] and [HeaderExtra] together
+// to the `writer`. It does merge both structs into a single [HeaderSerializable].
 func (h *HeaderExtra) EncodeRLP(eth *ethtypes.Header, writer io.Writer) error {
 	temp := new(HeaderSerializable)
 
@@ -41,6 +46,8 @@ func (h *HeaderExtra) EncodeRLP(eth *ethtypes.Header, writer io.Writer) error {
 	return rlp.Encode(writer, temp)
 }
 
+// DecodeRLP RLP decodes from the [*rlp.Stream] and writes the output to both the
+// [ethtypes.Header] passed as argument and to the receiver [HeaderExtra].
 func (h *HeaderExtra) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error {
 	temp := new(HeaderSerializable)
 	if err := stream.Decode(temp); err != nil {
@@ -53,6 +60,8 @@ func (h *HeaderExtra) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error 
 	return nil
 }
 
+// EncodeJSON JSON encodes the given [ethtypes.Header] and [HeaderExtra] together
+// to the `writer`. It does merge both structs into a single [HeaderSerializable].
 func (h *HeaderExtra) EncodeJSON(eth *ethtypes.Header) ([]byte, error) {
 	temp := new(HeaderSerializable)
 
@@ -62,6 +71,8 @@ func (h *HeaderExtra) EncodeJSON(eth *ethtypes.Header) ([]byte, error) {
 	return temp.EncodeJSON()
 }
 
+// DecodeJSON JSON decodes from the `input` bytes and writes the output to both the
+// [ethtypes.Header] passed as argument and to the receiver [HeaderExtra].
 func (h *HeaderExtra) DecodeJSON(eth *ethtypes.Header, input []byte) error {
 	temp := new(HeaderSerializable)
 	if err := temp.DecodeJSON(input); err != nil {
