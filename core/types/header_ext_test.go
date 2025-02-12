@@ -69,6 +69,41 @@ func TestHeaderExtraRLP(t *testing.T) {
 	assert.Equal(t, wantExtra, decodedExtra)
 }
 
+func TestHeaderExtraJSON(t *testing.T) {
+	t.Parallel()
+
+	eth := &ethtypes.Header{
+		ParentHash: common.Hash{1},
+		// Required json fields
+		Difficulty: big.NewInt(2),
+		Number:     big.NewInt(3),
+	}
+	extra := &HeaderExtra{
+		ExtDataHash: common.Hash{2},
+	}
+
+	encoded, err := extra.EncodeJSON(eth)
+	require.NoError(t, err)
+
+	decodedExtra := new(HeaderExtra)
+	decodedEth := new(ethtypes.Header)
+	err = decodedExtra.DecodeJSON(decodedEth, encoded)
+	require.NoError(t, err)
+
+	wantEth := &ethtypes.Header{
+		ParentHash: common.Hash{1},
+		Difficulty: big.NewInt(2),
+		Number:     big.NewInt(3),
+		Extra:      []byte{},
+	}
+	assert.Equal(t, wantEth, decodedEth)
+
+	wantExtra := &HeaderExtra{
+		ExtDataHash: common.Hash{2},
+	}
+	assert.Equal(t, wantExtra, decodedExtra)
+}
+
 func TestHeaderSerializable_updates(t *testing.T) {
 	t.Parallel()
 
