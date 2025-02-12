@@ -61,46 +61,52 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 		return nil, err
 	}
 
-	slowBaseFee, normalBaseFee, fastBaseFee := priceOptions(
+	baseFees := calculateFeeSpeeds(
 		bigMinBaseFee,
 		baseFee,
 		bigMaxNormalBaseFee,
 	)
-	slowGasTip, normalGasTip, fastGasTip := priceOptions(
+	gasTips := calculateFeeSpeeds(
 		bigMinGasTip,
 		gasTip,
 		bigMaxNormalGasTip,
 	)
-	slowGasFee := new(big.Int).Add(slowBaseFee, slowGasTip)
-	normalGasFee := new(big.Int).Add(normalBaseFee, normalGasTip)
-	fastGasFee := new(big.Int).Add(fastBaseFee, fastGasTip)
+	slowGasFee := new(big.Int).Add(baseFees.slow, gasTips.slow)
+	normalGasFee := new(big.Int).Add(baseFees.normal, gasTips.normal)
+	fastGasFee := new(big.Int).Add(baseFees.fast, gasTips.fast)
 	return &PriceOptions{
 		Slow: &Price{
-			GasTip: (*hexutil.Big)(slowGasTip),
+			GasTip: (*hexutil.Big)(gasTips.slow),
 			GasFee: (*hexutil.Big)(slowGasFee),
 		},
 		Normal: &Price{
-			GasTip: (*hexutil.Big)(normalGasTip),
+			GasTip: (*hexutil.Big)(gasTips.normal),
 			GasFee: (*hexutil.Big)(normalGasFee),
 		},
 		Fast: &Price{
-			GasTip: (*hexutil.Big)(fastGasTip),
+			GasTip: (*hexutil.Big)(gasTips.fast),
 			GasFee: (*hexutil.Big)(fastGasFee),
 		},
 	}, nil
 }
 
-// priceOptions returns the slow, normal, and fast price options for a given
-// min, estimate, and max,
+type feeSpeeds struct {
+	slow   *big.Int
+	normal *big.Int
+	fast   *big.Int
+}
+
+// calculateFeeSpeeds returns the slow, normal, and fast price options for a
+// given min, estimate, and max,
 //
 // slow   = max(0.95 * min(estimate, maxFee), minFee)
 // normal = min(estimate, maxFee)
 // fast   = 1.05 * estimate
-func priceOptions(
+func calculateFeeSpeeds(
 	minFee *big.Int,
 	estimate *big.Int,
 	maxFee *big.Int,
-) (*big.Int, *big.Int, *big.Int) {
+) feeSpeeds {
 	// Cap the fee to keep slow and normal options reasonable during fee spikes.
 	cappedFee := math.BigMin(estimate, maxFee)
 
@@ -114,5 +120,9 @@ func priceOptions(
 	fastFee := new(big.Int).Set(estimate)
 	fastFee.Mul(fastFee, bigFastFeeNumerator)
 	fastFee.Div(fastFee, bigFeeDenominator)
-	return slowFee, normalFee, fastFee
+	return feeSpeeds{
+		slow:   slowFee,
+		normal: normalFee,
+		fast:   fastFee,
+	}
 }

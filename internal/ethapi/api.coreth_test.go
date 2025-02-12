@@ -14,7 +14,7 @@ import (
 )
 
 type testSuggestPriceOptionsBackend struct {
-	Backend // embeds the interface to avoid implementing unused methods
+	Backend // embed the interface to avoid implementing unused methods
 
 	estimateBaseFee  *big.Int
 	suggestGasTipCap *big.Int
@@ -33,25 +33,25 @@ func TestSuggestPriceOptions(t *testing.T) {
 		name             string
 		estimateBaseFee  *big.Int
 		suggestGasTipCap *big.Int
-		expected         *PriceOptions
+		want             *PriceOptions
 	}{
 		{
 			name:             "nil_base_fee",
 			estimateBaseFee:  nil,
 			suggestGasTipCap: common.Big1,
-			expected:         nil,
+			want:             nil,
 		},
 		{
 			name:             "nil_tip_cap",
 			estimateBaseFee:  common.Big1,
 			suggestGasTipCap: nil,
-			expected:         nil,
+			want:             nil,
 		},
 		{
 			name:             "minimum_values",
 			estimateBaseFee:  bigMinBaseFee,
 			suggestGasTipCap: bigMinGasTip,
-			expected: &PriceOptions{
+			want: &PriceOptions{
 				Slow: newPrice(
 					minGasTip,
 					minBaseFee+minGasTip,
@@ -70,7 +70,7 @@ func TestSuggestPriceOptions(t *testing.T) {
 			name:             "maximum_values",
 			estimateBaseFee:  bigMaxNormalBaseFee,
 			suggestGasTipCap: bigMaxNormalGasTip,
-			expected: &PriceOptions{
+			want: &PriceOptions{
 				Slow: newPrice(
 					(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
 					(slowFeeNumerator*maxNormalBaseFee)/feeDenominator+(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
@@ -89,7 +89,7 @@ func TestSuggestPriceOptions(t *testing.T) {
 			name:             "double_maximum_values",
 			estimateBaseFee:  big.NewInt(2 * maxNormalBaseFee),
 			suggestGasTipCap: big.NewInt(2 * maxNormalGasTip),
-			expected: &PriceOptions{
+			want: &PriceOptions{
 				Slow: newPrice(
 					(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
 					(slowFeeNumerator*maxNormalBaseFee)/feeDenominator+(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
@@ -115,9 +115,9 @@ func TestSuggestPriceOptions(t *testing.T) {
 			}
 			api := NewEthereumAPI(backend)
 
-			options, err := api.SuggestPriceOptions(context.Background())
+			got, err := api.SuggestPriceOptions(context.Background())
 			require.NoError(err)
-			require.Equal(test.expected, options)
+			require.Equal(test.want, got)
 		})
 	}
 }
