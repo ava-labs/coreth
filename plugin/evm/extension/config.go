@@ -94,11 +94,10 @@ type BlockExtension interface {
 	// SemanticVerify verifies the block semantically
 	// it can be implemented to extend inner block verification
 	SemanticVerify(b VMBlock) error
-	// OnError is called when a block has passed SemanticVerify and SynctacticVerify,
-	// but failed insertion in the chain. This allows the block manager to perform any
-	// needed cleanup. This does not return any error because the block manager
-	// propagates the original error.
-	OnError(b VMBlock)
+	// CleanupVerified is called when a block has passed SemanticVerify and SynctacticVerify,
+	// and should be cleaned up due to error or verification runs under non-write mode. This
+	// does not return an error because the block has already been verified.
+	CleanupVerified(b VMBlock)
 	// OnAccept is called when a block is accepted by the block manager
 	OnAccept(b VMBlock, acceptedBatch database.Batch) error
 	// OnReject is called when a block is rejected by the block manager

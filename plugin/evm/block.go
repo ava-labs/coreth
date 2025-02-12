@@ -241,7 +241,7 @@ func (b *Block) semanticVerify(predicateContext *precompileconfig.PredicateConte
 
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
 	if b.extension != nil && (err != nil || !writes) {
-		b.extension.OnError(b)
+		b.extension.CleanupVerified(b)
 	}
 	return err
 }
