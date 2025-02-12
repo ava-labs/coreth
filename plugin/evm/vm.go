@@ -904,7 +904,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 		return nil, fmt.Errorf("%w: %w", vmerrors.ErrMakeNewBlockFailed, err)
 	}
 
-	// Verify is called on a non-wr apped block here, such that this
+	// Verify is called on a non-wrapped block here, such that this
 	// does not add [blk] to the processing blocks map in ChainState.
 	//
 	// TODO cache verification since Verify() will be called by the
