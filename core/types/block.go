@@ -154,6 +154,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+	if h.WithdrawalsHash != nil {
+		cpy.WithdrawalsHash = new(common.Hash)
+		*cpy.WithdrawalsHash = *h.WithdrawalsHash
+	}
 	if h.ExcessBlobGas != nil {
 		cpy.ExcessBlobGas = new(uint64)
 		*cpy.ExcessBlobGas = *h.ExcessBlobGas
