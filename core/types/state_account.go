@@ -47,7 +47,11 @@ var (
 type isMultiCoin bool
 
 var (
-	extras              = ethtypes.RegisterExtras[ethtypes.NOOPHeaderHooks, *ethtypes.NOOPHeaderHooks, isMultiCoin]()
+	extras = ethtypes.RegisterExtras[
+		ethtypes.NOOPHeaderHooks, *ethtypes.NOOPHeaderHooks,
+		ethtypes.NOOPBodyHooks, *ethtypes.NOOPBodyHooks,
+		isMultiCoin,
+	]()
 	IsMultiCoinPayloads = extras.StateAccount
 )
 
