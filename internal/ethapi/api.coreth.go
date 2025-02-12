@@ -21,9 +21,9 @@ const (
 	minGasTip       = 1 // 1 wei
 	maxNormalGasTip = 20 * nAVAX
 
-	slowFeeNum = 19 // 19/20 = 0.95
-	fastFeeNum = 21 // 21/20 = 1.05
-	feeDen     = 20
+	slowFeeNumerator = 19 // 19/20 = 0.95
+	fastFeeNumerator = 21 // 21/20 = 1.05
+	feeDenominator   = 20
 )
 
 var (
@@ -33,9 +33,9 @@ var (
 	bigMinGasTip       = big.NewInt(minGasTip)
 	bigMaxNormalGasTip = big.NewInt(maxNormalGasTip)
 
-	bigSlowFeeNum = big.NewInt(slowFeeNum)
-	bigFastFeeNum = big.NewInt(fastFeeNum)
-	bigFeeDen     = big.NewInt(feeDen)
+	bigSlowFeeNumerator = big.NewInt(slowFeeNumerator)
+	bigFastFeeNumerator = big.NewInt(fastFeeNumerator)
+	bigFeeDenominator   = big.NewInt(feeDenominator)
 )
 
 type Price struct {
@@ -105,14 +105,14 @@ func priceOptions(
 	cappedFee := math.BigMin(estimate, maxFee)
 
 	slowFee := new(big.Int).Set(cappedFee)
-	slowFee.Mul(slowFee, bigSlowFeeNum)
-	slowFee.Div(slowFee, bigFeeDen)
+	slowFee.Mul(slowFee, bigSlowFeeNumerator)
+	slowFee.Div(slowFee, bigFeeDenominator)
 	slowFee = math.BigMax(slowFee, minFee)
 
 	normalFee := cappedFee
 
 	fastFee := new(big.Int).Set(estimate)
-	fastFee.Mul(fastFee, bigFastFeeNum)
-	fastFee.Div(fastFee, bigFeeDen)
+	fastFee.Mul(fastFee, bigFastFeeNumerator)
+	fastFee.Div(fastFee, bigFeeDenominator)
 	return slowFee, normalFee, fastFee
 }

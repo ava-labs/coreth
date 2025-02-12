@@ -52,30 +52,18 @@ func TestSuggestPriceOptions(t *testing.T) {
 			estimateBaseFee:  bigMinBaseFee,
 			suggestGasTipCap: bigMinGasTip,
 			expected: &PriceOptions{
-				Slow: &Price{
-					GasTip: (*hexutil.Big)(
-						bigMinGasTip,
-					),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						minBaseFee + minGasTip,
-					)),
-				},
-				Normal: &Price{
-					GasTip: (*hexutil.Big)(
-						bigMinGasTip,
-					),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						minBaseFee + minGasTip,
-					)),
-				},
-				Fast: &Price{
-					GasTip: (*hexutil.Big)(
-						bigMinGasTip,
-					),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						(fastFeeNum*minBaseFee)/feeDen + (fastFeeNum*minGasTip)/feeDen,
-					)),
-				},
+				Slow: newPrice(
+					minGasTip,
+					minBaseFee+minGasTip,
+				),
+				Normal: newPrice(
+					minGasTip,
+					minBaseFee+minGasTip,
+				),
+				Fast: newPrice(
+					minGasTip,
+					(fastFeeNumerator*minBaseFee)/feeDenominator+(fastFeeNumerator*minGasTip)/feeDenominator,
+				),
 			},
 		},
 		{
@@ -83,30 +71,18 @@ func TestSuggestPriceOptions(t *testing.T) {
 			estimateBaseFee:  bigMaxNormalBaseFee,
 			suggestGasTipCap: bigMaxNormalGasTip,
 			expected: &PriceOptions{
-				Slow: &Price{
-					GasTip: (*hexutil.Big)(big.NewInt(
-						(slowFeeNum * maxNormalGasTip) / feeDen,
-					)),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						(slowFeeNum*maxNormalBaseFee)/feeDen + (slowFeeNum*maxNormalGasTip)/feeDen,
-					)),
-				},
-				Normal: &Price{
-					GasTip: (*hexutil.Big)(
-						bigMaxNormalGasTip,
-					),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						maxNormalBaseFee + maxNormalGasTip,
-					)),
-				},
-				Fast: &Price{
-					GasTip: (*hexutil.Big)(big.NewInt(
-						(fastFeeNum * maxNormalGasTip) / feeDen,
-					)),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						(fastFeeNum*maxNormalBaseFee)/feeDen + (fastFeeNum*maxNormalGasTip)/feeDen,
-					)),
-				},
+				Slow: newPrice(
+					(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
+					(slowFeeNumerator*maxNormalBaseFee)/feeDenominator+(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
+				),
+				Normal: newPrice(
+					maxNormalGasTip,
+					maxNormalBaseFee+maxNormalGasTip,
+				),
+				Fast: newPrice(
+					(fastFeeNumerator*maxNormalGasTip)/feeDenominator,
+					(fastFeeNumerator*maxNormalBaseFee)/feeDenominator+(fastFeeNumerator*maxNormalGasTip)/feeDenominator,
+				),
 			},
 		},
 		{
@@ -114,30 +90,18 @@ func TestSuggestPriceOptions(t *testing.T) {
 			estimateBaseFee:  big.NewInt(2 * maxNormalBaseFee),
 			suggestGasTipCap: big.NewInt(2 * maxNormalGasTip),
 			expected: &PriceOptions{
-				Slow: &Price{
-					GasTip: (*hexutil.Big)(big.NewInt(
-						(slowFeeNum * maxNormalGasTip) / feeDen,
-					)),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						(slowFeeNum*maxNormalBaseFee)/feeDen + (slowFeeNum*maxNormalGasTip)/feeDen,
-					)),
-				},
-				Normal: &Price{
-					GasTip: (*hexutil.Big)(
-						bigMaxNormalGasTip,
-					),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						maxNormalBaseFee + maxNormalGasTip,
-					)),
-				},
-				Fast: &Price{
-					GasTip: (*hexutil.Big)(big.NewInt(
-						(fastFeeNum * 2 * maxNormalGasTip) / feeDen,
-					)),
-					GasFee: (*hexutil.Big)(big.NewInt(
-						(fastFeeNum*2*maxNormalBaseFee)/feeDen + (fastFeeNum*2*maxNormalGasTip)/feeDen,
-					)),
-				},
+				Slow: newPrice(
+					(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
+					(slowFeeNumerator*maxNormalBaseFee)/feeDenominator+(slowFeeNumerator*maxNormalGasTip)/feeDenominator,
+				),
+				Normal: newPrice(
+					maxNormalGasTip,
+					maxNormalBaseFee+maxNormalGasTip,
+				),
+				Fast: newPrice(
+					(fastFeeNumerator*2*maxNormalGasTip)/feeDenominator,
+					(fastFeeNumerator*2*maxNormalBaseFee)/feeDenominator+(fastFeeNumerator*2*maxNormalGasTip)/feeDenominator,
+				),
 			},
 		},
 	}
@@ -155,5 +119,12 @@ func TestSuggestPriceOptions(t *testing.T) {
 			require.NoError(err)
 			require.Equal(test.expected, options)
 		})
+	}
+}
+
+func newPrice(gasTip, gasFee int64) *Price {
+	return &Price{
+		GasTip: (*hexutil.Big)(big.NewInt(gasTip)),
+		GasFee: (*hexutil.Big)(big.NewInt(gasFee)),
 	}
 }
