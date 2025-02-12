@@ -543,7 +543,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	return vm.initChainState(vm.blockChain.LastAcceptedBlock())
 }
 
-// initializeStateSync initializes the client for performing state sync.
+// initializeStateSync initializes the vm for performing state sync and responding to peer requests.
 // If state sync is disabled, this function will wipe any ongoing summary from
 // disk to ensure that we do not continue syncing from an invalid snapshot.
 func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
