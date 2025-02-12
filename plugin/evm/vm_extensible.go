@@ -24,9 +24,18 @@ var (
 	errExtensionConfigAlreadySet = errors.New("extension config already set")
 )
 
-/*
- // All these methods assumes that VM is already initialized
-*/
+func (vm *VM) SetExtensionConfig(config *extension.Config) error {
+	if vm.ctx != nil {
+		return errVMAlreadyInitialized
+	}
+	if vm.extensionConfig != nil {
+		return errExtensionConfigAlreadySet
+	}
+	vm.extensionConfig = config
+	return nil
+}
+
+// All these methods below assumes that VM is already initialized
 
 func (vm *VM) GetVMBlock(ctx context.Context, blkID ids.ID) (extension.VMBlock, error) {
 	// Since each internal handler used by [vm.State] always returns a block
@@ -92,15 +101,4 @@ func (vm *VM) SyncerClient() vmsync.Client {
 
 func (vm *VM) Version(context.Context) (string, error) {
 	return Version, nil
-}
-
-func (vm *VM) SetExtensionConfig(config *extension.Config) error {
-	if vm.ctx != nil {
-		return errVMAlreadyInitialized
-	}
-	if vm.extensionConfig != nil {
-		return errExtensionConfigAlreadySet
-	}
-	vm.extensionConfig = config
-	return nil
 }
