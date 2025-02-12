@@ -4,11 +4,13 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,6 +33,40 @@ func TestHeaderExtraGetWith(t *testing.T) {
 	assert.Equal(t, &HeaderExtra{
 		ExtDataHash: [32]byte{1},
 	}, extra)
+}
+
+func TestHeaderExtraRLP(t *testing.T) {
+	t.Parallel()
+
+	eth := &ethtypes.Header{
+		ParentHash: common.Hash{1},
+	}
+	extra := &HeaderExtra{
+		ExtDataHash: common.Hash{2},
+	}
+
+	writer := bytes.NewBuffer(nil)
+	err := extra.EncodeRLP(eth, writer)
+	require.NoError(t, err)
+
+	stream := rlp.NewStream(bytes.NewReader(writer.Bytes()), 0)
+	decodedExtra := new(HeaderExtra)
+	decodedEth := new(ethtypes.Header)
+	err = decodedExtra.DecodeRLP(decodedEth, stream)
+	require.NoError(t, err)
+
+	wantEth := &ethtypes.Header{
+		ParentHash: common.Hash{1},
+		Difficulty: new(big.Int),
+		Number:     new(big.Int),
+		Extra:      []byte{},
+	}
+	assert.Equal(t, wantEth, decodedEth)
+
+	wantExtra := &HeaderExtra{
+		ExtDataHash: common.Hash{2},
+	}
+	assert.Equal(t, wantExtra, decodedExtra)
 }
 
 func TestHeaderSerializable_updates(t *testing.T) {
