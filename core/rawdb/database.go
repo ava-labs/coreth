@@ -241,36 +241,6 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	return kvdb, nil
 }
 
-type counter uint64
-
-func (c counter) String() string {
-	return fmt.Sprintf("%d", c)
-}
-
-func (c counter) Percentage(current uint64) string {
-	return fmt.Sprintf("%d", current*100/uint64(c))
-}
-
-// stat stores sizes and count for a parameter
-type stat struct {
-	size  common.StorageSize
-	count counter
-}
-
-// Add size to the stat and increase the counter by 1
-func (s *stat) Add(size common.StorageSize) {
-	s.size += size
-	s.count++
-}
-
-func (s *stat) Size() string {
-	return s.size.String()
-}
-
-func (s *stat) Count() string {
-	return s.count.String()
-}
-
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
 func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
