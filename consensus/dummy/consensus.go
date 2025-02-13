@@ -145,8 +145,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
 		}
 	} else {
-		// Verify baseFee and rollupWindow encoding as part of header verification
-		// starting in AP3
+		// Verify header.Extra and header.BaseFee match their expected values.
 		expectedExtraPrefix, expectedBaseFee, err := CalcBaseFee(config, parent, header.Time)
 		if err != nil {
 			return fmt.Errorf("failed to calculate base fee: %w", err)
