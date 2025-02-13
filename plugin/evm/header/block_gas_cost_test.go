@@ -7,9 +7,68 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestBlockGasCost(t *testing.T) {
+	tests := []struct {
+		name                        string
+		apricotPhase5BlockTimestamp *uint64
+		parentTime                  uint64
+		parentCost                  *big.Int
+		timestamp                   uint64
+		expected                    uint64
+	}{
+		{
+			name:       "normal_ap4",
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   ap4.MaxBlockGasCost - ap4.BlockGasCostStep,
+		},
+		{
+			name:                        "normal_ap5",
+			apricotPhase5BlockTimestamp: utils.NewUint64(0),
+			parentTime:                  10,
+			parentCost:                  big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:                   10 + ap4.TargetBlockRate + 1,
+			expected:                    ap4.MaxBlockGasCost - ApricotPhase5BlockGasCostStep,
+		},
+		{
+			// TODO: Does it even make sense to test this? The timestamp should
+			// be verified to ensure this never happens.
+			name:       "negative_time_elapsed",
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MinBlockGasCost),
+			timestamp:  9,
+			expected:   ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := &params.ChainConfig{
+				NetworkUpgrades: params.NetworkUpgrades{
+					ApricotPhase5BlockTimestamp: test.apricotPhase5BlockTimestamp,
+				},
+			}
+			parent := &types.Header{
+				Time:         test.parentTime,
+				BlockGasCost: test.parentCost,
+			}
+
+			assert.Equal(t, test.expected, BlockGasCost(
+				config,
+				parent,
+				test.timestamp,
+			))
+		})
+	}
+}
 
 func TestBlockGasCostWithStep(t *testing.T) {
 	tests := []struct {
