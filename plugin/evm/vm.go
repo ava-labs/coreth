@@ -428,7 +428,7 @@ func (vm *VM) Initialize(
 	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
 	// normally it should not be empty, but some tests may not set it
 	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config = params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(chainID))
+		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time

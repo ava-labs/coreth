@@ -187,25 +187,6 @@ func (c *ChainConfig) ToWithUpgradesJSON() *ChainConfigWithUpgradesJSON {
 	}
 }
 
-func GetChainConfig(agoUpgrade upgrade.Config, chainID *big.Int) *ChainConfig {
-	c := &ChainConfig{
-		ChainID:             chainID,
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		NetworkUpgrades:     getNetworkUpgrades(agoUpgrade),
-	}
-	return c
-}
-
 func (r *Rules) PredicatersExist() bool {
 	return len(r.Predicaters) > 0
 }
