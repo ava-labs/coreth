@@ -23,11 +23,11 @@ func (h *HeaderExtra) DecodeRLP(eth *ethtypes.Header, stream *rlp.Stream) error 
 	panic("not implemented")
 }
 
-func (h *HeaderExtra) MarshalJSON(eth *ethtypes.Header) ([]byte, error) {
+func (h *HeaderExtra) EncodeJSON(eth *ethtypes.Header) ([]byte, error) {
 	panic("not implemented")
 }
 
-func (h *HeaderExtra) UnmarshalJSON(eth *ethtypes.Header, input []byte) error {
+func (h *HeaderExtra) DecodeJSON(eth *ethtypes.Header, input []byte) error {
 	panic("not implemented")
 }
 
