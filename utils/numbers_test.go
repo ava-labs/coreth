@@ -24,7 +24,7 @@ func TestBigEqualUint64(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "not uint64",
+			name: "not_uint64",
 			a:    big.NewInt(-1),
 			b:    0,
 			want: false,
@@ -36,7 +36,7 @@ func TestBigEqualUint64(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "not equal",
+			name: "not_equal",
 			a:    big.NewInt(1),
 			b:    2,
 			want: false,
