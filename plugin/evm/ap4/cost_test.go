@@ -55,9 +55,9 @@ func TestBlockGasCost(t *testing.T) {
 		},
 		{
 			name:        "clamp_to_max",
-			parentCost:  math.MaxUint64,
+			parentCost:  MaxBlockGasCost,
 			step:        100,
-			timeElapsed: TargetBlockRate,
+			timeElapsed: TargetBlockRate - 1,
 			want:        MaxBlockGasCost,
 		},
 	}

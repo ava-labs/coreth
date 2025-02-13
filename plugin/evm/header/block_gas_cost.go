@@ -24,7 +24,7 @@ func BlockGasCost(
 	parent *types.Header,
 	timestamp uint64,
 ) uint64 {
-	var step uint64 = ap4.BlockGasCostStep
+	step := uint64(ap4.BlockGasCostStep)
 	if config.IsApricotPhase5(timestamp) {
 		step = ApricotPhase5BlockGasCostStep
 	}
