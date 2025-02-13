@@ -5,6 +5,7 @@ package ethapi
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
@@ -53,12 +54,17 @@ type PriceOptions struct {
 // current transaction fees.
 func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, error) {
 	baseFee, err := s.b.EstimateBaseFee(ctx)
-	if err != nil || baseFee == nil {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate base fee: %w", err)
 	}
 	gasTip, err := s.b.SuggestGasTipCap(ctx)
-	if err != nil || gasTip == nil {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to suggest gas tip cap: %w", err)
+	}
+
+	// If the chain isn't running with dynamic fees, return nil.
+	if baseFee == nil || gasTip == nil {
+		return nil, nil
 	}
 
 	baseFees := calculateFeeSpeeds(
