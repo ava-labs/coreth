@@ -105,7 +105,10 @@ func UnpackSyncSegmentKey(keyBytes []byte) (common.Hash, []byte) {
 
 // packSyncSegmentKey packs root and account into a key for storage in db.
 func packSyncSegmentKey(root common.Hash, start []byte) []byte {
-	bytes := make([]byte, len(syncSegmentsPrefix)+common.HashLength+len(start))
+	if len(start) != common.HashLength {
+		panic("start must be 32 bytes")
+	}
+	bytes := make([]byte, syncSegmentsKeyLength)
 	copy(bytes, syncSegmentsPrefix)
 	copy(bytes[len(syncSegmentsPrefix):], root[:])
 	copy(bytes[len(syncSegmentsPrefix)+common.HashLength:], start)
