@@ -16,7 +16,7 @@ func ExampleInspectDatabase() {
 	WriteSnapshotBlockHash(db, common.Hash{})
 	WriteSnapshotRoot(db, common.Hash{})
 	// Trie segments: (77 + 2) + 1 = 80 bytes
-	_ = WriteSyncSegment(db, common.Hash{}, common.Hash{}.Bytes())
+	_ = WriteSyncSegment(db, common.Hash{}, common.Hash{})
 	// Storage tries to fetch: 76 + 1 = 77 bytes
 	_ = WriteSyncStorageTrie(db, common.Hash{}, common.Hash{})
 	// Code to fetch: 34 + 0 = 34 bytes
