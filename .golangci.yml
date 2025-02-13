@@ -18,7 +18,7 @@ linters-settings:
 
 issues:
   exclude-rules:
-    - path-except: "(plugin\\/.+\\.go|.+_ext\\.go)"
+    - path-except: "(_ext|plugin\\/.+|libevm.*)\\.go"
       linters:
         - errcheck
         - errorlint
