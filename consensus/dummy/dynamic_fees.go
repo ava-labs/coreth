@@ -87,7 +87,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		// the block's value of baseFee.
 		//
 		// Although the child block may be in AP5 here, the blockGasCost is
-		// still calculated using the AP4 step.
+		// still calculated using the AP4 step. This is different than the
+		// actual BlockGasCost calculation used for the child block. This
+		// behavior is kept to preserve the original behavior of this function.
 		blockGasCost = header.BlockGasCostWithStep(
 			parent.BlockGasCost,
 			ap4.BlockGasCostStep,
@@ -135,7 +137,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		num.Div(num, parentGasTargetBig)
 		num.Div(num, baseFeeChangeDenominator)
 		baseFeeDelta := math.BigMax(num, common.Big1)
-		// If [timeElapsed] is greater than [params.RollupWindow], apply the
+		// If timeElapsed is greater than [params.RollupWindow], apply the
 		// state transition to the base fee to account for the interval during
 		// which no blocks were produced.
 		//
