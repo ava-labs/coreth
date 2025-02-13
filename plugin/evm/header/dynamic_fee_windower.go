@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/ap4"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -63,9 +64,9 @@ func CalculateDynamicFeeWindow(
 	case rules.IsApricotPhase4:
 		// The blockGasCost is paid by the effective tips in the block using
 		// the block's value of baseFee.
-		blockGasCost = BlockGasCost(
+		blockGasCost = BlockGasCostWithStep(
 			parent.BlockGasCost,
-			ApricotPhase4BlockGasCostStep,
+			ap4.BlockGasCostStep,
 			timeElapsed,
 		)
 

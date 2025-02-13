@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
@@ -29,13 +30,6 @@ func BigEqual(a, b *big.Int) bool {
 		return a == b
 	}
 	return a.Cmp(b) == 0
-}
-
-func BigEqualUint64(a *big.Int, b uint64) bool {
-	if a == nil || !a.IsUint64() {
-		return false
-	}
-	return a.Uint64() == b
 }
 
 func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp uint64) (uint64, error) {
@@ -255,8 +249,8 @@ func VerifyHeaderGasFields(
 	}
 
 	// Enforce BlockGasCost constraints
-	expectedBlockGasCost := customheader.BlockGasCostFromHeader(config, parent, header.Time)
-	if !BigEqualUint64(header.BlockGasCost, expectedBlockGasCost) {
+	expectedBlockGasCost := customheader.BlockGasCost(config, parent, header.Time)
+	if !utils.BigEqualUint64(header.BlockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
 	}
 	// ExtDataGasUsed correctness is checked during block validation

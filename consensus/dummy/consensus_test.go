@@ -159,12 +159,13 @@ func TestVerifyBlockFee(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			blockGasCost := header.BlockGasCost(
+			blockGasCost := header.BlockGasCostWithStep(
 				test.parentBlockGasCost,
-				header.ApricotPhase4BlockGasCostStep,
+				ap4.BlockGasCostStep,
 				test.timeElapsed,
 			)
 			bigBlockGasCost := new(big.Int).SetUint64(blockGasCost)
+
 			engine := NewFaker()
 			if err := engine.verifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution); err != nil {
 				if !test.shouldErr {

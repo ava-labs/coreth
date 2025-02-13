@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
@@ -298,7 +299,8 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 	}
 
 	config := chain.Config()
-	if config.IsApricotPhase4(block.Time()) {
+	timestamp := block.Time()
+	if config.IsApricotPhase4(timestamp) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
@@ -310,17 +312,21 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
 		}
 
-		// Calculate the expected blockGasCost for this block.
-		// Note: this is a deterministic transition that defines an exact block fee for this block.
-		blockGasCost := customheader.BlockGasCostFromHeader(config, parent, block.Time())
-		// Verify the BlockGasCost set in the header matches the calculated value.
-		if blockBlockGasCost := block.BlockGasCost(); !BigEqualUint64(blockBlockGasCost, blockGasCost) {
-			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockBlockGasCost, blockGasCost)
+		// Verify the BlockGasCost set in the header matches the expected value.
+		blockGasCost := block.BlockGasCost()
+		expectedBlockGasCost := customheader.BlockGasCost(
+			config,
+			parent,
+			timestamp,
+		)
+		if !utils.BigEqualUint64(blockGasCost, expectedBlockGasCost) {
+			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 		}
+
 		// Verify the block fee was paid.
 		if err := eng.verifyBlockFee(
 			block.BaseFee(),
-			block.BlockGasCost(),
+			blockGasCost,
 			block.Transactions(),
 			receipts,
 			contribution,
@@ -336,7 +342,6 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	uncles []*types.Header, receipts []*types.Receipt,
 ) (*types.Block, error) {
 	var (
-		config                       = chain.Config()
 		contribution, extDataGasUsed *big.Int
 		extraData                    []byte
 		err                          error
@@ -347,6 +352,8 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
+
+	config := chain.Config()
 	if config.IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
@@ -354,9 +361,13 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		}
 
 		// Calculate the required block gas cost for this block.
-		header.BlockGasCost = new(big.Int).SetUint64(
-			customheader.BlockGasCostFromHeader(config, parent, header.Time),
+		blockGasCost := customheader.BlockGasCost(
+			config,
+			parent,
+			header.Time,
 		)
+		header.BlockGasCost = new(big.Int).SetUint64(blockGasCost)
+
 		// Verify that this block covers the block fee.
 		if err := eng.verifyBlockFee(
 			header.BaseFee,
