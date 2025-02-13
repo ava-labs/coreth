@@ -152,7 +152,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 			return fmt.Errorf("failed to calculate base fee: %w", err)
 		}
 		if !bytes.HasPrefix(header.Extra, expectedExtraPrefix) {
-			return fmt.Errorf("expected rollup window bytes: %x, found %x", expectedExtraPrefix, header.Extra)
+			return fmt.Errorf("expected header.Extra to have prefix: %x, found %x", expectedExtraPrefix, header.Extra)
 		}
 		if !utils.BigEqual(header.BaseFee, expectedBaseFee) {
 			return fmt.Errorf("expected base fee (%d), found (%d)", expectedBaseFee, header.BaseFee)
