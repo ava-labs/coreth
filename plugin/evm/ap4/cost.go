@@ -6,7 +6,7 @@
 package ap4
 
 import (
-	"github.com/ethereum/go-ethereum/common/math"
+	"math"
 
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
@@ -19,7 +19,7 @@ const (
 	// BlockGasCostStep is the rate at which the block gas cost changes per
 	// second.
 	//
-	// This value as modified by the Apricot Phase 5 upgrade.
+	// This value was modified by the Apricot Phase 5 upgrade.
 	BlockGasCostStep = 50_000
 )
 
@@ -33,25 +33,21 @@ func BlockGasCost(
 	step uint64,
 	timeElapsed uint64,
 ) uint64 {
-	var (
-		deviation   uint64
-		op          func(uint64, uint64) (uint64, error)
-		defaultCost uint64
-	)
-	if timeElapsed < TargetBlockRate {
-		deviation = TargetBlockRate - timeElapsed
-		op = safemath.Add
-		defaultCost = MaxBlockGasCost
-	} else {
-		deviation = timeElapsed - TargetBlockRate
-		op = safemath.Sub
-		defaultCost = MinBlockGasCost
-	}
-
+	deviation := safemath.AbsDiff(TargetBlockRate, timeElapsed)
 	change, err := safemath.Mul(step, deviation)
 	if err != nil {
 		change = math.MaxUint64
 	}
+
+	var (
+		op                 = safemath.Add[uint64]
+		defaultCost uint64 = MaxBlockGasCost
+	)
+	if timeElapsed > TargetBlockRate {
+		op = safemath.Sub
+		defaultCost = MinBlockGasCost
+	}
+
 	cost, err := op(parentCost, change)
 	if err != nil {
 		cost = defaultCost
@@ -59,6 +55,8 @@ func BlockGasCost(
 
 	switch {
 	case cost < MinBlockGasCost:
+		// This is technically dead code because [MinBlockGasCost] is 0, but it
+		// makes the code more clear.
 		return MinBlockGasCost
 	case cost > MaxBlockGasCost:
 		return MaxBlockGasCost

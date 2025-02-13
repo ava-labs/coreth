@@ -9,9 +9,13 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ap4"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
+
+const ApricotPhase3BlockGasFee = 1_000_000
 
 var (
 	ApricotPhase3MinBaseFee     = big.NewInt(params.ApricotPhase3MinBaseFee)
@@ -23,13 +27,6 @@ var (
 
 	ApricotPhase4BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase4BaseFeeChangeDenominator)
 	ApricotPhase5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
-
-	ApricotPhase3BlockGasFee      uint64 = 1_000_000
-	ApricotPhase4MinBlockGasCost         = new(big.Int).Set(common.Big0)
-	ApricotPhase4MaxBlockGasCost         = big.NewInt(1_000_000)
-	ApricotPhase4BlockGasCostStep        = big.NewInt(50_000)
-	ApricotPhase4TargetBlockRate  uint64 = 2 // in seconds
-	ApricotPhase5BlockGasCostStep        = big.NewInt(200_000)
 )
 
 // CalcBaseFee takes the previous header and the timestamp of its child block
@@ -55,6 +52,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	if err != nil {
 		return nil, nil, err
 	}
+
+	if timestamp < parent.Time {
+		return nil, nil, fmt.Errorf("cannot calculate base fee for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
+	}
+	timeElapsed := timestamp - parent.Time
 
 	// If AP5, use a less responsive BaseFeeChangeDenominator and a higher gas
 	// block limit
@@ -83,14 +85,14 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	case isApricotPhase4:
 		// The blockGasCost is paid by the effective tips in the block using
 		// the block's value of baseFee.
-		blockGasCost = calcBlockGasCost(
-			ApricotPhase4TargetBlockRate,
-			ApricotPhase4MinBlockGasCost,
-			ApricotPhase4MaxBlockGasCost,
-			ApricotPhase4BlockGasCostStep,
+		//
+		// Although the child block may be in AP5 here, the blockGasCost is
+		// still calculated using the AP4 step.
+		blockGasCost = header.BlockGasCostWithStep(
 			parent.BlockGasCost,
-			parent.Time, timestamp,
-		).Uint64()
+			ap4.BlockGasCostStep,
+			timeElapsed,
+		)
 
 		// On the boundary of AP3 and AP4 or at the start of a new network, the
 		// parent may not have a populated ExtDataGasUsed.
@@ -104,14 +106,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// Compute the new state of the gas rolling window.
 	dynamicFeeWindow.Add(parent.GasUsed, parentExtraStateGasUsed, blockGasCost)
 
-	if timestamp < parent.Time {
-		return nil, nil, fmt.Errorf("cannot calculate base fee for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
-	}
-	roll := timestamp - parent.Time
-
 	// roll the window over by the difference between the timestamps to generate
 	// the new rollup window.
-	dynamicFeeWindow.Shift(roll)
+	dynamicFeeWindow.Shift(timeElapsed)
 	dynamicFeeWindowBytes := dynamicFeeWindow.Bytes()
 
 	// Calculate the amount of gas consumed within the rollup window.
@@ -142,9 +139,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		// for the interval during which no blocks were produced.
 		// We use roll/rollupWindow, so that the transition is applied for every [rollupWindow] seconds
 		// that has elapsed between the parent and this block.
-		if roll > params.RollupWindow {
+		if timeElapsed > params.RollupWindow {
 			// Note: roll/rollupWindow must be greater than 1 since we've checked that roll > rollupWindow
-			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(roll/params.RollupWindow))
+			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(timeElapsed/params.RollupWindow))
 		}
 		baseFee.Sub(baseFee, baseFeeDelta)
 	}
@@ -188,43 +185,6 @@ func selectBigWithinBounds(lowerBound, value, upperBound *big.Int) *big.Int {
 	default:
 		return value
 	}
-}
-
-// calcBlockGasCost calculates the required block gas cost. If [parentTime]
-// > [currentTime], the timeElapsed will be treated as 0.
-func calcBlockGasCost(
-	targetBlockRate uint64,
-	minBlockGasCost *big.Int,
-	maxBlockGasCost *big.Int,
-	blockGasCostStep *big.Int,
-	parentBlockGasCost *big.Int,
-	parentTime, currentTime uint64,
-) *big.Int {
-	// Handle AP3/AP4 boundary by returning the minimum value as the boundary.
-	if parentBlockGasCost == nil {
-		return new(big.Int).Set(minBlockGasCost)
-	}
-
-	// Treat an invalid parent/current time combination as 0 elapsed time.
-	var timeElapsed uint64
-	if parentTime <= currentTime {
-		timeElapsed = currentTime - parentTime
-	}
-
-	var blockGasCost *big.Int
-	if timeElapsed < targetBlockRate {
-		blockGasCostDelta := new(big.Int).Mul(blockGasCostStep, new(big.Int).SetUint64(targetBlockRate-timeElapsed))
-		blockGasCost = new(big.Int).Add(parentBlockGasCost, blockGasCostDelta)
-	} else {
-		blockGasCostDelta := new(big.Int).Mul(blockGasCostStep, new(big.Int).SetUint64(timeElapsed-targetBlockRate))
-		blockGasCost = new(big.Int).Sub(parentBlockGasCost, blockGasCostDelta)
-	}
-
-	blockGasCost = selectBigWithinBounds(minBlockGasCost, blockGasCost, maxBlockGasCost)
-	if !blockGasCost.IsUint64() {
-		blockGasCost = new(big.Int).SetUint64(math.MaxUint64)
-	}
-	return blockGasCost
 }
 
 // MinRequiredTip is the estimated minimum tip a transaction would have
