@@ -106,8 +106,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// Compute the new state of the gas rolling window.
 	dynamicFeeWindow.Add(parent.GasUsed, parentExtraStateGasUsed, blockGasCost)
 
-	// roll the window over by the difference between the timestamps to generate
-	// the new rollup window.
+	// roll the window over by the timeElapsed to generate the new rollup
+	// window.
 	dynamicFeeWindow.Shift(timeElapsed)
 	dynamicFeeWindowBytes := dynamicFeeWindow.Bytes()
 
@@ -135,12 +135,16 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 		num.Div(num, parentGasTargetBig)
 		num.Div(num, baseFeeChangeDenominator)
 		baseFeeDelta := math.BigMax(num, common.Big1)
-		// If [roll] is greater than [rollupWindow], apply the state transition to the base fee to account
-		// for the interval during which no blocks were produced.
-		// We use roll/rollupWindow, so that the transition is applied for every [rollupWindow] seconds
-		// that has elapsed between the parent and this block.
+		// If [timeElapsed] is greater than [params.RollupWindow], apply the
+		// state transition to the base fee to account for the interval during
+		// which no blocks were produced.
+		//
+		// We use timeElapsed/params.RollupWindow, so that the transition is
+		// applied for every [params.RollupWindow] seconds that has elapsed
+		// between the parent and this block.
 		if timeElapsed > params.RollupWindow {
-			// Note: roll/rollupWindow must be greater than 1 since we've checked that roll > rollupWindow
+			// Note: timeElapsed/params.RollupWindow must be at least 1 since
+			// we've checked that timeElapsed > params.RollupWindow
 			baseFeeDelta = new(big.Int).Mul(baseFeeDelta, new(big.Int).SetUint64(timeElapsed/params.RollupWindow))
 		}
 		baseFee.Sub(baseFee, baseFeeDelta)
