@@ -115,7 +115,7 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 		number = uint64(blockNumOrHash.BlockNumber.Int64())
 	} else {
 		block, err := s.b.BlockByNumberOrHash(context.Background(), blockNumOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return fmt.Errorf("failed to get block from hash: %s", err)
 		}
 		number = block.NumberU64()
