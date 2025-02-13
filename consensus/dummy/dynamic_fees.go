@@ -67,9 +67,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	// If AP5, use a less responsive BaseFeeChangeDenominator and a higher gas
 	// block limit
 	var (
-		baseFee                  = new(big.Int).Set(parent.BaseFee)
-		baseFeeChangeDenominator = ApricotPhase4BaseFeeChangeDenominator
-		parentGasTarget          = params.ApricotPhase3TargetGas
+		baseFee                         = new(big.Int).Set(parent.BaseFee)
+		baseFeeChangeDenominator        = ApricotPhase4BaseFeeChangeDenominator
+		parentGasTarget          uint64 = params.ApricotPhase3TargetGas
 	)
 	if isApricotPhase5 {
 		baseFeeChangeDenominator = ApricotPhase5BaseFeeChangeDenominator
