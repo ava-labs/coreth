@@ -39,8 +39,6 @@ func TestBlockGasCost(t *testing.T) {
 			expected:                    ap4.MaxBlockGasCost - ApricotPhase5BlockGasCostStep,
 		},
 		{
-			// TODO: Does it even make sense to test this? The timestamp should
-			// be verified to ensure this never happens.
 			name:       "negative_time_elapsed",
 			parentTime: 10,
 			parentCost: big.NewInt(ap4.MinBlockGasCost),
