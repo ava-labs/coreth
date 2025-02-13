@@ -3,36 +3,26 @@ package rawdb
 import (
 	"fmt"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
 )
 
 func ExampleInspectDatabase() {
-	extendRight := func(base []byte, totalLength int) []byte {
-		if len(base) > totalLength {
-			return base[:totalLength]
-		}
-		extended := make([]byte, totalLength)
-		copy(extended, base)
-		return extended
+	db := &stubDatabase{
+		iterator: &stubIterator{},
 	}
 
-	db := &stubDatabase{
-		iterator: &stubIterator{
-			kvs: []keyValue{
-				// Extra metadata keys: (17 + 1) + (9 + 1) = 28 bytes
-				{key: snapshotBlockHashKey, value: []byte("a")},
-				{key: syncRootKey, value: []byte("b")},
-				// Trie segments: 77 + 1 = 78 bytes
-				{key: extendRight(syncSegmentsPrefix, syncSegmentsKeyLength), value: []byte("c")},
-				// Storage tries to fetch: 76 + 1 = 77 bytes
-				{key: extendRight(syncStorageTriesPrefix, syncStorageTriesKeyLength), value: []byte("d")},
-				// Code to fetch: 34 + 1 = 35 bytes
-				{key: extendRight(CodeToFetchPrefix, codeToFetchKeyLength), value: []byte("e")},
-				// Block numbers synced to: 22 + 1 = 23 bytes
-				{key: extendRight(syncPerformedPrefix, syncPerformedKeyLength), value: []byte("f")},
-			},
-		},
-	}
+	// Extra metadata keys: (17 + 32) + (12 + 32) = 93 bytes
+	WriteSnapshotBlockHash(db, common.Hash{})
+	WriteSnapshotRoot(db, common.Hash{})
+	// Trie segments: (77 + 2) + 1 = 80 bytes
+	_ = WriteSyncSegment(db, common.Hash{}, common.Hash{}.Bytes())
+	// Storage tries to fetch: 76 + 1 = 77 bytes
+	_ = WriteSyncStorageTrie(db, common.Hash{}, common.Hash{})
+	// Code to fetch: 34 + 0 = 34 bytes
+	AddCodeToFetch(db, common.Hash{})
+	// Block numbers synced to: 22 + 1 = 23 bytes
+	_ = WriteSyncPerformed(db, 0)
 
 	keyPrefix := []byte(nil)
 	keyStart := []byte(nil)
@@ -61,21 +51,21 @@ func ExampleInspectDatabase() {
 	// | Key-Value store | Account snapshot        | 0.00 B   |     0 |
 	// | Key-Value store | Storage snapshot        | 0.00 B   |     0 |
 	// | Key-Value store | Clique snapshots        | 0.00 B   |     0 |
-	// | Key-Value store | Singleton metadata      | 28.00 B  |     2 |
+	// | Key-Value store | Singleton metadata      | 93.00 B  |     2 |
 	// | Light client    | CHT trie nodes          | 0.00 B   |     0 |
 	// | Light client    | Bloom trie nodes        | 0.00 B   |     0 |
 	// | State sync      | Trie segments           | 78.00 B  |     1 |
 	// | State sync      | Storage tries to fetch  | 77.00 B  |     1 |
-	// | State sync      | Code to fetch           | 35.00 B  |     1 |
+	// | State sync      | Code to fetch           | 34.00 B  |     1 |
 	// | State sync      | Block numbers synced to | 23.00 B  |     1 |
 	// +-----------------+-------------------------+----------+-------+
-	// |                            TOTAL          | 241.00 B |       |
+	// |                            TOTAL          | 305.00 B |       |
 	// +-----------------+-------------------------+----------+-------+
 }
 
 type stubDatabase struct {
 	ethdb.Database
-	iterator ethdb.Iterator
+	iterator *stubIterator
 }
 
 func (s *stubDatabase) NewIterator(keyPrefix, keyStart []byte) ethdb.Iterator {
@@ -93,6 +83,11 @@ func (s *stubDatabase) Ancients() (uint64, error) {
 
 func (s *stubDatabase) Tail() (uint64, error) {
 	return 0, nil
+}
+
+func (s *stubDatabase) Put(key, value []byte) error {
+	s.iterator.kvs = append(s.iterator.kvs, keyValue{key: key, value: value})
+	return nil
 }
 
 func (s *stubDatabase) Get(key []byte) ([]byte, error) {
