@@ -408,6 +408,10 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 
+	if err := b.SemanticVerify(); err != nil {
+		return fmt.Errorf("failed to verify block extension: %w", err)
+	}
+
 	// Only enforce predicates if the chain has already bootstrapped.
 	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
 	// been accepted by the network (so the predicate was validated by the network when the
@@ -416,10 +420,6 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
-	}
-
-	if err := b.SemanticVerify(); err != nil {
-		return fmt.Errorf("failed to verify block extension: %w", err)
 	}
 
 	// The engine may call VerifyWithContext multiple times on the same block with different contexts.

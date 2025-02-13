@@ -144,6 +144,10 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 // SemanticVerify checks the semantic validity of the block. This is called the wrapper
 // block manager's SemanticVerify method.
 func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
+	// If the VM is not bootstrapped, we cannot verify atomic transactions
+	if !be.vm.IsBootstrapped() {
+		return nil
+	}
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {
 		return err
