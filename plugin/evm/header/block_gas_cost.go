@@ -55,8 +55,8 @@ func BlockGasCostWithStep(
 		return ap4.MinBlockGasCost
 	}
 
-	// ap4.MaxBlockGasCost is <= MaxUint64, so we know that parentCost is always
-	// going to be a valid uint64.
+	// [ap4.MaxBlockGasCost] is <= MaxUint64, so we know that parentCost is
+	// always going to be a valid uint64.
 	return ap4.BlockGasCost(
 		parentCost.Uint64(),
 		step,
