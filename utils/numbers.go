@@ -32,8 +32,7 @@ func Uint64PtrEqual(x, y *uint64) bool {
 // BigEqualUint64 returns true if a is equal to b. If a is nil or not a uint64,
 // it returns false.
 func BigEqualUint64(a *big.Int, b uint64) bool {
-	if a == nil || !a.IsUint64() {
-		return false
-	}
-	return a.Uint64() == b
+	return a != nil &&
+		a.IsUint64() &&
+		a.Uint64() == b
 }
