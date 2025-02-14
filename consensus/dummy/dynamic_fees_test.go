@@ -425,14 +425,15 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 		nextExtraData, nextBaseFee, err = CalcBaseFee(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
 		assert.NoError(t, err)
 		log.Info("Update", "baseFee (w/extData)", nextBaseFee)
-		extDataHeader = &types.Header{
-			Time:           block.timestamp,
-			GasUsed:        block.gasUsed,
-			Number:         big.NewInt(int64(index) + 1),
-			BaseFee:        nextBaseFee,
-			Extra:          nextExtraData,
+		extDataHeader = types.WithHeaderExtra(&types.Header{
+			Time:    block.timestamp,
+			GasUsed: block.gasUsed,
+			Number:  big.NewInt(int64(index) + 1),
+			BaseFee: nextBaseFee,
+			Extra:   nextExtraData,
+		}, &types.HeaderExtra{
 			ExtDataGasUsed: block.extDataGasUsed,
-		}
+		})
 
 		assert.Equal(t, event.extDataFeeGreater, extDataHeader.BaseFee.Cmp(header.BaseFee) == 1, "unexpected cmp for index %d", index)
 	}
