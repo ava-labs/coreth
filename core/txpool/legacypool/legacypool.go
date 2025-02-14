@@ -41,6 +41,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -48,8 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/holiman/uint256"
-
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 const (
@@ -1817,7 +1816,7 @@ func (pool *LegacyPool) updateBaseFee() {
 
 // assumes lock is already held
 func (pool *LegacyPool) updateBaseFeeAt(head *types.Header) error {
-	baseFeeEstimate, err := customheader.EstimateNextBaseFee(pool.chainconfig, head, uint64(time.Now().Unix()))
+	baseFeeEstimate, err := header.EstimateNextBaseFee(pool.chainconfig, head, uint64(time.Now().Unix()))
 	if err != nil {
 		return err
 	}
