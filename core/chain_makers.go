@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/holiman/uint256"
 
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 // BlockGen creates blocks for testing.
@@ -374,25 +374,24 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
 	parentHeader := parent.Header()
+	gasLimit, err := header.GasLimit(cm.config, parentHeader, time)
+	if err != nil {
+		panic(err)
+	}
+	baseFee, err := header.BaseFee(cm.config, parentHeader, time)
+	if err != nil {
+		panic(err)
+	}
 	header := &types.Header{
 		Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),
+		GasLimit:   gasLimit,
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
+		BaseFee:    baseFee,
 	}
-
-	var err error
-	header.GasLimit, err = customheader.GasLimit(cm.config, parentHeader, time)
-	if err != nil {
-		panic(err)
-	}
-	header.BaseFee, err = customheader.BaseFee(cm.config, parentHeader, time)
-	if err != nil {
-		panic(err)
-	}
-
 	if cm.config.IsCancun(header.Number, header.Time) {
 		var (
 			parentExcessBlobGas uint64
