@@ -86,12 +86,12 @@ func ClearSyncSegments(db ethdb.KeyValueStore, root common.Hash) error {
 	segmentsPrefix := make([]byte, len(syncSegmentsPrefix)+common.HashLength)
 	copy(segmentsPrefix, syncSegmentsPrefix)
 	copy(segmentsPrefix[len(syncSegmentsPrefix):], root[:])
-	return ClearPrefix(db, segmentsPrefix, syncSegmentsKeyLength)
+	return clearPrefix(db, segmentsPrefix, syncSegmentsKeyLength)
 }
 
 // ClearAllSyncSegments removes all segment markers from db
 func ClearAllSyncSegments(db ethdb.KeyValueStore) error {
-	return ClearPrefix(db, syncSegmentsPrefix, syncSegmentsKeyLength)
+	return clearPrefix(db, syncSegmentsPrefix, syncSegmentsKeyLength)
 }
 
 // UnpackSyncSegmentKey returns the root and start position for a trie segment
@@ -130,12 +130,12 @@ func ClearSyncStorageTrie(db ethdb.KeyValueStore, root common.Hash) error {
 	accountsPrefix := make([]byte, len(syncStorageTriesPrefix)+common.HashLength)
 	copy(accountsPrefix, syncStorageTriesPrefix)
 	copy(accountsPrefix[len(syncStorageTriesPrefix):], root[:])
-	return ClearPrefix(db, accountsPrefix, syncStorageTriesKeyLength)
+	return clearPrefix(db, accountsPrefix, syncStorageTriesKeyLength)
 }
 
 // ClearAllSyncStorageTries removes all storage tries added for syncing from db
 func ClearAllSyncStorageTries(db ethdb.KeyValueStore) error {
-	return ClearPrefix(db, syncStorageTriesPrefix, syncStorageTriesKeyLength)
+	return clearPrefix(db, syncStorageTriesPrefix, syncStorageTriesKeyLength)
 }
 
 // UnpackSyncStorageTrieKey returns the root and account for a storage trie
@@ -190,4 +190,33 @@ func GetLatestSyncPerformed(db ethdb.Iteratee) uint64 {
 		}
 	}
 	return latestSyncPerformed
+}
+
+// clearPrefix removes all keys in db that begin with prefix and match an
+// expected key length. [keyLen] should include the length of the prefix.
+func clearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
+	it := db.NewIterator(prefix, nil)
+	defer it.Release()
+
+	batch := db.NewBatch()
+	for it.Next() {
+		key := common.CopyBytes(it.Key())
+		if len(key) != keyLen {
+			// avoid deleting keys that do not match the expected length
+			continue
+		}
+		if err := batch.Delete(key); err != nil {
+			return err
+		}
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+		}
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	return batch.Write()
 }
