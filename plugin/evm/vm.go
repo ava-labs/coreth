@@ -509,12 +509,10 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 	if file := vm.config.FirewoodDBFile; file != "" {
-		var fwdb firewood.Firewood
-		if fileExists(file) {
-			fwdb = firewood.OpenDatabase(file)
-		} else {
-			fwdb = firewood.CreateDatabase(file)
-		}
+		fwdb := firewood.NewDatabase(
+			firewood.WithPath(file),
+			firewood.WithCreate(!fileExists(file)),
+		)
 		vm.ethConfig.KVBackend = &fw.Firewood{Firewood: fwdb}
 		log.Warn("Using Firewood database (experimental)", "file", file)
 	}
