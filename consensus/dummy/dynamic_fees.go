@@ -261,14 +261,17 @@ func VerifyHeaderGasFields(
 	return nil
 }
 
-// EstimateNextBaseFee attempts to estimate the next base fee based on a block with [parent] being built at
-// [timestamp].
-// If [timestamp] is less than the timestamp of [parent], then it uses the same timestamp as parent.
-// Warning: This function should only be used in estimation and should not be used when calculating the canonical
-// base fee for a subsequent block.
+// EstimateNextBaseFee attempts to estimate the base fee of a block built at
+// `timestamp` on top of `parent`.
+//
+// If timestamp is before parent.Time or the AP3 activation time, then timestamp
+// is set to the maximum of parent.Time and the AP3 activation time.
+//
+// Warning: This function should only be used in estimation and should not be
+// used when calculating the canonical base fee for a block.
 func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
-	if timestamp < parent.Time {
-		timestamp = parent.Time
+	if config.ApricotPhase3BlockTimestamp == nil {
+		return nil, errEstimateBaseFeeWithoutActivation
 	}
 
 	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
