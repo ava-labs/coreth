@@ -453,6 +453,16 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
+
+	if config.IsApricotPhase3(header.Time) {
+		// finalize the header.Extra
+		extraPrefix, err := CalcExtraPrefix(config, parent, header.Time)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
+		}
+		header.Extra = append(extraPrefix, header.Extra...)
+	}
+
 	// commit the final state root
 	header.Root = state.IntermediateRoot(config.IsEIP158(header.Number))
 
