@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc.
+// (c) 2025, Ava Labs, Inc.
 package rawdb
 
 import (
