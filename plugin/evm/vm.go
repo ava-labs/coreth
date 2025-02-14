@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
+	"github.com/ava-labs/coreth/plugin/evm/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -645,6 +646,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		return err
 	}
 	callbacks := vm.createConsensusCallbacks()
+
+	desiredTargetExcess := acp176.DesiredTargetExcess(1_500_000)
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -652,7 +655,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		vm.chaindb,
 		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
-		dummy.NewFakerWithClock(callbacks, &vm.clock),
+		dummy.NewDummyEngine(
+			callbacks,
+			dummy.Mode{},
+			&vm.clock,
+			&desiredTargetExcess,
+		),
 		&vm.clock,
 	)
 	if err != nil {
@@ -1576,9 +1584,10 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 		return fmt.Errorf("failed to retrieve block state at tip while verifying atomic tx: %w", err)
 	}
 	rules := vm.currentRules()
+
 	parentHeader := preferredBlock
-	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
+	var nextBaseFee *big.Int
 	if vm.chainConfig.IsApricotPhase3(timestamp) {
 		nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
 		if err != nil {
