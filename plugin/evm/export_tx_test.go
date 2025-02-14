@@ -1704,7 +1704,6 @@ func TestNewExportTx(t *testing.T) {
 				}
 			}()
 
-			parent := vm.LastAcceptedBlockInternal().(*Block)
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1764,7 +1763,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = vm.LastAcceptedBlockInternal().(*Block)
+			parent := vm.LastAcceptedBlockInternal().(*Block)
 			exportAmount := uint64(5000000)
 
 			state, err := vm.blockChain.State()
@@ -1877,7 +1876,6 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				}
 			}()
 
-			parent := vm.LastAcceptedBlockInternal().(*Block)
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1967,7 +1965,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = vm.LastAcceptedBlockInternal().(*Block)
+			parent := vm.LastAcceptedBlockInternal().(*Block)
 			exportAmount := uint64(5000000)
 
 			testKeys0Addr := testKeys[0].EthAddress()

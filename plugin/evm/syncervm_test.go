@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -49,7 +48,6 @@ import (
 )
 
 func TestSkipStateSync(t *testing.T) {
-	rand.Seed(1)
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
@@ -61,7 +59,6 @@ func TestSkipStateSync(t *testing.T) {
 }
 
 func TestStateSyncFromScratch(t *testing.T) {
-	rand.Seed(1)
 	test := syncTest{
 		syncableInterval:   256,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -73,7 +70,6 @@ func TestStateSyncFromScratch(t *testing.T) {
 }
 
 func TestStateSyncFromScratchExceedParent(t *testing.T) {
-	rand.Seed(1)
 	numToGen := parentsToGet + uint64(32)
 	test := syncTest{
 		syncableInterval:   numToGen,
@@ -86,8 +82,6 @@ func TestStateSyncFromScratchExceedParent(t *testing.T) {
 }
 
 func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
-	rand.Seed(1)
-
 	var lock sync.Mutex
 	reqCount := 0
 	test := syncTest{
@@ -111,7 +105,8 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 					t.Fatal("state sync client not populated correctly")
 				}
 			} else {
-				syncerVM.AppResponse(context.Background(), nodeID, requestID, response)
+				err := syncerVM.AppResponse(context.Background(), nodeID, requestID, response)
+				require.NoError(t, err)
 			}
 		},
 		expectedErr: context.Canceled,
@@ -133,7 +128,10 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		if !hasItem {
 			t.Fatal("expected nodeSet to contain at least 1 nodeID")
 		}
-		go vmSetup.serverVM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
+		go func() {
+			err := vmSetup.serverVM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
+			require.NoError(t, err)
+		}()
 		return nil
 	}
 	// Reset metrics to allow re-initialization
@@ -221,7 +219,10 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	vmSetup.serverAppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
-			go syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response)
+			go func() {
+				err := syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response)
+				require.NoError(t, err)
+			}()
 		} else {
 			go test.responseIntercept(syncReEnabledVM, nodeID, requestID, response)
 		}
@@ -377,7 +378,10 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	serverAppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
-			go syncerVM.AppResponse(ctx, nodeID, requestID, response)
+			go func() {
+				err := syncerVM.AppResponse(ctx, nodeID, requestID, response)
+				require.NoError(err)
+			}()
 		} else {
 			go test.responseIntercept(syncerVM, nodeID, requestID, response)
 		}

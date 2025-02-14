@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -183,7 +184,7 @@ func lastCommittedRootIfExists(db avalanchedatabase.Database) (common.Hash, uint
 	// read the last committed entry if it exists and set the root hash
 	lastCommittedHeightBytes, err := db.Get(lastCommittedKey)
 	switch {
-	case err == avalanchedatabase.ErrNotFound:
+	case errors.Is(err, avalanchedatabase.ErrNotFound):
 		return common.Hash{}, 0, nil
 	case err != nil:
 		return common.Hash{}, 0, err
@@ -305,7 +306,7 @@ func getRoot(metadataDB avalanchedatabase.Database, height uint64) (common.Hash,
 	heightBytes := avalanchedatabase.PackUInt64(height)
 	hash, err := metadataDB.Get(heightBytes)
 	switch {
-	case err == avalanchedatabase.ErrNotFound:
+	case errors.Is(err, avalanchedatabase.ErrNotFound):
 		return common.Hash{}, nil
 	case err != nil:
 		return common.Hash{}, err
@@ -323,7 +324,11 @@ func (a *atomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 			return err
 		}
 	}
-	a.trieDB.Reference(root, common.Hash{})
+
+	err := a.trieDB.Reference(root, common.Hash{})
+	if err != nil {
+		return fmt.Errorf("referencing root: %w", err)
+	}
 
 	// The use of [Cap] in [insertTrie] prevents exceeding the configured memory
 	// limit (and OOM) in case there is a large backlog of processing (unaccepted) blocks.
@@ -364,12 +369,19 @@ func (a *atomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 	// - not committted, in which case the current root we are inserting contains
 	//   references to all the relevant data from the previous root, so the previous
 	//   root can be dereferenced.
-	a.trieDB.Dereference(a.lastAcceptedRoot)
+	err := a.trieDB.Dereference(a.lastAcceptedRoot)
+	if err != nil {
+		return false, fmt.Errorf("dereferencing last accepted root: %w", err)
+	}
+
 	a.lastAcceptedRoot = root
 	return hasCommitted, nil
 }
 
 func (a *atomicTrie) RejectTrie(root common.Hash) error {
-	a.trieDB.Dereference(root)
+	err := a.trieDB.Dereference(root)
+	if err != nil {
+		return fmt.Errorf("dereferencing root from trie database: %w", err)
+	}
 	return nil
 }
