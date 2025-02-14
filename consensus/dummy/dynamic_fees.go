@@ -53,7 +53,9 @@ func CalcExtraPrefix(
 }
 
 // CalcBaseFee takes the previous header and the timestamp of its child block
-// and calculates the expected base fee for the child block which may be nil.
+// and calculates the expected base fee for the child block.
+//
+// Prior to AP3, the returned base fee will be nil.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	switch {
 	case config.IsApricotPhase3(timestamp):
