@@ -174,7 +174,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 }
 
 // EstimateNextBaseFee attempts to estimate the base fee of a block built at
-// timestamp on top of parent.
+// `timestamp` on top of `parent`.
 //
 // If timestamp is before parent.Time or the AP3 activation time, then timestamp
 // is set to the maximum of parent.Time and the AP3 activation time.
