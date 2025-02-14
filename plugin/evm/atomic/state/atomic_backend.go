@@ -19,10 +19,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
-
 const (
-	progressLogFrequency = 30 * time.Second
+	sharedMemoryApplyBatchSize = 10_000 // specifies the number of atomic operations to batch progress updates
+	progressLogFrequency       = 30 * time.Second
 )
 
 // AtomicBackend implements the AtomicBackend interface using
