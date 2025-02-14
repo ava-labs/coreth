@@ -5,7 +5,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"golang.org/x/exp/slog"
@@ -23,8 +22,6 @@ import (
 // TODO: this should be defined per chain vm (coreth, subnet-evm) in their relative pkgs.
 // Interface compliance
 var _ Client = (*client)(nil)
-
-var errInvalidAddr = errors.New("invalid hex address")
 
 // Client interface for interacting with EVM [chain]
 type Client interface {
