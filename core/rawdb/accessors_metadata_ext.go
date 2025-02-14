@@ -9,8 +9,8 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-// WriteTimeMarker writes a marker of the current time in the db at [key]
-func WriteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
+// writeTimeMarker writes a marker of the current time in the db at [key]
+func writeTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	data, err := rlp.EncodeToBytes(uint64(time.Now().Unix()))
 	if err != nil {
 		return err
@@ -18,8 +18,8 @@ func WriteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	return db.Put(key, data)
 }
 
-// ReadTimeMarker reads the timestamp stored at [key]
-func ReadTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
+// readTimeMarker reads the timestamp stored at [key]
+func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 	data, err := db.Get(key)
 	if err != nil {
 		return time.Time{}, err
@@ -33,8 +33,8 @@ func ReadTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 	return time.Unix(int64(lastRun), 0), nil
 }
 
-// DeleteTimeMarker deletes any value stored at [key]
-func DeleteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
+// deleteTimeMarker deletes any value stored at [key]
+func deleteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	return db.Delete(key)
 }
 
@@ -44,36 +44,36 @@ func DeleteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 // disable offline pruning and start their node successfully between runs of offline
 // pruning.
 func WriteOfflinePruning(db ethdb.KeyValueStore) error {
-	return WriteTimeMarker(db, offlinePruningKey)
+	return writeTimeMarker(db, offlinePruningKey)
 }
 
 // ReadOfflinePruning reads the most recent timestamp of an attempt to run offline
 // pruning if present.
 func ReadOfflinePruning(db ethdb.KeyValueStore) (time.Time, error) {
-	return ReadTimeMarker(db, offlinePruningKey)
+	return readTimeMarker(db, offlinePruningKey)
 }
 
 // DeleteOfflinePruning deletes any marker of the last attempt to run offline pruning.
 func DeleteOfflinePruning(db ethdb.KeyValueStore) error {
-	return DeleteTimeMarker(db, offlinePruningKey)
+	return deleteTimeMarker(db, offlinePruningKey)
 }
 
 // WritePopulateMissingTries writes a marker for the current attempt to populate
 // missing tries.
 func WritePopulateMissingTries(db ethdb.KeyValueStore) error {
-	return WriteTimeMarker(db, populateMissingTriesKey)
+	return writeTimeMarker(db, populateMissingTriesKey)
 }
 
 // ReadPopulateMissingTries reads the most recent timestamp of an attempt to
 // re-populate missing trie nodes.
 func ReadPopulateMissingTries(db ethdb.KeyValueStore) (time.Time, error) {
-	return ReadTimeMarker(db, populateMissingTriesKey)
+	return readTimeMarker(db, populateMissingTriesKey)
 }
 
 // DeletePopulateMissingTries deletes any marker of the last attempt to
 // re-populate missing trie nodes.
 func DeletePopulateMissingTries(db ethdb.KeyValueStore) error {
-	return DeleteTimeMarker(db, populateMissingTriesKey)
+	return deleteTimeMarker(db, populateMissingTriesKey)
 }
 
 // WritePruningDisabled writes a marker to track whether the node has ever run
