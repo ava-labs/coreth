@@ -66,7 +66,7 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 
-			window, err := ParseDynamicFeeWindow(test.bytes)
+			window, err := parseDynamicFeeWindow(test.bytes)
 			require.Equal(test.window, window)
 			require.ErrorIs(err, test.parseErr)
 			if test.parseErr != nil {

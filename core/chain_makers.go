@@ -31,7 +31,6 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
@@ -42,6 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/holiman/uint256"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 // BlockGen creates blocks for testing.
@@ -383,11 +384,11 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 	}
 
 	var err error
-	header.GasLimit, err = dummy.CalcGasLimit(cm.config, parentHeader, time)
+	header.GasLimit, err = customheader.GasLimit(cm.config, parentHeader, time)
 	if err != nil {
 		panic(err)
 	}
-	header.BaseFee, err = dummy.CalcBaseFee(cm.config, parentHeader, time)
+	header.BaseFee, err = customheader.BaseFee(cm.config, parentHeader, time)
 	if err != nil {
 		panic(err)
 	}

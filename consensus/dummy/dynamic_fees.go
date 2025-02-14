@@ -10,7 +10,6 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/utils/math"
-	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
@@ -28,124 +27,6 @@ var (
 
 	errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 )
-
-func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp uint64) (uint64, error) {
-	switch {
-	case config.IsFUpgrade(timestamp):
-		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, timestamp)
-		if err != nil {
-			return 0, err
-		}
-		return uint64(gasState.Gas.Capacity), nil
-	case config.IsCortina(timestamp):
-		return params.CortinaGasLimit, nil
-	case config.IsApricotPhase1(timestamp):
-		return params.ApricotPhase1GasLimit, nil
-	default:
-		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the
-		// ceiling and floor were set to the same value such that the gas limit
-		// converged to it. Since this is hardcoded now, we remove the ability
-		// to configure it.
-		return calcGasLimit(
-			parent.GasUsed,
-			parent.GasLimit,
-			params.ApricotPhase1GasLimit,
-			params.ApricotPhase1GasLimit,
-		), nil
-	}
-}
-
-// Copied from core.CalcGasLimit to avoid a circular dependency.
-// DO NOT MERGE with this hack.
-func calcGasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint64 {
-	// contrib = (parentGasUsed * 3 / 2) / 1024
-	contrib := (parentGasUsed + parentGasUsed/2) / params.GasLimitBoundDivisor
-
-	// decay = parentGasLimit / 1024 -1
-	decay := parentGasLimit/params.GasLimitBoundDivisor - 1
-
-	/*
-		strategy: gasLimit of block-to-mine is set based on parent's
-		gasUsed value.  if parentGasUsed > parentGasLimit * (2/3) then we
-		increase it, otherwise lower it (or leave it unchanged if it's right
-		at that usage) the amount increased/decreased depends on how far away
-		from parentGasLimit * (2/3) parentGasUsed is.
-	*/
-	limit := parentGasLimit - decay + contrib
-	if limit < params.MinGasLimit {
-		limit = params.MinGasLimit
-	}
-	// If we're outside our allowed gas range, we try to hone towards them
-	if limit < gasFloor {
-		limit = parentGasLimit + decay
-		if limit > gasFloor {
-			limit = gasFloor
-		}
-	} else if limit > gasCeil {
-		limit = parentGasLimit - decay
-		if limit < gasCeil {
-			limit = gasCeil
-		}
-	}
-	return limit
-}
-
-// CalcBaseFee takes the previous header and the timestamp of its child block
-// and calculates the expected base fee as well as the encoding of the past
-// pricing information for the child block.
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
-	switch {
-	case config.IsFUpgrade(timestamp):
-		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, timestamp)
-		if err != nil {
-			return nil, err
-		}
-		return new(big.Int).SetUint64(uint64(gasState.GasPrice())), nil
-	case config.IsApricotPhase3(timestamp):
-		feeWindow, err := customheader.CalculateDynamicFeeWindow(config, parent, timestamp)
-		if err != nil {
-			return nil, err
-		}
-		return CalcFeeWindowBaseFee(config, parent, timestamp, feeWindow)
-	default:
-		return nil, nil
-	}
-}
-
-func CalcHeaderExtraPrefix(
-	config *params.ChainConfig,
-	parent *types.Header,
-	header *types.Header,
-	desiredTargetExcess *gas.Gas,
-) ([]byte, error) {
-	switch {
-	case config.IsFUpgrade(header.Time):
-		// Calculate the gas state for the start of the block
-		gasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, header.Time)
-		if err != nil {
-			return nil, err
-		}
-		if err := gasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
-			return nil, err
-		}
-		// If the desired target excess isn't specified, default to the current
-		// target excess.
-		if desiredTargetExcess != nil {
-			gasState.UpdateTargetExcess(*desiredTargetExcess)
-		}
-
-		return customheader.DynamicFeeAccumulatorBytes(gasState), nil
-	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := customheader.CalculateDynamicFeeWindow(config, parent, header.Time)
-		if err != nil {
-			return nil, err
-		}
-
-		return customheader.DynamicFeeWindowBytes(feeWindow), nil
-	default:
-		return nil, nil
-	}
-}
 
 func VerifyHeaderGasFields(
 	config *params.ChainConfig,
@@ -226,7 +107,7 @@ func VerifyHeaderGasFields(
 		}
 	}
 
-	expectedBaseFee, err := CalcBaseFee(config, parent, header.Time)
+	expectedBaseFee, err := customheader.BaseFee(config, parent, header.Time)
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}
@@ -259,23 +140,6 @@ func VerifyHeaderGasFields(
 		return errExtDataGasUsedTooLarge
 	}
 	return nil
-}
-
-// EstimateNextBaseFee attempts to estimate the base fee of a block built at
-// `timestamp` on top of `parent`.
-//
-// If timestamp is before parent.Time or the AP3 activation time, then timestamp
-// is set to the maximum of parent.Time and the AP3 activation time.
-//
-// Warning: This function should only be used in estimation and should not be
-// used when calculating the canonical base fee for a block.
-func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
-	if config.ApricotPhase3BlockTimestamp == nil {
-		return nil, errEstimateBaseFeeWithoutActivation
-	}
-
-	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
-	return CalcBaseFee(config, parent, timestamp)
 }
 
 // MinRequiredTip is the estimated minimum tip a transaction would have

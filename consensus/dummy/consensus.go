@@ -381,7 +381,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	}
 
 	// finalize the header.Extra
-	extraPrefix, err := CalcHeaderExtraPrefix(config, parent, header, eng.desiredTargetExcess)
+	extraPrefix, err := customheader.ExtraPrefix(config, parent, header, eng.desiredTargetExcess)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	}

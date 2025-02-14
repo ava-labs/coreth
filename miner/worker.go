@@ -39,7 +39,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
@@ -53,6 +52,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 const (
@@ -154,11 +155,11 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 
 	// Set custom gas logic
 	var err error
-	header.GasLimit, err = dummy.CalcGasLimit(w.chainConfig, parent, timestamp)
+	header.GasLimit, err = customheader.GasLimit(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
 	}
-	header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
+	header.BaseFee, err = customheader.BaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
