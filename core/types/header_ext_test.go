@@ -117,7 +117,7 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 }
 
 func allExportedFieldsSet[T interface {
-	ethtypes.Header | HeaderExtra
+	ethtypes.Header | HeaderExtra | BlockBodyExtra
 }](t *testing.T, x *T) {
 	// We don't test for nil pointers because we're only confirming that
 	// test-input data is well-formed. A panic due to a dereference will be
@@ -140,6 +140,8 @@ func allExportedFieldsSet[T interface {
 				assertNonZero(t, f)
 			case Bloom:
 				assertNonZero(t, f)
+			case uint32:
+				assertNonZero(t, f)
 			case uint64:
 				assertNonZero(t, f)
 			case *big.Int:
@@ -147,6 +149,8 @@ func allExportedFieldsSet[T interface {
 			case *common.Hash:
 				assertNonZero(t, f)
 			case *uint64:
+				assertNonZero(t, f)
+			case *[]uint8:
 				assertNonZero(t, f)
 			case []uint8:
 				assert.NotEmpty(t, f)
@@ -158,8 +162,8 @@ func allExportedFieldsSet[T interface {
 }
 
 func assertNonZero[T interface {
-	common.Hash | common.Address | BlockNonce | uint64 | Bloom |
-		*big.Int | *common.Hash | *uint64
+	common.Hash | common.Address | BlockNonce | uint32 | uint64 | Bloom |
+		*big.Int | *common.Hash | *uint64 | *[]uint8
 }](t *testing.T, v T) {
 	t.Helper()
 	var zero T
