@@ -4,6 +4,9 @@
 package header
 
 import (
+	"fmt"
+
+	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 )
@@ -63,4 +66,37 @@ func gasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint64 {
 		limit = max(parentGasLimit-decay, gasCeil)
 	}
 	return limit
+}
+
+func VerifyGasLimit(
+	config *params.ChainConfig,
+	parent *types.Header,
+	header *types.Header,
+) error {
+	switch {
+	case config.IsFUpgrade(header.Time):
+		gasState, err := CalculateDynamicFeeAccumulator(config, parent, header.Time)
+		if err != nil {
+			return err
+		}
+		if header.GasLimit != uint64(gasState.Gas.Capacity) {
+			return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit, gasState.Gas.Capacity)
+		}
+	case config.IsCortina(header.Time):
+		if header.GasLimit != params.CortinaGasLimit {
+			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", params.CortinaGasLimit, header.GasLimit)
+		}
+	case config.IsApricotPhase1(header.Time):
+		if header.GasLimit != params.ApricotPhase1GasLimit {
+			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", params.ApricotPhase1GasLimit, header.GasLimit)
+		}
+	default:
+		// Verify that the gas limit remains within allowed bounds
+		diff := math.AbsDiff(parent.GasLimit, header.GasLimit)
+		limit := parent.GasLimit / params.GasLimitBoundDivisor
+		if diff >= limit || header.GasLimit < params.MinGasLimit || header.GasLimit > params.MaxGasLimit {
+			return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
+		}
+	}
+	return nil
 }
