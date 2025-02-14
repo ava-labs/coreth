@@ -141,7 +141,7 @@ func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller c
 	stateDB.SubBalanceMultiCoin(caller, assetID, assetAmount)
 	stateDB.AddBalanceMultiCoin(to, assetID, assetAmount)
 
-	ret, remainingGas, err = accessibleState.Call(to, callData, remainingGas, new(uint256.Int), vm.WithUNSAFECallerAddressProxying())
+	ret, err = accessibleState.Call(to, callData, remainingGas, new(uint256.Int), vm.WithUNSAFECallerAddressProxying())
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
