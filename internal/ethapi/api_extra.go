@@ -116,10 +116,10 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 		number = uint64(blockNumOrHash.BlockNumber.Int64())
 	} else if blockHash, ok := blockNumOrHash.Hash(); ok {
 		block, err := s.b.BlockByHash(context.Background(), blockHash)
-		if block == nil {
-			return fmt.Errorf("block from hash %s doesn't exist", blockHash)
-		} else if err != nil {
+		if err != nil {
 			return fmt.Errorf("failed to get block from hash: %s", err)
+		} else if block == nil {
+			return fmt.Errorf("block from hash %s doesn't exist", blockHash)
 		}
 		number = block.NumberU64()
 	} else {
