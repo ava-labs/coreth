@@ -71,7 +71,11 @@ var (
 	intermediateWriteBatchSizeKB  = 256
 
 	// firewood options
-	firewoodDBFile = "firewood_db"
+	firewoodDBFile            = "firewood_db"
+	firewoodCacheEntries      = -1 // uses default
+	firewoodRevisions         = -1 // uses default
+	firewoodReadCacheStrategy = 0  // 0: writes ony, 1: branch reads cached, 2: all reads cached
+	firewoodMetricsPort       = 0  // no metrics
 
 	// ipc options
 	socketPath = "/tmp/rust_socket"
@@ -105,6 +109,10 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&forceStartWithMismatch, "forceStartWithMismatch", forceStartWithMismatch, "force start with mismatch")
 	flag.BoolVar(&trackDeletedTries, "trackDeletedTries", trackDeletedTries, "track deleted tries (detect re-use of SELFDESTRUCTed accounts)")
 	flag.StringVar(&firewoodDBFile, "firewoodDBFile", firewoodDBFile, "firewood DB file")
+	flag.IntVar(&firewoodCacheEntries, "firewoodCacheEntries", firewoodCacheEntries, "firewood cache entries (-1 uses fw default)")
+	flag.IntVar(&firewoodRevisions, "firewoodRevisions", firewoodRevisions, "firewood revisions (-1 uses fw default)")
+	flag.IntVar(&firewoodReadCacheStrategy, "firewoodReadCacheStrategy", firewoodReadCacheStrategy, "firewood read cache strategy")
+	flag.IntVar(&firewoodMetricsPort, "firewoodMetricsPort", firewoodMetricsPort, "firewood metrics port")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")

@@ -204,12 +204,20 @@ func getKVBackend(t *testing.T, name string, merkleKVStore database.Database) tr
 		return nomt.New(conn)
 	}
 	if name == "firewood" {
-		var fwdb firewood.Firewood
-		if fileExists(firewoodDBFile) {
-			fwdb = firewood.OpenDatabase(firewoodDBFile)
-		} else {
-			fwdb = firewood.CreateDatabase(firewoodDBFile)
+		opts := []firewood.OpenOption{
+			firewood.WithPath(firewoodDBFile),
+			firewood.WithCreate(!fileExists(firewoodDBFile)),
+			firewood.WithReadCacheStrategy(uint8(firewoodReadCacheStrategy)),
+			firewood.WithMetricsPort(uint16(firewoodMetricsPort)),
 		}
+		if firewoodCacheEntries >= 0 {
+			opts = append(opts, firewood.WithNodeCacheEntries(uintptr(firewoodCacheEntries)))
+		}
+		if firewoodRevisions >= 0 {
+			opts = append(opts, firewood.WithRevisions(uintptr(firewoodRevisions)))
+		}
+
+		fwdb := firewood.NewDatabase(opts...)
 		return &fw.Firewood{Firewood: fwdb}
 	}
 	return nil
