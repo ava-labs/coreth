@@ -18,19 +18,16 @@ import (
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
+const ApricotPhase3BlockGasFee = 1_000_000
+
 var (
 	errBlockGasCostNil        = errors.New("block gas cost is nil")
 	errBaseFeeNil             = errors.New("base fee is nil")
 	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
 	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
-)
 
-func BigEqual(a, b *big.Int) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return a.Cmp(b) == 0
-}
+	errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
+)
 
 func CalcGasLimit(config *params.ChainConfig, parent *types.Header, timestamp uint64) (uint64, error) {
 	switch {
@@ -233,7 +230,7 @@ func VerifyHeaderGasFields(
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}
-	if !BigEqual(header.BaseFee, expectedBaseFee) {
+	if !utils.BigEqual(header.BaseFee, expectedBaseFee) {
 		return fmt.Errorf("expected base fee: %d, found %d", expectedBaseFee, header.BaseFee)
 	}
 
@@ -273,6 +270,8 @@ func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, times
 	if timestamp < parent.Time {
 		timestamp = parent.Time
 	}
+
+	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
 	return CalcBaseFee(config, parent, timestamp)
 }
 

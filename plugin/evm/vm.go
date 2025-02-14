@@ -411,25 +411,18 @@ func (vm *VM) Initialize(
 	}
 
 	var extDataHashes map[common.Hash]common.Hash
-	var chainID *big.Int
 	// Set the chain config for mainnet/fuji chain IDs
 	switch chainCtx.NetworkID {
 	case avalanchegoConstants.MainnetID:
-		chainID = params.AvalancheMainnetChainID
 		extDataHashes = mainnetExtDataHashes
 	case avalanchegoConstants.FujiID:
-		chainID = params.AvalancheFujiChainID
 		extDataHashes = fujiExtDataHashes
-	case avalanchegoConstants.LocalID:
-		chainID = params.AvalancheLocalChainID
-	default:
-		chainID = g.Config.ChainID
 	}
 
 	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
 	// normally it should not be empty, but some tests may not set it
 	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config = params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(chainID))
+		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
@@ -1594,10 +1587,13 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 
 	parentHeader := preferredBlock
 	timestamp := uint64(vm.clock.Time().Unix())
-	nextBaseFee, err := dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
-	if err != nil {
-		// Return extremely detailed error since CalcBaseFee should never encounter an issue here
-		return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
+	var nextBaseFee *big.Int
+	if vm.chainConfig.IsApricotPhase3(timestamp) {
+		nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+		if err != nil {
+			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
+			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
+		}
 	}
 
 	// We don’t need to revert the state here in case verifyTx errors, because
