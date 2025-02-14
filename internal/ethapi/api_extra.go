@@ -5,6 +5,7 @@ package ethapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/coreth/core"
@@ -113,12 +114,14 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 	var number uint64
 	if blockNumOrHash.BlockNumber != nil {
 		number = uint64(blockNumOrHash.BlockNumber.Int64())
-	} else {
-		block, err := s.b.BlockByNumberOrHash(context.Background(), blockNumOrHash)
+	} else if blockHash, ok := blockNumOrHash.Hash(); ok {
+		block, err := s.b.BlockByHash(context.Background(), blockHash)
 		if block == nil || err != nil {
 			return fmt.Errorf("failed to get block from hash: %s", err)
 		}
 		number = block.NumberU64()
+	} else {
+		return errors.New("block number or hash not provided")
 	}
 
 	var oldestAllowed uint64
