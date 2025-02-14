@@ -147,21 +147,21 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		timestamp = parent.Time
 	}
 
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		Time:       timestamp,
-	}
-
-	// Set custom gas logic
-	var err error
-	header.GasLimit, err = customheader.GasLimit(w.chainConfig, parent, timestamp)
+	gasLimit, err := customheader.GasLimit(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
 	}
-	header.BaseFee, err = customheader.BaseFee(w.chainConfig, parent, timestamp)
+	baseFee, err := customheader.BaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
+	}
+
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     new(big.Int).Add(parent.Number, common.Big1),
+		GasLimit:   gasLimit,
+		Time:       timestamp,
+		BaseFee:    baseFee,
 	}
 
 	// Apply EIP-4844, EIP-4788.
