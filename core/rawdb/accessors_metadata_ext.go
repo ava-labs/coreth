@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc.
+// (c) 2025, Ava Labs, Inc.
 package rawdb
 
 import (
@@ -98,9 +98,11 @@ func WriteAcceptorTip(db ethdb.KeyValueWriter, hash common.Hash) error {
 // empty hash is returned.
 func ReadAcceptorTip(db ethdb.KeyValueReader) (common.Hash, error) {
 	has, err := db.Has(acceptorTipKey)
-	// If the index is not present on disk, the [acceptorTipKey] index has not been initialized yet.
-	if !has || err != nil {
+	if err != nil {
 		return common.Hash{}, err
+	} else if !has {
+		// If the index is not present on disk, the [acceptorTipKey] index has not been initialized yet.
+		return common.Hash{}, nil
 	}
 	h, err := db.Get(acceptorTipKey)
 	if err != nil {
