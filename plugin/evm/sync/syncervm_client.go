@@ -37,13 +37,20 @@ type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
 }
 
+// EthBlockWrapper can be implemented by a concrete block wrapper type to
+// return *types.Block, which is needed to update chain pointers at the
+// end of the sync operation.
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
+// Extender is an interface that allows for extending the state sync process.
 type Extender interface {
+	// Sync is called to perform any extension-specific state sync logic.
 	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
+	// OnFinishBeforeCommit is called after the state sync process has completed but before the state sync summary is committed.
 	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
+	// OnFinishAfterCommit is called after the state sync process has completed and the state sync summary is committed.
 	OnFinishAfterCommit(summaryHeight uint64) error
 }
 
@@ -68,7 +75,8 @@ type ClientConfig struct {
 
 	// Extension points
 	SyncableParser message.SyncableParser
-	ExtraSyncer    Extender
+	// SyncExtender is an optional extension point for the state sync process, and can be nil.
+	SyncExtender Extender
 
 	Client syncclient.Client
 
@@ -165,13 +173,15 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	// Sync the EVM trie and then the atomic trie. These steps could be done
-	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
+	// Sync the EVM trie.
 	if err := client.syncStateTrie(ctx); err != nil {
 		return err
 	}
 
-	return client.ClientConfig.ExtraSyncer.Sync(ctx, client.Client, client.VerDB, client.syncSummary)
+	if client.SyncExtender != nil {
+		return client.SyncExtender.Sync(ctx, client.Client, client.VerDB, client.syncSummary)
+	}
+	return nil
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -365,8 +375,10 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	if err := client.ExtraSyncer.OnFinishBeforeCommit(client.LastAcceptedHeight, client.syncSummary); err != nil {
-		return err
+	if client.SyncExtender != nil {
+		if err := client.SyncExtender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.syncSummary); err != nil {
+			return err
+		}
 	}
 
 	if err := client.commitVMMarkers(); err != nil {
@@ -377,7 +389,11 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	return client.ExtraSyncer.OnFinishAfterCommit(block.NumberU64())
+	if client.SyncExtender != nil {
+		return client.SyncExtender.OnFinishAfterCommit(block.NumberU64())
+	}
+
+	return nil
 }
 
 // commitVMMarkers updates the following markers in the VM's database

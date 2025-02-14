@@ -51,9 +51,9 @@ type AtomicTrie struct {
 	tipBuffer *core.BoundedBuffer[common.Hash]
 }
 
-// NewAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
+// newAtomicTrie returns a new instance of a atomicTrie with a configurable commitHeightInterval, used in testing.
 // Initializes the trie before returning it.
-func NewAtomicTrie(
+func newAtomicTrie(
 	atomicTrieDB avalanchedatabase.Database, metadataDB avalanchedatabase.Database,
 	codec codec.Manager, lastAcceptedHeight uint64, commitHeightInterval uint64,
 ) (*AtomicTrie, error) {

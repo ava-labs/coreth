@@ -38,8 +38,8 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -917,7 +917,7 @@ func TestOpMCopy(t *testing.T) {
 		} else {
 			var overflow bool
 			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-				t.Error(vmerrs.ErrGasUintOverflow)
+				t.Error(coreerrors.ErrGasUintOverflow)
 			}
 		}
 		// and the dynamic cost

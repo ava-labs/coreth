@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"math/big"
@@ -9,9 +9,11 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -33,7 +35,7 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 			Amt: uint64(50000000),
 			OutputOwners: secp256k1fx.OutputOwners{
 				Threshold: 1,
-				Addrs:     []ids.ShortID{testKeys[0].Address()},
+				Addrs:     []ids.ShortID{testutils.TestKeys[0].Address()},
 			},
 		},
 	}
@@ -48,15 +50,15 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
-			testKeys[0].Address().Bytes(),
+			testutils.TestKeys[0].Address().Bytes(),
 		},
 	}}}}); err != nil {
 		t.Fatal(err)
 	}
 
 	importTxs := make([]*atomic.Tx, 0, 3)
-	for _, ethAddr := range testEthAddrs {
-		importTx, err := newImportTx(vm, vm.ctx.XChainID, ethAddr, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	for _, ethAddr := range testutils.TestEthAddrs {
+		importTx, err := vm.newImportTx(vm.ctx.XChainID, ethAddr, testutils.InitialBaseFee, []*secp256k1.PrivateKey{testutils.TestKeys[0]})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,12 +107,12 @@ func TestImportTxVerify(t *testing.T) {
 		},
 		Outs: []atomic.EVMOutput{
 			{
-				Address: testEthAddrs[0],
+				Address: testutils.TestEthAddrs[0],
 				Amount:  importAmount - params.AvalancheAtomicTxFee,
 				AssetID: ctx.AVAXAssetID,
 			},
 			{
-				Address: testEthAddrs[1],
+				Address: testutils.TestEthAddrs[1],
 				Amount:  importAmount,
 				AssetID: ctx.AVAXAssetID,
 			},
@@ -315,7 +317,7 @@ func TestImportTxVerify(t *testing.T) {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					{
-						Address: testEthAddrs[0],
+						Address: testutils.TestEthAddrs[0],
 						Amount:  0,
 						AssetID: ctx.AVAXAssetID,
 					},
@@ -426,16 +428,19 @@ func TestImportTxVerify(t *testing.T) {
 
 func TestNewImportTx(t *testing.T) {
 	importAmount := uint64(5000000)
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
+	ethAddress := key.EthAddress()
 	// createNewImportAVAXTx adds a UTXO to shared memory and then constructs a new import transaction
 	// and checks that it has the correct fee for the base fee that has been used
 	createNewImportAVAXTx := func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 		txID := ids.GenerateTestID()
-		_, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, importAmount, testShortIDAddrs[0])
+		_, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, importAmount, key.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		tx, err := newImportTx(vm, vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+		tx, err := vm.newImportTx(vm.ctx.XChainID, ethAddress, testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -452,7 +457,7 @@ func TestNewImportTx(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			actualFee, err = atomic.CalculateDynamicFee(actualCost, initialBaseFee)
+			actualFee, err = atomic.CalculateDynamicFee(actualCost, testutils.InitialBaseFee)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -469,7 +474,11 @@ func TestNewImportTx(t *testing.T) {
 		return tx
 	}
 	checkState := func(t *testing.T, vm *VM) {
-		txs := vm.LastAcceptedBlockInternal().(*Block).atomicTxs
+		blk := vm.LastAcceptedVMBlock()
+		txs, err := extractAtomicTxsFromBlock(blk, vm.Ethereum().BlockChain().Config())
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(txs) != 1 {
 			t.Fatalf("Expected one import tx to be in the last accepted block, but found %d", len(txs))
 		}
@@ -482,7 +491,7 @@ func TestNewImportTx(t *testing.T) {
 
 		// Ensure that the UTXO has been removed from shared memory within Accept
 		addrSet := set.Set[ids.ShortID]{}
-		addrSet.Add(testShortIDAddrs[0])
+		addrSet.Add(key.Address())
 		utxos, _, _, err := vm.GetAtomicUTXOs(vm.ctx.XChainID, addrSet, ids.ShortEmpty, ids.Empty, -1)
 		if err != nil {
 			t.Fatal(err)
@@ -492,38 +501,37 @@ func TestNewImportTx(t *testing.T) {
 		}
 
 		// Ensure that the call to EVMStateTransfer correctly updates the balance of [addr]
-		sdb, err := vm.blockChain.State()
+		sdb, err := vm.Ethereum().BlockChain().State()
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		expectedRemainingBalance := new(uint256.Int).Mul(
 			uint256.NewInt(importAmount-actualAVAXBurned), atomic.X2CRate)
-		addr := testKeys[0].EthAddress()
-		if actualBalance := sdb.GetBalance(addr); actualBalance.Cmp(expectedRemainingBalance) != 0 {
-			t.Fatalf("address remaining balance %s equal %s not %s", addr.String(), actualBalance, expectedRemainingBalance)
+		if actualBalance := sdb.GetBalance(ethAddress); actualBalance.Cmp(expectedRemainingBalance) != 0 {
+			t.Fatalf("address remaining balance %s equal %s not %s", ethAddress.String(), actualBalance, expectedRemainingBalance)
 		}
 	}
 	tests2 := map[string]atomicTxTest{
 		"apricot phase 0": {
 			setup:       createNewImportAVAXTx,
 			checkState:  checkState,
-			genesisJSON: genesisJSONApricotPhase0,
+			genesisJSON: testutils.GenesisJSONApricotPhase0,
 		},
 		"apricot phase 1": {
 			setup:       createNewImportAVAXTx,
 			checkState:  checkState,
-			genesisJSON: genesisJSONApricotPhase1,
+			genesisJSON: testutils.GenesisJSONApricotPhase1,
 		},
 		"apricot phase 2": {
 			setup:       createNewImportAVAXTx,
 			checkState:  checkState,
-			genesisJSON: genesisJSONApricotPhase2,
+			genesisJSON: testutils.GenesisJSONApricotPhase2,
 		},
 		"apricot phase 3": {
 			setup:       createNewImportAVAXTx,
 			checkState:  checkState,
-			genesisJSON: genesisJSONApricotPhase3,
+			genesisJSON: testutils.GenesisJSONApricotPhase3,
 		},
 	}
 
@@ -567,12 +575,12 @@ func TestImportTxGasCost(t *testing.T) {
 					},
 				}},
 				Outs: []atomic.EVMOutput{{
-					Address: testEthAddrs[0],
+					Address: testutils.TestEthAddrs[0],
 					Amount:  importAmount,
 					AssetID: avaxAssetID,
 				}},
 			},
-			Keys:            [][]*secp256k1.PrivateKey{{testKeys[0]}},
+			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}},
 			ExpectedGasUsed: 1230,
 			ExpectedFee:     30750,
 			BaseFee:         big.NewInt(25 * params.GWei),
@@ -591,12 +599,12 @@ func TestImportTxGasCost(t *testing.T) {
 					},
 				}},
 				Outs: []atomic.EVMOutput{{
-					Address: testEthAddrs[0],
+					Address: testutils.TestEthAddrs[0],
 					Amount:  importAmount,
 					AssetID: avaxAssetID,
 				}},
 			},
-			Keys:            [][]*secp256k1.PrivateKey{{testKeys[0]}},
+			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}},
 			ExpectedGasUsed: 1230,
 			ExpectedFee:     1,
 			BaseFee:         big.NewInt(1),
@@ -615,12 +623,12 @@ func TestImportTxGasCost(t *testing.T) {
 					},
 				}},
 				Outs: []atomic.EVMOutput{{
-					Address: testEthAddrs[0],
+					Address: testutils.TestEthAddrs[0],
 					Amount:  importAmount,
 					AssetID: avaxAssetID,
 				}},
 			},
-			Keys:            [][]*secp256k1.PrivateKey{{testKeys[0]}},
+			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}},
 			ExpectedGasUsed: 11230,
 			ExpectedFee:     1,
 			BaseFee:         big.NewInt(1),
@@ -651,13 +659,13 @@ func TestImportTxGasCost(t *testing.T) {
 				},
 				Outs: []atomic.EVMOutput{
 					{
-						Address: testEthAddrs[0],
+						Address: testutils.TestEthAddrs[0],
 						Amount:  importAmount,
 						AssetID: antAssetID,
 					},
 				},
 			},
-			Keys:            [][]*secp256k1.PrivateKey{{testKeys[0]}, {testKeys[0]}},
+			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}, {testutils.TestKeys[0]}},
 			ExpectedGasUsed: 2318,
 			ExpectedFee:     57950,
 			BaseFee:         big.NewInt(25 * params.GWei),
@@ -687,18 +695,18 @@ func TestImportTxGasCost(t *testing.T) {
 				},
 				Outs: []atomic.EVMOutput{
 					{
-						Address: testEthAddrs[0],
+						Address: testutils.TestEthAddrs[0],
 						Amount:  importAmount,
 						AssetID: avaxAssetID,
 					},
 					{
-						Address: testEthAddrs[0],
+						Address: testutils.TestEthAddrs[0],
 						Amount:  importAmount,
 						AssetID: antAssetID,
 					},
 				},
 			},
-			Keys:            [][]*secp256k1.PrivateKey{{testKeys[0]}, {testKeys[0]}},
+			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}, {testutils.TestKeys[0]}},
 			ExpectedGasUsed: 2378,
 			ExpectedFee:     59450,
 			BaseFee:         big.NewInt(25 * params.GWei),
@@ -717,12 +725,12 @@ func TestImportTxGasCost(t *testing.T) {
 					},
 				}},
 				Outs: []atomic.EVMOutput{{
-					Address: testEthAddrs[0],
+					Address: testutils.TestEthAddrs[0],
 					Amount:  importAmount,
 					AssetID: avaxAssetID,
 				}},
 			},
-			Keys:            [][]*secp256k1.PrivateKey{{testKeys[0], testKeys[1]}},
+			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0], testutils.TestKeys[1]}},
 			ExpectedGasUsed: 2234,
 			ExpectedFee:     55850,
 			BaseFee:         big.NewInt(25 * params.GWei),
@@ -816,23 +824,23 @@ func TestImportTxGasCost(t *testing.T) {
 				},
 				Outs: []atomic.EVMOutput{
 					{
-						Address: testEthAddrs[0],
+						Address: testutils.TestEthAddrs[0],
 						Amount:  importAmount * 10,
 						AssetID: avaxAssetID,
 					},
 				},
 			},
 			Keys: [][]*secp256k1.PrivateKey{
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
-				{testKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
+				{testutils.TestKeys[0]},
 			},
 			ExpectedGasUsed: 11022,
 			ExpectedFee:     275550,
@@ -869,6 +877,9 @@ func TestImportTxGasCost(t *testing.T) {
 }
 
 func TestImportTxSemanticVerify(t *testing.T) {
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
+	ethAddress := key.PublicKey().EthAddress()
 	tests := map[string]atomicTxTest{
 		"UTXO not present during bootstrapping": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -887,16 +898,17 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
+			genesisJSON:   testutils.GenesisJSONApricotPhase0,
 			bootstrapping: true,
 		},
 		"UTXO not present": {
@@ -916,16 +928,17 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "failed to fetch import UTXOs from",
 		},
 		"garbage UTXO": {
@@ -937,7 +950,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 					Key:   inputID[:],
 					Value: []byte("hey there"),
 					Traits: [][]byte{
-						testShortIDAddrs[0].Bytes(),
+						key.Address().Bytes(),
 					},
 				}}}}); err != nil {
 					t.Fatal(err)
@@ -956,23 +969,24 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "failed to unmarshal UTXO",
 		},
 		"UTXO AssetID mismatch": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				expectedAssetID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, expectedAssetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, expectedAssetID, 1, key.Address())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -990,22 +1004,23 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
-			semanticVerifyErr: atomic.ErrAssetIDMismatch.Error(),
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
+			semanticVerifyErr: errAssetIDMismatch.Error(),
 		},
 		"insufficient AVAX funds": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, key.Address())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1023,23 +1038,24 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  2, // Produce more output than is consumed by the transaction
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx flow check failed due to",
 		},
 		"insufficient non-AVAX funds": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
 				assetID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, testutils.TestShortIDAddrs[0])
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1057,22 +1073,23 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  2, // Produce more output than is consumed by the transaction
 						AssetID: assetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx flow check failed due to",
 		},
 		"no signatures": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testutils.TestShortIDAddrs[0])
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1090,7 +1107,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
@@ -1100,12 +1117,13 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx contained mismatched number of inputs/credentials",
 		},
 		"incorrect signature": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testutils.TestShortIDAddrs[0])
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1123,23 +1141,24 @@ func TestImportTxSemanticVerify(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
 				// Sign the transaction with the incorrect key
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[1]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testutils.TestKeys[1]}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
+			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx transfer failed verification",
 		},
 		"non-unique EVM Outputs": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 2, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 2, testutils.TestShortIDAddrs[0])
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1158,23 +1177,23 @@ func TestImportTxSemanticVerify(t *testing.T) {
 					}},
 					Outs: []atomic.EVMOutput{
 						{
-							Address: testEthAddrs[0],
+							Address: ethAddress,
 							Amount:  1,
 							AssetID: vm.ctx.AVAXAssetID,
 						},
 						{
-							Address: testEthAddrs[0],
+							Address: ethAddress,
 							Amount:  1,
 							AssetID: vm.ctx.AVAXAssetID,
 						},
 					},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
-			genesisJSON:       genesisJSONApricotPhase3,
+			genesisJSON:       testutils.GenesisJSONApricotPhase3,
 			semanticVerifyErr: atomic.ErrOutputsNotSortedUnique.Error(),
 		},
 	}
@@ -1188,11 +1207,14 @@ func TestImportTxSemanticVerify(t *testing.T) {
 
 func TestImportTxEVMStateTransfer(t *testing.T) {
 	assetID := ids.GenerateTestID()
+	key, err := secp256k1.NewPrivateKey()
+	require.NoError(t, err)
+	ethAddress := key.EthAddress()
 	tests := map[string]atomicTxTest{
 		"AVAX UTXO": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, key.Address())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1210,34 +1232,35 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: vm.ctx.AVAXAssetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
 			checkState: func(t *testing.T, vm *VM) {
-				lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
+				lastAcceptedBlock := vm.LastAcceptedVMBlock()
 
-				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+				sdb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				avaxBalance := sdb.GetBalance(testEthAddrs[0])
+				avaxBalance := sdb.GetBalance(ethAddress)
 				if avaxBalance.Cmp(atomic.X2CRate) != 0 {
 					t.Fatalf("Expected AVAX balance to be %d, found balance: %d", *atomic.X2CRate, avaxBalance)
 				}
 			},
+			genesisJSON: testutils.GenesisJSONApricotPhase0,
 		},
 		"non-AVAX UTXO": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, testShortIDAddrs[0])
+				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, key.Address())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1255,33 +1278,33 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 						},
 					}},
 					Outs: []atomic.EVMOutput{{
-						Address: testEthAddrs[0],
+						Address: ethAddress,
 						Amount:  1,
 						AssetID: assetID,
 					}},
 				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{testKeys[0]}}); err != nil {
+				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
 					t.Fatal(err)
 				}
 				return tx
 			},
 			checkState: func(t *testing.T, vm *VM) {
-				lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
-
-				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+				lastAcceptedBlock := vm.LastAcceptedVMBlock()
+				sdb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assetBalance := sdb.GetBalanceMultiCoin(testEthAddrs[0], common.Hash(assetID))
+				assetBalance := sdb.GetBalanceMultiCoin(ethAddress, common.Hash(assetID))
 				if assetBalance.Cmp(common.Big1) != 0 {
 					t.Fatalf("Expected asset balance to be %d, found balance: %d", common.Big1, assetBalance)
 				}
-				avaxBalance := sdb.GetBalance(testEthAddrs[0])
+				avaxBalance := sdb.GetBalance(ethAddress)
 				if avaxBalance.Cmp(common.U2560) != 0 {
 					t.Fatalf("Expected AVAX balance to be 0, found balance: %d", avaxBalance)
 				}
 			},
+			genesisJSON: testutils.GenesisJSONApricotPhase0,
 		},
 	}
 

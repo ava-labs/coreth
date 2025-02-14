@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm"
 
 	"github.com/ava-labs/coreth/plugin/evm"
+	"github.com/ava-labs/coreth/plugin/factory"
 )
 
 func main() {
@@ -29,6 +30,10 @@ func main() {
 		fmt.Printf("failed to set fd limit correctly due to: %s", err)
 		os.Exit(1)
 	}
-
-	rpcchainvm.Serve(context.Background(), &evm.VM{IsPlugin: true})
+	vm, err := factory.NewPluginVM()
+	if err != nil {
+		fmt.Printf("couldn't create evm plugin: %s", err)
+		os.Exit(1)
+	}
+	rpcchainvm.Serve(context.Background(), vm)
 }

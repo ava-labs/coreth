@@ -1,7 +1,7 @@
 // (c) 2019-2020, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package gossip
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 )
 
-type validatorSet struct {
+type ValidatorSet struct {
 	set set.Set[ids.NodeID]
 }
 
-func (v *validatorSet) Has(ctx context.Context, nodeID ids.NodeID) bool {
+func (v *ValidatorSet) Has(ctx context.Context, nodeID ids.NodeID) bool {
 	return v.set.Contains(nodeID)
 }

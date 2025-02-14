@@ -166,7 +166,9 @@ func (h *handlerStats) IncSnapshotReadSuccess()    { h.snapshotReadSuccess.Inc(1
 func (h *handlerStats) IncSnapshotSegmentValid()   { h.snapshotSegmentValid.Inc(1) }
 func (h *handlerStats) IncSnapshotSegmentInvalid() { h.snapshotSegmentInvalid.Inc(1) }
 
-func NewHandlerStats(enabled bool) HandlerStats {
+// GetOrRegisterHandlerStats returns a new HandlerStats instance to track state sync handler metrics.
+// Calling this multiple times will return same registered metrics.
+func GetOrRegisterHandlerStats(enabled bool) HandlerStats {
 	if !enabled {
 		return NewNoopHandlerStats()
 	}

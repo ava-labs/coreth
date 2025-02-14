@@ -9,12 +9,12 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/sync/syncutils"
 	"github.com/ava-labs/coreth/trie"
@@ -25,15 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var networkCodec codec.Manager
-
-func init() {
-	var err error
-	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		panic(err)
-	}
-}
+var networkCodec = messagetest.TestBlockSyncSummaryCodec
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	rand.Seed(1)

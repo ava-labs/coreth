@@ -2,6 +2,8 @@
 
 ## Pending Release
 
+- Moved atomic codebase from plugin/evm to plugin/evm/atomic package
+
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
 
 - Removed deprecated `ExportKey`, `ExportAVAX`, `Export`, `ImportKey`, `ImportAVAX`, `Import` APIs

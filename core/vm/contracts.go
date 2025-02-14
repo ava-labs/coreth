@@ -33,10 +33,10 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -284,7 +284,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
-		return nil, 0, vmerrs.ErrOutOfGas
+		return nil, 0, coreerrors.ErrOutOfGas
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(input)

@@ -13,7 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -22,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	clientstats "github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -31,15 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var networkCodec codec.Manager
-
-func init() {
-	var err error
-	networkCodec, err = message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		panic(err)
-	}
-}
+var networkCodec = messagetest.TestBlockSyncSummaryCodec
 
 func TestGetCode(t *testing.T) {
 	mockNetClient := &mockNetwork{}
