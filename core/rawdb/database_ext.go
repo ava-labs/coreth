@@ -9,9 +9,9 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 )
 
-// ClearPrefix removes all keys in db that begin with prefix and match an
+// clearPrefix removes all keys in db that begin with prefix and match an
 // expected key length. [keyLen] should include the length of the prefix.
-func ClearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
+func clearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
 	it := db.NewIterator(prefix, nil)
 	defer it.Release()
 
