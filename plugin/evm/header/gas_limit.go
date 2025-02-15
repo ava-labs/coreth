@@ -70,6 +70,27 @@ func gasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint64 {
 	return limit
 }
 
+func VerifyGasUsed(
+	config *params.ChainConfig,
+	header *types.Header,
+) error {
+	gasUsed := header.GasUsed
+	if config.IsFUpgrade(header.Time) && header.ExtDataGasUsed != nil {
+		if !header.ExtDataGasUsed.IsUint64() {
+			return fmt.Errorf("invalid gas limit: invalid extra data gas used %d", header.ExtDataGasUsed)
+		}
+		var err error
+		gasUsed, err = math.Add(gasUsed, header.ExtDataGasUsed.Uint64())
+		if err != nil {
+			return err
+		}
+	}
+	if gasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", gasUsed, header.GasLimit)
+	}
+	return nil
+}
+
 func VerifyGasLimit(
 	config *params.ChainConfig,
 	parent *types.Header,

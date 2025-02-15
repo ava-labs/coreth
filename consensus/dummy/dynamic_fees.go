@@ -29,15 +29,12 @@ func VerifyHeaderGasFields(
 	parent *types.Header,
 	header *types.Header,
 ) error {
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	if err := customheader.VerifyGasUsed(config, header); err != nil {
+		return err
 	}
-
 	if err := customheader.VerifyGasLimit(config, parent, header); err != nil {
 		return err
 	}
-
 	if err := customheader.VerifyExtraPrefix(config, parent, header); err != nil {
 		return err
 	}
