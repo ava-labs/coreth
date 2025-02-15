@@ -97,7 +97,9 @@ func VerifyExtraPrefix(
 }
 
 // VerifyExtra verifies that the header's Extra field is correctly formatted for
-// [rules].
+// rules.
+//
+// TODO: Should this be merged with VerifyExtraPrefix?
 func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {

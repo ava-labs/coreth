@@ -20,7 +20,7 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 		{
 			name:     "insufficient_length",
 			bytes:    make([]byte, DynamicFeeWindowSize-1),
-			parseErr: ErrDynamicFeeWindowInsufficientLength,
+			parseErr: errDynamicFeeWindowInsufficientLength,
 		},
 		{
 			name:   "zero_window",

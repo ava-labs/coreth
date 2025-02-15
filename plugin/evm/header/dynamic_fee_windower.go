@@ -22,20 +22,24 @@ import (
 
 const DynamicFeeWindowSize = wrappers.LongLen * ap3.WindowLen
 
-var ErrDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
+var errDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 
 var (
 	maxUint256Plus1 = new(big.Int).Lsh(common.Big1, 256)
 	maxUint256      = new(big.Int).Sub(maxUint256Plus1, common.Big1)
 
 	ap3MinBaseFee = big.NewInt(ap3.MinBaseFee)
-	ap3MaxBaseFee = big.NewInt(ap3.MaxBaseFee)
+	ap4MinBaseFee = big.NewInt(ap4.MinBaseFee)
+	// EtnaMinBaseFee is exported so that it can be modified by tests.
+	//
+	// TODO: Unexport
+	EtnaMinBaseFee = big.NewInt(etna.MinBaseFee)
 
-	ApricotPhase4MinBaseFee               = big.NewInt(ap4.MinBaseFee)
-	ApricotPhase4MaxBaseFee               = big.NewInt(ap4.MaxBaseFee)
-	EtnaMinBaseFee                        = big.NewInt(etna.MinBaseFee)
-	ApricotPhase4BaseFeeChangeDenominator = new(big.Int).SetUint64(ap3.BaseFeeChangeDenominator)
-	ApricotPhase5BaseFeeChangeDenominator = new(big.Int).SetUint64(ap5.BaseFeeChangeDenominator)
+	ap3MaxBaseFee = big.NewInt(ap3.MaxBaseFee)
+	ap4MaxBaseFee = big.NewInt(ap4.MaxBaseFee)
+
+	ap3BaseFeeChangeDenominator = new(big.Int).SetUint64(ap3.BaseFeeChangeDenominator)
+	ap5BaseFeeChangeDenominator = new(big.Int).SetUint64(ap5.BaseFeeChangeDenominator)
 
 	errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 )
@@ -119,11 +123,11 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	// block limit
 	var (
 		isApricotPhase5                 = config.IsApricotPhase5(parent.Time)
-		baseFeeChangeDenominator        = ApricotPhase4BaseFeeChangeDenominator
+		baseFeeChangeDenominator        = ap3BaseFeeChangeDenominator
 		parentGasTarget          uint64 = ap3.TargetGas
 	)
 	if isApricotPhase5 {
-		baseFeeChangeDenominator = ApricotPhase5BaseFeeChangeDenominator
+		baseFeeChangeDenominator = ap5BaseFeeChangeDenominator
 		parentGasTarget = ap5.TargetGas
 	}
 	// Calculate the amount of gas consumed within the rollup window.
@@ -186,9 +190,9 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	case config.IsEtna(parent.Time):
 		baseFee = selectBigWithinBounds(EtnaMinBaseFee, baseFee, maxUint256)
 	case isApricotPhase5:
-		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, maxUint256)
+		baseFee = selectBigWithinBounds(ap4MinBaseFee, baseFee, maxUint256)
 	case config.IsApricotPhase4(parent.Time):
-		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, ApricotPhase4MaxBaseFee)
+		baseFee = selectBigWithinBounds(ap4MinBaseFee, baseFee, ap4MaxBaseFee)
 	default:
 		baseFee = selectBigWithinBounds(ap3MinBaseFee, baseFee, ap3MaxBaseFee)
 	}
@@ -212,7 +216,7 @@ func selectBigWithinBounds(lowerBound, value, upperBound *big.Int) *big.Int {
 func parseDynamicFeeWindow(bytes []byte) (ap3.Window, error) {
 	if len(bytes) < DynamicFeeWindowSize {
 		return ap3.Window{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
-			ErrDynamicFeeWindowInsufficientLength,
+			errDynamicFeeWindowInsufficientLength,
 			DynamicFeeWindowSize,
 			len(bytes),
 		)

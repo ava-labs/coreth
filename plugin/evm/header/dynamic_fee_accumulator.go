@@ -20,7 +20,7 @@ import (
 
 const DynamicFeeAccumulatorSize = wrappers.LongLen * 2
 
-var ErrDynamicFeeAccumulatorInsufficientLength = errors.New("insufficient length for dynamic fee accumulator")
+var errDynamicFeeAccumulatorInsufficientLength = errors.New("insufficient length for dynamic fee accumulator")
 
 func calculateDynamicFeeAccumulator(
 	config *params.ChainConfig,
@@ -62,7 +62,7 @@ func parseDynamicFeeAccumulator(
 ) (acp176.State, error) {
 	if len(bytes) < DynamicFeeAccumulatorSize {
 		return acp176.State{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
-			ErrDynamicFeeAccumulatorInsufficientLength,
+			errDynamicFeeAccumulatorInsufficientLength,
 			DynamicFeeAccumulatorSize,
 			len(bytes),
 		)
