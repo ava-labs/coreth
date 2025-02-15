@@ -4,10 +4,48 @@
 package ap3
 
 import (
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-const WindowLen = 10 // in seconds
+const (
+	// WindowLen is the number of seconds of gas consumption to track.
+	WindowLen = 10
+
+	// MinBaseFee is the minimum base fee that is allowed after Apricot Phase 3
+	// upgrade.
+	//
+	// This value was modified in Apricot Phase 4.
+	MinBaseFee = 75 * params.GWei
+
+	// MaxBaseFee is the maximum base fee that is allowed after Apricot Phase 3
+	// upgrade.
+	//
+	// This value was modified in Apricot Phase 4.
+	MaxBaseFee = 225 * params.GWei
+
+	// InitialBaseFee is the base fee that is used for the first Apricot Phase 3
+	// block.
+	InitialBaseFee = MaxBaseFee
+
+	// TargetGas is the target amount of gas to be included in the window. The
+	// target amount of gas per second equals [TargetGas] / [WindowLen].
+	//
+	// This value was modified in Apricot Phase 5.
+	TargetGas = 10_000_000
+
+	// IntrinsicBlockGas is the amount of gas that should always be included in
+	// the window.
+	//
+	// This value became dynamic in Apricot Phase 4.
+	IntrinsicBlockGas = 1_000_000
+
+	// BaseFeeChangeDenominator is the denominator used to smoothen base fee
+	// changes.
+	//
+	// This value was modified in Apricot Phase 5.
+	BaseFeeChangeDenominator = 12
+)
 
 // Window is a window of the last [WindowLen] seconds of gas
 // usage.

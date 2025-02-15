@@ -4,7 +4,6 @@
 package dummy
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -39,43 +38,8 @@ func VerifyHeaderGasFields(
 		return err
 	}
 
-	switch {
-	case config.IsFUpgrade(header.Time):
-		gasState, err := customheader.ParseDynamicFeeAccumulator(
-			header.GasLimit,
-			header.GasUsed,
-			header.ExtDataGasUsed,
-			header.Extra,
-		)
-		if err != nil {
-			return err
-		}
-
-		// Calculate the gas state for the start of the block
-		expectedGasState, err := customheader.CalculateDynamicFeeAccumulator(config, parent, header.Time)
-		if err != nil {
-			return err
-		}
-		if err := expectedGasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
-			return err
-		}
-		expectedGasState.UpdateTargetExcess(gasState.TargetExcess)
-
-		if gasState.Gas.Excess != expectedGasState.Gas.Excess {
-			return fmt.Errorf("invalid gas state excess: have %v, want %v", gasState.Gas.Excess, expectedGasState.Gas.Excess)
-		}
-		if gasState.TargetExcess != expectedGasState.TargetExcess {
-			return fmt.Errorf("invalid gas state target excess: have %v, want %v", gasState.TargetExcess, expectedGasState.TargetExcess)
-		}
-	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := customheader.CalculateDynamicFeeWindow(config, parent, header.Time)
-		if err != nil {
-			return err
-		}
-		feeWindowBytes := customheader.DynamicFeeWindowBytes(feeWindow)
-		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
-			return fmt.Errorf("expected header prefix: %x, found %x", feeWindowBytes, header.Extra)
-		}
+	if err := customheader.VerifyExtraPrefix(config, parent, header); err != nil {
+		return err
 	}
 
 	expectedBaseFee, err := customheader.BaseFee(config, parent, header.Time)

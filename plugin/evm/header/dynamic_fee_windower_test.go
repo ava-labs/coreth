@@ -6,7 +6,7 @@ package header
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/plugin/evm/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,7 +74,7 @@ func TestDynamicFeeWindow_Bytes(t *testing.T) {
 			}
 
 			expectedBytes := test.bytes[:DynamicFeeWindowSize]
-			bytes := DynamicFeeWindowBytes(window)
+			bytes := dynamicFeeWindowBytes(window)
 			require.Equal(expectedBytes, bytes)
 		})
 	}

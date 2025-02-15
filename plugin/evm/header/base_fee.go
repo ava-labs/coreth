@@ -19,7 +19,7 @@ func BaseFee(
 ) (*big.Int, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, err := CalculateDynamicFeeAccumulator(config, parent, timestamp)
+		gasState, err := calculateDynamicFeeAccumulator(config, parent, timestamp)
 		if err != nil {
 			return nil, err
 		}

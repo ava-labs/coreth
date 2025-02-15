@@ -9,6 +9,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/cortina"
 )
 
 // GasLimit takes the previous header and the timestamp of its child block and
@@ -20,15 +22,15 @@ func GasLimit(
 ) (uint64, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, err := CalculateDynamicFeeAccumulator(config, parent, timestamp)
+		gasState, err := calculateDynamicFeeAccumulator(config, parent, timestamp)
 		if err != nil {
 			return 0, err
 		}
 		return uint64(gasState.Gas.Capacity), nil
 	case config.IsCortina(timestamp):
-		return params.CortinaGasLimit, nil
+		return cortina.GasLimit, nil
 	case config.IsApricotPhase1(timestamp):
-		return params.ApricotPhase1GasLimit, nil
+		return ap1.GasLimit, nil
 	default:
 		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the
 		// ceiling and floor were set to the same value such that the gas limit
@@ -37,8 +39,8 @@ func GasLimit(
 		return gasLimit(
 			parent.GasUsed,
 			parent.GasLimit,
-			params.ApricotPhase1GasLimit,
-			params.ApricotPhase1GasLimit,
+			ap1.GasLimit,
+			ap1.GasLimit,
 		), nil
 	}
 }
@@ -75,7 +77,7 @@ func VerifyGasLimit(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := CalculateDynamicFeeAccumulator(config, parent, header.Time)
+		gasState, err := calculateDynamicFeeAccumulator(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
@@ -83,12 +85,12 @@ func VerifyGasLimit(
 			return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit, gasState.Gas.Capacity)
 		}
 	case config.IsCortina(header.Time):
-		if header.GasLimit != params.CortinaGasLimit {
-			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", params.CortinaGasLimit, header.GasLimit)
+		if header.GasLimit != cortina.GasLimit {
+			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", cortina.GasLimit, header.GasLimit)
 		}
 	case config.IsApricotPhase1(header.Time):
-		if header.GasLimit != params.ApricotPhase1GasLimit {
-			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", params.ApricotPhase1GasLimit, header.GasLimit)
+		if header.GasLimit != ap1.GasLimit {
+			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", ap1.GasLimit, header.GasLimit)
 		}
 	default:
 		// Verify that the gas limit remains within allowed bounds

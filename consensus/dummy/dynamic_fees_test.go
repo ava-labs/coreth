@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -39,8 +40,8 @@ func TestDynamicFees(t *testing.T) {
 		{
 			extraData: nil,
 			baseFee:   nil,
-			minFee:    big.NewInt(params.ApricotPhase3MinBaseFee),
-			maxFee:    big.NewInt(params.ApricotPhase3MaxBaseFee),
+			minFee:    big.NewInt(ap3.MinBaseFee),
+			maxFee:    big.NewInt(ap3.MaxBaseFee),
 			genBlocks: func() []blockDefinition {
 				blocks := make([]blockDefinition, 0, len(spacedTimestamps))
 				for _, timestamp := range spacedTimestamps {
@@ -56,8 +57,8 @@ func TestDynamicFees(t *testing.T) {
 		{
 			extraData: nil,
 			baseFee:   nil,
-			minFee:    big.NewInt(params.ApricotPhase3MinBaseFee),
-			maxFee:    big.NewInt(params.ApricotPhase3MaxBaseFee),
+			minFee:    big.NewInt(ap3.MinBaseFee),
+			maxFee:    big.NewInt(ap3.MaxBaseFee),
 			genBlocks: func() []blockDefinition {
 				blocks := make([]blockDefinition, 0, len(spacedTimestamps))
 				for _, timestamp := range spacedTimestamps {
@@ -72,8 +73,8 @@ func TestDynamicFees(t *testing.T) {
 		{
 			extraData: nil,
 			baseFee:   nil,
-			minFee:    big.NewInt(params.ApricotPhase3MinBaseFee),
-			maxFee:    big.NewInt(params.ApricotPhase3MaxBaseFee),
+			minFee:    big.NewInt(ap3.MinBaseFee),
+			maxFee:    big.NewInt(ap3.MaxBaseFee),
 			genBlocks: func() []blockDefinition {
 				return []blockDefinition{
 					{
@@ -335,7 +336,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 	nextBaseFee, err := CalcBaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// Genesis matches the initial base fee
-	require.Equal(params.ApricotPhase3InitialBaseFee, nextBaseFee.Int64())
+	require.Equal(ap3.InitialBaseFee, nextBaseFee.Int64())
 
 	parent := header
 	header = &types.Header{
@@ -351,7 +352,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 	require.NoError(err)
 	// After some time has passed in the Etna phase, the base fee should drop
 	// lower than the prior base fee minimum.
-	require.Less(nextBaseFee.Int64(), params.ApricotPhase4MinBaseFee)
+	require.Less(nextBaseFee.Int64(), ap4.MinBaseFee)
 }
 
 func TestCalcBaseFeeRegression(t *testing.T) {
@@ -394,15 +395,15 @@ func TestEstimateNextBaseFee(t *testing.T) {
 			upgrades:      params.TestApricotPhase3Config.NetworkUpgrades,
 			parentNumber:  1,
 			parentExtra:   header.DynamicFeeWindowBytes(ap3.Window{}),
-			parentBaseFee: big.NewInt(params.ApricotPhase3MaxBaseFee),
+			parentBaseFee: big.NewInt(ap3.MaxBaseFee),
 			timestamp:     1,
 			want: func() *big.Int {
 				const (
-					gasTarget                  = params.ApricotPhase3TargetGas
-					gasUsed                    = ApricotPhase3BlockGasFee
+					gasTarget                  = ap3.TargetGas
+					gasUsed                    = ap3.IntrinsicBlockGas
 					amountUnderTarget          = gasTarget - gasUsed
-					parentBaseFee              = params.ApricotPhase3MaxBaseFee
-					smoothingFactor            = params.ApricotPhase4BaseFeeChangeDenominator
+					parentBaseFee              = ap3.MaxBaseFee
+					smoothingFactor            = ap3.BaseFeeChangeDenominator
 					baseFeeFractionUnderTarget = amountUnderTarget * parentBaseFee / gasTarget
 					delta                      = baseFeeFractionUnderTarget / smoothingFactor
 					baseFee                    = parentBaseFee - delta

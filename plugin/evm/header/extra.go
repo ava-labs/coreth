@@ -4,6 +4,7 @@
 package header
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -23,7 +24,7 @@ func ExtraPrefix(
 	switch {
 	case config.IsFUpgrade(header.Time):
 		// Calculate the gas state for the start of the block
-		gasState, err := CalculateDynamicFeeAccumulator(config, parent, header.Time)
+		gasState, err := calculateDynamicFeeAccumulator(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
@@ -38,15 +39,61 @@ func ExtraPrefix(
 
 		return DynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := CalculateDynamicFeeWindow(config, parent, header.Time)
+		feeWindow, err := calculateDynamicFeeWindow(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
 
-		return DynamicFeeWindowBytes(feeWindow), nil
+		return dynamicFeeWindowBytes(feeWindow), nil
 	default:
 		return nil, nil
 	}
+}
+
+func VerifyExtraPrefix(
+	config *params.ChainConfig,
+	parent *types.Header,
+	header *types.Header,
+) error {
+	switch {
+	case config.IsFUpgrade(header.Time):
+		gasState, err := parseDynamicFeeAccumulator(
+			header.GasLimit,
+			header.GasUsed,
+			header.ExtDataGasUsed,
+			header.Extra,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Calculate the gas state for the start of the block
+		expectedGasState, err := calculateDynamicFeeAccumulator(config, parent, header.Time)
+		if err != nil {
+			return err
+		}
+		if err := expectedGasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
+			return err
+		}
+		expectedGasState.UpdateTargetExcess(gasState.TargetExcess)
+
+		if gasState.Gas.Excess != expectedGasState.Gas.Excess {
+			return fmt.Errorf("invalid gas state excess: have %v, want %v", gasState.Gas.Excess, expectedGasState.Gas.Excess)
+		}
+		if gasState.TargetExcess != expectedGasState.TargetExcess {
+			return fmt.Errorf("invalid gas state target excess: have %v, want %v", gasState.TargetExcess, expectedGasState.TargetExcess)
+		}
+	case config.IsApricotPhase3(header.Time):
+		feeWindow, err := calculateDynamicFeeWindow(config, parent, header.Time)
+		if err != nil {
+			return err
+		}
+		feeWindowBytes := dynamicFeeWindowBytes(feeWindow)
+		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
+			return fmt.Errorf("expected header prefix: %x, found %x", feeWindowBytes, header.Extra)
+		}
+	}
+	return nil
 }
 
 // VerifyExtra verifies that the header's Extra field is correctly formatted for

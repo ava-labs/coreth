@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/acp176"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -22,7 +22,7 @@ const DynamicFeeAccumulatorSize = wrappers.LongLen * 2
 
 var ErrDynamicFeeAccumulatorInsufficientLength = errors.New("insufficient length for dynamic fee accumulator")
 
-func CalculateDynamicFeeAccumulator(
+func calculateDynamicFeeAccumulator(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
@@ -39,7 +39,7 @@ func CalculateDynamicFeeAccumulator(
 		// If the parent block was running with ACP-176, we start with the
 		// parent's fee state.
 		var err error
-		gasAccumulator, err = ParseDynamicFeeAccumulator(
+		gasAccumulator, err = parseDynamicFeeAccumulator(
 			parent.GasLimit,
 			parent.GasUsed,
 			parent.ExtDataGasUsed,
@@ -54,7 +54,7 @@ func CalculateDynamicFeeAccumulator(
 	return gasAccumulator, nil
 }
 
-func ParseDynamicFeeAccumulator(
+func parseDynamicFeeAccumulator(
 	limit uint64,
 	gasUsed uint64,
 	extraGasUsed *big.Int,
