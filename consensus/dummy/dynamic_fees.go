@@ -16,8 +16,6 @@ import (
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
-const ApricotPhase3BlockGasFee = 1_000_000
-
 var (
 	errBlockGasCostNil        = errors.New("block gas cost is nil")
 	errBaseFeeNil             = errors.New("base fee is nil")
