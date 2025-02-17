@@ -1,5 +1,9 @@
 # Release Notes
 
+## Pending Release
+- Bump golang version to v1.23.6
+- Bump golangci-lint to v1.63 and add linters
+
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
 - Remove API eth_getAssetBalance that was used to query ANT balances (deprecated since v0.10.0)
 - Remove legacy gossip handler and metrics (deprecated since v0.10.0)
