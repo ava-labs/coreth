@@ -4,6 +4,9 @@
 - Bump golang version to v1.23.6
 - Bump golangci-lint to v1.63 and add linters
 
+- Added `eth_suggestPriceOptions` API to suggest gas prices (slow, normal, fast) based on the current network conditions
+- Added `"po-slow-fee-percentage"`, `"po-fast-fee-percentage"`, `"po-max-base-fee"`, and `"po-max-tip"` config flags to configure the new `eth_suggestPriceOptions` API
+
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
 
 - Removed deprecated `ExportKey`, `ExportAVAX`, `Export`, `ImportKey`, `ImportAVAX`, `Import` APIs
