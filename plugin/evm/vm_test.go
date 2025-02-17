@@ -90,7 +90,10 @@ var (
 		g.Config = &cpy
 
 		allocStr := `{"0100000000000000000000000000000000000000":{"code":"0x7300000000000000000000000000000000000000003014608060405260043610603d5760003560e01c80631e010439146042578063b6510bb314606e575b600080fd5b605c60048036036020811015605657600080fd5b503560b1565b60408051918252519081900360200190f35b818015607957600080fd5b5060af60048036036080811015608e57600080fd5b506001600160a01b03813516906020810135906040810135906060013560b6565b005b30cd90565b836001600160a01b031681836108fc8690811502906040516000604051808303818888878c8acf9550505050505015801560f4573d6000803e3d6000fd5b505050505056fea26469706673582212201eebce970fe3f5cb96bf8ac6ba5f5c133fc2908ae3dcd51082cfee8f583429d064736f6c634300060a0033","balance":"0x0"}}`
-		json.Unmarshal([]byte(allocStr), &g.Alloc)
+		err := json.Unmarshal([]byte(allocStr), &g.Alloc)
+		if err != nil {
+			panic(err)
+		}
 		// After Durango, an additional account is funded in tests to use
 		// with warp messages.
 		if cfg.IsDurango(0) {
@@ -184,7 +187,7 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 	if err := json.Unmarshal([]byte(genesisJSON), genesis); err != nil {
 		t.Fatalf("Problem unmarshaling genesis JSON: %s", err)
 	}
-	genesisReply, err := ss.BuildGenesis(nil, genesis)
+	genesisReply, err := ss.BuildGenesis(context.Background(), genesis)
 	if err != nil {
 		t.Fatalf("Failed to create test genesis")
 	}
@@ -3573,8 +3576,10 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 
 	// Add the two conflicting transactions directly to the mempool, so that two consecutive transactions
 	// will fail verification when build block is called.
-	vm.mempool.AddRemoteTx(importTxs[1])
-	vm.mempool.AddRemoteTx(importTxs[2])
+	err = vm.mempool.AddRemoteTx(importTxs[1])
+	require.ErrorIs(t, err, database.ErrNotFound)
+	err = vm.mempool.AddRemoteTx(importTxs[2])
+	require.ErrorIs(t, err, database.ErrNotFound)
 
 	if _, err := vm.BuildBlock(context.Background()); err == nil {
 		t.Fatal("Expected build block to fail due to empty block")
@@ -3616,8 +3621,8 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		if err := vm.mempool.AddLocalTx(conflictTx); err == nil {
 			t.Fatal("should conflict with the utxoSet in the mempool")
 		}
-		// force add the tx
-		vm.mempool.ForceAddTx(conflictTx)
+		err = vm.mempool.ForceAddTx(conflictTx)
+		require.NoError(t, err)
 		conflictSets[index].Add(conflictTx.ID())
 	}
 	<-issuer

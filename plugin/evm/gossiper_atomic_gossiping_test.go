@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -147,7 +148,9 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	tx, conflictingTx := importTxs[0], importTxs[1]
 	txID := tx.ID()
 
-	mempool.AddRemoteTx(tx)
+	err := mempool.AddRemoteTx(tx)
+	require.NoError(t, err)
+
 	mempool.NextTx()
 	mempool.DiscardCurrentTx(txID)
 
@@ -184,7 +187,9 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// Conflicting tx must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	// This test adds it directly to the mempool + gossiper to simulate that.
-	vm.mempool.AddRemoteTx(conflictingTx)
+	err = vm.mempool.AddRemoteTx(conflictingTx)
+	require.NoError(t, err)
+
 	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: conflictingTx})
 	time.Sleep(500 * time.Millisecond)
 

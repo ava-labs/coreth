@@ -387,8 +387,6 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 			if err := indexAtomicTxs(a1, i, ops[i]); err != nil {
 				t.Fatal(err)
 			}
-		} else {
-			// do nothing
 		}
 	}
 
@@ -575,7 +573,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 			assert.NoError(t, err)
 			assert.False(t, hasMarker)
 			// reinitialize the atomic trie
-			backend, err = NewAtomicBackend(
+			_, err = NewAtomicBackend(
 				db, sharedMemories.thisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval,
 			)
 			assert.NoError(t, err)
@@ -736,7 +734,8 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 				_, storageSize, _ := atomicTrie.trieDB.Size()
 				require.NotZero(t, storageSize, "there should be a dirty node taking up storage space")
 			}
-			atomicTrie.updateLastCommitted(testCase.lastCommittedRoot, testCase.lastCommittedHeight)
+			err = atomicTrie.updateLastCommitted(testCase.lastCommittedRoot, testCase.lastCommittedHeight)
+			require.NoError(t, err)
 
 			hasCommitted, err := atomicTrie.AcceptTrie(testCase.height, testCase.root)
 			require.NoError(t, err)

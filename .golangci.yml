@@ -14,7 +14,7 @@ linters:
     - unconvert
     - typecheck
     - unused
-    # - staticcheck
+    - staticcheck
     - bidichk
     - durationcheck
     - copyloopvar
@@ -25,3 +25,18 @@ linters:
     - reassign
     - mirror
     - tenv
+    - errcheck
+
+issues:
+  exclude-rules:
+    - path: "_test\\.go"
+      text: "SA1019: rand\\.(Seed|Read) has been deprecated since Go 1\\.20"
+      linters:
+        - staticcheck
+
+    - path-except: "(plugin\\/.+\\.go|.+_ext\\.go)"
+      linters:
+        - errcheck
+        - gosimple
+        - govet
+        - staticcheck

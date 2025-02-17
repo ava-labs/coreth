@@ -611,7 +611,10 @@ func (vm *VM) Initialize(
 
 	// Add p2p warp message warpHandler
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
-	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
+	err = vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
+	if err != nil {
+		return fmt.Errorf("adding network handler: %w", err)
+	}
 
 	vm.setAppRequestHandlers()
 
@@ -1257,7 +1260,12 @@ func (vm *VM) Shutdown(context.Context) error {
 	for _, handler := range vm.rpcHandlers {
 		handler.Stop()
 	}
-	vm.eth.Stop()
+
+	err := vm.eth.Stop()
+	if err != nil {
+		return fmt.Errorf("stopping eth: %w", err)
+	}
+
 	vm.shutdownWg.Wait()
 	return nil
 }
