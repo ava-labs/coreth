@@ -2,7 +2,7 @@
 
 ## Pending Release
 - Bump golang version to v1.23.6
-- Bump golangci-lint to v1.63
+- Bump golangci-lint to v1.63 and add linters
 
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
 
