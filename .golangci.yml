@@ -12,6 +12,7 @@ run:
 linters:
   disable-all: true
   enable:
+    - gosimple
     - goimports
     - govet
     - ineffassign
@@ -30,13 +31,6 @@ linters:
     - reassign
     - mirror
     - tenv
-    - gosimple
-    - govet
-    - ineffassign
-    - misspell
-    - unconvert
-    - unused
-    - whitespace
 
 linters-settings:
   gofmt:
