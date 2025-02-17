@@ -12,8 +12,8 @@ run:
 linters:
   disable-all: true
   enable:
-    - gosimple
     - goimports
+    - gosimple
     - govet
     - ineffassign
     - misspell
