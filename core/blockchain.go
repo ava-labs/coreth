@@ -46,18 +46,18 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/version"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
+	"github.com/ava-labs/libevm/triedb/hashdb"
+	"github.com/ava-labs/libevm/triedb/pathdb"
 )
 
 var (
@@ -178,11 +178,11 @@ type CacheConfig struct {
 func (c *CacheConfig) triedbConfig() *triedb.Config {
 	config := &triedb.Config{Preimages: c.Preimages}
 	if c.StateScheme == rawdb.HashScheme || c.StateScheme == "" {
-		config.DBOverride = hashdb.Config{
+		config.HashDB = &hashdb.Config{
 			CleanCacheSize:                  c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:                     trieCleanCacheStatsNamespace,
-			ReferenceRootAtomicallyOnUpdate: true, // Automatically reference root nodes when an update is made
-		}.BackendConstructor
+			ReferenceRootAtomicallyOnUpdate: true,
+		}
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.DBOverride = pathdb.Config{
@@ -1159,7 +1159,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 
 	// Commit all cached state changes into underlying memory database.
 	var err error
-	_, err = bc.commitWithSnap(block, parentRoot, state)
+	if bc.snaps == nil {
+		_, err = state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
+	} else {
+		_, err = state.CommitWithSnap(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.snaps, block.Hash(), block.ParentHash())
+	}
 	if err != nil {
 		return err
 	}
@@ -1675,28 +1679,12 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
 
 	// Commit all cached state changes into underlying memory database.
-	return bc.commitWithSnap(current, parentRoot, statedb)
-}
-
-func (bc *BlockChain) commitWithSnap(
-	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
-) (common.Hash, error) {
-	// blockHashes must be passed through Commit since snapshots are based on the
-	// block hash.
-	blockHashes := snapshot.WithBlockHashes(current.Hash(), current.ParentHash())
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), blockHashes)
-	if err != nil {
-		return common.Hash{}, err
+	// If snapshots are enabled, call CommitWithSnaps to explicitly create a snapshot
+	// diff layer for the block.
+	if bc.snaps == nil {
+		return statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()))
 	}
-	// Upstream does not perform a snapshot update if the root is the same as the
-	// parent root, however here the snapshots are based on the block hash, so
-	// this update is necessary. Note blockHashes are passed here as well.
-	if bc.snaps != nil && root == parentRoot {
-		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil, blockHashes); err != nil {
-			return common.Hash{}, err
-		}
-	}
-	return root, nil
+	return statedb.CommitWithSnap(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), bc.snaps, current.Hash(), current.ParentHash())
 }
 
 // initSnapshot instantiates a Snapshot instance and adds it to [bc]
@@ -1837,7 +1825,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
-			if previousRoot != (common.Hash{}) {
+			if previousRoot != (common.Hash{}) && previousRoot != root {
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root

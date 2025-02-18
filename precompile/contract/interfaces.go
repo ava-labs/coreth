@@ -72,8 +72,8 @@ type ConfigurationBlockContext interface {
 
 type BlockContext interface {
 	ConfigurationBlockContext
-	// GetPredicateResults returns the result of verifying the predicates of the
-	// given transaction, precompile address pair as a byte array.
+	// GetPredicateResults returns an arbitrary byte array result of verifying the predicates
+	// of the given transaction, precompile address pair.
 	GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte
 }
 

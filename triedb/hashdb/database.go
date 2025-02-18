@@ -35,16 +35,14 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/rlp"
-	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
-	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
 )
 
@@ -103,17 +101,6 @@ type Config struct {
 	CleanCacheSize                  int    // Maximum memory allowance (in bytes) for caching clean nodes
 	StatsPrefix                     string // Prefix for cache stats (disabled if empty)
 	ReferenceRootAtomicallyOnUpdate bool   // Whether to reference the root node on update
-}
-
-func (c Config) BackendConstructor(diskdb ethdb.Database, config *triedb.Config) triedb.DBOverride {
-	var resolver ChildResolver
-	if config.IsVerkle {
-		// TODO define verkle resolver
-		log.Crit("Verkle node resolver is not defined")
-	} else {
-		resolver = trie.MerkleResolver{}
-	}
-	return New(diskdb, &c, resolver)
 }
 
 // Defaults is the default setting for database if it's not specified.

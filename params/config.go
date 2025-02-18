@@ -54,8 +54,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -84,6 +84,7 @@ var (
 				CortinaBlockTimestamp:           utils.NewUint64(0),
 				DurangoBlockTimestamp:           utils.NewUint64(0),
 				EtnaTimestamp:                   utils.NewUint64(0),
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -91,8 +92,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -117,6 +118,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -124,8 +126,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -150,6 +152,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -157,8 +160,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -184,6 +187,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -191,8 +195,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -219,6 +223,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -226,8 +231,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -238,6 +243,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			FUpgradeTimestamp:   nil,
 		},
 		&extras.ChainConfig{
 			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
@@ -254,6 +260,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -261,8 +268,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -289,6 +296,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -296,8 +304,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -324,6 +332,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -331,8 +340,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -359,6 +368,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -366,8 +376,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -394,6 +404,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -401,8 +412,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -429,6 +440,7 @@ var (
 				CortinaBlockTimestamp:           nil,
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -436,8 +448,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -464,6 +476,7 @@ var (
 				CortinaBlockTimestamp:           utils.NewUint64(0),
 				DurangoBlockTimestamp:           nil,
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -471,8 +484,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -500,6 +513,7 @@ var (
 				CortinaBlockTimestamp:           utils.NewUint64(0),
 				DurangoBlockTimestamp:           utils.NewUint64(0),
 				EtnaTimestamp:                   nil,
+				FUpgradeTimestamp:               nil,
 			},
 		})
 
@@ -507,8 +521,8 @@ var (
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      false,
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
 			EIP158Block:         big.NewInt(0),
@@ -537,6 +551,7 @@ var (
 				CortinaBlockTimestamp:           utils.NewUint64(0),
 				DurangoBlockTimestamp:           utils.NewUint64(0),
 				EtnaTimestamp:                   utils.NewUint64(0),
+				FUpgradeTimestamp:               utils.NewUint64(0),
 			},
 		})
 
