@@ -5,8 +5,10 @@
 package ap3
 
 import (
+	"math"
+
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common/math"
+	safemath "github.com/ethereum/go-ethereum/common/math"
 )
 
 const (
@@ -86,7 +88,7 @@ func (w *Window) Sum() uint64 {
 func add(sum uint64, values ...uint64) uint64 {
 	var overflow bool
 	for _, v := range values {
-		sum, overflow = math.SafeAdd(sum, v)
+		sum, overflow = safemath.SafeAdd(sum, v)
 		if overflow {
 			return math.MaxUint64
 		}
