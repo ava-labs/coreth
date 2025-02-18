@@ -45,7 +45,10 @@ func CalcExtraPrefix(
 	switch {
 	case config.IsApricotPhase3(timestamp):
 		window, err := calcFeeWindow(config, parent, timestamp)
-		return window.Bytes(), err
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate fee window: %w", err)
+		}
+		return window.Bytes(), nil
 	default:
 		// Prior to AP3 there was no expected extra prefix.
 		return nil, nil
@@ -66,7 +69,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 	}
 }
 
-// calcBaseFeeWithWindow should only be called if [timestamp] >= [config.ApricotPhase3Timestamp]
+// calcBaseFeeWithWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
 func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.

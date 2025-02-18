@@ -154,7 +154,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}
 	if !utils.BigEqual(header.BaseFee, expectedBaseFee) {
-		return fmt.Errorf("expected base fee (%d), found (%d)", expectedBaseFee, header.BaseFee)
+		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
 	}
 
 	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
