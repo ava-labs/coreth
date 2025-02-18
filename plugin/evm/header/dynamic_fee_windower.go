@@ -40,8 +40,6 @@ var (
 
 	ap3BaseFeeChangeDenominator = new(big.Int).SetUint64(ap3.BaseFeeChangeDenominator)
 	ap5BaseFeeChangeDenominator = new(big.Int).SetUint64(ap5.BaseFeeChangeDenominator)
-
-	errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 )
 
 func calculateDynamicFeeWindow(
