@@ -13,9 +13,16 @@ import (
 )
 
 const (
+	// MinBlockGasCost is the minimum block gas cost.
 	MinBlockGasCost = 0
+	// MaxBlockGasCost is the maximum block gas cost. If the maximum block gas
+	// cost would exceed this value, the block gas cost is set to this value.
 	MaxBlockGasCost = 1_000_000
-	TargetBlockRate = 2 // in seconds
+	// TargetBlockRate is the target amount of time in seconds between blocks.
+	// If blocks are produced faster than this rate, the block gas cost is
+	// increased. If blocks are produced slower than this rate, the block gas
+	// cost is decreased.
+	TargetBlockRate = 2
 
 	// BlockGasCostStep is the rate at which the block gas cost changes per
 	// second.
