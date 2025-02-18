@@ -391,6 +391,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		Time:       time,
 		BaseFee:    baseFee,
 	}
+
 	if cm.config.IsCancun(header.Number, header.Time) {
 		var (
 			parentExcessBlobGas uint64
