@@ -31,13 +31,13 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -372,31 +372,24 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
-
-	var gasLimit uint64
-	if cm.config.IsCortina(time) {
-		gasLimit = params.CortinaGasLimit
-	} else if cm.config.IsApricotPhase1(time) {
-		gasLimit = params.ApricotPhase1GasLimit
-	} else {
-		gasLimit = CalcGasLimit(parent.GasUsed(), parent.GasLimit(), parent.GasLimit(), parent.GasLimit())
+	parentHeader := parent.Header()
+	gasLimit, err := header.GasLimit(cm.config, parentHeader, time)
+	if err != nil {
+		panic(err)
 	}
-
+	baseFee, err := header.BaseFee(cm.config, parentHeader, time)
+	if err != nil {
+		panic(err)
+	}
 	header := &types.Header{
 		Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(cm, time, parent.Header()),
+		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),
 		GasLimit:   gasLimit,
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
-	}
-	if cm.config.IsApricotPhase3(time) {
-		var err error
-		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(cm.config, parent.Header(), time)
-		if err != nil {
-			panic(err)
-		}
+		BaseFee:    baseFee,
 	}
 	if cm.config.IsCancun(header.Number, header.Time) {
 		var (

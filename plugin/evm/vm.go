@@ -41,7 +41,10 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/etna"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
@@ -645,6 +648,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		return err
 	}
 	callbacks := vm.createConsensusCallbacks()
+
+	desiredTargetExcess := acp176.DesiredTargetExcess(1_500_000)
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -652,7 +657,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		vm.chaindb,
 		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
-		dummy.NewFakerWithClock(callbacks, &vm.clock),
+		dummy.NewDummyEngine(
+			callbacks,
+			dummy.Mode{},
+			&vm.clock,
+			&desiredTargetExcess,
+		),
 		&vm.clock,
 	)
 	if err != nil {
@@ -666,7 +676,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	// Set the gas parameters for the tx pool to the minimum gas price for the
 	// latest upgrade.
 	vm.txPool.SetGasTip(big.NewInt(0))
-	vm.txPool.SetMinFee(big.NewInt(params.EtnaMinBaseFee))
+	vm.txPool.SetMinFee(big.NewInt(etna.MinBaseFee))
 
 	vm.eth.Start()
 	return vm.initChainState(vm.blockChain.LastAcceptedBlock())
@@ -1577,14 +1587,11 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	}
 	rules := vm.currentRules()
 	parentHeader := preferredBlock
-	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	if vm.chainConfig.IsApricotPhase3(timestamp) {
-		nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
-		if err != nil {
-			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
-			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
-		}
+	nextBaseFee, err := header.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+	if err != nil {
+		// Return extremely detailed error since CalcBaseFee should never encounter an issue here
+		return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
 	}
 
 	// We don’t need to revert the state here in case verifyTx errors, because

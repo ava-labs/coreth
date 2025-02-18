@@ -50,7 +50,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsApricotPhase3: true,
 			},
-			extra:    make([]byte, params.DynamicFeeExtraDataSize),
+			extra:    make([]byte, DynamicFeeWindowSize),
 			expected: nil,
 		},
 		{
@@ -58,7 +58,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsApricotPhase3: true,
 			},
-			extra:    make([]byte, params.DynamicFeeExtraDataSize-1),
+			extra:    make([]byte, DynamicFeeWindowSize-1),
 			expected: errInvalidExtraLength,
 		},
 		{
@@ -66,7 +66,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsApricotPhase3: true,
 			},
-			extra:    make([]byte, params.DynamicFeeExtraDataSize+1),
+			extra:    make([]byte, DynamicFeeWindowSize+1),
 			expected: errInvalidExtraLength,
 		},
 		{
@@ -74,7 +74,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsDurango: true,
 			},
-			extra:    make([]byte, params.DynamicFeeExtraDataSize),
+			extra:    make([]byte, DynamicFeeWindowSize),
 			expected: nil,
 		},
 		{
@@ -82,7 +82,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsDurango: true,
 			},
-			extra:    make([]byte, params.DynamicFeeExtraDataSize+1),
+			extra:    make([]byte, DynamicFeeWindowSize+1),
 			expected: nil,
 		},
 		{
@@ -90,7 +90,31 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsDurango: true,
 			},
-			extra:    make([]byte, params.DynamicFeeExtraDataSize-1),
+			extra:    make([]byte, DynamicFeeWindowSize-1),
+			expected: errInvalidExtraLength,
+		},
+		{
+			name: "f_valid_min",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize),
+			expected: nil,
+		},
+		{
+			name: "f_valid_extra",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize+1),
+			expected: nil,
+		},
+		{
+			name: "f_invalid",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize-1),
 			expected: errInvalidExtraLength,
 		},
 	}

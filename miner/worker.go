@@ -39,7 +39,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
@@ -53,6 +52,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 const (
@@ -146,32 +147,22 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		timestamp = parent.Time
 	}
 
-	var gasLimit uint64
-	if w.chainConfig.IsCortina(timestamp) {
-		gasLimit = params.CortinaGasLimit
-	} else if w.chainConfig.IsApricotPhase1(timestamp) {
-		gasLimit = params.ApricotPhase1GasLimit
-	} else {
-		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the ceiling and floor were set to the same value
-		// such that the gas limit converged to it. Since this is hardbaked now, we remove the ability to configure it.
-		gasLimit = core.CalcGasLimit(parent.GasUsed, parent.GasLimit, params.ApricotPhase1GasLimit, params.ApricotPhase1GasLimit)
+	gasLimit, err := customheader.GasLimit(w.chainConfig, parent, timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
+	}
+	baseFee, err := customheader.BaseFee(w.chainConfig, parent, timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
 		GasLimit:   gasLimit,
-		Extra:      nil,
 		Time:       timestamp,
+		BaseFee:    baseFee,
 	}
 
-	// Set BaseFee and Extra data field if we are post ApricotPhase3
-	if w.chainConfig.IsApricotPhase3(timestamp) {
-		var err error
-		header.Extra, header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
-		}
-	}
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
@@ -199,7 +190,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		return nil, fmt.Errorf("failed to create new current environment: %w", err)
 	}
 	if header.ParentBeaconRoot != nil {
-		context := core.NewEVMBlockContext(header, w.chain, nil)
+		context := core.NewEVMBlockContextWithPredicateResults(header, w.chain, nil, predicate.NewResults())
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}

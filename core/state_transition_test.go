@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
@@ -104,7 +105,7 @@ func executeStateTransitionTest(t *testing.T, st stateTransitionTest) {
 					Nonce:   0,
 				},
 			},
-			GasLimit: params.ApricotPhase1GasLimit,
+			GasLimit: ap1.GasLimit,
 		}
 		genesis       = gspec.ToBlock()
 		engine        = dummy.NewFaker()
