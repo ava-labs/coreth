@@ -47,9 +47,9 @@ const (
 
 // BlockGasCost calculates the required block gas cost.
 //
-// cost = parentCost + step * (TargetBlockRate - timeElapsed)
+// cost = parentCost + step * ([TargetBlockRate] - timeElapsed)
 //
-// The returned cost is clamped to [MinBlockGasCost, MaxBlockGasCost].
+// The returned cost is clamped to [[MinBlockGasCost], [MaxBlockGasCost]].
 func BlockGasCost(
 	parentCost uint64,
 	step uint64,
