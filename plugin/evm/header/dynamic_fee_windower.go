@@ -30,14 +30,14 @@ var (
 	ap4MinBaseFee = big.NewInt(params.ApricotPhase4MinBaseFee)
 	// EtnaMinBaseFee is exported so that it can be modified by tests.
 	//
-	// TODO: Unexport
+	// TODO: Unexport this.
 	EtnaMinBaseFee = big.NewInt(params.EtnaMinBaseFee)
 
 	ap3MaxBaseFee = big.NewInt(ap3.MaxBaseFee)
 	ap4MaxBaseFee = big.NewInt(params.ApricotPhase4MaxBaseFee)
 
-	ApricotPhase4BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase4BaseFeeChangeDenominator)
-	ApricotPhase5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
+	ap3BaseFeeChangeDenominator = new(big.Int).SetUint64(ap3.BaseFeeChangeDenominator)
+	ap5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
 
 	errDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 )
@@ -59,11 +59,11 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	// block limit
 	var (
 		isApricotPhase5                 = config.IsApricotPhase5(parent.Time)
-		baseFeeChangeDenominator        = ApricotPhase4BaseFeeChangeDenominator
+		baseFeeChangeDenominator        = ap3BaseFeeChangeDenominator
 		parentGasTarget          uint64 = ap3.TargetGas
 	)
 	if isApricotPhase5 {
-		baseFeeChangeDenominator = ApricotPhase5BaseFeeChangeDenominator
+		baseFeeChangeDenominator = ap5BaseFeeChangeDenominator
 		parentGasTarget = params.ApricotPhase5TargetGas
 	}
 
