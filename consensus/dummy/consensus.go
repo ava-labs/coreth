@@ -29,8 +29,6 @@ var (
 
 	errInvalidBlockTime       = errors.New("timestamp less than parent's")
 	errUnclesUnsupported      = errors.New("uncles unsupported")
-	errBlockGasCostNil        = errors.New("block gas cost is nil")
-	errBaseFeeNil             = errors.New("base fee is nil")
 	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
 	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
 )
