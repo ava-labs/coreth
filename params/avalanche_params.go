@@ -4,8 +4,6 @@
 package params
 
 import (
-	"math/big"
-
 	"github.com/ava-labs/avalanchego/utils/units"
 )
 
@@ -20,20 +18,5 @@ const (
 
 	ApricotPhase1GasLimit uint64 = 8_000_000
 	CortinaGasLimit       uint64 = 15_000_000
-
-	ApricotPhase5TargetGas                       = 15_000_000
-	ApricotPhase5BaseFeeChangeDenominator uint64 = 36
-	EtnaMinBaseFee                        int64  = GWei
-
-	// The base cost to charge per atomic transaction. Added in Apricot Phase 5.
-	AtomicTxBaseCost uint64 = 10_000
+	EtnaMinBaseFee        int64  = GWei
 )
-
-// The atomic gas limit specifies the maximum amount of gas that can be consumed by the atomic
-// transactions included in a block and is enforced as of ApricotPhase5. Prior to ApricotPhase5,
-// a block included a single atomic transaction. As of ApricotPhase5, each block can include a set
-// of atomic transactions where the cumulative atomic gas consumed is capped by the atomic gas limit,
-// similar to the block gas limit.
-//
-// This value must always remain <= MaxUint64.
-var AtomicGasLimit *big.Int = big.NewInt(100_000)

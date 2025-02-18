@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
+	"github.com/ava-labs/coreth/plugin/evm/ap5"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
@@ -37,8 +38,8 @@ var (
 	ap3MaxBaseFee = big.NewInt(ap3.MaxBaseFee)
 	ap4MaxBaseFee = big.NewInt(ap4.MaxBaseFee)
 
-	ap3BaseFeeChangeDenominator = new(big.Int).SetUint64(ap3.BaseFeeChangeDenominator)
-	ap5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
+	ap3BaseFeeChangeDenominator = big.NewInt(ap3.BaseFeeChangeDenominator)
+	ap5BaseFeeChangeDenominator = big.NewInt(ap5.BaseFeeChangeDenominator)
 
 	errDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 )
@@ -65,7 +66,7 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	)
 	if isApricotPhase5 {
 		baseFeeChangeDenominator = ap5BaseFeeChangeDenominator
-		parentGasTarget = params.ApricotPhase5TargetGas
+		parentGasTarget = ap5.TargetGas
 	}
 
 	// Calculate the amount of gas consumed within the rollup window.
