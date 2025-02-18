@@ -280,7 +280,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			if g.BaseFee != nil {
 				head.BaseFee = g.BaseFee
 			} else {
-				head.BaseFee = new(big.Int).SetInt64(ap3.InitialBaseFee)
+				head.BaseFee = big.NewInt(ap3.InitialBaseFee)
 			}
 		}
 		if conf.IsCancun(num, g.Timestamp) {
