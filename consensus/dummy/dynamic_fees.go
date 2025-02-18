@@ -172,7 +172,7 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 // calcFeeWindow takes the previous header and the timestamp of its child block
 // and calculates the expected fee window.
 //
-// calcFeeWindow should only be called if [timestamp] >= [config.ApricotPhase3Timestamp]
+// calcFeeWindow should only be called if timestamp >= config.ApricotPhase3Timestamp
 func calcFeeWindow(
 	config *params.ChainConfig,
 	parent *types.Header,
@@ -190,7 +190,10 @@ func calcFeeWindow(
 	}
 
 	if timestamp < parent.Time {
-		return DynamicFeeWindow{}, fmt.Errorf("cannot calculate base fee for timestamp %d prior to parent timestamp %d", timestamp, parent.Time)
+		return DynamicFeeWindow{}, fmt.Errorf("cannot calculate fee window for timestamp %d prior to parent timestamp %d",
+			timestamp,
+			parent.Time,
+		)
 	}
 	timeElapsed := timestamp - parent.Time
 
