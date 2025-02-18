@@ -347,7 +347,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 			want: func() *big.Int {
 				const (
 					gasTarget                  = ap3.TargetGas
-					gasUsed                    = ApricotPhase3BlockGasFee
+					gasUsed                    = ap3.IntrinsicBlockGas
 					amountUnderTarget          = gasTarget - gasUsed
 					parentBaseFee              = ap3.MaxBaseFee
 					smoothingFactor            = ap3.BaseFeeChangeDenominator

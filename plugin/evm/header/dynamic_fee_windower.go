@@ -18,8 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-const ApricotPhase3BlockGasFee = 1_000_000
-
 const DynamicFeeWindowSize = wrappers.LongLen * ap3.WindowLen
 
 var (
@@ -202,7 +200,7 @@ func calcFeeWindow(
 			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
 		}
 	default:
-		blockGasCost = ApricotPhase3BlockGasFee
+		blockGasCost = ap3.IntrinsicBlockGas
 	}
 
 	// Compute the new state of the gas rolling window.
