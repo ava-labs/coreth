@@ -7,10 +7,31 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 )
 
 var errInvalidExtraLength = errors.New("invalid header.Extra length")
+
+// CalcExtraPrefix takes the previous header and the timestamp of its child
+// block and calculates the expected extra prefix for the child block.
+func CalcExtraPrefix(
+	config *params.ChainConfig,
+	parent *types.Header,
+	timestamp uint64,
+) ([]byte, error) {
+	switch {
+	case config.IsApricotPhase3(timestamp):
+		window, err := calcFeeWindow(config, parent, timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate fee window: %w", err)
+		}
+		return window.Bytes(), nil
+	default:
+		// Prior to AP3 there was no expected extra prefix.
+		return nil, nil
+	}
+}
 
 // VerifyExtra verifies that the header's Extra field is correctly formatted for
 // [rules].
