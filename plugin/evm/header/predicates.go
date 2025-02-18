@@ -7,6 +7,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 )
 
+// ParsePredicates returns the predicates from a header's Extra field.
 func ParsePredicates(rules params.AvalancheRules, extra []byte) ([]byte, error) {
 	if err := VerifyExtra(rules, extra); err != nil {
 		return nil, err
