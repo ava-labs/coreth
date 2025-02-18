@@ -25,23 +25,19 @@ type blockDefinition struct {
 }
 
 type test struct {
-	extraData      []byte
-	baseFee        *big.Int
-	genBlocks      func() []blockDefinition
+	blocks         []blockDefinition
 	minFee, maxFee *big.Int
 }
 
 func TestDynamicFees(t *testing.T) {
 	spacedTimestamps := []uint64{1, 1, 2, 5, 15, 120}
 
-	var tests []test = []test{
+	tests := []test{
 		// Test minimal gas usage
 		{
-			extraData: nil,
-			baseFee:   nil,
-			minFee:    big.NewInt(ap3.MinBaseFee),
-			maxFee:    big.NewInt(ap3.MaxBaseFee),
-			genBlocks: func() []blockDefinition {
+			minFee: big.NewInt(ap3.MinBaseFee),
+			maxFee: big.NewInt(ap3.MaxBaseFee),
+			blocks: func() []blockDefinition {
 				blocks := make([]blockDefinition, 0, len(spacedTimestamps))
 				for _, timestamp := range spacedTimestamps {
 					blocks = append(blocks, blockDefinition{
@@ -50,15 +46,13 @@ func TestDynamicFees(t *testing.T) {
 					})
 				}
 				return blocks
-			},
+			}(),
 		},
 		// Test overflow handling
 		{
-			extraData: nil,
-			baseFee:   nil,
-			minFee:    big.NewInt(ap3.MinBaseFee),
-			maxFee:    big.NewInt(ap3.MaxBaseFee),
-			genBlocks: func() []blockDefinition {
+			minFee: big.NewInt(ap3.MinBaseFee),
+			maxFee: big.NewInt(ap3.MaxBaseFee),
+			blocks: func() []blockDefinition {
 				blocks := make([]blockDefinition, 0, len(spacedTimestamps))
 				for _, timestamp := range spacedTimestamps {
 					blocks = append(blocks, blockDefinition{
@@ -67,48 +61,44 @@ func TestDynamicFees(t *testing.T) {
 					})
 				}
 				return blocks
-			},
+			}(),
 		},
 		{
-			extraData: nil,
-			baseFee:   nil,
-			minFee:    big.NewInt(ap3.MinBaseFee),
-			maxFee:    big.NewInt(ap3.MaxBaseFee),
-			genBlocks: func() []blockDefinition {
-				return []blockDefinition{
-					{
-						timestamp: 1,
-						gasUsed:   1_000_000,
-					},
-					{
-						timestamp: 3,
-						gasUsed:   1_000_000,
-					},
-					{
-						timestamp: 5,
-						gasUsed:   2_000_000,
-					},
-					{
-						timestamp: 5,
-						gasUsed:   6_000_000,
-					},
-					{
-						timestamp: 7,
-						gasUsed:   6_000_000,
-					},
-					{
-						timestamp: 1000,
-						gasUsed:   6_000_000,
-					},
-					{
-						timestamp: 1001,
-						gasUsed:   6_000_000,
-					},
-					{
-						timestamp: 1002,
-						gasUsed:   6_000_000,
-					},
-				}
+			minFee: big.NewInt(ap3.MinBaseFee),
+			maxFee: big.NewInt(ap3.MaxBaseFee),
+			blocks: []blockDefinition{
+				{
+					timestamp: 1,
+					gasUsed:   1_000_000,
+				},
+				{
+					timestamp: 3,
+					gasUsed:   1_000_000,
+				},
+				{
+					timestamp: 5,
+					gasUsed:   2_000_000,
+				},
+				{
+					timestamp: 5,
+					gasUsed:   6_000_000,
+				},
+				{
+					timestamp: 7,
+					gasUsed:   6_000_000,
+				},
+				{
+					timestamp: 1000,
+					gasUsed:   6_000_000,
+				},
+				{
+					timestamp: 1001,
+					gasUsed:   6_000_000,
+				},
+				{
+					timestamp: 1002,
+					gasUsed:   6_000_000,
+				},
 			},
 		},
 	}
@@ -119,14 +109,12 @@ func TestDynamicFees(t *testing.T) {
 }
 
 func testDynamicFeesStaysWithinRange(t *testing.T, test test) {
-	blocks := test.genBlocks()
+	blocks := test.blocks
 	initialBlock := blocks[0]
 	header := &types.Header{
 		Time:    initialBlock.timestamp,
 		GasUsed: initialBlock.gasUsed,
 		Number:  big.NewInt(0),
-		BaseFee: test.baseFee,
-		Extra:   test.extraData,
 	}
 
 	for index, block := range blocks[1:] {
