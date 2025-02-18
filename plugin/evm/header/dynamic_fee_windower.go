@@ -28,14 +28,14 @@ var (
 	maxUint256      = new(big.Int).Sub(maxUint256Plus1, common.Big1)
 
 	ap3MinBaseFee = big.NewInt(ap3.MinBaseFee)
-	ap4MinBaseFee = big.NewInt(params.ApricotPhase4MinBaseFee)
+	ap4MinBaseFee = big.NewInt(ap4.MinBaseFee)
 	// EtnaMinBaseFee is exported so that it can be modified by tests.
 	//
 	// TODO: Unexport this.
 	EtnaMinBaseFee = big.NewInt(params.EtnaMinBaseFee)
 
 	ap3MaxBaseFee = big.NewInt(ap3.MaxBaseFee)
-	ap4MaxBaseFee = big.NewInt(params.ApricotPhase4MaxBaseFee)
+	ap4MaxBaseFee = big.NewInt(ap4.MaxBaseFee)
 
 	ap3BaseFeeChangeDenominator = new(big.Int).SetUint64(ap3.BaseFeeChangeDenominator)
 	ap5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
