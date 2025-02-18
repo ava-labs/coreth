@@ -22,20 +22,15 @@ const (
 	ApricotPhase1GasLimit uint64 = 8_000_000
 	CortinaGasLimit       uint64 = 15_000_000
 
-	ApricotPhase3MinBaseFee               int64  = 75 * GWei
-	ApricotPhase3MaxBaseFee                      = 225 * GWei
-	ApricotPhase3InitialBaseFee           int64  = 225 * GWei
-	ApricotPhase3TargetGas                       = 10_000_000
-	ApricotPhase3BaseFeeChangeDenominator        = 12
-	ApricotPhase5TargetGas                       = 15_000_000
-	ApricotPhase5BaseFeeChangeDenominator uint64 = 36
-	EtnaMinBaseFee                        int64  = GWei
+	ApricotPhase3MinBaseFee               int64 = 75 * GWei
+	ApricotPhase3MaxBaseFee                     = 225 * GWei
+	ApricotPhase3InitialBaseFee           int64 = 225 * GWei
+	ApricotPhase3TargetGas                      = 10_000_000
+	ApricotPhase3BaseFeeChangeDenominator       = 12
+	EtnaMinBaseFee                        int64 = GWei
 
 	RollupWindow            = 10 // in seconds
 	DynamicFeeExtraDataSize = wrappers.LongLen * RollupWindow
-
-	// The base cost to charge per atomic transaction. Added in Apricot Phase 5.
-	AtomicTxBaseCost uint64 = 10_000
 )
 
 // The atomic gas limit specifies the maximum amount of gas that can be consumed by the atomic
