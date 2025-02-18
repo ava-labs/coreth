@@ -70,6 +70,8 @@ func gasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint64 {
 	return limit
 }
 
+// VerifyGasUsed verifies that the gas used is less than or equal to the gas
+// limit.
 func VerifyGasUsed(
 	config *params.ChainConfig,
 	header *types.Header,
@@ -91,6 +93,7 @@ func VerifyGasUsed(
 	return nil
 }
 
+// VerifyGasLimit verifies that the gas limit for the header is valid.
 func VerifyGasLimit(
 	config *params.ChainConfig,
 	parent *types.Header,
