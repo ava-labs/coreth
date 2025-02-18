@@ -15,6 +15,10 @@ import (
 
 var errInvalidExtraLength = errors.New("invalid header.Extra length")
 
+// ExtraPrefix returns what the prefix of the header's Extra field should be
+// based on the desired target excess.
+//
+// If the `desiredTargetExcess` is nil, the parent's target excess is used.
 func ExtraPrefix(
 	config *params.ChainConfig,
 	parent *types.Header,
@@ -31,7 +35,7 @@ func ExtraPrefix(
 		if err := gasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
 			return nil, err
 		}
-		// If the desired target excess isn't specified, default to the current
+		// If the desired target excess isn't specified, default to the parent
 		// target excess.
 		if desiredTargetExcess != nil {
 			gasState.UpdateTargetExcess(*desiredTargetExcess)
@@ -50,6 +54,8 @@ func ExtraPrefix(
 	}
 }
 
+// VerifyExtraPrefix verifies that the header's Extra field is correctly
+// formatted.
 func VerifyExtraPrefix(
 	config *params.ChainConfig,
 	parent *types.Header,
@@ -75,13 +81,19 @@ func VerifyExtraPrefix(
 		if err := expectedGasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
 			return err
 		}
+
+		// By passing in the claimed target excess, we ensure that the expected
+		// target excess is equal to the claimed target excess if it is possible
+		// to have correctly set it to that value. Otherwise, the resulting
+		// value will be as close to the claimed value as possible, but would
+		// not be equal.
 		expectedGasState.UpdateTargetExcess(gasState.TargetExcess)
 
 		if gasState.Gas.Excess != expectedGasState.Gas.Excess {
-			return fmt.Errorf("invalid gas state excess: have %v, want %v", gasState.Gas.Excess, expectedGasState.Gas.Excess)
+			return fmt.Errorf("invalid gas state excess: have %d, want %d", gasState.Gas.Excess, expectedGasState.Gas.Excess)
 		}
 		if gasState.TargetExcess != expectedGasState.TargetExcess {
-			return fmt.Errorf("invalid gas state target excess: have %v, want %v", gasState.TargetExcess, expectedGasState.TargetExcess)
+			return fmt.Errorf("invalid gas state target excess: have %d, want %d", gasState.TargetExcess, expectedGasState.TargetExcess)
 		}
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := calculateDynamicFeeWindow(config, parent, header.Time)
