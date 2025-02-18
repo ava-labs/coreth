@@ -39,7 +39,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -47,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -79,9 +79,9 @@ func init() {
 
 // overrideMinFee sets the minimum base fee to 1 wei for the duration of the test.
 func overrideMinFee(t *testing.T) {
-	orig := dummy.EtnaMinBaseFee
-	dummy.EtnaMinBaseFee = big.NewInt(1)
-	t.Cleanup(func() { dummy.EtnaMinBaseFee = orig })
+	orig := header.EtnaMinBaseFee
+	header.EtnaMinBaseFee = big.NewInt(1)
+	t.Cleanup(func() { header.EtnaMinBaseFee = orig })
 }
 
 // testBlockChain is a mock of the live chain for testing the pool.
@@ -121,7 +121,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			BaseFee:  mid,
 			Extra:    make([]byte, params.DynamicFeeExtraDataSize),
 		}
-		baseFee, err := dummy.CalcBaseFee(
+		baseFee, err := header.CalcBaseFee(
 			bc.config, parent, blockTime,
 		)
 		if err != nil {
