@@ -88,7 +88,7 @@ func parseDynamicFeeAccumulator(
 	}, nil
 }
 
-func DynamicFeeAccumulatorBytes(s acp176.State) []byte {
+func dynamicFeeAccumulatorBytes(s acp176.State) []byte {
 	bytes := make([]byte, DynamicFeeAccumulatorSize)
 	binary.BigEndian.PutUint64(bytes, uint64(s.Gas.Excess))
 	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(s.TargetExcess))

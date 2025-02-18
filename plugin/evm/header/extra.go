@@ -37,7 +37,7 @@ func ExtraPrefix(
 			gasState.UpdateTargetExcess(*desiredTargetExcess)
 		}
 
-		return DynamicFeeAccumulatorBytes(gasState), nil
+		return dynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := calculateDynamicFeeWindow(config, parent, header.Time)
 		if err != nil {

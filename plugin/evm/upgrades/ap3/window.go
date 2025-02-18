@@ -1,6 +1,7 @@
 // (c) 2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
+// AP3 defines the dynamic fee window used after the Apricot Phase 3 upgrade.
 package ap3
 
 import (

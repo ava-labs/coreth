@@ -1,7 +1,7 @@
 // (c) 2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// AP5 defines constants used during the Apricot Phase 5 upgrade.
+// AP5 defines constants used after the Apricot Phase 5 upgrade.
 package ap5
 
 const (
