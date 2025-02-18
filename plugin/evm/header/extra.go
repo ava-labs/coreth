@@ -39,20 +39,20 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsDurango:
-		if extraLen < params.DynamicFeeExtraDataSize {
+		if extraLen < DynamicFeeWindowSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				errInvalidExtraLength,
-				params.DynamicFeeExtraDataSize,
+				DynamicFeeWindowSize,
 				extraLen,
 			)
 		}
 	case rules.IsApricotPhase3:
-		if extraLen != params.DynamicFeeExtraDataSize {
+		if extraLen != DynamicFeeWindowSize {
 			return fmt.Errorf(
 				"%w: expected %d but got %d",
 				errInvalidExtraLength,
-				params.DynamicFeeExtraDataSize,
+				DynamicFeeWindowSize,
 				extraLen,
 			)
 		}

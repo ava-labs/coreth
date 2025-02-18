@@ -103,16 +103,16 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 			)
 		}
 
-		// If timeElapsed is greater than [params.RollupWindow], apply the
-		// state transition to the base fee to account for the interval during
-		// which no blocks were produced.
+		// If timeElapsed is greater than [ap3.WindowLen], apply the state
+		// transition to the base fee to account for the interval during which
+		// no blocks were produced.
 		//
-		// We use timeElapsed/params.RollupWindow, so that the transition is
-		// applied for every [params.RollupWindow] seconds that has elapsed
-		// between the parent and this block.
+		// We use timeElapsed/[ap3.WindowLen], so that the transition is applied
+		// for every [ap3.WindowLen] seconds that has elapsed between the parent
+		// and this block.
 		var (
 			timeElapsed    = timestamp - parent.Time
-			windowsElapsed = timeElapsed / params.RollupWindow
+			windowsElapsed = timeElapsed / ap3.WindowLen
 		)
 		if windowsElapsed > 1 {
 			bigWindowsElapsed := new(big.Int).SetUint64(windowsElapsed)

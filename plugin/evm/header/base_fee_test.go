@@ -352,14 +352,14 @@ func TestDynamicFeesEtna(t *testing.T) {
 
 func TestCalcBaseFeeRegression(t *testing.T) {
 	parentTimestamp := uint64(1)
-	timestamp := parentTimestamp + params.RollupWindow + 1000
+	timestamp := parentTimestamp + ap3.WindowLen + 1000
 
 	parentHeader := &types.Header{
 		Time:    parentTimestamp,
 		GasUsed: 14_999_999,
 		Number:  big.NewInt(1),
 		BaseFee: big.NewInt(1),
-		Extra:   make([]byte, params.DynamicFeeExtraDataSize),
+		Extra:   make([]byte, DynamicFeeWindowSize),
 	}
 
 	_, err := CalcBaseFee(params.TestChainConfig, parentHeader, timestamp)
