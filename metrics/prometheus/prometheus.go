@@ -4,10 +4,13 @@
 package prometheus
 
 import (
+	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/ava-labs/coreth/metrics"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -193,4 +196,29 @@ func (g gatherer) Gather() ([]*dto.MetricFamily, error) {
 
 func Gatherer(reg metrics.Registry) prometheus.Gatherer {
 	return gatherer{reg: reg}
+}
+
+// Handler returns an HTTP handler which dump metrics in Prometheus format.
+func Handler(reg metrics.Registry) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Gather and pre-sort the metrics to avoid random listings
+		var names []string
+		reg.Each(func(name string, i interface{}) {
+			names = append(names, name)
+		})
+		sort.Strings(names)
+
+		// Aggregate all the metrics into a Prometheus collector
+		c := newCollector()
+
+		for _, name := range names {
+			i := reg.Get(name)
+			if err := c.Add(name, i); err != nil {
+				log.Warn("Unknown Prometheus metric type", "type", fmt.Sprintf("%T", i))
+			}
+		}
+		w.Header().Add("Content-Type", "text/plain")
+		w.Header().Add("Content-Length", fmt.Sprint(c.buff.Len()))
+		w.Write(c.buff.Bytes())
+	})
 }

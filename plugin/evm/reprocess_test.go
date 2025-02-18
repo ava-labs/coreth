@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -20,6 +22,8 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/coreth/metrics/exp"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	evmdatabase "github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ethereum/go-ethereum/common"
@@ -62,6 +66,8 @@ var (
 	commitEachTxs          = 0
 	forceStartWithMismatch = false
 	trackDeletedTries      = false
+	startPProf             = false
+	pprofAddr              = "localhost:6060"
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -113,6 +119,8 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&firewoodRevisions, "firewoodRevisions", firewoodRevisions, "firewood revisions (-1 uses fw default)")
 	flag.IntVar(&firewoodReadCacheStrategy, "firewoodReadCacheStrategy", firewoodReadCacheStrategy, "firewood read cache strategy")
 	flag.IntVar(&firewoodMetricsPort, "firewoodMetricsPort", firewoodMetricsPort, "firewood metrics port")
+	flag.BoolVar(&startPProf, "startPProf", startPProf, "start pprof")
+	flag.StringVar(&pprofAddr, "pprofAddr", pprofAddr, "pprof address")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -430,6 +438,10 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 	dbs := openDBs(t)
 	defer dbs.Close()
 
+	if startPProf {
+		StartPProf(pprofAddr, true)
+	}
+
 	lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
 	t.Logf("Persisted metadata: Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
 
@@ -673,4 +685,18 @@ func checkSnapshot(t *testing.T, db ethdb.Database, log bool) (int, int) {
 
 func enableLogging() {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+}
+
+func StartPProf(address string, withMetrics bool) {
+	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
+	// from the registry into expvar, and execute regular expvar handler.
+	if withMetrics {
+		exp.Exp(metrics.DefaultRegistry)
+	}
+	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
+	go func() {
+		if err := http.ListenAndServe(address, nil); err != nil {
+			log.Error("Failure in running pprof server", "err", err)
+		}
+	}()
 }
