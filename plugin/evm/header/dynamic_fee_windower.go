@@ -18,6 +18,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
+// DynamicFeeWindowSize is the number of bytes that are used to encode the
+// dynamic fee window in the header's Extra field after the Apricot Phase 3
+// upgrade.
 const DynamicFeeWindowSize = wrappers.LongLen * ap3.WindowLen
 
 var (
