@@ -21,10 +21,6 @@ const (
 	ApricotPhase1GasLimit uint64 = 8_000_000
 	CortinaGasLimit       uint64 = 15_000_000
 
-	ApricotPhase3MinBaseFee               int64  = 75 * GWei
-	ApricotPhase3MaxBaseFee                      = 225 * GWei
-	ApricotPhase3InitialBaseFee           int64  = 225 * GWei
-	ApricotPhase3TargetGas                       = 10_000_000
 	ApricotPhase4MinBaseFee               int64  = 25 * GWei
 	ApricotPhase4MaxBaseFee               int64  = 1_000 * GWei
 	ApricotPhase4BaseFeeChangeDenominator        = 12

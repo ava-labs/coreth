@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -588,7 +589,7 @@ func TestOpenDrops(t *testing.T) {
 
 	chain := &testBlockChain{
 		config:  testChainConfig,
-		basefee: uint256.NewInt(uint64(params.ApricotPhase3MinBaseFee)),
+		basefee: uint256.NewInt(ap3.MinBaseFee),
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
@@ -707,7 +708,7 @@ func TestOpenIndex(t *testing.T) {
 
 	chain := &testBlockChain{
 		config:  testChainConfig,
-		basefee: uint256.NewInt(uint64(params.ApricotPhase3MinBaseFee)),
+		basefee: uint256.NewInt(ap3.MinBaseFee),
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}

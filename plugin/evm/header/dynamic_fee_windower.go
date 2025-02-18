@@ -23,15 +23,18 @@ const ApricotPhase3BlockGasFee = 1_000_000
 const DynamicFeeWindowSize = wrappers.LongLen * ap3.WindowLen
 
 var (
-	MaxUint256Plus1 = new(big.Int).Lsh(common.Big1, 256)
-	MaxUint256      = new(big.Int).Sub(MaxUint256Plus1, common.Big1)
+	maxUint256Plus1 = new(big.Int).Lsh(common.Big1, 256)
+	maxUint256      = new(big.Int).Sub(maxUint256Plus1, common.Big1)
 
-	ApricotPhase3MinBaseFee     = big.NewInt(params.ApricotPhase3MinBaseFee)
-	ApricotPhase3MaxBaseFee     = big.NewInt(params.ApricotPhase3MaxBaseFee)
-	ApricotPhase4MinBaseFee     = big.NewInt(params.ApricotPhase4MinBaseFee)
-	ApricotPhase4MaxBaseFee     = big.NewInt(params.ApricotPhase4MaxBaseFee)
-	ApricotPhase3InitialBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
-	EtnaMinBaseFee              = big.NewInt(params.EtnaMinBaseFee)
+	ap3MinBaseFee = big.NewInt(ap3.MinBaseFee)
+	ap4MinBaseFee = big.NewInt(params.ApricotPhase4MinBaseFee)
+	// EtnaMinBaseFee is exported so that it can be modified by tests.
+	//
+	// TODO: Unexport
+	EtnaMinBaseFee = big.NewInt(params.EtnaMinBaseFee)
+
+	ap3MaxBaseFee = big.NewInt(ap3.MaxBaseFee)
+	ap4MaxBaseFee = big.NewInt(params.ApricotPhase4MaxBaseFee)
 
 	ApricotPhase4BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase4BaseFeeChangeDenominator)
 	ApricotPhase5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
@@ -44,7 +47,7 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	if !config.IsApricotPhase3(parent.Time) || parent.Number.Cmp(common.Big0) == 0 {
-		return big.NewInt(params.ApricotPhase3InitialBaseFee), nil
+		return big.NewInt(ap3.InitialBaseFee), nil
 	}
 
 	dynamicFeeWindow, err := calcFeeWindow(config, parent, timestamp)
@@ -57,7 +60,7 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	var (
 		isApricotPhase5                 = config.IsApricotPhase5(parent.Time)
 		baseFeeChangeDenominator        = ApricotPhase4BaseFeeChangeDenominator
-		parentGasTarget          uint64 = params.ApricotPhase3TargetGas
+		parentGasTarget          uint64 = ap3.TargetGas
 	)
 	if isApricotPhase5 {
 		baseFeeChangeDenominator = ApricotPhase5BaseFeeChangeDenominator
@@ -127,13 +130,13 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	// Ensure that the base fee does not increase/decrease outside of the bounds
 	switch {
 	case config.IsEtna(parent.Time):
-		baseFee = selectBigWithinBounds(EtnaMinBaseFee, baseFee, MaxUint256)
+		baseFee = selectBigWithinBounds(EtnaMinBaseFee, baseFee, maxUint256)
 	case isApricotPhase5:
-		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, MaxUint256)
+		baseFee = selectBigWithinBounds(ap4MinBaseFee, baseFee, maxUint256)
 	case config.IsApricotPhase4(parent.Time):
-		baseFee = selectBigWithinBounds(ApricotPhase4MinBaseFee, baseFee, ApricotPhase4MaxBaseFee)
+		baseFee = selectBigWithinBounds(ap4MinBaseFee, baseFee, ap4MaxBaseFee)
 	default:
-		baseFee = selectBigWithinBounds(ApricotPhase3MinBaseFee, baseFee, ApricotPhase3MaxBaseFee)
+		baseFee = selectBigWithinBounds(ap3MinBaseFee, baseFee, ap3MaxBaseFee)
 	}
 
 	return baseFee, nil

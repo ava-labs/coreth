@@ -38,8 +38,8 @@ func TestDynamicFees(t *testing.T) {
 		{
 			extraData: nil,
 			baseFee:   nil,
-			minFee:    big.NewInt(params.ApricotPhase3MinBaseFee),
-			maxFee:    big.NewInt(params.ApricotPhase3MaxBaseFee),
+			minFee:    big.NewInt(ap3.MinBaseFee),
+			maxFee:    big.NewInt(ap3.MaxBaseFee),
 			genBlocks: func() []blockDefinition {
 				blocks := make([]blockDefinition, 0, len(spacedTimestamps))
 				for _, timestamp := range spacedTimestamps {
@@ -55,8 +55,8 @@ func TestDynamicFees(t *testing.T) {
 		{
 			extraData: nil,
 			baseFee:   nil,
-			minFee:    big.NewInt(params.ApricotPhase3MinBaseFee),
-			maxFee:    big.NewInt(params.ApricotPhase3MaxBaseFee),
+			minFee:    big.NewInt(ap3.MinBaseFee),
+			maxFee:    big.NewInt(ap3.MaxBaseFee),
 			genBlocks: func() []blockDefinition {
 				blocks := make([]blockDefinition, 0, len(spacedTimestamps))
 				for _, timestamp := range spacedTimestamps {
@@ -71,8 +71,8 @@ func TestDynamicFees(t *testing.T) {
 		{
 			extraData: nil,
 			baseFee:   nil,
-			minFee:    big.NewInt(params.ApricotPhase3MinBaseFee),
-			maxFee:    big.NewInt(params.ApricotPhase3MaxBaseFee),
+			minFee:    big.NewInt(ap3.MinBaseFee),
+			maxFee:    big.NewInt(ap3.MaxBaseFee),
 			genBlocks: func() []blockDefinition {
 				return []blockDefinition{
 					{
@@ -286,7 +286,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 	nextBaseFee, err := CalcBaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// Genesis matches the initial base fee
-	require.Equal(params.ApricotPhase3InitialBaseFee, nextBaseFee.Int64())
+	require.Equal(ap3.InitialBaseFee, nextBaseFee.Int64())
 
 	timestamp = uint64(10_000)
 	header = &types.Header{
@@ -342,14 +342,14 @@ func TestEstimateNextBaseFee(t *testing.T) {
 			upgrades:      params.TestApricotPhase3Config.NetworkUpgrades,
 			parentNumber:  1,
 			parentExtra:   dynamicFeeWindowBytes(ap3.Window{}),
-			parentBaseFee: big.NewInt(params.ApricotPhase3MaxBaseFee),
+			parentBaseFee: big.NewInt(ap3.MaxBaseFee),
 			timestamp:     1,
 			want: func() *big.Int {
 				const (
-					gasTarget                  = params.ApricotPhase3TargetGas
+					gasTarget                  = ap3.TargetGas
 					gasUsed                    = ApricotPhase3BlockGasFee
 					amountUnderTarget          = gasTarget - gasUsed
-					parentBaseFee              = params.ApricotPhase3MaxBaseFee
+					parentBaseFee              = ap3.MaxBaseFee
 					smoothingFactor            = params.ApricotPhase4BaseFeeChangeDenominator
 					baseFeeFractionUnderTarget = amountUnderTarget * parentBaseFee / gasTarget
 					delta                      = baseFeeFractionUnderTarget / smoothingFactor
