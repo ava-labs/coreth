@@ -1,7 +1,7 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package dummy
+package header
 
 import (
 	"errors"
@@ -9,27 +9,9 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
 )
 
-const ApricotPhase3BlockGasFee = 1_000_000
-
-var (
-	MaxUint256Plus1 = new(big.Int).Lsh(common.Big1, 256)
-	MaxUint256      = new(big.Int).Sub(MaxUint256Plus1, common.Big1)
-
-	ApricotPhase3MinBaseFee     = big.NewInt(params.ApricotPhase3MinBaseFee)
-	ApricotPhase3MaxBaseFee     = big.NewInt(params.ApricotPhase3MaxBaseFee)
-	ApricotPhase4MinBaseFee     = big.NewInt(params.ApricotPhase4MinBaseFee)
-	ApricotPhase4MaxBaseFee     = big.NewInt(params.ApricotPhase4MaxBaseFee)
-	ApricotPhase3InitialBaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
-	EtnaMinBaseFee              = big.NewInt(params.EtnaMinBaseFee)
-
-	ApricotPhase4BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase4BaseFeeChangeDenominator)
-	ApricotPhase5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
-
-	errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
-)
+var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 
 // CalcBaseFee takes the previous header and the timestamp of its child block
 // and calculates the expected base fee for the child block.

@@ -26,7 +26,7 @@ func CalcExtraPrefix(
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate fee window: %w", err)
 		}
-		return window.Bytes(), nil
+		return dynamicFeeWindowBytes(window), nil
 	default:
 		// Prior to AP3 there was no expected extra prefix.
 		return nil, nil

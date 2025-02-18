@@ -1,22 +1,26 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package dummy
+package header
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
-	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
 const ApricotPhase3BlockGasFee = 1_000_000
+
+const DynamicFeeWindowSize = wrappers.LongLen * ap3.WindowLen
 
 var (
 	MaxUint256Plus1 = new(big.Int).Lsh(common.Big1, 256)
@@ -32,7 +36,7 @@ var (
 	ApricotPhase4BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase4BaseFeeChangeDenominator)
 	ApricotPhase5BaseFeeChangeDenominator = new(big.Int).SetUint64(params.ApricotPhase5BaseFeeChangeDenominator)
 
-	errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
+	errDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 )
 
 // calcBaseFeeWithWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
@@ -143,20 +147,20 @@ func calcFeeWindow(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
-) (DynamicFeeWindow, error) {
+) (ap3.Window, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial window.
 	if !config.IsApricotPhase3(parent.Time) || parent.Number.Cmp(common.Big0) == 0 {
-		return DynamicFeeWindow{}, nil
+		return ap3.Window{}, nil
 	}
 
-	dynamicFeeWindow, err := ParseDynamicFeeWindow(parent.Extra)
+	dynamicFeeWindow, err := parseDynamicFeeWindow(parent.Extra)
 	if err != nil {
-		return DynamicFeeWindow{}, err
+		return ap3.Window{}, err
 	}
 
 	if timestamp < parent.Time {
-		return DynamicFeeWindow{}, fmt.Errorf("cannot calculate fee window for timestamp %d prior to parent timestamp %d",
+		return ap3.Window{}, fmt.Errorf("cannot calculate fee window for timestamp %d prior to parent timestamp %d",
 			timestamp,
 			parent.Time,
 		)
@@ -183,7 +187,7 @@ func calcFeeWindow(
 		// still calculated using the AP4 step. This is different than the
 		// actual BlockGasCost calculation used for the child block. This
 		// behavior is kept to preserve the original behavior of this function.
-		blockGasCost = header.BlockGasCostWithStep(
+		blockGasCost = BlockGasCostWithStep(
 			parent.BlockGasCost,
 			ap4.BlockGasCostStep,
 			timeElapsed,
@@ -219,4 +223,30 @@ func selectBigWithinBounds(lowerBound, value, upperBound *big.Int) *big.Int {
 	default:
 		return value
 	}
+}
+
+func parseDynamicFeeWindow(bytes []byte) (ap3.Window, error) {
+	if len(bytes) < DynamicFeeWindowSize {
+		return ap3.Window{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
+			errDynamicFeeWindowInsufficientLength,
+			DynamicFeeWindowSize,
+			len(bytes),
+		)
+	}
+
+	var window ap3.Window
+	for i := range window {
+		offset := i * wrappers.LongLen
+		window[i] = binary.BigEndian.Uint64(bytes[offset:])
+	}
+	return window, nil
+}
+
+func dynamicFeeWindowBytes(w ap3.Window) []byte {
+	bytes := make([]byte, DynamicFeeWindowSize)
+	for i, v := range w {
+		offset := i * wrappers.LongLen
+		binary.BigEndian.PutUint64(bytes[offset:], v)
+	}
+	return bytes
 }

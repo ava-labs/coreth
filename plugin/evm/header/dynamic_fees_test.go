@@ -1,7 +1,7 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package dummy
+package header
 
 import (
 	"math/big"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ap3"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
@@ -388,7 +389,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 			name:          "ap3",
 			upgrades:      params.TestApricotPhase3Config.NetworkUpgrades,
 			parentNumber:  1,
-			parentExtra:   (&DynamicFeeWindow{}).Bytes(),
+			parentExtra:   dynamicFeeWindowBytes(ap3.Window{}),
 			parentBaseFee: big.NewInt(params.ApricotPhase3MaxBaseFee),
 			timestamp:     1,
 			want: func() *big.Int {

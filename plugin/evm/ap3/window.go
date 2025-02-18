@@ -1,56 +1,74 @@
 // (c) 2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package dummy
+// AP3 defines the dynamic fee window used after the Apricot Phase 3 upgrade.
+package ap3
 
 import (
-	"encoding/binary"
-	"errors"
-	"fmt"
+	"math"
 
-	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common/math"
+	safemath "github.com/ethereum/go-ethereum/common/math"
 )
 
-var ErrDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
+const (
+	// WindowLen is the number of seconds of gas consumption to track.
+	WindowLen = 10
 
-// Window is a window of the last [params.RollupWindow] seconds of gas
+	// MinBaseFee is the minimum base fee that is allowed after Apricot Phase 3
+	// upgrade.
+	//
+	// This value was modified in Apricot Phase 4.
+	MinBaseFee = 75 * params.GWei
+
+	// MaxBaseFee is the maximum base fee that is allowed after Apricot Phase 3
+	// upgrade.
+	//
+	// This value was modified in Apricot Phase 4.
+	MaxBaseFee = 225 * params.GWei
+
+	// InitialBaseFee is the base fee that is used for the first Apricot Phase 3
+	// block.
+	InitialBaseFee = MaxBaseFee
+
+	// TargetGas is the target amount of gas to be included in the window. The
+	// target amount of gas per second equals [TargetGas] / [WindowLen].
+	//
+	// This value was modified in Apricot Phase 5.
+	TargetGas = 10_000_000
+
+	// IntrinsicBlockGas is the amount of gas that should always be included in
+	// the window.
+	//
+	// This value became dynamic in Apricot Phase 4.
+	IntrinsicBlockGas = 1_000_000
+
+	// BaseFeeChangeDenominator is the denominator used to smoothen base fee
+	// changes.
+	//
+	// This value was modified in Apricot Phase 5.
+	BaseFeeChangeDenominator = 12
+)
+
+// Window is a window of the last [WindowLen] seconds of gas
 // usage.
 //
-// Index 0 is the oldest entry, and [params.RollupWindow]-1 is the current
+// Index 0 is the oldest entry, and [WindowLen]-1 is the current
 // entry.
-type Window [params.RollupWindow]uint64
-
-func ParseDynamicFeeWindow(bytes []byte) (Window, error) {
-	if len(bytes) < params.DynamicFeeExtraDataSize {
-		return Window{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
-			ErrDynamicFeeWindowInsufficientLength,
-			params.DynamicFeeExtraDataSize,
-			len(bytes),
-		)
-	}
-
-	var window Window
-	for i := range window {
-		offset := i * wrappers.LongLen
-		window[i] = binary.BigEndian.Uint64(bytes[offset:])
-	}
-	return window, nil
-}
+type Window [WindowLen]uint64
 
 // Add adds the amounts to the most recent entry in the window.
 //
 // If the most recent entry overflows, it is set to [math.MaxUint64].
 func (w *Window) Add(amounts ...uint64) {
-	const lastIndex uint = params.RollupWindow - 1
+	const lastIndex uint = WindowLen - 1
 	w[lastIndex] = add(w[lastIndex], amounts...)
 }
 
 // Shift removes the oldest n entries from the window and adds n new empty
 // entries.
 func (w *Window) Shift(n uint64) {
-	if n >= params.RollupWindow {
+	if n >= WindowLen {
 		*w = Window{}
 		return
 	}
@@ -67,19 +85,10 @@ func (w *Window) Sum() uint64 {
 	return add(0, w[:]...)
 }
 
-func (w *Window) Bytes() []byte {
-	bytes := make([]byte, params.DynamicFeeExtraDataSize)
-	for i, v := range w {
-		offset := i * wrappers.LongLen
-		binary.BigEndian.PutUint64(bytes[offset:], v)
-	}
-	return bytes
-}
-
 func add(sum uint64, values ...uint64) uint64 {
 	var overflow bool
 	for _, v := range values {
-		sum, overflow = math.SafeAdd(sum, v)
+		sum, overflow = safemath.SafeAdd(sum, v)
 		if overflow {
 			return math.MaxUint64
 		}

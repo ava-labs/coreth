@@ -140,7 +140,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 	}
 
 	// Verify header.Extra matches the expected value.
-	expectedExtraPrefix, err := CalcExtraPrefix(config, parent, header.Time)
+	expectedExtraPrefix, err := customheader.CalcExtraPrefix(config, parent, header.Time)
 	if err != nil {
 		return fmt.Errorf("failed to calculate extra prefix: %w", err)
 	}
@@ -149,7 +149,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 	}
 
 	// Verify header.BaseFee matches the expected value.
-	expectedBaseFee, err := CalcBaseFee(config, parent, header.Time)
+	expectedBaseFee, err := customheader.CalcBaseFee(config, parent, header.Time)
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}

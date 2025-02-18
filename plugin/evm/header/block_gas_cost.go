@@ -4,6 +4,7 @@
 package header
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
@@ -16,6 +17,12 @@ import (
 //
 // This value modifies the previously used [ap4.BlockGasCostStep].
 const ApricotPhase5BlockGasCostStep = 200_000
+
+var (
+	errBaseFeeNil        = errors.New("base fee is nil")
+	errBlockGasCostNil   = errors.New("block gas cost is nil")
+	errExtDataGasUsedNil = errors.New("extDataGasUsed is nil")
+)
 
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
