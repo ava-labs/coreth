@@ -33,7 +33,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Verify that SimulatedBackend implements required interfaces

@@ -35,7 +35,7 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (

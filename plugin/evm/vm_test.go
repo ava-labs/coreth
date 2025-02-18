@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/coreth/constants"
@@ -27,7 +27,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/trie"
+	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -36,12 +36,12 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/metrics"
-	"github.com/ava-labs/libevm/common"
-	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
-	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/libevm/stateconf"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/triedb"
+	"github.com/ethereum/go-ethereum/common"
+	ethsnapshot "github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/libevm/stateconf"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 const (

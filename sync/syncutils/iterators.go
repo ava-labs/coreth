@@ -6,7 +6,7 @@ package syncutils
 import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var (

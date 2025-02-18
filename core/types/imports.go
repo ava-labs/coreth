@@ -4,7 +4,7 @@
 package types
 
 import (
-	ethtypes "github.com/ava-labs/libevm/core/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 // The following types are used directly as their upstream definitions.

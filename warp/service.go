@@ -15,8 +15,8 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/warp/aggregator"
 	warpValidators "github.com/ava-labs/coreth/warp/validators"
-	"github.com/ava-labs/libevm/common/hexutil"
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var errNoValidators = errors.New("cannot aggregate signatures from subnet with no validators")

@@ -5,7 +5,7 @@ package extras
 
 import (
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Rules struct {

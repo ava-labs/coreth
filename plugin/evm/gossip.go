@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	ethcommon "github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/log"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/avalanchego/ids"

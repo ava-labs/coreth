@@ -9,7 +9,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 var _ Client = (*client)(nil)

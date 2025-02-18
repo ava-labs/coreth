@@ -43,8 +43,8 @@ import (
 	"strconv"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/exp/slices"
 )
 

@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (

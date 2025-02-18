@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestStateObjectPartition(t *testing.T) {

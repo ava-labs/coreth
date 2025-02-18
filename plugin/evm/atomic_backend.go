@@ -18,8 +18,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var _ AtomicBackend = &atomicBackend{}

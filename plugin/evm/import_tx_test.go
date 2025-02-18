@@ -9,7 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"

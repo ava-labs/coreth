@@ -36,8 +36,8 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"golang.org/x/exp/slices"
 )

@@ -35,12 +35,12 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/rlp"
-	"github.com/ava-labs/libevm/trie/testutil"
-	"github.com/ava-labs/libevm/trie/trienode"
-	"github.com/ava-labs/libevm/trie/triestate"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/testutil"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )

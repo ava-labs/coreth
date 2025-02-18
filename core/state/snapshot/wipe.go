@@ -31,9 +31,9 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // WipeSnapshot starts a goroutine to iterate over the entire key-value database

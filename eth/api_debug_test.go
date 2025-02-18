@@ -36,13 +36,13 @@ import (
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/libevm/triedb"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 
 	"github.com/davecgh/go-spew/spew"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/crypto"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"golang.org/x/exp/slices"
 )

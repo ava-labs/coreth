@@ -9,7 +9,7 @@ set -o pipefail
 # 2. Ignore lines that import libevm with a named import starting with "eth"
 # 3. Sort the unique results
 # 4. Print out the difference between the search results and the list of specified allowed package imports from libevm.
-libevm_regexp='"github.com/ava-labs/libevm/.*"'
+libevm_regexp='"github.com/ethereum/go-ethereum/.*"'
 allow_named_imports='eth\w\+ "'
 extra_imports=$(grep -r --include='*.go' --exclude=mocks.go "${libevm_regexp}" -h | grep -v "${allow_named_imports}" | grep -o "${libevm_regexp}" | sort -u | comm -23 - ./scripts/eth-allowed-packages.txt)
 if [ -n "${extra_imports}" ]; then

@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/require"
 )
 

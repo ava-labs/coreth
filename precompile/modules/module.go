@@ -7,7 +7,7 @@ import (
 	"bytes"
 
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Module struct {

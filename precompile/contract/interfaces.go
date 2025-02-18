@@ -9,9 +9,9 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/libevm/common"
-	ethtypes "github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 )
 

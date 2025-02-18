@@ -33,7 +33,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const testSectionSize = 4096
