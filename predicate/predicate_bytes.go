@@ -57,8 +57,8 @@ func GetPredicateResultBytes(extraData []byte) ([]byte, bool) {
 	// Prior to Durango, the VM enforces the extra data is smaller than or equal to this size.
 	// After Durango, the VM pre-verifies the extra data past the dynamic fee rollup window is
 	// valid.
-	if len(extraData) <= header.DynamicFeeWindowSize {
+	if len(extraData) <= header.FeeWindowSize {
 		return nil, false
 	}
-	return extraData[header.DynamicFeeWindowSize:], true
+	return extraData[header.FeeWindowSize:], true
 }

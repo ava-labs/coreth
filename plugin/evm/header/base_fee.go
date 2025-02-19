@@ -13,14 +13,14 @@ import (
 
 var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 
-// CalcBaseFee takes the previous header and the timestamp of its child block
-// and calculates the expected base fee for the child block.
+// BaseFee takes the previous header and the timestamp of its child block and
+// calculates the expected base fee for the child block.
 //
 // Prior to AP3, the returned base fee will be nil.
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
+func BaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	switch {
 	case config.IsApricotPhase3(timestamp):
-		return calcBaseFeeWithWindow(config, parent, timestamp)
+		return baseFeeFromWindow(config, parent, timestamp)
 	default:
 		// Prior to AP3 the expected base fee is nil.
 		return nil, nil
@@ -41,5 +41,5 @@ func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, times
 	}
 
 	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
-	return CalcBaseFee(config, parent, timestamp)
+	return BaseFee(config, parent, timestamp)
 }

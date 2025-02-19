@@ -356,8 +356,8 @@ func TestStateProcessorErrors(t *testing.T) {
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
 	time := parent.Time() + 10
-	extra, _ := header.CalcExtraPrefix(config, parent.Header(), time)
-	baseFee, _ := header.CalcBaseFee(config, parent.Header(), time)
+	extra, _ := header.ExtraPrefix(config, parent.Header(), time)
+	baseFee, _ := header.BaseFee(config, parent.Header(), time)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),

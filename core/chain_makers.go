@@ -382,11 +382,11 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		gasLimit = CalcGasLimit(parent.GasUsed(), parent.GasLimit(), parent.GasLimit(), parent.GasLimit())
 	}
 
-	extra, err := header.CalcExtraPrefix(cm.config, parent.Header(), time)
+	extra, err := header.ExtraPrefix(cm.config, parent.Header(), time)
 	if err != nil {
 		panic(err)
 	}
-	baseFee, err := header.CalcBaseFee(cm.config, parent.Header(), time)
+	baseFee, err := header.BaseFee(cm.config, parent.Header(), time)
 	if err != nil {
 		panic(err)
 	}

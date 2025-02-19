@@ -68,18 +68,18 @@ func TestParseDynamicFeeWindow(t *testing.T) {
 	}{
 		{
 			name:     "insufficient_length",
-			bytes:    make([]byte, DynamicFeeWindowSize-1),
+			bytes:    make([]byte, FeeWindowSize-1),
 			parseErr: errDynamicFeeWindowInsufficientLength,
 		},
 		{
 			name:   "zero_window",
-			bytes:  make([]byte, DynamicFeeWindowSize),
+			bytes:  make([]byte, FeeWindowSize),
 			window: ap3.Window{},
 		},
 		{
 			name: "truncate_bytes",
 			bytes: []byte{
-				DynamicFeeWindowSize: 1,
+				FeeWindowSize: 1,
 			},
 			window: ap3.Window{},
 		},
@@ -115,15 +115,15 @@ func TestParseDynamicFeeWindow(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 
-			window, err := parseDynamicFeeWindow(test.bytes)
+			window, err := parseFeeWindow(test.bytes)
 			require.Equal(test.window, window)
 			require.ErrorIs(err, test.parseErr)
 			if test.parseErr != nil {
 				return
 			}
 
-			expectedBytes := test.bytes[:DynamicFeeWindowSize]
-			bytes := dynamicFeeWindowBytes(window)
+			expectedBytes := test.bytes[:FeeWindowSize]
+			bytes := feeWindowBytes(window)
 			require.Equal(expectedBytes, bytes)
 		})
 	}

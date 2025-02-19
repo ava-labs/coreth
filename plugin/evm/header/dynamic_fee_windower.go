@@ -19,10 +19,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-// DynamicFeeWindowSize is the number of bytes that are used to encode the
-// dynamic fee window in the header's Extra field after the Apricot Phase 3
-// upgrade.
-const DynamicFeeWindowSize = wrappers.LongLen * ap3.WindowLen
+// FeeWindowSize is the number of bytes that are used to encode the dynamic fee
+// window in the header's Extra field after the Apricot Phase 3 upgrade.
+const FeeWindowSize = wrappers.LongLen * ap3.WindowLen
 
 var (
 	maxUint256Plus1 = new(big.Int).Lsh(common.Big1, 256)
@@ -44,15 +43,15 @@ var (
 	errDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 )
 
-// calcBaseFeeWithWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
-func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
+// baseFeeFromWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
+func baseFeeFromWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	if !config.IsApricotPhase3(parent.Time) || parent.Number.Cmp(common.Big0) == 0 {
 		return big.NewInt(ap3.InitialBaseFee), nil
 	}
 
-	dynamicFeeWindow, err := calcFeeWindow(config, parent, timestamp)
+	dynamicFeeWindow, err := feeWindow(config, parent, timestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -144,11 +143,11 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 	return baseFee, nil
 }
 
-// calcFeeWindow takes the previous header and the timestamp of its child block
-// and calculates the expected fee window.
+// feeWindow takes the previous header and the timestamp of its child block and
+// calculates the expected fee window.
 //
-// calcFeeWindow should only be called if timestamp >= config.ApricotPhase3Timestamp
-func calcFeeWindow(
+// feeWindow should only be called if timestamp >= config.ApricotPhase3Timestamp
+func feeWindow(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
@@ -159,7 +158,7 @@ func calcFeeWindow(
 		return ap3.Window{}, nil
 	}
 
-	dynamicFeeWindow, err := parseDynamicFeeWindow(parent.Extra)
+	dynamicFeeWindow, err := parseFeeWindow(parent.Extra)
 	if err != nil {
 		return ap3.Window{}, err
 	}
@@ -230,11 +229,11 @@ func selectBigWithinBounds(lowerBound, value, upperBound *big.Int) *big.Int {
 	}
 }
 
-func parseDynamicFeeWindow(bytes []byte) (ap3.Window, error) {
-	if len(bytes) < DynamicFeeWindowSize {
+func parseFeeWindow(bytes []byte) (ap3.Window, error) {
+	if len(bytes) < FeeWindowSize {
 		return ap3.Window{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
 			errDynamicFeeWindowInsufficientLength,
-			DynamicFeeWindowSize,
+			FeeWindowSize,
 			len(bytes),
 		)
 	}
@@ -247,8 +246,8 @@ func parseDynamicFeeWindow(bytes []byte) (ap3.Window, error) {
 	return window, nil
 }
 
-func dynamicFeeWindowBytes(w ap3.Window) []byte {
-	bytes := make([]byte, DynamicFeeWindowSize)
+func feeWindowBytes(w ap3.Window) []byte {
+	bytes := make([]byte, FeeWindowSize)
 	for i, v := range w {
 		offset := i * wrappers.LongLen
 		binary.BigEndian.PutUint64(bytes[offset:], v)
