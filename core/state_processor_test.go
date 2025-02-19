@@ -39,8 +39,10 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap3"
-	"github.com/ava-labs/coreth/plugin/evm/header"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/cortina"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -56,7 +58,7 @@ func u64(val uint64) *uint64 { return &val }
 // blockchain imports bad blocks, meaning blocks which have valid headers but
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
-	cpcfg := *params.TestChainConfig
+	cpcfg := *params.TestEtnaChainConfig
 	config := &cpcfg
 	config.ShanghaiTime = u64(0)
 	config.CancunTime = u64(0)
@@ -120,7 +122,7 @@ func TestStateProcessorErrors(t *testing.T) {
 						Nonce:   0,
 					},
 				},
-				GasLimit: params.CortinaGasLimit,
+				GasLimit: cortina.GasLimit,
 			}
 			// FullFaker used to skip header verification that enforces no blobs.
 			blockchain, _  = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, false)
@@ -281,7 +283,7 @@ func TestStateProcessorErrors(t *testing.T) {
 						Nonce:   0,
 					},
 				},
-				GasLimit: params.ApricotPhase1GasLimit,
+				GasLimit: ap1.GasLimit,
 			}
 			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 		)
@@ -321,7 +323,7 @@ func TestStateProcessorErrors(t *testing.T) {
 						Code:    common.FromHex("0xB0B0FACE"),
 					},
 				},
-				GasLimit: params.CortinaGasLimit,
+				GasLimit: cortina.GasLimit,
 			}
 			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 		)
@@ -356,8 +358,7 @@ func TestStateProcessorErrors(t *testing.T) {
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
 	time := parent.Time() + 10
-	extra, _ := header.ExtraPrefix(config, parent.Header(), time)
-	baseFee, _ := header.BaseFee(config, parent.Header(), time)
+	baseFee, _ := customheader.BaseFee(config, parent.Header(), time)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
@@ -370,7 +371,6 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		GasLimit:  parent.GasLimit(),
 		Number:    new(big.Int).Add(parent.Number(), common.Big1),
 		Time:      time,
-		Extra:     extra,
 		UncleHash: types.EmptyUncleHash,
 		BaseFee:   baseFee,
 	}
@@ -395,6 +395,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		cumulativeGas += tx.Gas()
 		nBlobs += len(tx.BlobHashes())
 	}
+	header.Extra, _ = customheader.ExtraPrefix(config, parent.Header(), header, nil)
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
 		var pExcess, pUsed = uint64(0), uint64(0)

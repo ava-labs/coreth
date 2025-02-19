@@ -10,7 +10,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap5"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap5"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"

@@ -93,6 +93,30 @@ func TestVerifyExtra(t *testing.T) {
 			extra:    make([]byte, FeeWindowSize-1),
 			expected: errInvalidExtraLength,
 		},
+		{
+			name: "f_valid_min",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize),
+			expected: nil,
+		},
+		{
+			name: "f_valid_extra",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize+1),
+			expected: nil,
+		},
+		{
+			name: "f_invalid",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize-1),
+			expected: errInvalidExtraLength,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
