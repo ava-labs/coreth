@@ -56,5 +56,5 @@ var (
 )
 
 func IsMultiCoin(s ethtypes.StateOrSlimAccount) bool {
-	return bool(extras.StateAccount.Get(s))
+	return bool(IsMultiCoinPayloads.Get(s))
 }
