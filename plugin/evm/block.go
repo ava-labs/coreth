@@ -151,7 +151,7 @@ func (b *Block) Accept(context.Context) error {
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
 	// take place before the accepted log is emitted to subscribers.
-	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Time())
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
 	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules)); err != nil {
 		return err
 	}

@@ -209,7 +209,6 @@ func (mr *MockStateDBMockRecorder) GetTxHash() *gomock.Call {
 
 // RevertToSnapshot mocks base method.
 func (m *MockStateDB) RevertToSnapshot(arg0 int) {
-	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RevertToSnapshot", arg0)
 }
 
@@ -232,18 +231,6 @@ func (mr *MockStateDBMockRecorder) SetNonce(arg0, arg1 any) *gomock.Call {
 }
 
 // SetPredicateStorageSlots mocks base method.
-func (m *MockStateDB) SetPredicateStorageSlots(address common.Address, predicates [][]byte) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetPredicateStorageSlots", address, predicates)
-}
-
-// SetPredicateStorageSlots indicates an expected call of SetPredicateStorageSlots.
-func (mr *MockStateDBMockRecorder) SetPredicateStorageSlots(address, predicates any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPredicateStorageSlots", reflect.TypeOf((*MockStateDB)(nil).SetPredicateStorageSlots), address, predicates)
-}
-
-// SetState mocks base method.
 func (m *MockStateDB) SetState(arg0 common.Address, arg1, arg2 common.Hash) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetState", arg0, arg1, arg2)
