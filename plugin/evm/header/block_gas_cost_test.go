@@ -211,8 +211,8 @@ func TestEstimateRequiredTip(t *testing.T) {
 				ExtDataGasUsed: big.NewInt(789),
 				BlockGasCost:   big.NewInt(101112),
 			},
-			// totalRequiredTips = BlockGasCost * BaseFee
 			// totalGasUsed = GasUsed + ExtDataGasUsed
+			// totalRequiredTips = BlockGasCost * BaseFee
 			// requiredTip = totalRequiredTips / totalGasUsed
 			want: big.NewInt((101112 * 456) / (123 + 789)),
 		},

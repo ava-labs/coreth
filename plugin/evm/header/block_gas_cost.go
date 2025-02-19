@@ -98,9 +98,11 @@ func EstimateRequiredTip(
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
 	totalGasUsed.Add(totalGasUsed, header.ExtDataGasUsed)
 
-	// requiredTip = (blockGasCost * baseFee) / totalGasUsed
-	requiredTip := new(big.Int)
-	requiredTip.Mul(header.BlockGasCost, header.BaseFee) // Total required fee
-	requiredTip.Div(requiredTip, totalGasUsed)
+	// totalRequiredTips = blockGasCost * baseFee
+	totalRequiredTips := new(big.Int)
+	totalRequiredTips.Mul(header.BlockGasCost, header.BaseFee)
+
+	// requiredTip = totalRequiredTips / totalGasUsed
+	requiredTip := totalRequiredTips.Div(totalRequiredTips, totalGasUsed)
 	return requiredTip, nil
 }
