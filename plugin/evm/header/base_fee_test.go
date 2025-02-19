@@ -9,8 +9,8 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap3"
-	"github.com/ava-labs/coreth/plugin/evm/ap4"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap4"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
@@ -118,10 +118,6 @@ func testDynamicFeesStaysWithinRange(t *testing.T, test test) {
 	}
 
 	for index, block := range blocks[1:] {
-		nextExtraData, err := ExtraPrefix(params.TestApricotPhase3Config, header, block.timestamp)
-		if err != nil {
-			t.Fatalf("Failed to calculate extra prefix at index %d: %s", index, err)
-		}
 		nextBaseFee, err := BaseFee(params.TestApricotPhase3Config, header, block.timestamp)
 		if err != nil {
 			t.Fatalf("Failed to calculate base fee at index %d: %s", index, err)
@@ -133,12 +129,16 @@ func testDynamicFeesStaysWithinRange(t *testing.T, test test) {
 			t.Fatalf("Expected fee to stay greater than %d, but found %d", test.minFee, nextBaseFee)
 		}
 		log.Info("Update", "baseFee", nextBaseFee)
+		parent := header
 		header = &types.Header{
 			Time:    block.timestamp,
 			GasUsed: block.gasUsed,
 			Number:  big.NewInt(int64(index) + 1),
 			BaseFee: nextBaseFee,
-			Extra:   nextExtraData,
+		}
+		header.Extra, err = ExtraPrefix(params.TestApricotPhase3Config, parent, header, nil)
+		if err != nil {
+			t.Fatalf("Failed to calculate header.Extra at index %d: %s", index, err)
 		}
 	}
 }
@@ -232,32 +232,34 @@ func TestCalcBaseFeeAP4(t *testing.T) {
 
 	for index, event := range events {
 		block := event.block
-		nextExtraData, err := ExtraPrefix(params.TestApricotPhase4Config, header, block.timestamp)
-		assert.NoError(t, err)
 		nextBaseFee, err := BaseFee(params.TestApricotPhase4Config, header, block.timestamp)
 		assert.NoError(t, err)
 		log.Info("Update", "baseFee", nextBaseFee)
+
+		parent := header
 		header = &types.Header{
 			Time:    block.timestamp,
 			GasUsed: block.gasUsed,
 			Number:  big.NewInt(int64(index) + 1),
 			BaseFee: nextBaseFee,
-			Extra:   nextExtraData,
 		}
-
-		nextExtraData, err = ExtraPrefix(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
+		header.Extra, err = ExtraPrefix(params.TestApricotPhase4Config, parent, header, nil)
 		assert.NoError(t, err)
+
 		nextBaseFee, err = BaseFee(params.TestApricotPhase4Config, extDataHeader, block.timestamp)
 		assert.NoError(t, err)
 		log.Info("Update", "baseFee (w/extData)", nextBaseFee)
+
+		extDataParent := extDataHeader
 		extDataHeader = &types.Header{
 			Time:           block.timestamp,
 			GasUsed:        block.gasUsed,
 			Number:         big.NewInt(int64(index) + 1),
 			BaseFee:        nextBaseFee,
-			Extra:          nextExtraData,
 			ExtDataGasUsed: block.extDataGasUsed,
 		}
+		extDataHeader.Extra, err = ExtraPrefix(params.TestApricotPhase4Config, extDataParent, extDataHeader, nil)
+		assert.NoError(t, err)
 
 		assert.Equal(t, event.extDataFeeGreater, extDataHeader.BaseFee.Cmp(header.BaseFee) == 1, "unexpected cmp for index %d", index)
 	}
@@ -270,20 +272,21 @@ func TestDynamicFeesEtna(t *testing.T) {
 	}
 
 	timestamp := uint64(1)
-	extra, err := ExtraPrefix(params.TestEtnaChainConfig, header, timestamp)
-	require.NoError(err)
 	nextBaseFee, err := BaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// Genesis matches the initial base fee
 	require.Equal(int64(ap3.InitialBaseFee), nextBaseFee.Int64())
 
-	timestamp = uint64(10_000)
+	parent := header
 	header = &types.Header{
 		Number:  big.NewInt(1),
-		Time:    header.Time,
+		Time:    parent.Time,
 		BaseFee: nextBaseFee,
-		Extra:   extra,
 	}
+	header.Extra, err = ExtraPrefix(params.TestEtnaChainConfig, parent, header, nil)
+	require.NoError(err)
+
+	timestamp = uint64(10_000)
 	nextBaseFee, err = BaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// After some time has passed in the Etna phase, the base fee should drop

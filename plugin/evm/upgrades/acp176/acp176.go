@@ -138,11 +138,10 @@ func (s *State) UpdateTargetExcess(desiredTargetExcess gas.Gas) {
 
 // DesiredTargetExcess calculates the optimal desiredTargetExcess given the
 // desired target.
-//
-// This could be solved directly by calculating D * ln(desiredTarget / P) using
-// floating point math. However, it introduces inaccuracies. So, we use a binary
-// search to find the closest integer solution.
 func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
+	// This could be solved directly by calculating D * ln(desiredTarget / P)
+	// using floating point math. However, it introduces inaccuracies. So, we
+	// use a binary search to find the closest integer solution.
 	return gas.Gas(sort.Search(maxTargetExcess, func(targetExcessGuess int) bool {
 		state := State{
 			TargetExcess: gas.Gas(targetExcessGuess),

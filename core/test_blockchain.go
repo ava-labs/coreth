@@ -1294,7 +1294,7 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
 	gspec := &Genesis{
-		Config: params.TestChainConfig,
+		Config: params.TestEtnaChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
