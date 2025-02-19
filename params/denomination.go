@@ -32,6 +32,6 @@ package params
 //	new(big.Int).Mul(value, big.NewInt(params.GWei))
 const (
 	Wei   = 1
-	GWei  = 1e9
-	Ether = 1e18
+	GWei  = 1_000_000_000 * Wei
+	Ether = 1_000_000_000 * GWei
 )
