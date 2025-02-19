@@ -288,7 +288,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 	require.NoError(err)
 	// After some time has passed in the Etna phase, the base fee should drop
 	// lower than the prior base fee minimum.
-	require.Less(int64(ap4.MinBaseFee), nextBaseFee.Int64())
+	require.Less(nextBaseFee.Int64(), int64(ap4.MinBaseFee))
 }
 
 func TestCalcBaseFeeRegression(t *testing.T) {
