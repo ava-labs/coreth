@@ -154,7 +154,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		// If we are prior to ApricotPhase3, enforce each transaction has a minimum gas price of at least the ApricotPhase1MinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
 			if tx.GasPrice().Cmp(apricotPhase1MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap1.MinGasPrice)
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), int64(ap1.MinGasPrice))
 			}
 		}
 	}
