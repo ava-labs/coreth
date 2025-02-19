@@ -88,10 +88,10 @@ func EstimateRequiredTip(
 		return nil, nil
 	case header.BaseFee == nil:
 		return nil, errBaseFeeNil
-	case header.ExtDataGasUsed == nil:
-		return nil, errExtDataGasUsedNil
 	case header.BlockGasCost == nil:
 		return nil, errBlockGasCostNil
+	case header.ExtDataGasUsed == nil:
+		return nil, errExtDataGasUsedNil
 	}
 
 	// totalGasUsed = GasUsed + ExtDataGasUsed

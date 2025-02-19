@@ -185,15 +185,6 @@ func TestEstimateRequiredTip(t *testing.T) {
 			wantErr: errBaseFeeNil,
 		},
 		{
-			name:         "nil_extra_data_gas_used",
-			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee:      big.NewInt(1),
-				BlockGasCost: big.NewInt(1),
-			},
-			wantErr: errExtDataGasUsedNil,
-		},
-		{
 			name:         "nil_block_gas_cost",
 			ap4Timestamp: utils.NewUint64(0),
 			header: &types.Header{
@@ -201,6 +192,15 @@ func TestEstimateRequiredTip(t *testing.T) {
 				ExtDataGasUsed: big.NewInt(1),
 			},
 			wantErr: errBlockGasCostNil,
+		},
+		{
+			name:         "nil_extra_data_gas_used",
+			ap4Timestamp: utils.NewUint64(0),
+			header: &types.Header{
+				BaseFee:      big.NewInt(1),
+				BlockGasCost: big.NewInt(1),
+			},
+			wantErr: errExtDataGasUsedNil,
 		},
 		{
 			name:         "success",
