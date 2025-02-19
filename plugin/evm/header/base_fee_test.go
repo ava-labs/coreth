@@ -9,8 +9,8 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap3"
-	"github.com/ava-labs/coreth/plugin/evm/ap4"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap4"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
