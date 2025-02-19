@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -105,7 +106,7 @@ func TestImportTxVerify(t *testing.T) {
 		Outs: []atomic.EVMOutput{
 			{
 				Address: testEthAddrs[0],
-				Amount:  importAmount - params.AvalancheAtomicTxFee,
+				Amount:  importAmount - ap0.AtomicTxFee,
 				AssetID: ctx.AVAXAssetID,
 			},
 			{
