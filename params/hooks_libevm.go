@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
-	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 )
 
@@ -172,11 +171,8 @@ func (a accessableState) GetSnowContext() *snow.Context {
 	return GetExtra(a.env.ChainConfig()).SnowCtx
 }
 
-func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...vm.CallOption) (ret []byte, gasRemaining uint64, err error) {
-	start := a.env.Gas()
-	ret, err = a.env.Call(addr, input, gas, value, opts...)
-	used := start - a.env.Gas()
-	return ret, gas - used, err
+func (a accessableState) GetPrecompileEnv() vm.PrecompileEnvironment {
+	return a.env
 }
 
 type precompileBlockContext struct {
