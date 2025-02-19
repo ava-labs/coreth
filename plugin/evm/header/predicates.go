@@ -15,7 +15,7 @@ func ParsePredicates(rules params.AvalancheRules, extra []byte) ([]byte, error) 
 
 	var offset int
 	if rules.IsApricotPhase3 && !rules.IsFUpgrade {
-		offset = DynamicFeeWindowSize
+		offset = FeeWindowSize
 	}
 	if rules.IsFUpgrade {
 		offset = DynamicFeeAccumulatorSize

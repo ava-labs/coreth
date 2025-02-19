@@ -50,11 +50,9 @@ const (
 	BaseFeeChangeDenominator = 12
 )
 
-// Window is a window of the last [WindowLen] seconds of gas
-// usage.
+// Window is a window of the last [WindowLen] seconds of gas usage.
 //
-// Index 0 is the oldest entry, and [WindowLen]-1 is the current
-// entry.
+// Index 0 is the oldest entry, and [WindowLen]-1 is the current entry.
 type Window [WindowLen]uint64
 
 // Add adds the amounts to the most recent entry in the window.

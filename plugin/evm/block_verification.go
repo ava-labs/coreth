@@ -17,7 +17,9 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap5"
 	"github.com/ava-labs/coreth/trie"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
@@ -182,7 +184,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			return errNilExtDataGasUsedApricotPhase4
 		}
 		if rules.IsApricotPhase5 {
-			if ethHeader.ExtDataGasUsed.Cmp(params.AtomicGasLimit) == 1 {
+			if !utils.BigLessOrEqualUint64(ethHeader.ExtDataGasUsed, ap5.AtomicGasLimit) {
 				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
 			}
 		} else {

@@ -46,14 +46,13 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
-
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 const (
@@ -147,14 +146,15 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		timestamp = parent.Time
 	}
 
-	gasLimit, err := customheader.GasLimit(w.chainConfig, parent, timestamp)
+	gasLimit, err := header.GasLimit(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
 	}
-	baseFee, err := customheader.BaseFee(w.chainConfig, parent, timestamp)
+	baseFee, err := header.BaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
+
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
@@ -162,20 +162,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		Time:       timestamp,
 		BaseFee:    baseFee,
 	}
-
-<<<<<<< HEAD
-=======
-	var err error
-	header.Extra, err = dummy.CalcExtraPrefix(w.chainConfig, parent, timestamp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new extra prefix: %w", err)
-	}
-	header.BaseFee, err = dummy.CalcBaseFee(w.chainConfig, parent, timestamp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
-	}
-
->>>>>>> master
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64

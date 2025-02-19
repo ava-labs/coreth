@@ -39,8 +39,9 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap3"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrades/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrades/cortina"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
@@ -356,6 +357,9 @@ func TestStateProcessorErrors(t *testing.T) {
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
+	time := parent.Time() + 10
+	extra, _ := header.ExtraPrefix(config, parent.Header(), time)
+	baseFee, _ := header.BaseFee(config, parent.Header(), time)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
@@ -367,10 +371,11 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		}),
 		GasLimit:  parent.GasLimit(),
 		Number:    new(big.Int).Add(parent.Number(), common.Big1),
-		Time:      parent.Time() + 10,
+		Time:      time,
+		Extra:     extra,
 		UncleHash: types.EmptyUncleHash,
+		BaseFee:   baseFee,
 	}
-	header.BaseFee, _ = dummy.CalcBaseFee(config, parent.Header(), header.Time)
 	if config.IsApricotPhase4(header.Time) {
 		header.BlockGasCost = big.NewInt(0)
 		header.ExtDataGasUsed = big.NewInt(0)

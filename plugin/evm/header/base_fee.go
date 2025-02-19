@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package header
@@ -15,6 +15,8 @@ var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee f
 
 // BaseFee takes the previous header and the timestamp of its child block and
 // calculates the expected base fee for the child block.
+//
+// Prior to AP3, the returned base fee will be nil.
 func BaseFee(
 	config *params.ChainConfig,
 	parent *types.Header,
@@ -28,7 +30,7 @@ func BaseFee(
 		}
 		return new(big.Int).SetUint64(uint64(gasState.GasPrice())), nil
 	case config.IsApricotPhase3(timestamp):
-		return calcBaseFeeWithWindow(config, parent, timestamp)
+		return baseFeeFromWindow(config, parent, timestamp)
 	default:
 		return nil, nil
 	}

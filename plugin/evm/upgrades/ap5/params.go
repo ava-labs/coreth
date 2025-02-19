@@ -9,13 +9,13 @@ const (
 	// second.
 	//
 	// This value modifies the previously used `ap4.BlockGasCostStep`.
-	BlockGasCostStep = 50_000
+	BlockGasCostStep = 200_000
 
 	// TargetGas is the target amount of gas to be included in the window. The
 	// target amount of gas per second equals [TargetGas] / `ap3.WindowLen`.
 	//
 	// This value modifies the previously used `ap3.TargetGas`.
-	TargetGas = 10_000_000
+	TargetGas = 15_000_000
 
 	// BaseFeeChangeDenominator is the denominator used to smoothen base fee
 	// changes.

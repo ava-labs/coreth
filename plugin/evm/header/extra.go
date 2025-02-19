@@ -43,12 +43,12 @@ func ExtraPrefix(
 
 		return dynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := calculateDynamicFeeWindow(config, parent, header.Time)
+		feeWindow, err := feeWindow(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
 
-		return dynamicFeeWindowBytes(feeWindow), nil
+		return feeWindowBytes(feeWindow), nil
 	default:
 		return nil, nil
 	}
@@ -96,11 +96,11 @@ func VerifyExtraPrefix(
 			return fmt.Errorf("invalid gas state target excess: have %d, want %d", gasState.TargetExcess, expectedGasState.TargetExcess)
 		}
 	case config.IsApricotPhase3(header.Time):
-		feeWindow, err := calculateDynamicFeeWindow(config, parent, header.Time)
+		feeWindow, err := feeWindow(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
-		feeWindowBytes := dynamicFeeWindowBytes(feeWindow)
+		feeWindowBytes := feeWindowBytes(feeWindow)
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
 			return fmt.Errorf("expected header prefix: %x, found %x", feeWindowBytes, header.Extra)
 		}
@@ -125,20 +125,20 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 			)
 		}
 	case rules.IsDurango:
-		if extraLen < DynamicFeeWindowSize {
+		if extraLen < FeeWindowSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				errInvalidExtraLength,
-				DynamicFeeWindowSize,
+				FeeWindowSize,
 				extraLen,
 			)
 		}
 	case rules.IsApricotPhase3:
-		if extraLen != DynamicFeeWindowSize {
+		if extraLen != FeeWindowSize {
 			return fmt.Errorf(
 				"%w: expected %d but got %d",
 				errInvalidExtraLength,
-				DynamicFeeWindowSize,
+				FeeWindowSize,
 				extraLen,
 			)
 		}
