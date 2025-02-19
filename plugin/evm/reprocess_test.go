@@ -68,6 +68,7 @@ var (
 	trackDeletedTries      = false
 	startPProf             = false
 	pprofAddr              = "localhost:6060"
+	metricsExpensive       = true
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -121,6 +122,7 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&firewoodMetricsPort, "firewoodMetricsPort", firewoodMetricsPort, "firewood metrics port")
 	flag.BoolVar(&startPProf, "startPProf", startPProf, "start pprof")
 	flag.StringVar(&pprofAddr, "pprofAddr", pprofAddr, "pprof address")
+	flag.BoolVar(&metricsExpensive, "metricsExpensive", metricsExpensive, "expensive metrics")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -439,6 +441,7 @@ func TestReprocessMainnetBlocks(t *testing.T) {
 	defer dbs.Close()
 
 	if startPProf {
+		metrics.EnabledExpensive = metricsExpensive
 		StartPProf(pprofAddr, true)
 	}
 
