@@ -3276,7 +3276,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
 	}
-	minRequiredTip, err := header.MinRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3335,7 +3335,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
 	}
-	minRequiredTip, err = header.MinRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3446,7 +3446,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
 	}
-	minRequiredTip, err := header.MinRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3497,7 +3497,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
 	}
-	minRequiredTip, err = header.MinRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
