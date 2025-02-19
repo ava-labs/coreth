@@ -74,6 +74,11 @@ func baseFeeFromWindow(config *params.ChainConfig, parent *types.Header, timesta
 		totalGas = dynamicFeeWindow.Sum()
 	)
 	if totalGas == parentGasTarget {
+		// If the parent block used exactly its target gas, the baseFee stays
+		// the same.
+		//
+		// For legacy reasons, this is true even if the baseFee would have
+		// otherwise been clamped to a different range.
 		return baseFee, nil
 	}
 
@@ -178,8 +183,8 @@ func feeWindow(
 		// blockGasCost is not included in the fee window after AP5, so it is
 		// left as 0.
 
-		// At the start of a new network, the parent
-		// may not have a populated ExtDataGasUsed.
+		// At the start of a new network, the parent may not have a populated
+		// ExtDataGasUsed.
 		if parent.ExtDataGasUsed != nil {
 			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
 		}
