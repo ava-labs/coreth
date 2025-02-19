@@ -15,6 +15,8 @@ import (
 )
 
 const (
+	gwei = 1_000_000_000
+
 	defaultAcceptorQueueLimit                     = 64 // Provides 2 minutes of buffer (2s block target) for a commit delay
 	defaultPruningEnabled                         = true
 	defaultCommitInterval                         = 4096
@@ -62,6 +64,13 @@ const (
 
 	estimatedBlockAcceptPeriod        = 2 * time.Second
 	defaultHistoricalProofQueryWindow = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
+	// Price Option Defaults
+	defaultPriceOptionSlowFeePercentage = uint64(95)
+	defaultPriceOptionFastFeePercentage = uint64(105)
+	defaultPriceOptionMaxBaseFee        = uint64(100 * gwei)
+	defaultPriceOptionMaxTip            = uint64(20 * gwei)
+
+	minAllowedBaseFee = uint64(1 * gwei) // avoids circular-dependency with params.EtnaMinBaseFee
 )
 
 var (
@@ -136,6 +145,11 @@ type Config struct {
 
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
+	// Price Option Settings
+	PriceOptionSlowFeePercentage uint64 `json:"po-slow-fee-percentage"`
+	PriceOptionFastFeePercentage uint64 `json:"po-fast-fee-percentage"`
+	PriceOptionMaxBaseFee        uint64 `json:"po-max-base-fee"`
+	PriceOptionMaxTip            uint64 `json:"po-max-tip"`
 
 	TxPoolPriceLimit   uint64   `json:"tx-pool-price-limit"`
 	TxPoolPriceBump    uint64   `json:"tx-pool-price-bump"`
@@ -296,6 +310,12 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
 	c.HistoricalProofQueryWindow = defaultHistoricalProofQueryWindow
+
+	// Price Option Settings
+	c.PriceOptionSlowFeePercentage = defaultPriceOptionSlowFeePercentage
+	c.PriceOptionFastFeePercentage = defaultPriceOptionFastFeePercentage
+	c.PriceOptionMaxBaseFee = defaultPriceOptionMaxBaseFee
+	c.PriceOptionMaxTip = defaultPriceOptionMaxTip
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
@@ -346,6 +366,10 @@ func (c *Config) Validate(networkID uint32) error {
 
 	if c.PushGossipPercentStake < 0 || c.PushGossipPercentStake > 1 {
 		return fmt.Errorf("push-gossip-percent-stake is %f but must be in the range [0, 1]", c.PushGossipPercentStake)
+	}
+
+	if c.PriceOptionMaxBaseFee < minAllowedBaseFee {
+		return fmt.Errorf("max base fee %d is less than the minimum base fee %d", c.PriceOptionMaxBaseFee, minAllowedBaseFee)
 	}
 	return nil
 }
