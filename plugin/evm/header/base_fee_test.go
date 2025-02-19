@@ -275,7 +275,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 	nextBaseFee, err := BaseFee(params.TestEtnaChainConfig, header, timestamp)
 	require.NoError(err)
 	// Genesis matches the initial base fee
-	require.Equal(nextBaseFee.Int64(), int64(ap3.InitialBaseFee))
+	require.Equal(int64(ap3.InitialBaseFee), nextBaseFee.Int64())
 
 	timestamp = uint64(10_000)
 	header = &types.Header{
@@ -288,7 +288,7 @@ func TestDynamicFeesEtna(t *testing.T) {
 	require.NoError(err)
 	// After some time has passed in the Etna phase, the base fee should drop
 	// lower than the prior base fee minimum.
-	require.Less(nextBaseFee.Int64(), int64(ap4.MinBaseFee))
+	require.Less(int64(ap4.MinBaseFee), nextBaseFee.Int64())
 }
 
 func TestCalcBaseFeeRegression(t *testing.T) {
