@@ -176,13 +176,7 @@ func (a accessableState) Call(addr common.Address, input []byte, gas uint64, val
 	start := a.env.Gas()
 	ret, err = a.env.Call(addr, input, gas, value, opts...)
 	used := start - a.env.Gas()
-	if used > gas {
-		return ret, 0, vm.ErrOutOfGas
-	}
-	// `gasRemaining` is `gas` because [vm.PrecompileEnvironment]'s `Call` method
-	// should consume the gas from the environment directly
-	gasRemaining = gas
-	return ret, gasRemaining, err
+	return ret, gas - used, err
 }
 
 type precompileBlockContext struct {
