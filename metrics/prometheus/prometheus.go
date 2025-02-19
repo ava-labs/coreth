@@ -191,6 +191,13 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 				},
 			}},
 		}, nil
+
+	case metrics.NilCounter, metrics.NilCounterFloat64, metrics.NilEWMA,
+		metrics.NilGauge, metrics.NilGaugeFloat64, metrics.NilGaugeInfo,
+		metrics.NilHealthcheck, metrics.NilHistogram, metrics.NilMeter,
+		metrics.NilResettingTimer, metrics.NilSample, metrics.NilTimer:
+		return nil, fmt.Errorf("%w: %q metric is nil", errMetricSkip, name)
+
 	default:
 		return nil, fmt.Errorf("metric %q: type is not supported: %T", name, metric)
 	}
