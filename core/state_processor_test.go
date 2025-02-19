@@ -40,10 +40,10 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -374,7 +374,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Extra, _ = dummy.CalcExtraPrefix(config, parent.Header(), header.Time)
 	header.BaseFee, _ = dummy.CalcBaseFee(config, parent.Header(), header.Time)
-	if config.IsApricotPhase4(header.Time) {
+	if params.GetExtra(config).IsApricotPhase4(header.Time) {
 		header.BlockGasCost = big.NewInt(0)
 		header.ExtDataGasUsed = big.NewInt(0)
 	}

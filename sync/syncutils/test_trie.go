@@ -12,14 +12,14 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/trie/trienode"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 )
 

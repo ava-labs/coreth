@@ -10,8 +10,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	ethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/common"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 // UpgradeConfig includes the following configs that may be specified in upgradeBytes:

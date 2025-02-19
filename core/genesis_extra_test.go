@@ -36,8 +36,8 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
 )
 

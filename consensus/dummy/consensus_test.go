@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
 
 func TestVerifyBlockFee(t *testing.T) {

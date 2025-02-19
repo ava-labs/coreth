@@ -31,15 +31,15 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/lru"
+	ethstate "github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/trie/utils"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/crate-crypto/go-ipa/banderwagon"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	ethstate "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/ethereum/go-ethereum/triedb"
 )
 
 const (

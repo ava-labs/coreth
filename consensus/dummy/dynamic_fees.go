@@ -10,10 +10,11 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 )
 
 const ApricotPhase3BlockGasFee = 1_000_000
@@ -42,9 +43,10 @@ func CalcExtraPrefix(
 	parent *types.Header,
 	timestamp uint64,
 ) ([]byte, error) {
+	configExtra := params.GetExtra(config)
 	switch {
-	case config.IsApricotPhase3(timestamp):
-		window, err := calcFeeWindow(config, parent, timestamp)
+	case configExtra.IsApricotPhase3(timestamp):
+		window, err := calcFeeWindow(configExtra, parent, timestamp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate fee window: %w", err)
 		}
@@ -60,9 +62,10 @@ func CalcExtraPrefix(
 //
 // Prior to AP3, the returned base fee will be nil.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
+	configExtra := params.GetExtra(config)
 	switch {
-	case config.IsApricotPhase3(timestamp):
-		return calcBaseFeeWithWindow(config, parent, timestamp)
+	case configExtra.IsApricotPhase3(timestamp):
+		return calcBaseFeeWithWindow(configExtra, parent, timestamp)
 	default:
 		// Prior to AP3 the expected base fee is nil.
 		return nil, nil
@@ -70,7 +73,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uin
 }
 
 // calcBaseFeeWithWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
-func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
+func calcBaseFeeWithWindow(config *extras.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	if !config.IsApricotPhase3(parent.Time) || parent.Number.Cmp(common.Big0) == 0 {
@@ -174,7 +177,7 @@ func calcBaseFeeWithWindow(config *params.ChainConfig, parent *types.Header, tim
 //
 // calcFeeWindow should only be called if timestamp >= config.ApricotPhase3Timestamp
 func calcFeeWindow(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (DynamicFeeWindow, error) {
@@ -250,11 +253,12 @@ func calcFeeWindow(
 // Warning: This function should only be used in estimation and should not be
 // used when calculating the canonical base fee for a block.
 func EstimateNextBaseFee(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
-	if config.ApricotPhase3BlockTimestamp == nil {
+	configExtra := params.GetExtra(config)
+	if configExtra.ApricotPhase3BlockTimestamp == nil {
 		return nil, errEstimateBaseFeeWithoutActivation
 	}
 
-	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
+	timestamp = max(timestamp, parent.Time, *configExtra.ApricotPhase3BlockTimestamp)
 	return CalcBaseFee(config, parent, timestamp)
 }
 

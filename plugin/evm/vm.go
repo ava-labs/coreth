@@ -45,8 +45,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/triedb"
 
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
@@ -59,17 +59,17 @@ import (
 	// We must import this package (not referenced elsewhere) so that the native "callTracer"
 	// is added to a map of client-accessible tracers. In geth, this is done
 	// inside of cmd/geth.
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	_ "github.com/ava-labs/libevm/eth/tracers/js"
+	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	// Force-load precompiles to trigger registration
 	_ "github.com/ava-labs/coreth/precompile/registry"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
@@ -422,7 +422,7 @@ func (vm *VM) Initialize(
 	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
 	// normally it should not be empty, but some tests may not set it
 	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
+		params.GetExtra(g.Config).NetworkUpgrades = extras.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
@@ -1585,7 +1585,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
 	if vm.chainConfigExtra().IsApricotPhase3(timestamp) {
-		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+		nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 
@@ -16,8 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ava-labs/libevm/trie"
 )
 
 var (
@@ -124,7 +123,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	}
 
 	// Verify the extra data is well-formed.
-	if err := header.VerifyExtra(rules.AvalancheRules, ethHeader.Extra); err != nil {
+	if err := header.VerifyExtra(rulesExtra.AvalancheRules, ethHeader.Extra); err != nil {
 		return err
 	}
 

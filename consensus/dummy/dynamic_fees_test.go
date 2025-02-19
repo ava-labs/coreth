@@ -9,10 +9,11 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -371,7 +372,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 	tests := []struct {
 		name string
 
-		upgrades params.NetworkUpgrades
+		upgrades extras.NetworkUpgrades
 
 		parentTime           uint64
 		parentNumber         int64
@@ -387,7 +388,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 	}{
 		{
 			name:          "ap3",
-			upgrades:      params.TestApricotPhase3Config.NetworkUpgrades,
+			upgrades:      params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
 			parentNumber:  1,
 			parentExtra:   (&DynamicFeeWindow{}).Bytes(),
 			parentBaseFee: big.NewInt(params.ApricotPhase3MaxBaseFee),
@@ -408,7 +409,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_not_scheduled",
-			upgrades: params.TestApricotPhase2Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase2Config).NetworkUpgrades,
 			wantErr:  errEstimateBaseFeeWithoutActivation,
 		},
 	}
@@ -416,9 +417,11 @@ func TestEstimateNextBaseFee(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 
-			config := &params.ChainConfig{
-				NetworkUpgrades: test.upgrades,
-			}
+			config := params.WithExtra(
+				&params.ChainConfig{},
+				&extras.ChainConfig{
+					NetworkUpgrades: test.upgrades,
+				})
 			parentHeader := &types.Header{
 				Time:           test.parentTime,
 				Number:         big.NewInt(test.parentNumber),

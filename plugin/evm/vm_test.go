@@ -16,17 +16,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
-=======
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/trie"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -226,7 +226,11 @@ func NewContext() *snow.Context {
 	ctx.WarpSigner = avalancheWarp.NewSigner(blsSecretKey, ctx.NetworkID, ctx.ChainID)
 	ctx.PublicKey = blsSecretKey.PublicKey()
 	return ctx
+}
+
+// setupGenesis sets up the genesis
 // If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
+func setupGenesis(
 	t *testing.T,
 	genesisJSON string,
 ) (*snow.Context,

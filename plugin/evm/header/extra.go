@@ -8,13 +8,14 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 )
 
 var errInvalidExtraLength = errors.New("invalid header.Extra length")
 
 // VerifyExtra verifies that the header's Extra field is correctly formatted for
 // [rules].
-func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
+func VerifyExtra(rules extras.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsDurango:

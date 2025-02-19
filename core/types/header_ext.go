@@ -6,8 +6,8 @@ package types
 import (
 	"io"
 
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 // HeaderExtra is a struct that contains extra fields used by Avalanche

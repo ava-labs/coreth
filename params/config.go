@@ -33,7 +33,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
-	ethparams "github.com/ethereum/go-ethereum/params"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 // Avalanche ChainIDs
@@ -537,6 +537,44 @@ var (
 				CortinaBlockTimestamp:           utils.NewUint64(0),
 				DurangoBlockTimestamp:           utils.NewUint64(0),
 				EtnaTimestamp:                   utils.NewUint64(0),
+			},
+		})
+
+	TestFUpgradeChainConfig = WithExtra(
+		&ChainConfig{
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      big.NewInt(0),
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			ShanghaiTime:        utils.NewUint64(0),
+			CancunTime:          utils.NewUint64(0),
+		},
+		&extras.ChainConfig{
+			AvalancheContext: extras.AvalancheContext{SnowCtx: utils.TestSnowContext()},
+			NetworkUpgrades: extras.NetworkUpgrades{
+				ApricotPhase1BlockTimestamp:     utils.NewUint64(0),
+				ApricotPhase2BlockTimestamp:     utils.NewUint64(0),
+				ApricotPhase3BlockTimestamp:     utils.NewUint64(0),
+				ApricotPhase4BlockTimestamp:     utils.NewUint64(0),
+				ApricotPhase5BlockTimestamp:     utils.NewUint64(0),
+				ApricotPhasePre6BlockTimestamp:  utils.NewUint64(0),
+				ApricotPhase6BlockTimestamp:     utils.NewUint64(0),
+				ApricotPhasePost6BlockTimestamp: utils.NewUint64(0),
+				BanffBlockTimestamp:             utils.NewUint64(0),
+				CortinaBlockTimestamp:           utils.NewUint64(0),
+				DurangoBlockTimestamp:           utils.NewUint64(0),
+				EtnaTimestamp:                   utils.NewUint64(0),
+				FUpgradeTimestamp:               utils.NewUint64(0),
 			},
 		})
 

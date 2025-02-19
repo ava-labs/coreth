@@ -13,9 +13,9 @@ import (
 	syncStats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/warp"
 	warpHandlers "github.com/ava-labs/coreth/warp/handlers"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/triedb"
 )
 
 var _ message.RequestHandler = &networkHandler{}

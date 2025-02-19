@@ -23,9 +23,9 @@ import (
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/sync/syncutils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/triedb"
 )
 
 const commitInterval = 1024

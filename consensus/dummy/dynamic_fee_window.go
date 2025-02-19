@@ -10,7 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/libevm/common/math"
 )
 
 var ErrDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")

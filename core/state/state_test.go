@@ -27,15 +27,12 @@
 package state
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
-	"github.com/holiman/uint256"
 )
 
 type stateEnv struct {
@@ -105,103 +102,4 @@ func TestSnapshot(t *testing.T) {
 func TestSnapshotEmpty(t *testing.T) {
 	s := newStateEnv()
 	s.state.RevertToSnapshot(s.state.Snapshot())
-}
-
-func TestSnapshot2(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
-
-	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
-	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
-	var storageaddr common.Hash
-
-	data0 := common.BytesToHash([]byte{17})
-	data1 := common.BytesToHash([]byte{18})
-
-	state.SetState(stateobjaddr0, storageaddr, data0)
-	state.SetState(stateobjaddr1, storageaddr, data1)
-
-	// db, trie are already non-empty values
-	so0 := state.getStateObject(stateobjaddr0)
-	so0.SetBalance(uint256.NewInt(42))
-	so0.SetNonce(43)
-	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
-	so0.selfDestructed = false
-	so0.deleted = false
-	state.setStateObject(so0)
-
-	root, _ := state.Commit(0, false)
-	state, _ = New(root, state.db, nil)
-
-	// and one with deleted == true
-	so1 := state.getStateObject(stateobjaddr1)
-	so1.SetBalance(uint256.NewInt(52))
-	so1.SetNonce(53)
-	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
-	so1.selfDestructed = true
-	so1.deleted = true
-	state.setStateObject(so1)
-
-	so1 = state.getStateObject(stateobjaddr1)
-	if so1 != nil {
-		t.Fatalf("deleted object not nil when getting")
-	}
-
-	snapshot := state.Snapshot()
-	state.RevertToSnapshot(snapshot)
-
-	so0Restored := state.getStateObject(stateobjaddr0)
-	// Update lazily-loaded values before comparing.
-	so0Restored.GetState(storageaddr)
-	so0Restored.Code()
-	// non-deleted is equal (restored)
-	compareStateObjects(so0Restored, so0, t)
-
-	// deleted should be nil, both before and after restore of state copy
-	so1Restored := state.getStateObject(stateobjaddr1)
-	if so1Restored != nil {
-		t.Fatalf("deleted object not nil after restoring snapshot: %+v", so1Restored)
-	}
-}
-
-func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
-	if so0.Address() != so1.Address() {
-		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
-	}
-	if so0.Balance().Cmp(so1.Balance()) != 0 {
-		t.Fatalf("Balance mismatch: have %v, want %v", so0.Balance(), so1.Balance())
-	}
-	if so0.Nonce() != so1.Nonce() {
-		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
-	}
-	if so0.data.Root != so1.data.Root {
-		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
-	}
-	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
-		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
-	}
-	if !bytes.Equal(so0.code, so1.code) {
-		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
-	}
-
-	if len(so1.dirtyStorage) != len(so0.dirtyStorage) {
-		t.Errorf("Dirty storage size mismatch: have %d, want %d", len(so1.dirtyStorage), len(so0.dirtyStorage))
-	}
-	for k, v := range so1.dirtyStorage {
-		if so0.dirtyStorage[k] != v {
-			t.Errorf("Dirty storage key %x mismatch: have %v, want %v", k, so0.dirtyStorage[k], v)
-		}
-	}
-	for k, v := range so0.dirtyStorage {
-		if so1.dirtyStorage[k] != v {
-			t.Errorf("Dirty storage key %x mismatch: have %v, want none.", k, v)
-		}
-	}
-	if len(so1.originStorage) != len(so0.originStorage) {
-		t.Errorf("Origin storage size mismatch: have %d, want %d", len(so1.originStorage), len(so0.originStorage))
-	}
-	for k, v := range so1.originStorage {
-		if so0.originStorage[k] != v {
-			t.Errorf("Origin storage key %x mismatch: have %v, want %v", k, so0.originStorage[k], v)
-		}
-	}
 }

@@ -17,10 +17,9 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/trie"
 
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
@@ -172,7 +171,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 
 	// Enforce BlockGasCost constraints
 	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
+		configExtra,
 		parent,
 		header.Time,
 	)
@@ -199,8 +198,8 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 	}
 
 	// Verify the extra data is well-formed.
-	configExtra := params.GetExtra(chain.Config())
-	rules := config.GetAvalancheRules(header.Time)
+	config := chain.Config()
+	rules := params.GetExtra(config).GetAvalancheRules(header.Time)
 	if err := customheader.VerifyExtra(rules, header.Extra); err != nil {
 		return err
 	}
@@ -384,7 +383,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		// Verify the BlockGasCost set in the header matches the expected value.
 		blockGasCost := block.BlockGasCost()
 		expectedBlockGasCost := customheader.BlockGasCost(
-			config,
+			configExtra,
 			parent,
 			timestamp,
 		)
@@ -422,15 +421,15 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		}
 	}
 
-	chainConfigExtra := params.GetExtra(chain.Config())
-	if chainConfigExtra.IsApricotPhase4(header.Time) {
+	configExtra := params.GetExtra(chain.Config())
+	if configExtra.IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
 			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
 		// Calculate the required block gas cost for this block.
 		blockGasCost := customheader.BlockGasCost(
-			config,
+			configExtra,
 			parent,
 			header.Time,
 		)
@@ -448,12 +447,12 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		}
 	}
 	// commit the final state root
-	header.Root = state.IntermediateRoot(config.IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlockWithExtData(
 		header, txs, uncles, receipts, trie.NewStackTrie(nil),
-		extraData, chainConfigExtra.IsApricotPhase1(header.Time),
+		extraData, configExtra.IsApricotPhase1(header.Time),
 	), nil
 }
 

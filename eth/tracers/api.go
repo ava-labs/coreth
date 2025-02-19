@@ -44,13 +44,13 @@ import (
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 const (
@@ -1108,8 +1108,8 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		params.GetExtra(copy).EtnaTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.FUpgradeTimestamp; timestamp != nil {
-		copy.FUpgradeTimestamp = timestamp
+	if timestamp := overrideExtra.FUpgradeTimestamp; timestamp != nil {
+		params.GetExtra(copy).FUpgradeTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/stretchr/testify/assert"
@@ -49,8 +49,8 @@ func TestBlockGasCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			config := &params.ChainConfig{
-				NetworkUpgrades: params.NetworkUpgrades{
+			config := &extras.ChainConfig{
+				NetworkUpgrades: extras.NetworkUpgrades{
 					ApricotPhase5BlockTimestamp: test.apricotPhase5BlockTimestamp,
 				},
 			}

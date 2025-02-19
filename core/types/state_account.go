@@ -27,7 +27,7 @@
 package types
 
 import (
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 )
 
 type (

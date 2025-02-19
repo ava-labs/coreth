@@ -27,7 +27,7 @@
 package state
 
 import (
-	ethstate "github.com/ethereum/go-ethereum/core/state"
+	ethstate "github.com/ava-labs/libevm/core/state"
 )
 
 type (

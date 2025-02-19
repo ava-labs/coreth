@@ -7,31 +7,32 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/stretchr/testify/require"
 )
 
 func TestVerifyExtra(t *testing.T) {
 	tests := []struct {
 		name     string
-		rules    params.AvalancheRules
+		rules    extras.AvalancheRules
 		extra    []byte
 		expected error
 	}{
 		{
 			name:     "initial_valid",
-			rules:    params.AvalancheRules{},
+			rules:    extras.AvalancheRules{},
 			extra:    make([]byte, params.MaximumExtraDataSize),
 			expected: nil,
 		},
 		{
 			name:     "initial_invalid",
-			rules:    params.AvalancheRules{},
+			rules:    extras.AvalancheRules{},
 			extra:    make([]byte, params.MaximumExtraDataSize+1),
 			expected: errInvalidExtraLength,
 		},
 		{
 			name: "ap1_valid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase1: true,
 			},
 			extra:    nil,
@@ -39,7 +40,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap1_invalid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase1: true,
 			},
 			extra:    make([]byte, 1),
@@ -47,7 +48,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap3_valid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize),
@@ -55,7 +56,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap3_invalid_less",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize-1),
@@ -63,7 +64,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap3_invalid_more",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize+1),
@@ -71,7 +72,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "durango_valid_min",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsDurango: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize),
@@ -79,7 +80,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "durango_valid_extra",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsDurango: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize+1),
@@ -87,7 +88,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "durango_invalid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsDurango: true,
 			},
 			extra:    make([]byte, params.DynamicFeeExtraDataSize-1),

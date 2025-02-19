@@ -7,7 +7,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/ap4"
 )
 
@@ -20,7 +20,7 @@ const ApricotPhase5BlockGasCostStep = 200_000
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
 func BlockGasCost(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) uint64 {

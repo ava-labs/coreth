@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
@@ -151,7 +151,7 @@ func (b *Block) Accept(context.Context) error {
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
 	// take place before the accepted log is emitted to subscribers.
-	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Time())
 	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules)); err != nil {
 		return err
 	}
