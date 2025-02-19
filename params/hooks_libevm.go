@@ -173,8 +173,16 @@ func (a accessableState) GetSnowContext() *snow.Context {
 }
 
 func (a accessableState) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...vm.CallOption) (ret []byte, gasRemaining uint64, err error) {
+	start := a.env.Gas()
 	ret, err = a.env.Call(addr, input, gas, value, opts...)
-	return ret, a.env.Gas(), err
+	used := start - a.env.Gas()
+	if used > gas {
+		return ret, 0, vm.ErrOutOfGas
+	}
+	// `gasRemaining` is `gas` because [vm.PrecompileEnvironment]'s `Call` method
+	// should consume the gas from the environment directly
+	gasRemaining = gas
+	return ret, gasRemaining, err
 }
 
 type precompileBlockContext struct {
