@@ -38,8 +38,8 @@ func feeStateBeforeBlock(
 
 	var state acp176.State
 	if config.IsFUpgrade(parent.Time) && parent.Number.Cmp(common.Big0) != 0 {
-		// If the parent block was running with ACP-176, we start with resulting
-		// fee state from the parent block.
+		// If the parent block was running with ACP-176, we start with the
+		// resulting fee state from the parent block.
 		var err error
 		state, err = feeStateAfterBlock(
 			parent.GasLimit,
