@@ -10,16 +10,13 @@ import (
 )
 
 const (
-	// MinGasPrice is the minimum gas price of a transaction at the start of the
-	// network.
+	// MinGasPrice is the minimum gas price of a transaction.
 	//
 	// This value was modified by `ap1.MinGasPrice`.
 	MinGasPrice = 470 * utils.GWei
 
-	// GasLimit is the target amount of gas that can be included in a single
-	// block after the Apricot Phase 1 upgrade.
+	// AtomicTxFee is the amount of AVAX that must be burned by an atomic tx.
 	//
-	// This value encodes the default parameterization of the initial gas
-	// targeting mechanism.
+	// This value was replaced with the Apricot Phase 3 dynamic fee mechanism.
 	AtomicTxFee = units.MilliAvax
 )
