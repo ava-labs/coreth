@@ -34,8 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
-	"github.com/ava-labs/coreth/metrics"
-	corethPrometheus "github.com/ava-labs/coreth/metrics/prometheus"
+	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
@@ -47,6 +46,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
+	"github.com/ethereum/go-ethereum/metrics"
+
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -417,25 +418,18 @@ func (vm *VM) Initialize(
 	}
 
 	var extDataHashes map[common.Hash]common.Hash
-	var chainID *big.Int
 	// Set the chain config for mainnet/fuji chain IDs
 	switch chainCtx.NetworkID {
 	case avalanchegoConstants.MainnetID:
-		chainID = params.AvalancheMainnetChainID
 		extDataHashes = mainnetExtDataHashes
 	case avalanchegoConstants.FujiID:
-		chainID = params.AvalancheFujiChainID
 		extDataHashes = fujiExtDataHashes
-	case avalanchegoConstants.LocalID:
-		chainID = params.AvalancheLocalChainID
-	default:
-		chainID = g.Config.ChainID
 	}
 
 	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
 	// normally it should not be empty, but some tests may not set it
 	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config = params.GetChainConfig(chainCtx.NetworkUpgrades, new(big.Int).Set(chainID))
+		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
@@ -633,13 +627,9 @@ func (vm *VM) Initialize(
 }
 
 func (vm *VM) initializeMetrics() error {
+	metrics.Enabled = true
 	vm.sdkMetrics = prometheus.NewRegistry()
-	// If metrics are enabled, register the default metrics registry
-	if !metrics.Enabled {
-		return nil
-	}
-
-	gatherer := corethPrometheus.Gatherer(metrics.DefaultRegistry)
+	gatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
 	}
@@ -1627,7 +1617,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
 	if vm.chainConfig.IsApricotPhase3(timestamp) {
-		_, nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+		nextBaseFee, err = dummy.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)

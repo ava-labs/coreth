@@ -34,8 +34,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/upgrade"
-	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
@@ -115,7 +113,6 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
-		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
@@ -207,7 +204,6 @@ func BenchmarkTracers(b *testing.B) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
-		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
 			blob, err := os.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
 			if err != nil {
@@ -272,7 +268,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 
 func TestInternals(t *testing.T) {
 	var (
-		config    = params.GetChainConfig(upgrade.GetConfig(constants.MainnetID), params.AvalancheMainnetChainID)
+		config    = params.TestLaunchConfig
 		to        = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 		origin    = common.HexToAddress("0x00000000000000000000000000000000feed")
 		txContext = vm.TxContext{
