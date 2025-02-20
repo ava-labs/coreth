@@ -32,6 +32,7 @@ func BaseFee(
 	case config.IsApricotPhase3(timestamp):
 		return baseFeeFromWindow(config, parent, timestamp)
 	default:
+		// Prior to AP3 the expected base fee is nil.
 		return nil, nil
 	}
 }
