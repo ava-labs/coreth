@@ -33,6 +33,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -51,8 +52,8 @@ type ChainContext interface {
 
 // NewEVMBlockContext creates a new context for use in the EVM.
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
-	predicateBytes, ok := predicate.GetPredicateResultBytes(header.Extra)
-	if !ok {
+	predicateBytes := customheader.PredicateBytesFromExtra(header.Extra)
+	if len(predicateBytes) == 0 {
 		return newEVMBlockContext(header, chain, author, nil)
 	}
 	// Prior to Durango, the VM enforces the extra data is smaller than or
@@ -74,7 +75,9 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 // This function is used to create a BlockContext when the header Extra data is not fully formed yet and it's more efficient to pass in predicateResults
 // directly rather than re-encode the latest results when executing each individaul transaction.
 func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) vm.BlockContext {
-	return newEVMBlockContext(header, chain, author, predicateResults)
+	blockContext := NewEVMBlockContext(header, chain, author)
+	blockContext.PredicateResults = predicateResults
+	return blockContext
 }
 
 func newEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, predicateResults *predicate.Results) vm.BlockContext {
