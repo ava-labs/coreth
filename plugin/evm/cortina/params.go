@@ -7,5 +7,5 @@ package cortina
 // GasLimit is the maximum amount of gas that can be included in a single block
 // after the Cortina upgrade.
 //
-// This value modifies the previously used `ap4.MinBaseFee`.
+// This value modifies the previously used `ap1.GasLimit`.
 const GasLimit = 15_000_000
