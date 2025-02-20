@@ -84,7 +84,7 @@ func PredicateBytesFromExtra(extra []byte) []byte {
 	// to this size.
 	// After Durango, the VM pre-verifies the extra data past the dynamic fee
 	// rollup window is valid.
-	if len(extra) < FeeWindowSize {
+	if len(extra) <= FeeWindowSize {
 		return nil
 	}
 	return extra[FeeWindowSize:]

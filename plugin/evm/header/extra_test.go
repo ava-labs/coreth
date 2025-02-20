@@ -347,7 +347,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 		{
 			name:     "empty_predicate",
 			extra:    make([]byte, FeeWindowSize),
-			expected: []byte{},
+			expected: nil,
 		},
 		{
 			name: "non_empty_predicate",
