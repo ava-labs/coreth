@@ -48,6 +48,7 @@ func ExtraPrefix(
 		}
 		return feeWindowBytes(window), nil
 	default:
+		// Prior to AP3 there was no expected extra prefix.
 		return nil, nil
 	}
 }
