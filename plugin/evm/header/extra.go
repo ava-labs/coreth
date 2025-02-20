@@ -40,14 +40,12 @@ func ExtraPrefix(
 		if desiredTargetExcess != nil {
 			gasState.UpdateTargetExcess(*desiredTargetExcess)
 		}
-
 		return dynamicFeeAccumulatorBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to calculate fee window: %w", err)
 		}
-
 		return feeWindowBytes(feeWindow), nil
 	default:
 		return nil, nil
