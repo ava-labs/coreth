@@ -6,7 +6,7 @@ package ap0
 
 import (
 	"github.com/ava-labs/avalanchego/utils/units"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
 
 const (
@@ -14,7 +14,7 @@ const (
 	// network.
 	//
 	// This value was modified by `ap1.MinGasPrice`.
-	MinGasPrice = 470 * params.GWei
+	MinGasPrice = 470 * utils.GWei
 
 	// GasLimit is the target amount of gas that can be included in a single
 	// block after the Apricot Phase 1 upgrade.
