@@ -41,6 +41,7 @@ var (
 	ap3BaseFeeChangeDenominator = big.NewInt(ap3.BaseFeeChangeDenominator)
 	ap5BaseFeeChangeDenominator = big.NewInt(ap5.BaseFeeChangeDenominator)
 
+	errInvalidTimestamp                   = errors.New("invalid timestamp")
 	errDynamicFeeWindowInsufficientLength = errors.New("insufficient length for dynamic fee window")
 )
 
@@ -170,7 +171,8 @@ func feeWindow(
 	}
 
 	if timestamp < parent.Time {
-		return ap3.Window{}, fmt.Errorf("cannot calculate fee window for timestamp %d prior to parent timestamp %d",
+		return ap3.Window{}, fmt.Errorf("%w: timestamp %d prior to parent timestamp %d",
+			errInvalidTimestamp,
 			timestamp,
 			parent.Time,
 		)

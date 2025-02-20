@@ -153,7 +153,7 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 }
 
 func (b *testBackend) MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return customheader.MinRequiredTip(b.chain.Config(), header)
+	return customheader.EstimateRequiredTip(b.chain.Config(), header)
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
