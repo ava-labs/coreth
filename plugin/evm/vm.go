@@ -43,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
 	"github.com/ava-labs/coreth/triedb"
@@ -648,6 +649,8 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		return err
 	}
 	callbacks := vm.createConsensusCallbacks()
+
+	desiredTargetExcess := acp176.DesiredTargetExcess(1_500_000)
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -655,7 +658,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		vm.chaindb,
 		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
-		dummy.NewFakerWithClock(callbacks, &vm.clock),
+		dummy.NewDummyEngine(
+			callbacks,
+			dummy.Mode{},
+			&vm.clock,
+			&desiredTargetExcess,
+		),
 		&vm.clock,
 	)
 	if err != nil {

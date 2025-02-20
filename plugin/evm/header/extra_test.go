@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
@@ -18,16 +19,18 @@ import (
 
 func TestExtraPrefix(t *testing.T) {
 	tests := []struct {
-		name      string
-		upgrades  params.NetworkUpgrades
-		parent    *types.Header
-		timestamp uint64
-		want      []byte
-		wantErr   error
+		name                string
+		upgrades            params.NetworkUpgrades
+		parent              *types.Header
+		header              *types.Header
+		desiredTargetExcess *gas.Gas
+		want                []byte
+		wantErr             error
 	}{
 		{
 			name:     "ap2",
 			upgrades: params.TestApricotPhase2Config.NetworkUpgrades,
+			header:   &types.Header{},
 			want:     nil,
 			wantErr:  nil,
 		},
@@ -39,8 +42,10 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
-			timestamp: 1,
-			want:      feeWindowBytes(ap3.Window{}),
+			header: &types.Header{
+				Time: 1,
+			},
+			want: feeWindowBytes(ap3.Window{}),
 		},
 		{
 			name:     "ap3_genesis_block",
@@ -48,7 +53,8 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
-			want: feeWindowBytes(ap3.Window{}),
+			header: &types.Header{},
+			want:   feeWindowBytes(ap3.Window{}),
 		},
 		{
 			name:     "ap3_invalid_fee_window",
@@ -56,6 +62,7 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
+			header:  &types.Header{},
 			wantErr: errDynamicFeeWindowInsufficientLength,
 		},
 		{
@@ -66,8 +73,10 @@ func TestExtraPrefix(t *testing.T) {
 				Time:   1,
 				Extra:  feeWindowBytes(ap3.Window{}),
 			},
-			timestamp: 0,
-			wantErr:   errInvalidTimestamp,
+			header: &types.Header{
+				Time: 0,
+			},
+			wantErr: errInvalidTimestamp,
 		},
 		{
 			name:     "ap3_normal",
@@ -79,7 +88,9 @@ func TestExtraPrefix(t *testing.T) {
 					1, 2, 3, 4,
 				}),
 			},
-			timestamp: 1,
+			header: &types.Header{
+				Time: 1,
+			},
 			want: func() []byte {
 				window := ap3.Window{
 					1, 2, 3, 4,
@@ -95,7 +106,8 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
-			want: feeWindowBytes(ap3.Window{}),
+			header: &types.Header{},
+			want:   feeWindowBytes(ap3.Window{}),
 		},
 		{
 			name:     "ap4_no_block_gas_cost",
@@ -105,7 +117,9 @@ func TestExtraPrefix(t *testing.T) {
 				GasUsed: ap3.TargetGas,
 				Extra:   feeWindowBytes(ap3.Window{}),
 			},
-			timestamp: 2,
+			header: &types.Header{
+				Time: 2,
+			},
 			want: func() []byte {
 				var window ap3.Window
 				window.Add(ap3.TargetGas)
@@ -122,7 +136,9 @@ func TestExtraPrefix(t *testing.T) {
 				Extra:        feeWindowBytes(ap3.Window{}),
 				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
 			},
-			timestamp: 1,
+			header: &types.Header{
+				Time: 1,
+			},
 			want: func() []byte {
 				var window ap3.Window
 				window.Add(
@@ -142,7 +158,9 @@ func TestExtraPrefix(t *testing.T) {
 				Extra:          feeWindowBytes(ap3.Window{}),
 				ExtDataGasUsed: big.NewInt(5),
 			},
-			timestamp: 1,
+			header: &types.Header{
+				Time: 1,
+			},
 			want: func() []byte {
 				var window ap3.Window
 				window.Add(
@@ -165,7 +183,9 @@ func TestExtraPrefix(t *testing.T) {
 				ExtDataGasUsed: big.NewInt(5),
 				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
 			},
-			timestamp: 1,
+			header: &types.Header{
+				Time: 1,
+			},
 			want: func() []byte {
 				window := ap3.Window{
 					1, 2, 3, 4,
@@ -188,7 +208,9 @@ func TestExtraPrefix(t *testing.T) {
 				Extra:        feeWindowBytes(ap3.Window{}),
 				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
 			},
-			timestamp: 1,
+			header: &types.Header{
+				Time: 1,
+			},
 			want: func() []byte {
 				var window ap3.Window
 				window.Add(ap5.TargetGas)
@@ -208,7 +230,9 @@ func TestExtraPrefix(t *testing.T) {
 				ExtDataGasUsed: big.NewInt(5),
 				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
 			},
-			timestamp: 1,
+			header: &types.Header{
+				Time: 1,
+			},
 			want: func() []byte {
 				window := ap3.Window{
 					1, 2, 3, 4,
@@ -229,7 +253,7 @@ func TestExtraPrefix(t *testing.T) {
 			config := &params.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got, err := ExtraPrefix(config, test.parent, test.timestamp)
+			got, err := ExtraPrefix(config, test.parent, test.header, test.desiredTargetExcess)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, got)
 		})
@@ -317,6 +341,30 @@ func TestVerifyExtra(t *testing.T) {
 				IsDurango: true,
 			},
 			extra:    make([]byte, FeeWindowSize-1),
+			expected: errInvalidExtraLength,
+		},
+		{
+			name: "f_valid_min",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize),
+			expected: nil,
+		},
+		{
+			name: "f_valid_extra",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize+1),
+			expected: nil,
+		},
+		{
+			name: "f_invalid",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, DynamicFeeAccumulatorSize-1),
 			expected: errInvalidExtraLength,
 		},
 	}

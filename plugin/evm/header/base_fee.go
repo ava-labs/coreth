@@ -23,10 +23,15 @@ func BaseFee(
 	timestamp uint64,
 ) (*big.Int, error) {
 	switch {
+	case config.IsFUpgrade(timestamp):
+		gasState, err := calculateDynamicFeeAccumulator(config, parent, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		return new(big.Int).SetUint64(uint64(gasState.GasPrice())), nil
 	case config.IsApricotPhase3(timestamp):
 		return baseFeeFromWindow(config, parent, timestamp)
 	default:
-		// Prior to AP3 the expected base fee is nil.
 		return nil, nil
 	}
 }

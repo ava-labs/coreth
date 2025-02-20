@@ -77,7 +77,7 @@ var (
 			CortinaBlockTimestamp:           utils.NewUint64(0),
 			DurangoBlockTimestamp:           utils.NewUint64(0),
 			EtnaTimestamp:                   utils.NewUint64(0),
-			FUpgradeTimestamp:               utils.NewUint64(0),
+			FUpgradeTimestamp:               nil,
 		},
 	}
 

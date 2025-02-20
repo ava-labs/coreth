@@ -4,14 +4,13 @@
 package dummy
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
@@ -22,8 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 )
 
 var (
@@ -51,11 +48,26 @@ type (
 	}
 
 	DummyEngine struct {
-		cb            ConsensusCallbacks
-		clock         *mockable.Clock
-		consensusMode Mode
+		cb                  ConsensusCallbacks
+		clock               *mockable.Clock
+		consensusMode       Mode
+		desiredTargetExcess *gas.Gas
 	}
 )
+
+func NewDummyEngine(
+	cb ConsensusCallbacks,
+	mode Mode,
+	clock *mockable.Clock,
+	desiredTargetExcess *gas.Gas,
+) *DummyEngine {
+	return &DummyEngine{
+		cb:                  cb,
+		clock:               clock,
+		consensusMode:       mode,
+		desiredTargetExcess: desiredTargetExcess,
+	}
+}
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
@@ -113,39 +125,19 @@ func NewFullFaker() *DummyEngine {
 	}
 }
 
-func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
-	// Verify that the gas limit is <= 2^63-1
-	if header.GasLimit > params.MaxGasLimit {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
+func verifyHeaderGasFields(
+	config *params.ChainConfig,
+	header *types.Header,
+	parent *types.Header,
+) error {
+	if err := customheader.VerifyGasUsed(config, header); err != nil {
+		return err
 	}
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	if err := customheader.VerifyGasLimit(config, parent, header); err != nil {
+		return err
 	}
-	if config.IsCortina(header.Time) {
-		if header.GasLimit != cortina.GasLimit {
-			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", cortina.GasLimit, header.GasLimit)
-		}
-	} else if config.IsApricotPhase1(header.Time) {
-		if header.GasLimit != ap1.GasLimit {
-			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", ap1.GasLimit, header.GasLimit)
-		}
-	} else {
-		// Verify that the gas limit remains within allowed bounds
-		diff := math.AbsDiff(parent.GasLimit, header.GasLimit)
-		limit := parent.GasLimit / params.GasLimitBoundDivisor
-		if diff >= limit || header.GasLimit < params.MinGasLimit {
-			return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
-		}
-	}
-
-	// Verify header.Extra matches the expected value.
-	expectedExtraPrefix, err := customheader.ExtraPrefix(config, parent, header.Time)
-	if err != nil {
-		return fmt.Errorf("failed to calculate extra prefix: %w", err)
-	}
-	if !bytes.HasPrefix(header.Extra, expectedExtraPrefix) {
-		return fmt.Errorf("expected header.Extra to have prefix: %x, found %x", expectedExtraPrefix, header.Extra)
+	if err := customheader.VerifyExtraPrefix(config, parent, header); err != nil {
+		return err
 	}
 
 	// Verify header.BaseFee matches the expected value.
@@ -169,11 +161,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 	}
 
 	// Enforce BlockGasCost constraints
-	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
-		parent,
-		header.Time,
-	)
+	expectedBlockGasCost := customheader.BlockGasCost(config, parent, header.Time)
 	if !utils.BigEqualUint64(header.BlockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
 	}
@@ -204,7 +192,7 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 	}
 
 	// Ensure gas-related header fields are correct
-	if err := eng.verifyHeaderGasFields(config, header, parent); err != nil {
+	if err := verifyHeaderGasFields(config, header, parent); err != nil {
 		return err
 	}
 
@@ -446,6 +434,14 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
+
+	// finalize the header.Extra
+	extraPrefix, err := customheader.ExtraPrefix(config, parent, header, eng.desiredTargetExcess)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
+	}
+	header.Extra = append(extraPrefix, header.Extra...)
+
 	// commit the final state root
 	header.Root = state.IntermediateRoot(config.IsEIP158(header.Number))
 

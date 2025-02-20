@@ -59,7 +59,7 @@ func TestSelectBigWithinBounds(t *testing.T) {
 	}
 }
 
-func TestParseDynamicFeeWindow(t *testing.T) {
+func TestDynamicFeeWindow_Bytes(t *testing.T) {
 	tests := []struct {
 		name     string
 		bytes    []byte
