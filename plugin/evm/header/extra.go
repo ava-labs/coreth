@@ -27,18 +27,14 @@ func ExtraPrefix(
 ) ([]byte, error) {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		// Calculate the gas state for the start of the block
-		gasState, err := feeStateBeforeBlock(config, parent, header.Time)
+		gasState, err := feeStateAfterBlock(
+			config,
+			parent,
+			header,
+			desiredTargetExcess,
+		)
 		if err != nil {
-			return nil, err
-		}
-		if err := gasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
-			return nil, err
-		}
-		// If the desired target excess isn't specified, default to the parent
-		// target excess.
-		if desiredTargetExcess != nil {
-			gasState.UpdateTargetExcess(*desiredTargetExcess)
+			return nil, fmt.Errorf("failed to calculate fee state: %w", err)
 		}
 		return feeExcessBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
@@ -62,23 +58,9 @@ func VerifyExtraPrefix(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		state, err := feeStateAfterBlock(
-			header.GasLimit,
-			header.GasUsed,
-			header.ExtDataGasUsed,
-			header.Extra,
-		)
+		claimedState, err := claimedFeeStateAfterBlock(header)
 		if err != nil {
-			return err
-		}
-
-		// Calculate the expected gas state for after the block
-		expectedState, err := feeStateBeforeBlock(config, parent, header.Time)
-		if err != nil {
-			return err
-		}
-		if err := expectedState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
-			return err
+			return fmt.Errorf("failed to calculate claimed fee state: %w", err)
 		}
 
 		// By passing in the claimed target excess, we ensure that the expected
@@ -86,13 +68,21 @@ func VerifyExtraPrefix(
 		// to have correctly set it to that value. Otherwise, the resulting
 		// value will be as close to the claimed value as possible, but would
 		// not be equal.
-		expectedState.UpdateTargetExcess(state.TargetExcess)
-
-		if state.Gas.Excess != expectedState.Gas.Excess {
-			return fmt.Errorf("invalid gas state excess: have %d, want %d", state.Gas.Excess, expectedState.Gas.Excess)
+		expectedState, err := feeStateAfterBlock(
+			config,
+			parent,
+			header,
+			&claimedState.TargetExcess,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to calculate expected fee state: %w", err)
 		}
-		if state.TargetExcess != expectedState.TargetExcess {
-			return fmt.Errorf("invalid gas state target excess: have %d, want %d", state.TargetExcess, expectedState.TargetExcess)
+
+		if claimedState.Gas.Excess != expectedState.Gas.Excess {
+			return fmt.Errorf("invalid gas state excess: have %d, want %d", claimedState.Gas.Excess, expectedState.Gas.Excess)
+		}
+		if claimedState.TargetExcess != expectedState.TargetExcess {
+			return fmt.Errorf("invalid gas state target excess: have %d, want %d", claimedState.TargetExcess, expectedState.TargetExcess)
 		}
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
