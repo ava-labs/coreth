@@ -161,7 +161,8 @@ func verifyHeaderGasFields(
 	}
 
 	// Enforce BlockGasCost constraints
-	expectedBlockGasCost := customheader.BlockGasCost(config,
+	expectedBlockGasCost := customheader.BlockGasCost(
+		config,
 		parent,
 		header.Time,
 	)
