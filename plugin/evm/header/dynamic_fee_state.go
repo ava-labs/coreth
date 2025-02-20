@@ -36,12 +36,12 @@ func feeStateBeforeBlock(
 		)
 	}
 
-	var gasAccumulator acp176.State
+	var state acp176.State
 	if config.IsFUpgrade(parent.Time) && parent.Number.Cmp(common.Big0) != 0 {
 		// If the parent block was running with ACP-176, we start with resulting
 		// fee state from the parent block.
 		var err error
-		gasAccumulator, err = feeStateAfterBlock(
+		state, err = feeStateAfterBlock(
 			parent.GasLimit,
 			parent.GasUsed,
 			parent.ExtDataGasUsed,
@@ -52,12 +52,16 @@ func feeStateBeforeBlock(
 		}
 	}
 
-	gasAccumulator.AdvanceTime(timestamp - parent.Time)
-	return gasAccumulator, nil
+	state.AdvanceTime(timestamp - parent.Time)
+	return state, nil
 }
 
 // feeStateAfterBlock returns the fee state after the execution of a block whose
 // header include the given fields.
+//
+// This function does not clamp the gas capacity to be within the maximum
+// capacity. The caller must either manually clamp the capacity or advance the
+// time of the state to clamp the capacity.
 func feeStateAfterBlock(
 	limit uint64,
 	gasUsed uint64,

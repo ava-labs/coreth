@@ -72,7 +72,7 @@ func VerifyExtraPrefix(
 			return err
 		}
 
-		// Calculate the gas state for the start of the block
+		// Calculate the expected gas state for after the block
 		expectedState, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
 			return err
