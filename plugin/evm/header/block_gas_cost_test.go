@@ -207,13 +207,13 @@ func TestEstimateRequiredTip(t *testing.T) {
 			ap4Timestamp: utils.NewUint64(0),
 			header: &types.Header{
 				GasUsed:        123,
-				BaseFee:        big.NewInt(456),
 				ExtDataGasUsed: big.NewInt(789),
+				BaseFee:        big.NewInt(456),
 				BlockGasCost:   big.NewInt(101112),
 			},
 			// totalGasUsed = GasUsed + ExtDataGasUsed
 			// totalRequiredTips = BlockGasCost * BaseFee
-			// requiredTip = totalRequiredTips / totalGasUsed
+			// estimatedTip = totalRequiredTips / totalGasUsed
 			want: big.NewInt((101112 * 456) / (123 + 789)),
 		},
 	}

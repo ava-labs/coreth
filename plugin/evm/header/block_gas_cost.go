@@ -73,10 +73,9 @@ func BlockGasCostWithStep(
 // pay to be included in a given block (assuming it paid a tip proportional to
 // its gas usage).
 //
-// In reality, there is no minimum tip that is enforced by the consensus engine
-// and high tip paying transactions can subsidize the inclusion of low tip
-// paying transactions. The only correctness check performed is that the sum of
-// all tips is >= the required block fee.
+// In reality, the consensus engine does not enforce a minimum tip on individual
+// transactions. The only correctness check performed is that the sum of all
+// tips is >= the required block fee.
 //
 // This function will return nil for all return values prior to Apricot Phase 4.
 func EstimateRequiredTip(
@@ -102,7 +101,7 @@ func EstimateRequiredTip(
 	totalRequiredTips := new(big.Int)
 	totalRequiredTips.Mul(header.BlockGasCost, header.BaseFee)
 
-	// requiredTip = totalRequiredTips / totalGasUsed
-	requiredTip := totalRequiredTips.Div(totalRequiredTips, totalGasUsed)
-	return requiredTip, nil
+	// estimatedTip = totalRequiredTips / totalGasUsed
+	estimatedTip := totalRequiredTips.Div(totalRequiredTips, totalGasUsed)
+	return estimatedTip, nil
 }

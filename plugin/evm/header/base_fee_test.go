@@ -142,14 +142,14 @@ func TestBaseFee(t *testing.T) {
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
-					gasTarget                  = ap3.TargetGas
-					gasUsed                    = 2*ap3.TargetGas + ap3.IntrinsicBlockGas
-					amountOverTarget           = gasUsed - gasTarget
-					parentBaseFee              = ap3.MinBaseFee
-					smoothingFactor            = ap3.BaseFeeChangeDenominator
-					baseFeeFractionUnderTarget = amountOverTarget * parentBaseFee / gasTarget
-					delta                      = baseFeeFractionUnderTarget / smoothingFactor
-					baseFee                    = parentBaseFee + delta
+					gasTarget                 = ap3.TargetGas
+					gasUsed                   = 2*ap3.TargetGas + ap3.IntrinsicBlockGas
+					amountOverTarget          = gasUsed - gasTarget
+					parentBaseFee             = ap3.MinBaseFee
+					smoothingFactor           = ap3.BaseFeeChangeDenominator
+					baseFeeFractionOverTarget = amountOverTarget * parentBaseFee / gasTarget
+					delta                     = baseFeeFractionOverTarget / smoothingFactor
+					baseFee                   = parentBaseFee + delta
 				)
 				return big.NewInt(baseFee)
 			}(),
@@ -212,14 +212,14 @@ func TestBaseFee(t *testing.T) {
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
-					gasTarget                  = ap3.TargetGas
-					gasUsed                    = 2*ap3.TargetGas + (ap4.TargetBlockRate-1)*ap4.BlockGasCostStep
-					amountOverTarget           = gasUsed - gasTarget
-					parentBaseFee              = ap4.MinBaseFee
-					smoothingFactor            = ap3.BaseFeeChangeDenominator
-					baseFeeFractionUnderTarget = amountOverTarget * parentBaseFee / gasTarget
-					delta                      = baseFeeFractionUnderTarget / smoothingFactor
-					baseFee                    = parentBaseFee + delta
+					gasTarget                 = ap3.TargetGas
+					gasUsed                   = 2*ap3.TargetGas + (ap4.TargetBlockRate-1)*ap4.BlockGasCostStep
+					amountOverTarget          = gasUsed - gasTarget
+					parentBaseFee             = ap4.MinBaseFee
+					smoothingFactor           = ap3.BaseFeeChangeDenominator
+					baseFeeFractionOverTarget = amountOverTarget * parentBaseFee / gasTarget
+					delta                     = baseFeeFractionOverTarget / smoothingFactor
+					baseFee                   = parentBaseFee + delta
 				)
 				return big.NewInt(baseFee)
 			}(),
@@ -268,14 +268,14 @@ func TestBaseFee(t *testing.T) {
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
-					gasTarget                  = ap5.TargetGas
-					gasUsed                    = 2 * ap5.TargetGas
-					amountOverTarget           = gasUsed - gasTarget
-					parentBaseFee              = ap4.MinBaseFee
-					smoothingFactor            = ap5.BaseFeeChangeDenominator
-					baseFeeFractionUnderTarget = amountOverTarget * parentBaseFee / gasTarget
-					delta                      = baseFeeFractionUnderTarget / smoothingFactor
-					baseFee                    = parentBaseFee + delta
+					gasTarget                 = ap5.TargetGas
+					gasUsed                   = 2 * ap5.TargetGas
+					amountOverTarget          = gasUsed - gasTarget
+					parentBaseFee             = ap4.MinBaseFee
+					smoothingFactor           = ap5.BaseFeeChangeDenominator
+					baseFeeFractionOverTarget = amountOverTarget * parentBaseFee / gasTarget
+					delta                     = baseFeeFractionOverTarget / smoothingFactor
+					baseFee                   = parentBaseFee + delta
 				)
 				return big.NewInt(baseFee)
 			}(),
@@ -301,14 +301,14 @@ func TestBaseFee(t *testing.T) {
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
-					gasTarget                  = ap5.TargetGas
-					gasUsed                    = 2 * ap5.TargetGas
-					amountOverTarget           = gasUsed - gasTarget
-					parentBaseFee              = params.EtnaMinBaseFee
-					smoothingFactor            = ap5.BaseFeeChangeDenominator
-					baseFeeFractionUnderTarget = amountOverTarget * parentBaseFee / gasTarget
-					delta                      = baseFeeFractionUnderTarget / smoothingFactor
-					baseFee                    = parentBaseFee + delta
+					gasTarget                 = ap5.TargetGas
+					gasUsed                   = 2 * ap5.TargetGas
+					amountOverTarget          = gasUsed - gasTarget
+					parentBaseFee             = params.EtnaMinBaseFee
+					smoothingFactor           = ap5.BaseFeeChangeDenominator
+					baseFeeFractionOverTarget = amountOverTarget * parentBaseFee / gasTarget
+					delta                     = baseFeeFractionOverTarget / smoothingFactor
+					baseFee                   = parentBaseFee + delta
 				)
 				return big.NewInt(baseFee)
 			}(),
