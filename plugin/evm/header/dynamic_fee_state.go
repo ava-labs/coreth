@@ -18,11 +18,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const DynamicFeeAccumulatorSize = wrappers.LongLen * 2
+const FeeExcessSize = wrappers.LongLen * 2
 
-var errDynamicFeeAccumulatorInsufficientLength = errors.New("insufficient length for dynamic fee accumulator")
+var errFeeExcessInsufficientLength = errors.New("insufficient length for dynamic fee excess")
 
-func calculateDynamicFeeAccumulator(
+// feeStateBeforeBlock takes the previous header and the timestamp of its child
+// block and calculates the fee state before the child block is executed.
+func feeStateBeforeBlock(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
@@ -36,10 +38,10 @@ func calculateDynamicFeeAccumulator(
 
 	var gasAccumulator acp176.State
 	if config.IsFUpgrade(parent.Time) && parent.Number.Cmp(common.Big0) != 0 {
-		// If the parent block was running with ACP-176, we start with the
-		// parent's fee state.
+		// If the parent block was running with ACP-176, we start with resulting
+		// fee state from the parent block.
 		var err error
-		gasAccumulator, err = parseDynamicFeeAccumulator(
+		gasAccumulator, err = feeStateAfterBlock(
 			parent.GasLimit,
 			parent.GasUsed,
 			parent.ExtDataGasUsed,
@@ -54,17 +56,19 @@ func calculateDynamicFeeAccumulator(
 	return gasAccumulator, nil
 }
 
-func parseDynamicFeeAccumulator(
+// feeStateAfterBlock returns the fee state after the execution of a block whose
+// header include the given fields.
+func feeStateAfterBlock(
 	limit uint64,
 	gasUsed uint64,
 	extraGasUsed *big.Int,
-	bytes []byte,
+	extra []byte,
 ) (acp176.State, error) {
-	if len(bytes) < DynamicFeeAccumulatorSize {
+	if len(extra) < FeeExcessSize {
 		return acp176.State{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
-			errDynamicFeeAccumulatorInsufficientLength,
-			DynamicFeeAccumulatorSize,
-			len(bytes),
+			errFeeExcessInsufficientLength,
+			FeeExcessSize,
+			len(extra),
 		)
 	}
 
@@ -82,14 +86,14 @@ func parseDynamicFeeAccumulator(
 	return acp176.State{
 		Gas: gas.State{
 			Capacity: gas.Gas(capacity),
-			Excess:   gas.Gas(binary.BigEndian.Uint64(bytes)),
+			Excess:   gas.Gas(binary.BigEndian.Uint64(extra)),
 		},
-		TargetExcess: gas.Gas(binary.BigEndian.Uint64(bytes[wrappers.LongLen:])),
+		TargetExcess: gas.Gas(binary.BigEndian.Uint64(extra[wrappers.LongLen:])),
 	}, nil
 }
 
-func dynamicFeeAccumulatorBytes(s acp176.State) []byte {
-	bytes := make([]byte, DynamicFeeAccumulatorSize)
+func feeExcessBytes(s acp176.State) []byte {
+	bytes := make([]byte, FeeExcessSize)
 	binary.BigEndian.PutUint64(bytes, uint64(s.Gas.Excess))
 	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(s.TargetExcess))
 	return bytes

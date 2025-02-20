@@ -28,7 +28,7 @@ func ExtraPrefix(
 	switch {
 	case config.IsFUpgrade(header.Time):
 		// Calculate the gas state for the start of the block
-		gasState, err := calculateDynamicFeeAccumulator(config, parent, header.Time)
+		gasState, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func ExtraPrefix(
 		if desiredTargetExcess != nil {
 			gasState.UpdateTargetExcess(*desiredTargetExcess)
 		}
-		return dynamicFeeAccumulatorBytes(gasState), nil
+		return feeExcessBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
 		window, err := feeWindow(config, parent, header.Time)
 		if err != nil {
@@ -62,7 +62,7 @@ func VerifyExtraPrefix(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := parseDynamicFeeAccumulator(
+		state, err := feeStateAfterBlock(
 			header.GasLimit,
 			header.GasUsed,
 			header.ExtDataGasUsed,
@@ -73,11 +73,11 @@ func VerifyExtraPrefix(
 		}
 
 		// Calculate the gas state for the start of the block
-		expectedGasState, err := calculateDynamicFeeAccumulator(config, parent, header.Time)
+		expectedState, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
-		if err := expectedGasState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
+		if err := expectedState.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
 			return err
 		}
 
@@ -86,13 +86,13 @@ func VerifyExtraPrefix(
 		// to have correctly set it to that value. Otherwise, the resulting
 		// value will be as close to the claimed value as possible, but would
 		// not be equal.
-		expectedGasState.UpdateTargetExcess(gasState.TargetExcess)
+		expectedState.UpdateTargetExcess(state.TargetExcess)
 
-		if gasState.Gas.Excess != expectedGasState.Gas.Excess {
-			return fmt.Errorf("invalid gas state excess: have %d, want %d", gasState.Gas.Excess, expectedGasState.Gas.Excess)
+		if state.Gas.Excess != expectedState.Gas.Excess {
+			return fmt.Errorf("invalid gas state excess: have %d, want %d", state.Gas.Excess, expectedState.Gas.Excess)
 		}
-		if gasState.TargetExcess != expectedGasState.TargetExcess {
-			return fmt.Errorf("invalid gas state target excess: have %d, want %d", gasState.TargetExcess, expectedGasState.TargetExcess)
+		if state.TargetExcess != expectedState.TargetExcess {
+			return fmt.Errorf("invalid gas state target excess: have %d, want %d", state.TargetExcess, expectedState.TargetExcess)
 		}
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
@@ -115,11 +115,11 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsFUpgrade:
-		if extraLen < DynamicFeeAccumulatorSize {
+		if extraLen < FeeExcessSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				errInvalidExtraLength,
-				DynamicFeeAccumulatorSize,
+				FeeExcessSize,
 				extraLen,
 			)
 		}

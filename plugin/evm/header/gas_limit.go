@@ -25,7 +25,7 @@ func GasLimit(
 ) (uint64, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, err := calculateDynamicFeeAccumulator(config, parent, timestamp)
+		gasState, err := feeStateBeforeBlock(config, parent, timestamp)
 		if err != nil {
 			return 0, err
 		}
@@ -76,7 +76,7 @@ func VerifyGasLimit(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := calculateDynamicFeeAccumulator(config, parent, header.Time)
+		gasState, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
