@@ -139,7 +139,19 @@ func (b *Block) ID() ids.ID { return b.id }
 func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
 // Accept implements the snowman.Block interface
-func (b *Block) Accept(context.Context) error {
+func (b *Block) Accept(ctx context.Context) error {
+	if b.vm.StateSyncClient.AsyncReceive() {
+		log.Debug("Queueing block for later processing", "block", b.ID(), "height", b.Height())
+		return b.vm.StateSyncClient.QueueAcceptBlock(b)
+	}
+	return b.accept(ctx)
+}
+
+func (b *Block) AcceptDuringSync(ctx context.Context) error {
+	return b.accept(ctx)
+}
+
+func (b *Block) accept(context.Context) error {
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
@@ -271,6 +283,20 @@ func (b *Block) syntacticVerify() error {
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
+
+	// If currently dynamically syncing, we should simply queue the block for later processing
+	if b.vm.StateSyncClient.AsyncReceive() {
+		log.Debug("Queueing block for later processing", "block", b.ID(), "height", b.Height())
+		return b.vm.StateSyncClient.QueueVerifyBlock(b)
+	}
+
+	return b.verify(&precompileconfig.PredicateContext{
+		SnowCtx:            b.vm.ctx,
+		ProposerVMBlockCtx: nil,
+	}, true)
+}
+
+func (b *Block) VerifyDuringSync(context.Context) error {
 	return b.verify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: nil,
