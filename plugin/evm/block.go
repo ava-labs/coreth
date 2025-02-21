@@ -381,7 +381,6 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 	if err != nil {
 		return fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
-
 	extraData := b.ethBlock.Extra()
 	predicates, err := header.ParsePredicates(rules.AvalancheRules, extraData)
 	if err != nil {
