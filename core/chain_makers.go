@@ -374,10 +374,6 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
 
 	gasLimit := header.GasLimit(cm.config, parent.Header(), time)
-	extra, err := header.ExtraPrefix(cm.config, parent.Header(), time)
-	if err != nil {
-		panic(err)
-	}
 	baseFee, err := header.BaseFee(cm.config, parent.Header(), time)
 	if err != nil {
 		panic(err)
@@ -391,7 +387,6 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		GasLimit:   gasLimit,
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
-		Extra:      extra,
 		BaseFee:    baseFee,
 	}
 

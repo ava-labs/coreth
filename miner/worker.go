@@ -147,10 +147,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	gasLimit := header.GasLimit(w.chainConfig, parent, timestamp)
-	extra, err := header.ExtraPrefix(w.chainConfig, parent, timestamp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new extra prefix: %w", err)
-	}
 	baseFee, err := header.BaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
@@ -161,7 +157,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
 		GasLimit:   gasLimit,
 		Time:       timestamp,
-		Extra:      extra,
 		BaseFee:    baseFee,
 	}
 
