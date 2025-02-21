@@ -653,8 +653,8 @@ func testReceiveWarpMessage(
 
 	// Require the block was built with a successful predicate result
 	ethBlock := block2.(*chain.BlockWrapper).Block.(*Block).ethBlock
-
-	predicates, err := header.ParsePredicates(vm.chainConfig.GetAvalancheRules(ethBlock.Time()), ethBlock.Extra())
+	rules := vm.chainConfig.GetAvalancheRules(ethBlock.Time())
+	predicates, err := header.ParsePredicates(rules, ethBlock.Extra())
 	require.NoError(err)
 	results, err := predicate.ParseResults(predicates)
 	require.NoError(err)
