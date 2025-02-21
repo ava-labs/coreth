@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -244,6 +245,94 @@ func TestExtraPrefix(t *testing.T) {
 				window.Shift(1)
 				return feeWindowBytes(window)
 			}(),
+		},
+		{
+			name: "f_first_block",
+			upgrades: params.NetworkUpgrades{
+				FUpgradeTimestamp: utils.NewUint64(1),
+			},
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			header: &types.Header{
+				Time:           1,
+				GasUsed:        1,
+				ExtDataGasUsed: big.NewInt(5),
+			},
+			want: feeStateBytes(acp176.State{
+				Gas: gas.State{
+					Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 6,
+					Excess:   6,
+				},
+				TargetExcess: 0,
+			}),
+		},
+		{
+			name:     "f_genesis_block",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Time:           1,
+				GasUsed:        2,
+				ExtDataGasUsed: big.NewInt(1),
+			},
+			desiredTargetExcess: (*gas.Gas)(utils.NewUint64(3)),
+			want: feeStateBytes(acp176.State{
+				Gas: gas.State{
+					Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 3,
+					Excess:   3,
+				},
+				TargetExcess: 3,
+			}),
+		},
+		{
+			name:     "f_invalid_fee_state",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			header:  &types.Header{},
+			wantErr: errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_invalid_gas_used",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra:  feeStateBytes(acp176.State{}),
+			},
+			header: &types.Header{
+				GasUsed: 1,
+			},
+			wantErr: gas.ErrInsufficientCapacity,
+		},
+		{
+			name:     "f_reduce_capacity",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: feeStateBytes(acp176.State{
+					Gas: gas.State{
+						Capacity: 20_039_100, // [acp176.MinTargetPerSecond] * e^(2*[acp176.MaxTargetExcessDiff] / [acp176.TargetConversion])
+						Excess:   2_000_000_000 - 3,
+					},
+					TargetExcess: 2 * acp176.MaxTargetExcessDiff,
+				}),
+			},
+			header: &types.Header{
+				GasUsed:        2,
+				ExtDataGasUsed: big.NewInt(1),
+			},
+			desiredTargetExcess: (*gas.Gas)(utils.NewUint64(0)),
+			want: feeStateBytes(acp176.State{
+				Gas: gas.State{
+					Capacity: 20_019_540,    // [acp176.MinTargetPerSecond] * e^([acp176.MaxTargetExcessDiff] / [acp176.TargetConversion])
+					Excess:   1_998_047_816, // 2M * NewTarget / OldTarget
+				},
+				TargetExcess: acp176.MaxTargetExcessDiff,
+			}),
 		},
 	}
 	for _, test := range tests {
