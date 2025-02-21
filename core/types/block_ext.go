@@ -11,28 +11,6 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-// GetBlockExtra returns the [BlockBodyExtra] contained in the [Block] `b`.
-func GetBlockExtra(b *Block) *BlockBodyExtra {
-	return extras.Block.Get(b)
-}
-
-// WithBlockExtra sets the [BlockBodyExtra] `extra` into the [Block] `b`.
-func WithBlockExtra(b *Block, extra *BlockBodyExtra) *Block {
-	extras.Block.Set(b, extra)
-	return b
-}
-
-// GetBodyExtra returns the [BlockBodyExtra] contained in the [Body] `b`.
-func GetBodyExtra(b *Body) *BlockBodyExtra {
-	return extras.Body.Get(b)
-}
-
-// WithBodyExtra sets the [BlockBodyExtra] `extra` into the [Body] `b`.
-func WithBodyExtra(b *Body, extra *BlockBodyExtra) *Body {
-	extras.Body.Set(b, extra)
-	return b
-}
-
 // BlockBodyExtra is a struct containing extra fields used by Avalanche
 // in the [Block] and [Body].
 type BlockBodyExtra struct {
@@ -115,7 +93,7 @@ func (b *BlockBodyExtra) BlockRLPFieldPointersForDecoding(block *ethtypes.BlockR
 }
 
 func BlockExtData(b *Block) []byte {
-	extras := GetBlockExtra(b)
+	extras := extras.Block.Get(b)
 	if extras.ExtData == nil {
 		return nil
 	}
@@ -123,7 +101,7 @@ func BlockExtData(b *Block) []byte {
 }
 
 func BlockVersion(b *Block) uint32 {
-	return GetBlockExtra(b).Version
+	return extras.Block.Get(b).Version
 }
 
 func BlockExtDataGasUsed(b *Block) *big.Int {
@@ -158,8 +136,9 @@ func NewBlockWithExtData(
 	block := NewBlock(header, txs, uncles, receipts, hasher)
 	extdataCopy := make([]byte, len(extdata))
 	copy(extdataCopy, extdata)
-	extras := &BlockBodyExtra{
+	extra := &BlockBodyExtra{
 		ExtData: &extdataCopy,
 	}
-	return WithBlockExtra(block, extras)
+	extras.Block.Set(block, extra)
+	return block
 }
