@@ -11,7 +11,6 @@ import (
 	"unsafe"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -163,6 +162,11 @@ func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
 			originalField = field.Interface()
 		case reflect.Pointer:
 			originalField = field.Interface()
+			if field.Type().String() == "*pseudo.Type" {
+				// extras are checked separately in another call of [fieldsAreDeepCopied]
+				// Use the string type to prevent importing libevm/pseudo package.
+				continue
+			}
 			switch ptr := originalField.(type) {
 			case *big.Int:
 				ptr.Add(ptr, big.NewInt(1))
@@ -170,8 +174,6 @@ func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
 				*ptr++
 			case *common.Hash:
 				ptr[0]++
-			case *pseudo.Type:
-				continue // extras are checked separately in another call of [fieldsAreDeepCopied]
 			default:
 				t.Fatalf("unexpected pointer type %T for %q", ptr, fieldName)
 			}
