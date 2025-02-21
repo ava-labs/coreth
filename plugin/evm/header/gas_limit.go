@@ -25,11 +25,11 @@ func GasLimit(
 ) (uint64, error) {
 	switch {
 	case config.IsFUpgrade(timestamp):
-		gasState, err := feeStateBeforeBlock(config, parent, timestamp)
+		state, err := feeStateBeforeBlock(config, parent, timestamp)
 		if err != nil {
 			return 0, err
 		}
-		return uint64(gasState.MaxCapacity()), nil
+		return uint64(state.MaxCapacity()), nil
 	case config.IsCortina(timestamp):
 		return cortina.GasLimit, nil
 	case config.IsApricotPhase1(timestamp):
@@ -82,15 +82,16 @@ func VerifyGasLimit(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := feeStateBeforeBlock(config, parent, header.Time)
+		state, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
 			return err
 		}
-		if header.GasLimit != uint64(gasState.Gas.Capacity) {
+		maxCapacity := state.MaxCapacity()
+		if header.GasLimit != uint64(maxCapacity) {
 			return fmt.Errorf("%w: have %d, want %d",
 				errInvalidGasLimit,
 				header.GasLimit,
-				gasState.Gas.Capacity,
+				maxCapacity,
 			)
 		}
 	case config.IsCortina(header.Time):
@@ -146,9 +147,9 @@ func GasCapacity(
 		return GasLimit(config, parent, timestamp)
 	}
 
-	gasState, err := feeStateBeforeBlock(config, parent, timestamp)
+	state, err := feeStateBeforeBlock(config, parent, timestamp)
 	if err != nil {
 		return 0, err
 	}
-	return uint64(gasState.Gas.Capacity), nil
+	return uint64(state.Gas.Capacity), nil
 }

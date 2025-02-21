@@ -27,7 +27,7 @@ func ExtraPrefix(
 ) ([]byte, error) {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		gasState, err := feeStateAfterBlock(
+		state, err := feeStateAfterBlock(
 			config,
 			parent,
 			header,
@@ -36,7 +36,7 @@ func ExtraPrefix(
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate fee state: %w", err)
 		}
-		return feeStateBytes(gasState), nil
+		return feeStateBytes(state), nil
 	case config.IsApricotPhase3(header.Time):
 		window, err := feeWindow(config, parent, header.Time)
 		if err != nil {
