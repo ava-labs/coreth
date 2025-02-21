@@ -250,6 +250,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		return evm
 	}
 
+	// Because the BlockContext is pass-by-value, this does not cache the
+	// results for future calls to NewEVM.
 	evm.Context.PredicateResults = results
 	return evm
 }
