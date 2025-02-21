@@ -833,6 +833,8 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		size              int
 	)
 
+	// TODO cap atomic tx gas limit for Fortuna
+
 	for {
 		tx, exists := vm.mempool.NextTx()
 		if !exists {
@@ -858,7 +860,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		// ensure [gasUsed] + [batchGasUsed] doesnt exceed the [atomicGasLimit]
+		// ensure [gasUsed] + [batchGasUsed] doesn't exceed the [atomicGasLimit]
 		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); !utils.BigLessOrEqualUint64(totalGasUsed, ap5.AtomicGasLimit) {
 			// Send [tx] back to the mempool's tx heap.
 			vm.mempool.CancelCurrentTx(tx.ID())
