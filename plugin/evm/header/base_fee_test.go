@@ -356,7 +356,7 @@ func TestBaseFee(t *testing.T) {
 			wantErr: errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_current_price",
+			name:     "f_current",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -368,6 +368,21 @@ func TestBaseFee(t *testing.T) {
 				}),
 			},
 			want: big.NewInt(1_000_000_007), // nAVAX + 7 due to rounding
+		},
+		{
+			name:     "f_decrease",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: feeStateBytes(acp176.State{
+					Gas: gas.State{
+						Excess: 1_336_650_647, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+					},
+					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
+				}),
+			},
+			timestamp: 1,
+			want:      big.NewInt(977_012_526), // e^((1_336_650_647 - 1_500_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
 		},
 	}
 	for _, test := range tests {
