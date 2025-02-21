@@ -29,6 +29,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
 
@@ -73,7 +74,7 @@ var (
 	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
-	initialBaseFee   = big.NewInt(params.ApricotPhase3InitialBaseFee)
+	initialBaseFee   = big.NewInt(ap3.InitialBaseFee)
 
 	genesisJSON = func(cfg *params.ChainConfig) string {
 		g := new(core.Genesis)
