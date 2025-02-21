@@ -39,8 +39,27 @@ type Mode struct {
 }
 
 type (
-	OnFinalizeAndAssembleCallbackType = func(header *types.Header, state *state.StateDB, txs []*types.Transaction) (extraData []byte, blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
-	OnExtraStateChangeType            = func(block *types.Block, statedb *state.StateDB) (blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
+	OnFinalizeAndAssembleCallbackType = func(
+		header *types.Header,
+		parent *types.Header,
+		state *state.StateDB,
+		txs []*types.Transaction,
+	) (
+		extraData []byte,
+		blockFeeContribution *big.Int,
+		extDataGasUsed *big.Int,
+		err error,
+	)
+
+	OnExtraStateChangeType = func(
+		block *types.Block,
+		parent *types.Header,
+		statedb *state.StateDB,
+	) (
+		blockFeeContribution *big.Int,
+		extDataGasUsed *big.Int,
+		err error,
+	)
 
 	ConsensusCallbacks struct {
 		OnFinalizeAndAssemble OnFinalizeAndAssembleCallbackType
@@ -351,7 +370,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		err                          error
 	)
 	if eng.cb.OnExtraStateChange != nil {
-		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, state)
+		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state)
 		if err != nil {
 			return err
 		}
@@ -406,7 +425,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		err                          error
 	)
 	if eng.cb.OnFinalizeAndAssemble != nil {
-		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, state, txs)
+		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, parent, state, txs)
 		if err != nil {
 			return nil, err
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 )
 
@@ -149,6 +150,28 @@ func GasCapacity(
 
 	state, err := feeStateBeforeBlock(config, parent, timestamp)
 	if err != nil {
+		return 0, err
+	}
+	return uint64(state.Gas.Capacity), nil
+}
+
+// AtomicGasCapacity returns the maximum amount ExtDataGasUsed could be on
+// `header` while still being valid.
+func AtomicGasCapacity(
+	config *params.ChainConfig,
+	parent *types.Header,
+	header *types.Header,
+) (uint64, error) {
+	// Prior to the F upgrade, the gas capacity is equal to the gas limit.
+	if !config.IsFUpgrade(header.Time) {
+		return ap5.AtomicGasLimit, nil
+	}
+
+	state, err := feeStateBeforeBlock(config, parent, header.Time)
+	if err != nil {
+		return 0, err
+	}
+	if err := state.ConsumeGas(header.GasUsed, nil); err != nil {
 		return 0, err
 	}
 	return uint64(state.Gas.Capacity), nil
