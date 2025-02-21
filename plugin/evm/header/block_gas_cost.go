@@ -4,18 +4,20 @@
 package header
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap4"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 )
 
-// ApricotPhase5BlockGasCostStep is the rate at which the block gas cost changes
-// per second as of the Apricot Phase 5 upgrade.
-//
-// This value modifies the previously used [ap4.BlockGasCostStep].
-const ApricotPhase5BlockGasCostStep = 200_000
+var (
+	errBaseFeeNil        = errors.New("base fee is nil")
+	errBlockGasCostNil   = errors.New("block gas cost is nil")
+	errExtDataGasUsedNil = errors.New("extDataGasUsed is nil")
+)
 
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
@@ -26,7 +28,7 @@ func BlockGasCost(
 ) uint64 {
 	step := uint64(ap4.BlockGasCostStep)
 	if config.IsApricotPhase5(timestamp) {
-		step = ApricotPhase5BlockGasCostStep
+		step = ap5.BlockGasCostStep
 	}
 	// Treat an invalid parent/current time combination as 0 elapsed time.
 	//
@@ -65,4 +67,41 @@ func BlockGasCostWithStep(
 		step,
 		timeElapsed,
 	)
+}
+
+// EstimateRequiredTip is the estimated tip a transaction would have needed to
+// pay to be included in a given block (assuming it paid a tip proportional to
+// its gas usage).
+//
+// In reality, the consensus engine does not enforce a minimum tip on individual
+// transactions. The only correctness check performed is that the sum of all
+// tips is >= the required block fee.
+//
+// This function will return nil for all return values prior to Apricot Phase 4.
+func EstimateRequiredTip(
+	config *params.ChainConfig,
+	header *types.Header,
+) (*big.Int, error) {
+	switch {
+	case !config.IsApricotPhase4(header.Time):
+		return nil, nil
+	case header.BaseFee == nil:
+		return nil, errBaseFeeNil
+	case header.BlockGasCost == nil:
+		return nil, errBlockGasCostNil
+	case header.ExtDataGasUsed == nil:
+		return nil, errExtDataGasUsedNil
+	}
+
+	// totalGasUsed = GasUsed + ExtDataGasUsed
+	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
+	totalGasUsed.Add(totalGasUsed, header.ExtDataGasUsed)
+
+	// totalRequiredTips = blockGasCost * baseFee
+	totalRequiredTips := new(big.Int)
+	totalRequiredTips.Mul(header.BlockGasCost, header.BaseFee)
+
+	// estimatedTip = totalRequiredTips / totalGasUsed
+	estimatedTip := totalRequiredTips.Div(totalRequiredTips, totalGasUsed)
+	return estimatedTip, nil
 }
