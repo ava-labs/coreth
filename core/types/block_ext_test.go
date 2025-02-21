@@ -15,7 +15,11 @@ import (
 )
 
 func TestCopyHeader(t *testing.T) {
+	t.Parallel()
+
 	t.Run("empty_header", func(t *testing.T) {
+		t.Parallel()
+
 		empty := &Header{}
 
 		headerExtra := &HeaderExtra{}
@@ -35,154 +39,65 @@ func TestCopyHeader(t *testing.T) {
 	})
 
 	t.Run("filled_header", func(t *testing.T) {
-		h := &Header{
-			ParentHash:       common.Hash{1},
-			UncleHash:        common.Hash{2},
-			Coinbase:         common.Address{3},
-			Root:             common.Hash{4},
-			TxHash:           common.Hash{5},
-			ReceiptHash:      common.Hash{6},
-			Bloom:            Bloom{7},
-			Difficulty:       big.NewInt(8),
-			Number:           big.NewInt(9),
-			GasLimit:         10,
-			GasUsed:          11,
-			Time:             12,
-			Extra:            []byte{13},
-			MixDigest:        common.Hash{14},
-			Nonce:            BlockNonce{15},
-			BaseFee:          big.NewInt(16),
-			WithdrawalsHash:  &common.Hash{17},
-			BlobGasUsed:      ptrTo(uint64(18)),
-			ExcessBlobGas:    ptrTo(uint64(19)),
-			ParentBeaconRoot: &common.Hash{20},
-		}
-		headerExtra := &HeaderExtra{
-			ExtDataHash:    common.Hash{21},
-			ExtDataGasUsed: big.NewInt(22),
-			BlockGasCost:   big.NewInt(23),
-		}
-		extras.Header.Set(h, headerExtra)
+		t.Parallel()
 
-		allFieldsAreSet(t, h)
-		allFieldsAreSet(t, headerExtra)
+		header := headerWithNonZeroFields() // the header carries the [HeaderExtra] so we can ignore it
 
-		cpy := CopyHeader(h)
+		got := CopyHeader(header)
+		want := headerWithNonZeroFields()
 
-		want := &Header{
-			ParentHash:       common.Hash{1},
-			UncleHash:        common.Hash{2},
-			Coinbase:         common.Address{3},
-			Root:             common.Hash{4},
-			TxHash:           common.Hash{5},
-			ReceiptHash:      common.Hash{6},
-			Bloom:            Bloom{7},
-			Difficulty:       big.NewInt(8),
-			Number:           big.NewInt(9),
-			GasLimit:         10,
-			GasUsed:          11,
-			Time:             12,
-			Extra:            []byte{13},
-			MixDigest:        common.Hash{14},
-			Nonce:            BlockNonce{15},
-			BaseFee:          big.NewInt(16),
-			WithdrawalsHash:  &common.Hash{17},
-			BlobGasUsed:      ptrTo(uint64(18)),
-			ExcessBlobGas:    ptrTo(uint64(19)),
-			ParentBeaconRoot: &common.Hash{20},
-		}
-		headerExtra = &HeaderExtra{
-			ExtDataHash:    common.Hash{21},
-			ExtDataGasUsed: big.NewInt(22),
-			BlockGasCost:   big.NewInt(23),
-		}
-		extras.Header.Set(want, headerExtra)
+		assert.Equal(t, want, got)
 
-		assert.Equal(t, want, cpy)
-
-		// Mutate each non-value field to ensure they are not shared
-		fieldsAreDeepCopied(t, h, cpy)
-		fieldsAreDeepCopied(t, GetHeaderExtra(h), GetHeaderExtra(cpy))
+		exportedFieldsDeepCopied(t, header, got)
+		exportedFieldsDeepCopied(t, GetHeaderExtra(header), GetHeaderExtra(got))
 	})
 }
 
-func ptrTo[T any](x T) *T { return &x }
-
-func allFieldsAreSet(t *testing.T, x any) {
+func exportedFieldsDeepCopied[T interface {
+	Header | HeaderExtra
+}](t *testing.T, original, cpy *T) {
 	t.Helper()
-	require.Equal(t, reflect.Ptr.String(), reflect.TypeOf(x).Kind().String(), "x must be a pointer")
-	v := reflect.ValueOf(x).Elem()
+
+	v := reflect.ValueOf(*original)
 	typ := v.Type()
-	require.Equal(t, reflect.Struct.String(), typ.Kind().String())
+	cp := reflect.ValueOf(*cpy)
 	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldName := typ.Field(i).Name
-		fieldValue := field
-		if !typ.Field(i).IsExported() {
-			if field.Kind() == reflect.Ptr {
-				require.Falsef(t, field.IsNil(), "field %q is nil", fieldName)
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		switch field.Type.Kind() {
+		case reflect.Array, reflect.Uint64:
+			// Not pointers, but using explicit Kinds for safety
+			continue
+		}
+
+		t.Run(field.Name, func(t *testing.T) {
+			fieldCp := cp.Field(i).Interface()
+			switch f := v.Field(i).Interface().(type) {
+			case *big.Int:
+				assertDifferentPointers(t, f, fieldCp)
+			case *common.Hash:
+				assertDifferentPointers(t, f, fieldCp)
+			case *uint64:
+				assertDifferentPointers(t, f, fieldCp)
+			case []uint8:
+				assertDifferentPointers(t, unsafe.SliceData(f), unsafe.SliceData(fieldCp.([]uint8)))
+			default:
+				t.Errorf("field %q type %T needs to be added to switch cases of exportedFieldsDeepCopied", field.Name, f)
 			}
-			field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem() //nolint:gosec
-			fieldValue = field
-		}
-		if field.Kind() == reflect.Pointer {
-			require.Falsef(t, field.IsNil(), "field %q is nil", fieldName)
-			fieldValue = field.Elem()
-		}
-		require.False(t, fieldValue.IsZero(), "field %q is not set", fieldName)
+		})
 	}
 }
 
-func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
+// assertDifferentPointers asserts that `a` and `b` are both non-nil
+// pointers of the same type and point to different memory locations.
+func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	t.Helper()
-	require.Equal(t, reflect.Ptr.String(), reflect.TypeOf(original).Kind().String(), "original must be a pointer")
-	require.Equal(t, reflect.Ptr.String(), reflect.TypeOf(cpy).Kind().String(), "cpy must be a pointer")
-
-	v := reflect.ValueOf(original).Elem()
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldName := v.Type().Field(i).Name
-		isUnexported := !v.Type().Field(i).IsExported()
-		if isUnexported {
-			field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem() //nolint:gosec
-		}
-		var originalField any
-		switch field.Kind() {
-		case reflect.Array, reflect.Uint64: // values
-		case reflect.Slice:
-			originalField = field.Interface()
-			switch originalField.(type) {
-			case []byte:
-				field.Set(reflect.Append(field, reflect.ValueOf(byte(1))))
-			default:
-				t.Fatalf("unexpected slice type %T for %q", originalField, fieldName)
-			}
-			originalField = field.Interface()
-		case reflect.Pointer:
-			originalField = field.Interface()
-			if field.Type().String() == "*pseudo.Type" {
-				// extras are checked separately in another call of [fieldsAreDeepCopied]
-				// Use the string type to prevent importing libevm/pseudo package.
-				continue
-			}
-			switch ptr := originalField.(type) {
-			case *big.Int:
-				ptr.Add(ptr, big.NewInt(1))
-			case *uint64:
-				*ptr++
-			case *common.Hash:
-				ptr[0]++
-			default:
-				t.Fatalf("unexpected pointer type %T for %q", ptr, fieldName)
-			}
-		default:
-			t.Fatalf("unexpected field kind %v for %q", field.Kind(), fieldName)
-		}
-
-		cpyField := reflect.ValueOf(cpy).Elem().Field(i)
-		if isUnexported {
-			cpyField = reflect.NewAt(cpyField.Type(), unsafe.Pointer(cpyField.UnsafeAddr())).Elem() //nolint:gosec
-		}
-		assert.NotEqualf(t, originalField, cpyField.Interface(), "field %q", fieldName)
+	require.NotNilf(t, a, "a (%T) cannot be nil", a)
+	require.NotNilf(t, b, "b (%T) cannot be nil", b)
+	require.IsType(t, a, b, "a and b must be of the same type")
+	if a == b {
+		t.Errorf("pointers to same memory")
 	}
 }
