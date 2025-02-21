@@ -111,6 +111,7 @@ type StateSyncClient interface {
 	AsyncReceive() bool
 	QueueVerifyBlock(*Block) error
 	QueueAcceptBlock(*Block) error
+	QueueRejectBlock(*Block) error
 }
 
 // Syncer represents a step in state sync,
@@ -130,7 +131,6 @@ func (client *stateSyncerClient) AsyncReceive() bool {
 
 func (client *stateSyncerClient) QueueVerifyBlock(b *Block) error {
 	if !client.AsyncReceive() {
-		log.Info("Queueing block for later verify", "block", b.ID(), "height", b.Height())
 		return fmt.Errorf("cannot queue block when not using upstream syncing")
 	}
 
@@ -142,7 +142,6 @@ func (client *stateSyncerClient) QueueVerifyBlock(b *Block) error {
 
 func (client *stateSyncerClient) QueueAcceptBlock(b *Block) error {
 	if !client.AsyncReceive() {
-		log.Info("Queueing block for later accept", "block", b.ID(), "height", b.Height())
 		return fmt.Errorf("cannot queue block when not using upstream syncing")
 	}
 
@@ -157,10 +156,34 @@ func (client *stateSyncerClient) QueueAcceptBlock(b *Block) error {
 	// If the block is the pivot, signal the state syncer to start
 	client.dl.pivotLock.Lock()
 	if b.Height() >= client.dl.pivotBlock.Height()+pivotInterval {
+		log.Info("Setting new pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
 		client.dl.pivotBlock = b
 		client.dl.newPivot <- b
 	}
 	client.dl.pivotLock.Unlock()
+
+	return nil
+}
+
+func (client *stateSyncerClient) QueueRejectBlock(b *Block) error {
+	if !client.AsyncReceive() {
+		return fmt.Errorf("cannot queue block when not using upstream syncing")
+	}
+
+	reject := func(a *Block) error {
+		return a.RejectDuringSync(context.TODO()) // yeah gotta fix this too
+	}
+
+	if err := client.dl.execQueue.Insert(&queueElement{b, reject}); err != nil {
+		return err
+	}
+
+	// If the block is the pivot, signal the state syncer to start
+	client.dl.pivotLock.RLock()
+	defer client.dl.pivotLock.RUnlock()
+	if b.Height() == client.dl.pivotBlock.Height() {
+		return fmt.Errorf("cannot reject pivot block")
+	}
 
 	return nil
 }
@@ -550,6 +573,7 @@ func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) erro
 	} else {
 		client.network.AddConnector(ethstatesync.NewConnector(client.dl.SnapSyncer, p2pClient))
 	}
+
 	if err := client.dl.SnapSync(); err != nil {
 		return err
 	}
@@ -642,7 +666,7 @@ func (d *downloader) SnapSync() error {
 			if sync.err != nil {
 				return sync.err
 			}
-			return d.execQueue.Flush(nil, true)
+			return d.execQueue.Flush(nil, true) // might need to provide a cancle channel
 		case np := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
@@ -718,6 +742,7 @@ func newStateSync(d *downloader, root common.Hash) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
+	log.Info("Starting new sync")
 	s.err = s.d.SnapSyncer.Sync(s.root, s.cancel)
 	close(s.done)
 }
