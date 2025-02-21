@@ -199,16 +199,16 @@ func TestBlockExtraGetWith(t *testing.T) {
 
 	b := &Block{}
 
-	extra := GetBlockExtra(b)
+	extra := extras.Block.Get(b)
 	require.NotNil(t, extra)
 	assert.Equal(t, &BlockBodyExtra{}, extra)
 
 	extra = &BlockBodyExtra{
 		Version: 1,
 	}
-	WithBlockExtra(b, extra)
+	extras.Block.Set(b, extra)
 
-	extra = GetBlockExtra(b)
+	extra = extras.Block.Get(b)
 	wantExtra := &BlockBodyExtra{
 		Version: 1,
 	}
@@ -220,16 +220,16 @@ func TestBodyExtraGetWith(t *testing.T) {
 
 	b := &Body{}
 
-	extra := GetBodyExtra(b)
+	extra := extras.Body.Get(b)
 	require.NotNil(t, extra)
 	assert.Equal(t, &BlockBodyExtra{}, extra)
 
 	extra = &BlockBodyExtra{
 		Version: 1,
 	}
-	WithBodyExtra(b, extra)
+	extras.Body.Set(b, extra)
 
-	extra = GetBodyExtra(b)
+	extra = extras.Body.Get(b)
 	wantExtra := &BlockBodyExtra{
 		Version: 1,
 	}
@@ -254,7 +254,7 @@ func TestBodyExtraRLP(t *testing.T) {
 		Version: 1,
 		ExtData: ptrTo([]byte{2}),
 	}
-	_ = WithBodyExtra(body, extra)
+	extras.Body.Set(body, extra)
 
 	b, err := rlp.EncodeToBytes(body)
 	require.NoError(t, err)
@@ -291,10 +291,11 @@ func TestBodyExtraRLP(t *testing.T) {
 		Version: 1,
 		ExtData: ptrTo([]byte{2}),
 	}
-	_ = WithBodyExtra(wantBody, wantExtra)
+	extras.Body.Set(wantBody, wantExtra)
 
 	assert.Equal(t, wantBody, gotBody)
-	assert.Equal(t, wantExtra, GetBodyExtra(gotBody))
+	gotExtra := extras.Body.Get(gotBody)
+	assert.Equal(t, wantExtra, gotExtra)
 }
 
 func TestBlockExtraRLP(t *testing.T) {
@@ -323,7 +324,7 @@ func TestBlockExtraRLP(t *testing.T) {
 		Version: 10,
 		ExtData: ptrTo([]byte{11}),
 	}
-	_ = WithBlockExtra(block, extra)
+	extras.Block.Set(block, extra)
 
 	b, err := rlp.EncodeToBytes(block)
 	require.NoError(t, err)
@@ -365,11 +366,12 @@ func TestBlockExtraRLP(t *testing.T) {
 		Version: 10,
 		ExtData: ptrTo([]byte{11}),
 	}
-	_ = WithBlockExtra(wantBlock, wantExtra)
+	extras.Block.Set(wantBlock, wantExtra)
 	_ = wantBlock.Size() // set block cached unexported size field
 
 	assert.Equal(t, wantBlock, gotBlock)
-	assert.Equal(t, wantExtra, GetBlockExtra(gotBlock))
+	gotExtra := extras.Block.Get(gotBlock)
+	assert.Equal(t, wantExtra, gotExtra)
 }
 
 // TestBlockBody tests the [BlockBodyExtra.Copy] method is implemented correctly.
@@ -382,12 +384,12 @@ func TestBlockBody(t *testing.T) {
 	uncles := []*Header{{ParentHash: common.Hash{6}}}
 	receipts := []*Receipt{{PostState: []byte{7}}}
 	block := NewBlock(header, txs, uncles, receipts, stubHasher{})
-	extras := &BlockBodyExtra{
+	blockExtras := &BlockBodyExtra{
 		Version: 8,
 		ExtData: ptrTo([]byte{9}),
 	}
-	allFieldsAreSet(t, extras) // make sure each field is checked
-	_ = WithBlockExtra(block, extras)
+	allFieldsAreSet(t, blockExtras) // make sure each field is checked
+	extras.Block.Set(block, blockExtras)
 
 	wantUncle := &Header{
 		ParentHash: common.Hash{6},
@@ -404,14 +406,14 @@ func TestBlockBody(t *testing.T) {
 		Version: 8,
 		ExtData: ptrTo([]byte{9}),
 	}
-	_ = WithBodyExtra(wantBody, wantBodyExtra)
+	extras.Body.Set(wantBody, wantBodyExtra)
 
 	body := block.Body()
 	assert.Equal(t, wantBody, body)
-	bodyExtra := GetBodyExtra(body)
+	bodyExtra := extras.Body.Get(body)
 	assert.Equal(t, wantBodyExtra, bodyExtra)
 
-	fieldsAreDeepCopied(t, extras, bodyExtra)
+	fieldsAreDeepCopied(t, blockExtras, bodyExtra)
 }
 
 func TestBlockGetters(t *testing.T) {
@@ -456,7 +458,7 @@ func TestBlockGetters(t *testing.T) {
 			_ = WithHeaderExtra(header, test.headerExtra)
 
 			block := NewBlock(header, nil, nil, nil, stubHasher{})
-			_ = WithBlockExtra(block, test.blockExtra)
+			extras.Block.Set(block, test.blockExtra)
 
 			extData := BlockExtData(block)
 			assert.Equal(t, test.wantExtData, extData)
@@ -480,6 +482,11 @@ func TestNewBlockWithExtData(t *testing.T) {
 	// on creation.
 	testTx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
 
+	makeBlock := func(block *Block, extra *BlockBodyExtra) *Block {
+		extras.Block.Set(block, extra)
+		return block
+	}
+
 	tests := []struct {
 		name      string
 		header    *Header
@@ -493,7 +500,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 		{
 			name:   "empty",
 			header: WithHeaderExtra(&Header{}, &HeaderExtra{}),
-			wantBlock: WithBlockExtra(
+			wantBlock: makeBlock(
 				NewBlock(WithHeaderExtra(&Header{}, &HeaderExtra{}), nil, nil, nil, stubHasher{}),
 				&BlockBodyExtra{ExtData: ptrTo([]byte{})},
 			),
@@ -508,7 +515,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 			),
 			extdata: []byte{2},
 			recalc:  true,
-			wantBlock: WithBlockExtra(
+			wantBlock: makeBlock(
 				NewBlock(
 					WithHeaderExtra(
 						&Header{},
@@ -533,7 +540,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 			uncles:   []*Header{WithHeaderExtra(&Header{GasLimit: 5}, &HeaderExtra{BlockGasCost: big.NewInt(6)})},
 			receipts: []*Receipt{{PostState: []byte{7}}},
 			extdata:  []byte{8},
-			wantBlock: WithBlockExtra(
+			wantBlock: makeBlock(
 				NewBlock(
 					WithHeaderExtra(
 						&Header{GasLimit: 1},
