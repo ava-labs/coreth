@@ -44,10 +44,11 @@ func (b *Block) Version() uint32 {
 }
 
 func (b *Block) ExtDataGasUsed() *big.Int {
-	if GetHeaderExtra(b.header).ExtDataGasUsed == nil {
+	used := GetHeaderExtra(b.header).ExtDataGasUsed
+	if used == nil {
 		return nil
 	}
-	return new(big.Int).Set(GetHeaderExtra(b.header).ExtDataGasUsed)
+	return new(big.Int).Set(used)
 }
 
 func CalcExtDataHash(extdata []byte) common.Hash {
