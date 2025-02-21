@@ -78,7 +78,7 @@ func VerifyExtraPrefix(
 			return fmt.Errorf("failed to calculate expected fee state: %w", err)
 		}
 
-		if claimedState.Gas.Excess != expectedState.Gas.Excess {
+		if claimedState != expectedState {
 			return fmt.Errorf("invalid gas state: have %v, want %v", claimedState, expectedState)
 		}
 	case config.IsApricotPhase3(header.Time):
