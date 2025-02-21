@@ -148,6 +148,7 @@ func (b *Block) Accept(ctx context.Context) error {
 }
 
 func (b *Block) AcceptDuringSync(ctx context.Context) error {
+	log.Info("Accepting block during sync", "block", b.ID(), "height", b.Height())
 	return b.accept(ctx)
 }
 
@@ -235,7 +236,20 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
-func (b *Block) Reject(context.Context) error {
+func (b *Block) Reject(ctx context.Context) error {
+
+	if b.vm.StateSyncClient.AsyncReceive() {
+		log.Debug("Queueing block for later reject", "block", b.ID(), "height", b.Height())
+		return b.vm.StateSyncClient.QueueRejectBlock(b)
+	}
+	return b.reject(ctx)
+}
+
+func (b *Block) RejectDuringSync(ctx context.Context) error {
+	return b.reject(ctx)
+}
+
+func (b *Block) reject(context.Context) error {
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
@@ -312,6 +326,7 @@ func (b *Block) Verify(context.Context) error {
 }
 
 func (b *Block) VerifyDuringSync(context.Context) error {
+	log.Info("Verifying block during sync", "block", b.ID(), "height", b.Height())
 	return b.verify(true)
 }
 
