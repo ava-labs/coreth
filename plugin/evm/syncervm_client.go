@@ -130,6 +130,7 @@ func (client *stateSyncerClient) AsyncReceive() bool {
 
 func (client *stateSyncerClient) QueueVerifyBlock(b *Block) error {
 	if !client.AsyncReceive() {
+		log.Info("Queueing block for later verify", "block", b.ID(), "height", b.Height())
 		return fmt.Errorf("cannot queue block when not using upstream syncing")
 	}
 
@@ -141,11 +142,12 @@ func (client *stateSyncerClient) QueueVerifyBlock(b *Block) error {
 
 func (client *stateSyncerClient) QueueAcceptBlock(b *Block) error {
 	if !client.AsyncReceive() {
+		log.Info("Queueing block for later accept", "block", b.ID(), "height", b.Height())
 		return fmt.Errorf("cannot queue block when not using upstream syncing")
 	}
 
 	accept := func(a *Block) error {
-		return a.AcceptDuringSync(context.TODO())
+		return a.AcceptDuringSync(context.TODO()) // yeah gotta fix this too
 	}
 
 	if err := client.dl.execQueue.Insert(&queueElement{b, accept}); err != nil {
@@ -153,9 +155,13 @@ func (client *stateSyncerClient) QueueAcceptBlock(b *Block) error {
 	}
 
 	// If the block is the pivot, signal the state syncer to start
-	if b.Height() >= client.dl.pivotBlock.Height() {
+	client.dl.pivotLock.Lock()
+	if b.Height() >= client.dl.pivotBlock.Height()+pivotInterval {
+		client.dl.pivotBlock = b
 		client.dl.newPivot <- b
 	}
+	client.dl.pivotLock.Unlock()
+
 	return nil
 }
 
@@ -295,7 +301,20 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			return block.StateSyncDynamic, fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
 		}
 
+		b := evmBlock.ethBlock
+		parentHeight := b.NumberU64() - 1
+		parentHash := b.ParentHash()
+		client.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
+
+		if err := client.updateVMMarkers(); err != nil {
+			return block.StateSyncDynamic, fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", b.NumberU64(), b.Hash(), err)
+		}
+
 		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
+			return block.StateSyncDynamic, err
+		}
+
+		if err := client.atomicBackend.ApplyToSharedMemory(b.NumberU64()); err != nil {
 			return block.StateSyncDynamic, err
 		}
 
@@ -524,7 +543,7 @@ func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) erro
 	} else {
 		client.network.AddConnector(ethstatesync.NewConnector(client.dl.SnapSyncer, p2pClient))
 	}
-	if err := client.dl.SnapSyncer.Sync(client.syncSummary.BlockRoot, convertReadOnlyToBidirectional(ctx.Done())); err != nil {
+	if err := client.dl.SnapSync(); err != nil {
 		return err
 	}
 	log.Info("Upstream state syncer completed, moving to catch-up")
@@ -555,7 +574,7 @@ type downloader struct {
 	stateSyncStart chan *stateSync
 	newPivot       chan *Block
 	quitCh         chan struct{} // Quit channel to signal termination
-	quitLock       sync.Mutex    // Lock to prevent double closes
+	// quitLock       sync.Mutex    // Lock to prevent double closes
 }
 
 func newDownloader(chaindb ethdb.Database, firstPivot *Block) *downloader {
@@ -572,12 +591,11 @@ func newDownloader(chaindb ethdb.Database, firstPivot *Block) *downloader {
 		newPivot:       make(chan *Block),
 	}
 
-	// go d.stateFetcher()
+	go d.stateFetcher()
 
 	return d
 }
 
-/*
 // stateFetcher manages the active state sync and accepts requests
 // on its behalf.
 func (d *downloader) stateFetcher() {
@@ -589,19 +607,13 @@ func (d *downloader) stateFetcher() {
 			}
 		case <-d.quitCh:
 			return
-		case p:= <-d.newPivot:
-			d.pivotLock.Lock()
-			d.pivotBlock = p
-			d.pivotLock.Unlock()
-
 		}
 	}
 }
 
-
 // processSnapSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *downloader) processSnapSyncContent() error {
+func (d *downloader) SnapSync() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	d.pivotLock.RLock()
@@ -615,132 +627,20 @@ func (d *downloader) processSnapSyncContent() error {
 		sync.Cancel()
 	}()
 
-	// closeOnErr := func(s *stateSync) {
-	// 	if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled && err != snap.ErrCancelled {
-	// 		d.queue.Close() // wake up Results
-	// 	}
-	// }
-	// go closeOnErr(sync)
-
-	// To cater for moving pivot points, track the pivot block and subsequently
-	// accumulated download results separately.
-	//
-	// These will be nil up to the point where we reach the pivot, and will only
-	// be set temporarily if the synced blocks are piling up, but the pivot is
-	// still busy downloading. In that case, we need to occasionally check for
-	// pivot moves, so need to unblock the loop. These fields will accumulate
-	// the results in the meantime.
-	//
-	// Note, there's no issue with memory piling up since after 64 blocks the
-	// pivot will forcefully move so these accumulators will be dropped.
-	var (
-		oldPivot *fetchResult   // Locked in pivot block, might change eventually
-		oldTail  []*fetchResult // Downloaded content after the pivot
-		timer    = time.NewTimer(time.Second)
-	)
-	defer timer.Stop()
-
 	for {
-		// Wait for the next batch of downloaded data to be available. If we have
-		// not yet reached the pivot point, wait blockingly as there's no need to
-		// spin-loop check for pivot moves. If we reached the pivot but have not
-		// yet processed it, check for results async, so we might notice pivot
-		// moves while state syncing. If the pivot was passed fully, block again
-		// as there's no more reason to check for pivot moves at all.
-		results := d.queue.Results(oldPivot == nil)
-		if len(results) == 0 {
-			// If pivot sync is done, stop
-			if d.committed.Load() {
-				d.reportSnapSyncProgress(true)
-				return sync.Cancel()
+		select {
+		// If stateSync is ended, clear queue and return
+		// If err, just return so we can see it
+		case <-sync.done:
+			if sync.err != nil {
+				return sync.err
 			}
-			// If sync failed, stop
-			select {
-			case <-d.cancelCh:
-				sync.Cancel()
-				return errCanceled
-			default:
-			}
-		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		d.reportSnapSyncProgress(false)
-
-		// If we haven't downloaded the pivot block yet, check pivot staleness
-		// notifications from the header downloader
-		d.pivotLock.RLock()
-		pivot := d.pivotHeader
-		d.pivotLock.RUnlock()
-
-		if oldPivot == nil { // no results piling up, we can move the pivot
-			if !d.committed.Load() { // not yet passed the pivot, we can move the pivot
-				if pivot.Root != sync.root { // pivot position changed, we can move the pivot
-					sync.Cancel()
-					sync = d.syncState(pivot.Root)
-
-					go closeOnErr(sync)
-				}
-			}
-		} else { // results already piled up, consume before handling pivot move
-			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
-		}
-		// Split around the pivot block and process the two sides via snap/full sync
-		if !d.committed.Load() {
-			latest := results[len(results)-1].Header
-			// If the height is above the pivot block by 2 sets, it means the pivot
-			// become stale in the network, and it was garbage collected, move to a
-			// new pivot.
-			//
-			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
-			// need to be taken into account, otherwise we're detecting the pivot move
-			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
-
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
-
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable snap sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
-			}
-		}
-		P, beforeP, afterP := splitAroundPivot(pivot.Number.Uint64(), results)
-		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
-			return err
-		}
-		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
-			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header.Root)
-
-				go closeOnErr(sync)
-				oldPivot = P
-			}
-			// Wait for completion, occasionally checking for pivot staleness
-			timer.Reset(time.Second)
-			select {
-			case <-sync.done:
-				if sync.err != nil {
-					return sync.err
-				}
-				if err := d.commitPivotBlock(P); err != nil {
-					return err
-				}
-				oldPivot = nil
-
-			case <-timer.C:
-				oldTail = afterP
-				continue
-			}
-		}
-		// Fast sync done, pivot commit done, full import
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
+			return d.execQueue.Flush(nil, true)
+		case np := <-d.newPivot:
+			// If a new pivot block is found, cancel the current state sync and
+			// start a new one.
+			sync.Cancel()
+			sync = d.syncState(np.ethBlock.Hash())
 		}
 	}
 }
@@ -756,11 +656,12 @@ func (d *downloader) syncState(root common.Hash) *stateSync {
 		// out or been delivered
 		<-s.started
 	case <-d.quitCh:
-		s.err = errCancelStateFetch
+		s.err = fmt.Errorf("errCancelStateFetch") //errCancelStateFetch
 		close(s.done)
 	}
 	return s
 }
+
 // runStateSync runs a state synchronisation until it completes or another root
 // hash is requested to be switched over to.
 func (d *downloader) runStateSync(s *stateSync) *stateSync {
@@ -779,7 +680,7 @@ func (d *downloader) runStateSync(s *stateSync) *stateSync {
 		}
 	}
 }
-*/
+
 // stateSync schedules requests for downloading a particular state trie defined
 // by a given state root.
 type stateSync struct {
@@ -793,7 +694,6 @@ type stateSync struct {
 	err        error         // Any error hit during sync (set before completion)
 }
 
-/*
 // newStateSync creates a new state trie download scheduler. This method does not
 // yet start the sync. The user needs to call run to initiate.
 func newStateSync(d *downloader, root common.Hash) *stateSync {
@@ -828,4 +728,3 @@ func (s *stateSync) Cancel() error {
 	})
 	return s.Wait()
 }
-*/
