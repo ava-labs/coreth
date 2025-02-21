@@ -558,6 +558,42 @@ var (
 				TargetExcess: 2 * MaxTargetExcessDiff,
 			},
 		},
+		{
+			name: "reduce_capacity",
+			initial: State{
+				Gas: gas.State{
+					Capacity: 20_039_100, // MinTargetPerSecond * e^(2*MaxTargetExcessDiff / TargetConversion)
+					Excess:   2_000_000_000,
+				},
+				TargetExcess: 2 * MaxTargetExcessDiff,
+			},
+			desiredTargetExcess: 0,
+			expected: State{
+				Gas: gas.State{
+					Capacity: 20_019_540,    // MinTargetPerSecond * e^(MaxTargetExcessDiff / TargetConversion)
+					Excess:   1_998_047_816, // 2M * NewTarget / OldTarget
+				},
+				TargetExcess: MaxTargetExcessDiff,
+			},
+		},
+		{
+			name: "overflow_max_capacity",
+			initial: State{
+				Gas: gas.State{
+					Capacity: math.MaxUint64,
+					Excess:   2_000_000_000,
+				},
+				TargetExcess: maxTargetExcess,
+			},
+			desiredTargetExcess: 0,
+			expected: State{
+				Gas: gas.State{
+					Capacity: math.MaxUint64,
+					Excess:   1_998_047_867, // 2M * NewTarget / OldTarget
+				},
+				TargetExcess: maxTargetExcess - MaxTargetExcessDiff,
+			},
+		},
 	}
 )
 

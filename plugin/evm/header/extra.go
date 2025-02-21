@@ -36,7 +36,7 @@ func ExtraPrefix(
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate fee state: %w", err)
 		}
-		return feeExcessBytes(gasState), nil
+		return feeStateBytes(gasState), nil
 	case config.IsApricotPhase3(header.Time):
 		window, err := feeWindow(config, parent, header.Time)
 		if err != nil {
@@ -58,7 +58,7 @@ func VerifyExtraPrefix(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		claimedState, err := claimedFeeStateAfterBlock(header)
+		claimedState, err := parseFeeState(header.Extra)
 		if err != nil {
 			return fmt.Errorf("failed to calculate claimed fee state: %w", err)
 		}
@@ -79,10 +79,7 @@ func VerifyExtraPrefix(
 		}
 
 		if claimedState.Gas.Excess != expectedState.Gas.Excess {
-			return fmt.Errorf("invalid gas state excess: have %d, want %d", claimedState.Gas.Excess, expectedState.Gas.Excess)
-		}
-		if claimedState.TargetExcess != expectedState.TargetExcess {
-			return fmt.Errorf("invalid gas state target excess: have %d, want %d", claimedState.TargetExcess, expectedState.TargetExcess)
+			return fmt.Errorf("invalid gas state: have %v, want %v", claimedState, expectedState)
 		}
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
@@ -105,11 +102,11 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsFUpgrade:
-		if extraLen < FeeExcessSize {
+		if extraLen < FeeStateSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				errInvalidExtraLength,
-				FeeExcessSize,
+				FeeStateSize,
 				extraLen,
 			)
 		}

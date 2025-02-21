@@ -348,7 +348,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeExcessSize),
+			extra:    make([]byte, FeeStateSize),
 			expected: nil,
 		},
 		{
@@ -356,7 +356,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeExcessSize+1),
+			extra:    make([]byte, FeeStateSize+1),
 			expected: nil,
 		},
 		{
@@ -364,7 +364,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeExcessSize-1),
+			extra:    make([]byte, FeeStateSize-1),
 			expected: errInvalidExtraLength,
 		},
 	}

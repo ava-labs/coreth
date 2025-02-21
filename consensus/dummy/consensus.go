@@ -130,7 +130,7 @@ func verifyHeaderGasFields(
 	header *types.Header,
 	parent *types.Header,
 ) error {
-	if err := customheader.VerifyGasUsed(config, header); err != nil {
+	if err := customheader.VerifyGasUsed(config, parent, header); err != nil {
 		return err
 	}
 	if err := customheader.VerifyGasLimit(config, parent, header); err != nil {

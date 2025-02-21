@@ -18,7 +18,7 @@ func ParsePredicates(rules params.AvalancheRules, extra []byte) ([]byte, error) 
 		offset = FeeWindowSize
 	}
 	if rules.IsFUpgrade {
-		offset = FeeExcessSize
+		offset = FeeStateSize
 	}
 	if rules.IsDurango {
 		return extra[offset:], nil

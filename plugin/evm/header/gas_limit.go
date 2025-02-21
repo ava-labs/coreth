@@ -29,7 +29,7 @@ func GasLimit(
 		if err != nil {
 			return 0, err
 		}
-		return uint64(gasState.Gas.Capacity), nil
+		return uint64(gasState.MaxCapacity()), nil
 	case config.IsCortina(timestamp):
 		return cortina.GasLimit, nil
 	case config.IsApricotPhase1(timestamp):
@@ -49,6 +49,7 @@ func GasLimit(
 // limit.
 func VerifyGasUsed(
 	config *params.ChainConfig,
+	parent *types.Header,
 	header *types.Header,
 ) error {
 	gasUsed := header.GasUsed
@@ -62,7 +63,12 @@ func VerifyGasUsed(
 			return err
 		}
 	}
-	if gasUsed > header.GasLimit {
+
+	capacity, err := GasCapacity(config, parent, header.Time)
+	if err != nil {
+		return err
+	}
+	if gasUsed > capacity {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", gasUsed, header.GasLimit)
 	}
 	return nil
@@ -126,4 +132,23 @@ func VerifyGasLimit(
 		}
 	}
 	return nil
+}
+
+// GasCapacity takes the previous header and the timestamp of its child block
+// and calculates the available gas that can be consumed in the child block.
+func GasCapacity(
+	config *params.ChainConfig,
+	parent *types.Header,
+	timestamp uint64,
+) (uint64, error) {
+	// Prior to the F upgrade, the gas capacity is equal to the gas limit.
+	if !config.IsFUpgrade(timestamp) {
+		return GasLimit(config, parent, timestamp)
+	}
+
+	gasState, err := feeStateBeforeBlock(config, parent, timestamp)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(gasState.Gas.Capacity), nil
 }

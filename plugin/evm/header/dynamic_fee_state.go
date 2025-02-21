@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
@@ -17,9 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const FeeExcessSize = wrappers.LongLen * 2
+const FeeStateSize = 3 * wrappers.LongLen
 
-var errFeeExcessInsufficientLength = errors.New("insufficient length for dynamic fee excess")
+var errFeeStateInsufficientLength = errors.New("insufficient length for dynamic fee state")
 
 // feeStateBeforeBlock takes the previous header and the timestamp of its child
 // block and calculates the fee state before the child block is executed.
@@ -42,7 +41,7 @@ func feeStateBeforeBlock(
 		// parent has been verified, so the claimed fee state equals the actual
 		// fee state.
 		var err error
-		state, err = claimedFeeStateAfterBlock(parent)
+		state, err = parseFeeState(parent.Extra)
 		if err != nil {
 			return acp176.State{}, err
 		}
@@ -54,10 +53,6 @@ func feeStateBeforeBlock(
 
 // feeStateAfterBlock takes the previous header and returns the fee state after
 // the execution of the provided child.
-//
-// This function does not clamp the gas capacity to be within the maximum
-// capacity. The caller must either manually clamp the capacity or advance the
-// time of the state to clamp the capacity.
 func feeStateAfterBlock(
 	config *params.ChainConfig,
 	parent *types.Header,
@@ -83,44 +78,28 @@ func feeStateAfterBlock(
 	return state, nil
 }
 
-// claimedFeeStateAfterBlock returns the unverified fee state encoded in a
-// header.
-//
-// This function does not clamp the gas capacity to be within the maximum
-// capacity. The caller must either manually clamp the capacity or advance the
-// time of the state to clamp the capacity.
-func claimedFeeStateAfterBlock(header *types.Header) (acp176.State, error) {
-	if len(header.Extra) < FeeExcessSize {
+func parseFeeState(extra []byte) (acp176.State, error) {
+	if len(extra) < FeeStateSize {
 		return acp176.State{}, fmt.Errorf("%w: expected at least %d bytes but got %d bytes",
-			errFeeExcessInsufficientLength,
-			FeeExcessSize,
-			len(header.Extra),
+			errFeeStateInsufficientLength,
+			FeeStateSize,
+			len(extra),
 		)
-	}
-
-	capacity, err := math.Sub(header.GasLimit, header.GasUsed)
-	if err != nil {
-		return acp176.State{}, err
-	}
-	if header.ExtDataGasUsed != nil {
-		capacity, err = math.Sub(capacity, header.ExtDataGasUsed.Uint64())
-		if err != nil {
-			return acp176.State{}, err
-		}
 	}
 
 	return acp176.State{
 		Gas: gas.State{
-			Capacity: gas.Gas(capacity),
-			Excess:   gas.Gas(binary.BigEndian.Uint64(header.Extra)),
+			Capacity: gas.Gas(binary.BigEndian.Uint64(extra)),
+			Excess:   gas.Gas(binary.BigEndian.Uint64(extra[wrappers.LongLen:])),
 		},
-		TargetExcess: gas.Gas(binary.BigEndian.Uint64(header.Extra[wrappers.LongLen:])),
+		TargetExcess: gas.Gas(binary.BigEndian.Uint64(extra[2*wrappers.LongLen:])),
 	}, nil
 }
 
-func feeExcessBytes(s acp176.State) []byte {
-	bytes := make([]byte, FeeExcessSize)
-	binary.BigEndian.PutUint64(bytes, uint64(s.Gas.Excess))
-	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(s.TargetExcess))
+func feeStateBytes(s acp176.State) []byte {
+	bytes := make([]byte, FeeStateSize)
+	binary.BigEndian.PutUint64(bytes, uint64(s.Gas.Capacity))
+	binary.BigEndian.PutUint64(bytes[wrappers.LongLen:], uint64(s.Gas.Excess))
+	binary.BigEndian.PutUint64(bytes[2*wrappers.LongLen:], uint64(s.TargetExcess))
 	return bytes
 }
