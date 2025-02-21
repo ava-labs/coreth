@@ -28,7 +28,8 @@ func feeStateBeforeBlock(
 	timestamp uint64,
 ) (acp176.State, error) {
 	if timestamp < parent.Time {
-		return acp176.State{}, fmt.Errorf("cannot calculate gas state for timestamp %d prior to parent timestamp %d",
+		return acp176.State{}, fmt.Errorf("%w: timestamp %d prior to parent timestamp %d",
+			errInvalidTimestamp,
 			timestamp,
 			parent.Time,
 		)
