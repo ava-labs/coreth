@@ -284,6 +284,24 @@ func (b *Block) syntacticVerify() error {
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
+	log.Debug("Verifying block without context", "block", b.ID(), "height", b.Height())
+	if err := b.syntacticVerify(); err != nil {
+		return fmt.Errorf("syntactic block verification failed: %w", err)
+	}
+
+	predicateContext := &precompileconfig.PredicateContext{
+		SnowCtx:            b.vm.ctx,
+		ProposerVMBlockCtx: nil,
+	}
+	// Only enforce predicates if the chain has already bootstrapped.
+	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
+	// been accepted by the network (so the predicate was validated by the network when the
+	// block was originally verified).
+	if b.vm.bootstrapped.Get() {
+		if err := b.verifyPredicates(predicateContext); err != nil {
+			return fmt.Errorf("failed to verify predicates: %w", err)
+		}
+	}
 
 	// If currently dynamically syncing, we should simply queue the block for later processing
 	if b.vm.StateSyncClient.AsyncReceive() {
@@ -291,17 +309,11 @@ func (b *Block) Verify(context.Context) error {
 		return b.vm.StateSyncClient.QueueVerifyBlock(b)
 	}
 
-	return b.verify(&precompileconfig.PredicateContext{
-		SnowCtx:            b.vm.ctx,
-		ProposerVMBlockCtx: nil,
-	}, true)
+	return b.verify(true)
 }
 
 func (b *Block) VerifyDuringSync(context.Context) error {
-	return b.verify(&precompileconfig.PredicateContext{
-		SnowCtx:            b.vm.ctx,
-		ProposerVMBlockCtx: nil,
-	}, true)
+	return b.verify(true)
 }
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
@@ -330,30 +342,15 @@ func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
 
 // VerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
-	return b.verify(&precompileconfig.PredicateContext{
-		SnowCtx:            b.vm.ctx,
-		ProposerVMBlockCtx: proposerVMBlockCtx,
-	}, true)
-}
-
-// Verify the block is valid.
-// Enforces that the predicates are valid within [predicateContext].
-// Writes the block details to disk and the state to the trie manager iff writes=true.
-func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
-	if predicateContext.ProposerVMBlockCtx != nil {
-		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
-	} else {
-		log.Debug("Verifying block without context", "block", b.ID(), "height", b.Height())
-	}
+	log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
 	if err := b.syntacticVerify(); err != nil {
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 
-	// verify UTXOs named in import txs are present in shared memory.
-	if err := b.verifyUTXOsPresent(); err != nil {
-		return err
+	predicateContext := &precompileconfig.PredicateContext{
+		SnowCtx:            b.vm.ctx,
+		ProposerVMBlockCtx: proposerVMBlockCtx,
 	}
-
 	// Only enforce predicates if the chain has already bootstrapped.
 	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
 	// been accepted by the network (so the predicate was validated by the network when the
@@ -362,6 +359,17 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
+	}
+	return b.verify(true)
+}
+
+// Verify the block is valid.
+// Enforces that the predicates are valid within [predicateContext].
+// Writes the block details to disk and the state to the trie manager iff writes=true.
+func (b *Block) verify(writes bool) error {
+	// verify UTXOs named in import txs are present in shared memory.
+	if err := b.verifyUTXOsPresent(); err != nil {
+		return err
 	}
 
 	// The engine may call VerifyWithContext multiple times on the same block with different contexts.

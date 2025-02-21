@@ -1360,7 +1360,16 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
+	if err := blk.syntacticVerify(); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("syntactic block verification failed: %w", err)
+	}
+	if err := blk.verifyPredicates(predicateCtx); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("failed to verify predicates: %w", err)
+	}
+
+	if err := blk.verify(false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
