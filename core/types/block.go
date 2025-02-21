@@ -270,10 +270,11 @@ func (b *Block) BlobGasUsed() *uint64 {
 }
 
 func (b *Block) BlockGasCost() *big.Int {
-	if GetHeaderExtra(b.header).BlockGasCost == nil {
+	cost := GetHeaderExtra(b.header).BlockGasCost
+	if cost == nil {
 		return nil
 	}
-	return new(big.Int).Set(GetHeaderExtra(b.header).BlockGasCost)
+	return new(big.Int).Set(cost)
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
