@@ -11,13 +11,13 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 )
 
 // FeeWindowSize is the number of bytes that are used to encode the dynamic fee
@@ -46,7 +46,7 @@ var (
 )
 
 // baseFeeFromWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
-func baseFeeFromWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
+func baseFeeFromWindow(config *extras.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	if !config.IsApricotPhase3(parent.Time) || parent.Number.Cmp(common.Big0) == 0 {
@@ -155,7 +155,7 @@ func baseFeeFromWindow(config *params.ChainConfig, parent *types.Header, timesta
 //
 // feeWindow should only be called if timestamp >= config.ApricotPhase3Timestamp
 func feeWindow(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (ap3.Window, error) {

@@ -10,7 +10,7 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/holiman/uint256"
@@ -25,8 +25,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
 )
 
 var (
@@ -74,7 +74,7 @@ func (utx *UnsignedImportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedImportTx) Verify(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules extras.Rules,
 ) error {
 	switch {
 	case utx == nil:
@@ -291,7 +291,7 @@ func (utx *UnsignedImportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 // NewImportTx returns a new ImportTx
 func NewImportTx(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules extras.Rules,
 	time uint64,
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient

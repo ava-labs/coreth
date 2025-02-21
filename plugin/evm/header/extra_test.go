@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -19,7 +20,7 @@ import (
 func TestExtraPrefix(t *testing.T) {
 	tests := []struct {
 		name      string
-		upgrades  params.NetworkUpgrades
+		upgrades  extras.NetworkUpgrades
 		parent    *types.Header
 		timestamp uint64
 		want      []byte
@@ -27,13 +28,13 @@ func TestExtraPrefix(t *testing.T) {
 	}{
 		{
 			name:     "ap2",
-			upgrades: params.TestApricotPhase2Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase2Config).NetworkUpgrades,
 			want:     nil,
 			wantErr:  nil,
 		},
 		{
 			name: "ap3_first_block",
-			upgrades: params.NetworkUpgrades{
+			upgrades: extras.NetworkUpgrades{
 				ApricotPhase3BlockTimestamp: utils.NewUint64(1),
 			},
 			parent: &types.Header{
@@ -44,7 +45,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap3_genesis_block",
-			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -52,7 +53,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap3_invalid_fee_window",
-			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
@@ -60,7 +61,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap3_invalid_timestamp",
-			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Time:   1,
@@ -71,7 +72,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap3_normal",
-			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
@@ -91,7 +92,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap4_genesis_block",
-			upgrades: params.TestApricotPhase4Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -99,7 +100,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap4_no_block_gas_cost",
-			upgrades: params.TestApricotPhase4Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
@@ -115,7 +116,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap4_with_block_gas_cost",
-			upgrades: params.TestApricotPhase4Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:       big.NewInt(1),
 				GasUsed:      ap3.TargetGas,
@@ -135,7 +136,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap4_with_extra_data_gas",
-			upgrades: params.TestApricotPhase4Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:         big.NewInt(1),
 				GasUsed:        ap3.TargetGas,
@@ -155,7 +156,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap4_normal",
-			upgrades: params.TestApricotPhase4Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
@@ -181,7 +182,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap5_no_extra_data_gas",
-			upgrades: params.TestApricotPhase5Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:       big.NewInt(1),
 				GasUsed:      ap5.TargetGas,
@@ -198,7 +199,7 @@ func TestExtraPrefix(t *testing.T) {
 		},
 		{
 			name:     "ap5_normal",
-			upgrades: params.TestApricotPhase5Config.NetworkUpgrades,
+			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap5.TargetGas,
@@ -226,7 +227,7 @@ func TestExtraPrefix(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 
-			config := &params.ChainConfig{
+			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := ExtraPrefix(config, test.parent, test.timestamp)
@@ -239,25 +240,25 @@ func TestExtraPrefix(t *testing.T) {
 func TestVerifyExtra(t *testing.T) {
 	tests := []struct {
 		name     string
-		rules    params.AvalancheRules
+		rules    extras.AvalancheRules
 		extra    []byte
 		expected error
 	}{
 		{
 			name:     "initial_valid",
-			rules:    params.AvalancheRules{},
+			rules:    extras.AvalancheRules{},
 			extra:    make([]byte, params.MaximumExtraDataSize),
 			expected: nil,
 		},
 		{
 			name:     "initial_invalid",
-			rules:    params.AvalancheRules{},
+			rules:    extras.AvalancheRules{},
 			extra:    make([]byte, params.MaximumExtraDataSize+1),
 			expected: errInvalidExtraLength,
 		},
 		{
 			name: "ap1_valid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase1: true,
 			},
 			extra:    nil,
@@ -265,7 +266,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap1_invalid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase1: true,
 			},
 			extra:    make([]byte, 1),
@@ -273,7 +274,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap3_valid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, FeeWindowSize),
@@ -281,7 +282,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap3_invalid_less",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, FeeWindowSize-1),
@@ -289,7 +290,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "ap3_invalid_more",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsApricotPhase3: true,
 			},
 			extra:    make([]byte, FeeWindowSize+1),
@@ -297,7 +298,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "durango_valid_min",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsDurango: true,
 			},
 			extra:    make([]byte, FeeWindowSize),
@@ -305,7 +306,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "durango_valid_extra",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsDurango: true,
 			},
 			extra:    make([]byte, FeeWindowSize+1),
@@ -313,7 +314,7 @@ func TestVerifyExtra(t *testing.T) {
 		},
 		{
 			name: "durango_invalid",
-			rules: params.AvalancheRules{
+			rules: extras.AvalancheRules{
 				IsDurango: true,
 			},
 			extra:    make([]byte, FeeWindowSize-1),

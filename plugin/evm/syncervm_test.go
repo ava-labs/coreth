@@ -28,7 +28,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 
-	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
@@ -40,12 +39,13 @@ import (
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/triedb"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/triedb"
 )
 
 func TestSkipStateSync(t *testing.T) {
@@ -426,7 +426,7 @@ type syncVMSetup struct {
 	serverAppSender *enginetest.Sender
 
 	includedAtomicTxs []*atomic.Tx
-	fundedAccounts    map[*keystore.Key]*types.StateAccount
+	fundedAccounts    map[*utils.Key]*types.StateAccount
 
 	syncerVM             *VM
 	syncerDB             avalanchedatabase.Database

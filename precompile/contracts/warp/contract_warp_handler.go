@@ -12,8 +12,8 @@ import (
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/vmerrs"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 )
 
 var (
@@ -61,8 +61,8 @@ func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, s
 	warpIndex := int(warpIndexInput) // This conversion is safe even if int is 32 bits because we checked above.
 	state := accessibleState.GetStateDB()
 	predicateBytes, exists := state.GetPredicateStorageSlots(ContractAddress, warpIndex)
-	predicateResults := accessibleState.GetBlockContext().GetPredicateResults(state.GetTxHash(), ContractAddress)
-	valid := exists && !set.BitsFromBytes(predicateResults).Contains(warpIndex)
+	result := accessibleState.GetBlockContext().GetPredicateResults(state.GetTxHash(), ContractAddress)
+	valid := exists && !set.BitsFromBytes(result).Contains(warpIndex)
 	if !valid {
 		return handler.packFailed(), remainingGas, nil
 	}

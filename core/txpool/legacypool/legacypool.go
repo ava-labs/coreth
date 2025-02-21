@@ -43,11 +43,11 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/prque"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/holiman/uint256"
 )
 
@@ -686,6 +686,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 		State: pool.currentState,
 		Rules: pool.chainconfig.Rules(
 			pool.currentHead.Load().Number,
+			params.IsMergeTODO,
 			pool.currentHead.Load().Time,
 		),
 		MinimumFee: pool.minimumFee,
@@ -1363,7 +1364,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil {
-			if pool.chainconfig.IsApricotPhase3(reset.newHead.Time) {
+			if pool.chainconfig.IsLondon(reset.newHead.Number) {
 				if err := pool.updateBaseFeeAt(reset.newHead); err != nil {
 					log.Error("error at updating base fee in tx pool", "error", err)
 				}
@@ -1768,13 +1769,13 @@ func (pool *LegacyPool) demoteUnexecutables() {
 }
 
 func (pool *LegacyPool) startPeriodicFeeUpdate() {
-	if pool.chainconfig.ApricotPhase3BlockTimestamp == nil {
+	if params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp == nil {
 		return
 	}
 
 	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
 	// when starting up in ApricotPhase3 before the base fee is updated.
-	if time.Now().After(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp)) {
+	if time.Now().After(utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp)) {
 		pool.updateBaseFee()
 	}
 
@@ -1787,7 +1788,7 @@ func (pool *LegacyPool) periodicBaseFeeUpdate() {
 
 	// Sleep until its time to start the periodic base fee update or the tx pool is shutting down
 	select {
-	case <-time.After(time.Until(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp))):
+	case <-time.After(time.Until(utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp))):
 	case <-pool.generalShutdownChan:
 		return // Return early if shutting down
 	}
@@ -1816,7 +1817,8 @@ func (pool *LegacyPool) updateBaseFee() {
 
 // assumes lock is already held
 func (pool *LegacyPool) updateBaseFeeAt(head *types.Header) error {
-	baseFeeEstimate, err := header.EstimateNextBaseFee(pool.chainconfig, head, uint64(time.Now().Unix()))
+	config := params.GetExtra(pool.chainconfig)
+	baseFeeEstimate, err := header.EstimateNextBaseFee(config, head, uint64(time.Now().Unix()))
 	if err != nil {
 		return err
 	}

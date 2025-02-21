@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 )
 
 var errInvalidExtraLength = errors.New("invalid header.Extra length")
@@ -16,7 +17,7 @@ var errInvalidExtraLength = errors.New("invalid header.Extra length")
 // ExtraPrefix takes the previous header and the timestamp of its child block
 // and calculates the expected extra prefix for the child block.
 func ExtraPrefix(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) ([]byte, error) {
@@ -35,7 +36,7 @@ func ExtraPrefix(
 
 // VerifyExtra verifies that the header's Extra field is correctly formatted for
 // [rules].
-func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
+func VerifyExtra(rules extras.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsDurango:

@@ -8,7 +8,7 @@ import (
 	"math"
 
 	"github.com/ava-labs/coreth/utils"
-	safemath "github.com/ethereum/go-ethereum/common/math"
+	safemath "github.com/ava-labs/libevm/common/math"
 )
 
 const (

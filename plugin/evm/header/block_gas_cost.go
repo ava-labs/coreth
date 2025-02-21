@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 )
@@ -22,7 +22,7 @@ var (
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
 func BlockGasCost(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) uint64 {
@@ -79,7 +79,7 @@ func BlockGasCostWithStep(
 //
 // This function will return nil for all return values prior to Apricot Phase 4.
 func EstimateRequiredTip(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
 	switch {

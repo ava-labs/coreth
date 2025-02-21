@@ -44,16 +44,16 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
 	"github.com/holiman/uint256"
 )
 
@@ -149,9 +149,10 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	var gasLimit uint64
-	if w.chainConfig.IsCortina(timestamp) {
+	chainExtra := params.GetExtra(w.chainConfig)
+	if chainExtra.IsCortina(timestamp) {
 		gasLimit = cortina.GasLimit
-	} else if w.chainConfig.IsApricotPhase1(timestamp) {
+	} else if chainExtra.IsApricotPhase1(timestamp) {
 		gasLimit = ap1.GasLimit
 	} else {
 		// The gas limit is set in phase1 to [ap1.GasLimit] because the ceiling
@@ -161,11 +162,11 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		gasLimit = core.CalcGasLimit(parent.GasUsed, parent.GasLimit, ap1.GasLimit, ap1.GasLimit)
 	}
 
-	extra, err := header.ExtraPrefix(w.chainConfig, parent, timestamp)
+	extra, err := header.ExtraPrefix(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new extra prefix: %w", err)
 	}
-	baseFee, err := header.BaseFee(w.chainConfig, parent, timestamp)
+	baseFee, err := header.BaseFee(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
@@ -218,7 +219,8 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		env.state.StopPrefetcher()
 	}()
 	// Configure any upgrades that should go into effect during this block.
-	err = core.ApplyUpgrades(w.chainConfig, &parent.Time, types.NewBlockWithHeader(header), env.state)
+	blockContext := core.NewBlockContext(header.Number, header.Time)
+	err = core.ApplyUpgrades(w.chainConfig, &parent.Time, blockContext, env.state)
 	if err != nil {
 		log.Error("failed to configure precompiles mining new block", "parent", parent.Hash(), "number", header.Number, "timestamp", header.Time, "err", err)
 		return nil, err
@@ -284,7 +286,7 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 		header:           header,
 		tcount:           0,
 		gasPool:          new(core.GasPool).AddGas(header.GasLimit),
-		rules:            w.chainConfig.Rules(header.Number, header.Time),
+		rules:            w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time),
 		predicateContext: predicateContext,
 		predicateResults: predicate.NewResults(),
 		start:            tstart,
@@ -337,7 +339,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 		blockContext vm.BlockContext
 	)
 
-	if env.rules.IsDurango {
+	if params.GetRulesExtra(env.rules).IsDurango {
 		results, err := core.CheckPredicates(env.rules, env.predicateContext, tx)
 		if err != nil {
 			log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
@@ -345,7 +347,11 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 		}
 		env.predicateResults.SetTxResults(tx.Hash(), results)
 
-		blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &coinbase, env.predicateResults)
+		predicateResultsBytes, err := env.predicateResults.Bytes()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal predicate results: %w", err)
+		}
+		blockContext = core.NewEVMBlockContextWithPredicateResults(env.header, w.chain, &coinbase, predicateResultsBytes)
 	} else {
 		blockContext = core.NewEVMBlockContext(env.header, w.chain, &coinbase)
 	}
@@ -467,7 +473,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 func (w *worker) commit(env *environment) (*types.Block, error) {
-	if env.rules.IsDurango {
+	if params.GetRulesExtra(env.rules).IsDurango {
 		predicateResultsBytes, err := env.predicateResults.Bytes()
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal predicate results: %w", err)

@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
@@ -45,10 +46,10 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/triedb"
 
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
@@ -61,17 +62,17 @@ import (
 	// We must import this package (not referenced elsewhere) so that the native "callTracer"
 	// is added to a map of client-accessible tracers. In geth, this is done
 	// inside of cmd/geth.
-	_ "github.com/ava-labs/coreth/eth/tracers/js"
-	_ "github.com/ava-labs/coreth/eth/tracers/native"
+	_ "github.com/ava-labs/libevm/eth/tracers/js"
+	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	// Force-load precompiles to trigger registration
 	_ "github.com/ava-labs/coreth/precompile/registry"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
@@ -327,7 +328,7 @@ func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
 // implements SnowmanPlusPlusVM interface
 func (vm *VM) GetActivationTime() time.Time {
-	return utils.Uint64ToTime(vm.chainConfig.ApricotPhase4BlockTimestamp)
+	return utils.Uint64ToTime(vm.chainConfigExtra().ApricotPhase4BlockTimestamp)
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -424,18 +425,19 @@ func (vm *VM) Initialize(
 	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
 	// normally it should not be empty, but some tests may not set it
 	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
+		params.GetExtra(g.Config).NetworkUpgrades = extras.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
 	}
 
 	// If the Durango is activated, activate the Warp Precompile at the same time
-	if g.Config.DurangoBlockTimestamp != nil {
-		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpcontract.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
+	configExtra := params.GetExtra(g.Config)
+	if configExtra.DurangoBlockTimestamp != nil {
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, extras.PrecompileUpgrade{
+			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
 		})
 	}
 
 	// Set the Avalanche Context on the ChainConfig
-	g.Config.AvalancheContext = params.AvalancheContext{
+	configExtra.AvalancheContext = extras.AvalancheContext{
 		SnowCtx: chainCtx,
 	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
@@ -447,7 +449,7 @@ func (vm *VM) Initialize(
 
 	vm.chainID = g.Config.ChainID
 
-	g.Config.SetEthUpgrades()
+	params.SetEthUpgrades(g.Config)
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
@@ -517,7 +519,7 @@ func (vm *VM) Initialize(
 		},
 	}
 
-	if err := vm.chainConfig.Verify(); err != nil {
+	if err := configExtra.Verify(); err != nil {
 		return fmt.Errorf("failed to verify chain config: %w", err)
 	}
 
@@ -779,8 +781,9 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules := vm.chainConfig.Rules(header.Number, header.Time)
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
+		rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra := params.GetRulesExtra(rules)
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, *rulesExtra); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
 			vm.mempool.DiscardCurrentTx(tx.ID())
@@ -797,8 +800,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err = tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
+		if rulesExtra.IsApricotPhase4 {
+			contribution, gasUsed, err = tx.BlockFeeContribution(rulesExtra.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -821,7 +824,8 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
+		rules                      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra                 = *params.GetRulesExtra(rules)
 		size              int
 	)
 
@@ -870,7 +874,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 		}
 
 		snapshot := state.Snapshot()
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rulesExtra); err != nil {
 			// Discard the transaction from the mempool and reset the state to [snapshot]
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
@@ -916,7 +920,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 }
 
 func (vm *VM) onFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	if !vm.chainConfig.IsApricotPhase5(header.Time) {
+	if !vm.chainConfigExtra().IsApricotPhase5(header.Time) {
 		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
 	}
 	return vm.postBatchOnFinalizeAndAssemble(header, state, txs)
@@ -927,10 +931,11 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
+		rules                      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra                 = *params.GetRulesExtra(rules)
 	)
 
-	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, atomic.Codec)
+	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -941,7 +946,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
-			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules); err != nil {
+			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rulesExtra); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -965,8 +970,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 			return nil, nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
+		if rulesExtra.IsApricotPhase4 {
+			contribution, gasUsed, err := tx.BlockFeeContribution(rulesExtra.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
 			if err != nil {
 				return nil, nil, err
 			}
@@ -977,7 +982,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB) (*big
 
 		// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
 		// atomic gas limit.
-		if rules.IsApricotPhase5 {
+		if rulesExtra.IsApricotPhase5 {
 			// Ensure that [tx] does not push [block] above the atomic gas limit.
 			if !utils.BigLessOrEqualUint64(batchGasUsed, ap5.AtomicGasLimit) {
 				return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), ap5.AtomicGasLimit)
@@ -1227,9 +1232,9 @@ func (vm *VM) setAppRequestHandlers() {
 	evmTrieDB := triedb.NewDatabase(
 		vm.chaindb,
 		&triedb.Config{
-			HashDB: &hashdb.Config{
+			DBOverride: hashdb.Config{
 				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			},
+			}.BackendConstructor,
 		},
 	)
 	networkHandler := newNetworkHandler(
@@ -1582,8 +1587,9 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	if vm.chainConfig.IsApricotPhase3(timestamp) {
-		nextBaseFee, err = header.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+	configExtra := vm.chainConfigExtra()
+	if configExtra.IsApricotPhase3(timestamp) {
+		nextBaseFee, err = header.EstimateNextBaseFee(configExtra, parentHeader, timestamp)
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
@@ -1600,7 +1606,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1625,7 +1631,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
-func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
+func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules extras.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
 		return errRejectedParent
@@ -1694,17 +1700,22 @@ func (vm *VM) GetAtomicUTXOs(
 	)
 }
 
+func (vm *VM) chainConfigExtra() *extras.ChainConfig {
+	return params.GetExtra(vm.chainConfig)
+}
+
 // currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() params.Rules {
+func (vm *VM) currentRules() extras.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.chainConfig.Rules(header.Number, header.Time)
+	rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+	return *params.GetRulesExtra(rules)
 }
 
 // requirePrimaryNetworkSigners returns true if warp messages from the primary
 // network must be signed by the primary network validators.
 // This is necessary when the subnet is not validating the primary network.
 func (vm *VM) requirePrimaryNetworkSigners() bool {
-	switch c := vm.currentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
+	switch c := vm.currentRules().Precompiles[warpcontract.ContractAddress].(type) {
 	case *warpcontract.Config:
 		return c.RequirePrimaryNetworkSigners
 	default: // includes nil due to non-presence
