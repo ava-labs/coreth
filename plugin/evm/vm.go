@@ -1007,7 +1007,6 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 			return nil, nil, err
 		}
 
-		// Ensure that [tx] does not push [block] above the atomic gas limit.
 		if !utils.BigLessOrEqualUint64(batchGasUsed, atomicGasLimit) {
 			return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), atomicGasLimit)
 		}
