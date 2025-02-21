@@ -133,7 +133,7 @@ func CopyHeader(h *Header) *Header {
 	cpyExtra := &HeaderExtra{
 		ExtDataHash: hExtra.ExtDataHash,
 	}
-	cpy = *WithHeaderExtra(&cpy, cpyExtra)
+	SetHeaderExtra(&cpy, cpyExtra)
 
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)

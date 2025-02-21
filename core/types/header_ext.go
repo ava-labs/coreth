@@ -18,11 +18,9 @@ func GetHeaderExtra(h *Header) *HeaderExtra {
 	return extras.Header.Get(h)
 }
 
-// WithHeaderExtra sets the given [HeaderExtra] on the [Header],
-// and returns the header `h`. Note `h` is modified in place.
-func WithHeaderExtra(h *Header, extra *HeaderExtra) *Header {
+// SetHeaderExtra sets the given [HeaderExtra] on the [Header].
+func SetHeaderExtra(h *Header, extra *HeaderExtra) {
 	extras.Header.Set(h, extra)
-	return h
 }
 
 // HeaderExtra is a struct that contains extra fields used by Avalanche

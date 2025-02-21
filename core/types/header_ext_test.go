@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHeaderExtraGetWith(t *testing.T) {
+func TestHeaderExtraGetSet(t *testing.T) {
 	t.Parallel()
 
 	h := &Header{}
@@ -27,7 +27,7 @@ func TestHeaderExtraGetWith(t *testing.T) {
 	extra = &HeaderExtra{
 		ExtDataHash: [32]byte{1},
 	}
-	WithHeaderExtra(h, extra)
+	SetHeaderExtra(h, extra)
 
 	extra = GetHeaderExtra(h)
 	assert.Equal(t, &HeaderExtra{
