@@ -237,6 +237,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 					ApricotPhase4BlockTimestamp: test.ap4Timestamp,
 				},
 			}
+			types.SetHeaderExtra(test.header, test.headerExtra)
 			requiredTip, err := EstimateRequiredTip(config, test.header)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, requiredTip)
