@@ -86,7 +86,16 @@ func (h *HeaderExtra) DecodeJSON(eth *ethtypes.Header, input []byte) error {
 }
 
 func (h *HeaderExtra) PostCopy(dst *ethtypes.Header) {
-	panic("not implemented")
+	cp := &HeaderExtra{
+		ExtDataHash: h.ExtDataHash,
+	}
+	if h.BlockGasCost != nil {
+		cp.BlockGasCost = new(big.Int).Set(h.BlockGasCost)
+	}
+	if h.ExtDataGasUsed != nil {
+		cp.ExtDataGasUsed = new(big.Int).Set(h.ExtDataGasUsed)
+	}
+	WithHeaderExtra(dst, cp)
 }
 
 func (h *HeaderSerializable) updateFromEth(eth *ethtypes.Header) {
