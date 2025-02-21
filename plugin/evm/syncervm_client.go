@@ -648,7 +648,7 @@ func (d *downloader) SnapSync() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotBlock.ethBlock.Hash())
+	sync := d.syncState(d.pivotBlock.ethBlock.Root())
 	d.pivotLock.RUnlock()
 
 	defer func() {
@@ -671,7 +671,8 @@ func (d *downloader) SnapSync() error {
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
 			sync.Cancel()
-			sync = d.syncState(np.ethBlock.Hash())
+			d.execQueue.Flush(&queueElement{np, nil}, false)
+			sync = d.syncState(np.ethBlock.Root())
 		}
 	}
 }
