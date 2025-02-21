@@ -868,7 +868,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		// ensure [gasUsed] + [batchGasUsed] doesn't exceed the [atomicGasLimit]
+		// ensure `gasUsed + batchGasUsed` doesn't exceed `atomicGasLimit`
 		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); !utils.BigLessOrEqualUint64(totalGasUsed, atomicGasLimit) {
 			// Send [tx] back to the mempool's tx heap.
 			vm.mempool.CancelCurrentTx(tx.ID())
