@@ -332,7 +332,9 @@ func TestBaseFee(t *testing.T) {
 			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			types.SetHeaderExtra(test.parent, test.parentExt)
+			if test.parentExt != nil {
+				types.SetHeaderExtra(test.parent, test.parentExt)
+			}
 			got, err := BaseFee(config, test.parent, test.timestamp)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, got)
