@@ -25,7 +25,7 @@ const (
 
 	TimeToFillCapacity            = 10   // in seconds
 	TargetToMax                   = 2    // multiplier to convert from target per second to max per second
-	TargetToPriceUpdateConversion = 43   // 43s ~= 30s * ln(2) which makes the price double at most every ~30 seconds
+	TargetToPriceUpdateConversion = 87   // 87s ~= 60s * ln(2) which makes the price double at most every ~60 seconds
 	MaxTargetChangeRate           = 1024 // Controls the rate that the target can change per block.
 
 	targetToMaxCapacity = TargetToMax * TimeToFillCapacity
