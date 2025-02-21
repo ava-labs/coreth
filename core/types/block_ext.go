@@ -28,7 +28,8 @@ func (b *Block) setExtData(data []byte, recalc bool) {
 	b.extdata = &_data
 	copy(*b.extdata, data)
 	if recalc {
-		GetHeaderExtra(b.header).ExtDataHash = CalcExtDataHash(*b.extdata)
+		ex := GetHeaderExtra(b.header)
+		ex.ExtDataHash = CalcExtDataHash(*b.extdata)
 	}
 }
 
