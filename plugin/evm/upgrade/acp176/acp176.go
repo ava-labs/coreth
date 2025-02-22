@@ -7,14 +7,13 @@ package acp176
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"sort"
 
+	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/holiman/uint256"
-
-	safemath "github.com/ava-labs/avalanchego/utils/math"
+	"golang.org/x/exp/constraints"
 )
 
 const (
@@ -25,7 +24,7 @@ const (
 
 	TimeToFillCapacity            = 10   // in seconds
 	TargetToMax                   = 2    // multiplier to convert from target per second to max per second
-	TargetToPriceUpdateConversion = 43   // 43s ~= 30s * ln(2) which makes the price double at most every ~30 seconds
+	TargetToPriceUpdateConversion = 87   // 87s ~= 60s * ln(2) which makes the price double at most every ~60 seconds
 	MaxTargetChangeRate           = 1024 // Controls the rate that the target can change per block.
 
 	targetToMaxCapacity = TargetToMax * TimeToFillCapacity
@@ -52,23 +51,15 @@ func (s *State) Target() gas.Gas {
 // MaxCapacity returns the maximum possible accrued gas capacity, `C`.
 func (s *State) MaxCapacity() gas.Gas {
 	targetPerSecond := s.Target()
-	maxCapacity, err := safemath.Mul(targetToMaxCapacity, targetPerSecond)
-	if err != nil {
-		maxCapacity = math.MaxUint64
-	}
-	return maxCapacity
+	return mul(targetPerSecond, targetToMaxCapacity)
 }
 
 // GasPrice returns the current required fee per gas.
 //
 // GasPrice = MinGasPrice * e^(Excess / (Target() * TargetToPriceUpdateConversion))
 func (s *State) GasPrice() gas.Price {
-	target := s.Target()
-	priceUpdateConversion, err := safemath.Mul(TargetToPriceUpdateConversion, target) // K
-	if err != nil {
-		priceUpdateConversion = math.MaxUint64
-	}
-
+	targetPerSecond := s.Target()
+	priceUpdateConversion := mul(targetPerSecond, TargetToPriceUpdateConversion) // K
 	return gas.CalculatePrice(MinGasPrice, s.Gas.Excess, priceUpdateConversion)
 }
 
@@ -76,14 +67,8 @@ func (s *State) GasPrice() gas.Price {
 // the elapsed seconds.
 func (s *State) AdvanceTime(seconds uint64) {
 	targetPerSecond := s.Target()
-	maxPerSecond, err := safemath.Mul(TargetToMax, targetPerSecond) // R
-	if err != nil {
-		maxPerSecond = math.MaxUint64
-	}
-	maxCapacity, err := safemath.Mul(TimeToFillCapacity, maxPerSecond) // C
-	if err != nil {
-		maxCapacity = math.MaxUint64
-	}
+	maxPerSecond := mul(targetPerSecond, TargetToMax)    // R
+	maxCapacity := mul(maxPerSecond, TimeToFillCapacity) // C
 	s.Gas = s.Gas.AdvanceTime(
 		maxCapacity,
 		maxPerSecond,
@@ -134,15 +119,18 @@ func (s *State) UpdateTargetExcess(desiredTargetExcess gas.Gas) {
 		newTargetPerSecond,
 		previousTargetPerSecond,
 	)
+
+	// Ensure the gas capacity does not exceed the maximum capacity.
+	newMaxCapacity := mul(newTargetPerSecond, targetToMaxCapacity) // C
+	s.Gas.Capacity = min(s.Gas.Capacity, newMaxCapacity)
 }
 
 // DesiredTargetExcess calculates the optimal desiredTargetExcess given the
 // desired target.
-//
-// This could be solved directly by calculating D * ln(desiredTarget / P) using
-// floating point math. However, it introduces inaccuracies. So, we use a binary
-// search to find the closest integer solution.
 func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
+	// This could be solved directly by calculating D * ln(desiredTarget / P)
+	// using floating point math. However, it introduces inaccuracies. So, we
+	// use a binary search to find the closest integer solution.
 	return gas.Gas(sort.Search(maxTargetExcess, func(targetExcessGuess int) bool {
 		state := State{
 			TargetExcess: gas.Gas(targetExcessGuess),
@@ -154,7 +142,7 @@ func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
 // targetExcess calculates the optimal new targetExcess for a block proposer to
 // include given the current and desired excess values.
 func targetExcess(excess, desired gas.Gas) gas.Gas {
-	change := safemath.AbsDiff(excess, desired)
+	change := math.AbsDiff(excess, desired)
 	change = min(change, MaxTargetExcessDiff)
 	if excess < desired {
 		return excess + change
@@ -179,4 +167,12 @@ func scaleExcess(
 	bigTarget.SetUint64(uint64(previousTargetPerSecond))
 	bigExcess.Div(&bigExcess, &bigTarget)
 	return gas.Gas(bigExcess.Uint64())
+}
+
+func mul[T constraints.Unsigned](a, b T) T {
+	product, err := math.Mul(a, b)
+	if err != nil {
+		return math.MaxUint[T]()
+	}
+	return product
 }
