@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/spf13/cast"
@@ -88,7 +89,7 @@ type Config struct {
 	// GasTarget is the target gas per second that this node will attempt to use
 	// when creating blocks. If this config is not specified, the node will
 	// default to use the parent block's target gas per second.
-	GasTarget *uint64 `json:"gas-target,omitempty"`
+	GasTarget *gas.Gas `json:"gas-target,omitempty"`
 
 	// Coreth APIs
 	SnowmanAPIEnabled     bool   `json:"snowman-api-enabled"`
