@@ -121,7 +121,7 @@ func (s *State) UpdateTargetExcess(desiredTargetExcess gas.Gas) {
 	)
 
 	// Ensure the gas capacity does not exceed the maximum capacity.
-	newMaxCapacity := mul(newTargetPerSecond, targetToMaxCapacity)
+	newMaxCapacity := mul(newTargetPerSecond, targetToMaxCapacity) // C
 	s.Gas.Capacity = min(s.Gas.Capacity, newMaxCapacity)
 }
 
