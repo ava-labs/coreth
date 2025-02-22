@@ -552,7 +552,7 @@ func reprocess(
 
 	// continuous profiler
 	shutdownChan := make(chan struct{})
-	startContinuousProfiler(shutdownChan)
+	go startContinuousProfiler(shutdownChan)
 	defer close(shutdownChan)
 
 	var lock sync.Mutex
