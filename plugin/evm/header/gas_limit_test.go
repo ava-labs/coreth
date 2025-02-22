@@ -4,10 +4,12 @@
 package header
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/stretchr/testify/require"
@@ -20,7 +22,24 @@ func TestGasLimit(t *testing.T) {
 		parent    *types.Header
 		timestamp uint64
 		want      uint64
+		wantErr   error
 	}{
+		{
+			name:     "f_invalid_parent_header",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			wantErr: errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_initial_max_capacity",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			want: acp176.MinTargetPerSecond * acp176.TargetToMax * acp176.TimeToFillCapacity,
+		},
 		{
 			name:     "cortina",
 			upgrades: params.TestCortinaChainConfig.NetworkUpgrades,
@@ -42,12 +61,14 @@ func TestGasLimit(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			require := require.New(t)
+
 			config := &params.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := GasLimit(config, test.parent, test.timestamp)
-			require.Equal(t, test.want, got)
-			require.NoError(t, err)
+			require.Equal(test.want, got)
+			require.ErrorIs(err, test.wantErr)
 		})
 	}
 }
