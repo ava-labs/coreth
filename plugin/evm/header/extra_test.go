@@ -575,3 +575,45 @@ func TestVerifyExtra(t *testing.T) {
 		})
 	}
 }
+
+func TestPredicateBytesFromExtra(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    params.AvalancheRules
+		extra    []byte
+		expected []byte
+	}{
+		{
+			name:     "empty_extra",
+			rules:    params.AvalancheRules{},
+			extra:    nil,
+			expected: nil,
+		},
+		{
+			name:     "too_short",
+			rules:    params.AvalancheRules{},
+			extra:    make([]byte, FeeWindowSize-1),
+			expected: nil,
+		},
+		{
+			name:     "empty_predicate",
+			rules:    params.AvalancheRules{},
+			extra:    make([]byte, FeeWindowSize),
+			expected: nil,
+		},
+		{
+			name:  "non_empty_predicate",
+			rules: params.AvalancheRules{},
+			extra: []byte{
+				FeeWindowSize: 5,
+			},
+			expected: []byte{5},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := PredicateBytesFromExtra(test.rules, test.extra)
+			require.Equal(t, test.expected, got)
+		})
+	}
+}

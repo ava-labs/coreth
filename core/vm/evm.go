@@ -124,8 +124,11 @@ type BlockContext struct {
 	TransferMultiCoin TransferMCFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
-	// PredicateResults are the results of predicate verification available throughout the EVM's execution.
-	// PredicateResults may be nil if it is not encoded in the block's header.
+	// PredicateResults are the results of predicate verification available
+	// throughout the EVM's execution.
+	//
+	// PredicateResults may be nil if it is not encoded in the extra field of
+	// the block's header or if the extra field has not been parsed yet.
 	PredicateResults *predicate.Results
 	// Extra is the extra field from the block header.
 	Extra []byte
@@ -224,24 +227,22 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time),
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
+
+	// If the predicate results are already available, use them.
 	if blockCtx.PredicateResults != nil {
 		return evm
 	}
 
-	predicates, err := header.ParsePredicates(evm.chainRules.AvalancheRules, blockCtx.Extra)
-	if err != nil {
-		log.Error("Unexpected error parsing header.Extra",
-			"err", err,
-		)
-		return evm
-	}
-	if len(predicates) == 0 {
+	// Parse the predicate results from the extra field and store them in the
+	// block context.
+	predicateBytes := header.PredicateBytesFromExtra(evm.chainRules.AvalancheRules, blockCtx.Extra)
+	if len(predicateBytes) == 0 {
 		return evm
 	}
 
 	// The VM has already verified the correctness of the results during header
 	// validation.
-	results, err := predicate.ParseResults(predicates)
+	results, err := predicate.ParseResults(predicateBytes)
 	if err != nil {
 		log.Error("Unexpected error parsing predicate results",
 			"err", err,
@@ -249,6 +250,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		return evm
 	}
 
+	// Because the BlockContext is pass-by-value, this does not cache the
+	// results for future calls to NewEVM.
 	evm.Context.PredicateResults = results
 	return evm
 }
