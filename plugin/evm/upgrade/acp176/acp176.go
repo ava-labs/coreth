@@ -134,15 +134,21 @@ func (s *State) UpdateTargetExcess(desiredTargetExcess gas.Gas) {
 		newTargetPerSecond,
 		previousTargetPerSecond,
 	)
+
+	// Ensure the gas capacity does not exceed the maximum capacity.
+	newMaxCapacity, err := safemath.Mul(targetToMaxCapacity, newTargetPerSecond)
+	if err != nil {
+		newMaxCapacity = math.MaxUint64
+	}
+	s.Gas.Capacity = min(s.Gas.Capacity, newMaxCapacity)
 }
 
 // DesiredTargetExcess calculates the optimal desiredTargetExcess given the
 // desired target.
-//
-// This could be solved directly by calculating D * ln(desiredTarget / P) using
-// floating point math. However, it introduces inaccuracies. So, we use a binary
-// search to find the closest integer solution.
 func DesiredTargetExcess(desiredTarget gas.Gas) gas.Gas {
+	// This could be solved directly by calculating D * ln(desiredTarget / P)
+	// using floating point math. However, it introduces inaccuracies. So, we
+	// use a binary search to find the closest integer solution.
 	return gas.Gas(sort.Search(maxTargetExcess, func(targetExcessGuess int) bool {
 		state := State{
 			TargetExcess: gas.Gas(targetExcessGuess),

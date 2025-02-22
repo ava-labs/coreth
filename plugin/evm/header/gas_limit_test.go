@@ -45,8 +45,9 @@ func TestGasLimit(t *testing.T) {
 			config := &params.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got := GasLimit(config, test.parent, test.timestamp)
+			got, err := GasLimit(config, test.parent, test.timestamp)
 			require.Equal(t, test.want, got)
+			require.NoError(t, err)
 		})
 	}
 }

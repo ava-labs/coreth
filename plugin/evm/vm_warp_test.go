@@ -31,6 +31,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/precompile/contract"
@@ -652,9 +653,10 @@ func testReceiveWarpMessage(
 
 	// Require the block was built with a successful predicate result
 	ethBlock := block2.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	headerPredicateResultsBytes, ok := predicate.GetPredicateResultBytes(ethBlock.Extra())
-	require.True(ok)
-	results, err := predicate.ParseResults(headerPredicateResultsBytes)
+	rules := vm.chainConfig.GetAvalancheRules(ethBlock.Time())
+	predicates, err := header.ParsePredicates(rules, ethBlock.Extra())
+	require.NoError(err)
+	results, err := predicate.ParseResults(predicates)
 	require.NoError(err)
 
 	// Predicate results encode the index of invalid warp messages in a bitset.
