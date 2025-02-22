@@ -13,7 +13,11 @@ import (
 	"github.com/ava-labs/coreth/params"
 )
 
-var errInvalidExtraLength = errors.New("invalid header.Extra length")
+var (
+	errInvalidExtraPrefix = errors.New("invalid header.Extra prefix")
+	errIncorrectFeeState  = errors.New("incorrect fee state")
+	errInvalidExtraLength = errors.New("invalid header.Extra length")
+)
 
 // ExtraPrefix returns what the prefix of the header's Extra field should be
 // based on the desired target excess.
@@ -79,7 +83,11 @@ func VerifyExtraPrefix(
 		}
 
 		if claimedState != expectedState {
-			return fmt.Errorf("invalid gas state: have %v, want %v", claimedState, expectedState)
+			return fmt.Errorf("%w: expected %v, found %v",
+				errIncorrectFeeState,
+				expectedState,
+				claimedState,
+			)
 		}
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
@@ -88,7 +96,11 @@ func VerifyExtraPrefix(
 		}
 		feeWindowBytes := feeWindowBytes(feeWindow)
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
-			return fmt.Errorf("expected header prefix: %x, found %x", feeWindowBytes, header.Extra)
+			return fmt.Errorf("%w: expected %x, found %x",
+				errInvalidExtraPrefix,
+				feeWindowBytes,
+				header.Extra,
+			)
 		}
 	}
 	return nil

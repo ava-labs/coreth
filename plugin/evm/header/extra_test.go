@@ -349,6 +349,117 @@ func TestExtraPrefix(t *testing.T) {
 	}
 }
 
+func TestVerifyExtraPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		upgrades params.NetworkUpgrades
+		parent   *types.Header
+		header   *types.Header
+		wantErr  error
+	}{
+		{
+			name:     "ap2",
+			upgrades: params.TestApricotPhase2Config.NetworkUpgrades,
+			header:   &types.Header{},
+			wantErr:  nil,
+		},
+		{
+			name:     "ap3_invalid_parent_header",
+			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			header:  &types.Header{},
+			wantErr: errDynamicFeeWindowInsufficientLength,
+		},
+		{
+			name:     "ap3_invalid_header",
+			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header:  &types.Header{},
+			wantErr: errInvalidExtraPrefix,
+		},
+		{
+			name:     "ap3_valid",
+			upgrades: params.TestApricotPhase3Config.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Extra: feeWindowBytes(ap3.Window{}),
+			},
+			wantErr: nil,
+		},
+		{
+			name:     "f_invalid_header",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			header:   &types.Header{},
+			wantErr:  errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_invalid_gas_consumed",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				GasUsed: 1,
+				Extra:   feeStateBytes(acp176.State{}),
+			},
+			wantErr: gas.ErrInsufficientCapacity,
+		},
+		{
+			name:     "f_wrong_fee_state",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Time:    1,
+				GasUsed: 1,
+				Extra: feeStateBytes(acp176.State{
+					Gas: gas.State{
+						Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 1,
+						Excess:   1,
+					},
+					TargetExcess: acp176.MaxTargetExcessDiff + 1, // Too much of a diff
+				}),
+			},
+			wantErr: errIncorrectFeeState,
+		},
+		{
+			name:     "f_valid",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Time:    1,
+				GasUsed: 1,
+				Extra: feeStateBytes(acp176.State{
+					Gas: gas.State{
+						Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 1,
+						Excess:   1,
+					},
+					TargetExcess: acp176.MaxTargetExcessDiff,
+				}),
+			},
+			wantErr: nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := &params.ChainConfig{
+				NetworkUpgrades: test.upgrades,
+			}
+			err := VerifyExtraPrefix(config, test.parent, test.header)
+			require.ErrorIs(t, err, test.wantErr)
+		})
+	}
+}
+
 func TestVerifyExtra(t *testing.T) {
 	tests := []struct {
 		name     string
