@@ -15,7 +15,11 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 )
 
-var errInvalidGasLimit = errors.New("invalid gas limit")
+var (
+	errInvalidExtraDataGasUsed = errors.New("invalid extra data gas used")
+	errInvalidGasUsed          = errors.New("invalid gas used")
+	errInvalidGasLimit         = errors.New("invalid gas limit")
+)
 
 // GasLimit takes the previous header and the timestamp of its child block and
 // calculates the gas limit for the child block.
@@ -56,12 +60,15 @@ func VerifyGasUsed(
 	gasUsed := header.GasUsed
 	if config.IsFUpgrade(header.Time) && header.ExtDataGasUsed != nil {
 		if !header.ExtDataGasUsed.IsUint64() {
-			return fmt.Errorf("invalid gas limit: invalid extra data gas used %d", header.ExtDataGasUsed)
+			return fmt.Errorf("%w: %d is not a uint64",
+				errInvalidExtraDataGasUsed,
+				header.ExtDataGasUsed,
+			)
 		}
 		var err error
 		gasUsed, err = math.Add(gasUsed, header.ExtDataGasUsed.Uint64())
 		if err != nil {
-			return err
+			return fmt.Errorf("%w while calculating gas used", err)
 		}
 	}
 
@@ -70,7 +77,11 @@ func VerifyGasUsed(
 		return err
 	}
 	if gasUsed > capacity {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", gasUsed, header.GasLimit)
+		return fmt.Errorf("%w: have %d, gas limit %d",
+			errInvalidGasUsed,
+			gasUsed,
+			capacity,
+		)
 	}
 	return nil
 }
@@ -172,7 +183,7 @@ func AtomicGasCapacity(
 		return 0, err
 	}
 	if err := state.ConsumeGas(header.GasUsed, nil); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w while calculating available gas", err)
 	}
 	return uint64(state.Gas.Capacity), nil
 }
