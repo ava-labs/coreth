@@ -77,7 +77,7 @@ func VerifyGasUsed(
 		return err
 	}
 	if gasUsed > capacity {
-		return fmt.Errorf("%w: have %d, gas limit %d",
+		return fmt.Errorf("%w: have %d, capacity %d",
 			errInvalidGasUsed,
 			gasUsed,
 			capacity,
