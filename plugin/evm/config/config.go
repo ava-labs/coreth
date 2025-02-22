@@ -85,6 +85,11 @@ type Duration struct {
 
 // Config ...
 type Config struct {
+	// GasTarget is the target gas per second that this node will attempt to use
+	// when creating blocks. If this config is not specified, the node will
+	// default to use the parent block's target gas per second.
+	GasTarget *uint64 `json:"gas-target,omitempty"`
+
 	// Coreth APIs
 	SnowmanAPIEnabled     bool   `json:"snowman-api-enabled"`
 	AdminAPIEnabled       bool   `json:"admin-api-enabled"`

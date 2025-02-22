@@ -95,6 +95,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -650,7 +651,14 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	}
 	callbacks := vm.createConsensusCallbacks()
 
-	desiredTargetExcess := acp176.DesiredTargetExcess(1_500_000)
+	// If the gas target is specified, calculate the desired target excess and
+	// use it during block creation.
+	var desiredTargetExcess *gas.Gas
+	if vm.config.GasTarget != nil {
+		desiredTargetExcess = new(gas.Gas)
+		*desiredTargetExcess = acp176.DesiredTargetExcess(1_500_000)
+	}
+
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -662,7 +670,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 			callbacks,
 			dummy.Mode{},
 			&vm.clock,
-			&desiredTargetExcess,
+			desiredTargetExcess,
 		),
 		&vm.clock,
 	)
