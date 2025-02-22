@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/vm"
@@ -69,6 +71,11 @@ var (
 	startPProf             = false
 	pprofAddr              = "localhost:6060"
 	metricsExpensive       = true
+
+	// continuous profiler options
+	continuousProfilerDir       = ""
+	continuousProfilerFrequency = 15 * time.Minute
+	continuousProfilerMaxFiles  = 5
 
 	// merkledb options
 	merkleDBBranchFactor          = 16
@@ -123,6 +130,9 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&startPProf, "startPProf", startPProf, "start pprof")
 	flag.StringVar(&pprofAddr, "pprofAddr", pprofAddr, "pprof address")
 	flag.BoolVar(&metricsExpensive, "metricsExpensive", metricsExpensive, "expensive metrics")
+	flag.StringVar(&continuousProfilerDir, "continuousProfilerDir", continuousProfilerDir, "continuous profiler directory")
+	flag.DurationVar(&continuousProfilerFrequency, "continuousProfilerFrequency", continuousProfilerFrequency, "continuous profiler frequency")
+	flag.IntVar(&continuousProfilerMaxFiles, "continuousProfilerMaxFiles", continuousProfilerMaxFiles, "continuous profiler max files")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -540,6 +550,11 @@ func reprocess(
 	require.NoError(t, err)
 	defer bc.Stop()
 
+	// continuous profiler
+	shutdownChan := make(chan struct{})
+	startContinuousProfiler(shutdownChan)
+	defer close(shutdownChan)
+
 	var lock sync.Mutex
 
 	CleanupOnInterrupt(func() {
@@ -702,4 +717,27 @@ func StartPProf(address string, withMetrics bool) {
 			log.Error("Failure in running pprof server", "err", err)
 		}
 	}()
+}
+
+func startContinuousProfiler(shutdownChan chan struct{}) {
+	// If the profiler directory is empty, return immediately
+	// without creating or starting a continuous profiler.
+	if continuousProfilerDir == "" {
+		return
+	}
+	profiler := profiler.NewContinuous(
+		filepath.Join(continuousProfilerDir),
+		continuousProfilerFrequency,
+		continuousProfilerMaxFiles,
+	)
+	defer profiler.Shutdown()
+	go func() {
+		log.Info("Dispatching continuous profiler", "dir", continuousProfilerDir, "freq", continuousProfilerFrequency, "maxFiles", continuousProfilerMaxFiles)
+		err := profiler.Dispatch()
+		if err != nil {
+			log.Error("continuous profiler failed", "err", err)
+		}
+	}()
+	// Wait for shutdownChan to be closed
+	<-shutdownChan
 }
