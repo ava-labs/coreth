@@ -362,12 +362,12 @@ func TestBaseFee(t *testing.T) {
 				Number: big.NewInt(1),
 				Extra: feeStateBytes(acp176.State{
 					Gas: gas.State{
-						Excess: 1_336_650_647, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
 					},
 					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
 				}),
 			},
-			want: big.NewInt(1_000_000_007), // nAVAX + 7 due to rounding
+			want: big.NewInt(1_000_000_002), // nAVAX + 2 due to rounding
 		},
 		{
 			name:     "f_decrease",
@@ -376,13 +376,13 @@ func TestBaseFee(t *testing.T) {
 				Number: big.NewInt(1),
 				Extra: feeStateBytes(acp176.State{
 					Gas: gas.State{
-						Excess: 1_336_650_647, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
 					},
 					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
 				}),
 			},
 			timestamp: 1,
-			want:      big.NewInt(977_012_526), // e^((1_336_650_647 - 1_500_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
+			want:      big.NewInt(988_571_555), // e^((2_704_386_192 - 1_500_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
 		},
 	}
 	for _, test := range tests {
