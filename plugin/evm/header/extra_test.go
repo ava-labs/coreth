@@ -585,27 +585,57 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 	}{
 		{
 			name:     "empty_extra",
-			rules:    params.AvalancheRules{},
 			extra:    nil,
 			expected: nil,
 		},
 		{
 			name:     "too_short",
-			rules:    params.AvalancheRules{},
 			extra:    make([]byte, FeeWindowSize-1),
 			expected: nil,
 		},
 		{
 			name:     "empty_predicate",
-			rules:    params.AvalancheRules{},
 			extra:    make([]byte, FeeWindowSize),
 			expected: nil,
 		},
 		{
-			name:  "non_empty_predicate",
-			rules: params.AvalancheRules{},
+			name: "non_empty_predicate",
 			extra: []byte{
 				FeeWindowSize: 5,
+			},
+			expected: []byte{5},
+		},
+		{
+			name: "f_empty_extra",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    nil,
+			expected: nil,
+		},
+		{
+			name: "f_too_short",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, FeeStateSize-1),
+			expected: nil,
+		},
+		{
+			name: "f_empty_predicate",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra:    make([]byte, FeeStateSize),
+			expected: nil,
+		},
+		{
+			name: "f_non_empty_predicate",
+			rules: params.AvalancheRules{
+				IsFUpgrade: true,
+			},
+			extra: []byte{
+				FeeStateSize: 5,
 			},
 			expected: []byte{5},
 		},
