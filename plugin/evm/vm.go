@@ -656,7 +656,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	var desiredTargetExcess *gas.Gas
 	if vm.config.GasTarget != nil {
 		desiredTargetExcess = new(gas.Gas)
-		*desiredTargetExcess = acp176.DesiredTargetExcess(1_500_000)
+		*desiredTargetExcess = acp176.DesiredTargetExcess(*vm.config.GasTarget)
 	}
 
 	vm.eth, err = eth.New(
