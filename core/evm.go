@@ -27,7 +27,6 @@
 package core
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
@@ -126,12 +125,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 // in header.Extra.
 // This function is used to create a BlockContext when the header Extra data is not fully formed yet and it's more efficient to pass in predicateResults
 // directly rather than re-encode the latest results when executing each individaul transaction.
-func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateBytes []byte) vm.BlockContext {
-	extra := bytes.Clone(header.Extra)
-	if len(predicateBytes) > 0 {
-		extra = predicate.SetPredicateResultBytes(extra, predicateBytes)
-	}
-	return newEVMBlockContext(header, chain, author, extra)
+func NewEVMBlockContextWithPredicateResults(header *types.Header, chain ChainContext, author *common.Address, predicateResults []byte) vm.BlockContext {
+	return newEVMBlockContext(header, chain, author, predicateResults)
 }
 
 func newEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, extra []byte) vm.BlockContext {
