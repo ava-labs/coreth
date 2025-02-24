@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// (c) 2021-2024, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is although named queue.go, is not the same as the eth/downloader/queue.go file.
 // Instead, this is simply the protected array for downloader (yeah not even a queue).
