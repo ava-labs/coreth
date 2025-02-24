@@ -46,8 +46,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
@@ -148,24 +146,8 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		timestamp = parent.Time
 	}
 
-	var gasLimit uint64
 	chainExtra := params.GetExtra(w.chainConfig)
-	if chainExtra.IsCortina(timestamp) {
-		gasLimit = cortina.GasLimit
-	} else if chainExtra.IsApricotPhase1(timestamp) {
-		gasLimit = ap1.GasLimit
-	} else {
-		// The gas limit is set in phase1 to [ap1.GasLimit] because the ceiling
-		// and floor were set to the same value such that the gas limit
-		// converged to it. Since this is hardcoded now, we remove the ability
-		// to configure it.
-		gasLimit = core.CalcGasLimit(parent.GasUsed, parent.GasLimit, ap1.GasLimit, ap1.GasLimit)
-	}
-
-	extra, err := header.ExtraPrefix(chainExtra, parent, timestamp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new extra prefix: %w", err)
-	}
+	gasLimit := header.GasLimit(chainExtra, parent, timestamp)
 	baseFee, err := header.BaseFee(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
@@ -176,7 +158,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
 		GasLimit:   gasLimit,
 		Time:       timestamp,
-		Extra:      extra,
 		BaseFee:    baseFee,
 	}
 

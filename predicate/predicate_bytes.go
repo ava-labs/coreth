@@ -66,11 +66,3 @@ func GetPredicateResultBytes(extraData []byte) []byte {
 	// predicate results.
 	return extraData[HeaderFeeWindowSize:]
 }
-
-// SetPredicateResultBytes sets the predicate results in the extraData in the
-// block header. This is used to set the predicate results in a block header
-// without modifying the initial portion of the extra data (dynamic fee window
-// rollup).
-func SetPredicateResultBytes(extraData []byte, predicateResults []byte) []byte {
-	return append(extraData[:HeaderFeeWindowSize], predicateResults...)
-}
