@@ -41,6 +41,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -137,7 +138,7 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 	})
 
 	// Generate testing blocks
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 1, genBlocks)
+	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, ap4.TargetBlockRate-1, genBlocks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestSuggestTipCapSimpleFloor(t *testing.T) {
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       1,
 		extDataGasUsage: common.Big0,
-		genBlock:        testGenBlock(t, 55, 370),
+		genBlock:        testGenBlock(t, 55, 80),
 		expectedTip:     common.Big0,
 	}, defaultOracleConfig())
 }
@@ -379,9 +380,9 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
-		numBlocks:       20,
+		numBlocks:       200,
 		extDataGasUsage: common.Big0,
-		genBlock:        testGenBlock(t, 550, 370),
+		genBlock:        testGenBlock(t, 550, 80),
 		expectedTip:     big.NewInt(51_565_264_256),
 	}, defaultOracleConfig())
 }
