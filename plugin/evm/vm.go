@@ -40,20 +40,24 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
-	"github.com/ava-labs/coreth/triedb"
-	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/metrics"
 
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/triedb"
+	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 
 	// Force-load tracer engine to trigger registration
@@ -78,7 +82,7 @@ import (
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
-	"github.com/ava-labs/avalanchego/database"
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
@@ -108,6 +112,7 @@ var (
 	_ block.StateSyncableVM              = &VM{}
 	_ statesyncclient.EthBlockParser     = &VM{}
 	_ secp256k1fx.VM                     = &VM{}
+	_ vmsync.BlockAcceptor               = &VM{}
 )
 
 const (
@@ -158,9 +163,7 @@ var (
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
 
-	// Prefixes for atomic trie
-	atomicTrieDBPrefix     = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
+	networkCodec codec.Manager
 )
 
 var (
@@ -202,6 +205,13 @@ func init() {
 	// Preserving the log level allows us to update the root handler while writing to the original
 	// [os.Stderr] that is being piped through to the logger via the rpcchainvm.
 	originalStderr = os.Stderr
+
+	// Register the codec for the atomic block sync summary
+	var err error
+	networkCodec, err = message.NewCodec(atomicsync.AtomicSyncSummary{})
+	if err != nil {
+		panic(fmt.Errorf("failed to create codec manager: %w", err))
+	}
 }
 
 // VM implements the snowman.ChainVM interface
@@ -231,21 +241,20 @@ type VM struct {
 	versiondb *versiondb.Database
 
 	// [db] is the VM's current database
-	db database.Database
-
-	// metadataDB is used to store one off keys.
-	metadataDB database.Database
+	db avalanchedatabase.Database
 
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
 
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
-	acceptedBlockDB database.Database
+	acceptedBlockDB avalanchedatabase.Database
 
 	// [warpDB] is used to store warp message signatures
 	// set to a prefixDB with the prefix [warpPrefix]
-	warpDB database.Database
+	warpDB avalanchedatabase.Database
+
+	metadataDB avalanchedatabase.Database
 
 	toEngine chan<- commonEng.Message
 
@@ -254,17 +263,15 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository AtomicTxRepository
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
+	atomicTxRepository *atomicstate.AtomicTxRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend AtomicBackend
+	atomicBackend *atomicstate.AtomicBackend
 
 	builder *blockBuilder
 
 	baseCodec codec.Registry
 	clock     mockable.Clock
-	mempool   *atomic.Mempool
+	mempool   *atomictxpool.Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -276,8 +283,7 @@ type VM struct {
 	profiler profiler.ContinuousProfiler
 
 	peer.Network
-	client       peer.NetworkClient
-	networkCodec codec.Manager
+	client peer.NetworkClient
 
 	p2pValidators *p2p.Validators
 
@@ -289,8 +295,10 @@ type VM struct {
 
 	logger CorethLogger
 	// State sync server and client
-	StateSyncServer
-	StateSyncClient
+	vmsync.Server
+	vmsync.Client
+
+	leafRequestTypeConfigs map[message.NodeType]LeafRequestTypeConfig
 
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
@@ -334,7 +342,7 @@ func (vm *VM) GetActivationTime() time.Time {
 func (vm *VM) Initialize(
 	_ context.Context,
 	chainCtx *snow.Context,
-	db database.Database,
+	db avalanchedatabase.Database,
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
@@ -522,7 +530,7 @@ func (vm *VM) Initialize(
 	}
 
 	// TODO: read size from settings
-	vm.mempool, err = atomic.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -538,8 +546,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
 	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.networkCodec = message.Codec
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
+	vm.Network = peer.NewNetwork(p2pNetwork, appSender, networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// Initialize warp backend
@@ -555,7 +562,7 @@ func (vm *VM) Initialize(
 
 	// clear warpdb on initialization if config enabled
 	if vm.config.PruneWarpDB {
-		if err := database.Clear(vm.warpDB, ethdb.IdealBatchSize); err != nil {
+		if err := avalanchedatabase.Clear(vm.warpDB, ethdb.IdealBatchSize); err != nil {
 			return fmt.Errorf("failed to prune warpDB: %w", err)
 		}
 	}
@@ -587,11 +594,11 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
+	vm.atomicBackend, err = atomicstate.NewAtomicBackend(
 		vm.versiondb, vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,
@@ -599,7 +606,6 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
-	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
@@ -618,11 +624,8 @@ func (vm *VM) Initialize(
 
 	vm.setAppRequestHandlers()
 
-	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
-		Chain:            vm.blockChain,
-		AtomicTrie:       vm.atomicTrie,
-		SyncableInterval: vm.config.StateSyncCommitInterval,
-	})
+	atomicProvider := atomicsync.NewAtomicProvider(vm.blockChain, vm.atomicBackend.AtomicTrie())
+	vm.Server = vmsync.SyncServer(vm.blockChain, atomicProvider, vm.config.StateSyncCommitInterval)
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
 }
 
@@ -694,35 +697,42 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
-		chain: vm.eth,
-		state: vm.State,
-		client: statesyncclient.NewClient(
+	// Get leaf metrics from config
+	leafMetricsNames := make(map[message.NodeType]string, len(vm.leafRequestTypeConfigs))
+	for _, nodeType := range vm.leafRequestTypeConfigs {
+		leafMetricsNames[nodeType.NodeType] = nodeType.MetricName
+	}
+
+	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
+		Chain:       vm.eth,
+		State:       vm.State,
+		ExtraSyncer: atomicsync.NewAtomicSyncExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
+		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
-				Codec:            vm.networkCodec,
-				Stats:            stats.NewClientSyncerStats(),
+				Codec:            networkCodec,
+				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
 				BlockParser:      vm,
 			},
 		),
-		enabled:              stateSyncEnabled,
-		skipResume:           vm.config.StateSyncSkipResume,
-		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		stateSyncRequestSize: vm.config.StateSyncRequestSize,
-		lastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		chaindb:              vm.chaindb,
-		metadataDB:           vm.metadataDB,
-		acceptedBlockDB:      vm.acceptedBlockDB,
-		db:                   vm.versiondb,
-		atomicBackend:        vm.atomicBackend,
-		toEngine:             vm.toEngine,
+		Enabled:              stateSyncEnabled,
+		SkipResume:           vm.config.StateSyncSkipResume,
+		StateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
+		StateSyncRequestSize: vm.config.StateSyncRequestSize,
+		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
+		ChaindDB:             vm.chaindb,
+		VerDB:                vm.versiondb,
+		MetadataDB:           vm.metadataDB,
+		ToEngine:             vm.toEngine,
+		Acceptor:             vm,
+		SyncableParser:       atomicsync.NewAtomicSyncSummaryParser(),
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
 	// sync using a snapshot that has been modified by the node running normal operations.
 	if !stateSyncEnabled {
-		return vm.StateSyncClient.ClearOngoingSummary()
+		return vm.Client.ClearOngoingSummary()
 	}
 
 	return nil
@@ -1004,11 +1014,11 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 // onBootstrapStarted marks this VM as bootstrapping
 func (vm *VM) onBootstrapStarted() error {
 	vm.bootstrapped.Set(false)
-	if err := vm.StateSyncClient.Error(); err != nil {
+	if err := vm.Client.Error(); err != nil {
 		return err
 	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
-	if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
+	if err := vm.Client.ClearOngoingSummary(); err != nil {
 		return err
 	}
 	// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
@@ -1220,7 +1230,7 @@ func (vm *VM) initBlockBuilding() error {
 
 // setAppRequestHandlers sets the request handlers for the VM to serve state sync
 // requests.
-func (vm *VM) setAppRequestHandlers() {
+func (vm *VM) setAppRequestHandlers() error {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
@@ -1232,15 +1242,41 @@ func (vm *VM) setAppRequestHandlers() {
 			},
 		},
 	)
+	if err := vm.RegisterLeafRequestHandler(message.StateTrieNode, "sync_state_trie_leaves", evmTrieDB, message.StateTrieKeyLength, true); err != nil {
+		return fmt.Errorf("failed to register leaf request handler for state trie: %w", err)
+	}
+	// Register atomic trieDB for serving atomic leafs requests.
+	if err := vm.RegisterLeafRequestHandler(atomicsync.AtomicTrieNode, "sync_atomic_trie_leaves", vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, false); err != nil {
+		return fmt.Errorf("failed to register leaf request handler for atomic trie: %w", err)
+	}
+
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
-		evmTrieDB,
-		vm.atomicTrie.TrieDB(),
 		vm.warpBackend,
-		vm.networkCodec,
+		networkCodec,
+		vm.leafRequestTypeConfigs,
 	)
 	vm.Network.SetRequestHandler(networkHandler)
+	return nil
+}
+
+func (vm *VM) RegisterLeafRequestHandler(nodeType message.NodeType, metricName string, trieDB *triedb.Database, trieKeyLen int, useSnapshot bool) error {
+	if vm.leafRequestTypeConfigs == nil {
+		vm.leafRequestTypeConfigs = make(map[message.NodeType]LeafRequestTypeConfig)
+	}
+	if _, ok := vm.leafRequestTypeConfigs[nodeType]; ok {
+		return fmt.Errorf("leaf request handler for node type %d already registered", nodeType)
+	}
+	handlerConfig := LeafRequestTypeConfig{
+		NodeType:     nodeType,
+		TrieDB:       trieDB,
+		UseSnapshots: useSnapshot,
+		NodeKeyLen:   trieKeyLen,
+		MetricName:   metricName,
+	}
+	vm.leafRequestTypeConfigs[nodeType] = handlerConfig
+	return nil
 }
 
 // Shutdown implements the snowman.ChainVM interface
@@ -1252,7 +1288,7 @@ func (vm *VM) Shutdown(context.Context) error {
 		vm.cancel()
 	}
 	vm.Network.Shutdown()
-	if err := vm.StateSyncClient.Shutdown(); err != nil {
+	if err := vm.Client.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)
 	}
 	close(vm.shutdownChan)
@@ -1353,10 +1389,10 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 // by ChainState.
 func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 	ethBlock := vm.blockChain.GetBlockByHash(common.Hash(id))
-	// If [ethBlock] is nil, return [database.ErrNotFound] here
+	// If [ethBlock] is nil, return [avalanchedatabase.ErrNotFound] here
 	// so that the miss is considered cacheable.
 	if ethBlock == nil {
-		return nil, database.ErrNotFound
+		return nil, avalanchedatabase.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
 	return vm.newBlock(ethBlock)
@@ -1378,7 +1414,7 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 
 	if acceptedBlkID != blkID {
 		// The provided block is not accepted.
-		return nil, database.ErrNotFound
+		return nil, avalanchedatabase.ErrNotFound
 	}
 	return blk, nil
 }
@@ -1404,17 +1440,17 @@ func (vm *VM) VerifyHeightIndex(context.Context) error {
 
 // GetBlockIDAtHeight returns the canonical block at [height].
 // Note: the engine assumes that if a block is not found at [height], then
-// [database.ErrNotFound] will be returned. This indicates that the VM has state
+// [avalanchedatabase.ErrNotFound] will be returned. This indicates that the VM has state
 // synced and does not have all historical blocks available.
 func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {
 	lastAcceptedBlock := vm.LastAcceptedBlock()
 	if lastAcceptedBlock.Height() < height {
-		return ids.ID{}, database.ErrNotFound
+		return ids.ID{}, avalanchedatabase.ErrNotFound
 	}
 
 	hash := vm.blockChain.GetCanonicalHash(height)
 	if hash == (common.Hash{}) {
-		return ids.ID{}, database.ErrNotFound
+		return ids.ID{}, avalanchedatabase.ErrNotFound
 	}
 	return ids.ID(hash), nil
 }
@@ -1472,7 +1508,8 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}
 
 	if vm.config.WarpAPIEnabled {
-		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx.NetworkID, vm.ctx.SubnetID, vm.ctx.ChainID, vm.ctx.ValidatorState, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)); err != nil {
+		warpAPI := warp.NewAPI(vm.ctx, networkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
+		if err := handler.RegisterName("warp", warpAPI); err != nil {
 			return nil, err
 		}
 		enabledAPIs = append(enabledAPIs, "warp")
@@ -1518,7 +1555,7 @@ func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, er
 func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
 	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
 		return tx, atomic.Accepted, height, nil
-	} else if err != database.ErrNotFound {
+	} else if err != avalanchedatabase.ErrNotFound {
 		return nil, atomic.Unknown, 0, err
 	}
 	tx, dropped, found := vm.mempool.GetTx(txID)
@@ -1609,7 +1646,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if !ok {
 		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
 	}
-	atomicBackend := &atomic.Backend{
+	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
@@ -1648,7 +1685,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := &atomic.Backend{
+	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
@@ -1747,7 +1784,7 @@ func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 	// initialize state with the genesis block.
 	lastAcceptedBytes, lastAcceptedErr := vm.acceptedBlockDB.Get(lastAcceptedKey)
 	switch {
-	case lastAcceptedErr == database.ErrNotFound:
+	case lastAcceptedErr == avalanchedatabase.ErrNotFound:
 		// If there is nothing in the database, return the genesis block hash and height
 		return vm.genesisHash, 0, nil
 	case lastAcceptedErr != nil:
@@ -1811,54 +1848,6 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 	return lastAcceptedHeight == 0
 }
 
-func (vm *VM) newImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
-	keys []*secp256k1.PrivateKey, // Keys to import the funds
-) (*atomic.Tx, error) {
-	kc := secp256k1fx.NewKeychain()
-	for _, key := range keys {
-		kc.Add(key)
-	}
-
-	atomicUTXOs, _, _, err := vm.GetAtomicUTXOs(chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, -1)
-	if err != nil {
-		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
-	}
-
-	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
-}
-
-// newExportTx returns a new ExportTx
-func (vm *VM) newExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
-	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
-) (*atomic.Tx, error) {
-	state, err := vm.blockChain.State()
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the transaction
-	tx, err := atomic.NewExportTx(
-		vm.ctx,            // Context
-		vm.currentRules(), // VM rules
-		state,
-		assetID, // AssetID
-		amount,  // Amount
-		chainID, // ID of the chain to send the funds to
-		to,      // Address
-		baseFee,
-		keys, // Private keys
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return tx, nil
+func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
 }
