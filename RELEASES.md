@@ -1,6 +1,8 @@
 # Release Notes
 
 ## Pending Release
+- Bump golang version to v1.23.6
+- Bump golangci-lint to v1.63 and add linters
 
 - Moved atomic codebase from plugin/evm to plugin/evm/atomic package
 

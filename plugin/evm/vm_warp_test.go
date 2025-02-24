@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/precompile/contract"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/predicate"
@@ -100,7 +101,7 @@ func TestSendWarpMessage(t *testing.T) {
 	require.NoError(err)
 
 	// Submit a transaction to trigger sending a warp message
-	tx0 := types.NewTransaction(uint64(0), warpcontract.ContractAddress, big.NewInt(1), 100_000, big.NewInt(params.LaunchMinGasPrice), warpSendMessageInput)
+	tx0 := types.NewTransaction(uint64(0), warpcontract.ContractAddress, big.NewInt(1), 100_000, big.NewInt(ap0.MinGasPrice), warpSendMessageInput)
 	signedTx0, err := types.SignTx(tx0, types.LatestSignerForChainID(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	require.NoError(err)
 
@@ -277,13 +278,15 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 	blsSecretKey1, err := localsigner.New()
 	require.NoError(err)
 	blsPublicKey1 := blsSecretKey1.PublicKey()
-	blsSignature1 := blsSecretKey1.Sign(unsignedMessage.Bytes())
+	blsSignature1, err := blsSecretKey1.Sign(unsignedMessage.Bytes())
+	require.NoError(err)
 
 	nodeID2 := ids.GenerateTestNodeID()
 	blsSecretKey2, err := localsigner.New()
 	require.NoError(err)
 	blsPublicKey2 := blsSecretKey2.PublicKey()
-	blsSignature2 := blsSecretKey2.Sign(unsignedMessage.Bytes())
+	blsSignature2, err := blsSecretKey2.Sign(unsignedMessage.Bytes())
+	require.NoError(err)
 
 	blsAggregatedSignature, err := bls.AggregateSignatures([]*bls.Signature{blsSignature1, blsSignature2})
 	require.NoError(err)
@@ -333,7 +336,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 	require.NoError(err)
 
 	createTx, err := types.SignTx(
-		types.NewContractCreation(0, common.Big0, 7_000_000, big.NewInt(225*params.GWei), common.Hex2Bytes(exampleWarpBin)),
+		types.NewContractCreation(0, common.Big0, 7_000_000, big.NewInt(225*utils.GWei), common.Hex2Bytes(exampleWarpBin)),
 		types.LatestSignerForChainID(vm.chainConfig.ChainID),
 		testutils.TestKeys[0].ToECDSA(),
 	)
@@ -346,8 +349,8 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 			1,
 			&exampleWarpAddress,
 			1_000_000,
-			big.NewInt(225*params.GWei),
-			big.NewInt(params.GWei),
+			big.NewInt(225*utils.GWei),
+			big.NewInt(utils.GWei),
 			common.Big0,
 			txPayload,
 			types.AccessList{},
@@ -539,11 +542,14 @@ func testReceiveWarpMessage(
 	newSigner := func(networkID ids.ID, weight uint64) signer {
 		secret, err := localsigner.New()
 		require.NoError(err)
+		sig, err := secret.Sign(unsignedMessage.Bytes())
+		require.NoError(err)
+
 		return signer{
 			networkID: networkID,
 			nodeID:    ids.GenerateTestNodeID(),
 			secret:    secret,
-			signature: secret.Sign(unsignedMessage.Bytes()),
+			signature: sig,
 			weight:    weight,
 		}
 	}
@@ -625,8 +631,8 @@ func testReceiveWarpMessage(
 			vm.txPool.Nonce(testutils.TestEthAddrs[0]),
 			&warpcontract.Module.Address,
 			1_000_000,
-			big.NewInt(225*params.GWei),
-			big.NewInt(params.GWei),
+			big.NewInt(225*utils.GWei),
+			big.NewInt(utils.GWei),
 			common.Big0,
 			getWarpMsgInput,
 			types.AccessList{},

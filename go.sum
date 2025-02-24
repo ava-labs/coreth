@@ -56,6 +56,8 @@ github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156/go.mod h1:Cb/ax
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/ava-labs/avalanchego v1.12.3-0.20250211171948-c2c6e5dd9f6a h1:eTTraMsAXkYajANjyz5+vj5pRr9HJwOSv3vrboOzEZg=
 github.com/ava-labs/avalanchego v1.12.3-0.20250211171948-c2c6e5dd9f6a/go.mod h1:V8Rb40UUnYPHRp4l7SDo4+h8SMBBiB3q+hHGuQP+vJ4=
+github.com/ava-labs/avalanchego v1.12.3-0.20250224141806-0ec753280b4e h1:lzxopnSgL6rJzZt4JiLXyMx6n1ZDtHW4CxucNk8TrAo=
+github.com/ava-labs/avalanchego v1.12.3-0.20250224141806-0ec753280b4e/go.mod h1:kFGJHxWHmuVoHywnkr4T2VEdM0kQPCHH65TAooU3J8A=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=

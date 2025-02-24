@@ -39,9 +39,11 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/utils"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
+	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -383,8 +385,8 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	if err != nil {
 		return err
 	}
-	if new(big.Int).SetUint64(gasUsed).Cmp(params.AtomicGasLimit) > 0 {
-		return fmt.Errorf("tx gas usage (%d) exceeds atomic gas limit (%d)", gasUsed, params.AtomicGasLimit.Uint64())
+	if gasUsed > ap5.AtomicGasLimit {
+		return fmt.Errorf("tx gas usage (%d) exceeds atomic gas limit (%d)", gasUsed, ap5.AtomicGasLimit)
 	}
 	innerVM := vm.InnerVM
 	blockchain := innerVM.Ethereum().BlockChain()
@@ -400,7 +402,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	_, nextBaseFee, err = dummy.EstimateNextBaseFee(chainConfig, parentHeader, timestamp)
+	nextBaseFee, err = header.EstimateNextBaseFee(chainConfig, parentHeader, timestamp)
 	if err != nil {
 		// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 		return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
@@ -590,7 +592,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(header *types.Header, state *state.
 			return nil, nil, nil, err
 		}
 		// ensure [gasUsed] + [batchGasUsed] doesnt exceed the [atomicGasLimit]
-		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); totalGasUsed.Cmp(params.AtomicGasLimit) > 0 {
+		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); !utils.BigLessOrEqualUint64(totalGasUsed, ap5.AtomicGasLimit) {
 			// Send [tx] back to the mempool's tx heap.
 			vm.mempool.CancelCurrentTx(tx.ID())
 			break
@@ -718,8 +720,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB, chain
 		// atomic gas limit.
 		if rules.IsApricotPhase5 {
 			// Ensure that [tx] does not push [block] above the atomic gas limit.
-			if batchGasUsed.Cmp(params.AtomicGasLimit) == 1 {
-				return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), params.AtomicGasLimit)
+			if !utils.BigLessOrEqualUint64(batchGasUsed, ap5.AtomicGasLimit) {
+				return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), ap5.AtomicGasLimit)
 			}
 		}
 	}

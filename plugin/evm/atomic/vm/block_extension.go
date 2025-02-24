@@ -18,6 +18,8 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var _ extension.BlockExtension = (*blockExtension)(nil)
@@ -110,7 +112,7 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 			return errNilExtDataGasUsedApricotPhase4
 		}
 		if rules.IsApricotPhase5 {
-			if ethHeader.ExtDataGasUsed.Cmp(params.AtomicGasLimit) == 1 {
+			if !utils.BigLessOrEqualUint64(ethHeader.ExtDataGasUsed, ap5.AtomicGasLimit) {
 				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
 			}
 		} else {

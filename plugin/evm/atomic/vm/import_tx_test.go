@@ -7,9 +7,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -108,7 +108,7 @@ func TestImportTxVerify(t *testing.T) {
 		Outs: []atomic.EVMOutput{
 			{
 				Address: testutils.TestEthAddrs[0],
-				Amount:  importAmount - params.AvalancheAtomicTxFee,
+				Amount:  importAmount - ap0.AtomicTxFee,
 				AssetID: ctx.AVAXAssetID,
 			},
 			{
@@ -583,7 +583,7 @@ func TestImportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}},
 			ExpectedGasUsed: 1230,
 			ExpectedFee:     30750,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 		"simple import 1wei": {
 			UnsignedImportTx: &atomic.UnsignedImportTx{
@@ -668,7 +668,7 @@ func TestImportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}, {testutils.TestKeys[0]}},
 			ExpectedGasUsed: 2318,
 			ExpectedFee:     57950,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 		"complex ANT import": {
 			UnsignedImportTx: &atomic.UnsignedImportTx{
@@ -709,7 +709,7 @@ func TestImportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}, {testutils.TestKeys[0]}},
 			ExpectedGasUsed: 2378,
 			ExpectedFee:     59450,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 		"multisig import": {
 			UnsignedImportTx: &atomic.UnsignedImportTx{
@@ -733,7 +733,7 @@ func TestImportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0], testutils.TestKeys[1]}},
 			ExpectedGasUsed: 2234,
 			ExpectedFee:     55850,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 		"large import": {
 			UnsignedImportTx: &atomic.UnsignedImportTx{
@@ -844,7 +844,7 @@ func TestImportTxGasCost(t *testing.T) {
 			},
 			ExpectedGasUsed: 11022,
 			ExpectedFee:     275550,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 	}
 

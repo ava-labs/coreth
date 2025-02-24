@@ -20,16 +20,18 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/api/metrics"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
@@ -99,6 +101,12 @@ func GenesisVM(t *testing.T,
 	vm := newDefaultTestVM()
 	ch, dbManager, m, sender, _ := testutils.SetupVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON, vm)
 	return ch, vm, dbManager, m, sender
+}
+
+// resetMetrics resets the vm avalanchego metrics, and allows
+// for the VM to be re-initialized in tests.
+func resetMetrics(vm *VM) {
+	vm.ctx.Metrics = metrics.NewPrefixGatherer()
 }
 
 func TestVMConfig(t *testing.T) {
@@ -310,7 +318,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[0], big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[0], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), testutils.TestKeys[1].ToECDSA())
 		if err != nil {
 			t.Fatal(err)
@@ -432,7 +440,7 @@ func TestSetPreferenceRace(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -490,7 +498,7 @@ func TestSetPreferenceRace(t *testing.T) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), testutils.TestKeys[1].ToECDSA())
 		if err != nil {
 			t.Fatal(err)
@@ -664,7 +672,7 @@ func TestReorgProtection(t *testing.T) {
 	key := testutils.TestKeys[1].ToECDSA()
 	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -722,7 +730,7 @@ func TestReorgProtection(t *testing.T) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -828,7 +836,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	key := testutils.TestKeys[1].ToECDSA()
 	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -903,7 +911,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1019,7 +1027,7 @@ func TestStickyPreference(t *testing.T) {
 	key := testutils.TestKeys[1].ToECDSA()
 	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1077,7 +1085,7 @@ func TestStickyPreference(t *testing.T) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1273,7 +1281,7 @@ func TestUncleBlock(t *testing.T) {
 	key := testutils.TestKeys[1].ToECDSA()
 	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1329,7 +1337,7 @@ func TestUncleBlock(t *testing.T) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1458,7 +1466,7 @@ func TestAcceptReorg(t *testing.T) {
 	key := testutils.TestKeys[1].ToECDSA()
 	address := testutils.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1516,7 +1524,7 @@ func TestAcceptReorg(t *testing.T) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1642,7 +1650,7 @@ func TestFutureBlock(t *testing.T) {
 		}
 	}()
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1744,7 +1752,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 5; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1752,7 +1760,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		txs[i] = signedTx
 	}
 	for i := 5; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.ApricotPhase1MinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap1.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1810,7 +1818,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		}
 	}()
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
@@ -1944,10 +1952,6 @@ func TestConfigureLogLevel(t *testing.T) {
 }
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
-	// Hack: registering metrics uses global variables, so we need to disable metrics here so that we can initialize the VM twice.
-	metrics.Enabled = false
-	defer func() { metrics.Enabled = true }()
-
 	issuer, vm, dbManager, _, appSender := GenesisVM(t, true, testutils.GenesisJSONApricotPhase1, "", "")
 
 	// Since rewinding is permitted for last accepted height of 0, we must
@@ -1981,10 +1985,13 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, vm.Shutdown(context.Background()))
+	resetMetrics(vm)
 
 	// this will not be allowed
 	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, appSender)
 	require.ErrorContains(t, err, "mismatching ApricotPhase2 fork block timestamp in database")
+
+	resetMetrics(vm)
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)

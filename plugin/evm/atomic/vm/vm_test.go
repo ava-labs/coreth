@@ -32,7 +32,10 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/trie"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -226,7 +229,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, importAmount-(2*params.AvalancheAtomicTxFee), vm.ctx.XChainID, testutils.TestShortIDAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
+	exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, importAmount-(2*ap0.AtomicTxFee), vm.ctx.XChainID, testutils.TestShortIDAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -648,7 +651,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatalf("Expected new block to match")
 	}
 
-	tx := types.NewTransaction(0, key.Address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+	tx := types.NewTransaction(0, key.Address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), key.PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -1350,7 +1353,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
 	}
-	minRequiredTip, err := dummy.MinRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
+	minRequiredTip, err := header.EstimateRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1365,7 +1368,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice*3), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice*3), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.currentRules().ChainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1403,7 +1406,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
 	}
-	minRequiredTip, err = dummy.MinRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
+	minRequiredTip, err = header.EstimateRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1516,7 +1519,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
 	}
-	minRequiredTip, err := dummy.MinRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
+	minRequiredTip, err := header.EstimateRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1531,7 +1534,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 5; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.LaunchMinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.currentRules().ChainID), key)
 		if err != nil {
 			t.Fatal(err)
@@ -1539,7 +1542,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		txs[i] = signedTx
 	}
 	for i := 5; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(params.ApricotPhase1MinGasPrice), nil)
+		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap1.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.currentRules().ChainID), key)
 		if err != nil {
 			t.Fatal(err)

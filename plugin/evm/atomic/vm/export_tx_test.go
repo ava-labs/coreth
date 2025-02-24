@@ -1516,7 +1516,7 @@ func TestExportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}},
 			ExpectedGasUsed: 1230,
 			ExpectedFee:     30750,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 		"simple export 225Gwei BaseFee": {
 			UnsignedExportTx: &atomic.UnsignedExportTx{
@@ -1548,7 +1548,7 @@ func TestExportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0]}},
 			ExpectedGasUsed: 1230,
 			ExpectedFee:     276750,
-			BaseFee:         big.NewInt(225 * params.GWei),
+			BaseFee:         big.NewInt(225 * utils.GWei),
 		},
 		"complex export 25Gwei BaseFee": {
 			UnsignedExportTx: &atomic.UnsignedExportTx{
@@ -1592,7 +1592,7 @@ func TestExportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0], testutils.TestKeys[0], testutils.TestKeys[0]}},
 			ExpectedGasUsed: 3366,
 			ExpectedFee:     84150,
-			BaseFee:         big.NewInt(25 * params.GWei),
+			BaseFee:         big.NewInt(25 * utils.GWei),
 		},
 		"complex export 225Gwei BaseFee": {
 			UnsignedExportTx: &atomic.UnsignedExportTx{
@@ -1636,7 +1636,7 @@ func TestExportTxGasCost(t *testing.T) {
 			Keys:            [][]*secp256k1.PrivateKey{{testutils.TestKeys[0], testutils.TestKeys[0], testutils.TestKeys[0]}},
 			ExpectedGasUsed: 3366,
 			ExpectedFee:     757350,
-			BaseFee:         big.NewInt(225 * params.GWei),
+			BaseFee:         big.NewInt(225 * utils.GWei),
 		},
 	}
 

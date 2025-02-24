@@ -21,6 +21,10 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/trie"
@@ -36,8 +40,8 @@ var (
 )
 
 var (
-	apricotPhase0MinGasPrice = big.NewInt(params.LaunchMinGasPrice)
-	apricotPhase1MinGasPrice = big.NewInt(params.ApricotPhase1MinGasPrice)
+	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
+	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
 
 // Block implements the snowman.Block interface
@@ -87,52 +91,24 @@ func (b *Block) SyntacticVerify() error {
 
 	// Enforce static gas limit after ApricotPhase1 (prior to ApricotPhase1 it's handled in processing).
 	if rules.IsCortina {
-		if ethHeader.GasLimit != params.CortinaGasLimit {
+		if ethHeader.GasLimit != cortina.GasLimit {
 			return fmt.Errorf(
 				"expected gas limit to be %d after cortina but got %d",
-				params.CortinaGasLimit, ethHeader.GasLimit,
+				cortina.GasLimit, ethHeader.GasLimit,
 			)
 		}
 	} else if rules.IsApricotPhase1 {
-		if ethHeader.GasLimit != params.ApricotPhase1GasLimit {
+		if ethHeader.GasLimit != ap1.GasLimit {
 			return fmt.Errorf(
 				"expected gas limit to be %d after apricot phase 1 but got %d",
-				params.ApricotPhase1GasLimit, ethHeader.GasLimit,
+				ap1.GasLimit, ethHeader.GasLimit,
 			)
 		}
 	}
 
-	// Check that the size of the header's Extra data field is correct for [rules].
-	headerExtraDataSize := len(ethHeader.Extra)
-	switch {
-	case rules.IsDurango:
-		if headerExtraDataSize < params.DynamicFeeExtraDataSize {
-			return fmt.Errorf(
-				"expected header ExtraData to be len >= %d but got %d",
-				params.DynamicFeeExtraDataSize, len(ethHeader.Extra),
-			)
-		}
-	case rules.IsApricotPhase3:
-		if headerExtraDataSize != params.DynamicFeeExtraDataSize {
-			return fmt.Errorf(
-				"expected header ExtraData to be len %d but got %d",
-				params.DynamicFeeExtraDataSize, headerExtraDataSize,
-			)
-		}
-	case rules.IsApricotPhase1:
-		if headerExtraDataSize != 0 {
-			return fmt.Errorf(
-				"expected header ExtraData to be 0 but got %d",
-				headerExtraDataSize,
-			)
-		}
-	default:
-		if uint64(headerExtraDataSize) > params.MaximumExtraDataSize {
-			return fmt.Errorf(
-				"expected header ExtraData to be <= %d but got %d",
-				params.MaximumExtraDataSize, headerExtraDataSize,
-			)
-		}
+	// Verify the extra data is well-formed.
+	if err := customheader.VerifyExtra(rules.AvalancheRules, ethHeader.Extra); err != nil {
+		return err
 	}
 
 	if b.ethBlock.Version() != 0 {
@@ -163,15 +139,15 @@ func (b *Block) SyntacticVerify() error {
 	case !rules.IsApricotPhase1:
 		// If we are in ApricotPhase0, enforce each transaction has a minimum gas price of at least the LaunchMinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(apricotPhase0MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), params.LaunchMinGasPrice)
+			if tx.GasPrice().Cmp(ap0MinGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap0.MinGasPrice)
 			}
 		}
 	case !rules.IsApricotPhase3:
 		// If we are prior to ApricotPhase3, enforce each transaction has a minimum gas price of at least the ApricotPhase1MinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(apricotPhase1MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), params.ApricotPhase1MinGasPrice)
+			if tx.GasPrice().Cmp(ap1MinGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap1.MinGasPrice)
 			}
 		}
 	}
