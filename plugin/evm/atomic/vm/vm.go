@@ -402,10 +402,12 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	nextBaseFee, err = header.EstimateNextBaseFee(chainConfig, parentHeader, timestamp)
-	if err != nil {
-		// Return extremely detailed error since CalcBaseFee should never encounter an issue here
-		return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
+	if chainConfig.IsApricotPhase3(timestamp) {
+		nextBaseFee, err = header.EstimateNextBaseFee(chainConfig, parentHeader, timestamp)
+		if err != nil {
+			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
+			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
+		}
 	}
 
 	// We don’t need to revert the state here in case verifyTx errors, because

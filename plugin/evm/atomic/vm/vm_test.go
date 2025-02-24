@@ -24,7 +24,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
-	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
@@ -1580,7 +1579,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
 	}
-	minRequiredTip, err = dummy.MinRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
+	minRequiredTip, err = header.EstimateRequiredTip(vm.Ethereum().BlockChain().Config(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
