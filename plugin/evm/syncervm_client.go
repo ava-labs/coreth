@@ -5,10 +5,9 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
-
-	// "time"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -37,7 +36,6 @@ const (
 	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 	parentsToGet  = 256
 	pivotInterval = 128
-	bufferSize    = 6 * 60 * 30 // 2 * pivotInterval // extra space to be careful
 )
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
@@ -85,9 +83,10 @@ type stateSyncerClient struct {
 	syncSummary  message.SyncSummary
 	stateSyncErr error
 
-	// Testing dynamic sync
-	syncing utils.Atomic[bool]
-	dl      *downloader
+	// Dynamic sync
+	syncing    utils.Atomic[bool]
+	dl         *downloader
+	atomicLock sync.Mutex // to prevent writing during atomic sync
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
@@ -107,11 +106,9 @@ type StateSyncClient interface {
 	Shutdown() error
 	Error() error
 
-	// Methods to try to enable dynamic state sync
+	// Methods to enable dynamic state sync
 	AsyncReceive() bool
-	QueueVerifyBlock(*Block) error
-	QueueAcceptBlock(*Block) error
-	QueueRejectBlock(*Block) error
+	CheckPivot(b *Block) error
 }
 
 // Syncer represents a step in state sync,
@@ -126,63 +123,21 @@ type Syncer interface {
 // AsyncReceive returns true if the client is ready to receive a message from the engine
 // Should return true if syncing and useUpstream is true, i.e. currently dynamicaling syncing
 func (client *stateSyncerClient) AsyncReceive() bool {
-	return client.useUpstream && client.syncing.Get() && client.dl != nil && !client.dl.execQueue.Closed()
+	// Block until atomic sync is completed for bootstrapping
+	client.atomicLock.Lock()
+	client.atomicLock.Unlock()
+	return client.useUpstream && client.syncing.Get() && client.dl != nil
 }
 
-func (client *stateSyncerClient) QueueVerifyBlock(b *Block) error {
-	if !client.AsyncReceive() {
-		return fmt.Errorf("cannot queue block when not using upstream syncing")
-	}
-
-	verify := func(a *Block) error {
-		return a.VerifyDuringSync(context.TODO()) // is this right?
-	}
-	return client.dl.execQueue.Insert(&queueElement{b, verify})
-}
-
-func (client *stateSyncerClient) QueueAcceptBlock(b *Block) error {
-	if !client.AsyncReceive() {
-		return fmt.Errorf("cannot queue block when not using upstream syncing")
-	}
-
-	accept := func(a *Block) error {
-		return a.AcceptDuringSync(context.TODO()) // yeah gotta fix this too
-	}
-
-	if err := client.dl.execQueue.Insert(&queueElement{b, accept}); err != nil {
-		return err
-	}
-
-	// If the block is the pivot, signal the state syncer to start
-	client.dl.pivotLock.Lock()
+func (client *stateSyncerClient) CheckPivot(b *Block) error {
+	// No lock necessary, as this is protected by the engine
 	if b.Height() >= client.dl.pivotBlock.Height()+pivotInterval {
 		log.Info("Setting new pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
 		client.dl.pivotBlock = b
 		client.dl.newPivot <- b
-	}
-	client.dl.pivotLock.Unlock()
-
-	return nil
-}
-
-func (client *stateSyncerClient) QueueRejectBlock(b *Block) error {
-	if !client.AsyncReceive() {
-		return fmt.Errorf("cannot queue block when not using upstream syncing")
-	}
-
-	reject := func(a *Block) error {
-		return a.RejectDuringSync(context.TODO()) // yeah gotta fix this too
-	}
-
-	if err := client.dl.execQueue.Insert(&queueElement{b, reject}); err != nil {
-		return err
-	}
-
-	// If the block is the pivot, signal the state syncer to start
-	client.dl.pivotLock.RLock()
-	defer client.dl.pivotLock.RUnlock()
-	if b.Height() == client.dl.pivotBlock.Height() {
-		return fmt.Errorf("cannot reject pivot block")
+	} else if b.Height() <= client.dl.pivotBlock.Height() {
+		log.Warn("Received block with height less than pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
+		return errors.New("received block with height less than pivot block")
 	}
 
 	return nil
@@ -245,10 +200,12 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 	if err := client.syncAtomicTrie(ctx); err != nil {
 		return err
 	}
+	client.atomicLock.Unlock()
 
 	return client.syncStateTrie(ctx)
 }
 
+/* Unused
 func convertReadOnlyToBidirectional[T any](readOnly <-chan T) chan T {
 	bidirectional := make(chan T)
 
@@ -260,7 +217,7 @@ func convertReadOnlyToBidirectional[T any](readOnly <-chan T) chan T {
 	}()
 
 	return bidirectional
-}
+}*/
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
 // in a goroutine.
@@ -305,6 +262,9 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 
 	log.Info("Starting state sync", "summary", proposedSummary)
 
+	// Lock the atomic trie to prevent writes during the atomic sync from dynamic syncing
+	client.atomicLock.Lock()
+
 	// create a cancellable ctx for the state sync goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 	client.cancel = cancel
@@ -313,15 +273,15 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		// Must first find first pivot block to signal bootstrapper
 		stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(client.syncSummary.BlockHash))
 		if err != nil {
-			return block.StateSyncDynamic, fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
+			return block.StateSyncSkipped, fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
 		}
 		wrapper, ok := stateBlock.(*chain.BlockWrapper)
 		if !ok {
-			return block.StateSyncDynamic, fmt.Errorf("could not convert block(%T) to *chain.BlockWrapper", wrapper)
+			return block.StateSyncSkipped, fmt.Errorf("could not convert block(%T) to *chain.BlockWrapper", wrapper)
 		}
 		evmBlock, ok := wrapper.Block.(*Block)
 		if !ok {
-			return block.StateSyncDynamic, fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
+			return block.StateSyncSkipped, fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
 		}
 
 		b := evmBlock.ethBlock
@@ -330,15 +290,15 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		client.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
 		if err := client.updateVMMarkers(); err != nil {
-			return block.StateSyncDynamic, fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", b.NumberU64(), b.Hash(), err)
+			return block.StateSyncSkipped, fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", b.NumberU64(), b.Hash(), err)
 		}
 
 		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
-			return block.StateSyncDynamic, err
+			return block.StateSyncSkipped, err
 		}
 
 		if err := client.atomicBackend.ApplyToSharedMemory(b.NumberU64()); err != nil {
-			return block.StateSyncDynamic, err
+			return block.StateSyncSkipped, err
 		}
 
 		// Set downloader using pivot
@@ -577,12 +537,8 @@ func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) erro
 	if err := client.dl.SnapSync(); err != nil {
 		return err
 	}
-	log.Info("Upstream state syncer completed, moving to catch-up")
-
-	// Now that we have synced the state trie to static pivot, Verify and Accept all pending blocks
-	// Incoming blocks are still appended to buffer until emptied
-	err := client.dl.execQueue.Flush(nil, true)
-	return err
+	log.Info("Upstream state syncer completed")
+	return nil
 }
 
 func (e queueElement) ExitQueue() error {
@@ -597,9 +553,7 @@ type queueElement struct {
 var _ ethstatesync.Executable = &queueElement{}
 
 type downloader struct {
-	pivotLock  sync.RWMutex
 	pivotBlock *Block
-	execQueue  *ethstatesync.Queue[queueElement]
 	SnapSyncer *snap.Syncer
 
 	stateSyncStart chan *stateSync
@@ -609,13 +563,8 @@ type downloader struct {
 }
 
 func newDownloader(chaindb ethdb.Database, firstPivot *Block) *downloader {
-	compare := func(a, b *queueElement) int {
-		return int(a.block.Height()) - int(b.block.Height())
-	}
-
 	d := &downloader{
 		pivotBlock:     firstPivot,
-		execQueue:      ethstatesync.NewQueue[queueElement](bufferSize, compare),
 		SnapSyncer:     snap.NewSyncer(chaindb, rawdb.HashScheme),
 		stateSyncStart: make(chan *stateSync),
 		quitCh:         make(chan struct{}),
@@ -647,9 +596,7 @@ func (d *downloader) stateFetcher() {
 func (d *downloader) SnapSync() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
-	d.pivotLock.RLock()
 	sync := d.syncState(d.pivotBlock.ethBlock.Root())
-	d.pivotLock.RUnlock()
 
 	defer func() {
 		// The `sync` object is replaced every time the pivot moves. We need to
@@ -663,16 +610,12 @@ func (d *downloader) SnapSync() error {
 		// If stateSync is ended, clear queue and return
 		// If err, just return so we can see it
 		case <-sync.done:
-			if sync.err != nil {
-				return sync.err
-			}
-			return d.execQueue.Flush(nil, true) // might need to provide a cancle channel
-		case np := <-d.newPivot:
+			return sync.err
+		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
 			sync.Cancel()
-			d.execQueue.Flush(&queueElement{np, nil}, false)
-			sync = d.syncState(np.ethBlock.Root())
+			sync = d.syncState(newPivot.ethBlock.Root())
 		}
 	}
 }
@@ -688,7 +631,7 @@ func (d *downloader) syncState(root common.Hash) *stateSync {
 		// out or been delivered
 		<-s.started
 	case <-d.quitCh:
-		s.err = fmt.Errorf("errCancelStateFetch") //errCancelStateFetch
+		s.err = errors.New("errCancelStateFetch") //errCancelStateFetch from geth
 		close(s.done)
 	}
 	return s
@@ -697,7 +640,7 @@ func (d *downloader) syncState(root common.Hash) *stateSync {
 // runStateSync runs a state synchronisation until it completes or another root
 // hash is requested to be switched over to.
 func (d *downloader) runStateSync(s *stateSync) *stateSync {
-	log.Trace("State sync starting", "root", s.root)
+	log.Debug("State sync starting", "root", s.root)
 
 	go s.run()
 	defer s.Cancel()
@@ -743,7 +686,6 @@ func newStateSync(d *downloader, root common.Hash) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
-	log.Info("Starting new sync")
 	s.err = s.d.SnapSyncer.Sync(s.root, s.cancel)
 	close(s.done)
 }
