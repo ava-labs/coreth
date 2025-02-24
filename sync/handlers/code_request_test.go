@@ -35,7 +35,7 @@ func TestCodeRequestHandler(t *testing.T) {
 	rawdb.WriteCode(database, maxSizeCodeHash, maxSizeCodeBytes)
 
 	mockHandlerStats := &stats.MockHandlerStats{}
-	codeRequestHandler := NewCodeRequestHandler(database, message.Codec, mockHandlerStats)
+	codeRequestHandler := NewCodeRequestHandler(database, networkCodec, mockHandlerStats)
 
 	tests := map[string]struct {
 		setup       func() (request message.CodeRequest, expectedCodeResponse [][]byte)
@@ -100,7 +100,7 @@ func TestCodeRequestHandler(t *testing.T) {
 				return
 			}
 			var response message.CodeResponse
-			if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
+			if _, err = networkCodec.Unmarshal(responseBytes, &response); err != nil {
 				t.Fatal("error unmarshalling CodeResponse", err)
 			}
 			if len(expectedResponse) != len(response.Data) {

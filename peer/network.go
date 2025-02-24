@@ -228,6 +228,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	log.Debug("received AppRequest from node", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request))
 
+	// TODO: investigate if we can move all these network logic to new SDK handlers
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
 		log.Debug("forwarding AppRequest to SDK network", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)

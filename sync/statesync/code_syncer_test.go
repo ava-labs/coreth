@@ -10,7 +10,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -40,8 +39,8 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	}
 
 	// Set up mockClient
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewMockClient(message.Codec, nil, codeRequestHandler, nil)
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, networkCodec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewMockClient(networkCodec, nil, codeRequestHandler, nil)
 	mockClient.GetCodeIntercept = test.getCodeIntercept
 
 	clientDB := rawdb.NewMemoryDatabase()
