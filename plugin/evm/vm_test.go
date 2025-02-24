@@ -980,7 +980,8 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	}
 
 	header := types.CopyHeader(validEthBlock.Header())
-	types.GetHeaderExtra(header).ExtDataGasUsed.Mul(common.Big2, types.GetHeaderExtra(header).ExtDataGasUsed)
+	headerExtra := types.GetHeaderExtra(header)
+	headerExtra.ExtDataGasUsed.Mul(common.Big2, headerExtra.ExtDataGasUsed)
 
 	internalConflictBlock := types.NewBlockWithExtData(
 		header,

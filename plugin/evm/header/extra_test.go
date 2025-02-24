@@ -19,12 +19,13 @@ import (
 
 func TestExtraPrefix(t *testing.T) {
 	tests := []struct {
-		name      string
-		upgrades  extras.NetworkUpgrades
-		parent    *types.Header
-		timestamp uint64
-		want      []byte
-		wantErr   error
+		name        string
+		upgrades    extras.NetworkUpgrades
+		parent      *types.Header
+		parentExtra *types.HeaderExtra
+		timestamp   uint64
+		want        []byte
+		wantErr     error
 	}{
 		{
 			name:     "ap2",
@@ -117,15 +118,14 @@ func TestExtraPrefix(t *testing.T) {
 		{
 			name:     "ap4_with_block_gas_cost",
 			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
-			parent: types.WithHeaderExtra(
-				&types.Header{
-					Number:  big.NewInt(1),
-					GasUsed: ap3.TargetGas,
-					Extra:   feeWindowBytes(ap3.Window{}),
-				},
-				&types.HeaderExtra{
-					BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
-				}),
+			parent: &types.Header{
+				Number:  big.NewInt(1),
+				GasUsed: ap3.TargetGas,
+				Extra:   feeWindowBytes(ap3.Window{}),
+			},
+			parentExtra: &types.HeaderExtra{
+				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
+			},
 			timestamp: 1,
 			want: func() []byte {
 				var window ap3.Window
@@ -140,15 +140,14 @@ func TestExtraPrefix(t *testing.T) {
 		{
 			name:     "ap4_with_extra_data_gas",
 			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
-			parent: types.WithHeaderExtra(
-				&types.Header{
-					Number:  big.NewInt(1),
-					GasUsed: ap3.TargetGas,
-					Extra:   feeWindowBytes(ap3.Window{}),
-				},
-				&types.HeaderExtra{
-					ExtDataGasUsed: big.NewInt(5),
-				}),
+			parent: &types.Header{
+				Number:  big.NewInt(1),
+				GasUsed: ap3.TargetGas,
+				Extra:   feeWindowBytes(ap3.Window{}),
+			},
+			parentExtra: &types.HeaderExtra{
+				ExtDataGasUsed: big.NewInt(5),
+			},
 			timestamp: 1,
 			want: func() []byte {
 				var window ap3.Window
@@ -163,18 +162,17 @@ func TestExtraPrefix(t *testing.T) {
 		{
 			name:     "ap4_normal",
 			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
-			parent: types.WithHeaderExtra(
-				&types.Header{
-					Number:  big.NewInt(1),
-					GasUsed: ap3.TargetGas,
-					Extra: feeWindowBytes(ap3.Window{
-						1, 2, 3, 4,
-					}),
-				},
-				&types.HeaderExtra{
-					ExtDataGasUsed: big.NewInt(5),
-					BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
+			parent: &types.Header{
+				Number:  big.NewInt(1),
+				GasUsed: ap3.TargetGas,
+				Extra: feeWindowBytes(ap3.Window{
+					1, 2, 3, 4,
 				}),
+			},
+			parentExtra: &types.HeaderExtra{
+				ExtDataGasUsed: big.NewInt(5),
+				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
+			},
 			timestamp: 1,
 			want: func() []byte {
 				window := ap3.Window{
@@ -192,15 +190,14 @@ func TestExtraPrefix(t *testing.T) {
 		{
 			name:     "ap5_no_extra_data_gas",
 			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
-			parent: types.WithHeaderExtra(
-				&types.Header{
-					Number:  big.NewInt(1),
-					GasUsed: ap5.TargetGas,
-					Extra:   feeWindowBytes(ap3.Window{}),
-				},
-				&types.HeaderExtra{
-					BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
-				}),
+			parent: &types.Header{
+				Number:  big.NewInt(1),
+				GasUsed: ap5.TargetGas,
+				Extra:   feeWindowBytes(ap3.Window{}),
+			},
+			parentExtra: &types.HeaderExtra{
+				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
+			},
 			timestamp: 1,
 			want: func() []byte {
 				var window ap3.Window
@@ -212,18 +209,17 @@ func TestExtraPrefix(t *testing.T) {
 		{
 			name:     "ap5_normal",
 			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
-			parent: types.WithHeaderExtra(
-				&types.Header{
-					Number:  big.NewInt(1),
-					GasUsed: ap5.TargetGas,
-					Extra: feeWindowBytes(ap3.Window{
-						1, 2, 3, 4,
-					}),
-				},
-				&types.HeaderExtra{
-					ExtDataGasUsed: big.NewInt(5),
-					BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
+			parent: &types.Header{
+				Number:  big.NewInt(1),
+				GasUsed: ap5.TargetGas,
+				Extra: feeWindowBytes(ap3.Window{
+					1, 2, 3, 4,
 				}),
+			},
+			parentExtra: &types.HeaderExtra{
+				ExtDataGasUsed: big.NewInt(5),
+				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
+			},
 			timestamp: 1,
 			want: func() []byte {
 				window := ap3.Window{
@@ -244,6 +240,9 @@ func TestExtraPrefix(t *testing.T) {
 
 			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
+			}
+			if test.parentExtra != nil {
+				types.SetHeaderExtra(test.parent, test.parentExtra)
 			}
 			got, err := ExtraPrefix(config, test.parent, test.timestamp)
 			require.ErrorIs(err, test.wantErr)
