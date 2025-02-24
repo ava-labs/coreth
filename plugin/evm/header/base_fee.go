@@ -23,6 +23,13 @@ func BaseFee(
 	timestamp uint64,
 ) (*big.Int, error) {
 	switch {
+	case config.IsFUpgrade(timestamp):
+		state, err := feeStateBeforeBlock(config, parent, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		price := state.GasPrice()
+		return new(big.Int).SetUint64(uint64(price)), nil
 	case config.IsApricotPhase3(timestamp):
 		return baseFeeFromWindow(config, parent, timestamp)
 	default:

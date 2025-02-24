@@ -4,12 +4,18 @@
 package header
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +26,24 @@ func TestGasLimit(t *testing.T) {
 		parent    *types.Header
 		timestamp uint64
 		want      uint64
+		wantErr   error
 	}{
+		{
+			name:     "f_invalid_parent_header",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			wantErr: errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_initial_max_capacity",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			want: acp176.MinMaxCapacity,
+		},
 		{
 			name:     "cortina",
 			upgrades: params.TestCortinaChainConfig.NetworkUpgrades,
@@ -42,11 +65,96 @@ func TestGasLimit(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			require := require.New(t)
+
 			config := &params.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got := GasLimit(config, test.parent, test.timestamp)
-			require.Equal(t, test.want, got)
+			got, err := GasLimit(config, test.parent, test.timestamp)
+			require.Equal(test.want, got)
+			require.ErrorIs(err, test.wantErr)
+		})
+	}
+}
+
+func TestVerifyGasUsed(t *testing.T) {
+	tests := []struct {
+		name     string
+		upgrades params.NetworkUpgrades
+		parent   *types.Header
+		header   *types.Header
+		want     error
+	}{
+		{
+			name:     "f_massive_extra_gas_used",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			header: &types.Header{
+				ExtDataGasUsed: new(big.Int).Lsh(common.Big1, 64),
+			},
+			want: errInvalidExtraDataGasUsed,
+		},
+		{
+			name:     "f_gas_used_overflow",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			header: &types.Header{
+				GasUsed:        math.MaxUint[uint64](),
+				ExtDataGasUsed: common.Big1,
+			},
+			want: math.ErrOverflow,
+		},
+		{
+			name:     "f_invalid_capacity",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			header: &types.Header{},
+			want:   errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_invalid_usage",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Time:    1,
+				GasUsed: acp176.MinMaxPerSecond + 1,
+			},
+			want: errInvalidGasUsed,
+		},
+		{
+			name:     "f_max_consumption",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Time:    1,
+				GasUsed: acp176.MinMaxPerSecond,
+			},
+			want: nil,
+		},
+		{
+			name:     "cortina_does_not_include_extra_gas_used",
+			upgrades: params.TestCortinaChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				GasUsed:        cortina.GasLimit,
+				ExtDataGasUsed: common.Big1,
+			},
+			want: nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := &params.ChainConfig{
+				NetworkUpgrades: test.upgrades,
+			}
+			err := VerifyGasUsed(config, test.parent, test.header)
+			require.ErrorIs(t, err, test.want)
 		})
 	}
 }
@@ -59,6 +167,36 @@ func TestVerifyGasLimit(t *testing.T) {
 		header   *types.Header
 		want     error
 	}{
+		{
+			name:     "f_invalid_header",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			header: &types.Header{},
+			want:   errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_invalid",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				GasLimit: acp176.MinMaxCapacity + 1,
+			},
+			want: errInvalidGasLimit,
+		},
+		{
+			name:     "f_valid",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				GasLimit: acp176.MinMaxCapacity,
+			},
+		},
 		{
 			name:     "cortina_valid",
 			upgrades: params.TestCortinaChainConfig.NetworkUpgrades,
@@ -140,6 +278,114 @@ func TestVerifyGasLimit(t *testing.T) {
 			}
 			err := VerifyGasLimit(config, test.parent, test.header)
 			require.ErrorIs(t, err, test.want)
+		})
+	}
+}
+
+func TestGasCapacity(t *testing.T) {
+	tests := []struct {
+		name      string
+		upgrades  params.NetworkUpgrades
+		parent    *types.Header
+		timestamp uint64
+		want      uint64
+		wantErr   error
+	}{
+		{
+			name:     "cortina",
+			upgrades: params.TestCortinaChainConfig.NetworkUpgrades,
+			want:     cortina.GasLimit,
+		},
+		{
+			name:     "f_invalid_header",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			wantErr: errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_after_1s",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			timestamp: 1,
+			want:      acp176.MinMaxPerSecond,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require := require.New(t)
+
+			config := &params.ChainConfig{
+				NetworkUpgrades: test.upgrades,
+			}
+			got, err := GasCapacity(config, test.parent, test.timestamp)
+			require.ErrorIs(err, test.wantErr)
+			require.Equal(test.want, got)
+		})
+	}
+}
+
+func TestAtomicGasCapacity(t *testing.T) {
+	tests := []struct {
+		name     string
+		upgrades params.NetworkUpgrades
+		parent   *types.Header
+		header   *types.Header
+		want     uint64
+		wantErr  error
+	}{
+		{
+			name:     "ap5",
+			upgrades: params.TestApricotPhase5Config.NetworkUpgrades,
+			header:   &types.Header{},
+			want:     ap5.AtomicGasLimit,
+		},
+		{
+			name:     "f_invalid_header",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+			},
+			header:  &types.Header{},
+			wantErr: errFeeStateInsufficientLength,
+		},
+		{
+			name:     "f_negative_capacity",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				GasUsed: 1,
+			},
+			wantErr: gas.ErrInsufficientCapacity,
+		},
+		{
+			name:     "f",
+			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(0),
+			},
+			header: &types.Header{
+				Time:    1,
+				GasUsed: 1,
+			},
+			want: acp176.MinMaxPerSecond - 1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require := require.New(t)
+
+			config := &params.ChainConfig{
+				NetworkUpgrades: test.upgrades,
+			}
+			got, err := AtomicGasCapacity(config, test.parent, test.header)
+			require.ErrorIs(err, test.wantErr)
+			require.Equal(test.want, got)
 		})
 	}
 }
