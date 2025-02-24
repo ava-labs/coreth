@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
-	"unicode"
 	"unsafe"
 
 	"github.com/ava-labs/libevm/common"
@@ -119,7 +118,7 @@ func allFieldsAreSet(t *testing.T, x any) {
 		field := v.Field(i)
 		fieldName := typ.Field(i).Name
 		fieldValue := field
-		if unicode.IsLower(rune(fieldName[0])) { // unexported
+		if !typ.Field(i).IsExported() {
 			if field.Kind() == reflect.Ptr {
 				require.Falsef(t, field.IsNil(), "field %q is nil", fieldName)
 			}
@@ -127,11 +126,10 @@ func allFieldsAreSet(t *testing.T, x any) {
 			fieldValue = field
 		}
 		if field.Kind() == reflect.Pointer {
-			require.NotNilf(t, field.Interface(), "field %q is nil", fieldName)
+			require.Falsef(t, field.IsNil(), "field %q is nil", fieldName)
 			fieldValue = field.Elem()
 		}
-		isSet := fieldValue.IsValid() && !fieldValue.IsZero()
-		require.True(t, isSet, "field %q is not set", fieldName)
+		require.False(t, fieldValue.IsZero(), "field %q is not set", fieldName)
 	}
 }
 
@@ -144,7 +142,7 @@ func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldName := v.Type().Field(i).Name
-		isUnexported := unicode.IsLower(rune(fieldName[0]))
+		isUnexported := !v.Type().Field(i).IsExported()
 		if isUnexported {
 			field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem() //nolint:gosec
 		}

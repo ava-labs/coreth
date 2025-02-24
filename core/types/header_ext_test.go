@@ -4,7 +4,7 @@
 package types
 
 import (
-	"bytes"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -38,41 +38,38 @@ func TestHeaderExtraGetSet(t *testing.T) {
 func TestHeaderExtraRLP(t *testing.T) {
 	t.Parallel()
 
-	eth := &ethtypes.Header{
+	header := &ethtypes.Header{
 		ParentHash: common.Hash{1},
 	}
 	extra := &HeaderExtra{
 		ExtDataHash: common.Hash{2},
 	}
+	extras.Header.Set(header, extra)
 
-	writer := bytes.NewBuffer(nil)
-	err := extra.EncodeRLP(eth, writer)
+	b, err := rlp.EncodeToBytes(header)
 	require.NoError(t, err)
 
-	stream := rlp.NewStream(bytes.NewReader(writer.Bytes()), 0)
-	decodedExtra := new(HeaderExtra)
-	decodedEth := new(ethtypes.Header)
-	err = decodedExtra.DecodeRLP(decodedEth, stream)
+	gotHeader := new(ethtypes.Header)
+	err = rlp.DecodeBytes(b, gotHeader)
 	require.NoError(t, err)
 
-	wantEth := &ethtypes.Header{
+	wantHeader := &ethtypes.Header{
 		ParentHash: common.Hash{1},
 		Difficulty: new(big.Int),
 		Number:     new(big.Int),
 		Extra:      []byte{},
 	}
-	assert.Equal(t, wantEth, decodedEth)
-
 	wantExtra := &HeaderExtra{
 		ExtDataHash: common.Hash{2},
 	}
-	assert.Equal(t, wantExtra, decodedExtra)
+	extras.Header.Set(wantHeader, wantExtra)
+	assert.Equal(t, wantHeader, gotHeader)
 }
 
 func TestHeaderExtraJSON(t *testing.T) {
 	t.Parallel()
 
-	eth := &ethtypes.Header{
+	header := &ethtypes.Header{
 		ParentHash: common.Hash{1},
 		// Required json fields
 		Difficulty: big.NewInt(2),
@@ -81,27 +78,27 @@ func TestHeaderExtraJSON(t *testing.T) {
 	extra := &HeaderExtra{
 		ExtDataHash: common.Hash{2},
 	}
+	extras.Header.Set(header, extra)
 
-	encoded, err := extra.EncodeJSON(eth)
+	encoded, err := json.Marshal(header)
 	require.NoError(t, err)
 
-	decodedExtra := new(HeaderExtra)
-	decodedEth := new(ethtypes.Header)
-	err = decodedExtra.DecodeJSON(decodedEth, encoded)
+	gotHeader := new(ethtypes.Header)
+	err = json.Unmarshal(encoded, gotHeader)
 	require.NoError(t, err)
 
-	wantEth := &ethtypes.Header{
+	wantHeader := &ethtypes.Header{
 		ParentHash: common.Hash{1},
 		Difficulty: big.NewInt(2),
 		Number:     big.NewInt(3),
 		Extra:      []byte{},
 	}
-	assert.Equal(t, wantEth, decodedEth)
-
 	wantExtra := &HeaderExtra{
 		ExtDataHash: common.Hash{2},
 	}
-	assert.Equal(t, wantExtra, decodedExtra)
+	extras.Header.Set(wantHeader, wantExtra)
+
+	assert.Equal(t, wantHeader, gotHeader)
 }
 
 func TestHeaderSerializable_updates(t *testing.T) {
@@ -110,7 +107,7 @@ func TestHeaderSerializable_updates(t *testing.T) {
 	t.Run("from", func(t *testing.T) {
 		t.Parallel()
 
-		eth := &ethtypes.Header{
+		header := &ethtypes.Header{
 			ParentHash:       common.Hash{1},
 			UncleHash:        common.Hash{2},
 			Coinbase:         common.Address{3},
@@ -139,7 +136,7 @@ func TestHeaderSerializable_updates(t *testing.T) {
 		}
 
 		got := new(HeaderSerializable)
-		got.updateFromEth(eth)
+		got.updateFromEth(header)
 		got.updateFromExtras(extras)
 
 		allFieldsAreSet(t, got)

@@ -19,13 +19,13 @@ import (
 
 func TestExtraPrefix(t *testing.T) {
 	tests := []struct {
-		name      string
-		upgrades  extras.NetworkUpgrades
-		parent    *types.Header
-		parentExt *types.HeaderExtra
-		timestamp uint64
-		want      []byte
-		wantErr   error
+		name        string
+		upgrades    extras.NetworkUpgrades
+		parent      *types.Header
+		parentExtra *types.HeaderExtra
+		timestamp   uint64
+		want        []byte
+		wantErr     error
 	}{
 		{
 			name:     "ap2",
@@ -123,7 +123,7 @@ func TestExtraPrefix(t *testing.T) {
 				GasUsed: ap3.TargetGas,
 				Extra:   feeWindowBytes(ap3.Window{}),
 			},
-			parentExt: &types.HeaderExtra{
+			parentExtra: &types.HeaderExtra{
 				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
 			},
 			timestamp: 1,
@@ -145,7 +145,7 @@ func TestExtraPrefix(t *testing.T) {
 				GasUsed: ap3.TargetGas,
 				Extra:   feeWindowBytes(ap3.Window{}),
 			},
-			parentExt: &types.HeaderExtra{
+			parentExtra: &types.HeaderExtra{
 				ExtDataGasUsed: big.NewInt(5),
 			},
 			timestamp: 1,
@@ -169,7 +169,7 @@ func TestExtraPrefix(t *testing.T) {
 					1, 2, 3, 4,
 				}),
 			},
-			parentExt: &types.HeaderExtra{
+			parentExtra: &types.HeaderExtra{
 				ExtDataGasUsed: big.NewInt(5),
 				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
 			},
@@ -195,7 +195,7 @@ func TestExtraPrefix(t *testing.T) {
 				GasUsed: ap5.TargetGas,
 				Extra:   feeWindowBytes(ap3.Window{}),
 			},
-			parentExt: &types.HeaderExtra{
+			parentExtra: &types.HeaderExtra{
 				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
 			},
 			timestamp: 1,
@@ -216,7 +216,7 @@ func TestExtraPrefix(t *testing.T) {
 					1, 2, 3, 4,
 				}),
 			},
-			parentExt: &types.HeaderExtra{
+			parentExtra: &types.HeaderExtra{
 				ExtDataGasUsed: big.NewInt(5),
 				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
 			},
@@ -241,8 +241,8 @@ func TestExtraPrefix(t *testing.T) {
 			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			if test.parentExt != nil {
-				types.SetHeaderExtra(test.parent, test.parentExt)
+			if test.parentExtra != nil {
+				types.SetHeaderExtra(test.parent, test.parentExtra)
 			}
 			got, err := ExtraPrefix(config, test.parent, test.timestamp)
 			require.ErrorIs(err, test.wantErr)
