@@ -34,8 +34,8 @@ import (
 	"strings"
 
 	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/coreerrors"
 	"github.com/ava-labs/coreth/eth/tracers"
-	"github.com/ava-labs/coreth/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -276,7 +276,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 
 	// Revert output contains useful information (revert reason).
 	// Otherwise discard result.
-	if input.Error != "" && input.Error != vmerrs.ErrExecutionReverted.Error() {
+	if input.Error != "" && input.Error != coreerrors.ErrExecutionReverted.Error() {
 		frame.Result = nil
 	}
 

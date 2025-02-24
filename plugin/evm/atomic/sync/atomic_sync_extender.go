@@ -42,12 +42,11 @@ type AtomicSyncExtender struct {
 	stateSyncRequestSize uint16
 }
 
-func NewAtomicSyncExtender(backend AtomicBackend, atomicTrie AtomicTrie, stateSyncRequestSize uint16) *AtomicSyncExtender {
-	return &AtomicSyncExtender{
-		backend:              backend,
-		atomicTrie:           atomicTrie,
-		stateSyncRequestSize: stateSyncRequestSize,
-	}
+// Initialize initializes the atomic sync extender with the atomic backend and atomic trie.
+func (a *AtomicSyncExtender) Initialize(backend AtomicBackend, atomicTrie AtomicTrie, stateSyncRequestSize uint16) {
+	a.backend = backend
+	a.atomicTrie = atomicTrie
+	a.stateSyncRequestSize = stateSyncRequestSize
 }
 
 func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {

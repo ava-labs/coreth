@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var _ LeafRequestHandler = (*leafsRequestHandler)(nil)
+
 const (
 	// Maximum number of leaves to return in a message.LeafsResponse
 	// This parameter overrides any other Limit specified
@@ -38,9 +40,13 @@ const (
 	segmentLen = 64 // divide data from snapshot to segments of this size
 )
 
-// LeafsRequestHandler is a peer.RequestHandler for types.LeafsRequest
+type LeafRequestHandler interface {
+	OnLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error)
+}
+
+// leafsRequestHandler is a peer.RequestHandler for types.LeafsRequest
 // serving requested trie data
-type LeafsRequestHandler struct {
+type leafsRequestHandler struct {
 	trieDB           *triedb.Database
 	snapshotProvider SnapshotProvider
 	codec            codec.Manager
@@ -49,8 +55,8 @@ type LeafsRequestHandler struct {
 	trieKeyLength    int
 }
 
-func NewLeafsRequestHandler(trieDB *triedb.Database, trieKeyLength int, snapshotProvider SnapshotProvider, codec codec.Manager, syncerStats stats.LeafsRequestHandlerStats) *LeafsRequestHandler {
-	return &LeafsRequestHandler{
+func NewLeafsRequestHandler(trieDB *triedb.Database, trieKeyLength int, snapshotProvider SnapshotProvider, codec codec.Manager, syncerStats stats.LeafsRequestHandlerStats) *leafsRequestHandler {
+	return &leafsRequestHandler{
 		trieDB:           trieDB,
 		snapshotProvider: snapshotProvider,
 		codec:            codec,
@@ -72,7 +78,7 @@ func NewLeafsRequestHandler(trieDB *triedb.Database, trieKeyLength int, snapshot
 // Never returns errors
 // Returns nothing if NodeType is invalid or requested trie root is not found
 // Assumes ctx is active
-func (lrh *LeafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
+func (lrh *leafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
 	startTime := time.Now()
 	lrh.stats.IncLeafsRequest()
 

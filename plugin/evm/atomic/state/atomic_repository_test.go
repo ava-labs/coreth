@@ -69,7 +69,7 @@ func constTxsPerHeight(txCount int) func(uint64) int {
 // writeTxs writes [txsPerHeight] txs for heights ranging in [fromHeight, toHeight) through the Write call on [repo],
 // storing the resulting transactions in [txMap] if non-nil and the resulting atomic operations in [operationsMap]
 // if non-nil.
-func writeTxs(t testing.TB, repo *AtomicTxRepository, fromHeight uint64, toHeight uint64,
+func writeTxs(t testing.TB, repo *AtomicRepository, fromHeight uint64, toHeight uint64,
 	txsPerHeight func(height uint64) int, txMap map[uint64][]*atomic.Tx, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests,
 ) {
 	for height := fromHeight; height < toHeight; height++ {
@@ -95,7 +95,7 @@ func writeTxs(t testing.TB, repo *AtomicTxRepository, fromHeight uint64, toHeigh
 }
 
 // verifyTxs asserts [repo] can find all txs in [txMap] by height and txID
-func verifyTxs(t testing.TB, repo *AtomicTxRepository, txMap map[uint64][]*atomic.Tx) {
+func verifyTxs(t testing.TB, repo *AtomicRepository, txMap map[uint64][]*atomic.Tx) {
 	// We should be able to fetch indexed txs by height:
 	for height, expectedTxs := range txMap {
 		txs, err := repo.GetByHeight(height)

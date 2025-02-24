@@ -10,18 +10,17 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncHandlers "github.com/ava-labs/coreth/sync/handlers"
-	syncStats "github.com/ava-labs/coreth/sync/handlers/stats"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/warp"
 	warpHandlers "github.com/ava-labs/coreth/warp/handlers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var _ message.RequestHandler = &networkHandler{}
 
-type LeafHandlers map[message.NodeType]*syncHandlers.LeafsRequestHandler
+type LeafHandlers map[message.NodeType]syncHandlers.LeafRequestHandler
 
 type networkHandler struct {
 	leafRequestHandlers     LeafHandlers
@@ -44,18 +43,9 @@ func newNetworkHandler(
 	diskDB ethdb.KeyValueReader,
 	warpBackend warp.Backend,
 	networkCodec codec.Manager,
-	leafRequesTypeConfigs map[message.NodeType]LeafRequestTypeConfig,
-) message.RequestHandler {
-	syncStats := syncStats.NewHandlerStats(metrics.Enabled)
-	leafRequestHandlers := make(LeafHandlers)
-	for _, config := range leafRequesTypeConfigs {
-		snapshotProvider := provider
-		if !config.UseSnapshots {
-			snapshotProvider = nil
-		}
-		leafRequestHandler := syncHandlers.NewLeafsRequestHandler(config.TrieDB, config.NodeKeyLen, snapshotProvider, networkCodec, syncStats)
-		leafRequestHandlers[config.NodeType] = leafRequestHandler
-	}
+	leafRequestHandlers LeafHandlers,
+	syncStats stats.HandlerStats,
+) *networkHandler {
 	return &networkHandler{
 		leafRequestHandlers:     leafRequestHandlers,
 		blockRequestHandler:     syncHandlers.NewBlockRequestHandler(provider, networkCodec, syncStats),
