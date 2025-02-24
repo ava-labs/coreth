@@ -41,15 +41,17 @@ func TestCopyHeader(t *testing.T) {
 	t.Run("filled_header", func(t *testing.T) {
 		t.Parallel()
 
-		header := headerWithNonZeroFields() // the header carries the [HeaderExtra] so we can ignore it
+		header, _ := headerWithNonZeroFields() // the header carries the [HeaderExtra] so we can ignore it
 
-		got := CopyHeader(header)
-		want := headerWithNonZeroFields()
+		gotHeader := CopyHeader(header)
+		gotExtra := GetHeaderExtra(gotHeader)
 
-		assert.Equal(t, want, got)
+		wantHeader, wantExtra := headerWithNonZeroFields()
+		assert.Equal(t, wantHeader, gotHeader)
+		assert.Equal(t, wantExtra, gotExtra)
 
-		exportedFieldsDeepCopied(t, header, got)
-		exportedFieldsDeepCopied(t, GetHeaderExtra(header), GetHeaderExtra(got))
+		exportedFieldsDeepCopied(t, header, gotHeader)
+		exportedFieldsDeepCopied(t, GetHeaderExtra(header), gotExtra)
 	})
 }
 
@@ -96,7 +98,7 @@ func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	t.Helper()
 	require.NotNilf(t, a, "a (%T) cannot be nil", a)
 	require.NotNilf(t, b, "b (%T) cannot be nil", b)
-	require.IsType(t, a, b, "a and b must be of the same type")
+	require.IsType(t, a, b, "test is badly written: a and b must be of the same type")
 	if a == b {
 		t.Errorf("pointers to same memory")
 	}

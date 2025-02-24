@@ -32,7 +32,7 @@ func TestHeaderRLP(t *testing.T) {
 
 	assert.Equal(t, wantHex, hex.EncodeToString(got), "Header RLP")
 
-	header := headerWithNonZeroFields()
+	header, _ := headerWithNonZeroFields()
 	gotHashHex := header.Hash().Hex()
 	assert.Equal(t, "0x"+wantHashHex, gotHashHex, "Header.Hash()")
 }
@@ -46,17 +46,19 @@ func TestHeaderJSON(t *testing.T) {
 func testHeaderEncodings(t *testing.T, encode func(any) ([]byte, error), decode func([]byte, any) error) []byte {
 	t.Helper()
 
-	input := headerWithNonZeroFields() // the Header carries the HeaderExtra so we can ignore it
+	input, _ := headerWithNonZeroFields() // the Header carries the HeaderExtra so we can ignore it
 	b, err := encode(input)
 	require.NoError(t, err, "encode")
 
-	got := new(Header)
-	err = decode(b, got)
+	gotHeader := new(Header)
+	err = decode(b, gotHeader)
 	require.NoError(t, err, "decode")
+	gotExtra := GetHeaderExtra(gotHeader)
 
-	want := headerWithNonZeroFields()
-	want.WithdrawalsHash = nil
-	assert.Equal(t, want, got)
+	wantHeader, wantExtra := headerWithNonZeroFields()
+	wantHeader.WithdrawalsHash = nil
+	assert.Equal(t, wantHeader, gotHeader)
+	assert.Equal(t, wantExtra, gotExtra)
 
 	return b
 }
@@ -64,19 +66,19 @@ func testHeaderEncodings(t *testing.T, encode func(any) ([]byte, error), decode 
 func Test_headerWithNonZeroFields(t *testing.T) {
 	t.Parallel()
 
-	header := headerWithNonZeroFields()
-	extra := GetHeaderExtra(header)
+	header, extra := headerWithNonZeroFields()
 	t.Run("Header", func(t *testing.T) { allExportedFieldsSet(t, header) })
 	t.Run("HeaderExtra", func(t *testing.T) { allExportedFieldsSet(t, extra) })
 }
 
-// headerWithNonZeroFields returns a [Header] with its extra payload [HeaderExtra]
-// set via [SetHeaderExtra], each with all fields set to non-zero values.
+// headerWithNonZeroFields returns a [Header] and a [HeaderExtra],
+// each with all fields set to non-zero values.
+// The [HeaderExtra] extra payload is set in the [Header] via [SetHeaderExtra].
 //
 // NOTE: They can be used to demonstrate that RLP and JSON round-trip encoding
 // can recover all fields, but not that the encoded format is correct. This is
 // very important as the RLP encoding of a [Header] defines its hash.
-func headerWithNonZeroFields() *Header {
+func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 	header := &ethtypes.Header{
 		ParentHash:       common.Hash{1},
 		UncleHash:        common.Hash{2},
@@ -105,7 +107,7 @@ func headerWithNonZeroFields() *Header {
 		BlockGasCost:   big.NewInt(23),
 	}
 	SetHeaderExtra(header, extra)
-	return header
+	return header, extra
 }
 
 func allExportedFieldsSet[T interface {
