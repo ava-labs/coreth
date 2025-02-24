@@ -42,7 +42,7 @@ func TestGasLimit(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
-			want: acp176.MinTargetPerSecond * acp176.TargetToMax * acp176.TimeToFillCapacity,
+			want: acp176.MinMaxCapacity,
 		},
 		{
 			name:     "cortina",
@@ -119,7 +119,7 @@ func TestVerifyGasUsed(t *testing.T) {
 			},
 			header: &types.Header{
 				Time:    1,
-				GasUsed: acp176.MinTargetPerSecond*acp176.TargetToMax + 1,
+				GasUsed: acp176.MinMaxPerSecond + 1,
 			},
 			want: errInvalidGasUsed,
 		},
@@ -131,7 +131,7 @@ func TestVerifyGasUsed(t *testing.T) {
 			},
 			header: &types.Header{
 				Time:    1,
-				GasUsed: acp176.MinTargetPerSecond * acp176.TargetToMax,
+				GasUsed: acp176.MinMaxPerSecond,
 			},
 			want: nil,
 		},
@@ -183,7 +183,7 @@ func TestVerifyGasLimit(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{
-				GasLimit: acp176.MinTargetPerSecond*acp176.TargetToMax*acp176.TimeToFillCapacity + 1,
+				GasLimit: acp176.MinMaxCapacity + 1,
 			},
 			want: errInvalidGasLimit,
 		},
@@ -194,7 +194,7 @@ func TestVerifyGasLimit(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{
-				GasLimit: acp176.MinTargetPerSecond * acp176.TargetToMax * acp176.TimeToFillCapacity,
+				GasLimit: acp176.MinMaxCapacity,
 			},
 		},
 		{
@@ -311,7 +311,7 @@ func TestGasCapacity(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			timestamp: 1,
-			want:      acp176.MinTargetPerSecond * acp176.TargetToMax,
+			want:      acp176.MinMaxPerSecond,
 		},
 	}
 	for _, test := range tests {
@@ -373,7 +373,7 @@ func TestAtomicGasCapacity(t *testing.T) {
 				Time:    1,
 				GasUsed: 1,
 			},
-			want: acp176.MinTargetPerSecond*acp176.TargetToMax - 1,
+			want: acp176.MinMaxPerSecond - 1,
 		},
 	}
 	for _, test := range tests {

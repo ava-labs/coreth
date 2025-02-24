@@ -261,7 +261,7 @@ func TestExtraPrefix(t *testing.T) {
 			},
 			want: feeStateBytes(acp176.State{
 				Gas: gas.State{
-					Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 6,
+					Capacity: acp176.MinMaxPerSecond - 6,
 					Excess:   6,
 				},
 				TargetExcess: 0,
@@ -281,7 +281,7 @@ func TestExtraPrefix(t *testing.T) {
 			desiredTargetExcess: (*gas.Gas)(utils.NewUint64(3)),
 			want: feeStateBytes(acp176.State{
 				Gas: gas.State{
-					Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 3,
+					Capacity: acp176.MinMaxPerSecond - 3,
 					Excess:   3,
 				},
 				TargetExcess: 3,
@@ -421,7 +421,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 				GasUsed: 1,
 				Extra: feeStateBytes(acp176.State{
 					Gas: gas.State{
-						Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 1,
+						Capacity: acp176.MinMaxPerSecond - 1,
 						Excess:   1,
 					},
 					TargetExcess: acp176.MaxTargetExcessDiff + 1, // Too much of a diff
@@ -440,7 +440,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 				GasUsed: 1,
 				Extra: feeStateBytes(acp176.State{
 					Gas: gas.State{
-						Capacity: acp176.MinTargetPerSecond*acp176.TargetToMax - 1,
+						Capacity: acp176.MinMaxPerSecond - 1,
 						Excess:   1,
 					},
 					TargetExcess: acp176.MaxTargetExcessDiff,

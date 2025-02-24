@@ -27,8 +27,11 @@ const (
 	TargetToPriceUpdateConversion = 87   // 87s ~= 60s * ln(2) which makes the price double at most every ~60 seconds
 	MaxTargetChangeRate           = 1024 // Controls the rate that the target can change per block.
 
-	targetToMaxCapacity = TargetToMax * TimeToFillCapacity
-	maxTargetExcess     = 1_024_950_627 // TargetConversion * ln(MaxUint64 / MinTargetPerSecond) + 1
+	TargetToMaxCapacity = TargetToMax * TimeToFillCapacity
+	MinMaxPerSecond     = MinTargetPerSecond * TargetToMax
+	MinMaxCapacity      = MinMaxPerSecond * TimeToFillCapacity
+
+	maxTargetExcess = 1_024_950_627 // TargetConversion * ln(MaxUint64 / MinTargetPerSecond) + 1
 )
 
 // State represents the current state of the gas pricing and constraints.
@@ -51,7 +54,7 @@ func (s *State) Target() gas.Gas {
 // MaxCapacity returns the maximum possible accrued gas capacity, `C`.
 func (s *State) MaxCapacity() gas.Gas {
 	targetPerSecond := s.Target()
-	return mul(targetPerSecond, targetToMaxCapacity)
+	return mul(targetPerSecond, TargetToMaxCapacity)
 }
 
 // GasPrice returns the current required fee per gas.
@@ -121,7 +124,7 @@ func (s *State) UpdateTargetExcess(desiredTargetExcess gas.Gas) {
 	)
 
 	// Ensure the gas capacity does not exceed the maximum capacity.
-	newMaxCapacity := mul(newTargetPerSecond, targetToMaxCapacity) // C
+	newMaxCapacity := mul(newTargetPerSecond, TargetToMaxCapacity) // C
 	s.Gas.Capacity = min(s.Gas.Capacity, newMaxCapacity)
 }
 
