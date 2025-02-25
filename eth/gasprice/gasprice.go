@@ -37,7 +37,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -66,7 +66,7 @@ const (
 var (
 	DefaultMaxPrice           = big.NewInt(150 * params.GWei)
 	DefaultMinPrice           = big.NewInt(acp176.MinGasPrice)
-	DefaultMinBaseFee         = big.NewInt(etna.MinBaseFee)
+	DefaultMinBaseFee         = big.NewInt(ap3.InitialBaseFee)
 	DefaultMinGasUsed         = big.NewInt(acp176.MinTargetPerSecond)
 	DefaultMaxLookbackSeconds = uint64(80)
 )
