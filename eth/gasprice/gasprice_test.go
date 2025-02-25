@@ -131,7 +131,7 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 		OnFinalizeAndAssemble: func(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
 			return nil, common.Big0, extDataGasUsage, nil
 		},
-		OnExtraStateChange: func(block *types.Block, state *state.StateDB) (*big.Int, *big.Int, error) {
+		OnExtraStateChange: func(block *types.Block, state *state.StateDB, _ *params.ChainConfig) (*big.Int, *big.Int, error) {
 			return common.Big0, extDataGasUsage, nil
 		},
 	})
