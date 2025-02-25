@@ -304,7 +304,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		// Set downloader using pivot
 		client.dl = newDownloader(client.chaindb, evmBlock)
 
-		log.Info("Set LastAcceptedBlock to first pivot with height", evmBlock.Height(), "timestamp", evmBlock.Timestamp())
+		log.Info("Set LastAcceptedBlock to first pivot", "height", evmBlock.ID(), evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	}
 	go func() {
 		defer client.wg.Done()
