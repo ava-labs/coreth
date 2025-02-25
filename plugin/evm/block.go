@@ -362,6 +362,13 @@ func (b *Block) verifyDuringSync() error {
 		return err
 	}
 
+	// This is my idea how to fix it
+	/*
+		if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
+			return err
+		}
+	*/
+
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
 	if vm.atomicBackend != nil {
 		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
