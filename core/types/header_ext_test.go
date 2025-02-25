@@ -168,56 +168,6 @@ func assertNonZero[T interface {
 	}
 }
 
-func TestHeaderExtraPostCopy(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty_extra", func(t *testing.T) {
-		t.Parallel()
-
-		got := &ethtypes.Header{
-			ParentHash: common.Hash{1},
-		}
-		extra := &HeaderExtra{}
-
-		extra.PostCopy(got)
-
-		want := &ethtypes.Header{
-			ParentHash: common.Hash{1},
-		}
-		wantExtra := &HeaderExtra{}
-		SetHeaderExtra(want, wantExtra)
-
-		assert.Equal(t, want, got)
-		gotExtra := GetHeaderExtra(got)
-		assert.Equal(t, wantExtra, gotExtra)
-	})
-
-	t.Run("filled_extra", func(t *testing.T) {
-		got := &ethtypes.Header{
-			ParentHash: common.Hash{1},
-		}
-		extra := &HeaderExtra{
-			ExtDataHash:    common.Hash{2},
-			ExtDataGasUsed: big.NewInt(3),
-			BlockGasCost:   big.NewInt(4),
-		}
-
-		extra.PostCopy(got)
-
-		want := &ethtypes.Header{
-			ParentHash: common.Hash{1},
-		}
-		wantExtra := &HeaderExtra{
-			ExtDataHash:    common.Hash{2},
-			ExtDataGasUsed: big.NewInt(3),
-			BlockGasCost:   big.NewInt(4),
-		}
-		_ = WithHeaderExtra(want, wantExtra)
-
-		assert.Equal(t, want, got)
-		gotExtra := GetHeaderExtra(got)
-		assert.Equal(t, wantExtra, gotExtra)
-	})
-}
+// Note [TestCopyHeader] tests the [HeaderExtra.PostCopy] method.
 
 func ptrTo[T any](x T) *T { return &x }
