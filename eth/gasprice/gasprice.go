@@ -277,6 +277,7 @@ func (oracle *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	if nextBaseFee != nil {
 		baseFee = math.BigMin(baseFee, nextBaseFee)
 	}
+
 	return new(big.Int).Add(tip, baseFee), nil
 }
 
