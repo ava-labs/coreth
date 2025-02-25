@@ -673,8 +673,9 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB, chain
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules                      = chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra                 = *params.GetRulesExtra(rules)
+		// We cannot use chain config from InnerVM since it's not available when this function is called for the first time (bc.loadLastState).
+		rules      = chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra = *params.GetRulesExtra(rules)
 	)
 
 	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
