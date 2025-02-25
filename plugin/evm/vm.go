@@ -1652,8 +1652,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 		SecpCache:    &vm.secpCache,
 	}
 	if err := tx.UnsignedAtomicTx.SemanticVerify(atomicBackend, tx, parent, baseFee); err != nil {
-		txJSON, _ := json.Marshal(tx)
-		return fmt.Errorf("%w with %d: %s", err, baseFee, string(txJSON))
+		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
 }
