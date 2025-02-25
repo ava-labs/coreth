@@ -165,14 +165,15 @@ func (b *Block) SyntacticVerify() error {
 		}
 	}
 
+	headerExtra := types.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase4 {
 		switch {
 		// Make sure BlockGasCost is not nil
 		// NOTE: ethHeader.BlockGasCost correctness is checked in header verification
-		case ethHeader.BlockGasCost == nil:
+		case headerExtra.BlockGasCost == nil:
 			return errNilBlockGasCostApricotPhase4
-		case !ethHeader.BlockGasCost.IsUint64():
-			return fmt.Errorf("too large blockGasCost: %d", ethHeader.BlockGasCost)
+		case !headerExtra.BlockGasCost.IsUint64():
+			return fmt.Errorf("too large blockGasCost: %d", headerExtra.BlockGasCost)
 		}
 	}
 
@@ -209,7 +210,7 @@ func (b *Block) SyntacticVerify() error {
 	}
 
 	if b.extension != nil {
-		return b.extension.SyntacticVerify(b, *rulesExtra)
+		return b.extension.SyntacticVerify(b, rules)
 	}
 	return nil
 }

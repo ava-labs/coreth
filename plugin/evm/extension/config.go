@@ -20,7 +20,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
@@ -90,7 +90,7 @@ type VMBlock interface {
 type BlockExtension interface {
 	// SyntacticVerify verifies the block syntactically
 	// it can be implemented to extend inner block verification
-	SyntacticVerify(b VMBlock, rules extras.Rules) error
+	SyntacticVerify(b VMBlock, rules params.Rules) error
 	// SemanticVerify verifies the block semantically
 	// it can be implemented to extend inner block verification
 	SemanticVerify(b VMBlock) error

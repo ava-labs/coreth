@@ -16,7 +16,6 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -52,7 +51,7 @@ func newBlockExtension(
 
 // SyntacticVerify checks the syntactic validity of the block. This is called the wrapper
 // block manager's SyntacticVerify method.
-func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules extras.Rules) error {
+func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rules) error {
 	ethBlock := b.GetEthBlock()
 	// should not happen
 	if ethBlock == nil {
@@ -61,7 +60,8 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules extras.Rule
 	ethHeader := ethBlock.Header()
 	blockHash := ethBlock.Hash()
 
-	if !rules.IsApricotPhase1 {
+	rulesExtra := params.GetRulesExtra(rules)
+	if !rulesExtra.IsApricotPhase1 {
 		if be.extDataHashes != nil {
 			extData := ethBlock.ExtData()
 			extDataHash := types.CalcExtDataHash(extData)
@@ -83,15 +83,16 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules extras.Rule
 	}
 
 	// Verify the ExtDataHash field
-	if rules.IsApricotPhase1 {
-		if hash := types.CalcExtDataHash(ethBlock.ExtData()); ethHeader.ExtDataHash != hash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", ethHeader.ExtDataHash, hash)
+	headerExtra := types.GetHeaderExtra(ethHeader)
+	if rulesExtra.IsApricotPhase1 {
+		if hash := types.CalcExtDataHash(ethBlock.ExtData()); headerExtra.ExtDataHash != hash {
+			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
 		}
 	} else {
-		if ethHeader.ExtDataHash != (common.Hash{}) {
+		if headerExtra.ExtDataHash != (common.Hash{}) {
 			return fmt.Errorf(
 				"expected ExtDataHash to be empty but got %x",
-				ethHeader.ExtDataHash,
+				headerExtra.ExtDataHash,
 			)
 		}
 	}
@@ -107,25 +108,25 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules extras.Rule
 	}
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
-	if rules.IsApricotPhase4 {
+	if rulesExtra.IsApricotPhase4 {
 		// Make sure ExtDataGasUsed is not nil and correct
-		if ethHeader.ExtDataGasUsed == nil {
+		if headerExtra.ExtDataGasUsed == nil {
 			return errNilExtDataGasUsedApricotPhase4
 		}
-		if rules.IsApricotPhase5 {
-			if !utils.BigLessOrEqualUint64(ethHeader.ExtDataGasUsed, ap5.AtomicGasLimit) {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
+		if rulesExtra.IsApricotPhase5 {
+			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
+				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
 			}
 		} else {
-			if !ethHeader.ExtDataGasUsed.IsUint64() {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
+			if !headerExtra.ExtDataGasUsed.IsUint64() {
+				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
 			}
 		}
 		var totalGasUsed uint64
 		for _, atomicTx := range atomicTxs {
 			// We perform this check manually here to avoid the overhead of having to
 			// reparse the atomicTx in `CalcExtDataGasUsed`.
-			fixedFee := rules.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
+			fixedFee := rulesExtra.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
 			gasUsed, err := atomicTx.GasUsed(fixedFee)
 			if err != nil {
 				return err
@@ -136,8 +137,8 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules extras.Rule
 			}
 		}
 
-		if ethHeader.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0 {
-			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", ethHeader.ExtDataGasUsed, totalGasUsed)
+		if headerExtra.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0 {
+			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
 		}
 	}
 
