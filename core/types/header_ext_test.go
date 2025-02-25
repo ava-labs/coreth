@@ -45,10 +45,11 @@ func TestHeaderJSON(t *testing.T) {
 	_ = testHeaderEncodeDecode(t, json.Marshal, json.Unmarshal)
 }
 
-func testHeaderEncodeDecode(t *testing.T,
+func testHeaderEncodeDecode(
+	t *testing.T,
 	encode func(any) ([]byte, error),
-	decode func([]byte, any) error) (
-	encoded []byte) {
+	decode func([]byte, any) error,
+) (encoded []byte) {
 	t.Helper()
 
 	input, _ := headerWithNonZeroFields() // the Header carries the HeaderExtra so we can ignore it
