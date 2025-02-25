@@ -181,7 +181,7 @@ func (b *Block) acceptDuringSync() error {
 		return err
 	}
 
-	log.Info("Returning from accept without error")
+	log.Info("Returning from accept without error", "block", b.ID(), "height", b.Height())
 
 	return nil
 }
@@ -272,10 +272,25 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(ctx context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
-		log.Error("Called Reject for block during dynamic state sync", "block", b.ID(), "height", b.Height())
-		return errors.New("cannot reject block during dynamic state sync")
+		log.Warn("Called Reject for block during dynamic state sync", "block", b.ID(), "height", b.Height())
+		return b.rejectDuringSync(ctx)
 	}
 	return b.reject(ctx)
+}
+
+func (b *Block) rejectDuringSync(ctx context.Context) error {
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Reject
+		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
+		return err
+	}
+	if err := atomicState.Reject(); err != nil {
+		return err
+	}
+
+	log.Info("Returning from reject without error", "block", b.ID(), "height", b.Height())
+	return nil
 }
 
 func (b *Block) reject(context.Context) error {
@@ -392,7 +407,7 @@ func (b *Block) verifyDuringSync() error {
 		}
 	}
 
-	log.Info("Returning from verify without error")
+	log.Info("Returning from verify without error", "block", b.ID(), "height", b.Height())
 
 	return nil
 }
