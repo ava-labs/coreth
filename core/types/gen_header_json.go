@@ -9,37 +9,36 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
-	"github.com/ava-labs/libevm/core/types"
 )
 
 var _ = (*headerMarshaling)(nil)
 
-// EncodeJSON marshals as JSON.
-func (h HeaderSerializable) EncodeJSON() ([]byte, error) {
+// MarshalJSON marshals as JSON.
+func (h HeaderSerializable) MarshalJSON() ([]byte, error) {
 	type HeaderSerializable struct {
-		ParentHash       common.Hash      `json:"parentHash"       gencodec:"required"`
-		UncleHash        common.Hash      `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase         common.Address   `json:"miner"            gencodec:"required"`
-		Root             common.Hash      `json:"stateRoot"        gencodec:"required"`
-		TxHash           common.Hash      `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash      common.Hash      `json:"receiptsRoot"     gencodec:"required"`
-		Bloom            types.Bloom      `json:"logsBloom"        gencodec:"required"`
-		Difficulty       *hexutil.Big     `json:"difficulty"       gencodec:"required"`
-		Number           *hexutil.Big     `json:"number"           gencodec:"required"`
-		GasLimit         hexutil.Uint64   `json:"gasLimit"         gencodec:"required"`
-		GasUsed          hexutil.Uint64   `json:"gasUsed"          gencodec:"required"`
-		Time             hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
-		Extra            hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		MixDigest        common.Hash      `json:"mixHash"`
-		Nonce            types.BlockNonce `json:"nonce"`
-		ExtDataHash      common.Hash      `json:"extDataHash"      gencodec:"required"`
-		BaseFee          *hexutil.Big     `json:"baseFeePerGas" rlp:"optional"`
-		ExtDataGasUsed   *hexutil.Big     `json:"extDataGasUsed" rlp:"optional"`
-		BlockGasCost     *hexutil.Big     `json:"blockGasCost" rlp:"optional"`
-		BlobGasUsed      *hexutil.Uint64  `json:"blobGasUsed" rlp:"optional"`
-		ExcessBlobGas    *hexutil.Uint64  `json:"excessBlobGas" rlp:"optional"`
-		ParentBeaconRoot *common.Hash     `json:"parentBeaconBlockRoot" rlp:"optional"`
-		Hash             common.Hash      `json:"hash"`
+		ParentHash       common.Hash     `json:"parentHash"       gencodec:"required"`
+		UncleHash        common.Hash     `json:"sha3Uncles"       gencodec:"required"`
+		Coinbase         common.Address  `json:"miner"            gencodec:"required"`
+		Root             common.Hash     `json:"stateRoot"        gencodec:"required"`
+		TxHash           common.Hash     `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash      common.Hash     `json:"receiptsRoot"     gencodec:"required"`
+		Bloom            Bloom           `json:"logsBloom"        gencodec:"required"`
+		Difficulty       *hexutil.Big    `json:"difficulty"       gencodec:"required"`
+		Number           *hexutil.Big    `json:"number"           gencodec:"required"`
+		GasLimit         hexutil.Uint64  `json:"gasLimit"         gencodec:"required"`
+		GasUsed          hexutil.Uint64  `json:"gasUsed"          gencodec:"required"`
+		Time             hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
+		Extra            hexutil.Bytes   `json:"extraData"        gencodec:"required"`
+		MixDigest        common.Hash     `json:"mixHash"`
+		Nonce            BlockNonce      `json:"nonce"`
+		ExtDataHash      common.Hash     `json:"extDataHash"      gencodec:"required"`
+		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
+		ExtDataGasUsed   *hexutil.Big    `json:"extDataGasUsed" rlp:"optional"`
+		BlockGasCost     *hexutil.Big    `json:"blockGasCost" rlp:"optional"`
+		BlobGasUsed      *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
+		ExcessBlobGas    *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
+		ParentBeaconRoot *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
+		Hash             common.Hash     `json:"hash"`
 	}
 	var enc HeaderSerializable
 	enc.ParentHash = h.ParentHash
@@ -68,31 +67,31 @@ func (h HeaderSerializable) EncodeJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
-// DecodeJSON unmarshals from JSON.
-func (h *HeaderSerializable) DecodeJSON(input []byte) error {
+// UnmarshalJSON unmarshals from JSON.
+func (h *HeaderSerializable) UnmarshalJSON(input []byte) error {
 	type HeaderSerializable struct {
-		ParentHash       *common.Hash      `json:"parentHash"       gencodec:"required"`
-		UncleHash        *common.Hash      `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase         *common.Address   `json:"miner"            gencodec:"required"`
-		Root             *common.Hash      `json:"stateRoot"        gencodec:"required"`
-		TxHash           *common.Hash      `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash      *common.Hash      `json:"receiptsRoot"     gencodec:"required"`
-		Bloom            *types.Bloom      `json:"logsBloom"        gencodec:"required"`
-		Difficulty       *hexutil.Big      `json:"difficulty"       gencodec:"required"`
-		Number           *hexutil.Big      `json:"number"           gencodec:"required"`
-		GasLimit         *hexutil.Uint64   `json:"gasLimit"         gencodec:"required"`
-		GasUsed          *hexutil.Uint64   `json:"gasUsed"          gencodec:"required"`
-		Time             *hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
-		Extra            *hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		MixDigest        *common.Hash      `json:"mixHash"`
-		Nonce            *types.BlockNonce `json:"nonce"`
-		ExtDataHash      *common.Hash      `json:"extDataHash"      gencodec:"required"`
-		BaseFee          *hexutil.Big      `json:"baseFeePerGas" rlp:"optional"`
-		ExtDataGasUsed   *hexutil.Big      `json:"extDataGasUsed" rlp:"optional"`
-		BlockGasCost     *hexutil.Big      `json:"blockGasCost" rlp:"optional"`
-		BlobGasUsed      *hexutil.Uint64   `json:"blobGasUsed" rlp:"optional"`
-		ExcessBlobGas    *hexutil.Uint64   `json:"excessBlobGas" rlp:"optional"`
-		ParentBeaconRoot *common.Hash      `json:"parentBeaconBlockRoot" rlp:"optional"`
+		ParentHash       *common.Hash    `json:"parentHash"       gencodec:"required"`
+		UncleHash        *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+		Coinbase         *common.Address `json:"miner"            gencodec:"required"`
+		Root             *common.Hash    `json:"stateRoot"        gencodec:"required"`
+		TxHash           *common.Hash    `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash      *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+		Bloom            *Bloom          `json:"logsBloom"        gencodec:"required"`
+		Difficulty       *hexutil.Big    `json:"difficulty"       gencodec:"required"`
+		Number           *hexutil.Big    `json:"number"           gencodec:"required"`
+		GasLimit         *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
+		GasUsed          *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
+		Time             *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
+		Extra            *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
+		MixDigest        *common.Hash    `json:"mixHash"`
+		Nonce            *BlockNonce     `json:"nonce"`
+		ExtDataHash      *common.Hash    `json:"extDataHash"      gencodec:"required"`
+		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
+		ExtDataGasUsed   *hexutil.Big    `json:"extDataGasUsed" rlp:"optional"`
+		BlockGasCost     *hexutil.Big    `json:"blockGasCost" rlp:"optional"`
+		BlobGasUsed      *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
+		ExcessBlobGas    *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
+		ParentBeaconRoot *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
 	}
 	var dec HeaderSerializable
 	if err := json.Unmarshal(input, &dec); err != nil {

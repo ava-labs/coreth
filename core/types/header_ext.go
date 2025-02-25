@@ -66,14 +66,14 @@ func (h *HeaderExtra) EncodeJSON(eth *ethtypes.Header) ([]byte, error) {
 	temp.updateFromEth(eth)
 	temp.updateFromExtras(h)
 
-	return temp.EncodeJSON()
+	return temp.MarshalJSON()
 }
 
 // DecodeJSON JSON decodes from the `input` bytes and writes the output to both the
 // [ethtypes.Header] passed as argument and to the receiver [HeaderExtra].
 func (h *HeaderExtra) DecodeJSON(eth *ethtypes.Header, input []byte) error {
 	temp := new(HeaderSerializable)
-	if err := temp.DecodeJSON(input); err != nil {
+	if err := temp.UnmarshalJSON(input); err != nil {
 		return err
 	}
 
