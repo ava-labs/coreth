@@ -227,7 +227,7 @@ func (utx *UnsignedImportTx) SemanticVerify(
 	}
 
 	if err := fc.Verify(); err != nil {
-		return fmt.Errorf("import tx flow check failed due to: %w %+v", err, fc)
+		return fmt.Errorf("import tx flow check failed due to: %w", err)
 	}
 
 	if len(stx.Creds) != len(utx.ImportedInputs) {
