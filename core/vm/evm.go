@@ -228,7 +228,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 
-	// If the predicate results are already available, use them.
+	// If the predicate results were set by the miner, use them.
 	if blockCtx.PredicateResults != nil {
 		return evm
 	}
