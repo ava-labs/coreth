@@ -271,7 +271,7 @@ func TestSuggestTipCapSimpleFloor(t *testing.T) {
 		numBlocks:       1,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 55, 80),
-		expectedTip:     common.Big0,
+		expectedTip:     big.NewInt(1),
 	}, defaultOracleConfig())
 }
 
