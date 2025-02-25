@@ -1168,11 +1168,11 @@ func (bc *BlockChain) InsertBlockDuringSync(block *types.Block) error {
 
 	// If [block] represents a new tip of the canonical chain, we optimistically add it before
 	// setPreference is called. Otherwise, we consider it a side chain block.
-	// if bc.newTip(block) {
-	// 	bc.writeCanonicalBlockWithLogs(block, nil)
-	// } else {
-	// 	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
-	// }
+	if bc.newTip(block) {
+		bc.writeCanonicalBlockWithLogs(block, nil)
+	} else {
+		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+	}
 	return nil
 }
 
