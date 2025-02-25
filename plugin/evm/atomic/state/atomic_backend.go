@@ -32,7 +32,7 @@ type AtomicBackend struct {
 	sharedMemory avalancheatomic.SharedMemory
 
 	repo       *AtomicRepository
-	atomicTrie *atomicTrie
+	atomicTrie *AtomicTrie
 
 	lastAcceptedHash common.Hash
 	verifiedRoots    map[common.Hash]*atomicState
@@ -401,7 +401,7 @@ func (a *AtomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool 
 	return false
 }
 
-func (a *AtomicBackend) AtomicTrie() *atomicTrie {
+func (a *AtomicBackend) AtomicTrie() *AtomicTrie {
 	return a.atomicTrie
 }
 
