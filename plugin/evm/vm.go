@@ -1689,16 +1689,19 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules extras.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
+		log.Error("First errRejectedParent in verifyTxs")
 		return errRejectedParent
 	}
 
 	ancestorID := ids.ID(parentHash)
+	log.Info("Ancestor", "ID", ancestorID.String())
 	// If the ancestor is unknown, then the parent failed verification when
 	// it was called.
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
 	ancestorInf, err := vm.GetBlockInternal(context.TODO(), ancestorID)
 	if err != nil {
+		log.Info("Second errRejectedParent in verifyTxs")
 		return errRejectedParent
 	}
 	ancestor, ok := ancestorInf.(*Block)

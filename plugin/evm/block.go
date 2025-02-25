@@ -178,7 +178,13 @@ func (b *Block) acceptDuringSync() error {
 
 	// Apply any shared memory changes atomically with other pending changes to
 	// the vm's versionDB.
-	return atomicState.Accept(vdbBatch, nil)
+	if err := atomicState.Accept(vdbBatch, nil); err != nil {
+		return err
+	}
+
+	log.Info("Returning from accept without error")
+
+	return nil
 }
 
 func (b *Block) accept(context.Context) error {
@@ -363,12 +369,9 @@ func (b *Block) verifyDuringSync() error {
 		return err
 	}
 
-	// This is my idea how to fix it
-	/*
-		if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
-			return err
-		}
-	*/
+	if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
+		return err
+	}
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
 	if vm.atomicBackend != nil {
@@ -389,6 +392,8 @@ func (b *Block) verifyDuringSync() error {
 			return err
 		}
 	}
+
+	log.Info("Returning from verify without error")
 
 	return nil
 }
@@ -437,6 +442,12 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
 	}
+
+	// If currently dynamically syncing, we should simply queue the block for later processing
+	if b.vm.StateSyncClient.AsyncReceive() {
+		return b.verifyDuringSync()
+	}
+
 	return b.verify(true)
 }
 

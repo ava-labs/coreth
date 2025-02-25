@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 )
 
@@ -98,12 +99,18 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 // HasBlock checks if a block is fully present in the database or not.
 func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
+		log.Info("Found in cache")
 		return true
 	}
 	if !bc.HasHeader(hash, number) {
+		log.Info("HasHeader failed")
 		return false
 	}
-	return rawdb.HasBody(bc.db, hash, number)
+	if !rawdb.HasBody(bc.db, hash, number) {
+		log.Info("HasBody failed")
+		return false
+	}
+	return true
 }
 
 // HasFastBlock checks if a fast block is fully present in the database or not.
