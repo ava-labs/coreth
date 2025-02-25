@@ -11,7 +11,6 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCopyHeader(t *testing.T) {
@@ -93,13 +92,17 @@ func exportedFieldsPointToDifferentMemory[T interface {
 }
 
 // assertDifferentPointers asserts that `a` and `b` are both non-nil
-// pointers of the same type and point to different memory locations.
+// pointers pointing to different memory locations.
 func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	t.Helper()
-	require.NotNilf(t, a, "a (%T) cannot be nil", a)
-	require.NotNilf(t, b, "b (%T) cannot be nil", b)
-	require.IsType(t, a, b, "test is badly written: a and b must be of the same type")
-	if a == b {
+	switch {
+	case a == nil:
+		t.Errorf("a (%T) cannot be nil", a)
+	case b == nil:
+		t.Errorf("b (%T) cannot be nil", b)
+	case a == b:
 		t.Errorf("pointers to same memory")
 	}
+	// Note: no need to check `b` is of the same type as `a`, otherwise
+	// the memory address would be different as well.
 }
