@@ -579,7 +579,6 @@ func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
 		"apricotPhase4": testutils.GenesisJSONApricotPhase4,
 		"apricotPhase5": testutils.GenesisJSONApricotPhase5,
 	} {
-		genesis := genesis
 		t.Run(name, func(t *testing.T) {
 			testConflictingImportTxs(t, genesis)
 		})
