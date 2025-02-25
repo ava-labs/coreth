@@ -131,20 +131,39 @@ func allExportedFieldsSet[T interface {
 
 		t.Run(field.Name, func(t *testing.T) {
 			switch f := v.Field(i).Interface().(type) {
-			case common.Hash, common.Address, BlockNonce, Bloom, uint64:
-				assert.NotZero(t, f)
+			case common.Hash:
+				assertNonZero(t, f)
+			case common.Address:
+				assertNonZero(t, f)
+			case BlockNonce:
+				assertNonZero(t, f)
+			case Bloom:
+				assertNonZero(t, f)
+			case uint64:
+				assertNonZero(t, f)
 			case *big.Int:
-				assert.NotZero(t, *f)
+				assertNonZero(t, f)
 			case *common.Hash:
-				assert.NotZero(t, *f)
+				assertNonZero(t, f)
 			case *uint64:
-				assert.NotZero(t, *f)
+				assertNonZero(t, f)
 			case []uint8:
 				assert.NotEmpty(t, f)
 			default:
 				t.Errorf("Field %q has unsupported type %T", field.Name, f)
 			}
 		})
+	}
+}
+
+func assertNonZero[T interface {
+	common.Hash | common.Address | BlockNonce | uint64 | Bloom |
+		*big.Int | *common.Hash | *uint64
+}](t *testing.T, v T) {
+	t.Helper()
+	var zero T
+	if v == zero {
+		t.Errorf("must not be zero value for %T", v)
 	}
 }
 
