@@ -20,7 +20,7 @@ import (
 func TestHeaderRLP(t *testing.T) {
 	t.Parallel()
 
-	got := testHeaderEncodings(t, rlp.EncodeToBytes, rlp.DecodeBytes)
+	got := testHeaderEncodeDecode(t, rlp.EncodeToBytes, rlp.DecodeBytes)
 
 	// Golden data from original coreth implementation, before integration of
 	// libevm. WARNING: changing these values can break backwards compatibility
@@ -40,18 +40,23 @@ func TestHeaderRLP(t *testing.T) {
 func TestHeaderJSON(t *testing.T) {
 	t.Parallel()
 
-	testHeaderEncodings(t, json.Marshal, json.Unmarshal)
+	// Note we ignore the returned encoded bytes because we don't
+	// need to compare them to a JSON gold standard.
+	_ = testHeaderEncodeDecode(t, json.Marshal, json.Unmarshal)
 }
 
-func testHeaderEncodings(t *testing.T, encode func(any) ([]byte, error), decode func([]byte, any) error) []byte {
+func testHeaderEncodeDecode(t *testing.T,
+	encode func(any) ([]byte, error),
+	decode func([]byte, any) error) (
+	encoded []byte) {
 	t.Helper()
 
 	input, _ := headerWithNonZeroFields() // the Header carries the HeaderExtra so we can ignore it
-	b, err := encode(input)
+	encoded, err := encode(input)
 	require.NoError(t, err, "encode")
 
 	gotHeader := new(Header)
-	err = decode(b, gotHeader)
+	err = decode(encoded, gotHeader)
 	require.NoError(t, err, "decode")
 	gotExtra := GetHeaderExtra(gotHeader)
 
@@ -60,10 +65,10 @@ func testHeaderEncodings(t *testing.T, encode func(any) ([]byte, error), decode 
 	assert.Equal(t, wantHeader, gotHeader)
 	assert.Equal(t, wantExtra, gotExtra)
 
-	return b
+	return encoded
 }
 
-func Test_headerWithNonZeroFields(t *testing.T) {
+func TestHeaderWithNonZeroFields(t *testing.T) {
 	t.Parallel()
 
 	header, extra := headerWithNonZeroFields()

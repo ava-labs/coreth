@@ -383,9 +383,9 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		BaseFee:   baseFee,
 	}
 	if configExtra.IsApricotPhase4(header.Time) {
-		ex := types.GetHeaderExtra(header)
-		ex.BlockGasCost = big.NewInt(0)
-		ex.ExtDataGasUsed = big.NewInt(0)
+		headerExtra := types.GetHeaderExtra(header)
+		headerExtra.BlockGasCost = big.NewInt(0)
+		headerExtra.ExtDataGasUsed = big.NewInt(0)
 	}
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there

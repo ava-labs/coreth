@@ -50,12 +50,12 @@ func TestCopyHeader(t *testing.T) {
 		assert.Equal(t, wantHeader, gotHeader)
 		assert.Equal(t, wantExtra, gotExtra)
 
-		exportedFieldsDeepCopied(t, header, gotHeader)
-		exportedFieldsDeepCopied(t, GetHeaderExtra(header), gotExtra)
+		exportedFieldsPointToDifferentMemory(t, header, gotHeader)
+		exportedFieldsPointToDifferentMemory(t, GetHeaderExtra(header), gotExtra)
 	})
 }
 
-func exportedFieldsDeepCopied[T interface {
+func exportedFieldsPointToDifferentMemory[T interface {
 	Header | HeaderExtra
 }](t *testing.T, original, cpy *T) {
 	t.Helper()
@@ -63,7 +63,7 @@ func exportedFieldsDeepCopied[T interface {
 	v := reflect.ValueOf(*original)
 	typ := v.Type()
 	cp := reflect.ValueOf(*cpy)
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		field := typ.Field(i)
 		if !field.IsExported() {
 			continue
