@@ -62,7 +62,7 @@ func VerifyExtraPrefix(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		claimedState, err := parseFeeState(header.Extra)
+		remoteState, err := parseFeeState(header.Extra)
 		if err != nil {
 			return fmt.Errorf("failed to calculate claimed fee state: %w", err)
 		}
@@ -76,17 +76,17 @@ func VerifyExtraPrefix(
 			config,
 			parent,
 			header,
-			&claimedState.TargetExcess,
+			&remoteState.TargetExcess,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to calculate expected fee state: %w", err)
 		}
 
-		if claimedState != expectedState {
+		if remoteState != expectedState {
 			return fmt.Errorf("%w: expected %v, found %v",
 				errIncorrectFeeState,
 				expectedState,
-				claimedState,
+				remoteState,
 			)
 		}
 	case config.IsApricotPhase3(header.Time):
