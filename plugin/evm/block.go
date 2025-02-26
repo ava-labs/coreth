@@ -35,6 +35,15 @@ var (
 
 var errMissingUTXOs = errors.New("missing UTXOs")
 
+type syncBlockRequest uint8
+
+const (
+	// Constants to identify block requests
+	verifySyncBlockRequest syncBlockRequest = iota + 1
+	acceptSyncBlockRequest
+	rejectSyncBlockRequest
+)
+
 // readMainnetBonusBlocks returns maps of bonus block numbers to block IDs.
 // Note bonus blocks are indexed in the atomic trie.
 func readMainnetBonusBlocks() (map[uint64]ids.ID, error) {
@@ -146,42 +155,6 @@ func (b *Block) Accept(context.Context) error {
 	return b.accept()
 }
 
-func (b *Block) acceptDuringSync() error {
-	vm := b.vm
-
-	// Although returning an error from Accept is considered fatal, it is good
-	// practice to cleanup the batch we were modifying in the case of an error.
-	defer vm.versiondb.Abort()
-	log.Info("Accepting block during sync", "block", b.ID(), "height", b.Height())
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
-	}
-
-	// Update VM state for atomic txs in this block. This includes updating the
-	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-	if err != nil {
-		// should never occur since [b] must be verified before calling Accept
-		return err
-	}
-	// Get pending operations on the vm's versionDB so we can apply them atomically
-	// with the shared memory changes.
-	vdbBatch, err := b.vm.versiondb.CommitBatch()
-	if err != nil {
-		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
-	}
-
-	// Apply any shared memory changes atomically with other pending changes to
-	// the vm's versionDB.
-	if err := atomicState.Accept(vdbBatch, nil); err != nil {
-		return err
-	}
-
-	log.Info("Returning from accept without error", "block", b.ID(), "height", b.Height())
-
-	return nil
-}
-
 func (b *Block) accept() error {
 	vm := b.vm
 
@@ -230,6 +203,42 @@ func (b *Block) accept() error {
 	return atomicState.Accept(vdbBatch, nil)
 }
 
+func (b *Block) acceptDuringSync() error {
+	vm := b.vm
+
+	// Although returning an error from Accept is considered fatal, it is good
+	// practice to cleanup the batch we were modifying in the case of an error.
+	defer vm.versiondb.Abort()
+	log.Info("Accepting block during sync", "block", b.ID(), "height", b.Height())
+	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	}
+
+	// Update VM state for atomic txs in this block. This includes updating the
+	// atomic tx repo, atomic trie, and shared memory.
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Accept
+		return err
+	}
+	// Get pending operations on the vm's versionDB so we can apply them atomically
+	// with the shared memory changes.
+	vdbBatch, err := b.vm.versiondb.CommitBatch()
+	if err != nil {
+		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+	}
+
+	// Apply any shared memory changes atomically with other pending changes to
+	// the vm's versionDB.
+	if err := atomicState.Accept(vdbBatch, nil); err != nil {
+		return err
+	}
+
+	log.Info("Returning from accept without error", "block", b.ID(), "height", b.Height())
+
+	return nil
+}
+
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
 // contract.Accepter
 func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
@@ -274,21 +283,6 @@ func (b *Block) Reject(ctx context.Context) error {
 	return b.reject()
 }
 
-func (b *Block) rejectDuringSync() error {
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-	if err != nil {
-		// should never occur since [b] must be verified before calling Reject
-		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
-		return err
-	}
-	if err := atomicState.Reject(); err != nil {
-		return err
-	}
-
-	log.Info("Returning from reject without error", "block", b.ID(), "height", b.Height())
-	return nil
-}
-
 func (b *Block) reject() error {
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
@@ -309,6 +303,21 @@ func (b *Block) reject() error {
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
+func (b *Block) rejectDuringSync() error {
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Reject
+		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
+		return err
+	}
+	if err := atomicState.Reject(); err != nil {
+		return err
+	}
+
+	log.Info("Returning from reject without error", "block", b.ID(), "height", b.Height())
+	return nil
+}
+
 // Parent implements the snowman.Block interface
 func (b *Block) Parent() ids.ID {
 	return ids.ID(b.ethBlock.ParentHash())
@@ -322,17 +331,6 @@ func (b *Block) Height() uint64 {
 // Timestamp implements the snowman.Block interface
 func (b *Block) Timestamp() time.Time {
 	return time.Unix(int64(b.ethBlock.Time()), 0)
-}
-
-// syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() error {
-	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
-	}
-
-	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
 }
 
 // Verify implements the snowman.Block interface
@@ -362,50 +360,6 @@ func (b *Block) Verify(context.Context) error {
 	}
 
 	return b.verify(true)
-}
-
-func (b *Block) verifyDuringSync() error {
-	log.Debug("Verifying block during sync", "block", b.ID(), "height", b.Height())
-	var (
-		block      = b.ethBlock
-		header     = block.Header()
-		vm         = b.vm
-		rules      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra = *params.GetRulesExtra(rules)
-	)
-
-	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
-	if err != nil {
-		return err
-	}
-
-	if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
-		return err
-	}
-
-	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
-	if vm.atomicBackend != nil {
-		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
-			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
-		} else {
-			// Verify [txs] do not conflict with themselves or ancestor blocks.
-			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rulesExtra); err != nil {
-				return err
-			}
-		}
-		// Update the atomic backend with [txs] from this block.
-		//
-		// Note: The atomic trie canonically contains the duplicate operations
-		// from any bonus blocks.
-		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
-		if err != nil {
-			return err
-		}
-	}
-
-	log.Info("Returning from verify without error", "block", b.ID(), "height", b.Height())
-
-	return nil
 }
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
@@ -489,6 +443,61 @@ func (b *Block) verify(writes bool) error {
 		}
 	}
 	return err
+}
+
+func (b *Block) verifyDuringSync() error {
+	log.Debug("Verifying block during sync", "block", b.ID(), "height", b.Height())
+	var (
+		block      = b.ethBlock
+		header     = block.Header()
+		vm         = b.vm
+		rules      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra = *params.GetRulesExtra(rules)
+	)
+
+	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
+	if err != nil {
+		return err
+	}
+
+	if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
+		return err
+	}
+
+	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
+	if vm.atomicBackend != nil {
+		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
+			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
+		} else {
+			// Verify [txs] do not conflict with themselves or ancestor blocks.
+			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rulesExtra); err != nil {
+				return err
+			}
+		}
+		// Update the atomic backend with [txs] from this block.
+		//
+		// Note: The atomic trie canonically contains the duplicate operations
+		// from any bonus blocks.
+		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Info("Returning from verify without error", "block", b.ID(), "height", b.Height())
+
+	return nil
+}
+
+// syntacticVerify verifies that a *Block is well-formed.
+func (b *Block) syntacticVerify() error {
+	if b == nil || b.ethBlock == nil {
+		return errInvalidBlock
+	}
+
+	header := b.ethBlock.Header()
+	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
 }
 
 // verifyPredicates verifies the predicates in the block are valid according to predicateContext.
