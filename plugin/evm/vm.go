@@ -131,7 +131,12 @@ const (
 	chainStateMetricsPrefix = "chain_state"
 
 	targetAtomicTxsSize = 40 * units.KiB
-	targetAtomicTxsGas  = ap5.AtomicGasLimit
+
+	// maxAtomicTxMempoolGas is the maximum amount of gas that is allowed to be
+	// used by an atomic transaction in the mempool. It is allowed to build
+	// blocks with larger atomic transactions, but they will not be accepted
+	// into the mempool.
+	maxAtomicTxMempoolGas = ap5.AtomicGasLimit
 
 	// gossip constants
 	pushGossipDiscardedElements = 16_384
@@ -1601,8 +1606,8 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	if err != nil {
 		return err
 	}
-	if gasUsed > targetAtomicTxsGas {
-		return fmt.Errorf("tx gas usage (%d) exceeds atomic txs gas target (%d)", gasUsed, targetAtomicTxsGas)
+	if gasUsed > maxAtomicTxMempoolGas {
+		return fmt.Errorf("tx gas usage (%d) exceeds maximum allowed mempool gas usage (%d)", gasUsed, maxAtomicTxMempoolGas)
 	}
 
 	// Note: we fetch the current block and then the state at that block instead of the current state directly
