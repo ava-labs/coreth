@@ -297,16 +297,16 @@ func TestBlockGetters(t *testing.T) {
 			extras.Block.Set(block, test.blockExtra)
 
 			extData := BlockExtData(block)
-			assert.Equal(t, test.wantExtData, extData)
+			assert.Equal(t, test.wantExtData, extData, "BlockExtData()")
 
 			version := BlockVersion(block)
-			assert.Equal(t, test.wantVersion, version)
+			assert.Equal(t, test.wantVersion, version, "BlockVersion()")
 
 			extDataGasUsed := BlockExtDataGasUsed(block)
-			assert.Equal(t, test.wantExtDataGasUsed, extDataGasUsed)
+			assert.Equal(t, test.wantExtDataGasUsed, extDataGasUsed, "BlockExtDataGasUsed()")
 
 			blockGasCost := BlockGasCost(block)
-			assert.Equal(t, test.wantBlockGasCost, blockGasCost)
+			assert.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
 		})
 	}
 }
