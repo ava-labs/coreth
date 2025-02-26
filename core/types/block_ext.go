@@ -146,7 +146,8 @@ func NewBlockWithExtData(
 		headerExtra.ExtDataHash = CalcExtDataHash(extdata)
 	}
 	block := NewBlock(header, txs, uncles, receipts, hasher)
-	extdataCopy := slices.Clone(extdata)
+	extdataCopy := make([]byte, len(extdata))
+	copy(extdataCopy, extdata)
 	extra := &BlockBodyExtra{
 		ExtData: &extdataCopy,
 	}
