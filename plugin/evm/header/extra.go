@@ -96,7 +96,7 @@ func VerifyExtraPrefix(
 		}
 		feeWindowBytes := feeWindowBytes(feeWindow)
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
-			return fmt.Errorf("%w: expected %x, found %x",
+			return fmt.Errorf("%w: expected %x as prefix, found %x",
 				errInvalidExtraPrefix,
 				feeWindowBytes,
 				header.Extra,
