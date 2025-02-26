@@ -372,12 +372,11 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
-	parentHeader := parent.Header()
-	gasLimit, err := header.GasLimit(cm.config, parentHeader, time)
+	gasLimit, err := header.GasLimit(cm.config, parent.Header(), time)
 	if err != nil {
 		panic(err)
 	}
-	baseFee, err := header.BaseFee(cm.config, parentHeader, time)
+	baseFee, err := header.BaseFee(cm.config, parent.Header(), time)
 	if err != nil {
 		panic(err)
 	}
@@ -386,7 +385,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),
+		Difficulty: engine.CalcDifficulty(cm, time, parent.Header()),
 		GasLimit:   gasLimit,
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
