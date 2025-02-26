@@ -117,7 +117,7 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 }
 
 func allExportedFieldsSet[T interface {
-	Header | HeaderExtra | Body | BlockBodyExtra
+	Header | HeaderExtra | Block | Body | BlockBodyExtra
 }](t *testing.T, x *T) {
 	// We don't test for nil pointers because we're only confirming that
 	// test-input data is well-formed. A panic due to a dereference will be
