@@ -5,6 +5,7 @@ package types
 
 import (
 	"math/big"
+	"slices"
 
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
@@ -32,11 +33,9 @@ type BlockBodyExtra struct {
 func (b *BlockBodyExtra) Copy() *BlockBodyExtra {
 	cpy := *b
 	if b.ExtData == nil {
-		data := make([]byte, 0)
-		cpy.ExtData = &data
+		cpy.ExtData = &[]byte{}
 	} else {
-		data := make([]byte, len(*b.ExtData))
-		copy(data, *b.ExtData)
+		data := slices.Clone(*b.ExtData)
 		cpy.ExtData = &data
 	}
 	return &cpy
