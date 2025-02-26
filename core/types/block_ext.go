@@ -74,7 +74,7 @@ func (b *BlockBodyExtra) BodyRLPFieldPointersForDecoding(body *Body) *rlp.Fields
 // BlockRLPFieldPointersForEncoding returns the fields that should be encoded
 // for the [Block] and [BlockBodyExtra].
 // Note the following fields are added (+) and removed (-) compared to geth:
-// - (-) [ethtypes.Body] `Withdrawals` field
+// - (-) [ethtypes.Block] `Withdrawals` field
 // - (+) [BlockBodyExtra] `Version` field
 // - (+) [BlockBodyExtra] `ExtData` field
 func (b *BlockBodyExtra) BlockRLPFieldsForEncoding(block *ethtypes.BlockRLPProxy) *rlp.Fields {
