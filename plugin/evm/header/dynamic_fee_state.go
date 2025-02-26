@@ -44,7 +44,7 @@ func feeStateBeforeBlock(
 		var err error
 		state, err = parseFeeState(parent.Extra)
 		if err != nil {
-			return acp176.State{}, err
+			return acp176.State{}, fmt.Errorf("failed to parse parent fee state: %w", err)
 		}
 	}
 
