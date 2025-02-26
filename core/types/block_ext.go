@@ -124,6 +124,9 @@ func BlockExtDataGasUsed(b *Block) *big.Int {
 
 func BlockGasCost(b *Block) *big.Int {
 	cost := GetHeaderExtra(b.Header()).BlockGasCost
+	if cost == nil {
+		return nil
+	}
 	return new(big.Int).Set(cost)
 }
 
