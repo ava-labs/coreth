@@ -25,8 +25,10 @@ type BlockBodyExtra struct {
 
 // Copy deep copies the [BlockBodyExtra] `b` and returns it.
 // It is notably used in the following functions:
-// - [Block]'s Body() method
-// - [Block]'s With*() methods
+// - [ethtypes.Block.Body]
+// - [ethtypes.Block.WithSeal]
+// - [ethtypes.Block.WithBody]
+// - [ethtypes.Block.WithWithdrawals]
 func (b *BlockBodyExtra) Copy() *BlockBodyExtra {
 	cpy := *b
 	if b.ExtData == nil {
