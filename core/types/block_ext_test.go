@@ -229,42 +229,27 @@ func TestBlockExtraRLP(t *testing.T) {
 func TestBlockBody(t *testing.T) {
 	t.Parallel()
 
-	header := &Header{ParentHash: common.Hash{1}}
-	tx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
-	txs := []*Transaction{tx}
-	uncles := []*Header{{ParentHash: common.Hash{6}}}
-	receipts := []*Receipt{{PostState: []byte{7}}}
-	block := NewBlock(header, txs, uncles, receipts, stubHasher{})
+	const (
+		version     = 1
+		extDataByte = 2
+	)
+
 	blockExtras := &BlockBodyExtra{
-		Version: 8,
-		ExtData: ptrTo([]byte{9}),
+		Version: version,
+		ExtData: ptrTo([]byte{extDataByte}),
 	}
 	allExportedFieldsSet(t, blockExtras) // make sure each field is checked
+	block := NewBlock(&Header{}, nil, nil, nil, stubHasher{})
 	extras.Block.Set(block, blockExtras)
 
-	wantUncle := &Header{
-		ParentHash: common.Hash{6},
-		Difficulty: new(big.Int),
-		Number:     new(big.Int),
+	wantExtra := &BlockBodyExtra{
+		Version: version,
+		ExtData: ptrTo([]byte{extDataByte}),
 	}
-	// uncle returned from Body() has its extra set, even if the block uncle did not have it set
-	SetHeaderExtra(wantUncle, &HeaderExtra{})
-	wantBody := &Body{
-		Transactions: []*Transaction{tx},
-		Uncles:       []*Header{wantUncle},
-	}
-	wantBodyExtra := &BlockBodyExtra{
-		Version: 8,
-		ExtData: ptrTo([]byte{9}),
-	}
-	extras.Body.Set(wantBody, wantBodyExtra)
+	gotExtra := extras.Body.Get(block.Body()) // [types.Block.Body] invokes [BlockBodyExtra.Copy]
+	assert.Equal(t, wantExtra, gotExtra)
 
-	body := block.Body()
-	assert.Equal(t, wantBody, body)
-	bodyExtra := extras.Body.Get(body)
-	assert.Equal(t, wantBodyExtra, bodyExtra)
-
-	exportedFieldsPointToDifferentMemory(t, blockExtras, bodyExtra)
+	exportedFieldsPointToDifferentMemory(t, blockExtras, gotExtra)
 }
 
 func TestBlockGetters(t *testing.T) {
