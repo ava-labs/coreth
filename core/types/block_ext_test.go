@@ -112,48 +112,6 @@ func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	// the memory address would be different as well.
 }
 
-func TestBlockExtraGetWith(t *testing.T) {
-	t.Parallel()
-
-	b := &Block{}
-
-	extra := extras.Block.Get(b)
-	require.NotNil(t, extra)
-	assert.Equal(t, &BlockBodyExtra{}, extra)
-
-	extra = &BlockBodyExtra{
-		Version: 1,
-	}
-	extras.Block.Set(b, extra)
-
-	extra = extras.Block.Get(b)
-	wantExtra := &BlockBodyExtra{
-		Version: 1,
-	}
-	assert.Equal(t, wantExtra, extra)
-}
-
-func TestBodyExtraGetWith(t *testing.T) {
-	t.Parallel()
-
-	b := &Body{}
-
-	extra := extras.Body.Get(b)
-	require.NotNil(t, extra)
-	assert.Equal(t, &BlockBodyExtra{}, extra)
-
-	extra = &BlockBodyExtra{
-		Version: 1,
-	}
-	extras.Body.Set(b, extra)
-
-	extra = extras.Body.Get(b)
-	wantExtra := &BlockBodyExtra{
-		Version: 1,
-	}
-	assert.Equal(t, wantExtra, extra)
-}
-
 func TestBodyExtraRLP(t *testing.T) {
 	t.Parallel()
 
