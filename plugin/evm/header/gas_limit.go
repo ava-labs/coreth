@@ -96,7 +96,7 @@ func VerifyGasLimit(
 	case config.IsFUpgrade(header.Time):
 		state, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
-			return fmt.Errorf("failed to calculate the fee state: %w", err)
+			return fmt.Errorf("failed to calculate the initial fee state: %w", err)
 		}
 		maxCapacity := state.MaxCapacity()
 		if header.GasLimit != uint64(maxCapacity) {
