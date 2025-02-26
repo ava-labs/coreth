@@ -139,19 +139,15 @@ func (b *Block) ID() ids.ID { return b.id }
 func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
 // Accept implements the snowman.Block interface
-func (b *Block) Accept(ctx context.Context) error {
+func (b *Block) Accept(context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
-		return b.acceptDuringSync()
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, acceptSyncBlockRequest)
 	}
-	return b.accept(ctx)
+	return b.accept()
 }
 
 func (b *Block) acceptDuringSync() error {
 	vm := b.vm
-	// First check to see if we should pivot
-	if err := b.vm.StateSyncClient.CheckPivot(b); err != nil {
-		return err
-	}
 
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
@@ -186,7 +182,7 @@ func (b *Block) acceptDuringSync() error {
 	return nil
 }
 
-func (b *Block) accept(context.Context) error {
+func (b *Block) accept() error {
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
@@ -273,12 +269,12 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 func (b *Block) Reject(ctx context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
 		log.Warn("Called Reject for block during dynamic state sync", "block", b.ID(), "height", b.Height())
-		return b.rejectDuringSync(ctx)
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, rejectSyncBlockRequest)
 	}
-	return b.reject(ctx)
+	return b.reject()
 }
 
-func (b *Block) rejectDuringSync(ctx context.Context) error {
+func (b *Block) rejectDuringSync() error {
 	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
@@ -293,7 +289,7 @@ func (b *Block) rejectDuringSync(ctx context.Context) error {
 	return nil
 }
 
-func (b *Block) reject(context.Context) error {
+func (b *Block) reject() error {
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
@@ -360,9 +356,9 @@ func (b *Block) Verify(context.Context) error {
 		}
 	}
 
-	// If currently dynamically syncing, we should simply queue the block for later processing
+	// If currently dynamically syncing, we should simply postpone execution
 	if b.vm.StateSyncClient.AsyncReceive() {
-		return b.verifyDuringSync()
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, verifySyncBlockRequest)
 	}
 
 	return b.verify(true)
@@ -457,9 +453,9 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 		}
 	}
 
-	// If currently dynamically syncing, we should simply queue the block for later processing
+	// If currently dynamically syncing, we should postpone execution
 	if b.vm.StateSyncClient.AsyncReceive() {
-		return b.verifyDuringSync()
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, verifySyncBlockRequest)
 	}
 
 	return b.verify(true)
@@ -556,6 +552,34 @@ func (b *Block) verifyUTXOsPresent() error {
 		}
 	}
 	return nil
+}
+
+func (b *Block) ExecuteSyncRequest(req syncBlockRequest, final bool) error {
+	if final {
+		switch req {
+		case verifySyncBlockRequest:
+			return b.verify(true)
+		case acceptSyncBlockRequest:
+			return b.accept()
+		case rejectSyncBlockRequest:
+			return b.reject()
+		default:
+			// Should never happen
+			return fmt.Errorf("Unable to perform block operation of %d", req)
+		}
+	} else {
+		switch req {
+		case verifySyncBlockRequest:
+			return b.verifyDuringSync()
+		case acceptSyncBlockRequest:
+			return b.acceptDuringSync()
+		case rejectSyncBlockRequest:
+			return b.rejectDuringSync()
+		default:
+			// Should never happen
+			return fmt.Errorf("Unable to perform block operation of %d", req)
+		}
+	}
 }
 
 // Bytes implements the snowman.Block interface
