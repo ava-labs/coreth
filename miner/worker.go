@@ -261,7 +261,7 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	}
 	capacity, err := customheader.GasCapacity(w.chainConfig, parent, header.Time)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to calculate gas capacity: %w", err)
 	}
 	numPrefetchers := w.chain.CacheConfig().TriePrefetcherParallelism
 	currentState.StartPrefetcher("miner", state.WithConcurrentWorkers(numPrefetchers))
