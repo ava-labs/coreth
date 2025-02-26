@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
@@ -118,7 +119,7 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 
 func allExportedFieldsSet[T interface {
 	Header | HeaderExtra | Block | Body | BlockBodyExtra
-}](t *testing.T, x *T) {
+}](t *testing.T, x *T, ignoredFields ...string) {
 	// We don't test for nil pointers because we're only confirming that
 	// test-input data is well-formed. A panic due to a dereference will be
 	// reported anyway.
@@ -126,7 +127,7 @@ func allExportedFieldsSet[T interface {
 	v := reflect.ValueOf(*x)
 	for i := range v.Type().NumField() {
 		field := v.Type().Field(i)
-		if !field.IsExported() {
+		if !field.IsExported() || slices.Contains(ignoredFields, field.Name) {
 			continue
 		}
 
@@ -152,7 +153,7 @@ func allExportedFieldsSet[T interface {
 				assertNonZero(t, f)
 			case *[]uint8:
 				assertNonZero(t, f)
-			case []uint8:
+			case []uint8, []*Transaction, []*Header, []*ethtypes.Withdrawal:
 				assert.NotEmpty(t, f)
 			default:
 				t.Errorf("Field %q has unsupported type %T", field.Name, f)
