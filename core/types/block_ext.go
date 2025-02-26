@@ -108,9 +108,6 @@ func BlockExtData(b *Block) []byte {
 		return *data
 	}
 	return nil
-		return nil
-	}
-	return *extras.ExtData
 }
 
 func BlockVersion(b *Block) uint32 {
