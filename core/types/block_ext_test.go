@@ -359,7 +359,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 			wantBlock: func() *Block {
 				header := &Header{}
 				extra := &HeaderExtra{
-					ExtDataHash: common.HexToHash("0xf2ee15ea639b73fa3db9b34a245bdfa015c260c598b211bf05a1ecc4b3e3b4f2"),
+					ExtDataHash: CalcExtDataHash([]byte{2}),
 				}
 				SetHeaderExtra(header, extra)
 				block := NewBlock(header, nil, nil, nil, stubHasher{})
