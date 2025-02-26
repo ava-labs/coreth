@@ -200,7 +200,7 @@ var (
 				Gas: gas.State{
 					Excess: math.MaxUint64,
 				},
-				TargetExcess: 1_024_950_627, // 2^25 * ln(MaxUint64 / MinTargetPerSecond) + 1
+				TargetExcess: maxTargetExcess,
 			},
 			target:      math.MaxUint64,
 			maxCapacity: math.MaxUint64,
