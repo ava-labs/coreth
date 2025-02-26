@@ -126,9 +126,8 @@ func BlockExtDataGasUsed(b *Block) *big.Int {
 }
 
 func BlockGasCost(b *Block) *big.Int {
-	header := b.Header() // note this deep copies headerExtra.BlockGasCost
-	headerExtra := GetHeaderExtra(header)
-	return headerExtra.BlockGasCost
+	cost := GetHeaderExtra(b.Header()).BlockGasCost
+	return new(big.Int).Set(cost)
 }
 
 func CalcExtDataHash(extdata []byte) common.Hash {
