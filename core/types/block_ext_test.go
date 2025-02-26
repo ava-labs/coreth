@@ -179,8 +179,8 @@ func TestBlockExtraRLP(t *testing.T) {
 	headerExtras := &HeaderExtra{ExtDataHash: common.Hash{2}}
 	SetHeaderExtra(header, headerExtras)
 
-	testTx := NewTransaction(3, common.Address{4}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
-	txs := []*Transaction{testTx}
+	tx := NewTransaction(3, common.Address{4}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
+	txs := []*Transaction{tx}
 
 	uncle := &Header{ParentHash: common.Hash{6}}
 	uncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
@@ -200,52 +200,29 @@ func TestBlockExtraRLP(t *testing.T) {
 	}
 	extras.Block.Set(block, extra)
 
-	b, err := rlp.EncodeToBytes(block)
+	encoded, err := rlp.EncodeToBytes(block)
 	require.NoError(t, err)
 
 	gotBlock := new(Block)
-	err = rlp.DecodeBytes(b, gotBlock)
+	err = rlp.DecodeBytes(encoded, gotBlock)
 	require.NoError(t, err)
 
-	// Check transactions in the following because unexported fields
-	// size and time are set by the RLP decoder.
-	gotTxs := gotBlock.Transactions()
-	require.Len(t, gotTxs, 1)
-	gotTx := gotTxs[0]
-	gotTxBin, err := gotTx.MarshalBinary()
-	require.NoError(t, err)
-	wantTxBin, err := testTx.MarshalBinary()
-	require.NoError(t, err)
-	assert.Equal(t, wantTxBin, gotTxBin)
+	wantBlock := block.WithWithdrawals(nil)
 
-	wantHeader := &Header{
-		ParentHash: common.Hash{1},
-		Extra:      []byte{}, // field set by RLP decoder
+	opts := cmp.Options{
+		txHashComparer(),
+		headerHashComparer(),
+		cmpopts.IgnoreUnexported(Block{}),
 	}
-	wantHeaderExtras := &HeaderExtra{ExtDataHash: common.Hash{2}}
-	SetHeaderExtra(wantHeader, wantHeaderExtras)
-
-	wantUncle := &Header{
-		ParentHash: common.Hash{6},
-		Difficulty: new(big.Int), // field set by RLP decoder
-		Number:     new(big.Int), // field set by RLP decoder
-		Extra:      []byte{},     // field set by RLP decoder
+	if diff := cmp.Diff(wantBlock, gotBlock, opts); diff != "" {
+		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", gotBlock, diff)
 	}
-	wantUncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
-	SetHeaderExtra(wantUncle, wantUncleExtra)
-	wantUncles := []*Header{wantUncle}
 
-	wantBlock := NewBlock(wantHeader, gotTxs /* checked above */, wantUncles, receipts, stubHasher{})
-	wantExtra := &BlockBodyExtra{
-		Version: 10,
-		ExtData: ptrTo([]byte{11}),
-	}
-	extras.Block.Set(wantBlock, wantExtra)
-	_ = wantBlock.Size() // set block cached unexported size field
-
-	assert.Equal(t, wantBlock, gotBlock)
 	gotExtra := extras.Block.Get(gotBlock)
-	assert.Equal(t, wantExtra, gotExtra)
+	wantExtra := extra
+	if diff := cmp.Diff(wantExtra, gotExtra); diff != "" {
+		t.Errorf("%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBlock, diff)
+	}
 }
 
 // TestBlockBody tests the [BlockBodyExtra.Copy] method is implemented correctly.
