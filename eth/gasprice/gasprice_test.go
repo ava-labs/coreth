@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/rpc"
@@ -395,4 +396,14 @@ func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
 		genBlock:        testGenBlock(t, 550, 80),
 		expectedTip:     big.NewInt(1),
 	}, timeCrunchOracleConfig())
+}
+
+func TestSuggestTipCapLargeTip(t *testing.T) {
+	applyGasPriceTest(t, suggestTipCapTest{
+		chainConfig:     params.TestChainConfig,
+		numBlocks:       1000,
+		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(params.TxGas)),
+		genBlock:        testGenBlock(t, 550, 1),
+		expectedTip:     big.NewInt(44_252),
+	}, defaultOracleConfig())
 }
