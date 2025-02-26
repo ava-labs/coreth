@@ -4,6 +4,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"math/big"
 	"reflect"
 	"testing"
@@ -112,6 +113,76 @@ func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	}
 	// Note: no need to check `b` is of the same type as `a`, otherwise
 	// the memory address would be different as well.
+}
+
+func TestBodyRLP(t *testing.T) {
+	t.Parallel()
+
+	input, _ := bodyWithNonZeroFields() // the [Body] carries the [BlockBodyExtra] so we can ignore it
+	encoded, err := rlp.EncodeToBytes(input)
+	require.NoError(t, err, "encode")
+
+	gotBody := new(Body)
+	err = rlp.DecodeBytes(encoded, gotBody)
+	require.NoError(t, err, "decode")
+	gotExtra := extras.Body.Get(gotBody)
+
+	wantBody, wantExtra := bodyWithNonZeroFields()
+
+	wantBody.Withdrawals = nil // this should be ignored
+	opts := cmp.Options{
+		txHashComparer(),
+		headerHashComparer(),
+		cmpopts.IgnoreUnexported(Body{}),
+	}
+	if diff := cmp.Diff(wantBody, gotBody, opts); diff != "" {
+		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
+	}
+	assert.Equal(t, wantExtra, gotExtra, "extra")
+
+	// Golden data from original coreth implementation, before integration of
+	// libevm. WARNING: changing these values can break backwards compatibility
+	// with extreme consequences.
+	const wantHex = "f90235dedd0105049402000000000000000000000000000000000000000306808080f90211f9020ea00900000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000070880808080a00000000000000000000000000000000000000000000000000000000000000000880000000000000000a00a000000000000000000000000000000000000000000000000000000000000000c0d"
+
+	assert.Equal(t, wantHex, hex.EncodeToString(encoded), "golden data")
+}
+
+// bodyWithNonZeroFields returns a [Body] and a [BlockBodyExtra],
+// each with all fields set to non-zero values.
+// The [BlockBodyExtra] extra payload is set in the [Body] via `extras.Body.Set`.
+//
+// NOTE: They can be used to demonstrate that RLP round-trip encoding
+// can recover all fields, but not that the encoded format is correct. This is
+// very important as the RLP encoding of a [Body] defines its hash.
+func bodyWithNonZeroFields() (*Body, *BlockBodyExtra) {
+	tx := NewTransaction(1, common.Address{2}, big.NewInt(3), 4, big.NewInt(5), []byte{6})
+	uncle := &Header{
+		Difficulty: big.NewInt(7),
+		Number:     big.NewInt(8),
+		ParentHash: common.Hash{9},
+	}
+	uncleExtra := &HeaderExtra{ExtDataHash: common.Hash{10}}
+	SetHeaderExtra(uncle, uncleExtra)
+	body := &Body{
+		Transactions: []*Transaction{tx},
+		Uncles:       []*Header{uncle},
+		Withdrawals:  []*ethtypes.Withdrawal{{Index: 11}},
+	}
+	extra := &BlockBodyExtra{
+		Version: 12,
+		ExtData: &[]byte{13},
+	}
+	extras.Body.Set(body, extra)
+	return body, extra
+}
+
+func TestBodyWithNonZeroFields(t *testing.T) {
+	t.Parallel()
+
+	body, extra := bodyWithNonZeroFields()
+	t.Run("Body", func(t *testing.T) { allExportedFieldsSet(t, body) })
+	t.Run("BodyExtra", func(t *testing.T) { allExportedFieldsSet(t, extra) })
 }
 
 func txHashComparer() cmp.Option {
