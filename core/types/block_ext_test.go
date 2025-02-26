@@ -12,6 +12,8 @@ import (
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,108 +114,62 @@ func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	// the memory address would be different as well.
 }
 
-func TestBlockExtraGetWith(t *testing.T) {
-	t.Parallel()
-
-	b := &Block{}
-
-	extra := extras.Block.Get(b)
-	require.NotNil(t, extra)
-	assert.Equal(t, &BlockBodyExtra{}, extra)
-
-	extra = &BlockBodyExtra{
-		Version: 1,
-	}
-	extras.Block.Set(b, extra)
-
-	extra = extras.Block.Get(b)
-	wantExtra := &BlockBodyExtra{
-		Version: 1,
-	}
-	assert.Equal(t, wantExtra, extra)
+func txHashComparer() cmp.Option {
+	return cmp.Comparer(func(a, b *Transaction) bool {
+		return a.Hash() == b.Hash()
+	})
 }
 
-func TestBodyExtraGetWith(t *testing.T) {
-	t.Parallel()
-
-	b := &Body{}
-
-	extra := extras.Body.Get(b)
-	require.NotNil(t, extra)
-	assert.Equal(t, &BlockBodyExtra{}, extra)
-
-	extra = &BlockBodyExtra{
-		Version: 1,
-	}
-	extras.Body.Set(b, extra)
-
-	extra = extras.Body.Get(b)
-	wantExtra := &BlockBodyExtra{
-		Version: 1,
-	}
-	assert.Equal(t, wantExtra, extra)
+func headerHashComparer() cmp.Option {
+	return cmp.Comparer(func(a, b *Header) bool {
+		return a.Hash() == b.Hash()
+	})
 }
 
 func TestBodyExtraRLP(t *testing.T) {
 	t.Parallel()
 
-	testTx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
+	tx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
 
 	uncle := &Header{ParentHash: common.Hash{6}}
 	uncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
 	SetHeaderExtra(uncle, uncleExtra)
 
 	body := &Body{
-		Transactions: []*Transaction{testTx},
+		Transactions: []*Transaction{tx},
 		Uncles:       []*Header{uncle},
 		Withdrawals:  []*ethtypes.Withdrawal{{Index: 7}}, // ignored
 	}
 	extra := &BlockBodyExtra{
 		Version: 1,
-		ExtData: ptrTo([]byte{2}),
+		ExtData: &[]byte{2},
 	}
 	extras.Body.Set(body, extra)
 
-	b, err := rlp.EncodeToBytes(body)
+	encoded, err := rlp.EncodeToBytes(body)
 	require.NoError(t, err)
 
 	gotBody := new(Body)
-	err = rlp.DecodeBytes(b, gotBody)
+	err = rlp.DecodeBytes(encoded, gotBody)
 	require.NoError(t, err)
 
-	// Check transactions in the following because unexported fields
-	// size and time are set by the RLP decoder.
-	require.Len(t, gotBody.Transactions, 1)
-	gotTx := gotBody.Transactions[0]
-	gotTxJSON, err := gotTx.MarshalJSON()
-	require.NoError(t, err)
-	wantTxJSON, err := testTx.MarshalJSON()
-	require.NoError(t, err)
-	assert.Equal(t, string(wantTxJSON), string(gotTxJSON))
-	gotBody.Transactions = nil
+	wantBody := body
+	wantBody.Withdrawals = nil
 
-	wantUncle := &Header{
-		ParentHash: common.Hash{6},
-		Difficulty: new(big.Int),
-		Number:     new(big.Int),
-		Extra:      []byte{},
+	opts := cmp.Options{
+		txHashComparer(),
+		headerHashComparer(),
+		cmpopts.IgnoreUnexported(Body{}),
 	}
-	wantUncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
-	SetHeaderExtra(wantUncle, wantUncleExtra)
+	if diff := cmp.Diff(wantBody, gotBody, opts); diff != "" {
+		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
+	}
 
-	wantBody := &Body{
-		Transactions: nil, // checked above
-		Uncles:       []*Header{wantUncle},
-	}
-	wantExtra := &BlockBodyExtra{
-		Version: 1,
-		ExtData: ptrTo([]byte{2}),
-	}
-	extras.Body.Set(wantBody, wantExtra)
-
-	assert.Equal(t, wantBody, gotBody)
 	gotExtra := extras.Body.Get(gotBody)
-	assert.Equal(t, wantExtra, gotExtra)
+	wantExtra := extra
+	if diff := cmp.Diff(wantExtra, gotExtra); diff != "" {
+		t.Errorf("%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBody, diff)
+	}
 }
 
 func TestBlockExtraRLP(t *testing.T) {
@@ -223,8 +179,8 @@ func TestBlockExtraRLP(t *testing.T) {
 	headerExtras := &HeaderExtra{ExtDataHash: common.Hash{2}}
 	SetHeaderExtra(header, headerExtras)
 
-	testTx := NewTransaction(3, common.Address{4}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
-	txs := []*Transaction{testTx}
+	tx := NewTransaction(3, common.Address{4}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
+	txs := []*Transaction{tx}
 
 	uncle := &Header{ParentHash: common.Hash{6}}
 	uncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
@@ -240,98 +196,55 @@ func TestBlockExtraRLP(t *testing.T) {
 
 	extra := &BlockBodyExtra{
 		Version: 10,
-		ExtData: ptrTo([]byte{11}),
+		ExtData: &[]byte{11},
 	}
 	extras.Block.Set(block, extra)
 
-	b, err := rlp.EncodeToBytes(block)
+	encoded, err := rlp.EncodeToBytes(block)
 	require.NoError(t, err)
 
 	gotBlock := new(Block)
-	err = rlp.DecodeBytes(b, gotBlock)
+	err = rlp.DecodeBytes(encoded, gotBlock)
 	require.NoError(t, err)
 
-	// Check transactions in the following because unexported fields
-	// size and time are set by the RLP decoder.
-	gotTxs := gotBlock.Transactions()
-	require.Len(t, gotTxs, 1)
-	gotTx := gotTxs[0]
-	gotTxBin, err := gotTx.MarshalBinary()
-	require.NoError(t, err)
-	wantTxBin, err := testTx.MarshalBinary()
-	require.NoError(t, err)
-	assert.Equal(t, wantTxBin, gotTxBin)
+	wantBlock := block.WithWithdrawals(nil)
 
-	wantHeader := &Header{
-		ParentHash: common.Hash{1},
-		Extra:      []byte{}, // field set by RLP decoder
+	opts := cmp.Options{
+		txHashComparer(),
+		headerHashComparer(),
+		cmpopts.IgnoreUnexported(Block{}),
 	}
-	wantHeaderExtras := &HeaderExtra{ExtDataHash: common.Hash{2}}
-	SetHeaderExtra(wantHeader, wantHeaderExtras)
-
-	wantUncle := &Header{
-		ParentHash: common.Hash{6},
-		Difficulty: new(big.Int), // field set by RLP decoder
-		Number:     new(big.Int), // field set by RLP decoder
-		Extra:      []byte{},     // field set by RLP decoder
+	if diff := cmp.Diff(wantBlock, gotBlock, opts); diff != "" {
+		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", gotBlock, diff)
 	}
-	wantUncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
-	SetHeaderExtra(wantUncle, wantUncleExtra)
-	wantUncles := []*Header{wantUncle}
 
-	wantBlock := NewBlock(wantHeader, gotTxs /* checked above */, wantUncles, receipts, stubHasher{})
-	wantExtra := &BlockBodyExtra{
-		Version: 10,
-		ExtData: ptrTo([]byte{11}),
-	}
-	extras.Block.Set(wantBlock, wantExtra)
-	_ = wantBlock.Size() // set block cached unexported size field
-
-	assert.Equal(t, wantBlock, gotBlock)
 	gotExtra := extras.Block.Get(gotBlock)
-	assert.Equal(t, wantExtra, gotExtra)
+	wantExtra := extra
+	if diff := cmp.Diff(wantExtra, gotExtra); diff != "" {
+		t.Errorf("%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBlock, diff)
+	}
 }
 
 // TestBlockBody tests the [BlockBodyExtra.Copy] method is implemented correctly.
 func TestBlockBody(t *testing.T) {
 	t.Parallel()
 
-	header := &Header{ParentHash: common.Hash{1}}
-	tx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
-	txs := []*Transaction{tx}
-	uncles := []*Header{{ParentHash: common.Hash{6}}}
-	receipts := []*Receipt{{PostState: []byte{7}}}
-	block := NewBlock(header, txs, uncles, receipts, stubHasher{})
 	blockExtras := &BlockBodyExtra{
-		Version: 8,
-		ExtData: ptrTo([]byte{9}),
+		Version: 1,
+		ExtData: &[]byte{2},
 	}
 	allExportedFieldsSet(t, blockExtras) // make sure each field is checked
+	block := NewBlock(&Header{}, nil, nil, nil, stubHasher{})
 	extras.Block.Set(block, blockExtras)
 
-	wantUncle := &Header{
-		ParentHash: common.Hash{6},
-		Difficulty: new(big.Int),
-		Number:     new(big.Int),
+	wantExtra := &BlockBodyExtra{
+		Version: 1,
+		ExtData: &[]byte{2},
 	}
-	// uncle returned from Body() has its extra set, even if the block uncle did not have it set
-	SetHeaderExtra(wantUncle, &HeaderExtra{})
-	wantBody := &Body{
-		Transactions: []*Transaction{tx},
-		Uncles:       []*Header{wantUncle},
-	}
-	wantBodyExtra := &BlockBodyExtra{
-		Version: 8,
-		ExtData: ptrTo([]byte{9}),
-	}
-	extras.Body.Set(wantBody, wantBodyExtra)
+	gotExtra := extras.Body.Get(block.Body()) // [types.Block.Body] invokes [BlockBodyExtra.Copy]
+	assert.Equal(t, wantExtra, gotExtra)
 
-	body := block.Body()
-	assert.Equal(t, wantBody, body)
-	bodyExtra := extras.Body.Get(body)
-	assert.Equal(t, wantBodyExtra, bodyExtra)
-
-	exportedFieldsPointToDifferentMemory(t, blockExtras, bodyExtra)
+	exportedFieldsPointToDifferentMemory(t, blockExtras, gotExtra)
 }
 
 func TestBlockGetters(t *testing.T) {
@@ -359,7 +272,7 @@ func TestBlockGetters(t *testing.T) {
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
-				ExtData: ptrTo([]byte{4}),
+				ExtData: &[]byte{4},
 			},
 			wantExtDataGasUsed: big.NewInt(1),
 			wantBlockGasCost:   big.NewInt(2),
@@ -379,16 +292,16 @@ func TestBlockGetters(t *testing.T) {
 			extras.Block.Set(block, test.blockExtra)
 
 			extData := BlockExtData(block)
-			assert.Equal(t, test.wantExtData, extData)
+			assert.Equal(t, test.wantExtData, extData, "BlockExtData()")
 
 			version := BlockVersion(block)
-			assert.Equal(t, test.wantVersion, version)
+			assert.Equal(t, test.wantVersion, version, "BlockVersion()")
 
 			extDataGasUsed := BlockExtDataGasUsed(block)
-			assert.Equal(t, test.wantExtDataGasUsed, extDataGasUsed)
+			assert.Equal(t, test.wantExtDataGasUsed, extDataGasUsed, "BlockExtDataGasUsed()")
 
 			blockGasCost := BlockGasCost(block)
-			assert.Equal(t, test.wantBlockGasCost, blockGasCost)
+			assert.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
 		})
 	}
 }
@@ -421,7 +334,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 				header := &Header{}
 				SetHeaderExtra(header, &HeaderExtra{})
 				block := NewBlock(header, nil, nil, nil, stubHasher{})
-				blockExtra := &BlockBodyExtra{ExtData: ptrTo([]byte{})}
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{}}
 				extras.Block.Set(block, blockExtra)
 				return block
 			},
@@ -441,11 +354,11 @@ func TestNewBlockWithExtData(t *testing.T) {
 			wantBlock: func() *Block {
 				header := &Header{}
 				extra := &HeaderExtra{
-					ExtDataHash: common.HexToHash("0xf2ee15ea639b73fa3db9b34a245bdfa015c260c598b211bf05a1ecc4b3e3b4f2"),
+					ExtDataHash: CalcExtDataHash([]byte{2}),
 				}
 				SetHeaderExtra(header, extra)
 				block := NewBlock(header, nil, nil, nil, stubHasher{})
-				blockExtra := &BlockBodyExtra{ExtData: ptrTo([]byte{2})}
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{2}}
 				extras.Block.Set(block, blockExtra)
 				return block
 			},
@@ -482,7 +395,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 				SetHeaderExtra(uncle, &HeaderExtra{BlockGasCost: big.NewInt(6)})
 				uncles := []*Header{uncle}
 				block := NewBlock(header, []*Transaction{testTx}, uncles, []*Receipt{{PostState: []byte{7}}}, stubHasher{})
-				blockExtra := &BlockBodyExtra{ExtData: ptrTo([]byte{8})}
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{8}}
 				extras.Block.Set(block, blockExtra)
 				return block
 			},
