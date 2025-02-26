@@ -1347,7 +1347,7 @@ func TestInsertChainInvalidBlockFee(t *testing.T, create func(db ethdb.Database,
 	// This call generates a chain of 3 blocks.
 	signer := types.LatestSigner(params.TestChainConfig)
 	eng := dummy.NewFakerWithMode(TestCallbacks, dummy.Mode{ModeSkipBlockFee: true, ModeSkipCoinbase: true})
-	_, chain, _, err := GenerateChainWithGenesis(gspec, eng, 3, 0, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, eng, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
