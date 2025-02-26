@@ -11,6 +11,11 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
+// SetBlockExtra sets the [BlockBodyExtra] `extra` in the [Block] `b`.
+func SetBlockExtra(b *Block, extra *BlockBodyExtra) {
+	extras.Block.Set(b, extra)
+}
+
 // BlockBodyExtra is a struct containing extra fields used by Avalanche
 // in the [Block] and [Body].
 type BlockBodyExtra struct {
