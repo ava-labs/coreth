@@ -5,6 +5,7 @@ package header
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
@@ -26,7 +27,7 @@ func BaseFee(
 	case config.IsFUpgrade(timestamp):
 		state, err := feeStateBeforeBlock(config, parent, timestamp)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to calculate the initial fee state: %w", err)
 		}
 		price := state.GasPrice()
 		return new(big.Int).SetUint64(uint64(price)), nil

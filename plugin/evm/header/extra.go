@@ -64,7 +64,7 @@ func VerifyExtraPrefix(
 	case config.IsFUpgrade(header.Time):
 		remoteState, err := parseFeeState(header.Extra)
 		if err != nil {
-			return fmt.Errorf("failed to calculate claimed fee state: %w", err)
+			return fmt.Errorf("failed to parse remote fee state: %w", err)
 		}
 
 		// By passing in the claimed target excess, we ensure that the expected
@@ -92,7 +92,7 @@ func VerifyExtraPrefix(
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to calculate expected fee window: %w", err)
 		}
 		feeWindowBytes := feeWindowBytes(feeWindow)
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {

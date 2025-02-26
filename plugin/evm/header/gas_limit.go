@@ -32,7 +32,7 @@ func GasLimit(
 	case config.IsFUpgrade(timestamp):
 		state, err := feeStateBeforeBlock(config, parent, timestamp)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
 		}
 		return uint64(state.MaxCapacity()), nil
 	case config.IsCortina(timestamp):
@@ -74,7 +74,7 @@ func VerifyGasUsed(
 
 	capacity, err := GasCapacity(config, parent, header.Time)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to calculate gas capacity: %w", err)
 	}
 	if gasUsed > capacity {
 		return fmt.Errorf("%w: have %d, capacity %d",
@@ -161,7 +161,7 @@ func GasCapacity(
 
 	state, err := feeStateBeforeBlock(config, parent, timestamp)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
 	}
 	return uint64(state.Gas.Capacity), nil
 }
@@ -181,7 +181,7 @@ func AtomicGasCapacity(
 
 	state, err := feeStateBeforeBlock(config, parent, header.Time)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
 	}
 	if err := state.ConsumeGas(header.GasUsed, nil); err != nil {
 		return 0, fmt.Errorf("%w while calculating available gas", err)
