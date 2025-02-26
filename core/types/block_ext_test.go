@@ -12,6 +12,8 @@ import (
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,17 +114,29 @@ func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	// the memory address would be different as well.
 }
 
+func txHashComparer() cmp.Option {
+	return cmp.Comparer(func(a, b *Transaction) bool {
+		return a.Hash() == b.Hash()
+	})
+}
+
+func headerHashComparer() cmp.Option {
+	return cmp.Comparer(func(a, b *Header) bool {
+		return a.Hash() == b.Hash()
+	})
+}
+
 func TestBodyExtraRLP(t *testing.T) {
 	t.Parallel()
 
-	testTx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
+	tx := NewTransaction(0, common.Address{1}, big.NewInt(2), 3, big.NewInt(4), []byte{5})
 
 	uncle := &Header{ParentHash: common.Hash{6}}
 	uncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
 	SetHeaderExtra(uncle, uncleExtra)
 
 	body := &Body{
-		Transactions: []*Transaction{testTx},
+		Transactions: []*Transaction{tx},
 		Uncles:       []*Header{uncle},
 		Withdrawals:  []*ethtypes.Withdrawal{{Index: 7}}, // ignored
 	}
@@ -132,46 +146,30 @@ func TestBodyExtraRLP(t *testing.T) {
 	}
 	extras.Body.Set(body, extra)
 
-	b, err := rlp.EncodeToBytes(body)
+	encoded, err := rlp.EncodeToBytes(body)
 	require.NoError(t, err)
 
 	gotBody := new(Body)
-	err = rlp.DecodeBytes(b, gotBody)
+	err = rlp.DecodeBytes(encoded, gotBody)
 	require.NoError(t, err)
 
-	// Check transactions in the following because unexported fields
-	// size and time are set by the RLP decoder.
-	require.Len(t, gotBody.Transactions, 1)
-	gotTx := gotBody.Transactions[0]
-	gotTxJSON, err := gotTx.MarshalJSON()
-	require.NoError(t, err)
-	wantTxJSON, err := testTx.MarshalJSON()
-	require.NoError(t, err)
-	assert.Equal(t, string(wantTxJSON), string(gotTxJSON))
-	gotBody.Transactions = nil
+	wantBody := body
+	wantBody.Withdrawals = nil
 
-	wantUncle := &Header{
-		ParentHash: common.Hash{6},
-		Difficulty: new(big.Int),
-		Number:     new(big.Int),
-		Extra:      []byte{},
+	opts := cmp.Options{
+		txHashComparer(),
+		headerHashComparer(),
+		cmpopts.IgnoreUnexported(Body{}),
 	}
-	wantUncleExtra := &HeaderExtra{ExtDataHash: common.Hash{7}}
-	SetHeaderExtra(wantUncle, wantUncleExtra)
+	if diff := cmp.Diff(wantBody, gotBody, opts); diff != "" {
+		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
+	}
 
-	wantBody := &Body{
-		Transactions: nil, // checked above
-		Uncles:       []*Header{wantUncle},
-	}
-	wantExtra := &BlockBodyExtra{
-		Version: 1,
-		ExtData: ptrTo([]byte{2}),
-	}
-	extras.Body.Set(wantBody, wantExtra)
-
-	assert.Equal(t, wantBody, gotBody)
 	gotExtra := extras.Body.Get(gotBody)
-	assert.Equal(t, wantExtra, gotExtra)
+	wantExtra := extra
+	if diff := cmp.Diff(wantExtra, gotExtra); diff != "" {
+		t.Errorf("%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBody, diff)
+	}
 }
 
 func TestBlockExtraRLP(t *testing.T) {

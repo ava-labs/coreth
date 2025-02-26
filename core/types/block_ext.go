@@ -108,9 +108,6 @@ func BlockExtData(b *Block) []byte {
 		return *data
 	}
 	return nil
-		return nil
-	}
-	return *extras.ExtData
 }
 
 func BlockVersion(b *Block) uint32 {
@@ -127,7 +124,10 @@ func BlockExtDataGasUsed(b *Block) *big.Int {
 
 func BlockGasCost(b *Block) *big.Int {
 	cost := GetHeaderExtra(b.Header()).BlockGasCost
-	return new(big.Int).Set(cost)
+	if cost != nil {
+		return new(big.Int).Set(cost)
+	}
+	return nil
 }
 
 func CalcExtDataHash(extdata []byte) common.Hash {
