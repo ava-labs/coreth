@@ -180,8 +180,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
 	if rules.IsApricotPhase4 {
-		// Make sure ExtDataGasUsed is correct.
-		//
 		// After the F upgrade, the extDataGasUsed field is validated during the
 		// header verification for the total gas used.
 		if !rules.IsFUpgrade && rules.IsApricotPhase5 {

@@ -298,7 +298,7 @@ func CalculateDynamicFee(cost uint64, baseFee *big.Int) (uint64, error) {
 	if baseFee == nil {
 		return 0, errNilBaseFee
 	}
-	// fee = (cost * baseFee + X2CRate - 1) / X2CRate
+	// fee = (cost * baseFee + [X2CRate] - 1) / [X2CRate]
 	fee := new(big.Int).SetUint64(cost)
 	fee.Mul(fee, baseFee)
 	fee.Add(fee, x2cRateMinus1.ToBig())
