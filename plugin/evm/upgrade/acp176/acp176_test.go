@@ -33,7 +33,7 @@ var (
 				TargetExcess: 0,
 			},
 			target:      MinTargetPerSecond,
-			maxCapacity: MinMaxPerSecond,
+			maxCapacity: MinMaxCapacity,
 			gasPrice:    MinGasPrice,
 		},
 		{
@@ -46,7 +46,7 @@ var (
 			},
 			skipTestDesiredTargetExcess: true,
 			target:                      MinTargetPerSecond,
-			maxCapacity:                 MinMaxPerSecond,
+			maxCapacity:                 MinMaxCapacity,
 			gasPrice:                    2 * MinGasPrice,
 		},
 		{
