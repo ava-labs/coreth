@@ -317,7 +317,7 @@ func TestBaseFee(t *testing.T) {
 			}(),
 		},
 		{
-			name:     "f_invalid_timestamp",
+			name:     "fupgrade_invalid_timestamp",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -328,7 +328,7 @@ func TestBaseFee(t *testing.T) {
 			wantErr:   errInvalidTimestamp,
 		},
 		{
-			name: "f_first_block",
+			name: "fupgrade_first_block",
 			upgrades: params.NetworkUpgrades{
 				FUpgradeTimestamp: utils.NewUint64(1),
 			},
@@ -339,7 +339,7 @@ func TestBaseFee(t *testing.T) {
 			want:      big.NewInt(acp176.MinGasPrice),
 		},
 		{
-			name:     "f_genesis_block",
+			name:     "fupgrade_genesis_block",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -347,7 +347,7 @@ func TestBaseFee(t *testing.T) {
 			want: big.NewInt(acp176.MinGasPrice),
 		},
 		{
-			name:     "f_invalid_fee_state",
+			name:     "fupgrade_invalid_fee_state",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -356,7 +356,7 @@ func TestBaseFee(t *testing.T) {
 			wantErr: errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_current",
+			name:     "fupgrade_current",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -370,7 +370,7 @@ func TestBaseFee(t *testing.T) {
 			want: big.NewInt(1_000_000_002), // nAVAX + 2 due to rounding
 		},
 		{
-			name:     "f_decrease",
+			name:     "fupgrade_decrease",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),

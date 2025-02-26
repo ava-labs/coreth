@@ -247,7 +247,7 @@ func TestExtraPrefix(t *testing.T) {
 			}(),
 		},
 		{
-			name: "f_first_block",
+			name: "fupgrade_first_block",
 			upgrades: params.NetworkUpgrades{
 				FUpgradeTimestamp: utils.NewUint64(1),
 			},
@@ -268,7 +268,7 @@ func TestExtraPrefix(t *testing.T) {
 			}),
 		},
 		{
-			name:     "f_genesis_block",
+			name:     "fupgrade_genesis_block",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -288,7 +288,7 @@ func TestExtraPrefix(t *testing.T) {
 			}),
 		},
 		{
-			name:     "f_invalid_fee_state",
+			name:     "fupgrade_invalid_fee_state",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -297,7 +297,7 @@ func TestExtraPrefix(t *testing.T) {
 			wantErr: errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_invalid_gas_used",
+			name:     "fupgrade_invalid_gas_used",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -309,7 +309,7 @@ func TestExtraPrefix(t *testing.T) {
 			wantErr: gas.ErrInsufficientCapacity,
 		},
 		{
-			name:     "f_reduce_capacity",
+			name:     "fupgrade_reduce_capacity",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -393,13 +393,13 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:     "f_invalid_header",
+			name:     "fupgrade_invalid_header",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			header:   &types.Header{},
 			wantErr:  errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_invalid_gas_consumed",
+			name:     "fupgrade_invalid_gas_consumed",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -411,7 +411,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			wantErr: gas.ErrInsufficientCapacity,
 		},
 		{
-			name:     "f_wrong_fee_state",
+			name:     "fupgrade_wrong_fee_state",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -430,7 +430,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			wantErr: errIncorrectFeeState,
 		},
 		{
-			name:     "f_valid",
+			name:     "fupgrade_valid",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -544,7 +544,7 @@ func TestVerifyExtra(t *testing.T) {
 			expected: errInvalidExtraLength,
 		},
 		{
-			name: "f_valid_min",
+			name: "fupgrade_valid_min",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
@@ -552,7 +552,7 @@ func TestVerifyExtra(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "f_valid_extra",
+			name: "fupgrade_valid_extra",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
@@ -560,7 +560,7 @@ func TestVerifyExtra(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "f_invalid",
+			name: "fupgrade_invalid",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
@@ -606,7 +606,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 			expected: []byte{5},
 		},
 		{
-			name: "f_empty_extra",
+			name: "fupgrade_empty_extra",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
@@ -614,7 +614,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "f_too_short",
+			name: "fupgrade_too_short",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
@@ -622,7 +622,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "f_empty_predicate",
+			name: "fupgrade_empty_predicate",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
@@ -630,7 +630,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "f_non_empty_predicate",
+			name: "fupgrade_non_empty_predicate",
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},

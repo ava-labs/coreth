@@ -29,7 +29,7 @@ func TestGasLimit(t *testing.T) {
 		wantErr   error
 	}{
 		{
-			name:     "f_invalid_parent_header",
+			name:     "fupgrade_invalid_parent_header",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -37,7 +37,7 @@ func TestGasLimit(t *testing.T) {
 			wantErr: errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_initial_max_capacity",
+			name:     "fupgrade_initial_max_capacity",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -86,7 +86,7 @@ func TestVerifyGasUsed(t *testing.T) {
 		want     error
 	}{
 		{
-			name:     "f_massive_extra_gas_used",
+			name:     "fupgrade_massive_extra_gas_used",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			header: &types.Header{
 				ExtDataGasUsed: new(big.Int).Lsh(common.Big1, 64),
@@ -94,7 +94,7 @@ func TestVerifyGasUsed(t *testing.T) {
 			want: errInvalidExtraDataGasUsed,
 		},
 		{
-			name:     "f_gas_used_overflow",
+			name:     "fupgrade_gas_used_overflow",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			header: &types.Header{
 				GasUsed:        math.MaxUint[uint64](),
@@ -103,7 +103,7 @@ func TestVerifyGasUsed(t *testing.T) {
 			want: math.ErrOverflow,
 		},
 		{
-			name:     "f_invalid_capacity",
+			name:     "fupgrade_invalid_capacity",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -112,7 +112,7 @@ func TestVerifyGasUsed(t *testing.T) {
 			want:   errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_invalid_usage",
+			name:     "fupgrade_invalid_usage",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -124,7 +124,7 @@ func TestVerifyGasUsed(t *testing.T) {
 			want: errInvalidGasUsed,
 		},
 		{
-			name:     "f_max_consumption",
+			name:     "fupgrade_max_consumption",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -168,7 +168,7 @@ func TestVerifyGasLimit(t *testing.T) {
 		want     error
 	}{
 		{
-			name:     "f_invalid_header",
+			name:     "fupgrade_invalid_header",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -177,7 +177,7 @@ func TestVerifyGasLimit(t *testing.T) {
 			want:   errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_invalid",
+			name:     "fupgrade_invalid",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -188,7 +188,7 @@ func TestVerifyGasLimit(t *testing.T) {
 			want: errInvalidGasLimit,
 		},
 		{
-			name:     "f_valid",
+			name:     "fupgrade_valid",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -297,7 +297,7 @@ func TestGasCapacity(t *testing.T) {
 			want:     cortina.GasLimit,
 		},
 		{
-			name:     "f_invalid_header",
+			name:     "fupgrade_invalid_header",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -305,7 +305,7 @@ func TestGasCapacity(t *testing.T) {
 			wantErr: errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_after_1s",
+			name:     "fupgrade_after_1s",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
@@ -344,7 +344,7 @@ func TestAtomicGasCapacity(t *testing.T) {
 			want:     ap5.AtomicGasLimit,
 		},
 		{
-			name:     "f_invalid_header",
+			name:     "fupgrade_invalid_header",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
@@ -353,7 +353,7 @@ func TestAtomicGasCapacity(t *testing.T) {
 			wantErr: errFeeStateInsufficientLength,
 		},
 		{
-			name:     "f_negative_capacity",
+			name:     "fupgrade_negative_capacity",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
