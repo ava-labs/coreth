@@ -266,7 +266,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: "failed to unmarshal response: rlp: expected List and ctx error context canceled",
+			expectedErr: "failed to unmarshal response: rlp: expected List",
 		},
 		"incorrect starting point": {
 			request: message.BlockRequest{
