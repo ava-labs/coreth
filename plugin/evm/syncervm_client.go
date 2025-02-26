@@ -261,12 +261,20 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	client.cancel = cancel
 	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
 	if client.useUpstream {
-		// I don't think all of this is necessary/correct, but I'm not sure which parts can be dropped
-		client.finishSync(client.syncSummary.BlockHash)
-
 		// Set downloader using pivot
 		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
 		client.dl = newDownloader(client.chaindb, evmBlock)
+		ethBlock := evmBlock.ethBlock
+		if err := client.updateVMMarkers(); err != nil {
+			return block.StateSyncSkipped, fmt.Errorf("error updating vm markers height=%d, hash=%s, err=%w", ethBlock.NumberU64(), ethBlock.Hash(), err)
+		}
+
+		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
+			return block.StateSyncSkipped, err
+		}
+		if err := client.atomicBackend.ApplyToSharedMemory(ethBlock.NumberU64()); err != nil {
+			return block.StateSyncSkipped, err
+		}
 
 		log.Info("Set LastAcceptedBlock to first pivot", "height", evmBlock.ID(), evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	}
@@ -569,7 +577,7 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 	d.blockBuffer[d.bufferLen] = &queueElement{b, req}
 	d.bufferLen++
 
-	if b.Height() >= d.pivotBlock.Height()+pivotInterval {
+	if req == acceptSyncBlockRequest && b.Height() >= d.pivotBlock.Height()+pivotInterval {
 		log.Info("Setting new pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
 
 		// Reset pivot first in other goroutine
@@ -577,7 +585,10 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 		d.newPivot <- b
 
 		// Clear queue
-		d.flushQueue(false)
+		if err := d.flushQueue(false); err != nil {
+			return err
+		}
+		d.bufferLen = 0
 	} else if b.Height() <= d.pivotBlock.Height() {
 		log.Warn("Received block with height less than pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
 		return errors.New("received block with height less than pivot block")
@@ -587,6 +598,7 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 
 // Clears queue of blocks. Assumes no elements are past pivot and bufferLock is held
 // If `final`, executes blocks as normal. Otherwise executes only atomic operations
+// To avoid duplicating actions, should adjust length at higher level
 func (d *downloader) flushQueue(final bool) error {
 	for i, elem := range d.blockBuffer {
 		if i >= d.bufferLen {
@@ -601,8 +613,7 @@ func (d *downloader) flushQueue(final bool) error {
 			return err
 		}
 	}
-
-	d.bufferLen = 0
+	d.bufferLen = 0 // this is not always sufficient to adjust the length? I think scoping issue
 
 	return nil
 }
