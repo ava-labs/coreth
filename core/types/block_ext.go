@@ -104,8 +104,10 @@ func (b *BlockBodyExtra) BlockRLPFieldPointersForDecoding(block *ethtypes.BlockR
 }
 
 func BlockExtData(b *Block) []byte {
-	extras := extras.Block.Get(b)
-	if extras.ExtData == nil {
+	if data := extras.Block.Get(b).ExtData; data != nil {
+		return *data
+	}
+	return nil
 		return nil
 	}
 	return *extras.ExtData
