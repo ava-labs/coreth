@@ -142,7 +142,7 @@ func TestBodyExtraRLP(t *testing.T) {
 	}
 	extra := &BlockBodyExtra{
 		Version: 1,
-		ExtData: ptrTo([]byte{2}),
+		ExtData: &[]byte{2},
 	}
 	extras.Body.Set(body, extra)
 
@@ -196,7 +196,7 @@ func TestBlockExtraRLP(t *testing.T) {
 
 	extra := &BlockBodyExtra{
 		Version: 10,
-		ExtData: ptrTo([]byte{11}),
+		ExtData: &[]byte{11},
 	}
 	extras.Block.Set(block, extra)
 
@@ -236,7 +236,7 @@ func TestBlockBody(t *testing.T) {
 
 	blockExtras := &BlockBodyExtra{
 		Version: version,
-		ExtData: ptrTo([]byte{extDataByte}),
+		ExtData: &[]byte{extDataByte},
 	}
 	allExportedFieldsSet(t, blockExtras) // make sure each field is checked
 	block := NewBlock(&Header{}, nil, nil, nil, stubHasher{})
@@ -244,7 +244,7 @@ func TestBlockBody(t *testing.T) {
 
 	wantExtra := &BlockBodyExtra{
 		Version: version,
-		ExtData: ptrTo([]byte{extDataByte}),
+		ExtData: &[]byte{extDataByte},
 	}
 	gotExtra := extras.Body.Get(block.Body()) // [types.Block.Body] invokes [BlockBodyExtra.Copy]
 	assert.Equal(t, wantExtra, gotExtra)
@@ -277,7 +277,7 @@ func TestBlockGetters(t *testing.T) {
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
-				ExtData: ptrTo([]byte{4}),
+				ExtData: &[]byte{4},
 			},
 			wantExtDataGasUsed: big.NewInt(1),
 			wantBlockGasCost:   big.NewInt(2),
@@ -339,7 +339,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 				header := &Header{}
 				SetHeaderExtra(header, &HeaderExtra{})
 				block := NewBlock(header, nil, nil, nil, stubHasher{})
-				blockExtra := &BlockBodyExtra{ExtData: ptrTo([]byte{})}
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{}}
 				extras.Block.Set(block, blockExtra)
 				return block
 			},
@@ -363,7 +363,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 				}
 				SetHeaderExtra(header, extra)
 				block := NewBlock(header, nil, nil, nil, stubHasher{})
-				blockExtra := &BlockBodyExtra{ExtData: ptrTo([]byte{2})}
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{2}}
 				extras.Block.Set(block, blockExtra)
 				return block
 			},
@@ -400,7 +400,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 				SetHeaderExtra(uncle, &HeaderExtra{BlockGasCost: big.NewInt(6)})
 				uncles := []*Header{uncle}
 				block := NewBlock(header, []*Transaction{testTx}, uncles, []*Receipt{{PostState: []byte{7}}}, stubHasher{})
-				blockExtra := &BlockBodyExtra{ExtData: ptrTo([]byte{8})}
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{8}}
 				extras.Block.Set(block, blockExtra)
 				return block
 			},
