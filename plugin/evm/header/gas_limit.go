@@ -173,7 +173,8 @@ func AtomicGasCapacity(
 	parent *types.Header,
 	header *types.Header,
 ) (uint64, error) {
-	// Prior to the F upgrade, the gas capacity is equal to the gas limit.
+	// Prior to the F upgrade, the atomic gas limit was a constant independent
+	// of the evm gas used.
 	if !config.IsFUpgrade(header.Time) {
 		return ap5.AtomicGasLimit, nil
 	}
