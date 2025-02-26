@@ -21,9 +21,6 @@ func SetBlockExtra(b *Block, extra *BlockBodyExtra) {
 type BlockBodyExtra struct {
 	Version uint32
 	ExtData *[]byte
-
-	// RLP block and body field removed from geth:
-	// - Withdrawals []*Withdrawal
 }
 
 // Copy deep copies the [BlockBodyExtra] `b` and returns it.
@@ -45,6 +42,10 @@ func (b *BlockBodyExtra) Copy() *BlockBodyExtra {
 
 // BodyRLPFieldPointersForEncoding returns the fields that should be encoded
 // for the [Body] and [BlockBodyExtra].
+// Note the following fields are added (+) and removed (-) compared to geth:
+// - (-) [ethtypes.Body] `Withdrawals` field
+// - (+) [BlockBodyExtra] `Version` field
+// - (+) [BlockBodyExtra] `ExtData` field
 func (b *BlockBodyExtra) BodyRLPFieldsForEncoding(body *Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{
@@ -71,6 +72,10 @@ func (b *BlockBodyExtra) BodyRLPFieldPointersForDecoding(body *Body) *rlp.Fields
 
 // BlockRLPFieldPointersForEncoding returns the fields that should be encoded
 // for the [Block] and [BlockBodyExtra].
+// Note the following fields are added (+) and removed (-) compared to geth:
+// - (-) [ethtypes.Body] `Withdrawals` field
+// - (+) [BlockBodyExtra] `Version` field
+// - (+) [BlockBodyExtra] `ExtData` field
 func (b *BlockBodyExtra) BlockRLPFieldsForEncoding(block *ethtypes.BlockRLPProxy) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{
