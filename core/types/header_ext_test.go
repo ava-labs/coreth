@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"unsafe"
 
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
@@ -74,8 +75,8 @@ func TestHeaderWithNonZeroFields(t *testing.T) {
 	t.Parallel()
 
 	header, extra := headerWithNonZeroFields()
-	t.Run("Header", func(t *testing.T) { allExportedFieldsSet(t, header) })
-	t.Run("HeaderExtra", func(t *testing.T) { allExportedFieldsSet(t, extra) })
+	t.Run("Header", func(t *testing.T) { allFieldsSet(t, header, "extra") })
+	t.Run("HeaderExtra", func(t *testing.T) { allFieldsSet(t, extra) })
 }
 
 // headerWithNonZeroFields returns a [Header] and a [HeaderExtra],
@@ -117,22 +118,35 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 	return header, extra
 }
 
-func allExportedFieldsSet[T interface {
+func allFieldsSet[T interface {
 	Header | HeaderExtra | Block | Body | BlockBodyExtra
 }](t *testing.T, x *T, ignoredFields ...string) {
+	t.Helper()
+
 	// We don't test for nil pointers because we're only confirming that
 	// test-input data is well-formed. A panic due to a dereference will be
 	// reported anyway.
 
-	v := reflect.ValueOf(*x)
+	v := reflect.ValueOf(x).Elem()
 	for i := range v.Type().NumField() {
 		field := v.Type().Field(i)
-		if !field.IsExported() || slices.Contains(ignoredFields, field.Name) {
+		if slices.Contains(ignoredFields, field.Name) {
 			continue
 		}
 
 		t.Run(field.Name, func(t *testing.T) {
-			switch f := v.Field(i).Interface().(type) {
+			fieldValue := v.Field(i)
+			if !field.IsExported() {
+				// Note: we need to check unexported fields especially for [Block].
+				if fieldValue.Kind() == reflect.Ptr {
+					require.Falsef(t, fieldValue.IsNil(), "field %q is nil", field.Name)
+				}
+				fieldValue = reflect.NewAt(fieldValue.Type(), unsafe.Pointer(fieldValue.UnsafeAddr())).Elem() //nolint:gosec
+				assert.NotZero(t, fieldValue.Interface())
+				return
+			}
+
+			switch f := fieldValue.Interface().(type) {
 			case common.Hash:
 				assertNonZero(t, f)
 			case common.Address:

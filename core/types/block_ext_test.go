@@ -179,6 +179,8 @@ func blockWithNonZeroFields() (*Block, *BlockBodyExtra) {
 	receipts := []*Receipt{{PostState: []byte{11}}}
 
 	block := NewBlock(header, txs, uncles, receipts, stubHasher{})
+	withdrawals := []*ethtypes.Withdrawal{{Index: 12}}
+	block = block.WithWithdrawals(withdrawals)
 	extra := &BlockBodyExtra{
 		Version: 12,
 		ExtData: &[]byte{13},
@@ -192,10 +194,10 @@ func TestBlockWithNonZeroFields(t *testing.T) {
 
 	block, extra := blockWithNonZeroFields()
 	t.Run("Block", func(t *testing.T) {
-		ignoreFields := []string{"ReceivedAt", "ReceivedFrom"}
-		allExportedFieldsSet(t, block, ignoreFields...)
+		ignoreFields := []string{"hash", "size", "ReceivedAt", "ReceivedFrom"}
+		allFieldsSet(t, block, ignoreFields...)
 	})
-	t.Run("BlockExtra", func(t *testing.T) { allExportedFieldsSet(t, extra) })
+	t.Run("BlockExtra", func(t *testing.T) { allFieldsSet(t, extra) })
 }
 
 func TestBlockRLP(t *testing.T) {
@@ -246,8 +248,8 @@ func TestBodyWithNonZeroFields(t *testing.T) {
 	t.Parallel()
 
 	body, extra := bodyWithNonZeroFields()
-	t.Run("Body", func(t *testing.T) { allExportedFieldsSet(t, body) })
-	t.Run("BodyExtra", func(t *testing.T) { allExportedFieldsSet(t, extra) })
+	t.Run("Body", func(t *testing.T) { allFieldsSet(t, body) })
+	t.Run("BodyExtra", func(t *testing.T) { allFieldsSet(t, extra) })
 }
 
 func txHashComparer() cmp.Option {
@@ -369,7 +371,7 @@ func TestBlockBody(t *testing.T) {
 		Version: 1,
 		ExtData: &[]byte{2},
 	}
-	allExportedFieldsSet(t, blockExtras) // make sure each field is checked
+	allFieldsSet(t, blockExtras) // make sure each field is checked
 	block := NewBlock(&Header{}, nil, nil, nil, stubHasher{})
 	extras.Block.Set(block, blockExtras)
 
