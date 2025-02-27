@@ -279,7 +279,9 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	go func() {
 		defer client.wg.Done()
 		defer cancel()
-		defer client.dl.Close()
+		if client.useUpstream {
+			defer client.dl.Close()
+		}
 
 		if err := client.stateSync(ctx); err != nil {
 			client.stateSyncErr = err
