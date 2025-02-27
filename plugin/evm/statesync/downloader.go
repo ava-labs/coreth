@@ -87,9 +87,10 @@ func (d *Downloader) Pivot() *types.Block {
 	return d.pivotBlock
 }
 
-// Opens bufferLock to allow block requests to go through
+// Opens bufferLock to allow block requests to go through after finalizing the sync
 func (d *Downloader) Close() {
 	d.bufferLock.TryLock()
+	d.flushQueue(true)
 	d.bufferLock.Unlock()
 }
 
@@ -175,7 +176,7 @@ func (d *Downloader) SnapSync() error {
 				return sync.err
 			}
 			d.bufferLock.Lock() // unlocked by syncer client once we can normally process blocks
-			return d.flushQueue(true)
+			return nil
 		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.

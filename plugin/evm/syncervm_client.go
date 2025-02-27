@@ -274,7 +274,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			return block.StateSyncSkipped, err
 		}
 
-		log.Info("Set LastAcceptedBlock to first pivot", "height", evmBlock.ID(), evmBlock.Height(), "timestamp", evmBlock.Timestamp())
+		log.Info("Set LastAcceptedBlock as first pivot", "height", evmBlock.ID(), evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	}
 	go func() {
 		defer client.wg.Done()
