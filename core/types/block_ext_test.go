@@ -183,7 +183,7 @@ func blockWithNonZeroFields() (*Block, *BlockBodyExtra) {
 		Version: 12,
 		ExtData: &[]byte{13},
 	}
-	extras.Block.Set(block, extra)
+	SetBlockExtra(block, extra)
 	return block, extra
 }
 
