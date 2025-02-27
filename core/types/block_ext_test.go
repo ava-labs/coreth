@@ -277,17 +277,20 @@ func TestBlockExtraRLP(t *testing.T) {
 func TestBlockBody(t *testing.T) {
 	t.Parallel()
 
+	const version = 1
+	extData := &[]byte{2}
+
 	blockExtras := &BlockBodyExtra{
-		Version: 1,
-		ExtData: &[]byte{2},
+		Version: version,
+		ExtData: extData,
 	}
 	allFieldsSet(t, blockExtras) // make sure each field is checked
 	block := NewBlock(&Header{}, nil, nil, nil, stubHasher{})
 	extras.Block.Set(block, blockExtras)
 
 	wantExtra := &BlockBodyExtra{
-		Version: 1,
-		ExtData: &[]byte{2},
+		Version: version,
+		ExtData: extData,
 	}
 	gotExtra := extras.Body.Get(block.Body()) // [types.Block.Body] invokes [BlockBodyExtra.Copy]
 	assert.Equal(t, wantExtra, gotExtra)
