@@ -191,7 +191,10 @@ func TestBlockWithNonZeroFields(t *testing.T) {
 	t.Parallel()
 
 	block, extra := blockWithNonZeroFields()
-	t.Run("Block", func(t *testing.T) { allExportedFieldsSet(t, block, "ReceivedAt", "ReceivedFrom") })
+	t.Run("Block", func(t *testing.T) {
+		ignoreFields := []string{"ReceivedAt", "ReceivedFrom"}
+		allExportedFieldsSet(t, block, ignoreFields...)
+	})
 	t.Run("BlockExtra", func(t *testing.T) { allExportedFieldsSet(t, extra) })
 }
 
