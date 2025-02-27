@@ -32,33 +32,33 @@ var (
 )
 
 type Connector struct {
-	sync   *snap.Syncer
-	sender *p2p.Client
+	downloader *Downloader
+	sender     *p2p.Client
 }
 
-func NewConnector(sync *snap.Syncer, sender *p2p.Client) *Connector {
-	return &Connector{sync: sync, sender: sender}
+func NewConnector(downloader *Downloader, sender *p2p.Client) *Connector {
+	return &Connector{downloader: downloader, sender: sender}
 }
 
 func (c *Connector) Connected(ctx context.Context, nodeID ids.NodeID, version *version.Application) error {
-	return c.sync.Register(NewOutboundPeer(nodeID, c.sync, c.sender))
+	return c.downloader.SnapSyncer.Register(NewOutboundPeer(nodeID, c.downloader, c.sender))
 }
 
 func (c *Connector) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
-	return c.sync.Unregister(nodeID.String())
+	return c.downloader.SnapSyncer.Unregister(nodeID.String())
 }
 
 type outbound struct {
-	peerID ids.NodeID
-	sync   *snap.Syncer
-	sender *p2p.Client
+	peerID     ids.NodeID
+	downloader *Downloader
+	sender     *p2p.Client
 }
 
-func NewOutboundPeer(nodeID ids.NodeID, sync *snap.Syncer, sender *p2p.Client) *snap.Peer {
+func NewOutboundPeer(nodeID ids.NodeID, downloader *Downloader, sender *p2p.Client) *snap.Peer {
 	return snap.NewFakePeer(protocolVersion, nodeID.String(), &outbound{
-		peerID: nodeID,
-		sync:   sync,
-		sender: sender,
+		peerID:     nodeID,
+		downloader: downloader,
+		sender:     sender,
 	})
 }
 
@@ -136,37 +136,5 @@ func (o *outbound) RunPeer(*snap.Peer, snap.Handler) error { panic("not expected
 func (o *outbound) PeerInfo(id enode.ID) interface{}       { panic("not expected to be called") }
 
 func (o *outbound) Handle(peer *snap.Peer, packet snap.Packet) error {
-	d := &Downloader{SnapSyncer: o.sync}
-	return d.DeliverSnapPacket(peer, packet)
-}
-
-// Downloader is copied from eth/downloader/downloader.go
-type Downloader struct {
-	SnapSyncer *snap.Syncer
-}
-
-// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
-// data packet for the local node to consume.
-func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
-	switch packet := packet.(type) {
-	case *snap.AccountRangePacket:
-		hashes, accounts, err := packet.Unpack()
-		if err != nil {
-			return err
-		}
-		return d.SnapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
-
-	case *snap.StorageRangesPacket:
-		hashset, slotset := packet.Unpack()
-		return d.SnapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
-
-	case *snap.ByteCodesPacket:
-		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
-
-	case *snap.TrieNodesPacket:
-		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
-
-	default:
-		return fmt.Errorf("unexpected snap packet type: %T", packet)
-	}
+	return o.downloader.DeliverSnapPacket(peer, packet)
 }

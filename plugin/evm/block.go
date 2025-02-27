@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 
@@ -34,15 +35,6 @@ var (
 )
 
 var errMissingUTXOs = errors.New("missing UTXOs")
-
-type syncBlockRequest uint8
-
-const (
-	// Constants to identify block requests
-	verifySyncBlockRequest syncBlockRequest = iota + 1
-	acceptSyncBlockRequest
-	rejectSyncBlockRequest
-)
 
 // readMainnetBonusBlocks returns maps of bonus block numbers to block IDs.
 // Note bonus blocks are indexed in the atomic trie.
@@ -150,7 +142,7 @@ func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 // Accept implements the snowman.Block interface
 func (b *Block) Accept(context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, acceptSyncBlockRequest)
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.AcceptSyncBlockRequest)
 	}
 	return b.accept()
 }
@@ -203,7 +195,11 @@ func (b *Block) accept() error {
 	return atomicState.Accept(vdbBatch, nil)
 }
 
-func (b *Block) acceptDuringSync() error {
+func (b *Block) acceptDuringSync(final bool) error {
+	if final {
+		return b.accept()
+	}
+
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
@@ -277,7 +273,7 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 func (b *Block) Reject(ctx context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
 		log.Warn("Called Reject for block during dynamic state sync", "block", b.ID(), "height", b.Height())
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, rejectSyncBlockRequest)
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.RejectSyncBlockRequest)
 	}
 	return b.reject()
 }
@@ -302,7 +298,11 @@ func (b *Block) reject() error {
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
-func (b *Block) rejectDuringSync() error {
+func (b *Block) rejectDuringSync(final bool) error {
+	if final {
+		return b.reject()
+	}
+
 	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
@@ -355,7 +355,7 @@ func (b *Block) Verify(context.Context) error {
 
 	// If currently dynamically syncing, we should simply postpone execution
 	if b.vm.StateSyncClient.AsyncReceive() {
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, verifySyncBlockRequest)
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
 	}
 
 	return b.verify(true)
@@ -408,7 +408,7 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 
 	// If currently dynamically syncing, we should postpone execution
 	if b.vm.StateSyncClient.AsyncReceive() {
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, verifySyncBlockRequest)
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
 	}
 
 	return b.verify(true)
@@ -444,7 +444,11 @@ func (b *Block) verify(writes bool) error {
 	return err
 }
 
-func (b *Block) verifyDuringSync() error {
+func (b *Block) verifyDuringSync(final bool) error {
+	if final {
+		return b.verify(true)
+	}
+
 	log.Debug("Verifying block during sync", "block", b.ID(), "height", b.Height())
 	var (
 		block      = b.ethBlock
@@ -560,34 +564,6 @@ func (b *Block) verifyUTXOsPresent() error {
 		}
 	}
 	return nil
-}
-
-func (b *Block) ExecuteSyncRequest(req syncBlockRequest, final bool) error {
-	if final {
-		switch req {
-		case verifySyncBlockRequest:
-			return b.verify(true)
-		case acceptSyncBlockRequest:
-			return b.accept()
-		case rejectSyncBlockRequest:
-			return b.reject()
-		default:
-			// Should never happen
-			return fmt.Errorf("Unable to perform block operation of %d", req)
-		}
-	} else {
-		switch req {
-		case verifySyncBlockRequest:
-			return b.verifyDuringSync()
-		case acceptSyncBlockRequest:
-			return b.acceptDuringSync()
-		case rejectSyncBlockRequest:
-			return b.rejectDuringSync()
-		default:
-			// Should never happen
-			return fmt.Errorf("Unable to perform block operation of %d", req)
-		}
-	}
 }
 
 // Bytes implements the snowman.Block interface

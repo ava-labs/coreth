@@ -1,17 +1,28 @@
 // (c) 2021-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package statesync
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/protocols/snap"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
+)
+
+type SyncBlockRequest uint8
+
+const (
+	// Constants to identify block requests
+	VerifySyncBlockRequest SyncBlockRequest = iota + 1
+	AcceptSyncBlockRequest
+	RejectSyncBlockRequest
 )
 
 const (
@@ -22,31 +33,33 @@ const (
 )
 
 type queueElement struct {
-	block *Block
-	req   syncBlockRequest
+	block    *types.Block
+	req      SyncBlockRequest
+	resolver func(bool) error
 }
 
-type downloader struct {
-	pivotBlock  *Block
-	snapSyncer  *snap.Syncer
+type Downloader struct {
+	pivotBlock  *types.Block
+	SnapSyncer  *snap.Syncer
 	blockBuffer []*queueElement
 	bufferLen   int
-	bufferLock  sync.Mutex
+	bufferLock  *sync.Mutex
 
 	stateSyncStart chan *stateSync
-	newPivot       chan *Block
+	newPivot       chan *types.Block
 	quitCh         chan struct{} // Quit channel to signal termination
 	// quitLock       sync.Mutex    // Lock to prevent double closes
 }
 
-func newDownloader(chaindb ethdb.Database, firstPivot *Block) *downloader {
-	d := &downloader{
+func NewDownloader(chaindb ethdb.Database, firstPivot *types.Block, bufferLock *sync.Mutex) *Downloader {
+	d := &Downloader{
 		pivotBlock:     firstPivot,
-		snapSyncer:     snap.NewSyncer(chaindb, rawdb.HashScheme),
+		SnapSyncer:     snap.NewSyncer(chaindb, rawdb.HashScheme),
 		blockBuffer:    make([]*queueElement, bufferSize),
 		stateSyncStart: make(chan *stateSync),
 		quitCh:         make(chan struct{}),
-		newPivot:       make(chan *Block),
+		newPivot:       make(chan *types.Block),
+		bufferLock:     bufferLock,
 	}
 
 	go d.stateFetcher()
@@ -56,7 +69,7 @@ func newDownloader(chaindb ethdb.Database, firstPivot *Block) *downloader {
 
 // stateFetcher manages the active state sync and accepts requests
 // on its behalf.
-func (d *downloader) stateFetcher() {
+func (d *Downloader) stateFetcher() {
 	for {
 		select {
 		case s := <-d.stateSyncStart:
@@ -69,9 +82,20 @@ func (d *downloader) stateFetcher() {
 	}
 }
 
+// Returns the current pivot
+func (d *Downloader) Pivot() *types.Block {
+	return d.pivotBlock
+}
+
+// Opens bufferLock to allow block requests to go through
+func (d *Downloader) Close() {
+	d.bufferLock.TryLock()
+	d.bufferLock.Unlock()
+}
+
 // QueueBlock queues a block for processing by the state syncer.
 // This assumes the queue lock is NOT held
-func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
+func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func(bool) error) error {
 	d.bufferLock.Lock()
 	defer d.bufferLock.Unlock()
 	if d.bufferLen >= len(d.blockBuffer) {
@@ -79,17 +103,17 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 		return errors.New("Snap sync queue overflow")
 	}
 
-	d.blockBuffer[d.bufferLen] = &queueElement{b, req}
+	d.blockBuffer[d.bufferLen] = &queueElement{b, req, resolver}
 	d.bufferLen++
 
 	// Should change to debug prior to production
-	log.Info("Received queue request", "hash", b.ID(), "height", b.Height(), "req", req, "timestamp", b.Timestamp())
+	log.Info("Received queue request", "hash", b.Hash(), "height", b.Number(), "req", req, "timestamp", b.Timestamp())
 
 	// If on pivot interval, we should pivot (regardless of whether the queue is full)
-	if req == acceptSyncBlockRequest && b.Height()%pivotInterval == 0 {
-		log.Info("Setting new pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
-		if b.Height() <= d.pivotBlock.Height() {
-			log.Warn("Received pivot with height <= pivot block", "old hash", b.ID(), "old height", b.Height(), "timestamp", b.Timestamp())
+	if req == AcceptSyncBlockRequest && b.NumberU64()%pivotInterval == 0 {
+		log.Info("Setting new pivot block", "hash", b.Hash(), "height", b.NumberU64(), "timestamp", b.Timestamp())
+		if b.NumberU64() <= d.pivotBlock.NumberU64() {
+			log.Warn("Received pivot with height <= pivot block", "old hash", b.Hash(), "old height", b.NumberU64(), "timestamp", b.Timestamp())
 		}
 
 		// Reset pivot first in other goroutine
@@ -109,14 +133,14 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 // Clears queue of blocks. Assumes no elements are past pivot and bufferLock is held
 // If `final`, executes blocks as normal. Otherwise executes only atomic operations
 // To avoid duplicating actions, should adjust length at higher level
-func (d *downloader) flushQueue(final bool) error {
+func (d *Downloader) flushQueue(final bool) error {
 	defer func() { d.bufferLen = 0 }()
 	for i, elem := range d.blockBuffer {
 		if i >= d.bufferLen {
 			return nil
 		}
 
-		if err := elem.block.ExecuteSyncRequest(elem.req, final); err != nil {
+		if err := elem.resolver(final); err != nil {
 			if final {
 				// EXTREMELY hacky solution to release lock in final case on error - should fix later
 				d.bufferLock.Unlock()
@@ -130,10 +154,10 @@ func (d *downloader) flushQueue(final bool) error {
 
 // processSnapSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *downloader) SnapSync() error {
+func (d *Downloader) SnapSync() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
-	sync := d.syncState(d.pivotBlock.ethBlock.Root())
+	sync := d.syncState(d.pivotBlock.Root())
 
 	defer func() {
 		// The `sync` object is replaced every time the pivot moves. We need to
@@ -156,13 +180,13 @@ func (d *downloader) SnapSync() error {
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
 			sync.Cancel()
-			sync = d.syncState(newPivot.ethBlock.Root())
+			sync = d.syncState(newPivot.Root())
 		}
 	}
 }
 
 // syncState starts downloading state with the given root hash.
-func (d *downloader) syncState(root common.Hash) *stateSync {
+func (d *Downloader) syncState(root common.Hash) *stateSync {
 	// Create the state sync
 	s := newStateSync(d, root)
 	select {
@@ -180,7 +204,7 @@ func (d *downloader) syncState(root common.Hash) *stateSync {
 
 // runStateSync runs a state synchronisation until it completes or another root
 // hash is requested to be switched over to.
-func (d *downloader) runStateSync(s *stateSync) *stateSync {
+func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 	log.Debug("State sync starting", "root", s.root)
 
 	go s.run()
@@ -200,7 +224,7 @@ func (d *downloader) runStateSync(s *stateSync) *stateSync {
 // stateSync schedules requests for downloading a particular state trie defined
 // by a given state root.
 type stateSync struct {
-	d    *downloader // Downloader instance to access and manage current peerset
+	d    *Downloader // Downloader instance to access and manage current peerset
 	root common.Hash // State root currently being synced
 
 	started    chan struct{} // Started is signalled once the sync loop starts
@@ -212,7 +236,7 @@ type stateSync struct {
 
 // newStateSync creates a new state trie download scheduler. This method does not
 // yet start the sync. The user needs to call run to initiate.
-func newStateSync(d *downloader, root common.Hash) *stateSync {
+func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
 		root:    root,
@@ -227,7 +251,7 @@ func newStateSync(d *downloader, root common.Hash) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
-	s.err = s.d.snapSyncer.Sync(s.root, s.cancel)
+	s.err = s.d.SnapSyncer.Sync(s.root, s.cancel)
 	close(s.done)
 }
 
@@ -243,4 +267,30 @@ func (s *stateSync) Cancel() error {
 		close(s.cancel)
 	})
 	return s.Wait()
+}
+
+// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
+// data packet for the local node to consume.
+func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
+	switch packet := packet.(type) {
+	case *snap.AccountRangePacket:
+		hashes, accounts, err := packet.Unpack()
+		if err != nil {
+			return err
+		}
+		return d.SnapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
+
+	case *snap.StorageRangesPacket:
+		hashset, slotset := packet.Unpack()
+		return d.SnapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
+
+	case *snap.ByteCodesPacket:
+		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
+
+	case *snap.TrieNodesPacket:
+		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
+
+	default:
+		return fmt.Errorf("unexpected snap packet type: %T", packet)
+	}
 }
