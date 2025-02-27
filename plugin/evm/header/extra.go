@@ -81,8 +81,9 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 // extra data. If the extra data is not long enough, an empty slice is returned.
 func PredicateBytesFromExtra(_ params.AvalancheRules, extra []byte) []byte {
 	// Prior to Durango, the VM enforces the extra data is smaller than or equal
-	// to `offset`.
-	// After Durango, the VM pre-verifies the extra data past `offset` is valid.
+	// to this size.
+	// After Durango, the VM pre-verifies the extra data past the dynamic fee
+	// rollup window is valid.
 	if len(extra) <= FeeWindowSize {
 		return nil
 	}
