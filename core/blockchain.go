@@ -1067,8 +1067,6 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
-	log.Error("Rejecting block", "number", block.Number(), "hash", block.Hash())
-
 	// Reject Trie
 	if err := bc.stateManager.RejectTrie(block); err != nil {
 		return fmt.Errorf("unable to reject trie: %w", err)
@@ -1273,11 +1271,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	err := bc.engine.VerifyHeader(bc, block.Header())
 	if err == nil {
 		err = bc.validator.ValidateBody(block)
-		if err != nil {
-			log.Error("Body validation failed", "err", err, "number", block.Number(), "hash", block.Hash())
-		}
-	} else {
-		log.Error("Header verification failed", "err", err, "number", block.Number(), "hash", block.Hash())
 	}
 
 	switch {
