@@ -9,10 +9,15 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
+)
+
+const (
+	MinGasLimit          uint64 = 5000               // Minimum the gas limit may ever be.
+	MaxGasLimit          uint64 = 0x7fffffffffffffff // Maximum the gas limit (2^63-1).
+	GasLimitBoundDivisor uint64 = 1024               // The bound divisor of the gas limit, used in update calculations.
 )
 
 var errInvalidGasLimit = errors.New("invalid gas limit")
@@ -64,18 +69,18 @@ func VerifyGasLimit(
 			)
 		}
 	default:
-		if header.GasLimit < params.MinGasLimit || header.GasLimit > params.MaxGasLimit {
+		if header.GasLimit < MinGasLimit || header.GasLimit > MaxGasLimit {
 			return fmt.Errorf("%w: %d not in range [%d, %d]",
 				errInvalidGasLimit,
 				header.GasLimit,
-				params.MinGasLimit,
-				params.MaxGasLimit,
+				MinGasLimit,
+				MaxGasLimit,
 			)
 		}
 
 		// Verify that the gas limit remains within allowed bounds
 		diff := math.AbsDiff(parent.GasLimit, header.GasLimit)
-		limit := parent.GasLimit / params.GasLimitBoundDivisor
+		limit := parent.GasLimit / GasLimitBoundDivisor
 		if diff >= limit {
 			return fmt.Errorf("%w: have %d, want %d += %d",
 				errInvalidGasLimit,

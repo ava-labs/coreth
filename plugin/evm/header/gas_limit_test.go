@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
@@ -24,17 +23,17 @@ func TestGasLimit(t *testing.T) {
 	}{
 		{
 			name:     "cortina",
-			upgrades: params.GetExtra(params.TestCortinaChainConfig).NetworkUpgrades,
+			upgrades: extras.TestCortinaChainConfig.NetworkUpgrades,
 			want:     cortina.GasLimit,
 		},
 		{
 			name:     "ap1",
-			upgrades: params.GetExtra(params.TestApricotPhase1Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase1Config.NetworkUpgrades,
 			want:     ap1.GasLimit,
 		},
 		{
 			name:     "launch",
-			upgrades: params.GetExtra(params.TestLaunchConfig).NetworkUpgrades,
+			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
 				GasLimit: 1,
 			},
@@ -62,14 +61,14 @@ func TestVerifyGasLimit(t *testing.T) {
 	}{
 		{
 			name:     "cortina_valid",
-			upgrades: params.GetExtra(params.TestCortinaChainConfig).NetworkUpgrades,
+			upgrades: extras.TestCortinaChainConfig.NetworkUpgrades,
 			header: &types.Header{
 				GasLimit: cortina.GasLimit,
 			},
 		},
 		{
 			name:     "cortina_invalid",
-			upgrades: params.GetExtra(params.TestCortinaChainConfig).NetworkUpgrades,
+			upgrades: extras.TestCortinaChainConfig.NetworkUpgrades,
 			header: &types.Header{
 				GasLimit: cortina.GasLimit + 1,
 			},
@@ -77,14 +76,14 @@ func TestVerifyGasLimit(t *testing.T) {
 		},
 		{
 			name:     "ap1_valid",
-			upgrades: params.GetExtra(params.TestApricotPhase1Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase1Config.NetworkUpgrades,
 			header: &types.Header{
 				GasLimit: ap1.GasLimit,
 			},
 		},
 		{
 			name:     "ap1_invalid",
-			upgrades: params.GetExtra(params.TestApricotPhase1Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase1Config.NetworkUpgrades,
 			header: &types.Header{
 				GasLimit: ap1.GasLimit + 1,
 			},
@@ -92,7 +91,7 @@ func TestVerifyGasLimit(t *testing.T) {
 		},
 		{
 			name:     "launch_valid",
-			upgrades: params.GetExtra(params.TestLaunchConfig).NetworkUpgrades,
+			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
 				GasLimit: 50_000,
 			},
@@ -102,34 +101,34 @@ func TestVerifyGasLimit(t *testing.T) {
 		},
 		{
 			name:     "launch_too_low",
-			upgrades: params.GetExtra(params.TestLaunchConfig).NetworkUpgrades,
+			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
-				GasLimit: params.MinGasLimit,
+				GasLimit: MinGasLimit,
 			},
 			header: &types.Header{
-				GasLimit: params.MinGasLimit - 1,
+				GasLimit: MinGasLimit - 1,
 			},
 			want: errInvalidGasLimit,
 		},
 		{
 			name:     "launch_too_high",
-			upgrades: params.GetExtra(params.TestLaunchConfig).NetworkUpgrades,
+			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
-				GasLimit: params.MaxGasLimit,
+				GasLimit: MaxGasLimit,
 			},
 			header: &types.Header{
-				GasLimit: params.MaxGasLimit + 1,
+				GasLimit: MaxGasLimit + 1,
 			},
 			want: errInvalidGasLimit,
 		},
 		{
 			name:     "change_too_large",
-			upgrades: params.GetExtra(params.TestLaunchConfig).NetworkUpgrades,
+			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
-				GasLimit: params.MinGasLimit,
+				GasLimit: MinGasLimit,
 			},
 			header: &types.Header{
-				GasLimit: params.MaxGasLimit,
+				GasLimit: MaxGasLimit,
 			},
 			want: errInvalidGasLimit,
 		},
