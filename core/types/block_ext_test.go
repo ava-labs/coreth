@@ -129,7 +129,7 @@ func TestBodyRLP(t *testing.T) {
 
 	wantBody, wantExtra := bodyWithNonZeroFields()
 
-	wantBody.Withdrawals = nil // this should be ignored
+	wantBody.Withdrawals = nil // this should be dropped by the RLP round trip
 	opts := cmp.Options{
 		txHashComparer(),
 		headerHashComparer(),
