@@ -401,7 +401,10 @@ func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       20,
 		extDataGasUsage: DefaultMinGasUsed,
-		genBlock:        testGenBlock(t, 100_000, 1),
-		expectedTip:     big.NewInt(83_603_561_239),
+		// The tip on the transaction is very large to pay the block gas cost.
+		genBlock: testGenBlock(t, 100_000, 1),
+		// The actual tip doesn't matter, we just want to ensure that the tip is
+		// non-zero when almost all the gas is coming from the extDataGasUsage.
+		expectedTip: big.NewInt(83_603_561_239),
 	}, timeCrunchOracleConfig())
 }
