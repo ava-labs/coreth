@@ -249,7 +249,7 @@ func TestBlockExtraRLP(t *testing.T) {
 	err = rlp.DecodeBytes(encoded, gotBlock)
 	require.NoError(t, err)
 
-	wantBlock := block.WithWithdrawals(nil)
+	wantBlock := block.WithWithdrawals(nil) // withdrawals are not encoded
 
 	opts := cmp.Options{
 		txHashComparer(),
