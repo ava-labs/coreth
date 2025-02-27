@@ -127,7 +127,7 @@ type UnsignedTx interface {
 	SignedBytes() []byte
 }
 
-type Backend struct {
+type VerifierBackend struct {
 	Ctx          *snow.Context
 	Fx           fx.Fx
 	Rules        params.Rules
@@ -170,7 +170,7 @@ type UnsignedAtomicTx interface {
 	Verify(ctx *snow.Context, rules params.Rules) error
 	// Attempts to verify this transaction with the provided state.
 	// SemanticVerify this transaction is valid.
-	SemanticVerify(backend *Backend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error
+	SemanticVerify(backend *VerifierBackend, stx *Tx, parent AtomicBlockContext, baseFee *big.Int) error
 	// AtomicOps returns the blockchainID and set of atomic requests that
 	// must be applied to shared memory for this transaction to be accepted.
 	// The set of atomic requests must be returned in a consistent order.

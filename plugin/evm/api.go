@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -35,8 +34,6 @@ var (
 	errNoAddresses   = errors.New("no addresses provided")
 	errNoSourceChain = errors.New("no source chain provided")
 	errNilTxID       = errors.New("nil transaction ID")
-
-	initialBaseFee = big.NewInt(ap3.InitialBaseFee)
 )
 
 // SnowmanAPI introduces snowman specific functionality to the evm
