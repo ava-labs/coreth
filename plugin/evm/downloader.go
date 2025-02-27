@@ -81,6 +81,8 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 	d.blockBuffer[d.bufferLen] = &queueElement{b, req}
 	d.bufferLen++
 
+	log.Debug("Received queue request", "hash", b.ID(), "height", b.Height(), "req", req, "timestamp", b.Timestamp())
+
 	if req == acceptSyncBlockRequest && b.Height() >= d.pivotBlock.Height()+pivotInterval {
 		log.Info("Setting new pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
 
