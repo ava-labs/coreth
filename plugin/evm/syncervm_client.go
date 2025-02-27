@@ -81,9 +81,9 @@ type stateSyncerClient struct {
 	stateSyncErr error
 
 	// Dynamic sync
-	syncing   utils.Atomic[bool]
-	dl        *downloader
-	queueLock sync.Mutex // to prevent writing during atomic sync
+	syncing        utils.Atomic[bool]
+	dl             *ethstatesync.Downloader
+	downloaderLock sync.Mutex // to prevent writing during atomic sync
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
@@ -105,7 +105,7 @@ type StateSyncClient interface {
 
 	// Methods to enable dynamic state sync
 	AsyncReceive() bool
-	QueueBlockOrPivot(*Block, syncBlockRequest) error
+	QueueBlockOrPivot(*Block, ethstatesync.SyncBlockRequest) error
 }
 
 // Syncer represents a step in state sync,
@@ -121,13 +121,27 @@ type Syncer interface {
 // Should return true if syncing and useUpstream is true, i.e. currently dynamicaling syncing
 func (client *stateSyncerClient) AsyncReceive() bool {
 	// Block until atomic sync is completed for bootstrapping
-	client.queueLock.Lock()
-	client.queueLock.Unlock()
+	client.downloaderLock.Lock()
+	client.downloaderLock.Unlock()
 	return client.useUpstream && client.syncing.Get() && client.dl != nil
 }
 
-func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
-	return client.dl.QueueBlockOrPivot(b, req)
+func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.SyncBlockRequest) error {
+	return client.dl.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
+}
+
+func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func(bool) error {
+	switch req {
+	case ethstatesync.AcceptSyncBlockRequest:
+		return func(final bool) error { return b.acceptDuringSync(final) }
+	case ethstatesync.RejectSyncBlockRequest:
+		return func(final bool) error { return b.rejectDuringSync(final) }
+	case ethstatesync.VerifySyncBlockRequest:
+		return func(final bool) error { return b.verifyDuringSync(final) }
+	default:
+		log.Error("Invalid statesync.SyncBlockRequest", "ID", req)
+	}
+	return func(final bool) error { return nil }
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
@@ -189,7 +203,7 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 	if err := client.syncAtomicTrie(ctx); err != nil {
 		return err
 	}
-	client.queueLock.Unlock()
+	client.downloaderLock.Unlock()
 
 	return client.syncStateTrie(ctx)
 }
@@ -238,7 +252,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	log.Info("Starting state sync", "summary", proposedSummary)
 
 	// Lock the atomic trie to prevent pivots during the atomic sync from dynamic syncing
-	client.queueLock.Lock()
+	client.downloaderLock.Lock()
 
 	// create a cancellable ctx for the state sync goroutine
 	ctx, cancel := context.WithCancel(context.Background())
@@ -247,7 +261,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	if client.useUpstream {
 		// Set downloader using pivot
 		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
-		client.dl = newDownloader(client.chaindb, evmBlock)
+		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
 		ethBlock := evmBlock.ethBlock
 		if err := client.updateVMMarkers(); err != nil {
 			return block.StateSyncSkipped, fmt.Errorf("error updating vm markers height=%d, hash=%s, err=%w", ethBlock.NumberU64(), ethBlock.Hash(), err)
@@ -265,16 +279,13 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	go func() {
 		defer client.wg.Done()
 		defer cancel()
+		defer client.dl.Close()
 
 		if err := client.stateSync(ctx); err != nil {
 			client.stateSyncErr = err
 		} else {
 			if client.useUpstream {
-				client.stateSyncErr = client.finishSync(client.dl.pivotBlock.ethBlock.Hash())
-
-				// should be locked from final, opens for regular block operations
-				// if any error occurs during sync, mutex will not be locked
-				client.dl.bufferLock.Unlock()
+				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
 			} else {
 				client.stateSyncErr = client.finishSync(client.syncSummary.BlockHash)
 			}
@@ -397,10 +408,10 @@ func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) erro
 	p2pClient := client.network.NewClient(ethstatesync.ProtocolID)
 	if len(client.stateSyncNodes) > 0 {
 		for _, nodeID := range client.stateSyncNodes {
-			client.dl.snapSyncer.Register(ethstatesync.NewOutboundPeer(nodeID, client.dl.snapSyncer, p2pClient))
+			client.dl.SnapSyncer.Register(ethstatesync.NewOutboundPeer(nodeID, client.dl, p2pClient))
 		}
 	} else {
-		client.network.AddConnector(ethstatesync.NewConnector(client.dl.snapSyncer, p2pClient))
+		client.network.AddConnector(ethstatesync.NewConnector(client.dl, p2pClient))
 	}
 
 	if err := client.dl.SnapSync(); err != nil {
