@@ -271,9 +271,8 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
-func (b *Block) Reject(ctx context.Context) error {
+func (b *Block) Reject(context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
-		log.Warn("Called Reject for block during dynamic state sync", "block", b.ID(), "height", b.Height())
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.RejectSyncBlockRequest)
 	}
 	return b.reject()
