@@ -217,31 +217,15 @@ func TestBlockRLP(t *testing.T) {
 
 // bodyWithNonZeroFields returns a [Body] and a [BlockBodyExtra],
 // each with all fields set to non-zero values.
-// The [BlockBodyExtra] extra payload is set in the [Body] via `extras.Body.Set`.
+// The [BlockBodyExtra] extra payload is set in the [Body] via `extras.Block.Set`
+// and the extra copying done in [ethtypes.Block.Body].
 //
 // NOTE: They can be used to demonstrate that RLP round-trip encoding
 // can recover all fields, but not that the encoded format is correct. This is
 // very important as the RLP encoding of a [Body] defines its hash.
 func bodyWithNonZeroFields() (*Body, *BlockBodyExtra) {
-	tx := NewTransaction(1, common.Address{2}, big.NewInt(3), 4, big.NewInt(5), []byte{6})
-	uncle := &Header{
-		Difficulty: big.NewInt(7),
-		Number:     big.NewInt(8),
-		ParentHash: common.Hash{9},
-	}
-	uncleExtra := &HeaderExtra{ExtDataHash: common.Hash{10}}
-	SetHeaderExtra(uncle, uncleExtra)
-	body := &Body{
-		Transactions: []*Transaction{tx},
-		Uncles:       []*Header{uncle},
-		Withdrawals:  []*ethtypes.Withdrawal{{Index: 11}},
-	}
-	extra := &BlockBodyExtra{
-		Version: 12,
-		ExtData: &[]byte{13},
-	}
-	extras.Body.Set(body, extra)
-	return body, extra
+	block, extra := blockWithNonZeroFields()
+	return block.Body(), extra
 }
 
 func TestBodyWithNonZeroFields(t *testing.T) {
