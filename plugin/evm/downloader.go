@@ -75,16 +75,22 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 	d.bufferLock.Lock()
 	defer d.bufferLock.Unlock()
 	if d.bufferLen >= len(d.blockBuffer) {
+		close(d.quitCh)
 		return errors.New("Snap sync queue overflow")
 	}
 
 	d.blockBuffer[d.bufferLen] = &queueElement{b, req}
 	d.bufferLen++
 
-	log.Debug("Received queue request", "hash", b.ID(), "height", b.Height(), "req", req, "timestamp", b.Timestamp())
+	// Should change to debug prior to production
+	log.Info("Received queue request", "hash", b.ID(), "height", b.Height(), "req", req, "timestamp", b.Timestamp())
 
-	if req == acceptSyncBlockRequest && b.Height() >= d.pivotBlock.Height()+pivotInterval {
+	// If on pivot interval, we should pivot (regardless of whether the queue is full)
+	if req == acceptSyncBlockRequest && b.Height()%pivotInterval == 0 {
 		log.Info("Setting new pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
+		if b.Height() <= d.pivotBlock.Height() {
+			log.Warn("Received pivot with height <= pivot block", "old hash", b.ID(), "old height", b.Height(), "timestamp", b.Timestamp())
+		}
 
 		// Reset pivot first in other goroutine
 		d.pivotBlock = b
@@ -95,11 +101,8 @@ func (d *downloader) QueueBlockOrPivot(b *Block, req syncBlockRequest) error {
 			close(d.quitCh)
 			return err
 		}
-	} else if b.Height() <= d.pivotBlock.Height() {
-		close(d.quitCh)
-		log.Warn("Received block with height less than pivot block", "hash", b.ID(), "height", b.Height(), "timestamp", b.Timestamp())
-		return errors.New("received block with height less than pivot block")
 	}
+
 	return nil
 }
 
