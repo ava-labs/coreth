@@ -210,7 +210,6 @@ func (b *Block) acceptDuringSync() error {
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
-	log.Info("Accepting block during sync", "block", b.ID(), "height", b.Height())
 	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
@@ -235,7 +234,7 @@ func (b *Block) acceptDuringSync() error {
 		return err
 	}
 
-	log.Info("Returning from accept without error", "block", b.ID(), "height", b.Height())
+	log.Debug("Returning from accept without error", "block", b.ID(), "height", b.Height())
 
 	return nil
 }
@@ -315,7 +314,7 @@ func (b *Block) rejectDuringSync() error {
 		return err
 	}
 
-	log.Info("Returning from reject without error", "block", b.ID(), "height", b.Height())
+	log.Debug("Returning from reject without error", "block", b.ID(), "height", b.Height())
 	return nil
 }
 
@@ -485,7 +484,7 @@ func (b *Block) verifyDuringSync() error {
 		}
 	}
 
-	log.Info("Returning from verify without error", "block", b.ID(), "height", b.Height())
+	log.Debug("Returning from verify without error", "block", b.ID(), "height", b.Height())
 
 	return nil
 }
