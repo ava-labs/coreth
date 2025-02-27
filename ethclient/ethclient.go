@@ -265,8 +265,12 @@ func (ec *client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	block := types.NewBlockWithHeader(head)
-	block = block.WithBody(types.Body{Transactions: txs, Uncles: uncles})
+
+	block := types.NewBlockWithHeader(head).WithBody(
+		types.Body{
+			Transactions: txs,
+			Uncles:       uncles,
+		})
 	extra := &types.BlockBodyExtra{
 		Version: body.Version,
 		ExtData: (*[]byte)(body.BlockExtraData),
