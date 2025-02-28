@@ -243,7 +243,7 @@ func TestBodyExtraRLP(t *testing.T) {
 func TestBlockExtraRLP(t *testing.T) {
 	t.Parallel()
 
-	block, wantExtra := blockWithNonZeroFields()
+	block, _ := blockWithNonZeroFields() // the block carries the [BlockBodyExtra] so we can ignore it
 
 	encoded, err := rlp.EncodeToBytes(block)
 	require.NoError(t, err)
@@ -252,7 +252,8 @@ func TestBlockExtraRLP(t *testing.T) {
 	err = rlp.DecodeBytes(encoded, gotBlock)
 	require.NoError(t, err)
 
-	wantBlock := block.WithWithdrawals(nil) // withdrawals are not encoded
+	wantBlock, wantExtra := blockWithNonZeroFields()
+	wantBlock = wantBlock.WithWithdrawals(nil) // withdrawals are not encoded
 
 	opts := cmp.Options{
 		txHashComparer(),
