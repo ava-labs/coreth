@@ -345,6 +345,7 @@ func TestVerifyExtra(t *testing.T) {
 func TestPredicateBytesFromExtra(t *testing.T) {
 	tests := []struct {
 		name     string
+		rules    extras.AvalancheRules
 		extra    []byte
 		expected []byte
 	}{
@@ -373,7 +374,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := PredicateBytesFromExtra(test.extra)
+			got := PredicateBytesFromExtra(test.rules, test.extra)
 			require.Equal(t, test.expected, got)
 		})
 	}

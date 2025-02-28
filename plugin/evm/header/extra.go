@@ -85,7 +85,7 @@ func VerifyExtra(rules extras.AvalancheRules, extra []byte) error {
 
 // PredicateBytesFromExtra returns the predicate result bytes from the header's
 // extra data. If the extra data is not long enough, an empty slice is returned.
-func PredicateBytesFromExtra(extra []byte) []byte {
+func PredicateBytesFromExtra(_ extras.AvalancheRules, extra []byte) []byte {
 	// Prior to Durango, the VM enforces the extra data is smaller than or equal
 	// to this size.
 	// After Durango, the VM pre-verifies the extra data past the dynamic fee
