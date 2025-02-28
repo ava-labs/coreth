@@ -206,7 +206,7 @@ func headerHashComparer() cmp.Option {
 func TestBodyExtraRLP(t *testing.T) {
 	t.Parallel()
 
-	body, wantExtra := bodyWithNonZeroFields()
+	body, _ := bodyWithNonZeroFields() // the body carries the [BlockBodyExtra] so we can ignore it
 
 	encoded, err := rlp.EncodeToBytes(body)
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestBodyExtraRLP(t *testing.T) {
 	err = rlp.DecodeBytes(encoded, gotBody)
 	require.NoError(t, err)
 
-	wantBody := body
+	wantBody, wantExtra := bodyWithNonZeroFields()
 	wantBody.Withdrawals = nil
 
 	opts := cmp.Options{
