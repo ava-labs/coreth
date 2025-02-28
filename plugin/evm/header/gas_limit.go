@@ -32,7 +32,7 @@ func GasLimit(
 	case config.IsFUpgrade(timestamp):
 		state, err := feeStateBeforeBlock(config, parent, timestamp)
 		if err != nil {
-			return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
+			return 0, fmt.Errorf("calculating initial fee state: %w", err)
 		}
 		// The gas limit is set to the maximum capacity, rather than the current
 		// capacity, to minimize the differences with upstream geth. During
@@ -78,7 +78,7 @@ func VerifyGasUsed(
 
 	capacity, err := GasCapacity(config, parent, header.Time)
 	if err != nil {
-		return fmt.Errorf("failed to calculate gas capacity: %w", err)
+		return fmt.Errorf("calculating gas capacity: %w", err)
 	}
 	if gasUsed > capacity {
 		return fmt.Errorf("%w: have %d, capacity %d",
@@ -100,7 +100,7 @@ func VerifyGasLimit(
 	case config.IsFUpgrade(header.Time):
 		state, err := feeStateBeforeBlock(config, parent, header.Time)
 		if err != nil {
-			return fmt.Errorf("failed to calculate the initial fee state: %w", err)
+			return fmt.Errorf("calculating initial fee state: %w", err)
 		}
 		maxCapacity := state.MaxCapacity()
 		if header.GasLimit != uint64(maxCapacity) {
@@ -165,14 +165,15 @@ func GasCapacity(
 
 	state, err := feeStateBeforeBlock(config, parent, timestamp)
 	if err != nil {
-		return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
+		return 0, fmt.Errorf("calculating initial fee state: %w", err)
 	}
 	return uint64(state.Gas.Capacity), nil
 }
 
-// AtomicGasCapacity returns the maximum amount ExtDataGasUsed could be on
-// `header` while still being valid.
-func AtomicGasCapacity(
+// RemainingAtomicGasCapacity returns the maximum amount ExtDataGasUsed could be
+// on `header` while still being valid based on the initial capacity and
+// consumed gas.
+func RemainingAtomicGasCapacity(
 	config *params.ChainConfig,
 	parent *types.Header,
 	header *types.Header,
@@ -185,7 +186,7 @@ func AtomicGasCapacity(
 
 	state, err := feeStateBeforeBlock(config, parent, header.Time)
 	if err != nil {
-		return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
+		return 0, fmt.Errorf("calculating initial fee state: %w", err)
 	}
 	if err := state.ConsumeGas(header.GasUsed, nil); err != nil {
 		return 0, fmt.Errorf("%w while calculating available gas", err)

@@ -37,7 +37,7 @@ func feeStateBeforeBlock(
 		var err error
 		state, err = acp176.ParseState(parent.Extra)
 		if err != nil {
-			return acp176.State{}, fmt.Errorf("failed to parse parent fee state: %w", err)
+			return acp176.State{}, fmt.Errorf("parsing parent fee state: %w", err)
 		}
 	}
 
@@ -56,12 +56,12 @@ func feeStateAfterBlock(
 	// Calculate the gas state after the parent block
 	state, err := feeStateBeforeBlock(config, parent, header.Time)
 	if err != nil {
-		return acp176.State{}, fmt.Errorf("failed to calculate the initial fee state: %w", err)
+		return acp176.State{}, fmt.Errorf("calculating initial fee state: %w", err)
 	}
 
 	// Consume the gas used by the block
 	if err := state.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
-		return acp176.State{}, fmt.Errorf("failed to advance the fee state: %w", err)
+		return acp176.State{}, fmt.Errorf("advancing the fee state: %w", err)
 	}
 
 	// If the desired target excess is specified, move the target excess as much

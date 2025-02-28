@@ -27,7 +27,7 @@ func BaseFee(
 	case config.IsFUpgrade(timestamp):
 		state, err := feeStateBeforeBlock(config, parent, timestamp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate the initial fee state: %w", err)
+			return nil, fmt.Errorf("calculating initial fee state: %w", err)
 		}
 		price := state.GasPrice()
 		return new(big.Int).SetUint64(uint64(price)), nil

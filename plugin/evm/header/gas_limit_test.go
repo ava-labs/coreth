@@ -71,8 +71,8 @@ func TestGasLimit(t *testing.T) {
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := GasLimit(config, test.parent, test.timestamp)
-			require.Equal(test.want, got)
 			require.ErrorIs(err, test.wantErr)
+			require.Equal(test.want, got)
 		})
 	}
 }
@@ -118,7 +118,10 @@ func TestVerifyGasUsed(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{
-				Time:    1,
+				Time: 1,
+				// The maximum allowed gas used is:
+				// (header.Time - parent.Time) * [acp176.MinMaxPerSecond]
+				// which is equal to [acp176.MinMaxPerSecond].
 				GasUsed: acp176.MinMaxPerSecond + 1,
 			},
 			want: errInvalidGasUsed,
@@ -328,7 +331,7 @@ func TestGasCapacity(t *testing.T) {
 	}
 }
 
-func TestAtomicGasCapacity(t *testing.T) {
+func TestRemainingAtomicGasCapacity(t *testing.T) {
 	tests := []struct {
 		name     string
 		upgrades params.NetworkUpgrades
@@ -383,7 +386,7 @@ func TestAtomicGasCapacity(t *testing.T) {
 			config := &params.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got, err := AtomicGasCapacity(config, test.parent, test.header)
+			got, err := RemainingAtomicGasCapacity(config, test.parent, test.header)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, got)
 		})

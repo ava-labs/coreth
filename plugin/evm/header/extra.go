@@ -40,7 +40,7 @@ func ExtraPrefix(
 			desiredTargetExcess,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate fee state: %w", err)
+			return nil, fmt.Errorf("calculating fee state: %w", err)
 		}
 		return state.Bytes(), nil
 	case config.IsApricotPhase3(header.Time):
@@ -66,7 +66,7 @@ func VerifyExtraPrefix(
 	case config.IsFUpgrade(header.Time):
 		remoteState, err := acp176.ParseState(header.Extra)
 		if err != nil {
-			return fmt.Errorf("failed to parse remote fee state: %w", err)
+			return fmt.Errorf("parsing remote fee state: %w", err)
 		}
 
 		// By passing in the claimed target excess, we ensure that the expected
@@ -81,11 +81,11 @@ func VerifyExtraPrefix(
 			&remoteState.TargetExcess,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to calculate expected fee state: %w", err)
+			return fmt.Errorf("calculating expected fee state: %w", err)
 		}
 
 		if remoteState != expectedState {
-			return fmt.Errorf("%w: expected %v, found %v",
+			return fmt.Errorf("%w: expected %+v, found %+v",
 				errIncorrectFeeState,
 				expectedState,
 				remoteState,
@@ -94,7 +94,7 @@ func VerifyExtraPrefix(
 	case config.IsApricotPhase3(header.Time):
 		feeWindow, err := feeWindow(config, parent, header.Time)
 		if err != nil {
-			return fmt.Errorf("failed to calculate expected fee window: %w", err)
+			return fmt.Errorf("calculating expected fee window: %w", err)
 		}
 		feeWindowBytes := feeWindow.Bytes()
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
