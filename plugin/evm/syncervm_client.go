@@ -83,12 +83,14 @@ type stateSyncerClient struct {
 	// Dynamic sync
 	syncing        utils.Atomic[bool]
 	dl             *ethstatesync.Downloader
-	downloaderLock sync.Mutex // to prevent writing during atomic sync
+	downloaderLock sync.Mutex
+	atomicDone     chan struct{} // to prevent writing during atomic sync
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 	return &stateSyncerClient{
 		stateSyncClientConfig: config,
+		atomicDone:            make(chan struct{}),
 	}
 }
 
@@ -120,16 +122,24 @@ type Syncer interface {
 // AsyncReceive returns true if the client is ready to receive a message from the engine
 // Should return true if syncing and useUpstream is true, i.e. currently dynamicaling syncing
 func (client *stateSyncerClient) AsyncReceive() bool {
-	// Block until atomic sync is completed for bootstrapping
+	// Block until atomic sync is completed for bootstrapping and after sync completes until blockchain updates
 	client.downloaderLock.Lock()
 	client.downloaderLock.Unlock()
 	return client.useUpstream && client.syncing.Get() && client.dl != nil
 }
 
 func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.SyncBlockRequest) error {
-	return client.dl.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
+	// Wait for atomic sync to be done prior to queueing
+	<-client.atomicDone
+	err := client.dl.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
+	if err != nil {
+		log.Error("Queue failed", "error", err)
+	}
+	return err
 }
 
+// Depending on the request type, returns the hook to properly handle the block
+// If final, will run normal operation. Otherwise, will only perform atomic ops
 func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func(bool) error {
 	switch req {
 	case ethstatesync.AcceptSyncBlockRequest:
@@ -203,7 +213,6 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 	if err := client.syncAtomicTrie(ctx); err != nil {
 		return err
 	}
-	client.downloaderLock.Unlock()
 
 	return client.syncStateTrie(ctx)
 }
@@ -250,9 +259,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	}
 
 	log.Info("Starting state sync", "summary", proposedSummary)
-
-	// Lock the atomic trie to prevent pivots during the atomic sync from dynamic syncing
-	client.downloaderLock.Lock()
 
 	// create a cancellable ctx for the state sync goroutine
 	ctx, cancel := context.WithCancel(context.Background())
@@ -380,6 +386,7 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 		return err
 	}
 	err = <-atomicSyncer.Done()
+	close(client.atomicDone)
 	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
 	return err
 }
