@@ -850,7 +850,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		size              int
 	)
 
-	atomicGasLimit, err := customheader.AtomicGasCapacity(vm.chainConfig, parent, header)
+	atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfig, parent, header)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1014,7 +1014,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
 	// atomic gas limit.
 	if rules.IsApricotPhase5 {
-		atomicGasLimit, err := customheader.AtomicGasCapacity(vm.chainConfig, parent, header)
+		atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfig, parent, header)
 		if err != nil {
 			return nil, nil, err
 		}

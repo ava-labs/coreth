@@ -170,9 +170,10 @@ func GasCapacity(
 	return uint64(state.Gas.Capacity), nil
 }
 
-// AtomicGasCapacity returns the maximum amount ExtDataGasUsed could be on
-// `header` while still being valid.
-func AtomicGasCapacity(
+// RemainingAtomicGasCapacity returns the maximum amount ExtDataGasUsed could be
+// on `header` while still being valid based on the initial capacity and
+// consumed gas.
+func RemainingAtomicGasCapacity(
 	config *params.ChainConfig,
 	parent *types.Header,
 	header *types.Header,

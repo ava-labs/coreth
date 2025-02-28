@@ -328,7 +328,7 @@ func TestGasCapacity(t *testing.T) {
 	}
 }
 
-func TestAtomicGasCapacity(t *testing.T) {
+func TestRemainingAtomicGasCapacity(t *testing.T) {
 	tests := []struct {
 		name     string
 		upgrades params.NetworkUpgrades
@@ -383,7 +383,7 @@ func TestAtomicGasCapacity(t *testing.T) {
 			config := &params.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got, err := AtomicGasCapacity(config, test.parent, test.header)
+			got, err := RemainingAtomicGasCapacity(config, test.parent, test.header)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, got)
 		})
