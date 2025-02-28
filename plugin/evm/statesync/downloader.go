@@ -184,7 +184,7 @@ func (d *Downloader) SnapSync() error {
 		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
-			log.Debug("Pivot block updated to", "hash", d.pivotBlock.Root(), "height", d.pivotBlock.NumberU64())
+			log.Debug("Pivot block updated to", "hash", d.Pivot().Root(), "height", d.Pivot().NumberU64())
 			sync.Cancel()
 			sync = d.syncState(newPivot.Root())
 		}
