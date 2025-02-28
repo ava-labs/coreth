@@ -182,16 +182,8 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
 	if rulesExtra.IsApricotPhase4 {
-		// Make sure ExtDataGasUsed is not nil and correct
-		if headerExtra.ExtDataGasUsed == nil {
-			return errNilExtDataGasUsedApricotPhase4
-		}
 		if rulesExtra.IsApricotPhase5 {
 			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
-				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
-			}
-		} else {
-			if !headerExtra.ExtDataGasUsed.IsUint64() {
 				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
 			}
 		}
@@ -204,14 +196,14 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			if err != nil {
 				return err
 			}
-			totalGasUsed, err = safemath.Add64(totalGasUsed, gasUsed)
+			totalGasUsed, err = safemath.Add(totalGasUsed, gasUsed)
 			if err != nil {
 				return err
 			}
 		}
 
 		switch {
-		case headerExtra.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0:
+		case !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed):
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
 
 		// Make sure BlockGasCost is not nil

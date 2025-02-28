@@ -251,7 +251,7 @@ func TestSuggestTipCapEmptyExtDataGasUsage(t *testing.T) {
 		numBlocks:       3,
 		extDataGasUsage: nil,
 		genBlock:        testGenBlock(t, 55, 370),
-		expectedTip:     big.NewInt(5_713_963_963),
+		expectedTip:     big.NewInt(5_713_963_964),
 	}, defaultOracleConfig())
 }
 
@@ -261,7 +261,7 @@ func TestSuggestTipCapSimple(t *testing.T) {
 		numBlocks:       3,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 55, 370),
-		expectedTip:     big.NewInt(5_713_963_963),
+		expectedTip:     big.NewInt(5_713_963_964),
 	}, defaultOracleConfig())
 }
 
@@ -317,7 +317,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 			}
 		},
 		// NOTE: small tips do not bias estimate
-		expectedTip: big.NewInt(5_713_963_963),
+		expectedTip: big.NewInt(5_713_963_964),
 	}, defaultOracleConfig())
 }
 
@@ -327,7 +327,7 @@ func TestSuggestTipCapExtDataUsage(t *testing.T) {
 		numBlocks:       3,
 		extDataGasUsage: big.NewInt(10_000),
 		genBlock:        testGenBlock(t, 55, 370),
-		expectedTip:     big.NewInt(5_706_726_649),
+		expectedTip:     big.NewInt(5_706_726_650),
 	}, defaultOracleConfig())
 }
 
@@ -383,7 +383,7 @@ func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 		numBlocks:       20,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 550, 370),
-		expectedTip:     big.NewInt(51_565_264_256),
+		expectedTip:     big.NewInt(51_565_264_257),
 	}, defaultOracleConfig())
 }
 
@@ -393,6 +393,19 @@ func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
 		numBlocks:       20,
 		extDataGasUsage: big.NewInt(1),
 		genBlock:        testGenBlock(t, 550, 370),
-		expectedTip:     big.NewInt(92_212_529_423),
+		expectedTip:     big.NewInt(92_212_529_424),
+	}, timeCrunchOracleConfig())
+}
+
+func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
+	applyGasPriceTest(t, suggestTipCapTest{
+		chainConfig:     params.TestChainConfig,
+		numBlocks:       20,
+		extDataGasUsage: DefaultMinGasUsed,
+		// The tip on the transaction is very large to pay the block gas cost.
+		genBlock: testGenBlock(t, 100_000, 1),
+		// The actual tip doesn't matter, we just want to ensure that the tip is
+		// non-zero when almost all the gas is coming from the extDataGasUsage.
+		expectedTip: big.NewInt(83_603_561_239),
 	}, timeCrunchOracleConfig())
 }
