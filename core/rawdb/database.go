@@ -283,6 +283,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				case database == "Key-Value store" && category == "Difficulties",
 					database == "Key-Value store" && category == "Beacon sync headers",
 					database == "Ancient store (Chain)":
+					// Discard rows specific to libevm (geth) but irrelevant to coreth.
 					continue
 				}
 				newRows = append(newRows, row)
