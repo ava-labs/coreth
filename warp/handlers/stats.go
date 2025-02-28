@@ -6,6 +6,7 @@ package handlers
 import (
 	"time"
 
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/metrics"
 )
 
@@ -24,14 +25,14 @@ type handlerStats struct {
 
 func newStats() *handlerStats {
 	return &handlerStats{
-		messageSignatureRequest:         metrics.NewRegisteredCounter("message_signature_request_count", nil),
-		messageSignatureHit:             metrics.NewRegisteredCounter("message_signature_request_hit", nil),
-		messageSignatureMiss:            metrics.NewRegisteredCounter("message_signature_request_miss", nil),
-		messageSignatureRequestDuration: metrics.NewRegisteredGauge("message_signature_request_duration", nil),
-		blockSignatureRequest:           metrics.NewRegisteredCounter("block_signature_request_count", nil),
-		blockSignatureHit:               metrics.NewRegisteredCounter("block_signature_request_hit", nil),
-		blockSignatureMiss:              metrics.NewRegisteredCounter("block_signature_request_miss", nil),
-		blockSignatureRequestDuration:   metrics.NewRegisteredGauge("block_signature_request_duration", nil),
+		messageSignatureRequest:         metrics.NewRegisteredCounter("message_signature_request_count", cmetrics.Registry),
+		messageSignatureHit:             metrics.NewRegisteredCounter("message_signature_request_hit", cmetrics.Registry),
+		messageSignatureMiss:            metrics.NewRegisteredCounter("message_signature_request_miss", cmetrics.Registry),
+		messageSignatureRequestDuration: metrics.NewRegisteredGauge("message_signature_request_duration", cmetrics.Registry),
+		blockSignatureRequest:           metrics.NewRegisteredCounter("block_signature_request_count", cmetrics.Registry),
+		blockSignatureHit:               metrics.NewRegisteredCounter("block_signature_request_hit", cmetrics.Registry),
+		blockSignatureMiss:              metrics.NewRegisteredCounter("block_signature_request_miss", cmetrics.Registry),
+		blockSignatureRequestDuration:   metrics.NewRegisteredGauge("block_signature_request_duration", cmetrics.Registry),
 	}
 }
 

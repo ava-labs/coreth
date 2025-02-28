@@ -10,6 +10,7 @@ import (
 
 	utils_math "github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/timer"
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
@@ -49,9 +50,9 @@ func newTrieSyncStats() *trieSyncStats {
 		lastUpdated:    now,
 
 		// metrics
-		totalLeafs:     metrics.GetOrRegisterCounter("state_sync_total_leafs", nil),
-		leafsRateGauge: metrics.GetOrRegisterGauge("state_sync_leafs_per_second", nil),
-		triesSegmented: metrics.GetOrRegisterCounter("state_sync_tries_segmented", nil),
+		totalLeafs:     metrics.GetOrRegisterCounter("state_sync_total_leafs", cmetrics.Registry),
+		leafsRateGauge: metrics.GetOrRegisterGauge("state_sync_leafs_per_second", cmetrics.Registry),
+		triesSegmented: metrics.GetOrRegisterCounter("state_sync_tries_segmented", cmetrics.Registry),
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/libevm/metrics"
 )
@@ -41,12 +42,12 @@ type messageMetric struct {
 
 func NewMessageMetric(name string) MessageMetric {
 	return &messageMetric{
-		requested:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_requested", name), nil),
-		succeeded:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_succeeded", name), nil),
-		failed:          metrics.GetOrRegisterCounter(fmt.Sprintf("%s_failed", name), nil),
-		invalidResponse: metrics.GetOrRegisterCounter(fmt.Sprintf("%s_invalid_response", name), nil),
-		received:        metrics.GetOrRegisterCounter(fmt.Sprintf("%s_received", name), nil),
-		requestLatency:  metrics.GetOrRegisterTimer(fmt.Sprintf("%s_request_latency", name), nil),
+		requested:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_requested", name), cmetrics.Registry),
+		succeeded:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_succeeded", name), cmetrics.Registry),
+		failed:          metrics.GetOrRegisterCounter(fmt.Sprintf("%s_failed", name), cmetrics.Registry),
+		invalidResponse: metrics.GetOrRegisterCounter(fmt.Sprintf("%s_invalid_response", name), cmetrics.Registry),
+		received:        metrics.GetOrRegisterCounter(fmt.Sprintf("%s_received", name), cmetrics.Registry),
+		requestLatency:  metrics.GetOrRegisterTimer(fmt.Sprintf("%s_request_latency", name), cmetrics.Registry),
 	}
 }
 

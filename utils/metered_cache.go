@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/metrics"
 )
 
@@ -45,13 +46,13 @@ func NewMeteredCache(size int, namespace string, updateFrequency uint64) *Metere
 	}
 	if namespace != "" {
 		// only register stats if a namespace is provided.
-		mc.entriesCount = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/entriesCount", namespace), nil)
-		mc.bytesSize = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/bytesSize", namespace), nil)
-		mc.collisions = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/collisions", namespace), nil)
-		mc.gets = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/gets", namespace), nil)
-		mc.sets = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/sets", namespace), nil)
-		mc.misses = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/misses", namespace), nil)
-		mc.statsTime = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/statsTime", namespace), nil)
+		mc.entriesCount = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/entriesCount", namespace), cmetrics.Registry)
+		mc.bytesSize = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/bytesSize", namespace), cmetrics.Registry)
+		mc.collisions = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/collisions", namespace), cmetrics.Registry)
+		mc.gets = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/gets", namespace), cmetrics.Registry)
+		mc.sets = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/sets", namespace), cmetrics.Registry)
+		mc.misses = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/misses", namespace), cmetrics.Registry)
+		mc.statsTime = metrics.GetOrRegisterGauge(fmt.Sprintf("%s/statsTime", namespace), cmetrics.Registry)
 	}
 	return mc
 }

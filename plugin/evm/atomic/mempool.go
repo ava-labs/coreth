@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/prometheus/client_golang/prometheus"
 
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
@@ -46,11 +47,11 @@ type mempoolMetrics struct {
 // newMempoolMetrics constructs metrics for the atomic mempool
 func newMempoolMetrics() *mempoolMetrics {
 	return &mempoolMetrics{
-		pendingTxs:   metrics.GetOrRegisterGauge("atomic_mempool_pending_txs", nil),
-		currentTxs:   metrics.GetOrRegisterGauge("atomic_mempool_current_txs", nil),
-		issuedTxs:    metrics.GetOrRegisterGauge("atomic_mempool_issued_txs", nil),
-		addedTxs:     metrics.GetOrRegisterCounter("atomic_mempool_added_txs", nil),
-		discardedTxs: metrics.GetOrRegisterCounter("atomic_mempool_discarded_txs", nil),
+		pendingTxs:   metrics.GetOrRegisterGauge("atomic_mempool_pending_txs", cmetrics.Registry),
+		currentTxs:   metrics.GetOrRegisterGauge("atomic_mempool_current_txs", cmetrics.Registry),
+		issuedTxs:    metrics.GetOrRegisterGauge("atomic_mempool_issued_txs", cmetrics.Registry),
+		addedTxs:     metrics.GetOrRegisterCounter("atomic_mempool_added_txs", cmetrics.Registry),
+		discardedTxs: metrics.GetOrRegisterCounter("atomic_mempool_discarded_txs", cmetrics.Registry),
 	}
 }
 

@@ -30,18 +30,19 @@ import (
 	"fmt"
 	"time"
 
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/metrics"
 )
 
 var (
-	rpcRequestGauge        = metrics.NewRegisteredGauge("rpc/requests", nil)
-	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/success", nil)
-	failedRequestGauge     = metrics.NewRegisteredGauge("rpc/failure", nil)
+	rpcRequestGauge        = metrics.NewRegisteredGauge("rpc/requests", cmetrics.Registry)
+	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/success", cmetrics.Registry)
+	failedRequestGauge     = metrics.NewRegisteredGauge("rpc/failure", cmetrics.Registry)
 
 	// serveTimeHistName is the prefix of the per-request serving time histograms.
 	serveTimeHistName = "rpc/duration"
 
-	rpcServingTimer = metrics.NewRegisteredTimer("rpc/duration/all", nil)
+	rpcServingTimer = metrics.NewRegisteredTimer("rpc/duration/all", cmetrics.Registry)
 )
 
 // updateServeTimeHistogram tracks the serving time of a remote RPC call.
@@ -56,5 +57,5 @@ func updateServeTimeHistogram(method string, success bool, elapsed time.Duration
 			metrics.NewExpDecaySample(1028, 0.015),
 		)
 	}
-	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Nanoseconds())
+	metrics.GetOrRegisterHistogramLazy(h, cmetrics.Registry, sampler).Update(elapsed.Nanoseconds())
 }

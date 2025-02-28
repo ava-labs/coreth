@@ -35,6 +35,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
@@ -53,35 +54,35 @@ const (
 )
 
 var (
-	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/clean/hit", nil)
-	memcacheCleanMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/miss", nil)
-	memcacheCleanReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/read", nil)
-	memcacheCleanWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/clean/write", nil)
+	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/clean/hit", cmetrics.Registry)
+	memcacheCleanMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/miss", cmetrics.Registry)
+	memcacheCleanReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/read", cmetrics.Registry)
+	memcacheCleanWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/clean/write", cmetrics.Registry)
 
-	memcacheDirtyHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/dirty/hit", nil)
-	memcacheDirtyMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/miss", nil)
-	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/read", nil)
-	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/dirty/write", nil)
+	memcacheDirtyHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/dirty/hit", cmetrics.Registry)
+	memcacheDirtyMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/miss", cmetrics.Registry)
+	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/read", cmetrics.Registry)
+	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/dirty/write", cmetrics.Registry)
 
-	memcacheDirtySizeGauge      = metrics.NewRegisteredGaugeFloat64("hashdb/memcache/dirty/size", nil)
-	memcacheDirtyChildSizeGauge = metrics.NewRegisteredGaugeFloat64("hashdb/memcache/dirty/childsize", nil)
-	memcacheDirtyNodesGauge     = metrics.NewRegisteredGauge("hashdb/memcache/dirty/nodes", nil)
+	memcacheDirtySizeGauge      = metrics.NewRegisteredGaugeFloat64("hashdb/memcache/dirty/size", cmetrics.Registry)
+	memcacheDirtyChildSizeGauge = metrics.NewRegisteredGaugeFloat64("hashdb/memcache/dirty/childsize", cmetrics.Registry)
+	memcacheDirtyNodesGauge     = metrics.NewRegisteredGauge("hashdb/memcache/dirty/nodes", cmetrics.Registry)
 
-	memcacheFlushMeter         = metrics.NewRegisteredMeter("hashdb/memcache/flush/count", nil)
-	memcacheFlushTimeTimer     = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/time", nil)
-	memcacheFlushLockTimeTimer = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/locktime", nil)
-	memcacheFlushNodesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/flush/nodes", nil)
-	memcacheFlushBytesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/flush/bytes", nil)
+	memcacheFlushMeter         = metrics.NewRegisteredMeter("hashdb/memcache/flush/count", cmetrics.Registry)
+	memcacheFlushTimeTimer     = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/time", cmetrics.Registry)
+	memcacheFlushLockTimeTimer = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/locktime", cmetrics.Registry)
+	memcacheFlushNodesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/flush/nodes", cmetrics.Registry)
+	memcacheFlushBytesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/flush/bytes", cmetrics.Registry)
 
-	memcacheGCTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/gc/time", nil)
-	memcacheGCNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/nodes", nil)
-	memcacheGCBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/bytes", nil)
+	memcacheGCTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/gc/time", cmetrics.Registry)
+	memcacheGCNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/nodes", cmetrics.Registry)
+	memcacheGCBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/bytes", cmetrics.Registry)
 
-	memcacheCommitMeter         = metrics.NewRegisteredMeter("hashdb/memcache/commit/count", nil)
-	memcacheCommitTimeTimer     = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
-	memcacheCommitLockTimeTimer = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/locktime", nil)
-	memcacheCommitNodesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
-	memcacheCommitBytesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
+	memcacheCommitMeter         = metrics.NewRegisteredMeter("hashdb/memcache/commit/count", cmetrics.Registry)
+	memcacheCommitTimeTimer     = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", cmetrics.Registry)
+	memcacheCommitLockTimeTimer = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/locktime", cmetrics.Registry)
+	memcacheCommitNodesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", cmetrics.Registry)
+	memcacheCommitBytesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", cmetrics.Registry)
 )
 
 // ChildResolver defines the required method to decode the provided

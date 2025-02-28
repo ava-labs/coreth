@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/version"
+	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -61,42 +62,42 @@ import (
 )
 
 var (
-	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", nil)
-	accountHashTimer         = metrics.NewRegisteredCounter("chain/account/hashes", nil)
-	accountUpdateTimer       = metrics.NewRegisteredCounter("chain/account/updates", nil)
-	accountCommitTimer       = metrics.NewRegisteredCounter("chain/account/commits", nil)
-	storageReadTimer         = metrics.NewRegisteredCounter("chain/storage/reads", nil)
-	storageHashTimer         = metrics.NewRegisteredCounter("chain/storage/hashes", nil)
-	storageUpdateTimer       = metrics.NewRegisteredCounter("chain/storage/updates", nil)
-	storageCommitTimer       = metrics.NewRegisteredCounter("chain/storage/commits", nil)
-	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", nil)
+	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", cmetrics.Registry)
+	accountHashTimer         = metrics.NewRegisteredCounter("chain/account/hashes", cmetrics.Registry)
+	accountUpdateTimer       = metrics.NewRegisteredCounter("chain/account/updates", cmetrics.Registry)
+	accountCommitTimer       = metrics.NewRegisteredCounter("chain/account/commits", cmetrics.Registry)
+	storageReadTimer         = metrics.NewRegisteredCounter("chain/storage/reads", cmetrics.Registry)
+	storageHashTimer         = metrics.NewRegisteredCounter("chain/storage/hashes", cmetrics.Registry)
+	storageUpdateTimer       = metrics.NewRegisteredCounter("chain/storage/updates", cmetrics.Registry)
+	storageCommitTimer       = metrics.NewRegisteredCounter("chain/storage/commits", cmetrics.Registry)
+	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", cmetrics.Registry)
+	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", cmetrics.Registry)
+	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", cmetrics.Registry)
 
-	triedbCommitTimer = metrics.NewRegisteredCounter("chain/triedb/commits", nil)
+	triedbCommitTimer = metrics.NewRegisteredCounter("chain/triedb/commits", cmetrics.Registry)
 
-	blockInsertTimer            = metrics.NewRegisteredCounter("chain/block/inserts", nil)
-	blockInsertCount            = metrics.NewRegisteredCounter("chain/block/inserts/count", nil)
-	blockContentValidationTimer = metrics.NewRegisteredCounter("chain/block/validations/content", nil)
-	blockStateInitTimer         = metrics.NewRegisteredCounter("chain/block/inits/state", nil)
-	blockExecutionTimer         = metrics.NewRegisteredCounter("chain/block/executions", nil)
-	blockTrieOpsTimer           = metrics.NewRegisteredCounter("chain/block/trie", nil)
-	blockValidationTimer        = metrics.NewRegisteredCounter("chain/block/validations/state", nil)
-	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", nil)
+	blockInsertTimer            = metrics.NewRegisteredCounter("chain/block/inserts", cmetrics.Registry)
+	blockInsertCount            = metrics.NewRegisteredCounter("chain/block/inserts/count", cmetrics.Registry)
+	blockContentValidationTimer = metrics.NewRegisteredCounter("chain/block/validations/content", cmetrics.Registry)
+	blockStateInitTimer         = metrics.NewRegisteredCounter("chain/block/inits/state", cmetrics.Registry)
+	blockExecutionTimer         = metrics.NewRegisteredCounter("chain/block/executions", cmetrics.Registry)
+	blockTrieOpsTimer           = metrics.NewRegisteredCounter("chain/block/trie", cmetrics.Registry)
+	blockValidationTimer        = metrics.NewRegisteredCounter("chain/block/validations/state", cmetrics.Registry)
+	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", cmetrics.Registry)
 
-	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", nil)
-	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", nil)
-	acceptorWorkCount            = metrics.NewRegisteredCounter("chain/acceptor/work/count", nil)
-	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("chain/block/gas/used/processed", nil)
-	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("chain/block/gas/used/accepted", nil)
-	badBlockCounter              = metrics.NewRegisteredCounter("chain/block/bad/count", nil)
+	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", cmetrics.Registry)
+	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", cmetrics.Registry)
+	acceptorWorkCount            = metrics.NewRegisteredCounter("chain/acceptor/work/count", cmetrics.Registry)
+	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("chain/block/gas/used/processed", cmetrics.Registry)
+	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("chain/block/gas/used/accepted", cmetrics.Registry)
+	badBlockCounter              = metrics.NewRegisteredCounter("chain/block/bad/count", cmetrics.Registry)
 
-	txUnindexTimer      = metrics.NewRegisteredCounter("chain/txs/unindex", nil)
-	acceptedTxsCounter  = metrics.NewRegisteredCounter("chain/txs/accepted", nil)
-	processedTxsCounter = metrics.NewRegisteredCounter("chain/txs/processed", nil)
+	txUnindexTimer      = metrics.NewRegisteredCounter("chain/txs/unindex", cmetrics.Registry)
+	acceptedTxsCounter  = metrics.NewRegisteredCounter("chain/txs/accepted", cmetrics.Registry)
+	processedTxsCounter = metrics.NewRegisteredCounter("chain/txs/processed", cmetrics.Registry)
 
-	acceptedLogsCounter  = metrics.NewRegisteredCounter("chain/logs/accepted", nil)
-	processedLogsCounter = metrics.NewRegisteredCounter("chain/logs/processed", nil)
+	acceptedLogsCounter  = metrics.NewRegisteredCounter("chain/logs/accepted", cmetrics.Registry)
+	processedLogsCounter = metrics.NewRegisteredCounter("chain/logs/processed", cmetrics.Registry)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
