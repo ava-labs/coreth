@@ -71,8 +71,8 @@ func TestGasLimit(t *testing.T) {
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := GasLimit(config, test.parent, test.timestamp)
-			require.Equal(test.want, got)
 			require.ErrorIs(err, test.wantErr)
+			require.Equal(test.want, got)
 		})
 	}
 }
