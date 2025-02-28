@@ -121,8 +121,6 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 func allFieldsSet[T interface {
 	Header | HeaderExtra | Block | Body | BlockBodyExtra
 }](t *testing.T, x *T, ignoredFields ...string) {
-	t.Helper()
-
 	// We don't test for nil pointers because we're only confirming that
 	// test-input data is well-formed. A panic due to a dereference will be
 	// reported anyway.
