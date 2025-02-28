@@ -32,9 +32,7 @@ type BlockBodyExtra struct {
 // - [ethtypes.Block.WithWithdrawals]
 func (b *BlockBodyExtra) Copy() *BlockBodyExtra {
 	cpy := *b
-	if b.ExtData == nil {
-		cpy.ExtData = &[]byte{}
-	} else {
+	if b.ExtData != nil {
 		data := slices.Clone(*b.ExtData)
 		cpy.ExtData = &data
 	}
