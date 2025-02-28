@@ -20,7 +20,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/utils"
 )
 
@@ -109,23 +108,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	if ethHeader.MixDigest != (common.Hash{}) {
 		return fmt.Errorf("invalid mix digest: %v", ethHeader.MixDigest)
-	}
-
-	// Enforce static gas limit after ApricotPhase1 (prior to ApricotPhase1 it's handled in processing).
-	if rulesExtra.IsCortina {
-		if ethHeader.GasLimit != cortina.GasLimit {
-			return fmt.Errorf(
-				"expected gas limit to be %d after cortina but got %d",
-				cortina.GasLimit, ethHeader.GasLimit,
-			)
-		}
-	} else if rulesExtra.IsApricotPhase1 {
-		if ethHeader.GasLimit != ap1.GasLimit {
-			return fmt.Errorf(
-				"expected gas limit to be %d after apricot phase 1 but got %d",
-				ap1.GasLimit, ethHeader.GasLimit,
-			)
-		}
 	}
 
 	// Verify the extra data is well-formed.
