@@ -280,16 +280,22 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		defer client.wg.Done()
 		defer cancel()
 		if client.useUpstream {
-			defer client.dl.Close()
+			defer func() {
+				log.Debug("Closing downloader in defer")
+				client.dl.Close()
+			}()
 		}
 
 		if err := client.stateSync(ctx); err != nil {
+			log.Error("Returned from stateSync with error")
 			client.stateSyncErr = err
 		} else {
 			if client.useUpstream {
+				log.Info("No state sync error, final pivot", "hash", client.dl.Pivot().Hash(), "height", client.dl.Pivot().NumberU64())
 				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
 				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
 			} else {
+				log.Error("Called incorrect finishSync?????", "useUpstream", client.useUpstream)
 				client.stateSyncErr = client.finishSync(client.syncSummary.BlockHash)
 			}
 		}
