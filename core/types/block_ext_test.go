@@ -161,7 +161,7 @@ func TestBlockWithNonZeroFields(t *testing.T) {
 
 	block, extra := blockWithNonZeroFields()
 	t.Run("Block", func(t *testing.T) {
-		ignoreFields := []string{"hash", "size", "ReceivedAt", "ReceivedFrom"}
+		ignoreFields := []string{"extra", "hash", "size", "ReceivedAt", "ReceivedFrom"}
 		allFieldsSet(t, block, ignoreFields...)
 	})
 	t.Run("BlockExtra", func(t *testing.T) { allFieldsSet(t, extra) })
@@ -184,7 +184,10 @@ func TestBodyWithNonZeroFields(t *testing.T) {
 	t.Parallel()
 
 	body, extra := bodyWithNonZeroFields()
-	t.Run("Body", func(t *testing.T) { allFieldsSet(t, body) })
+	t.Run("Body", func(t *testing.T) {
+		ignoredFields := []string{"extra"}
+		allFieldsSet(t, body, ignoredFields...)
+	})
 	t.Run("BodyExtra", func(t *testing.T) { allFieldsSet(t, extra) })
 }
 

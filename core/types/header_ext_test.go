@@ -142,8 +142,6 @@ func allFieldsSet[T interface {
 					require.Falsef(t, fieldValue.IsNil(), "field %q is nil", field.Name)
 				}
 				fieldValue = reflect.NewAt(fieldValue.Type(), unsafe.Pointer(fieldValue.UnsafeAddr())).Elem() //nolint:gosec
-				assert.NotZero(t, fieldValue.Interface())
-				return
 			}
 
 			switch f := fieldValue.Interface().(type) {
@@ -167,7 +165,9 @@ func allFieldsSet[T interface {
 				assertNonZero(t, f)
 			case *[]uint8:
 				assertNonZero(t, f)
-			case []uint8, []*Transaction, []*Header, []*ethtypes.Withdrawal:
+			case *Header:
+				assertNonZero(t, f)
+			case []uint8, []*Header, Transactions, []*Transaction, ethtypes.Withdrawals, []*ethtypes.Withdrawal:
 				assert.NotEmpty(t, f)
 			default:
 				t.Errorf("Field %q has unsupported type %T", field.Name, f)
@@ -178,7 +178,7 @@ func allFieldsSet[T interface {
 
 func assertNonZero[T interface {
 	common.Hash | common.Address | BlockNonce | uint32 | uint64 | Bloom |
-		*big.Int | *common.Hash | *uint64 | *[]uint8
+		*big.Int | *common.Hash | *uint64 | *[]uint8 | *Header
 }](t *testing.T, v T) {
 	t.Helper()
 	var zero T
