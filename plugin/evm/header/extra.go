@@ -8,8 +8,13 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+)
+
+const (
+	// Note: MaximumExtraDataSize has been reduced to 32 in Geth, but is kept the same in Coreth for
+	// backwards compatibility.
+	MaximumExtraDataSize uint64 = 64 // Maximum size extra data may be after Genesis.
 )
 
 var errInvalidExtraLength = errors.New("invalid header.Extra length")
@@ -66,11 +71,11 @@ func VerifyExtra(rules extras.AvalancheRules, extra []byte) error {
 			)
 		}
 	default:
-		if uint64(extraLen) > params.MaximumExtraDataSize {
+		if uint64(extraLen) > MaximumExtraDataSize {
 			return fmt.Errorf(
 				"%w: expected <= %d but got %d",
 				errInvalidExtraLength,
-				params.MaximumExtraDataSize,
+				MaximumExtraDataSize,
 				extraLen,
 			)
 		}

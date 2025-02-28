@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
@@ -31,7 +30,7 @@ func TestBaseFee(t *testing.T) {
 	}{
 		{
 			name:     "ap2",
-			upgrades: params.GetExtra(params.TestApricotPhase2Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase2Config.NetworkUpgrades,
 			want:     nil,
 			wantErr:  nil,
 		},
@@ -48,7 +47,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_genesis_block",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -56,7 +55,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_invalid_fee_window",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
@@ -64,7 +63,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_invalid_timestamp",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Time:   1,
@@ -75,7 +74,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_no_change",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas - ap3.IntrinsicBlockGas,
@@ -88,7 +87,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_small_decrease",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   feeWindowBytes(ap3.Window{}),
@@ -111,7 +110,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_large_decrease",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   feeWindowBytes(ap3.Window{}),
@@ -135,7 +134,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_increase",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: 2 * ap3.TargetGas,
@@ -159,7 +158,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_big_1_not_modified",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: 1,
@@ -171,7 +170,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap4_genesis_block",
-			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase4Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -179,7 +178,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap4_decrease",
-			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase4Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   feeWindowBytes(ap3.Window{}),
@@ -205,7 +204,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap4_increase",
-			upgrades: params.GetExtra(params.TestApricotPhase4Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase4Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
@@ -233,7 +232,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap5_genesis_block",
-			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase5Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -241,7 +240,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap5_decrease",
-			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase5Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   feeWindowBytes(ap3.Window{}),
@@ -264,7 +263,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap5_increase",
-			upgrades: params.GetExtra(params.TestApricotPhase5Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase5Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap5.TargetGas,
@@ -291,7 +290,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "etna_genesis_block",
-			upgrades: params.GetExtra(params.TestEtnaChainConfig).NetworkUpgrades,
+			upgrades: extras.TestEtnaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -299,7 +298,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "etna_increase",
-			upgrades: params.GetExtra(params.TestEtnaChainConfig).NetworkUpgrades,
+			upgrades: extras.TestEtnaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap5.TargetGas,
@@ -356,7 +355,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 	}{
 		{
 			name:     "ap3",
-			upgrades: params.GetExtra(params.TestApricotPhase3Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   feeWindowBytes(ap3.Window{}),
@@ -379,7 +378,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_not_scheduled",
-			upgrades: params.GetExtra(params.TestApricotPhase2Config).NetworkUpgrades,
+			upgrades: extras.TestApricotPhase2Config.NetworkUpgrades,
 			wantErr:  errEstimateBaseFeeWithoutActivation,
 		},
 	}
