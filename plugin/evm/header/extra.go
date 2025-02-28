@@ -85,7 +85,7 @@ func VerifyExtraPrefix(
 		}
 
 		if remoteState != expectedState {
-			return fmt.Errorf("%w: expected %v, found %v",
+			return fmt.Errorf("%w: expected %+v, found %+v",
 				errIncorrectFeeState,
 				expectedState,
 				remoteState,
