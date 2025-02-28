@@ -40,6 +40,7 @@ type queueElement struct {
 
 type Downloader struct {
 	pivotBlock  *types.Block
+	pivotLock   sync.RWMutex
 	SnapSyncer  *snap.Syncer
 	blockBuffer []*queueElement
 	bufferLen   int
@@ -84,6 +85,8 @@ func (d *Downloader) stateFetcher() {
 
 // Returns the current pivot
 func (d *Downloader) Pivot() *types.Block {
+	d.pivotLock.RLock()
+	defer d.pivotLock.RUnlock()
 	return d.pivotBlock
 }
 
@@ -118,11 +121,14 @@ func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 		}
 
 		// Reset pivot first in other goroutine
+		d.pivotLock.Lock()
 		d.pivotBlock = b
+		d.pivotLock.Unlock()
 		d.newPivot <- b
 
 		// Clear queue
 		if err := d.flushQueue(false); err != nil {
+			log.Error("Issue flushing queue", "err", err)
 			close(d.quitCh)
 			return err
 		}
@@ -172,12 +178,13 @@ func (d *Downloader) SnapSync() error {
 		// If stateSync is ended, clear queue and return
 		// If err, just return so we can see it
 		case <-sync.done:
+			log.Info("Sync completed with", "err", sync.err)
 			d.bufferLock.Lock() // unlocked in Close()
 			return sync.err
 		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
-			log.Debug("Pivot block updated to", "hash", d.pivotBlock.Root(), d.pivotBlock.NumberU64())
+			log.Debug("Pivot block updated to", "hash", d.pivotBlock.Root(), "height", d.pivotBlock.NumberU64())
 			sync.Cancel()
 			sync = d.syncState(newPivot.Root())
 		}
