@@ -118,7 +118,10 @@ func TestVerifyGasUsed(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{
-				Time:    1,
+				Time: 1,
+				// The maximum allowed gas used is:
+				// (header.Time - parent.Time) * [acp176.MinMaxPerSecond]
+				// which is equal to [acp176.MinMaxPerSecond].
 				GasUsed: acp176.MinMaxPerSecond + 1,
 			},
 			want: errInvalidGasUsed,
