@@ -46,7 +46,7 @@ func TestExtraPrefix(t *testing.T) {
 			header: &types.Header{
 				Time: 1,
 			},
-			want: feeWindowBytes(ap3.Window{}),
+			want: (&ap3.Window{}).Bytes(),
 		},
 		{
 			name:     "ap3_genesis_block",
@@ -55,7 +55,7 @@ func TestExtraPrefix(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{},
-			want:   feeWindowBytes(ap3.Window{}),
+			want:   (&ap3.Window{}).Bytes(),
 		},
 		{
 			name:     "ap3_invalid_fee_window",
@@ -64,7 +64,7 @@ func TestExtraPrefix(t *testing.T) {
 				Number: big.NewInt(1),
 			},
 			header:  &types.Header{},
-			wantErr: errDynamicFeeWindowInsufficientLength,
+			wantErr: ap3.ErrWindowInsufficientLength,
 		},
 		{
 			name:     "ap3_invalid_timestamp",
@@ -72,7 +72,7 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Time:   1,
-				Extra:  feeWindowBytes(ap3.Window{}),
+				Extra:  (&ap3.Window{}).Bytes(),
 			},
 			header: &types.Header{
 				Time: 0,
@@ -85,9 +85,9 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
-				Extra: feeWindowBytes(ap3.Window{
+				Extra: (&ap3.Window{
 					1, 2, 3, 4,
-				}),
+				}).Bytes(),
 			},
 			header: &types.Header{
 				Time: 1,
@@ -98,7 +98,7 @@ func TestExtraPrefix(t *testing.T) {
 				}
 				window.Add(ap3.TargetGas, ap3.IntrinsicBlockGas)
 				window.Shift(1)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -108,7 +108,7 @@ func TestExtraPrefix(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{},
-			want:   feeWindowBytes(ap3.Window{}),
+			want:   (&ap3.Window{}).Bytes(),
 		},
 		{
 			name:     "ap4_no_block_gas_cost",
@@ -116,7 +116,7 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
-				Extra:   feeWindowBytes(ap3.Window{}),
+				Extra:   (&ap3.Window{}).Bytes(),
 			},
 			header: &types.Header{
 				Time: 2,
@@ -125,7 +125,7 @@ func TestExtraPrefix(t *testing.T) {
 				var window ap3.Window
 				window.Add(ap3.TargetGas)
 				window.Shift(2)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -134,7 +134,7 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:       big.NewInt(1),
 				GasUsed:      ap3.TargetGas,
-				Extra:        feeWindowBytes(ap3.Window{}),
+				Extra:        (&ap3.Window{}).Bytes(),
 				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
 			},
 			header: &types.Header{
@@ -147,7 +147,7 @@ func TestExtraPrefix(t *testing.T) {
 					(ap4.TargetBlockRate-1)*ap4.BlockGasCostStep,
 				)
 				window.Shift(1)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -156,7 +156,7 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:         big.NewInt(1),
 				GasUsed:        ap3.TargetGas,
-				Extra:          feeWindowBytes(ap3.Window{}),
+				Extra:          (&ap3.Window{}).Bytes(),
 				ExtDataGasUsed: big.NewInt(5),
 			},
 			header: &types.Header{
@@ -169,7 +169,7 @@ func TestExtraPrefix(t *testing.T) {
 					5,
 				)
 				window.Shift(1)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -178,9 +178,9 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas,
-				Extra: feeWindowBytes(ap3.Window{
+				Extra: (&ap3.Window{
 					1, 2, 3, 4,
-				}),
+				}).Bytes(),
 				ExtDataGasUsed: big.NewInt(5),
 				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
 			},
@@ -197,7 +197,7 @@ func TestExtraPrefix(t *testing.T) {
 					(ap4.TargetBlockRate-1)*ap4.BlockGasCostStep,
 				)
 				window.Shift(1)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -206,7 +206,7 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:       big.NewInt(1),
 				GasUsed:      ap5.TargetGas,
-				Extra:        feeWindowBytes(ap3.Window{}),
+				Extra:        (&ap3.Window{}).Bytes(),
 				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
 			},
 			header: &types.Header{
@@ -216,7 +216,7 @@ func TestExtraPrefix(t *testing.T) {
 				var window ap3.Window
 				window.Add(ap5.TargetGas)
 				window.Shift(1)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -225,9 +225,9 @@ func TestExtraPrefix(t *testing.T) {
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap5.TargetGas,
-				Extra: feeWindowBytes(ap3.Window{
+				Extra: (&ap3.Window{
 					1, 2, 3, 4,
-				}),
+				}).Bytes(),
 				ExtDataGasUsed: big.NewInt(5),
 				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
 			},
@@ -243,7 +243,7 @@ func TestExtraPrefix(t *testing.T) {
 					5,
 				)
 				window.Shift(1)
-				return feeWindowBytes(window)
+				return window.Bytes()
 			}(),
 		},
 		{
@@ -259,13 +259,13 @@ func TestExtraPrefix(t *testing.T) {
 				GasUsed:        1,
 				ExtDataGasUsed: big.NewInt(5),
 			},
-			want: feeStateBytes(acp176.State{
+			want: (&acp176.State{
 				Gas: gas.State{
 					Capacity: acp176.MinMaxPerSecond - 6,
 					Excess:   6,
 				},
 				TargetExcess: 0,
-			}),
+			}).Bytes(),
 		},
 		{
 			name:     "fupgrade_genesis_block",
@@ -279,13 +279,13 @@ func TestExtraPrefix(t *testing.T) {
 				ExtDataGasUsed: big.NewInt(1),
 			},
 			desiredTargetExcess: (*gas.Gas)(utils.NewUint64(3)),
-			want: feeStateBytes(acp176.State{
+			want: (&acp176.State{
 				Gas: gas.State{
 					Capacity: acp176.MinMaxPerSecond - 3,
 					Excess:   3,
 				},
 				TargetExcess: 3,
-			}),
+			}).Bytes(),
 		},
 		{
 			name:     "fupgrade_invalid_fee_state",
@@ -294,14 +294,14 @@ func TestExtraPrefix(t *testing.T) {
 				Number: big.NewInt(1),
 			},
 			header:  &types.Header{},
-			wantErr: errFeeStateInsufficientLength,
+			wantErr: acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_invalid_gas_used",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
-				Extra:  feeStateBytes(acp176.State{}),
+				Extra:  (&acp176.State{}).Bytes(),
 			},
 			header: &types.Header{
 				GasUsed: 1,
@@ -313,26 +313,26 @@ func TestExtraPrefix(t *testing.T) {
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
-				Extra: feeStateBytes(acp176.State{
+				Extra: (&acp176.State{
 					Gas: gas.State{
 						Capacity: 20_039_100, // [acp176.MinTargetPerSecond] * e^(2*[acp176.MaxTargetExcessDiff] / [acp176.TargetConversion])
 						Excess:   2_000_000_000 - 3,
 					},
 					TargetExcess: 2 * acp176.MaxTargetExcessDiff,
-				}),
+				}).Bytes(),
 			},
 			header: &types.Header{
 				GasUsed:        2,
 				ExtDataGasUsed: big.NewInt(1),
 			},
 			desiredTargetExcess: (*gas.Gas)(utils.NewUint64(0)),
-			want: feeStateBytes(acp176.State{
+			want: (&acp176.State{
 				Gas: gas.State{
 					Capacity: 20_019_540,    // [acp176.MinTargetPerSecond] * e^([acp176.MaxTargetExcessDiff] / [acp176.TargetConversion])
 					Excess:   1_998_047_816, // 2M * NewTarget / OldTarget
 				},
 				TargetExcess: acp176.MaxTargetExcessDiff,
-			}),
+			}).Bytes(),
 		},
 	}
 	for _, test := range tests {
@@ -370,7 +370,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 				Number: big.NewInt(1),
 			},
 			header:  &types.Header{},
-			wantErr: errDynamicFeeWindowInsufficientLength,
+			wantErr: ap3.ErrWindowInsufficientLength,
 		},
 		{
 			name:     "ap3_invalid_header",
@@ -388,7 +388,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 				Number: big.NewInt(0),
 			},
 			header: &types.Header{
-				Extra: feeWindowBytes(ap3.Window{}),
+				Extra: (&ap3.Window{}).Bytes(),
 			},
 			wantErr: nil,
 		},
@@ -396,7 +396,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			name:     "fupgrade_invalid_header",
 			upgrades: params.TestFUpgradeChainConfig.NetworkUpgrades,
 			header:   &types.Header{},
-			wantErr:  errFeeStateInsufficientLength,
+			wantErr:  acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_invalid_gas_consumed",
@@ -406,7 +406,7 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			},
 			header: &types.Header{
 				GasUsed: 1,
-				Extra:   feeStateBytes(acp176.State{}),
+				Extra:   (&acp176.State{}).Bytes(),
 			},
 			wantErr: gas.ErrInsufficientCapacity,
 		},
@@ -419,13 +419,13 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			header: &types.Header{
 				Time:    1,
 				GasUsed: 1,
-				Extra: feeStateBytes(acp176.State{
+				Extra: (&acp176.State{
 					Gas: gas.State{
 						Capacity: acp176.MinMaxPerSecond - 1,
 						Excess:   1,
 					},
 					TargetExcess: acp176.MaxTargetExcessDiff + 1, // Too much of a diff
-				}),
+				}).Bytes(),
 			},
 			wantErr: errIncorrectFeeState,
 		},
@@ -438,13 +438,13 @@ func TestVerifyExtraPrefix(t *testing.T) {
 			header: &types.Header{
 				Time:    1,
 				GasUsed: 1,
-				Extra: feeStateBytes(acp176.State{
+				Extra: (&acp176.State{
 					Gas: gas.State{
 						Capacity: acp176.MinMaxPerSecond - 1,
 						Excess:   1,
 					},
 					TargetExcess: acp176.MaxTargetExcessDiff,
-				}),
+				}).Bytes(),
 			},
 			wantErr: nil,
 		},
@@ -500,7 +500,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsApricotPhase3: true,
 			},
-			extra:    make([]byte, FeeWindowSize),
+			extra:    make([]byte, ap3.WindowSize),
 			expected: nil,
 		},
 		{
@@ -508,7 +508,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsApricotPhase3: true,
 			},
-			extra:    make([]byte, FeeWindowSize-1),
+			extra:    make([]byte, ap3.WindowSize-1),
 			expected: errInvalidExtraLength,
 		},
 		{
@@ -516,7 +516,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsApricotPhase3: true,
 			},
-			extra:    make([]byte, FeeWindowSize+1),
+			extra:    make([]byte, ap3.WindowSize+1),
 			expected: errInvalidExtraLength,
 		},
 		{
@@ -524,7 +524,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsDurango: true,
 			},
-			extra:    make([]byte, FeeWindowSize),
+			extra:    make([]byte, ap3.WindowSize),
 			expected: nil,
 		},
 		{
@@ -532,7 +532,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsDurango: true,
 			},
-			extra:    make([]byte, FeeWindowSize+1),
+			extra:    make([]byte, ap3.WindowSize+1),
 			expected: nil,
 		},
 		{
@@ -540,7 +540,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsDurango: true,
 			},
-			extra:    make([]byte, FeeWindowSize-1),
+			extra:    make([]byte, ap3.WindowSize-1),
 			expected: errInvalidExtraLength,
 		},
 		{
@@ -548,7 +548,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeStateSize),
+			extra:    make([]byte, acp176.StateSize),
 			expected: nil,
 		},
 		{
@@ -556,7 +556,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeStateSize+1),
+			extra:    make([]byte, acp176.StateSize+1),
 			expected: nil,
 		},
 		{
@@ -564,7 +564,7 @@ func TestVerifyExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeStateSize-1),
+			extra:    make([]byte, acp176.StateSize-1),
 			expected: errInvalidExtraLength,
 		},
 	}
@@ -590,18 +590,18 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 		},
 		{
 			name:     "too_short",
-			extra:    make([]byte, FeeWindowSize-1),
+			extra:    make([]byte, ap3.WindowSize-1),
 			expected: nil,
 		},
 		{
 			name:     "empty_predicate",
-			extra:    make([]byte, FeeWindowSize),
+			extra:    make([]byte, ap3.WindowSize),
 			expected: nil,
 		},
 		{
 			name: "non_empty_predicate",
 			extra: []byte{
-				FeeWindowSize: 5,
+				ap3.WindowSize: 5,
 			},
 			expected: []byte{5},
 		},
@@ -618,7 +618,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeStateSize-1),
+			extra:    make([]byte, acp176.StateSize-1),
 			expected: nil,
 		},
 		{
@@ -626,7 +626,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 			rules: params.AvalancheRules{
 				IsFUpgrade: true,
 			},
-			extra:    make([]byte, FeeStateSize),
+			extra:    make([]byte, acp176.StateSize),
 			expected: nil,
 		},
 		{
@@ -635,7 +635,7 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 				IsFUpgrade: true,
 			},
 			extra: []byte{
-				FeeStateSize: 5,
+				acp176.StateSize: 5,
 			},
 			expected: []byte{5},
 		},

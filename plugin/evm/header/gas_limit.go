@@ -34,6 +34,10 @@ func GasLimit(
 		if err != nil {
 			return 0, fmt.Errorf("failed to calculate the initial fee state: %w", err)
 		}
+		// The gas limit is set to the maximum capacity, rather than the current
+		// capacity, to minimize the differences with upstream geth. During
+		// block building and gas usage calculations, the gas limit is checked
+		// against the current capacity.
 		return uint64(state.MaxCapacity()), nil
 	case config.IsCortina(timestamp):
 		return cortina.GasLimit, nil

@@ -11,6 +11,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 )
 
 var (
@@ -40,13 +42,13 @@ func ExtraPrefix(
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate fee state: %w", err)
 		}
-		return feeStateBytes(state), nil
+		return state.Bytes(), nil
 	case config.IsApricotPhase3(header.Time):
 		window, err := feeWindow(config, parent, header.Time)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate fee window: %w", err)
 		}
-		return feeWindowBytes(window), nil
+		return window.Bytes(), nil
 	default:
 		// Prior to AP3 there was no expected extra prefix.
 		return nil, nil
@@ -62,7 +64,7 @@ func VerifyExtraPrefix(
 ) error {
 	switch {
 	case config.IsFUpgrade(header.Time):
-		remoteState, err := parseFeeState(header.Extra)
+		remoteState, err := acp176.ParseState(header.Extra)
 		if err != nil {
 			return fmt.Errorf("failed to parse remote fee state: %w", err)
 		}
@@ -94,7 +96,7 @@ func VerifyExtraPrefix(
 		if err != nil {
 			return fmt.Errorf("failed to calculate expected fee window: %w", err)
 		}
-		feeWindowBytes := feeWindowBytes(feeWindow)
+		feeWindowBytes := feeWindow.Bytes()
 		if !bytes.HasPrefix(header.Extra, feeWindowBytes) {
 			return fmt.Errorf("%w: expected %x as prefix, found %x",
 				errInvalidExtraPrefix,
@@ -114,29 +116,29 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 	extraLen := len(extra)
 	switch {
 	case rules.IsFUpgrade:
-		if extraLen < FeeStateSize {
+		if extraLen < acp176.StateSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				errInvalidExtraLength,
-				FeeStateSize,
+				acp176.StateSize,
 				extraLen,
 			)
 		}
 	case rules.IsDurango:
-		if extraLen < FeeWindowSize {
+		if extraLen < ap3.WindowSize {
 			return fmt.Errorf(
 				"%w: expected >= %d but got %d",
 				errInvalidExtraLength,
-				FeeWindowSize,
+				ap3.WindowSize,
 				extraLen,
 			)
 		}
 	case rules.IsApricotPhase3:
-		if extraLen != FeeWindowSize {
+		if extraLen != ap3.WindowSize {
 			return fmt.Errorf(
 				"%w: expected %d but got %d",
 				errInvalidExtraLength,
-				FeeWindowSize,
+				ap3.WindowSize,
 				extraLen,
 			)
 		}
@@ -164,9 +166,9 @@ func VerifyExtra(rules params.AvalancheRules, extra []byte) error {
 // PredicateBytesFromExtra returns the predicate result bytes from the header's
 // extra data. If the extra data is not long enough, an empty slice is returned.
 func PredicateBytesFromExtra(rules params.AvalancheRules, extra []byte) []byte {
-	offset := FeeWindowSize
+	offset := ap3.WindowSize
 	if rules.IsFUpgrade {
-		offset = FeeStateSize
+		offset = acp176.StateSize
 	}
 
 	// Prior to Durango, the VM enforces the extra data is smaller than or equal

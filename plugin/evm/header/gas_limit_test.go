@@ -34,7 +34,7 @@ func TestGasLimit(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
-			wantErr: errFeeStateInsufficientLength,
+			wantErr: acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_initial_max_capacity",
@@ -109,7 +109,7 @@ func TestVerifyGasUsed(t *testing.T) {
 				Number: big.NewInt(1),
 			},
 			header: &types.Header{},
-			want:   errFeeStateInsufficientLength,
+			want:   acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_invalid_usage",
@@ -174,7 +174,7 @@ func TestVerifyGasLimit(t *testing.T) {
 				Number: big.NewInt(1),
 			},
 			header: &types.Header{},
-			want:   errFeeStateInsufficientLength,
+			want:   acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_invalid",
@@ -302,7 +302,7 @@ func TestGasCapacity(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
-			wantErr: errFeeStateInsufficientLength,
+			wantErr: acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_after_1s",
@@ -350,7 +350,7 @@ func TestAtomicGasCapacity(t *testing.T) {
 				Number: big.NewInt(1),
 			},
 			header:  &types.Header{},
-			wantErr: errFeeStateInsufficientLength,
+			wantErr: acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "fupgrade_negative_capacity",

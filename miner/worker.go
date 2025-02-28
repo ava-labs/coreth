@@ -148,7 +148,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 
 	gasLimit, err := customheader.GasLimit(w.chainConfig, parent, timestamp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new gas limit: %w", err)
+		return nil, fmt.Errorf("calculating new gas limit: %w", err)
 	}
 	baseFee, err := customheader.BaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
