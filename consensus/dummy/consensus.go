@@ -146,11 +146,7 @@ func NewFullFaker() *DummyEngine {
 	}
 }
 
-func verifyHeaderGasFields(
-	config *params.ChainConfig,
-	header *types.Header,
-	parent *types.Header,
-) error {
+func verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
 	if err := customheader.VerifyGasUsed(config, parent, header); err != nil {
 		return err
 	}
