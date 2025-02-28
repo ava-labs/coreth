@@ -56,7 +56,7 @@ func feeStateAfterBlock(
 	// Calculate the gas state after the parent block
 	state, err := feeStateBeforeBlock(config, parent, header.Time)
 	if err != nil {
-		return acp176.State{}, fmt.Errorf("calculating the initial fee state: %w", err)
+		return acp176.State{}, fmt.Errorf("calculating initial fee state: %w", err)
 	}
 
 	// Consume the gas used by the block
