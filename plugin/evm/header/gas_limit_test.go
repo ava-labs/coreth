@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/stretchr/testify/require"
@@ -103,10 +104,10 @@ func TestVerifyGasLimit(t *testing.T) {
 			name:     "launch_too_low",
 			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
-				GasLimit: MinGasLimit,
+				GasLimit: ap0.MinGasLimit,
 			},
 			header: &types.Header{
-				GasLimit: MinGasLimit - 1,
+				GasLimit: ap0.MinGasLimit - 1,
 			},
 			want: errInvalidGasLimit,
 		},
@@ -114,10 +115,10 @@ func TestVerifyGasLimit(t *testing.T) {
 			name:     "launch_too_high",
 			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
-				GasLimit: MaxGasLimit,
+				GasLimit: ap0.MaxGasLimit,
 			},
 			header: &types.Header{
-				GasLimit: MaxGasLimit + 1,
+				GasLimit: ap0.MaxGasLimit + 1,
 			},
 			want: errInvalidGasLimit,
 		},
@@ -125,10 +126,10 @@ func TestVerifyGasLimit(t *testing.T) {
 			name:     "change_too_large",
 			upgrades: extras.TestLaunchConfig.NetworkUpgrades,
 			parent: &types.Header{
-				GasLimit: MinGasLimit,
+				GasLimit: ap0.MinGasLimit,
 			},
 			header: &types.Header{
-				GasLimit: MaxGasLimit,
+				GasLimit: ap0.MaxGasLimit,
 			},
 			want: errInvalidGasLimit,
 		},
