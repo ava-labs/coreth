@@ -274,7 +274,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			return block.StateSyncSkipped, err
 		}
 
-		log.Info("Set LastAcceptedBlock as first pivot", "height", evmBlock.ID(), evmBlock.Height(), "timestamp", evmBlock.Timestamp())
+		log.Info("Set LastAcceptedBlock as first pivot", "id", evmBlock.ID(), "height", evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	}
 	go func() {
 		defer client.wg.Done()
@@ -287,6 +287,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			client.stateSyncErr = err
 		} else {
 			if client.useUpstream {
+				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
 				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
 			} else {
 				client.stateSyncErr = client.finishSync(client.syncSummary.BlockHash)
