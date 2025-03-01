@@ -1,4 +1,6 @@
-// (c) 2025, Ava Labs, Inc.
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package rawdb
 
 import (
