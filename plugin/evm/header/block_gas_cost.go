@@ -27,7 +27,10 @@ func BlockGasCost(
 	config *params.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
-) uint64 {
+) *big.Int {
+	if !config.IsApricotPhase4(timestamp) {
+		return nil
+	}
 	step := uint64(ap4.BlockGasCostStep)
 	if config.IsApricotPhase5(timestamp) {
 		step = ap5.BlockGasCostStep
@@ -40,11 +43,11 @@ func BlockGasCost(
 	if parent.Time <= timestamp {
 		timeElapsed = timestamp - parent.Time
 	}
-	return BlockGasCostWithStep(
+	return new(big.Int).SetUint64(BlockGasCostWithStep(
 		parent.BlockGasCost,
 		step,
 		timeElapsed,
-	)
+	))
 }
 
 // BlockGasCostWithStep calculates the required block gas cost based on the

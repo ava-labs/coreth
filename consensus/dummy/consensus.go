@@ -166,6 +166,16 @@ func verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, par
 		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
 	}
 
+	// Enforce BlockGasCost constraints
+	expectedBlockGasCost := customheader.BlockGasCost(
+		config,
+		parent,
+		header.Time,
+	)
+	if !utils.BigEqual(header.BlockGasCost, expectedBlockGasCost) {
+		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
+	}
+
 	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
 	if !config.IsApricotPhase4(header.Time) {
 		if header.BlockGasCost != nil {
@@ -175,16 +185,6 @@ func verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, par
 			return fmt.Errorf("invalid extDataGasUsed before fork: have %d, want <nil>", header.ExtDataGasUsed)
 		}
 		return nil
-	}
-
-	// Enforce BlockGasCost constraints
-	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
-		parent,
-		header.Time,
-	)
-	if !utils.BigEqualUint64(header.BlockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
 	}
 
 	// ExtDataGasUsed correctness is checked during block validation
@@ -377,6 +377,16 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 
 	config := chain.Config()
 	timestamp := block.Time()
+	// Verify the BlockGasCost set in the header matches the expected value.
+	blockGasCost := block.BlockGasCost()
+	expectedBlockGasCost := customheader.BlockGasCost(
+		config,
+		parent,
+		timestamp,
+	)
+	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
+		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
+	}
 	if config.IsApricotPhase4(timestamp) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
@@ -387,17 +397,6 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		}
 		if blockExtDataGasUsed := block.ExtDataGasUsed(); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
-		}
-
-		// Verify the BlockGasCost set in the header matches the expected value.
-		blockGasCost := block.BlockGasCost()
-		expectedBlockGasCost := customheader.BlockGasCost(
-			config,
-			parent,
-			timestamp,
-		)
-		if !utils.BigEqualUint64(blockGasCost, expectedBlockGasCost) {
-			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 		}
 
 		// Verify the block fee was paid.
@@ -431,19 +430,18 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	}
 
 	config := chain.Config()
+	// Calculate the required block gas cost for this block.
+	blockGasCost := customheader.BlockGasCost(
+		config,
+		parent,
+		header.Time,
+	)
+	header.BlockGasCost = blockGasCost
 	if config.IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
 			header.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
-
-		// Calculate the required block gas cost for this block.
-		blockGasCost := customheader.BlockGasCost(
-			config,
-			parent,
-			header.Time,
-		)
-		header.BlockGasCost = new(big.Int).SetUint64(blockGasCost)
 
 		// Verify that this block covers the block fee.
 		if err := eng.verifyBlockFee(

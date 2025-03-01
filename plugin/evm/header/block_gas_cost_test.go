@@ -19,18 +19,27 @@ import (
 func TestBlockGasCost(t *testing.T) {
 	tests := []struct {
 		name         string
+		beforeAP4    bool
 		ap5Timestamp *uint64
 		parentTime   uint64
 		parentCost   *big.Int
 		timestamp    uint64
-		expected     uint64
+		expected     *big.Int
 	}{
+		{
+			name:       "before_ap4",
+			parentTime: 10,
+			beforeAP4:  true,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   nil,
+		},
 		{
 			name:       "normal_ap4",
 			parentTime: 10,
 			parentCost: big.NewInt(ap4.MaxBlockGasCost),
 			timestamp:  10 + ap4.TargetBlockRate + 1,
-			expected:   ap4.MaxBlockGasCost - ap4.BlockGasCostStep,
+			expected:   big.NewInt(ap4.MaxBlockGasCost - ap4.BlockGasCostStep),
 		},
 		{
 			name:         "normal_ap5",
@@ -38,21 +47,26 @@ func TestBlockGasCost(t *testing.T) {
 			parentTime:   10,
 			parentCost:   big.NewInt(ap4.MaxBlockGasCost),
 			timestamp:    10 + ap4.TargetBlockRate + 1,
-			expected:     ap4.MaxBlockGasCost - ap5.BlockGasCostStep,
+			expected:     big.NewInt(ap4.MaxBlockGasCost - ap5.BlockGasCostStep),
 		},
 		{
 			name:       "negative_time_elapsed",
 			parentTime: 10,
 			parentCost: big.NewInt(ap4.MinBlockGasCost),
 			timestamp:  9,
-			expected:   ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate,
+			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ap4Timestamp := utils.NewUint64(0)
+			if test.beforeAP4 {
+				ap4Timestamp = nil
+			}
 			config := &params.ChainConfig{
 				NetworkUpgrades: params.NetworkUpgrades{
+					ApricotPhase4BlockTimestamp: ap4Timestamp,
 					ApricotPhase5BlockTimestamp: test.ap5Timestamp,
 				},
 			}
