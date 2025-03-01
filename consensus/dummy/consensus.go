@@ -431,12 +431,11 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 
 	config := chain.Config()
 	// Calculate the required block gas cost for this block.
-	blockGasCost := customheader.BlockGasCost(
+	header.BlockGasCost = customheader.BlockGasCost(
 		config,
 		parent,
 		header.Time,
 	)
-	header.BlockGasCost = blockGasCost
 	if config.IsApricotPhase4(header.Time) {
 		header.ExtDataGasUsed = extDataGasUsed
 		if header.ExtDataGasUsed == nil {
