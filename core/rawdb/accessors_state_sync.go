@@ -31,14 +31,14 @@ func WriteSyncRoot(db ethdb.KeyValueWriter, root common.Hash) error {
 	return db.Put(syncRootKey, root[:])
 }
 
-// AddCodeToFetch adds a marker that we need to fetch the code for [hash].
+// AddCodeToFetch adds a marker that we need to fetch the code for `hash`.
 func AddCodeToFetch(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(codeToFetchKey(hash), nil); err != nil {
 		log.Crit("Failed to put code to fetch", "codeHash", hash, "err", err)
 	}
 }
 
-// DeleteCodeToFetch removes the marker that the code corresponding to [hash] needs to be fetched.
+// DeleteCodeToFetch removes the marker that the code corresponding to `hash` needs to be fetched.
 func DeleteCodeToFetch(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(codeToFetchKey(hash)); err != nil {
 		log.Crit("Failed to delete code to fetch", "codeHash", hash, "err", err)
@@ -156,7 +156,7 @@ func packSyncStorageTrieKey(root common.Hash, account common.Hash) []byte {
 	return bytes
 }
 
-// WriteSyncPerformed logs an entry in [db] indicating the VM state synced to [blockNumber].
+// WriteSyncPerformed logs an entry in `db` indicating the VM state synced to `blockNumber`.
 func WriteSyncPerformed(db ethdb.KeyValueWriter, blockNumber uint64) error {
 	syncPerformedPrefixLen := len(syncPerformedPrefix)
 	bytes := make([]byte, syncPerformedPrefixLen+wrappers.LongLen)
@@ -193,7 +193,7 @@ func GetLatestSyncPerformed(db ethdb.Iteratee) uint64 {
 }
 
 // clearPrefix removes all keys in db that begin with prefix and match an
-// expected key length. [keyLen] should include the length of the prefix.
+// expected key length. `keyLen` should include the length of the prefix.
 func clearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
 	it := db.NewIterator(prefix, nil)
 	defer it.Release()

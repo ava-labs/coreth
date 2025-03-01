@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-// writeTimeMarker writes a marker of the current time in the db at [key]
+// writeTimeMarker writes a marker of the current time in the db at `key`
 func writeTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	data, err := rlp.EncodeToBytes(uint64(time.Now().Unix()))
 	if err != nil {
@@ -20,7 +20,7 @@ func writeTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	return db.Put(key, data)
 }
 
-// readTimeMarker reads the timestamp stored at [key]
+// readTimeMarker reads the timestamp stored at `key`
 func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 	data, err := db.Get(key)
 	if err != nil {
@@ -35,7 +35,7 @@ func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 	return time.Unix(int64(lastRun), 0), nil
 }
 
-// deleteTimeMarker deletes any value stored at [key]
+// deleteTimeMarker deletes any value stored at `key`
 func deleteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	return db.Delete(key)
 }
@@ -90,7 +90,7 @@ func HasPruningDisabled(db ethdb.KeyValueStore) (bool, error) {
 	return db.Has(pruningDisabledKey)
 }
 
-// WriteAcceptorTip writes [hash] as the last accepted block that has been fully processed.
+// WriteAcceptorTip writes `hash` as the last accepted block that has been fully processed.
 func WriteAcceptorTip(db ethdb.KeyValueWriter, hash common.Hash) error {
 	return db.Put(acceptorTipKey, hash[:])
 }
