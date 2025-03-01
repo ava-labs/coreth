@@ -23,6 +23,7 @@ var (
 
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
+// Prior to AP4, the returned block gas cost will be nil.
 func BlockGasCost(
 	config *params.ChainConfig,
 	parent *types.Header,
