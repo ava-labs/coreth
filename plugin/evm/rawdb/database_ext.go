@@ -44,16 +44,13 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		ethrawdb.WithDatabaseStatsTransformer(func(rows [][]string) [][]string {
 			newRows := make([][]string, 0, len(rows))
 			for _, row := range rows {
-				database := row[0]
-				category := row[1]
-				switch {
-				case database == "Key-Value store" && category == "Difficulties",
-					database == "Key-Value store" && category == "Beacon sync headers",
-					database == "Ancient store (Chain)":
-					// Discard rows specific to libevm (geth) but irrelevant to coreth.
-					continue
+				switch db, cat := row[0], row[1]; {
+				// Discard rows specific to libevm (geth) but irrelevant to coreth.
+				case db == "Key-Value store" && (cat == "Difficulties" || cat == "Beacon sync headers"):
+				case db == "Ancient store (Chain)":
+				default:
+					newRows = append(newRows, row)
 				}
-				newRows = append(newRows, row)
 			}
 			for _, s := range stats {
 				newRows = append(newRows, []string{"State sync", s.name, s.stat.Size(), s.stat.Count()})
