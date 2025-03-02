@@ -19,12 +19,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		name      string
 		keyLen    int
 		keyPrefix []byte
-		stat      stat
+		stat      *stat
 	}{
-		{"Trie segments", syncSegmentsKeyLength, syncSegmentsPrefix, stat{}},
-		{"Storage tries to fetch", syncStorageTriesKeyLength, syncStorageTriesPrefix, stat{}},
-		{"Code to fetch", codeToFetchKeyLength, CodeToFetchPrefix, stat{}},
-		{"Block numbers synced to", syncPerformedKeyLength, syncPerformedPrefix, stat{}},
+		{"Trie segments", syncSegmentsKeyLength, syncSegmentsPrefix, &stat{}},
+		{"Storage tries to fetch", syncStorageTriesKeyLength, syncStorageTriesPrefix, &stat{}},
+		{"Code to fetch", codeToFetchKeyLength, CodeToFetchPrefix, &stat{}},
+		{"Block numbers synced to", syncPerformedKeyLength, syncPerformedPrefix, &stat{}},
 	}
 
 	options := []ethrawdb.InspectDatabaseOption{
