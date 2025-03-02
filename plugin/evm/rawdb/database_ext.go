@@ -19,7 +19,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		name      string
 		keyLen    int
 		keyPrefix []byte
-		stat      ethrawdb.DatabaseStat
+		stat      stat
 	}{
 		{"Trie segments", syncSegmentsKeyLength, syncSegmentsPrefix, stat{}},
 		{"Storage tries to fetch", syncStorageTriesKeyLength, syncStorageTriesPrefix, stat{}},
