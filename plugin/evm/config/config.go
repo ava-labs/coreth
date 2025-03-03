@@ -146,10 +146,10 @@ type Config struct {
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
 	// Price Option Settings
-	PriceOptionSlowFeePercentage uint64 `json:"po-slow-fee-percentage"`
-	PriceOptionFastFeePercentage uint64 `json:"po-fast-fee-percentage"`
-	PriceOptionMaxBaseFee        uint64 `json:"po-max-base-fee"`
-	PriceOptionMaxTip            uint64 `json:"po-max-tip"`
+	PriceOptionSlowFeePercentage uint64 `json:"price-options-slow-fee-percentage"`
+	PriceOptionFastFeePercentage uint64 `json:"price-options-fast-fee-percentage"`
+	PriceOptionMaxBaseFee        uint64 `json:"price-options-max-base-fee"`
+	PriceOptionMaxTip            uint64 `json:"price-options-max-tip"`
 
 	TxPoolPriceLimit   uint64   `json:"tx-pool-price-limit"`
 	TxPoolPriceBump    uint64   `json:"tx-pool-price-bump"`
