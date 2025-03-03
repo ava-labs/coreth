@@ -35,7 +35,7 @@ func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 	return time.Unix(int64(lastRun), 0), nil
 }
 
-// WriteOfflinePruning writes a marker of the last attempt to run offline pruning
+// WriteOfflinePruning writes a time marker of the last attempt to run offline pruning.
 // The marker is written when offline pruning completes and is deleted when the node
 // is started successfully with offline pruning disabled. This ensures users must
 // disable offline pruning and start their node successfully between runs of offline
