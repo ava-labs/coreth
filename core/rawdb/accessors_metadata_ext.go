@@ -11,8 +11,8 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-// writeTimeMarker writes a marker of the current time in the db at `key`
-func writeTimeMarker(db ethdb.KeyValueStore, key []byte) error {
+// writeCurrentTimeMarker writes a marker of the current time in the db at `key`.
+func writeCurrentTimeMarker(db ethdb.KeyValueStore, key []byte) error {
 	data, err := rlp.EncodeToBytes(uint64(time.Now().Unix()))
 	if err != nil {
 		return err
@@ -41,7 +41,7 @@ func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 // disable offline pruning and start their node successfully between runs of offline
 // pruning.
 func WriteOfflinePruning(db ethdb.KeyValueStore) error {
-	return writeTimeMarker(db, offlinePruningKey)
+	return writeCurrentTimeMarker(db, offlinePruningKey)
 }
 
 // ReadOfflinePruning reads the most recent timestamp of an attempt to run offline
@@ -58,7 +58,7 @@ func DeleteOfflinePruning(db ethdb.KeyValueStore) error {
 // WritePopulateMissingTries writes a marker for the current attempt to populate
 // missing tries.
 func WritePopulateMissingTries(db ethdb.KeyValueStore) error {
-	return writeTimeMarker(db, populateMissingTriesKey)
+	return writeCurrentTimeMarker(db, populateMissingTriesKey)
 }
 
 // ReadPopulateMissingTries reads the most recent timestamp of an attempt to
