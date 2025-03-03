@@ -35,11 +35,6 @@ func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 	return time.Unix(int64(lastRun), 0), nil
 }
 
-// deleteTimeMarker deletes any value stored at `key`
-func deleteTimeMarker(db ethdb.KeyValueStore, key []byte) error {
-	return db.Delete(key)
-}
-
 // WriteOfflinePruning writes a marker of the last attempt to run offline pruning
 // The marker is written when offline pruning completes and is deleted when the node
 // is started successfully with offline pruning disabled. This ensures users must
@@ -57,7 +52,7 @@ func ReadOfflinePruning(db ethdb.KeyValueStore) (time.Time, error) {
 
 // DeleteOfflinePruning deletes any marker of the last attempt to run offline pruning.
 func DeleteOfflinePruning(db ethdb.KeyValueStore) error {
-	return deleteTimeMarker(db, offlinePruningKey)
+	return db.Delete(offlinePruningKey)
 }
 
 // WritePopulateMissingTries writes a marker for the current attempt to populate
@@ -75,7 +70,7 @@ func ReadPopulateMissingTries(db ethdb.KeyValueStore) (time.Time, error) {
 // DeletePopulateMissingTries deletes any marker of the last attempt to
 // re-populate missing trie nodes.
 func DeletePopulateMissingTries(db ethdb.KeyValueStore) error {
-	return deleteTimeMarker(db, populateMissingTriesKey)
+	return db.Delete(populateMissingTriesKey)
 }
 
 // WritePruningDisabled writes a marker to track whether the node has ever run
