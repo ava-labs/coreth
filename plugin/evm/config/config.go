@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/spf13/cast"
 )
 
 const (
-	gwei = 1_000_000_000
-
 	defaultAcceptorQueueLimit                     = 64 // Provides 2 minutes of buffer (2s block target) for a commit delay
 	defaultPruningEnabled                         = true
 	defaultCommitInterval                         = 4096
@@ -67,10 +68,10 @@ const (
 	// Price Option Defaults
 	defaultPriceOptionSlowFeePercentage = uint64(95)
 	defaultPriceOptionFastFeePercentage = uint64(105)
-	defaultPriceOptionMaxBaseFee        = uint64(100 * gwei)
-	defaultPriceOptionMaxTip            = uint64(20 * gwei)
+	defaultPriceOptionMaxBaseFee        = uint64(100 * utils.GWei)
+	defaultPriceOptionMaxTip            = uint64(20 * utils.GWei)
 
-	minAllowedBaseFee = uint64(1 * gwei) // avoids circular-dependency with params.EtnaMinBaseFee
+	minAllowedBaseFee = etna.MinBaseFee
 )
 
 var (
@@ -94,6 +95,11 @@ type Duration struct {
 
 // Config ...
 type Config struct {
+	// GasTarget is the target gas per second that this node will attempt to use
+	// when creating blocks. If this config is not specified, the node will
+	// default to use the parent block's target gas per second.
+	GasTarget *gas.Gas `json:"gas-target,omitempty"`
+
 	// Coreth APIs
 	SnowmanAPIEnabled     bool   `json:"snowman-api-enabled"`
 	AdminAPIEnabled       bool   `json:"admin-api-enabled"`

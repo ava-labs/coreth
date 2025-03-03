@@ -46,7 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/header"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ethereum/go-ethereum/common"
@@ -146,22 +146,11 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		timestamp = parent.Time
 	}
 
-	var gasLimit uint64
-	if w.chainConfig.IsCortina(timestamp) {
-		gasLimit = params.CortinaGasLimit
-	} else if w.chainConfig.IsApricotPhase1(timestamp) {
-		gasLimit = params.ApricotPhase1GasLimit
-	} else {
-		// The gas limit is set in phase1 to ApricotPhase1GasLimit because the ceiling and floor were set to the same value
-		// such that the gas limit converged to it. Since this is hardbaked now, we remove the ability to configure it.
-		gasLimit = core.CalcGasLimit(parent.GasUsed, parent.GasLimit, params.ApricotPhase1GasLimit, params.ApricotPhase1GasLimit)
-	}
-
-	extra, err := header.ExtraPrefix(w.chainConfig, parent, timestamp)
+	gasLimit, err := customheader.GasLimit(w.chainConfig, parent, timestamp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to calculate new extra prefix: %w", err)
+		return nil, fmt.Errorf("calculating new gas limit: %w", err)
 	}
-	baseFee, err := header.BaseFee(w.chainConfig, parent, timestamp)
+	baseFee, err := customheader.BaseFee(w.chainConfig, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
@@ -171,7 +160,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
 		GasLimit:   gasLimit,
 		Time:       timestamp,
-		Extra:      extra,
 		BaseFee:    baseFee,
 	}
 
@@ -271,6 +259,10 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	if err != nil {
 		return nil, err
 	}
+	capacity, err := customheader.GasCapacity(w.chainConfig, parent, header.Time)
+	if err != nil {
+		return nil, fmt.Errorf("calculating gas capacity: %w", err)
+	}
 	numPrefetchers := w.chain.CacheConfig().TriePrefetcherParallelism
 	currentState.StartPrefetcher("miner", state.WithConcurrentWorkers(numPrefetchers))
 	return &environment{
@@ -279,7 +271,7 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 		parent:           parent,
 		header:           header,
 		tcount:           0,
-		gasPool:          new(core.GasPool).AddGas(header.GasLimit),
+		gasPool:          new(core.GasPool).AddGas(capacity),
 		rules:            w.chainConfig.Rules(header.Number, header.Time),
 		predicateContext: predicateContext,
 		predicateResults: predicate.NewResults(),

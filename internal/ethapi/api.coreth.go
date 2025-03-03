@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
 const (
-	minBaseFee = params.EtnaMinBaseFee // 1 gwei
+	minBaseFee = etna.MinBaseFee // 1 gwei
 
 	minGasTip = 1 // 1 wei
 

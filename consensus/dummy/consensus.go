@@ -4,14 +4,13 @@
 package dummy
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
@@ -27,6 +26,8 @@ import (
 var (
 	allowedFutureBlockTime = 10 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
 
+	ErrInsufficientBlockGas = errors.New("insufficient gas to cover the block cost")
+
 	errInvalidBlockTime       = errors.New("timestamp less than parent's")
 	errUnclesUnsupported      = errors.New("uncles unsupported")
 	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
@@ -40,8 +41,27 @@ type Mode struct {
 }
 
 type (
-	OnFinalizeAndAssembleCallbackType = func(header *types.Header, state *state.StateDB, txs []*types.Transaction) (extraData []byte, blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
-	OnExtraStateChangeType            = func(block *types.Block, statedb *state.StateDB) (blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
+	OnFinalizeAndAssembleCallbackType = func(
+		header *types.Header,
+		parent *types.Header,
+		state *state.StateDB,
+		txs []*types.Transaction,
+	) (
+		extraData []byte,
+		blockFeeContribution *big.Int,
+		extDataGasUsed *big.Int,
+		err error,
+	)
+
+	OnExtraStateChangeType = func(
+		block *types.Block,
+		parent *types.Header,
+		statedb *state.StateDB,
+	) (
+		blockFeeContribution *big.Int,
+		extDataGasUsed *big.Int,
+		err error,
+	)
 
 	ConsensusCallbacks struct {
 		OnFinalizeAndAssemble OnFinalizeAndAssembleCallbackType
@@ -49,11 +69,26 @@ type (
 	}
 
 	DummyEngine struct {
-		cb            ConsensusCallbacks
-		clock         *mockable.Clock
-		consensusMode Mode
+		cb                  ConsensusCallbacks
+		clock               *mockable.Clock
+		consensusMode       Mode
+		desiredTargetExcess *gas.Gas
 	}
 )
+
+func NewDummyEngine(
+	cb ConsensusCallbacks,
+	mode Mode,
+	clock *mockable.Clock,
+	desiredTargetExcess *gas.Gas,
+) *DummyEngine {
+	return &DummyEngine{
+		cb:                  cb,
+		clock:               clock,
+		consensusMode:       mode,
+		desiredTargetExcess: desiredTargetExcess,
+	}
+}
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
@@ -111,39 +146,15 @@ func NewFullFaker() *DummyEngine {
 	}
 }
 
-func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
-	// Verify that the gas limit is <= 2^63-1
-	if header.GasLimit > params.MaxGasLimit {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
+func verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
+	if err := customheader.VerifyGasUsed(config, parent, header); err != nil {
+		return err
 	}
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	if err := customheader.VerifyGasLimit(config, parent, header); err != nil {
+		return err
 	}
-	if config.IsCortina(header.Time) {
-		if header.GasLimit != params.CortinaGasLimit {
-			return fmt.Errorf("expected gas limit to be %d in Cortina, but found %d", params.CortinaGasLimit, header.GasLimit)
-		}
-	} else if config.IsApricotPhase1(header.Time) {
-		if header.GasLimit != params.ApricotPhase1GasLimit {
-			return fmt.Errorf("expected gas limit to be %d in ApricotPhase1, but found %d", params.ApricotPhase1GasLimit, header.GasLimit)
-		}
-	} else {
-		// Verify that the gas limit remains within allowed bounds
-		diff := math.AbsDiff(parent.GasLimit, header.GasLimit)
-		limit := parent.GasLimit / params.GasLimitBoundDivisor
-		if diff >= limit || header.GasLimit < params.MinGasLimit {
-			return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
-		}
-	}
-
-	// Verify header.Extra matches the expected value.
-	expectedExtraPrefix, err := customheader.ExtraPrefix(config, parent, header.Time)
-	if err != nil {
-		return fmt.Errorf("failed to calculate extra prefix: %w", err)
-	}
-	if !bytes.HasPrefix(header.Extra, expectedExtraPrefix) {
-		return fmt.Errorf("expected header.Extra to have prefix: %x, found %x", expectedExtraPrefix, header.Extra)
+	if err := customheader.VerifyExtraPrefix(config, parent, header); err != nil {
+		return err
 	}
 
 	// Verify header.BaseFee matches the expected value.
@@ -202,7 +213,7 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 	}
 
 	// Ensure gas-related header fields are correct
-	if err := eng.verifyHeaderGasFields(config, header, parent); err != nil {
+	if err := verifyHeaderGasFields(config, header, parent); err != nil {
 		return err
 	}
 
@@ -336,15 +347,16 @@ func (eng *DummyEngine) verifyBlockFee(
 	// set by the base fee of this block.
 	blockGas := new(big.Int).Div(totalBlockFee, baseFee)
 
-	// Require that the amount of gas purchased by the effective tips within the block, [blockGas],
-	// covers at least [requiredBlockGasCost].
+	// Require that the amount of gas purchased by the effective tips within the
+	// block covers at least `requiredBlockGasCost`.
 	//
-	// NOTE: To determine the [requiredBlockFee], multiply [requiredBlockGasCost]
-	// by [baseFee].
+	// NOTE: To determine the required block fee, multiply
+	// `requiredBlockGasCost` by `baseFee`.
 	if blockGas.Cmp(requiredBlockGasCost) < 0 {
-		return fmt.Errorf(
-			"insufficient gas (%d) to cover the block cost (%d) at base fee (%d) (total block fee: %d)",
-			blockGas, requiredBlockGasCost, baseFee, totalBlockFee,
+		return fmt.Errorf("%w: expected %d but got %d",
+			ErrInsufficientBlockGas,
+			requiredBlockGasCost,
+			blockGas,
 		)
 	}
 	return nil
@@ -357,7 +369,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		err                          error
 	)
 	if eng.cb.OnExtraStateChange != nil {
-		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, state)
+		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state)
 		if err != nil {
 			return err
 		}
@@ -412,7 +424,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		err                          error
 	)
 	if eng.cb.OnFinalizeAndAssemble != nil {
-		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, state, txs)
+		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, parent, state, txs)
 		if err != nil {
 			return nil, err
 		}
@@ -444,6 +456,14 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			return nil, err
 		}
 	}
+
+	// finalize the header.Extra
+	extraPrefix, err := customheader.ExtraPrefix(config, parent, header, eng.desiredTargetExcess)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
+	}
+	header.Extra = append(extraPrefix, header.Extra...)
+
 	// commit the final state root
 	header.Root = state.IntermediateRoot(config.IsEIP158(header.Number))
 

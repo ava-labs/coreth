@@ -15,15 +15,17 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
 )
 
 var (
-	apricotPhase0MinGasPrice = big.NewInt(params.LaunchMinGasPrice)
-	apricotPhase1MinGasPrice = big.NewInt(params.ApricotPhase1MinGasPrice)
+	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
+	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
 
 type BlockValidator interface {
@@ -106,23 +108,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		return fmt.Errorf("invalid mix digest: %v", ethHeader.MixDigest)
 	}
 
-	// Enforce static gas limit after ApricotPhase1 (prior to ApricotPhase1 it's handled in processing).
-	if rules.IsCortina {
-		if ethHeader.GasLimit != params.CortinaGasLimit {
-			return fmt.Errorf(
-				"expected gas limit to be %d after cortina but got %d",
-				params.CortinaGasLimit, ethHeader.GasLimit,
-			)
-		}
-	} else if rules.IsApricotPhase1 {
-		if ethHeader.GasLimit != params.ApricotPhase1GasLimit {
-			return fmt.Errorf(
-				"expected gas limit to be %d after apricot phase 1 but got %d",
-				params.ApricotPhase1GasLimit, ethHeader.GasLimit,
-			)
-		}
-	}
-
 	// Verify the extra data is well-formed.
 	if err := header.VerifyExtra(rules.AvalancheRules, ethHeader.Extra); err != nil {
 		return err
@@ -162,15 +147,15 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	case !rules.IsApricotPhase1:
 		// If we are in ApricotPhase0, enforce each transaction has a minimum gas price of at least the LaunchMinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(apricotPhase0MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), params.LaunchMinGasPrice)
+			if tx.GasPrice().Cmp(ap0MinGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap0.MinGasPrice)
 			}
 		}
 	case !rules.IsApricotPhase3:
 		// If we are prior to ApricotPhase3, enforce each transaction has a minimum gas price of at least the ApricotPhase1MinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(apricotPhase1MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), params.ApricotPhase1MinGasPrice)
+			if tx.GasPrice().Cmp(ap1MinGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap1.MinGasPrice)
 			}
 		}
 	}
@@ -195,16 +180,10 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
 	if rules.IsApricotPhase4 {
-		// Make sure ExtDataGasUsed is not nil and correct
-		if ethHeader.ExtDataGasUsed == nil {
-			return errNilExtDataGasUsedApricotPhase4
-		}
-		if rules.IsApricotPhase5 {
+		// After the F upgrade, the extDataGasUsed field is validated by
+		// [header.VerifyGasUsed].
+		if !rules.IsFUpgrade && rules.IsApricotPhase5 {
 			if !utils.BigLessOrEqualUint64(ethHeader.ExtDataGasUsed, ap5.AtomicGasLimit) {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
-			}
-		} else {
-			if !ethHeader.ExtDataGasUsed.IsUint64() {
 				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
 			}
 		}
@@ -217,14 +196,14 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			if err != nil {
 				return err
 			}
-			totalGasUsed, err = safemath.Add64(totalGasUsed, gasUsed)
+			totalGasUsed, err = safemath.Add(totalGasUsed, gasUsed)
 			if err != nil {
 				return err
 			}
 		}
 
 		switch {
-		case ethHeader.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0:
+		case !utils.BigEqualUint64(ethHeader.ExtDataGasUsed, totalGasUsed):
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", ethHeader.ExtDataGasUsed, totalGasUsed)
 
 		// Make sure BlockGasCost is not nil
