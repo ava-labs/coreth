@@ -447,9 +447,9 @@ func (client *stateSyncerClient) Shutdown() error {
 
 func (client *stateSyncerClient) getEVMBlockFromHash(blockHash common.Hash) *Block {
 	// Must first find first pivot block to signal bootstrapper
-	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(client.syncSummary.BlockHash))
+	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(blockHash))
 	if err != nil {
-		log.Error("could not get block by hash from client state", "hash", client.syncSummary.BlockHash)
+		log.Error("could not get block by hash from client state", "hash", blockHash)
 		return nil
 	}
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
