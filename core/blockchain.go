@@ -663,6 +663,7 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
+	log.Debug("Called loadLastState with", "hash", lastAcceptedHash)
 	if lastAcceptedHash == (common.Hash{}) {
 		return bc.loadGenesisState()
 	}
@@ -677,6 +678,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	if headBlock == nil {
 		return fmt.Errorf("could not load head block %s", head.Hex())
 	}
+	log.Debug("Put head block in loadLastState as", "hash", headBlock.Hash(), "height", headBlock.NumberU64())
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(headBlock.Header())
 
@@ -2059,6 +2061,7 @@ func (bc *BlockChain) gatherBlockRootsAboveLastAccepted() map[common.Hash]struct
 // in-memory and on disk current block pointers to [block].
 // Only should be called after state sync has completed.
 func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
+	log.Debug("Called ResetToStateSyncedBlock with", "hash", block.Hash(), "height", block.NumberU64())
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 

@@ -462,12 +462,14 @@ func (client *stateSyncerClient) getEVMBlockFromHash(blockHash common.Hash) *Blo
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
 func (client *stateSyncerClient) finishSync(blockHash common.Hash) error {
+	log.Debug("Called finishSync with", "hash", blockHash)
 	evmBlock := client.getEVMBlockFromHash(blockHash)
 	if evmBlock == nil {
 		return fmt.Errorf("Could not get evmBlock form hash %s", blockHash)
 	}
 
 	block := evmBlock.ethBlock
+	log.Debug("Found block for finishSync", "hash", block.Hash(), "height", block.NumberU64())
 
 	// BloomIndexer needs to know that some parts of the chain are not available
 	// and cannot be indexed. This is done by calling [AddCheckpoint] here.
