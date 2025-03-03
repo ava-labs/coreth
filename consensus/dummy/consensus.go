@@ -176,7 +176,7 @@ func verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, par
 		return fmt.Errorf("invalid block gas cost: have %d, want %d", header.BlockGasCost, expectedBlockGasCost)
 	}
 
-	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
+	// Verify ExtDataGasUsed not present before AP4
 	if !config.IsApricotPhase4(header.Time) {
 		if header.ExtDataGasUsed != nil {
 			return fmt.Errorf("invalid extDataGasUsed before fork: have %d, want <nil>", header.ExtDataGasUsed)
