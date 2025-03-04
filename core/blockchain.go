@@ -440,6 +440,7 @@ func NewBlockChain(
 	if !bc.cacheConfig.SnapshotDelayInit {
 		// Load any existing snapshot, regenerating it if loading failed (if not
 		// already initialized in recovery)
+		log.Debug("Loading snapshot in NewBlockchain")
 		bc.initSnapshot(head)
 	}
 
@@ -1857,6 +1858,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			// that the node stops mid-way through snapshot flattening (performed across multiple DB batches).
 			// If snapshot initialization is delayed due to state sync, skip initializing snaps here
 			if !bc.cacheConfig.SnapshotDelayInit {
+				log.Debug("Initializing snapshot in reprocessState", "hash", parent.Hash(), "height", parent.NumberU64())
 				bc.initSnapshot(parent.Header())
 			}
 			writeIndices = true // Set [writeIndices] to true, so that the indices will be updated from the last accepted tip onwards.
@@ -2120,6 +2122,7 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 		return fmt.Errorf("head state missing %d:%s", head.Number, head.Hash())
 	}
 
+	log.Debug("Called initSnapshot in ResetToStateSyncedBlock", "head", head.Number, "hash", head.Hash(), "root", head.Root)
 	bc.initSnapshot(head)
 	return nil
 }

@@ -140,18 +140,18 @@ func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.Sy
 
 // Depending on the request type, returns the hook to properly handle the block
 // If final, will run normal operation. Otherwise, will only perform atomic ops
-func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func(bool) error {
+func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func() error {
 	switch req {
 	case ethstatesync.AcceptSyncBlockRequest:
-		return func(final bool) error { return b.acceptDuringSync(final) }
+		return func() error { return b.acceptAfterSync() }
 	case ethstatesync.RejectSyncBlockRequest:
-		return func(final bool) error { return b.rejectDuringSync(final) }
+		return func() error { return b.rejectAfterSync() }
 	case ethstatesync.VerifySyncBlockRequest:
-		return func(final bool) error { return b.verifyDuringSync(final) }
+		return func() error { return b.verifyAfterSync() }
 	default:
 		log.Error("Invalid statesync.SyncBlockRequest", "ID", req)
 	}
-	return func(final bool) error { return nil }
+	return func() error { return nil }
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.

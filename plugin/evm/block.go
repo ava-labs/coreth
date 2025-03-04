@@ -143,6 +143,9 @@ func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 // Accept implements the snowman.Block interface
 func (b *Block) Accept(context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.acceptDuringSync(); err != nil {
+			return err
+		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.AcceptSyncBlockRequest)
 	}
 	return b.accept()
@@ -196,19 +199,12 @@ func (b *Block) accept() error {
 	return atomicState.Accept(vdbBatch, nil)
 }
 
-func (b *Block) acceptDuringSync(final bool) error {
-	if final {
-		return b.accept()
-	}
-
+func (b *Block) acceptDuringSync() error {
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
-	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
@@ -231,6 +227,28 @@ func (b *Block) acceptDuringSync(final bool) error {
 	}
 
 	log.Debug("Returning from accept without error", "block", b.ID(), "height", b.Height())
+
+	return nil
+}
+
+func (b *Block) acceptAfterSync() error {
+	vm := b.vm
+	log.Debug("Accepting block after sync", b.ID(), "height", b.Height())
+
+	// Call Accept for relevant precompile logs. Note we do this prior to
+	// calling Accept on the blockChain so any side effects (eg warp signatures)
+	// take place before the accepted log is emitted to subscribers.
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
+	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules)); err != nil {
+		return err
+	}
+	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
+		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
+	}
+
+	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	}
 
 	return nil
 }
@@ -273,6 +291,9 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.rejectDuringSync(); err != nil {
+			return err
+		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.RejectSyncBlockRequest)
 	}
 	return b.reject()
@@ -298,11 +319,7 @@ func (b *Block) reject() error {
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
-func (b *Block) rejectDuringSync(final bool) error {
-	if final {
-		return b.reject()
-	}
-
+func (b *Block) rejectDuringSync() error {
 	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
@@ -315,6 +332,11 @@ func (b *Block) rejectDuringSync(final bool) error {
 
 	log.Debug("Returning from reject without error", "block", b.ID(), "height", b.Height())
 	return nil
+}
+
+func (b *Block) rejectAfterSync() error {
+	log.Debug("Rejecting block after sync", b.ID(), "height", b.Height())
+	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
 // Parent implements the snowman.Block interface
@@ -353,11 +375,13 @@ func (b *Block) Verify(context.Context) error {
 		}
 	}
 
-	// If currently dynamically syncing, we should simply postpone execution
+	// If currently dynamically syncing, postpone non-atomic operations
 	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.verifyDuringSync(); err != nil {
+			return err
+		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
 	}
-
 	return b.verify(true)
 }
 
@@ -406,8 +430,11 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 		}
 	}
 
-	// If currently dynamically syncing, we should postpone execution
+	// If currently dynamically syncing, postpone non-atomic operations
 	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.verifyDuringSync(); err != nil {
+			return err
+		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
 	}
 
@@ -444,11 +471,7 @@ func (b *Block) verify(writes bool) error {
 	return err
 }
 
-func (b *Block) verifyDuringSync(final bool) error {
-	if final {
-		return b.verify(true)
-	}
-
+func (b *Block) verifyDuringSync() error {
 	log.Debug("Verifying block during sync", "block", b.ID(), "height", b.Height())
 	var (
 		block      = b.ethBlock
@@ -490,6 +513,20 @@ func (b *Block) verifyDuringSync(final bool) error {
 	log.Debug("Returning from verify without error", "block", b.ID(), "height", b.Height())
 
 	return nil
+}
+
+func (b *Block) verifyAfterSync() error {
+	log.Debug("Verifying block after sync", b.ID(), "height", b.Height())
+	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
+	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
+	// Additionally, if a block is already in processing, then it has already passed verification and
+	// at this point we have checked the predicates are still valid in the different context so we
+	// can return nil.
+	if b.vm.State.IsProcessing(b.id) {
+		return nil
+	}
+
+	return b.vm.blockChain.InsertBlockManual(b.ethBlock, true)
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
