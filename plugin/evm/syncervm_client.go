@@ -269,7 +269,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
 		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
 		ethBlock := evmBlock.ethBlock
-		if err := client.updateVMMarkers(); err != nil {
+		if err := client.updateVMMarkers(ethBlock.Hash(), ethBlock.NumberU64()); err != nil {
 			return block.StateSyncSkipped, fmt.Errorf("error updating vm markers height=%d, hash=%s, err=%w", ethBlock.NumberU64(), ethBlock.Hash(), err)
 		}
 
@@ -487,7 +487,7 @@ func (client *stateSyncerClient) finishSync(blockHash common.Hash) error {
 		return err
 	}
 
-	if err := client.updateVMMarkers(); err != nil {
+	if err := client.updateVMMarkers(blockHash, block.NumberU64()); err != nil {
 		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
 	}
 
@@ -510,15 +510,15 @@ func (client *stateSyncerClient) finishSync(blockHash common.Hash) error {
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
 // - removes state sync progress markers
-func (client *stateSyncerClient) updateVMMarkers() error {
+func (client *stateSyncerClient) updateVMMarkers(blockHash common.Hash, lastAcceptedHeight uint64) error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.syncSummary] when ApplyToSharedMemory
 	// is called.
-	if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(client.lastAcceptedHeight); err != nil {
+	if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(lastAcceptedHeight); err != nil {
 		return err
 	}
-	client.atomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
-	if err := client.acceptedBlockDB.Put(lastAcceptedKey, client.syncSummary.BlockHash[:]); err != nil {
+	client.atomicBackend.SetLastAccepted(blockHash)
+	if err := client.acceptedBlockDB.Put(lastAcceptedKey, blockHash[:]); err != nil {
 		return err
 	}
 	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {
