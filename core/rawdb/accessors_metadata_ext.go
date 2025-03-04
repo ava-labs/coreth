@@ -4,6 +4,7 @@
 package rawdb
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ava-labs/libevm/common"
@@ -27,12 +28,12 @@ func readTimeMarker(db ethdb.KeyValueStore, key []byte) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	var lastRun uint64
-	if err := rlp.DecodeBytes(data, &lastRun); err != nil {
+	var unix uint64
+	if err := rlp.DecodeBytes(data, &unix); err != nil {
 		return time.Time{}, err
 	}
 
-	return time.Unix(int64(lastRun), 0), nil
+	return time.Unix(int64(unix), 0), nil
 }
 
 // WriteOfflinePruning writes a time marker of the last attempt to run offline pruning.
@@ -97,13 +98,17 @@ func ReadAcceptorTip(db ethdb.KeyValueReader) (common.Hash, error) {
 	has, err := db.Has(acceptorTipKey)
 	if err != nil {
 		return common.Hash{}, err
-	} else if !has {
+	}
+	if !has {
 		// If the index is not present on disk, the [acceptorTipKey] index has not been initialized yet.
 		return common.Hash{}, nil
 	}
 	h, err := db.Get(acceptorTipKey)
 	if err != nil {
 		return common.Hash{}, err
+	}
+	if len(h) != common.HashLength {
+		return common.Hash{}, fmt.Errorf("value has incorrect length %d", len(h))
 	}
 	return common.BytesToHash(h), nil
 }

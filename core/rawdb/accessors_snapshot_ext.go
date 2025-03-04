@@ -39,5 +39,7 @@ func DeleteSnapshotBlockHash(db ethdb.KeyValueWriter) {
 
 // IterateAccountSnapshots returns an iterator for walking all of the accounts in the snapshot
 func IterateAccountSnapshots(db ethdb.Iteratee) ethdb.Iterator {
-	return NewKeyLengthIterator(db.NewIterator(SnapshotAccountPrefix, nil), len(SnapshotAccountPrefix)+common.HashLength)
+	it := db.NewIterator(SnapshotAccountPrefix, nil)
+	keyLen := len(SnapshotAccountPrefix) + common.HashLength
+	return NewKeyLengthIterator(it, keyLen)
 }
