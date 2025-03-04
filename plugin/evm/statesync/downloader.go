@@ -35,7 +35,7 @@ const (
 type queueElement struct {
 	block    *types.Block
 	req      SyncBlockRequest
-	resolver func(bool) error
+	resolver func() error
 }
 
 type Downloader struct {
@@ -92,14 +92,13 @@ func (d *Downloader) Pivot() *types.Block {
 
 // Opens bufferLock to allow block requests to go through after finalizing the sync
 func (d *Downloader) Close() {
-	d.bufferLock.TryLock() // this should be a no-op
-	d.flushQueue(true)
+	d.flushQueue(true) // ignores errors
 	d.bufferLock.Unlock()
 }
 
 // QueueBlock queues a block for processing by the state syncer.
 // This assumes the queue lock is NOT held
-func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func(bool) error) error {
+func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func() error) error {
 	d.bufferLock.Lock()
 	defer d.bufferLock.Unlock()
 	if d.bufferLen >= len(d.blockBuffer) {
@@ -142,16 +141,17 @@ func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 // To avoid duplicating actions, should adjust length at higher level
 func (d *Downloader) flushQueue(final bool) error {
 	defer func() { d.bufferLen = 0 }()
+	// During sync, can ignore queue
+	if !final {
+		return nil
+	}
+
 	for i, elem := range d.blockBuffer {
 		if i >= d.bufferLen {
 			return nil
 		}
 
-		if err := elem.resolver(final); err != nil {
-			if final {
-				// EXTREMELY hacky solution to release lock in final case on error - should fix later
-				d.bufferLock.Unlock()
-			}
+		if err := elem.resolver(); err != nil {
 			return err
 		}
 	}
