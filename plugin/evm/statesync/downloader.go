@@ -4,6 +4,7 @@
 package statesync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -162,7 +163,7 @@ func (d *Downloader) flushQueue(final bool) error {
 
 // processSnapSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *Downloader) SnapSync() error {
+func (d *Downloader) SnapSync(ctx context.Context) error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	sync := d.syncState(d.pivotBlock.Root())
@@ -182,6 +183,9 @@ func (d *Downloader) SnapSync() error {
 			log.Info("Sync completed with", "err", sync.err)
 			d.bufferLock.Lock() // unlocked in Close()
 			return sync.err
+		case <-ctx.Done():
+			log.Warn("Sync interrupted by context", "err", ctx.Err())
+			return ctx.Err()
 		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
