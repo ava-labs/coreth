@@ -270,10 +270,15 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
 		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
 		ethBlock := evmBlock.ethBlock
-		if err := client.updateVMMarkers(ethBlock.Hash(), ethBlock.NumberU64()); err != nil {
-			return block.StateSyncSkipped, fmt.Errorf("error updating vm markers height=%d, hash=%s, err=%w", ethBlock.NumberU64(), ethBlock.Hash(), err)
-		}
 
+		// Do all of updateVMMarkers EXCEPT acceptBlockDB.Put, since this breaks resume
+		if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(ethBlock.NumberU64()); err != nil {
+			return block.StateSyncSkipped, err
+		}
+		client.atomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
+		if err := client.db.Commit(); err != nil {
+			return block.StateSyncSkipped, err
+		}
 		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
 			return block.StateSyncSkipped, err
 		}
@@ -286,12 +291,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	go func() {
 		defer client.wg.Done()
 		defer cancel()
-		if client.useUpstream {
-			defer func() {
-				log.Debug("Closing downloader in defer")
-				client.dl.Close()
-			}()
-		}
 
 		if err := client.stateSync(ctx); err != nil {
 			log.Error("Returned from stateSync with error")
@@ -300,6 +299,10 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			if client.useUpstream {
 				log.Info("No state sync error, final pivot", "hash", client.dl.Pivot().Hash(), "height", client.dl.Pivot().NumberU64())
 				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
+				defer func() {
+					log.Debug("Closing downloader in defer")
+					client.dl.Close()
+				}()
 				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
 			} else {
 				log.Error("Called incorrect finishSync?????", "useUpstream", client.useUpstream)
