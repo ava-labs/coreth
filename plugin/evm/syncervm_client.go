@@ -131,6 +131,7 @@ func (client *stateSyncerClient) AsyncReceive() bool {
 func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.SyncBlockRequest) error {
 	// Wait for atomic sync to be done prior to queueing
 	<-client.atomicDone
+	log.Debug("Queueing block", "hash", b.ID(), "height", b.Height(), "req", req)
 	err := client.dl.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
 	if err != nil {
 		log.Error("Queue failed", "error", err)
