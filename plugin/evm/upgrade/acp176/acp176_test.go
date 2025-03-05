@@ -164,10 +164,10 @@ var (
 				Gas: gas.State{
 					Excess: math.MaxUint64,
 				},
-				TargetExcess: 924430531, // 2^25 * ln(MaxUint64 / MinMaxCapacity)
+				TargetExcess: 947_688_691, // 2^25 * ln(MaxUint64 / MinMaxCapacity)
 			},
-			target:      922_337_190_378_117_171,
-			maxCapacity: 18_446_743_807_562_343_420,
+			target:      1_844_674_384_269_701_322,
+			maxCapacity: 18_446_743_842_697_013_220,
 			gasPrice:    2 * MinGasPrice,
 		},
 		{
@@ -287,16 +287,16 @@ var (
 			name: "0_seconds_over_capacity",
 			initial: State{
 				Gas: gas.State{
-					Capacity: 31_000_000, // Could happen if the targetExcess was modified
+					Capacity: 16_000_000, // Could happen if the targetExcess was modified
 					Excess:   2_000_000,
 				},
-				// Set capacity to 30M
+				// Set capacity to 15M
 				TargetExcess: 13_605_152, // 2^25 * ln(1.5)
 			},
 			seconds: 0,
 			expected: State{
 				Gas: gas.State{
-					Capacity: 30_000_000, // capped at 30M
+					Capacity: 15_000_000, // capped at 15M
 					Excess:   2_000_000,  // unmodified
 				},
 				TargetExcess: 13_605_152, // unmodified
@@ -562,7 +562,7 @@ var (
 			name: "reduce_capacity",
 			initial: State{
 				Gas: gas.State{
-					Capacity: 20_039_100, // MinTargetPerSecond * e^(2*MaxTargetExcessDiff / TargetConversion)
+					Capacity: 10_019_550, // MinMaxCapacity * e^(2*MaxTargetExcessDiff / TargetConversion)
 					Excess:   2_000_000_000,
 				},
 				TargetExcess: 2 * MaxTargetExcessDiff,
@@ -570,7 +570,7 @@ var (
 			desiredTargetExcess: 0,
 			expected: State{
 				Gas: gas.State{
-					Capacity: 20_019_540,    // MinTargetPerSecond * e^(MaxTargetExcessDiff / TargetConversion)
+					Capacity: 10_009_770,    // MinMaxCapacity * e^(MaxTargetExcessDiff / TargetConversion)
 					Excess:   1_998_047_816, // 2M * NewTarget / OldTarget
 				},
 				TargetExcess: MaxTargetExcessDiff,
@@ -592,6 +592,45 @@ var (
 					Excess:   1_998_047_867, // 2M * NewTarget / OldTarget
 				},
 				TargetExcess: maxTargetExcess - MaxTargetExcessDiff,
+			},
+		},
+	}
+	parseTests = []struct {
+		name        string
+		bytes       []byte
+		state       State
+		expectedErr error
+	}{
+		{
+			name:        "insufficient_length",
+			bytes:       make([]byte, StateSize-1),
+			expectedErr: ErrStateInsufficientLength,
+		},
+		{
+			name:  "zero_state",
+			bytes: make([]byte, StateSize),
+			state: State{},
+		},
+		{
+			name: "truncate_bytes",
+			bytes: []byte{
+				StateSize: 1,
+			},
+			state: State{},
+		},
+		{
+			name: "endianess",
+			bytes: []byte{
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+				0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+				0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+			},
+			state: State{
+				Gas: gas.State{
+					Capacity: 0x0102030405060708,
+					Excess:   0x1112131415161718,
+				},
+				TargetExcess: 0x2122232425262728,
 			},
 		},
 	}
@@ -734,6 +773,54 @@ func BenchmarkDesiredTargetExcess(b *testing.B) {
 		b.Run(test.name, func(b *testing.B) {
 			for range b.N {
 				DesiredTargetExcess(test.target)
+			}
+		})
+	}
+}
+
+func TestParseState(t *testing.T) {
+	for _, test := range parseTests {
+		t.Run(test.name, func(t *testing.T) {
+			require := require.New(t)
+
+			state, err := ParseState(test.bytes)
+			require.ErrorIs(err, test.expectedErr)
+			require.Equal(test.state, state)
+		})
+	}
+}
+
+func BenchmarkParseState(b *testing.B) {
+	for _, test := range parseTests {
+		b.Run(test.name, func(b *testing.B) {
+			for range b.N {
+				_, _ = ParseState(test.bytes)
+			}
+		})
+	}
+}
+
+func TestBytes(t *testing.T) {
+	for _, test := range parseTests {
+		if test.expectedErr != nil {
+			continue
+		}
+		t.Run(test.name, func(t *testing.T) {
+			expectedBytes := test.bytes[:StateSize]
+			bytes := test.state.Bytes()
+			require.Equal(t, expectedBytes, bytes)
+		})
+	}
+}
+
+func BenchmarkBytes(b *testing.B) {
+	for _, test := range parseTests {
+		if test.expectedErr != nil {
+			continue
+		}
+		b.Run(test.name, func(b *testing.B) {
+			for range b.N {
+				_ = test.state.Bytes()
 			}
 		})
 	}

@@ -4,18 +4,19 @@
 package dummy
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/trie"
@@ -41,8 +42,27 @@ type Mode struct {
 }
 
 type (
-	OnFinalizeAndAssembleCallbackType = func(header *types.Header, state *state.StateDB, txs []*types.Transaction) (extraData []byte, blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
-	OnExtraStateChangeType            = func(block *types.Block, statedb *state.StateDB) (blockFeeContribution *big.Int, extDataGasUsed *big.Int, err error)
+	OnFinalizeAndAssembleCallbackType = func(
+		header *types.Header,
+		parent *types.Header,
+		state *state.StateDB,
+		txs []*types.Transaction,
+	) (
+		extraData []byte,
+		blockFeeContribution *big.Int,
+		extDataGasUsed *big.Int,
+		err error,
+	)
+
+	OnExtraStateChangeType = func(
+		block *types.Block,
+		parent *types.Header,
+		statedb *state.StateDB,
+	) (
+		blockFeeContribution *big.Int,
+		extDataGasUsed *big.Int,
+		err error,
+	)
 
 	ConsensusCallbacks struct {
 		OnFinalizeAndAssemble OnFinalizeAndAssembleCallbackType
@@ -50,11 +70,26 @@ type (
 	}
 
 	DummyEngine struct {
-		cb            ConsensusCallbacks
-		clock         *mockable.Clock
-		consensusMode Mode
+		cb                  ConsensusCallbacks
+		clock               *mockable.Clock
+		consensusMode       Mode
+		desiredTargetExcess *gas.Gas
 	}
 )
+
+func NewDummyEngine(
+	cb ConsensusCallbacks,
+	mode Mode,
+	clock *mockable.Clock,
+	desiredTargetExcess *gas.Gas,
+) *DummyEngine {
+	return &DummyEngine{
+		cb:                  cb,
+		clock:               clock,
+		consensusMode:       mode,
+		desiredTargetExcess: desiredTargetExcess,
+	}
+}
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
@@ -112,22 +147,15 @@ func NewFullFaker() *DummyEngine {
 	}
 }
 
-func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header *types.Header, parent *types.Header) error {
-	configExtra := params.GetExtra(config)
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+func verifyHeaderGasFields(configExtra *extras.ChainConfig, header *types.Header, parent *types.Header) error {
+	if err := customheader.VerifyGasUsed(configExtra, parent, header); err != nil {
+		return err
 	}
 	if err := customheader.VerifyGasLimit(configExtra, parent, header); err != nil {
 		return err
 	}
-	// Verify header.Extra matches the expected value.
-	expectedExtraPrefix, err := customheader.ExtraPrefix(configExtra, parent, header.Time)
-	if err != nil {
-		return fmt.Errorf("failed to calculate extra prefix: %w", err)
-	}
-	if !bytes.HasPrefix(header.Extra, expectedExtraPrefix) {
-		return fmt.Errorf("expected header.Extra to have prefix: %x, found %x", expectedExtraPrefix, header.Extra)
+	if err := customheader.VerifyExtraPrefix(configExtra, parent, header); err != nil {
+		return err
 	}
 
 	// Verify header.BaseFee matches the expected value.
@@ -139,17 +167,7 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
 	}
 
-	// Verify BlockGasCost, ExtDataGasUsed not present before AP4
 	headerExtra := types.GetHeaderExtra(header)
-	if !configExtra.IsApricotPhase4(header.Time) {
-		if headerExtra.BlockGasCost != nil {
-			return fmt.Errorf("invalid blockGasCost before fork: have %d, want <nil>", headerExtra.BlockGasCost)
-		}
-		if headerExtra.ExtDataGasUsed != nil {
-			return fmt.Errorf("invalid extDataGasUsed before fork: have %d, want <nil>", headerExtra.ExtDataGasUsed)
-		}
-		return nil
-	}
 
 	// Enforce BlockGasCost constraints
 	expectedBlockGasCost := customheader.BlockGasCost(
@@ -157,8 +175,16 @@ func (eng *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, header
 		parent,
 		header.Time,
 	)
-	if !utils.BigEqualUint64(headerExtra.BlockGasCost, expectedBlockGasCost) {
+	if !utils.BigEqual(headerExtra.BlockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid block gas cost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
+	}
+
+	// Verify ExtDataGasUsed not present before AP4
+	if !configExtra.IsApricotPhase4(header.Time) {
+		if headerExtra.ExtDataGasUsed != nil {
+			return fmt.Errorf("invalid extDataGasUsed before fork: have %d, want <nil>", headerExtra.ExtDataGasUsed)
+		}
+		return nil
 	}
 
 	// ExtDataGasUsed correctness is checked during block validation
@@ -181,13 +207,14 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 
 	// Verify the extra data is well-formed.
 	config := chain.Config()
-	rules := params.GetExtra(config).GetAvalancheRules(header.Time)
+	configExtra := params.GetExtra(config)
+	rules := configExtra.GetAvalancheRules(header.Time)
 	if err := customheader.VerifyExtra(rules, header.Extra); err != nil {
 		return err
 	}
 
 	// Ensure gas-related header fields are correct
-	if err := eng.verifyHeaderGasFields(config, header, parent); err != nil {
+	if err := verifyHeaderGasFields(configExtra, header, parent); err != nil {
 		return err
 	}
 
@@ -343,7 +370,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		err                          error
 	)
 	if eng.cb.OnExtraStateChange != nil {
-		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, state)
+		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state)
 		if err != nil {
 			return err
 		}
@@ -351,6 +378,16 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 
 	configExtra := params.GetExtra(chain.Config())
 	timestamp := block.Time()
+	// Verify the BlockGasCost set in the header matches the expected value.
+	blockGasCost := types.BlockGasCost(block)
+	expectedBlockGasCost := customheader.BlockGasCost(
+		configExtra,
+		parent,
+		timestamp,
+	)
+	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
+		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
+	}
 	if configExtra.IsApricotPhase4(timestamp) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
@@ -361,17 +398,6 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		}
 		if blockExtDataGasUsed := types.BlockExtDataGasUsed(block); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
-		}
-
-		// Verify the BlockGasCost set in the header matches the expected value.
-		blockGasCost := types.BlockGasCost(block)
-		expectedBlockGasCost := customheader.BlockGasCost(
-			configExtra,
-			parent,
-			timestamp,
-		)
-		if !utils.BigEqualUint64(blockGasCost, expectedBlockGasCost) {
-			return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 		}
 
 		// Verify the block fee was paid.
@@ -398,7 +424,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		err                          error
 	)
 	if eng.cb.OnFinalizeAndAssemble != nil {
-		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, state, txs)
+		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, parent, state, txs)
 		if err != nil {
 			return nil, err
 		}
@@ -406,18 +432,18 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 
 	configExtra := params.GetExtra(chain.Config())
 	headerExtra := types.GetHeaderExtra(header)
+	// Calculate the required block gas cost for this block.
+	headerExtra.BlockGasCost = customheader.BlockGasCost(
+		configExtra,
+		parent,
+		header.Time,
+	)
 	if configExtra.IsApricotPhase4(header.Time) {
-		headerExtra.ExtDataGasUsed = extDataGasUsed
-		if headerExtra.ExtDataGasUsed == nil {
-			headerExtra.ExtDataGasUsed = new(big.Int).Set(common.Big0)
+		ext := types.GetHeaderExtra(header)
+		ext.ExtDataGasUsed = extDataGasUsed
+		if ext.ExtDataGasUsed == nil {
+			ext.ExtDataGasUsed = new(big.Int).Set(common.Big0)
 		}
-		// Calculate the required block gas cost for this block.
-		blockGasCost := customheader.BlockGasCost(
-			configExtra,
-			parent,
-			header.Time,
-		)
-		headerExtra.BlockGasCost = new(big.Int).SetUint64(blockGasCost)
 
 		// Verify that this block covers the block fee.
 		if err := eng.verifyBlockFee(
@@ -432,7 +458,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	}
 
 	// finalize the header.Extra
-	extraPrefix, err := customheader.ExtraPrefix(configExtra, parent, header.Time)
+	extraPrefix, err := customheader.ExtraPrefix(configExtra, parent, header, eng.desiredTargetExcess)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	}

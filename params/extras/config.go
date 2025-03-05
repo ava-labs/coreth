@@ -30,6 +30,7 @@ var (
 			CortinaBlockTimestamp:           utils.NewUint64(0),
 			DurangoBlockTimestamp:           utils.NewUint64(0),
 			EtnaTimestamp:                   utils.NewUint64(0),
+			FortunaTimestamp:                utils.NewUint64(0),
 		},
 	}
 
@@ -85,8 +86,8 @@ var (
 		c.NetworkUpgrades.EtnaTimestamp = utils.NewUint64(0)
 	})
 
-	TestFUpgradeChainConfig = copyAndSet(TestEtnaChainConfig, func(c *ChainConfig) {
-		c.NetworkUpgrades.FUpgradeTimestamp = utils.NewUint64(0)
+	TestFortunaChainConfig = copyAndSet(TestEtnaChainConfig, func(c *ChainConfig) {
+		c.NetworkUpgrades.FortunaTimestamp = utils.NewUint64(0)
 	})
 )
 

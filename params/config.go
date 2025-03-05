@@ -330,7 +330,7 @@ var (
 		extras.TestEtnaChainConfig,
 	)
 
-	TestFUpgradeChainConfig = WithExtra(
+	TestFortunaChainConfig = WithExtra(
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -349,7 +349,7 @@ var (
 			ShanghaiTime:        utils.NewUint64(0),
 			CancunTime:          utils.NewUint64(0),
 		},
-		extras.TestFUpgradeChainConfig,
+		extras.TestFortunaChainConfig,
 	)
 
 	TestRules = TestChainConfig.Rules(new(big.Int), IsMergeTODO, 0)
