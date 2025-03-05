@@ -56,13 +56,14 @@ func TestBlockGasCost(t *testing.T) {
 					ApricotPhase5BlockTimestamp: test.ap5Timestamp,
 				},
 			}
-			parent := &types.Header{
-				Time: test.parentTime,
-			}
-			extra := &types.HeaderExtra{
-				BlockGasCost: test.parentCost,
-			}
-			types.SetHeaderExtra(parent, extra)
+			parent := types.WithHeaderExtra(
+				&types.Header{
+					Time: test.parentTime,
+				},
+				&types.HeaderExtra{
+					BlockGasCost: test.parentCost,
+				},
+			)
 
 			assert.Equal(t, test.expected, BlockGasCost(
 				config,
@@ -170,7 +171,6 @@ func TestEstimateRequiredTip(t *testing.T) {
 		name         string
 		ap4Timestamp *uint64
 		header       *types.Header
-		headerExtra  *types.HeaderExtra
 		want         *big.Int
 		wantErr      error
 	}{
@@ -182,46 +182,54 @@ func TestEstimateRequiredTip(t *testing.T) {
 		{
 			name:         "nil_base_fee",
 			ap4Timestamp: utils.NewUint64(0),
-			header:       &types.Header{},
-			headerExtra: &types.HeaderExtra{
-				ExtDataGasUsed: big.NewInt(1),
-				BlockGasCost:   big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(1),
+					BlockGasCost:   big.NewInt(1),
+				},
+			),
 			wantErr: errBaseFeeNil,
 		},
 		{
 			name:         "nil_block_gas_cost",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee: big.NewInt(1),
-			},
-			headerExtra: &types.HeaderExtra{
-				ExtDataGasUsed: big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(1),
+				},
+			),
 			wantErr: errBlockGasCostNil,
 		},
 		{
 			name:         "nil_extra_data_gas_used",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee: big.NewInt(1),
-			},
-			headerExtra: &types.HeaderExtra{
-				BlockGasCost: big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					BlockGasCost: big.NewInt(1),
+				},
+			),
 			wantErr: errExtDataGasUsedNil,
 		},
 		{
 			name:         "success",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				GasUsed: 123,
-				BaseFee: big.NewInt(456),
-			},
-			headerExtra: &types.HeaderExtra{
-				ExtDataGasUsed: big.NewInt(789),
-				BlockGasCost:   big.NewInt(101112),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					GasUsed: 123,
+					BaseFee: big.NewInt(456),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(789),
+					BlockGasCost:   big.NewInt(101112),
+				},
+			),
 			// totalGasUsed = GasUsed + ExtDataGasUsed
 			// totalRequiredTips = BlockGasCost * BaseFee
 			// estimatedTip = totalRequiredTips / totalGasUsed
@@ -237,7 +245,6 @@ func TestEstimateRequiredTip(t *testing.T) {
 					ApricotPhase4BlockTimestamp: test.ap4Timestamp,
 				},
 			}
-			types.SetHeaderExtra(test.header, test.headerExtra)
 			requiredTip, err := EstimateRequiredTip(config, test.header)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, requiredTip)
