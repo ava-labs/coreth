@@ -431,7 +431,7 @@ func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) erro
 		client.network.AddConnector(ethstatesync.NewConnector(client.dl, p2pClient))
 	}
 
-	if err := client.dl.SnapSync(); err != nil {
+	if err := client.dl.SnapSync(ctx); err != nil {
 		return err
 	}
 	log.Info("Upstream state syncer completed")

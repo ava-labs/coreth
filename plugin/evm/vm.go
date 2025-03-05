@@ -1060,9 +1060,8 @@ func (vm *VM) onBootstrapStarted() error {
 		return err
 	}
 
-	// If we are currently dynamically syncing, don't set the snapshot.
-	if vm.StateSyncClient.AsyncReceive() {
-		log.Debug("It was bootstrap starting!")
+	// If we are dynamically syncing, don't set the snapshot.
+	if vm.config.StateSyncUseUpstream {
 		return vm.fx.Bootstrapping()
 	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
@@ -1071,7 +1070,6 @@ func (vm *VM) onBootstrapStarted() error {
 	}
 	// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
 	// Note calling this function has no effect if snapshots are already initialized.
-	log.Debug("initializing snapshots on bootstrap starting")
 	vm.blockChain.InitializeSnapshots()
 
 	return vm.fx.Bootstrapping()
