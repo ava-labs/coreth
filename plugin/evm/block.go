@@ -201,11 +201,16 @@ func (b *Block) accept() error {
 }
 
 func (b *Block) acceptDuringSync() error {
+	log.Debug("Accepting block during sync", "hash", b.ID(), "height", b.Height())
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
+
+	// if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+	// 	return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	// }
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
@@ -245,10 +250,6 @@ func (b *Block) acceptAfterSync() error {
 	}
 	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
-	}
-
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
 	}
 
 	return nil
@@ -528,6 +529,11 @@ func (b *Block) verifyAfterSync() error {
 	if b.vm.State.IsProcessing(b.id) {
 		return nil
 	}
+
+	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
+	tempAtomicBackend := b.vm.atomicBackend
+	b.vm.atomicBackend = nil
+	defer func() { b.vm.atomicBackend = tempAtomicBackend }()
 
 	return b.vm.blockChain.InsertBlockManual(b.ethBlock, true)
 }
