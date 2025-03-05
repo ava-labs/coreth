@@ -27,38 +27,37 @@
 package pathdb
 
 import (
-	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/metrics"
 )
 
 // nolint: unused
 var (
-	cleanHitMeter   = metrics.NewRegisteredMeter("pathdb/clean/hit", cmetrics.Registry)
-	cleanMissMeter  = metrics.NewRegisteredMeter("pathdb/clean/miss", cmetrics.Registry)
-	cleanReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/read", cmetrics.Registry)
-	cleanWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/write", cmetrics.Registry)
+	cleanHitMeter   = metrics.GetOrRegisterMeter("pathdb/clean/hit", nil)
+	cleanMissMeter  = metrics.GetOrRegisterMeter("pathdb/clean/miss", nil)
+	cleanReadMeter  = metrics.GetOrRegisterMeter("pathdb/clean/read", nil)
+	cleanWriteMeter = metrics.GetOrRegisterMeter("pathdb/clean/write", nil)
 
-	dirtyHitMeter         = metrics.NewRegisteredMeter("pathdb/dirty/hit", cmetrics.Registry)
-	dirtyMissMeter        = metrics.NewRegisteredMeter("pathdb/dirty/miss", cmetrics.Registry)
-	dirtyReadMeter        = metrics.NewRegisteredMeter("pathdb/dirty/read", cmetrics.Registry)
-	dirtyWriteMeter       = metrics.NewRegisteredMeter("pathdb/dirty/write", cmetrics.Registry)
-	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/depth", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015))
+	dirtyHitMeter         = metrics.GetOrRegisterMeter("pathdb/dirty/hit", nil)
+	dirtyMissMeter        = metrics.GetOrRegisterMeter("pathdb/dirty/miss", nil)
+	dirtyReadMeter        = metrics.GetOrRegisterMeter("pathdb/dirty/read", nil)
+	dirtyWriteMeter       = metrics.GetOrRegisterMeter("pathdb/dirty/write", nil)
+	dirtyNodeHitDepthHist = metrics.GetOrRegisterHistogram("pathdb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", cmetrics.Registry)
-	dirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", cmetrics.Registry)
-	diskFalseMeter  = metrics.NewRegisteredMeter("pathdb/disk/false", cmetrics.Registry)
+	cleanFalseMeter = metrics.GetOrRegisterMeter("pathdb/clean/false", nil)
+	dirtyFalseMeter = metrics.GetOrRegisterMeter("pathdb/dirty/false", nil)
+	diskFalseMeter  = metrics.GetOrRegisterMeter("pathdb/disk/false", nil)
 
-	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", cmetrics.Registry)
-	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", cmetrics.Registry)
-	commitBytesMeter = metrics.NewRegisteredMeter("pathdb/commit/bytes", cmetrics.Registry)
+	commitTimeTimer  = metrics.GetOrRegisterTimer("pathdb/commit/time", nil)
+	commitNodesMeter = metrics.GetOrRegisterMeter("pathdb/commit/nodes", nil)
+	commitBytesMeter = metrics.GetOrRegisterMeter("pathdb/commit/bytes", nil)
 
-	gcNodesMeter = metrics.NewRegisteredMeter("pathdb/gc/nodes", cmetrics.Registry)
-	gcBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/bytes", cmetrics.Registry)
+	gcNodesMeter = metrics.GetOrRegisterMeter("pathdb/gc/nodes", nil)
+	gcBytesMeter = metrics.GetOrRegisterMeter("pathdb/gc/bytes", nil)
 
-	diffLayerBytesMeter = metrics.NewRegisteredMeter("pathdb/diff/bytes", cmetrics.Registry)
-	diffLayerNodesMeter = metrics.NewRegisteredMeter("pathdb/diff/nodes", cmetrics.Registry)
+	diffLayerBytesMeter = metrics.GetOrRegisterMeter("pathdb/diff/bytes", nil)
+	diffLayerNodesMeter = metrics.GetOrRegisterMeter("pathdb/diff/nodes", nil)
 
-	historyBuildTimeMeter  = metrics.NewRegisteredTimer("pathdb/history/time", cmetrics.Registry)
-	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", cmetrics.Registry)
-	historyIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", cmetrics.Registry)
+	historyBuildTimeMeter  = metrics.GetOrRegisterTimer("pathdb/history/time", nil)
+	historyDataBytesMeter  = metrics.GetOrRegisterMeter("pathdb/history/bytes/data", nil)
+	historyIndexBytesMeter = metrics.GetOrRegisterMeter("pathdb/history/bytes/index", nil)
 )

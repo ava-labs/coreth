@@ -34,7 +34,6 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
-	cmetrics "github.com/ava-labs/coreth/metrics"
 	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
@@ -631,12 +630,8 @@ func (vm *VM) Initialize(
 
 func (vm *VM) initializeMetrics() error {
 	metrics.Enabled = true
-	corethGatherer := corethprometheus.NewGatherer(cmetrics.Registry)
-	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, corethGatherer); err != nil {
-		return err
-	}
-	libevmGatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
-	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, libevmGatherer); err != nil {
+	gatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
+	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
 	}
 	vm.sdkMetrics = prometheus.NewRegistry()

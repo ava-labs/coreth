@@ -6,7 +6,6 @@ package stats
 import (
 	"time"
 
-	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/metrics"
 )
 
@@ -173,36 +172,36 @@ func NewHandlerStats(enabled bool) HandlerStats {
 	}
 	return &handlerStats{
 		// initialize block request stats
-		blockRequest:               metrics.GetOrRegisterCounter("block_request_count", cmetrics.Registry),
-		missingBlockHash:           metrics.GetOrRegisterCounter("block_request_missing_block_hash", cmetrics.Registry),
-		blocksReturned:             metrics.GetOrRegisterHistogram("block_request_total_blocks", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015)),
-		blockRequestProcessingTime: metrics.GetOrRegisterTimer("block_request_processing_time", cmetrics.Registry),
+		blockRequest:               metrics.GetOrRegisterCounter("block_request_count", nil),
+		missingBlockHash:           metrics.GetOrRegisterCounter("block_request_missing_block_hash", nil),
+		blocksReturned:             metrics.GetOrRegisterHistogram("block_request_total_blocks", nil, metrics.NewExpDecaySample(1028, 0.015)),
+		blockRequestProcessingTime: metrics.GetOrRegisterTimer("block_request_processing_time", nil),
 
 		// initialize code request stats
-		codeRequest:              metrics.GetOrRegisterCounter("code_request_count", cmetrics.Registry),
-		missingCodeHash:          metrics.GetOrRegisterCounter("code_request_missing_code_hash", cmetrics.Registry),
-		tooManyHashesRequested:   metrics.GetOrRegisterCounter("code_request_too_many_hashes", cmetrics.Registry),
-		duplicateHashesRequested: metrics.GetOrRegisterCounter("code_request_duplicate_hashes", cmetrics.Registry),
-		codeReadDuration:         metrics.GetOrRegisterTimer("code_request_read_time", cmetrics.Registry),
-		codeBytesReturned:        metrics.GetOrRegisterHistogram("code_request_bytes_returned", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015)),
+		codeRequest:              metrics.GetOrRegisterCounter("code_request_count", nil),
+		missingCodeHash:          metrics.GetOrRegisterCounter("code_request_missing_code_hash", nil),
+		tooManyHashesRequested:   metrics.GetOrRegisterCounter("code_request_too_many_hashes", nil),
+		duplicateHashesRequested: metrics.GetOrRegisterCounter("code_request_duplicate_hashes", nil),
+		codeReadDuration:         metrics.GetOrRegisterTimer("code_request_read_time", nil),
+		codeBytesReturned:        metrics.GetOrRegisterHistogram("code_request_bytes_returned", nil, metrics.NewExpDecaySample(1028, 0.015)),
 
 		// initialize leafs request stats
-		leafsRequest:               metrics.GetOrRegisterCounter("leafs_request_count", cmetrics.Registry),
-		invalidLeafsRequest:        metrics.GetOrRegisterCounter("leafs_request_invalid", cmetrics.Registry),
-		leafsRequestProcessingTime: metrics.GetOrRegisterTimer("leafs_request_processing_time", cmetrics.Registry),
-		leafsReturned:              metrics.GetOrRegisterHistogram("leafs_request_total_leafs", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015)),
-		leafsReadTime:              metrics.GetOrRegisterTimer("leafs_request_read_time", cmetrics.Registry),
-		snapshotReadTime:           metrics.GetOrRegisterTimer("leafs_request_snapshot_read_time", cmetrics.Registry),
-		generateRangeProofTime:     metrics.GetOrRegisterTimer("leafs_request_generate_range_proof_time", cmetrics.Registry),
-		proofValsReturned:          metrics.GetOrRegisterHistogram("leafs_request_proof_vals_returned", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015)),
-		missingRoot:                metrics.GetOrRegisterCounter("leafs_request_missing_root", cmetrics.Registry),
-		trieError:                  metrics.GetOrRegisterCounter("leafs_request_trie_error", cmetrics.Registry),
-		proofError:                 metrics.GetOrRegisterCounter("leafs_request_proof_error", cmetrics.Registry),
-		snapshotReadError:          metrics.GetOrRegisterCounter("leafs_request_snapshot_read_error", cmetrics.Registry),
-		snapshotReadAttempt:        metrics.GetOrRegisterCounter("leafs_request_snapshot_read_attempt", cmetrics.Registry),
-		snapshotReadSuccess:        metrics.GetOrRegisterCounter("leafs_request_snapshot_read_success", cmetrics.Registry),
-		snapshotSegmentValid:       metrics.GetOrRegisterCounter("leafs_request_snapshot_segment_valid", cmetrics.Registry),
-		snapshotSegmentInvalid:     metrics.GetOrRegisterCounter("leafs_request_snapshot_segment_invalid", cmetrics.Registry),
+		leafsRequest:               metrics.GetOrRegisterCounter("leafs_request_count", nil),
+		invalidLeafsRequest:        metrics.GetOrRegisterCounter("leafs_request_invalid", nil),
+		leafsRequestProcessingTime: metrics.GetOrRegisterTimer("leafs_request_processing_time", nil),
+		leafsReturned:              metrics.GetOrRegisterHistogram("leafs_request_total_leafs", nil, metrics.NewExpDecaySample(1028, 0.015)),
+		leafsReadTime:              metrics.GetOrRegisterTimer("leafs_request_read_time", nil),
+		snapshotReadTime:           metrics.GetOrRegisterTimer("leafs_request_snapshot_read_time", nil),
+		generateRangeProofTime:     metrics.GetOrRegisterTimer("leafs_request_generate_range_proof_time", nil),
+		proofValsReturned:          metrics.GetOrRegisterHistogram("leafs_request_proof_vals_returned", nil, metrics.NewExpDecaySample(1028, 0.015)),
+		missingRoot:                metrics.GetOrRegisterCounter("leafs_request_missing_root", nil),
+		trieError:                  metrics.GetOrRegisterCounter("leafs_request_trie_error", nil),
+		proofError:                 metrics.GetOrRegisterCounter("leafs_request_proof_error", nil),
+		snapshotReadError:          metrics.GetOrRegisterCounter("leafs_request_snapshot_read_error", nil),
+		snapshotReadAttempt:        metrics.GetOrRegisterCounter("leafs_request_snapshot_read_attempt", nil),
+		snapshotReadSuccess:        metrics.GetOrRegisterCounter("leafs_request_snapshot_read_success", nil),
+		snapshotSegmentValid:       metrics.GetOrRegisterCounter("leafs_request_snapshot_segment_valid", nil),
+		snapshotSegmentInvalid:     metrics.GetOrRegisterCounter("leafs_request_snapshot_segment_invalid", nil),
 	}
 }
 

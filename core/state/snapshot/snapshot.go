@@ -35,7 +35,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/rawdb"
-	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/common"
 	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/ethdb"
@@ -57,48 +56,48 @@ const (
 )
 
 var (
-	snapshotCleanAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/account/hit", cmetrics.Registry)
-	snapshotCleanAccountMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/miss", cmetrics.Registry)
-	snapshotCleanAccountInexMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/inex", cmetrics.Registry)
-	snapshotCleanAccountReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/read", cmetrics.Registry)
-	snapshotCleanAccountWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/account/write", cmetrics.Registry)
+	snapshotCleanAccountHitMeter   = metrics.GetOrRegisterMeter("state/snapshot/clean/account/hit", nil)
+	snapshotCleanAccountMissMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/account/miss", nil)
+	snapshotCleanAccountInexMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/account/inex", nil)
+	snapshotCleanAccountReadMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/account/read", nil)
+	snapshotCleanAccountWriteMeter = metrics.GetOrRegisterMeter("state/snapshot/clean/account/write", nil)
 
-	snapshotCleanStorageHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/storage/hit", cmetrics.Registry)
-	snapshotCleanStorageMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/miss", cmetrics.Registry)
-	snapshotCleanStorageInexMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/inex", cmetrics.Registry)
-	snapshotCleanStorageReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/read", cmetrics.Registry)
-	snapshotCleanStorageWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/storage/write", cmetrics.Registry)
+	snapshotCleanStorageHitMeter   = metrics.GetOrRegisterMeter("state/snapshot/clean/storage/hit", nil)
+	snapshotCleanStorageMissMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/storage/miss", nil)
+	snapshotCleanStorageInexMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/storage/inex", nil)
+	snapshotCleanStorageReadMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/storage/read", nil)
+	snapshotCleanStorageWriteMeter = metrics.GetOrRegisterMeter("state/snapshot/clean/storage/write", nil)
 
-	snapshotDirtyAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/dirty/account/hit", cmetrics.Registry)
-	snapshotDirtyAccountMissMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/miss", cmetrics.Registry)
-	snapshotDirtyAccountInexMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/inex", cmetrics.Registry)
-	snapshotDirtyAccountReadMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/read", cmetrics.Registry)
-	snapshotDirtyAccountWriteMeter = metrics.NewRegisteredMeter("state/snapshot/dirty/account/write", cmetrics.Registry)
+	snapshotDirtyAccountHitMeter   = metrics.GetOrRegisterMeter("state/snapshot/dirty/account/hit", nil)
+	snapshotDirtyAccountMissMeter  = metrics.GetOrRegisterMeter("state/snapshot/dirty/account/miss", nil)
+	snapshotDirtyAccountInexMeter  = metrics.GetOrRegisterMeter("state/snapshot/dirty/account/inex", nil)
+	snapshotDirtyAccountReadMeter  = metrics.GetOrRegisterMeter("state/snapshot/dirty/account/read", nil)
+	snapshotDirtyAccountWriteMeter = metrics.GetOrRegisterMeter("state/snapshot/dirty/account/write", nil)
 
-	snapshotDirtyStorageHitMeter   = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/hit", cmetrics.Registry)
-	snapshotDirtyStorageMissMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/miss", cmetrics.Registry)
-	snapshotDirtyStorageInexMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/inex", cmetrics.Registry)
-	snapshotDirtyStorageReadMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/read", cmetrics.Registry)
-	snapshotDirtyStorageWriteMeter = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/write", cmetrics.Registry)
+	snapshotDirtyStorageHitMeter   = metrics.GetOrRegisterMeter("state/snapshot/dirty/storage/hit", nil)
+	snapshotDirtyStorageMissMeter  = metrics.GetOrRegisterMeter("state/snapshot/dirty/storage/miss", nil)
+	snapshotDirtyStorageInexMeter  = metrics.GetOrRegisterMeter("state/snapshot/dirty/storage/inex", nil)
+	snapshotDirtyStorageReadMeter  = metrics.GetOrRegisterMeter("state/snapshot/dirty/storage/read", nil)
+	snapshotDirtyStorageWriteMeter = metrics.GetOrRegisterMeter("state/snapshot/dirty/storage/write", nil)
 
-	snapshotDirtyAccountHitDepthHist = metrics.NewRegisteredHistogram("state/snapshot/dirty/account/hit/depth", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015))
-	snapshotDirtyStorageHitDepthHist = metrics.NewRegisteredHistogram("state/snapshot/dirty/storage/hit/depth", cmetrics.Registry, metrics.NewExpDecaySample(1028, 0.015))
+	snapshotDirtyAccountHitDepthHist = metrics.GetOrRegisterHistogram("state/snapshot/dirty/account/hit/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+	snapshotDirtyStorageHitDepthHist = metrics.GetOrRegisterHistogram("state/snapshot/dirty/storage/hit/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	snapshotFlushAccountItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/account/item", cmetrics.Registry)
-	snapshotFlushAccountSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/account/size", cmetrics.Registry)
-	snapshotFlushStorageItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/item", cmetrics.Registry)
-	snapshotFlushStorageSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/size", cmetrics.Registry)
+	snapshotFlushAccountItemMeter = metrics.GetOrRegisterMeter("state/snapshot/flush/account/item", nil)
+	snapshotFlushAccountSizeMeter = metrics.GetOrRegisterMeter("state/snapshot/flush/account/size", nil)
+	snapshotFlushStorageItemMeter = metrics.GetOrRegisterMeter("state/snapshot/flush/storage/item", nil)
+	snapshotFlushStorageSizeMeter = metrics.GetOrRegisterMeter("state/snapshot/flush/storage/size", nil)
 
-	snapshotBloomIndexTimer = metrics.NewRegisteredResettingTimer("state/snapshot/bloom/index", cmetrics.Registry)
-	snapshotBloomErrorGauge = metrics.NewRegisteredGaugeFloat64("state/snapshot/bloom/error", cmetrics.Registry)
+	snapshotBloomIndexTimer = metrics.GetOrRegisterResettingTimer("state/snapshot/bloom/index", nil)
+	snapshotBloomErrorGauge = metrics.GetOrRegisterGaugeFloat64("state/snapshot/bloom/error", nil)
 
-	snapshotBloomAccountTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/account/truehit", cmetrics.Registry)
-	snapshotBloomAccountFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/account/falsehit", cmetrics.Registry)
-	snapshotBloomAccountMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/account/miss", cmetrics.Registry)
+	snapshotBloomAccountTrueHitMeter  = metrics.GetOrRegisterMeter("state/snapshot/bloom/account/truehit", nil)
+	snapshotBloomAccountFalseHitMeter = metrics.GetOrRegisterMeter("state/snapshot/bloom/account/falsehit", nil)
+	snapshotBloomAccountMissMeter     = metrics.GetOrRegisterMeter("state/snapshot/bloom/account/miss", nil)
 
-	snapshotBloomStorageTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/truehit", cmetrics.Registry)
-	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", cmetrics.Registry)
-	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", cmetrics.Registry)
+	snapshotBloomStorageTrueHitMeter  = metrics.GetOrRegisterMeter("state/snapshot/bloom/storage/truehit", nil)
+	snapshotBloomStorageFalseHitMeter = metrics.GetOrRegisterMeter("state/snapshot/bloom/storage/falsehit", nil)
+	snapshotBloomStorageMissMeter     = metrics.GetOrRegisterMeter("state/snapshot/bloom/storage/miss", nil)
 
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough

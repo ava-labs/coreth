@@ -15,7 +15,6 @@ import (
 
 	"github.com/ava-labs/libevm/log"
 
-	cmetrics "github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/libevm/metrics"
 )
 
@@ -56,12 +55,12 @@ type peerTracker struct {
 func NewPeerTracker() *peerTracker {
 	return &peerTracker{
 		peers:                  make(map[ids.NodeID]*peerInfo),
-		numTrackedPeers:        metrics.GetOrRegisterGauge("net_tracked_peers", cmetrics.Registry),
+		numTrackedPeers:        metrics.GetOrRegisterGauge("net_tracked_peers", nil),
 		trackedPeers:           make(set.Set[ids.NodeID]),
-		numResponsivePeers:     metrics.GetOrRegisterGauge("net_responsive_peers", cmetrics.Registry),
+		numResponsivePeers:     metrics.GetOrRegisterGauge("net_responsive_peers", nil),
 		responsivePeers:        make(set.Set[ids.NodeID]),
 		bandwidthHeap:          utils_math.NewMaxAveragerHeap(),
-		averageBandwidthMetric: metrics.GetOrRegisterGaugeFloat64("net_average_bandwidth", cmetrics.Registry),
+		averageBandwidthMetric: metrics.GetOrRegisterGaugeFloat64("net_average_bandwidth", nil),
 		averageBandwidth:       utils_math.NewAverager(0, bandwidthHalflife, time.Now()),
 	}
 }
