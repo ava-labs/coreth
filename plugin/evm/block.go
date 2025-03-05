@@ -143,6 +143,7 @@ func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 func (b *Block) Accept(context.Context) error {
 	if b.vm.StateSyncClient.AsyncReceive() {
 		if err := b.acceptDuringSync(); err != nil {
+			log.Warn("Failed to accept block during sync", "block", b.ID(), "height", b.Height(), "err", err)
 			return err
 		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.AcceptSyncBlockRequest)
@@ -232,7 +233,7 @@ func (b *Block) acceptDuringSync() error {
 
 func (b *Block) acceptAfterSync() error {
 	vm := b.vm
-	log.Debug("Accepting block after sync", b.ID(), "height", b.Height())
+	log.Debug("Accepting block after sync", "hash", b.ID(), "height", b.Height())
 
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
@@ -377,6 +378,7 @@ func (b *Block) Verify(context.Context) error {
 	// If currently dynamically syncing, postpone non-atomic operations
 	if b.vm.StateSyncClient.AsyncReceive() {
 		if err := b.verifyDuringSync(); err != nil {
+			log.Warn("Failed to verify block during sync", "block", b.ID(), "height", b.Height(), "err", err)
 			return err
 		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
@@ -432,6 +434,7 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 	// If currently dynamically syncing, postpone non-atomic operations
 	if b.vm.StateSyncClient.AsyncReceive() {
 		if err := b.verifyDuringSync(); err != nil {
+			log.Warn("Failed to verify block during sync", "block", b.ID(), "height", b.Height(), "err", err)
 			return err
 		}
 		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)

@@ -142,6 +142,7 @@ func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 func (d *Downloader) flushQueue(final bool) error {
 	defer func() { d.bufferLen = 0 }()
 	// During sync, can ignore queue
+	log.Debug("Flushing queue", "final", final, "bufferLen", d.bufferLen)
 	if !final {
 		return nil
 	}
