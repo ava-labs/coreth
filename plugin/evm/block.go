@@ -207,9 +207,9 @@ func (b *Block) acceptDuringSync() error {
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
 
-	// if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-	// 	return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
-	// }
+	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
