@@ -30,10 +30,8 @@ import (
 	"github.com/ava-labs/libevm/metrics"
 
 	// Force libevm metrics of the same name to be registered first.
-	ethblobpool "github.com/ava-labs/libevm/core/txpool/blobpool"
+	_ "github.com/ava-labs/libevm/core/txpool/blobpool"
 )
-
-type _ = ethblobpool.BlobPool // Avoid unused import being removed.
 
 var (
 	// datacapGauge tracks the user's configured capacity for the blob pool. It

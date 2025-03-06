@@ -33,10 +33,8 @@ import (
 	"github.com/ava-labs/libevm/metrics"
 
 	// Force libevm metrics of the same name to be registered first.
-	ethrpc "github.com/ava-labs/libevm/rpc"
+	_ "github.com/ava-labs/libevm/rpc"
 )
-
-type _ = ethrpc.Client // Avoid unused import being removed.
 
 var (
 	rpcRequestGauge        = metrics.GetOrRegisterGauge("rpc/requests", nil)

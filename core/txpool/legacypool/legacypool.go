@@ -51,10 +51,8 @@ import (
 	"github.com/holiman/uint256"
 
 	// Force libevm metrics of the same name to be registered first.
-	ethlegacypool "github.com/ava-labs/libevm/core/txpool/legacypool"
+	_ "github.com/ava-labs/libevm/core/txpool/legacypool"
 )
-
-type _ = ethlegacypool.LegacyPool // Avoid unused import being removed.
 
 const (
 	// txSlotSize is used to calculate how many data slots a single transaction
