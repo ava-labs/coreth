@@ -46,7 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/params"
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -449,7 +449,7 @@ func NewBlockChain(
 
 	// if txlookup limit is 0 (uindexing disabled), we don't need to repair the tx index tail.
 	if bc.cacheConfig.TransactionHistory != 0 {
-		latestStateSynced := crawdb.GetLatestSyncPerformed(bc.db)
+		latestStateSynced := customrawdb.GetLatestSyncPerformed(bc.db)
 		bc.repairTxIndexTail(latestStateSynced)
 	}
 
@@ -482,7 +482,7 @@ func (bc *BlockChain) batchBlockAcceptedIndices(batch ethdb.Batch, b *types.Bloc
 	if !bc.cacheConfig.SkipTxIndexing {
 		rawdb.WriteTxLookupEntriesByBlock(batch, b)
 	}
-	if err := crawdb.WriteAcceptorTip(batch, b.Hash()); err != nil {
+	if err := customrawdb.WriteAcceptorTip(batch, b.Hash()); err != nil {
 		return fmt.Errorf("%w: failed to write acceptor tip key", err)
 	}
 	return nil
@@ -1746,7 +1746,7 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 // state that reprocessing will start from.
 func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error {
 	origin := current.NumberU64()
-	acceptorTip, err := crawdb.ReadAcceptorTip(bc.db)
+	acceptorTip, err := customrawdb.ReadAcceptorTip(bc.db)
 	if err != nil {
 		return fmt.Errorf("%w: unable to get Acceptor tip", err)
 	}
@@ -1877,9 +1877,9 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 func (bc *BlockChain) protectTrieIndex() error {
 	if !bc.cacheConfig.Pruning {
-		return crawdb.WritePruningDisabled(bc.db)
+		return customrawdb.WritePruningDisabled(bc.db)
 	}
-	pruningDisabled, err := crawdb.HasPruningDisabled(bc.db)
+	pruningDisabled, err := customrawdb.HasPruningDisabled(bc.db)
 	if err != nil {
 		return fmt.Errorf("failed to check if the chain has been run with pruning disabled: %w", err)
 	}
@@ -1964,7 +1964,7 @@ func (bc *BlockChain) populateMissingTries() error {
 	// Write marker to DB to indicate populate missing tries finished successfully.
 	// Note: writing the marker here means that we do allow consecutive runs of re-populating
 	// missing tries if it does not finish during the prior run.
-	if err := crawdb.WritePopulateMissingTries(bc.db); err != nil {
+	if err := customrawdb.WritePopulateMissingTries(bc.db); err != nil {
 		return fmt.Errorf("failed to write offline pruning success marker: %w", err)
 	}
 
@@ -2062,9 +2062,9 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	}
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
-	crawdb.WriteSnapshotBlockHash(batch, block.Hash())
+	customrawdb.WriteSnapshotBlockHash(batch, block.Hash())
 	rawdb.WriteSnapshotRoot(batch, block.Root())
-	if err := crawdb.WriteSyncPerformed(batch, block.NumberU64()); err != nil {
+	if err := customrawdb.WriteSyncPerformed(batch, block.NumberU64()); err != nil {
 		return err
 	}
 

@@ -16,7 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -240,7 +240,7 @@ func TestCorruptSnapshots(t *testing.T) {
 	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 		// Delete the snapshot block hash and state root to ensure that if we die in between writing a snapshot
 		// diff layer to disk at any point, we can still recover on restart.
-		crawdb.DeleteSnapshotBlockHash(db)
+		customrawdb.DeleteSnapshotBlockHash(db)
 		rawdb.DeleteSnapshotRoot(db)
 
 		return createBlockChain(db, pruningConfig, gspec, lastAcceptedHash)

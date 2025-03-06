@@ -44,7 +44,7 @@ import (
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -98,7 +98,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 	switch blockNr {
 	case rpc.FinalizedBlockNumber:
 		var err error
-		hash, err = crawdb.ReadAcceptorTip(b.db)
+		hash, err = customrawdb.ReadAcceptorTip(b.db)
 		if err != nil {
 			return nil, err
 		}
