@@ -15,8 +15,8 @@ type verifierStats struct {
 
 func newVerifierStats() *verifierStats {
 	return &verifierStats{
-		messageParseFail:    metrics.GetOrRegisterCounter("warp_backend_message_parse_fail", nil),
-		blockValidationFail: metrics.GetOrRegisterCounter("warp_backend_block_validation_fail", nil),
+		messageParseFail:    metrics.NewRegisteredCounter("warp_backend_message_parse_fail", nil),
+		blockValidationFail: metrics.NewRegisteredCounter("warp_backend_block_validation_fail", nil),
 	}
 }
 
@@ -26,4 +26,9 @@ func (h *verifierStats) IncBlockValidationFail() {
 
 func (h *verifierStats) IncMessageParseFail() {
 	h.messageParseFail.Inc(1)
+}
+
+func (h *verifierStats) clear() {
+	h.messageParseFail.Clear()
+	h.blockValidationFail.Clear()
 }

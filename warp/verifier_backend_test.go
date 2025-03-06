@@ -223,6 +223,8 @@ func TestBlockSignatures(t *testing.T) {
 					nil,
 				)
 				require.NoError(t, err)
+				t.Cleanup(warpBackend.(*backend).stats.clear)
+
 				handler := acp118.NewCachedHandler(sigCache, warpBackend, warpSigner)
 
 				requestBytes, expectedResponse := test.setup()

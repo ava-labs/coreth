@@ -34,14 +34,14 @@ import (
 )
 
 var (
-	rpcRequestGauge        = metrics.GetOrRegisterGauge("rpc/requests", nil)
-	successfulRequestGauge = metrics.GetOrRegisterGauge("rpc/success", nil)
-	failedRequestGauge     = metrics.GetOrRegisterGauge("rpc/failure", nil)
+	rpcRequestGauge        = metrics.NewRegisteredGauge("rpc/requests", nil)
+	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/success", nil)
+	failedRequestGauge     = metrics.NewRegisteredGauge("rpc/failure", nil)
 
 	// serveTimeHistName is the prefix of the per-request serving time histograms.
 	serveTimeHistName = "rpc/duration"
 
-	rpcServingTimer = metrics.GetOrRegisterTimer("rpc/duration/all", nil)
+	rpcServingTimer = metrics.NewRegisteredTimer("rpc/duration/all", nil)
 )
 
 // updateServeTimeHistogram tracks the serving time of a remote RPC call.
