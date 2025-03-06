@@ -12,7 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -105,16 +105,16 @@ func (c *codeSyncer) start(ctx context.Context) {
 // Clean out any codeToFetch markers from the database that are no longer needed and
 // add any outstanding markers to the queue.
 func (c *codeSyncer) addCodeToFetchFromDBToQueue() error {
-	it := crawdb.NewCodeToFetchIterator(c.DB)
+	it := customrawdb.NewCodeToFetchIterator(c.DB)
 	defer it.Release()
 
 	batch := c.DB.NewBatch()
 	codeHashes := make([]common.Hash, 0)
 	for it.Next() {
-		codeHash := common.BytesToHash(it.Key()[len(crawdb.CodeToFetchPrefix):])
+		codeHash := common.BytesToHash(it.Key()[len(customrawdb.CodeToFetchPrefix):])
 		// If we already have the codeHash, delete the marker from the database and continue
 		if rawdb.HasCode(c.DB, codeHash) {
-			crawdb.DeleteCodeToFetch(batch, codeHash)
+			customrawdb.DeleteCodeToFetch(batch, codeHash)
 			// Write the batch to disk if it has reached the ideal batch size.
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
@@ -187,7 +187,7 @@ func (c *codeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 	c.lock.Lock()
 	batch := c.DB.NewBatch()
 	for i, codeHash := range codeHashes {
-		crawdb.DeleteCodeToFetch(batch, codeHash)
+		customrawdb.DeleteCodeToFetch(batch, codeHash)
 		c.outstandingCodeHashes.Remove(ids.ID(codeHash))
 		rawdb.WriteCode(batch, codeHash, codeByteSlices[i])
 	}
@@ -212,7 +212,7 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 		if !c.outstandingCodeHashes.Contains(ids.ID(codeHash)) && !rawdb.HasCode(c.DB, codeHash) {
 			selectedCodeHashes = append(selectedCodeHashes, codeHash)
 			c.outstandingCodeHashes.Add(ids.ID(codeHash))
-			crawdb.AddCodeToFetch(batch, codeHash)
+			customrawdb.AddCodeToFetch(batch, codeHash)
 		}
 	}
 	c.lock.Unlock()

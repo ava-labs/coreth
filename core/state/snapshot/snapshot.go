@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	ethsnapshot "github.com/ava-labs/libevm/core/state/snapshot"
@@ -637,7 +637,7 @@ func diffToDisk(bottom *diffLayer) (*diskLayer, bool, error) {
 	base.abortGeneration()
 
 	// Put the deletion in the batch writer, flush all updates in the final step.
-	crawdb.DeleteSnapshotBlockHash(batch)
+	customrawdb.DeleteSnapshotBlockHash(batch)
 	rawdb.DeleteSnapshotRoot(batch)
 
 	// Mark the original base as stale as we're going to create a new wrapper
@@ -729,7 +729,7 @@ func diffToDisk(bottom *diffLayer) (*diskLayer, bool, error) {
 		}
 	}
 	// Update the snapshot block marker and write any remainder data
-	crawdb.WriteSnapshotBlockHash(batch, bottom.blockHash)
+	customrawdb.WriteSnapshotBlockHash(batch, bottom.blockHash)
 	rawdb.WriteSnapshotRoot(batch, bottom.root)
 
 	// Write out the generator progress marker and report

@@ -39,7 +39,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -274,7 +274,7 @@ func TestFilters(t *testing.T) {
 
 	// Set block 998 as Finalized (-3)
 	// bc.SetFinalized(chain[998].Header())
-	err = crawdb.WriteAcceptorTip(db, chain[998].Hash())
+	err = customrawdb.WriteAcceptorTip(db, chain[998].Hash())
 	require.NoError(t, err)
 
 	for i, tc := range []struct {
