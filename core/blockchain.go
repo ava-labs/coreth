@@ -58,6 +58,10 @@ import (
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
+
+	// Ensures that libevm metrics are already registered so `GetOrRegister*("foo", nil)`
+	// here results in the same metric if they use `New*("foo", nil)`.
+	_ "github.com/ava-labs/libevm/core"
 )
 
 var (
@@ -75,28 +79,28 @@ var (
 
 	triedbCommitTimer = metrics.GetOrRegisterOrOverrideCounter("chain/triedb/commits", nil)
 
-	blockInsertTimer            = metrics.NewRegisteredCounter("chain/block/inserts", nil)
-	blockInsertCount            = metrics.NewRegisteredCounter("chain/block/inserts/count", nil)
-	blockContentValidationTimer = metrics.NewRegisteredCounter("chain/block/validations/content", nil)
-	blockStateInitTimer         = metrics.NewRegisteredCounter("chain/block/inits/state", nil)
-	blockExecutionTimer         = metrics.NewRegisteredCounter("chain/block/executions", nil)
-	blockTrieOpsTimer           = metrics.NewRegisteredCounter("chain/block/trie", nil)
-	blockValidationTimer        = metrics.NewRegisteredCounter("chain/block/validations/state", nil)
-	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", nil)
+	blockInsertTimer            = metrics.GetOrRegisterCounter("chain/block/inserts", nil)
+	blockInsertCount            = metrics.GetOrRegisterCounter("chain/block/inserts/count", nil)
+	blockContentValidationTimer = metrics.GetOrRegisterCounter("chain/block/validations/content", nil)
+	blockStateInitTimer         = metrics.GetOrRegisterCounter("chain/block/inits/state", nil)
+	blockExecutionTimer         = metrics.GetOrRegisterCounter("chain/block/executions", nil)
+	blockTrieOpsTimer           = metrics.GetOrRegisterCounter("chain/block/trie", nil)
+	blockValidationTimer        = metrics.GetOrRegisterCounter("chain/block/validations/state", nil)
+	blockWriteTimer             = metrics.GetOrRegisterCounter("chain/block/writes", nil)
 
-	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", nil)
-	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", nil)
-	acceptorWorkCount            = metrics.NewRegisteredCounter("chain/acceptor/work/count", nil)
-	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("chain/block/gas/used/processed", nil)
-	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("chain/block/gas/used/accepted", nil)
-	badBlockCounter              = metrics.NewRegisteredCounter("chain/block/bad/count", nil)
+	acceptorQueueGauge           = metrics.GetOrRegisterGauge("chain/acceptor/queue/size", nil)
+	acceptorWorkTimer            = metrics.GetOrRegisterCounter("chain/acceptor/work", nil)
+	acceptorWorkCount            = metrics.GetOrRegisterCounter("chain/acceptor/work/count", nil)
+	processedBlockGasUsedCounter = metrics.GetOrRegisterCounter("chain/block/gas/used/processed", nil)
+	acceptedBlockGasUsedCounter  = metrics.GetOrRegisterCounter("chain/block/gas/used/accepted", nil)
+	badBlockCounter              = metrics.GetOrRegisterCounter("chain/block/bad/count", nil)
 
-	txUnindexTimer      = metrics.NewRegisteredCounter("chain/txs/unindex", nil)
-	acceptedTxsCounter  = metrics.NewRegisteredCounter("chain/txs/accepted", nil)
-	processedTxsCounter = metrics.NewRegisteredCounter("chain/txs/processed", nil)
+	txUnindexTimer      = metrics.GetOrRegisterCounter("chain/txs/unindex", nil)
+	acceptedTxsCounter  = metrics.GetOrRegisterCounter("chain/txs/accepted", nil)
+	processedTxsCounter = metrics.GetOrRegisterCounter("chain/txs/processed", nil)
 
-	acceptedLogsCounter  = metrics.NewRegisteredCounter("chain/logs/accepted", nil)
-	processedLogsCounter = metrics.NewRegisteredCounter("chain/logs/processed", nil)
+	acceptedLogsCounter  = metrics.GetOrRegisterCounter("chain/logs/accepted", nil)
+	processedLogsCounter = metrics.GetOrRegisterCounter("chain/logs/processed", nil)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
