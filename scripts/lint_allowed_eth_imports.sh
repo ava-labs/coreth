@@ -10,8 +10,8 @@ set -o pipefail
 # 3. Sort the unique results.
 # 4. Print out the difference between the search results and the list of specified allowed package imports from libevm.
 libevm_regexp='"github.com/ava-labs/libevm/.*"'
-extra_imports=$(find . -type f \( -name "*.go" \) ! -path "./core/main_test.go" ! -name "gen_*.go" |
-  xargs grep "${libevm_regexp}" |
+extra_imports=$(find . -type f \( -name "*.go" \) ! -path "./core/main_test.go" ! -name "gen_*.go" -print0 |
+  xargs -0 grep "${libevm_regexp}" |
   grep -v 'eth\w\+ "' |
   grep -v '_ "' |
   grep -o "${libevm_regexp}" |
