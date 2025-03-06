@@ -26,7 +26,12 @@
 
 package pathdb
 
-import "github.com/ava-labs/libevm/metrics"
+import (
+	"github.com/ava-labs/libevm/metrics"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/triedb/pathdb"
+)
 
 // nolint: unused
 var (

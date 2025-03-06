@@ -26,7 +26,12 @@
 
 package blobpool
 
-import "github.com/ava-labs/libevm/metrics"
+import (
+	"github.com/ava-labs/libevm/metrics"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/core/txpool/blobpool"
+)
 
 var (
 	// datacapGauge tracks the user's configured capacity for the blob pool. It

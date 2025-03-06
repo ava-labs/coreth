@@ -31,6 +31,9 @@ import (
 	"time"
 
 	"github.com/ava-labs/libevm/metrics"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/rpc"
 )
 
 var (
