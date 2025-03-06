@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp/warptest"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -102,6 +103,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 					sigCache = &cache.Empty[ids.ID, []byte]{}
 				}
 				warpBackend, err := NewBackend(snowCtx.NetworkID, snowCtx.ChainID, warpSigner, warptest.EmptyBlockClient, database, sigCache, [][]byte{offchainMessage.Bytes()})
+				t.Cleanup(unregisterVerifierStats)
 				require.NoError(t, err)
 				handler := acp118.NewCachedHandler(sigCache, warpBackend, warpSigner)
 
@@ -222,6 +224,7 @@ func TestBlockSignatures(t *testing.T) {
 					sigCache,
 					nil,
 				)
+				t.Cleanup(unregisterVerifierStats)
 				require.NoError(t, err)
 				handler := acp118.NewCachedHandler(sigCache, warpBackend, warpSigner)
 
@@ -257,4 +260,9 @@ func TestBlockSignatures(t *testing.T) {
 			})
 		}
 	}
+}
+
+func unregisterVerifierStats() {
+	metrics.Unregister("warp_backend_message_parse_fail")
+	metrics.Unregister("warp_backend_block_validation_fail")
 }

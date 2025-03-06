@@ -107,6 +107,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			handler := NewSignatureRequestHandler(backend, message.Codec)
+			t.Cleanup(handler.stats.clear)
 
 			request, expectedResponse := test.setup()
 			responseBytes, err := handler.OnMessageSignatureRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -196,6 +197,7 @@ func TestBlockSignatureHandler(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			handler := NewSignatureRequestHandler(backend, message.Codec)
+			t.Cleanup(handler.stats.clear)
 
 			request, expectedResponse := test.setup()
 			responseBytes, err := handler.OnBlockSignatureRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -215,4 +217,15 @@ func TestBlockSignatureHandler(t *testing.T) {
 			require.Equal(t, expectedResponse, response.Signature[:])
 		})
 	}
+}
+
+func (h *handlerStats) clear() {
+	h.messageSignatureRequest.Clear()
+	h.messageSignatureHit.Clear()
+	h.messageSignatureMiss.Clear()
+	h.messageSignatureRequestDuration.Update(0)
+	h.blockSignatureRequest.Clear()
+	h.blockSignatureHit.Clear()
+	h.blockSignatureMiss.Clear()
+	h.blockSignatureRequestDuration.Update(0)
 }
