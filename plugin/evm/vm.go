@@ -603,7 +603,7 @@ func (vm *VM) Initialize(
 	vm.atomicBackend, err = NewAtomicBackend(
 		vm.versiondb, vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
-		vm.config.CommitInterval, vm.config.StateSyncUseUpstream,
+		vm.config.CommitInterval,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)

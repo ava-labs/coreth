@@ -131,7 +131,6 @@ type atomicTrie struct {
 func newAtomicTrie(
 	atomicTrieDB avalanchedatabase.Database, metadataDB avalanchedatabase.Database,
 	codec codec.Manager, lastAcceptedHeight uint64, commitHeightInterval uint64,
-	useUpstream bool,
 ) (*atomicTrie, error) {
 	root, height, err := lastCommittedRootIfExists(metadataDB)
 	if err != nil {
@@ -143,7 +142,7 @@ func newAtomicTrie(
 	}
 	// If the last committed height is above the last accepted height, then we fall back to
 	// the last commit below the last accepted height.
-	if !useUpstream && height > lastAcceptedHeight {
+	if height > lastAcceptedHeight {
 		height = nearestCommitHeight(lastAcceptedHeight, commitHeightInterval)
 		root, err = getRoot(metadataDB, height)
 		if err != nil {
