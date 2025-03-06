@@ -30,8 +30,10 @@ import (
 	"github.com/ava-labs/libevm/metrics"
 
 	// Force libevm metrics of the same name to be registered first.
-	_ "github.com/ava-labs/libevm/triedb/pathdb"
+	ethpathdb "github.com/ava-labs/libevm/triedb/pathdb"
 )
+
+type _ = ethpathdb.Database // Avoid unused import being removed.
 
 // nolint: unused
 var (

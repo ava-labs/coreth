@@ -48,8 +48,10 @@ import (
 	"github.com/ava-labs/libevm/triedb/database"
 
 	// Force libevm metrics of the same name to be registered first.
-	_ "github.com/ava-labs/libevm/triedb/hashdb"
+	ethhashdb "github.com/ava-labs/libevm/triedb/hashdb"
 )
+
+type _ = ethhashdb.Database // Avoid unused import being removed.
 
 const (
 	cacheStatsUpdateFrequency = 1000 // update trie cache stats once per 1000 ops

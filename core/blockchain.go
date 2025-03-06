@@ -60,8 +60,10 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 
 	// Force libevm metrics of the same name to be registered first.
-	_ "github.com/ava-labs/libevm/core"
+	ethcore "github.com/ava-labs/libevm/core"
 )
+
+type _ = ethcore.BlockChain // Avoid unused import being removed.
 
 var (
 	accountReadTimer         = metrics.GetOrRegisterCounter("chain/account/reads", nil)
