@@ -66,19 +66,19 @@ import (
 type _ = ethcore.BlockChain // Avoid unused import being removed.
 
 var (
-	accountReadTimer         = metrics.GetOrRegisterCounter("chain/account/reads", nil)
-	accountHashTimer         = metrics.GetOrRegisterCounter("chain/account/hashes", nil)
-	accountUpdateTimer       = metrics.GetOrRegisterCounter("chain/account/updates", nil)
-	accountCommitTimer       = metrics.GetOrRegisterCounter("chain/account/commits", nil)
-	storageReadTimer         = metrics.GetOrRegisterCounter("chain/storage/reads", nil)
-	storageHashTimer         = metrics.GetOrRegisterCounter("chain/storage/hashes", nil)
-	storageUpdateTimer       = metrics.GetOrRegisterCounter("chain/storage/updates", nil)
-	storageCommitTimer       = metrics.GetOrRegisterCounter("chain/storage/commits", nil)
-	snapshotAccountReadTimer = metrics.GetOrRegisterCounter("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.GetOrRegisterCounter("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.GetOrRegisterCounter("chain/snapshot/commits", nil)
+	accountReadTimer         = getOrOverrideAsRegisteredCounter("chain/account/reads", nil)
+	accountHashTimer         = getOrOverrideAsRegisteredCounter("chain/account/hashes", nil)
+	accountUpdateTimer       = getOrOverrideAsRegisteredCounter("chain/account/updates", nil)
+	accountCommitTimer       = getOrOverrideAsRegisteredCounter("chain/account/commits", nil)
+	storageReadTimer         = getOrOverrideAsRegisteredCounter("chain/storage/reads", nil)
+	storageHashTimer         = getOrOverrideAsRegisteredCounter("chain/storage/hashes", nil)
+	storageUpdateTimer       = getOrOverrideAsRegisteredCounter("chain/storage/updates", nil)
+	storageCommitTimer       = getOrOverrideAsRegisteredCounter("chain/storage/commits", nil)
+	snapshotAccountReadTimer = getOrOverrideAsRegisteredCounter("chain/snapshot/account/reads", nil)
+	snapshotStorageReadTimer = getOrOverrideAsRegisteredCounter("chain/snapshot/storage/reads", nil)
+	snapshotCommitTimer      = getOrOverrideAsRegisteredCounter("chain/snapshot/commits", nil)
 
-	triedbCommitTimer = metrics.GetOrRegisterCounter("chain/triedb/commits", nil)
+	triedbCommitTimer = getOrOverrideAsRegisteredCounter("chain/triedb/commits", nil)
 
 	blockInsertTimer            = metrics.GetOrRegisterCounter("chain/block/inserts", nil)
 	blockInsertCount            = metrics.GetOrRegisterCounter("chain/block/inserts/count", nil)
