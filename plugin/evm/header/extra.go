@@ -12,13 +12,8 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
-)
-
-const (
-	// Note: MaximumExtraDataSize has been reduced to 32 in Geth, but is kept the same in Coreth for
-	// backwards compatibility.
-	MaximumExtraDataSize uint64 = 64 // Maximum size extra data may be after Genesis.
 )
 
 var (
@@ -157,11 +152,11 @@ func VerifyExtra(rules extras.AvalancheRules, extra []byte) error {
 			)
 		}
 	default:
-		if uint64(extraLen) > MaximumExtraDataSize {
+		if uint64(extraLen) > ap0.MaximumExtraDataSize {
 			return fmt.Errorf(
 				"%w: expected <= %d but got %d",
 				errInvalidExtraLength,
-				MaximumExtraDataSize,
+				ap0.MaximumExtraDataSize,
 				extraLen,
 			)
 		}

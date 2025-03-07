@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -494,13 +495,13 @@ func TestVerifyExtra(t *testing.T) {
 		{
 			name:     "initial_valid",
 			rules:    extras.AvalancheRules{},
-			extra:    make([]byte, MaximumExtraDataSize),
+			extra:    make([]byte, ap0.MaximumExtraDataSize),
 			expected: nil,
 		},
 		{
 			name:     "initial_invalid",
 			rules:    extras.AvalancheRules{},
-			extra:    make([]byte, MaximumExtraDataSize+1),
+			extra:    make([]byte, ap0.MaximumExtraDataSize+1),
 			expected: errInvalidExtraLength,
 		},
 		{
