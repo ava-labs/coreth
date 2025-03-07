@@ -88,10 +88,12 @@ type stateSyncerClient struct {
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
-	return &stateSyncerClient{
+	client := &stateSyncerClient{
 		stateSyncClientConfig: config,
 		atomicDone:            make(chan struct{}),
 	}
+	close(client.atomicDone) // close first in case we don't state sync
+	return client
 }
 
 type StateSyncClient interface {
@@ -221,7 +223,6 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
 // in a goroutine.
 func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncSummary) (block.StateSyncMode, error) {
-	close(client.atomicDone) // close first in case we don't state sync
 	isResume := proposedSummary.BlockHash == client.resumableSummary.BlockHash
 	if !isResume {
 		// Skip syncing if the blockchain is not significantly ahead of local state,
