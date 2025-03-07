@@ -35,7 +35,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
-	"github.com/ava-labs/coreth/accounts"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/bloombits"
@@ -44,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/eth/gasprice"
@@ -55,10 +53,12 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/accounts"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
 )
 
 // Config contains the configuration options of the ETH protocol.

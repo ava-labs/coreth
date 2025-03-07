@@ -24,10 +24,10 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/trie/trienode"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie/trienode"
 )
 
 const testCommitInterval = 100

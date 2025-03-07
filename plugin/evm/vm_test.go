@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/coreth/constants"
@@ -28,8 +28,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/trie"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,7 +67,6 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	accountKeystore "github.com/ava-labs/coreth/accounts/keystore"
 )
 
 var (
@@ -96,10 +95,10 @@ var (
 		json.Unmarshal([]byte(allocStr), &g.Alloc)
 		// After Durango, an additional account is funded in tests to use
 		// with warp messages.
-		if cfg.IsDurango(0) {
+		if params.GetExtra(cfg).IsDurango(0) {
 			addr := common.HexToAddress("0x99b9DEA54C48Dfea6aA9A4Ca4623633EE04ddbB5")
 			balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
-			g.Alloc[addr] = types.GenesisAccount{Balance: balance}
+			g.Alloc[addr] = types.Account{Balance: balance}
 		}
 
 		b, err := json.Marshal(g)
@@ -134,15 +133,14 @@ var (
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
-	apricotRulesPhase0 = params.Rules{}
-	apricotRulesPhase1 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true}}
-	apricotRulesPhase2 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true}}
-	apricotRulesPhase3 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true}}
-	apricotRulesPhase4 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true}}
-	apricotRulesPhase5 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true}}
-	apricotRulesPhase6 = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true}}
-	banffRules         = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true}}
-	// cortinaRules    = params.Rules{AvalancheRules: params.AvalancheRules{IsApricotPhase1: true, IsApricotPhase2: true, IsApricotPhase3: true, IsApricotPhase4: true, IsApricotPhase5: true, IsApricotPhasePre6: true, IsApricotPhase6: true, IsApricotPhasePost6: true, IsBanff: true, IsCortina: true}}
+	apricotRulesPhase0 = *params.GetRulesExtra(params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase1 = *params.GetRulesExtra(params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase2 = *params.GetRulesExtra(params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase3 = *params.GetRulesExtra(params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase4 = *params.GetRulesExtra(params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase5 = *params.GetRulesExtra(params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	apricotRulesPhase6 = *params.GetRulesExtra(params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0))
+	banffRules         = *params.GetRulesExtra(params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
 )
 
 func init() {
@@ -167,7 +165,7 @@ func newPrefundedGenesis(
 ) *core.Genesis {
 	alloc := types.GenesisAlloc{}
 	for _, address := range addresses {
-		alloc[address] = types.GenesisAccount{
+		alloc[address] = types.Account{
 			Balance: big.NewInt(int64(balance)),
 		}
 	}
@@ -982,7 +980,8 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	}
 
 	header := types.CopyHeader(validEthBlock.Header())
-	header.ExtDataGasUsed.Mul(common.Big2, header.ExtDataGasUsed)
+	headerExtra := types.GetHeaderExtra(header)
+	headerExtra.ExtDataGasUsed.Mul(common.Big2, headerExtra.ExtDataGasUsed)
 
 	internalConflictBlock := types.NewBlockWithExtData(
 		header,
@@ -1378,7 +1377,7 @@ func TestSetPreferenceRace(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	key, err := accountKeystore.NewKey(rand.Reader)
+	key, err := utils.NewKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2390,7 +2389,7 @@ func TestUncleBlock(t *testing.T) {
 		uncles,
 		nil,
 		trie.NewStackTrie(nil),
-		blkDEthBlock.ExtData(),
+		types.BlockExtData(blkDEthBlock),
 		false,
 	)
 	uncleBlock, err := vm2.newBlock(uncleEthBlock)
@@ -2451,7 +2450,7 @@ func TestEmptyBlock(t *testing.T) {
 		false,
 	)
 
-	if len(emptyEthBlock.ExtData()) != 0 || emptyEthBlock.Header().ExtDataHash != (common.Hash{}) {
+	if len(types.BlockExtData(emptyEthBlock)) != 0 || types.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash != (common.Hash{}) {
 		t.Fatalf("emptyEthBlock should not have any extra data")
 	}
 
@@ -2717,7 +2716,7 @@ func TestFutureBlock(t *testing.T) {
 		nil,
 		nil,
 		new(trie.Trie),
-		internalBlkA.ethBlock.ExtData(),
+		types.BlockExtData(internalBlkA.ethBlock),
 		false,
 	)
 
@@ -3272,13 +3271,13 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 
 	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if eBlockGasCost := ethBlk.BlockGasCost(); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
+	if eBlockGasCost := types.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
-	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
+	if eExtDataGasUsed := types.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
 	}
-	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3331,13 +3330,13 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 
 	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if ethBlk.BlockGasCost() == nil || ethBlk.BlockGasCost().Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", ethBlk.BlockGasCost())
+	if types.BlockGasCost(ethBlk) == nil || types.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
+		t.Fatalf("expected blockGasCost to be at least 100 but got %d", types.BlockGasCost(ethBlk))
 	}
-	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
+	if types.BlockExtDataGasUsed(ethBlk) == nil || types.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
+		t.Fatalf("expected extDataGasUsed to be 0 but got %d", types.BlockExtDataGasUsed(ethBlk))
 	}
-	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3442,13 +3441,13 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	}
 
 	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if eBlockGasCost := ethBlk.BlockGasCost(); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
+	if eBlockGasCost := types.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
-	if eExtDataGasUsed := ethBlk.ExtDataGasUsed(); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
+	if eExtDataGasUsed := types.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
 	}
-	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3493,13 +3492,13 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	}
 
 	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if ethBlk.BlockGasCost() == nil || ethBlk.BlockGasCost().Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", ethBlk.BlockGasCost())
+	if types.BlockGasCost(ethBlk) == nil || types.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
+		t.Fatalf("expected blockGasCost to be at least 100 but got %d", types.BlockGasCost(ethBlk))
 	}
-	if ethBlk.ExtDataGasUsed() == nil || ethBlk.ExtDataGasUsed().Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", ethBlk.ExtDataGasUsed())
+	if types.BlockExtDataGasUsed(ethBlk) == nil || types.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
+		t.Fatalf("expected extDataGasUsed to be 0 but got %d", types.BlockExtDataGasUsed(ethBlk))
 	}
-	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfig, ethBlk.Header())
+	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3591,7 +3590,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		testShortIDAddrs[1]: importAmount,
 		testShortIDAddrs[2]: importAmount,
 	})
-	conflictKey, err := accountKeystore.NewKey(rand.Reader)
+	conflictKey, err := utils.NewKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3803,7 +3802,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}
 	require.NoError(t, json.Unmarshal([]byte(genesisJSONApricotPhase1), genesisWithUpgrade))
-	genesisWithUpgrade.Config.ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
+	params.GetExtra(genesisWithUpgrade.Config).ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 
@@ -3910,7 +3909,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				nil,
 				nil,
 				new(trie.Trie),
-				ethBlock.ExtData(),
+				types.BlockExtData(ethBlock),
 				false,
 			)
 

@@ -31,6 +31,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
@@ -39,8 +40,8 @@ import (
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -430,8 +431,8 @@ func TestReceiveWarpMessage(t *testing.T) {
 		true, // RequirePrimaryNetworkSigners
 	)
 
-	vm.chainConfig.UpgradeConfig = params.UpgradeConfig{
-		PrecompileUpgrades: []params.PrecompileUpgrade{
+	vm.chainConfigExtra().UpgradeConfig = extras.UpgradeConfig{
+		PrecompileUpgrades: []extras.PrecompileUpgrade{
 			{Config: enableConfig},
 			{Config: disableConfig},
 			{Config: reEnableConfig},
@@ -653,8 +654,9 @@ func testReceiveWarpMessage(
 
 	// Require the block was built with a successful predicate result
 	ethBlock := block2.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	rules := vm.chainConfig.GetAvalancheRules(ethBlock.Time())
+	rules := params.GetExtra(vm.chainConfig).GetAvalancheRules(ethBlock.Time())
 	headerPredicateResultsBytes := customheader.PredicateBytesFromExtra(rules, ethBlock.Extra())
+	require.NotEmpty(headerPredicateResultsBytes)
 	results, err := predicate.ParseResults(headerPredicateResultsBytes)
 	require.NoError(err)
 

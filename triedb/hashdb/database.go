@@ -35,50 +35,62 @@ import (
 
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie/trienode"
-	"github.com/ava-labs/coreth/trie/triestate"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/trie/trienode"
+	"github.com/ava-labs/libevm/trie/triestate"
+	"github.com/ava-labs/libevm/triedb"
+	"github.com/ava-labs/libevm/triedb/database"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/triedb/hashdb"
 )
 
 const (
 	cacheStatsUpdateFrequency = 1000 // update trie cache stats once per 1000 ops
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() have been replaced with
+// metrics.GetOrRegister*() and this package's corresponding libevm package
+// imported above. Together these ensure that the metric here is the same as the
+// one with the same name in libevm.
 var (
-	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/clean/hit", nil)
-	memcacheCleanMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/miss", nil)
-	memcacheCleanReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/read", nil)
-	memcacheCleanWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/clean/write", nil)
+	memcacheCleanHitMeter   = metrics.GetOrRegisterMeter("hashdb/memcache/clean/hit", nil)
+	memcacheCleanMissMeter  = metrics.GetOrRegisterMeter("hashdb/memcache/clean/miss", nil)
+	memcacheCleanReadMeter  = metrics.GetOrRegisterMeter("hashdb/memcache/clean/read", nil)
+	memcacheCleanWriteMeter = metrics.GetOrRegisterMeter("hashdb/memcache/clean/write", nil)
 
-	memcacheDirtyHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/dirty/hit", nil)
-	memcacheDirtyMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/miss", nil)
-	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/read", nil)
-	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/dirty/write", nil)
+	memcacheDirtyHitMeter   = metrics.GetOrRegisterMeter("hashdb/memcache/dirty/hit", nil)
+	memcacheDirtyMissMeter  = metrics.GetOrRegisterMeter("hashdb/memcache/dirty/miss", nil)
+	memcacheDirtyReadMeter  = metrics.GetOrRegisterMeter("hashdb/memcache/dirty/read", nil)
+	memcacheDirtyWriteMeter = metrics.GetOrRegisterMeter("hashdb/memcache/dirty/write", nil)
 
-	memcacheDirtySizeGauge      = metrics.NewRegisteredGaugeFloat64("hashdb/memcache/dirty/size", nil)
-	memcacheDirtyChildSizeGauge = metrics.NewRegisteredGaugeFloat64("hashdb/memcache/dirty/childsize", nil)
-	memcacheDirtyNodesGauge     = metrics.NewRegisteredGauge("hashdb/memcache/dirty/nodes", nil)
+	memcacheDirtySizeGauge      = metrics.GetOrRegisterGaugeFloat64("hashdb/memcache/dirty/size", nil)
+	memcacheDirtyChildSizeGauge = metrics.GetOrRegisterGaugeFloat64("hashdb/memcache/dirty/childsize", nil)
+	memcacheDirtyNodesGauge     = metrics.GetOrRegisterGauge("hashdb/memcache/dirty/nodes", nil)
 
-	memcacheFlushMeter         = metrics.NewRegisteredMeter("hashdb/memcache/flush/count", nil)
-	memcacheFlushTimeTimer     = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/time", nil)
-	memcacheFlushLockTimeTimer = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/locktime", nil)
-	memcacheFlushNodesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/flush/nodes", nil)
-	memcacheFlushBytesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/flush/bytes", nil)
+	memcacheFlushMeter         = metrics.GetOrRegisterMeter("hashdb/memcache/flush/count", nil)
+	memcacheFlushTimeTimer     = metrics.GetOrRegisterResettingTimer("hashdb/memcache/flush/time", nil)
+	memcacheFlushLockTimeTimer = metrics.GetOrRegisterResettingTimer("hashdb/memcache/flush/locktime", nil)
+	memcacheFlushNodesMeter    = metrics.GetOrRegisterMeter("hashdb/memcache/flush/nodes", nil)
+	memcacheFlushBytesMeter    = metrics.GetOrRegisterMeter("hashdb/memcache/flush/bytes", nil)
 
-	memcacheGCTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/gc/time", nil)
-	memcacheGCNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/nodes", nil)
-	memcacheGCBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/bytes", nil)
+	memcacheGCTimeTimer  = metrics.GetOrRegisterResettingTimer("hashdb/memcache/gc/time", nil)
+	memcacheGCNodesMeter = metrics.GetOrRegisterMeter("hashdb/memcache/gc/nodes", nil)
+	memcacheGCBytesMeter = metrics.GetOrRegisterMeter("hashdb/memcache/gc/bytes", nil)
 
-	memcacheCommitMeter         = metrics.NewRegisteredMeter("hashdb/memcache/commit/count", nil)
-	memcacheCommitTimeTimer     = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
-	memcacheCommitLockTimeTimer = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/locktime", nil)
-	memcacheCommitNodesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
-	memcacheCommitBytesMeter    = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
+	memcacheCommitMeter         = metrics.GetOrRegisterMeter("hashdb/memcache/commit/count", nil)
+	memcacheCommitTimeTimer     = metrics.GetOrRegisterResettingTimer("hashdb/memcache/commit/time", nil)
+	memcacheCommitLockTimeTimer = metrics.GetOrRegisterResettingTimer("hashdb/memcache/commit/locktime", nil)
+	memcacheCommitNodesMeter    = metrics.GetOrRegisterMeter("hashdb/memcache/commit/nodes", nil)
+	memcacheCommitBytesMeter    = metrics.GetOrRegisterMeter("hashdb/memcache/commit/bytes", nil)
 )
 
 // ChildResolver defines the required method to decode the provided
@@ -100,6 +112,17 @@ type Config struct {
 	CleanCacheSize                  int    // Maximum memory allowance (in bytes) for caching clean nodes
 	StatsPrefix                     string // Prefix for cache stats (disabled if empty)
 	ReferenceRootAtomicallyOnUpdate bool   // Whether to reference the root node on update
+}
+
+func (c Config) BackendConstructor(diskdb ethdb.Database, config *triedb.Config) triedb.DBOverride {
+	var resolver ChildResolver
+	if config.IsVerkle {
+		// TODO define verkle resolver
+		log.Crit("Verkle node resolver is not defined")
+	} else {
+		resolver = trie.MerkleResolver{}
+	}
+	return New(diskdb, &c, resolver)
 }
 
 // Defaults is the default setting for database if it's not specified.
@@ -726,7 +749,7 @@ func (db *Database) Scheme() string {
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (*reader, error) {
+func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}

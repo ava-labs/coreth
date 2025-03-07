@@ -37,8 +37,8 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/crypto"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -125,7 +125,10 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	// Create a transaction to an account.
 	code := "6060604052600a8060106000396000f360606040526008565b00"
 	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
-	tx, _ = types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(1337)), testKey)
+	tx, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(1337)), testKey)
+	if err != nil {
+		t.Fatalf("Failed to sign transaction: %s", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := backend.Client().SendTransaction(ctx, tx); err != nil {

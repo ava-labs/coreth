@@ -13,7 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/utils/set"
