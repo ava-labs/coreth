@@ -671,3 +671,75 @@ func TestPredicateBytesFromExtra(t *testing.T) {
 		})
 	}
 }
+
+func TestSetPredicateBytesInExtra(t *testing.T) {
+	tests := []struct {
+		name      string
+		rules     extras.AvalancheRules
+		extra     []byte
+		predicate []byte
+		want      []byte
+	}{
+		{
+			name: "empty_extra_predicate",
+			want: make([]byte, ap3.WindowSize),
+		},
+		{
+			name: "empty_extra_predicate_fortuna",
+			rules: extras.AvalancheRules{
+				IsFortuna: true,
+			},
+			want: make([]byte, acp176.StateSize),
+		},
+		{
+			name:      "extra_too_short",
+			extra:     []byte{1},
+			predicate: []byte{2},
+			want: []byte{
+				0:              1,
+				ap3.WindowSize: 2,
+			},
+		},
+		{
+			name: "extra_too_short_fortuna",
+			rules: extras.AvalancheRules{
+				IsFortuna: true,
+			},
+			extra:     []byte{1},
+			predicate: []byte{2},
+			want: []byte{
+				0:                1,
+				acp176.StateSize: 2,
+			},
+		},
+		{
+			name: "extra_too_long",
+			extra: []byte{
+				ap3.WindowSize: 1,
+			},
+			predicate: []byte{2},
+			want: []byte{
+				ap3.WindowSize: 2,
+			},
+		},
+		{
+			name: "extra_too_long_fortuna",
+			rules: extras.AvalancheRules{
+				IsFortuna: true,
+			},
+			extra: []byte{
+				acp176.StateSize: 1,
+			},
+			predicate: []byte{2},
+			want: []byte{
+				acp176.StateSize: 2,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := SetPredicateBytesInExtra(test.rules, test.extra, test.predicate)
+			require.Equal(t, test.want, got)
+		})
+	}
+}
