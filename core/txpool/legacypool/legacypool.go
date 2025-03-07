@@ -82,6 +82,12 @@ var (
 	baseFeeUpdateInterval = 10 * time.Second // Time interval at which to schedule a base fee update for the tx pool after ApricotPhase3 is enabled
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() have been replaced with
+// metrics.GetOrRegister*() and this package's corresponding libevm package
+// imported above. Together these ensure that the metric here is the same as the
+// one with the same name in libevm.
 var (
 	// Metrics for the pending pool
 	pendingDiscardMeter   = metrics.GetOrRegisterMeter("txpool/pending/discard", nil)

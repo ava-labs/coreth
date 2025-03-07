@@ -63,6 +63,15 @@ import (
 	_ "github.com/ava-labs/libevm/core"
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() have been replaced with
+// metrics.GetOrRegister*() and this package's corresponding libevm package
+// imported above. Together these ensure that the metric here is the same as the
+// one with the same name in libevm.
+//
+// Note, however, those that have had their types overridden as
+// [metrics.Counter].
 var (
 	accountReadTimer         = getOrOverrideAsRegisteredCounter("chain/account/reads", nil)
 	accountHashTimer         = getOrOverrideAsRegisteredCounter("chain/account/hashes", nil)

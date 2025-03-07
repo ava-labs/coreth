@@ -33,6 +33,12 @@ import (
 	_ "github.com/ava-labs/libevm/triedb/pathdb"
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() have been replaced with
+// metrics.GetOrRegister*() and this package's corresponding libevm package
+// imported above. Together these ensure that the metric here is the same as the
+// one with the same name in libevm.
 // nolint: unused
 var (
 	cleanHitMeter   = metrics.GetOrRegisterMeter("pathdb/clean/hit", nil)

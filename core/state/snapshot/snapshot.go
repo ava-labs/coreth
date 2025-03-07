@@ -55,6 +55,12 @@ const (
 	skipGenThreshold = 500 * time.Millisecond
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() have been replaced with
+// metrics.GetOrRegister*() and this package's corresponding libevm package
+// imported above. Together these ensure that the metric here is the same as the
+// one with the same name in libevm.
 var (
 	snapshotCleanAccountHitMeter   = metrics.GetOrRegisterMeter("state/snapshot/clean/account/hit", nil)
 	snapshotCleanAccountMissMeter  = metrics.GetOrRegisterMeter("state/snapshot/clean/account/miss", nil)
