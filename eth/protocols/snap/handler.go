@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/metrics"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
@@ -31,6 +30,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
 	"github.com/ava-labs/libevm/p2p/enr"

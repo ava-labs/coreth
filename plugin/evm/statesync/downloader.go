@@ -10,9 +10,9 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/protocols/snap"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 )
@@ -111,13 +111,13 @@ func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 	d.bufferLen++
 
 	// Should change to debug prior to production
-	log.Info("Received queue request", "hash", b.Hash(), "height", b.Number(), "req", req, "timestamp", b.Timestamp())
+	log.Info("Received queue request", "hash", b.Hash(), "height", b.Number(), "req", req, "timestamp", b.Time())
 
 	// If on pivot interval, we should pivot (regardless of whether the queue is full)
 	if req == AcceptSyncBlockRequest && b.NumberU64()%pivotInterval == 0 {
-		log.Info("Setting new pivot block", "hash", b.Hash(), "height", b.NumberU64(), "timestamp", b.Timestamp())
+		log.Info("Setting new pivot block", "hash", b.Hash(), "height", b.NumberU64(), "timestamp", b.Time())
 		if b.NumberU64() <= d.pivotBlock.NumberU64() {
-			log.Warn("Received pivot with height <= pivot block", "old hash", b.Hash(), "old height", b.NumberU64(), "timestamp", b.Timestamp())
+			log.Warn("Received pivot with height <= pivot block", "old hash", b.Hash(), "old height", b.NumberU64(), "timestamp", b.Time())
 		}
 
 		// Reset pivot first in other goroutine

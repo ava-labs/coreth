@@ -244,7 +244,7 @@ func (b *Block) acceptAfterSync() error {
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
 	// take place before the accepted log is emitted to subscribers.
-	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Time())
 	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules)); err != nil {
 		return err
 	}
@@ -485,7 +485,7 @@ func (b *Block) verifyDuringSync() error {
 		rulesExtra = *params.GetRulesExtra(rules)
 	)
 
-	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
+	txs, err := atomic.ExtractAtomicTxs(types.BlockExtData(block), rulesExtra.IsApricotPhase5, atomic.Codec)
 	if err != nil {
 		return err
 	}
