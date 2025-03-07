@@ -1027,6 +1027,11 @@ func (vm *VM) onBootstrapStarted() error {
 	if err := vm.StateSyncClient.Error(); err != nil {
 		return err
 	}
+
+	// If we are dynamically syncing, don't set the snapshot.
+	if vm.config.StateSyncUseUpstream {
+		return vm.fx.Bootstrapping()
+	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
 	if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
 		return err
@@ -1313,7 +1318,16 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
+	if err := blk.syntacticVerify(); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("syntactic block verification failed: %w", err)
+	}
+	if err := blk.verifyPredicates(predicateCtx); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("failed to verify predicates: %w", err)
+	}
+
+	if err := blk.verify(false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
@@ -1396,6 +1410,11 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	block, err := vm.GetBlockInternal(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
+	}
+
+	if vm.StateSyncClient.AsyncReceive() {
+		log.Warn("cannot set preference while state sync is in progress", "block", blkID)
+		return nil
 	}
 
 	return vm.blockChain.SetPreference(block.(*Block).ethBlock)

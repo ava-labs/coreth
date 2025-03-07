@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 
@@ -140,6 +141,17 @@ func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
 // Accept implements the snowman.Block interface
 func (b *Block) Accept(context.Context) error {
+	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.acceptDuringSync(); err != nil {
+			log.Warn("Failed to accept block during sync", "block", b.ID(), "height", b.Height(), "err", err)
+			return err
+		}
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.AcceptSyncBlockRequest)
+	}
+	return b.accept()
+}
+
+func (b *Block) accept() error {
 	vm := b.vm
 
 	// Although returning an error from Accept is considered fatal, it is good
@@ -187,6 +199,61 @@ func (b *Block) Accept(context.Context) error {
 	return atomicState.Accept(vdbBatch, nil)
 }
 
+func (b *Block) acceptDuringSync() error {
+	log.Debug("Accepting block during sync", "hash", b.ID(), "height", b.Height())
+	vm := b.vm
+
+	// Although returning an error from Accept is considered fatal, it is good
+	// practice to cleanup the batch we were modifying in the case of an error.
+	defer vm.versiondb.Abort()
+
+	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	}
+
+	// Update VM state for atomic txs in this block. This includes updating the
+	// atomic tx repo, atomic trie, and shared memory.
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Accept
+		return err
+	}
+	// Get pending operations on the vm's versionDB so we can apply them atomically
+	// with the shared memory changes.
+	vdbBatch, err := b.vm.versiondb.CommitBatch()
+	if err != nil {
+		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+	}
+
+	// Apply any shared memory changes atomically with other pending changes to
+	// the vm's versionDB.
+	if err := atomicState.Accept(vdbBatch, nil); err != nil {
+		return err
+	}
+
+	log.Debug("Returning from accept without error", "block", b.ID(), "height", b.Height())
+
+	return nil
+}
+
+func (b *Block) acceptAfterSync() error {
+	vm := b.vm
+	log.Debug("Accepting block after sync", "hash", b.ID(), "height", b.Height())
+
+	// Call Accept for relevant precompile logs. Note we do this prior to
+	// calling Accept on the blockChain so any side effects (eg warp signatures)
+	// take place before the accepted log is emitted to subscribers.
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Timestamp())
+	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules)); err != nil {
+		return err
+	}
+	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
+		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
+	}
+
+	return nil
+}
+
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
 // contract.Accepter
 func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
@@ -224,6 +291,16 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
+	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.rejectDuringSync(); err != nil {
+			return err
+		}
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.RejectSyncBlockRequest)
+	}
+	return b.reject()
+}
+
+func (b *Block) reject() error {
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	for _, tx := range b.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
@@ -243,6 +320,26 @@ func (b *Block) Reject(context.Context) error {
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
+func (b *Block) rejectDuringSync() error {
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Reject
+		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
+		return err
+	}
+	if err := atomicState.Reject(); err != nil {
+		return err
+	}
+
+	log.Debug("Returning from reject without error", "block", b.ID(), "height", b.Height())
+	return nil
+}
+
+func (b *Block) rejectAfterSync() error {
+	log.Debug("Rejecting block after sync", b.ID(), "height", b.Height())
+	return b.vm.blockChain.Reject(b.ethBlock)
+}
+
 // Parent implements the snowman.Block interface
 func (b *Block) Parent() ids.ID {
 	return ids.ID(b.ethBlock.ParentHash())
@@ -258,23 +355,36 @@ func (b *Block) Timestamp() time.Time {
 	return time.Unix(int64(b.ethBlock.Time()), 0)
 }
 
-// syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() error {
-	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
-	}
-
-	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
-}
-
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
-	return b.verify(&precompileconfig.PredicateContext{
+	log.Debug("Verifying block without context", "block", b.ID(), "height", b.Height())
+	if err := b.syntacticVerify(); err != nil {
+		return fmt.Errorf("syntactic block verification failed: %w", err)
+	}
+
+	predicateContext := &precompileconfig.PredicateContext{
 		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: nil,
-	}, true)
+	}
+	// Only enforce predicates if the chain has already bootstrapped.
+	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
+	// been accepted by the network (so the predicate was validated by the network when the
+	// block was originally verified).
+	if b.vm.bootstrapped.Get() {
+		if err := b.verifyPredicates(predicateContext); err != nil {
+			return fmt.Errorf("failed to verify predicates: %w", err)
+		}
+	}
+
+	// If currently dynamically syncing, postpone non-atomic operations
+	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.verifyDuringSync(); err != nil {
+			log.Warn("Failed to verify block during sync", "block", b.ID(), "height", b.Height(), "err", err)
+			return err
+		}
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
+	}
+	return b.verify(true)
 }
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
@@ -303,30 +413,15 @@ func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
 
 // VerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
-	return b.verify(&precompileconfig.PredicateContext{
-		SnowCtx:            b.vm.ctx,
-		ProposerVMBlockCtx: proposerVMBlockCtx,
-	}, true)
-}
-
-// Verify the block is valid.
-// Enforces that the predicates are valid within [predicateContext].
-// Writes the block details to disk and the state to the trie manager iff writes=true.
-func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
-	if predicateContext.ProposerVMBlockCtx != nil {
-		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
-	} else {
-		log.Debug("Verifying block without context", "block", b.ID(), "height", b.Height())
-	}
+	log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
 	if err := b.syntacticVerify(); err != nil {
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 
-	// verify UTXOs named in import txs are present in shared memory.
-	if err := b.verifyUTXOsPresent(); err != nil {
-		return err
+	predicateContext := &precompileconfig.PredicateContext{
+		SnowCtx:            b.vm.ctx,
+		ProposerVMBlockCtx: proposerVMBlockCtx,
 	}
-
 	// Only enforce predicates if the chain has already bootstrapped.
 	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
 	// been accepted by the network (so the predicate was validated by the network when the
@@ -335,6 +430,27 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
+	}
+
+	// If currently dynamically syncing, postpone non-atomic operations
+	if b.vm.StateSyncClient.AsyncReceive() {
+		if err := b.verifyDuringSync(); err != nil {
+			log.Warn("Failed to verify block during sync", "block", b.ID(), "height", b.Height(), "err", err)
+			return err
+		}
+		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
+	}
+
+	return b.verify(true)
+}
+
+// Verify the block is valid.
+// Enforces that the predicates are valid within [predicateContext].
+// Writes the block details to disk and the state to the trie manager iff writes=true.
+func (b *Block) verify(writes bool) error {
+	// verify UTXOs named in import txs are present in shared memory.
+	if err := b.verifyUTXOsPresent(); err != nil {
+		return err
 	}
 
 	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
@@ -356,6 +472,80 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		}
 	}
 	return err
+}
+
+func (b *Block) verifyDuringSync() error {
+	log.Debug("Verifying block during sync", "block", b.ID(), "height", b.Height())
+	var (
+		block      = b.ethBlock
+		header     = block.Header()
+		vm         = b.vm
+		rules      = vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+		rulesExtra = *params.GetRulesExtra(rules)
+	)
+
+	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
+	if err != nil {
+		return err
+	}
+
+	if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
+		return err
+	}
+
+	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
+	if vm.atomicBackend != nil {
+		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
+			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
+		} else {
+			// Verify [txs] do not conflict with themselves or ancestor blocks.
+			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rulesExtra); err != nil {
+				return err
+			}
+		}
+		// Update the atomic backend with [txs] from this block.
+		//
+		// Note: The atomic trie canonically contains the duplicate operations
+		// from any bonus blocks.
+		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debug("Returning from verify without error", "block", b.ID(), "height", b.Height())
+
+	return nil
+}
+
+func (b *Block) verifyAfterSync() error {
+	log.Debug("Verifying block after sync", b.ID(), "height", b.Height())
+	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
+	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
+	// Additionally, if a block is already in processing, then it has already passed verification and
+	// at this point we have checked the predicates are still valid in the different context so we
+	// can return nil.
+	if b.vm.State.IsProcessing(b.id) {
+		return nil
+	}
+
+	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
+	tempAtomicBackend := b.vm.atomicBackend
+	b.vm.atomicBackend = nil
+	defer func() { b.vm.atomicBackend = tempAtomicBackend }()
+
+	return b.vm.blockChain.InsertBlockManual(b.ethBlock, true)
+}
+
+// syntacticVerify verifies that a *Block is well-formed.
+func (b *Block) syntacticVerify() error {
+	if b == nil || b.ethBlock == nil {
+		return errInvalidBlock
+	}
+
+	header := b.ethBlock.Header()
+	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
 }
 
 // verifyPredicates verifies the predicates in the block are valid according to predicateContext.

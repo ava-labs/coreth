@@ -663,6 +663,7 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
+	log.Debug("Called loadLastState with", "hash", lastAcceptedHash)
 	if lastAcceptedHash == (common.Hash{}) {
 		return bc.loadGenesisState()
 	}
@@ -677,6 +678,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	if headBlock == nil {
 		return fmt.Errorf("could not load head block %s", head.Hex())
 	}
+	log.Debug("Put head block in loadLastState as", "hash", headBlock.Hash(), "height", headBlock.NumberU64())
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(headBlock.Header())
 
@@ -1139,6 +1141,26 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, parentRoot common
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 
+	return nil
+}
+
+// InsertBlockDuringSync writes the block to the database without receipts or state.
+// skipping pruning management for simplicity
+func (bc *BlockChain) InsertBlockDuringSync(block *types.Block) error {
+	// Write the block to the database
+	batch := bc.db.NewBatch()
+	rawdb.WriteBlock(batch, block)
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to write block during sync: %w", err)
+	}
+
+	// If [block] represents a new tip of the canonical chain, we optimistically add it before
+	// setPreference is called. Otherwise, we consider it a side chain block.
+	if bc.newTip(block) {
+		bc.writeCanonicalBlockWithLogs(block, nil)
+	} else {
+		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+	}
 	return nil
 }
 
@@ -2039,6 +2061,7 @@ func (bc *BlockChain) gatherBlockRootsAboveLastAccepted() map[common.Hash]struct
 // in-memory and on disk current block pointers to [block].
 // Only should be called after state sync has completed.
 func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
+	log.Debug("Called ResetToStateSyncedBlock with", "hash", block.Hash(), "height", block.NumberU64())
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
