@@ -185,6 +185,30 @@ type responseBuilder struct {
 	stats        stats.LeafsRequestHandlerStats
 }
 
+func NewResponseBuilder(
+	request *message.LeafsRequest,
+	response *message.LeafsResponse,
+	t *trie.Trie,
+	snap *snapshot.Tree,
+	keyLength int,
+	limit uint16,
+	stats stats.LeafsRequestHandlerStats,
+) *responseBuilder {
+	return &responseBuilder{
+		request:   request,
+		response:  response,
+		t:         t,
+		snap:      snap,
+		keyLength: keyLength,
+		limit:     limit,
+		stats:     stats,
+	}
+}
+
+func (rb *responseBuilder) HandleRequest(ctx context.Context) error {
+	return rb.handleRequest(ctx)
+}
+
 func (rb *responseBuilder) handleRequest(ctx context.Context) error {
 	// Read from snapshot if a [snapshot.Tree] was provided in initialization
 	if rb.snap != nil {
@@ -223,6 +247,8 @@ func (rb *responseBuilder) handleRequest(ctx context.Context) error {
 		rb.stats.IncProofError()
 		return err
 	}
+	rb.response.More = true // set to signal a proof is needed
+
 	return nil
 }
 
@@ -271,6 +297,7 @@ func (rb *responseBuilder) fillFromSnapshot(ctx context.Context) (bool, error) {
 			rb.stats.IncSnapshotReadSuccess()
 			return true, nil
 		}
+		rb.response.More = true // set to signal a proof is needed
 		rb.response.ProofVals, err = iterateVals(proof)
 		if err != nil {
 			rb.stats.IncProofError()
@@ -436,7 +463,7 @@ func (rb *responseBuilder) fillFromTrie(ctx context.Context, end []byte) (bool, 
 	more := false
 	for it.Next() {
 		// if we're at the end, break this loop
-		if len(end) > 0 && bytes.Compare(it.Key, end) > 0 {
+		if len(rb.response.Keys) > 0 && len(end) > 0 && bytes.Compare(it.Key, end) > 0 {
 			more = true
 			break
 		}
@@ -487,7 +514,7 @@ func (rb *responseBuilder) readLeafsFromSnapshot(ctx context.Context) ([][]byte,
 	defer snapIt.Release()
 	for snapIt.Next() {
 		// if we're at the end, break this loop
-		if len(rb.request.End) > 0 && bytes.Compare(snapIt.Key(), rb.request.End) > 0 {
+		if len(keys) > 0 && len(rb.request.End) > 0 && bytes.Compare(snapIt.Key(), rb.request.End) > 0 {
 			break
 		}
 		// If we've returned enough data or run out of time, set the more flag and exit

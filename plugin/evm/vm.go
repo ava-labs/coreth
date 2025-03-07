@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -624,6 +625,9 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
+	//////
+	vm.Network.AddHandler(statesync.ProtocolID, statesync.NewHandler(vm.blockChain))
+
 	vm.setAppRequestHandlers()
 
 	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
@@ -739,6 +743,10 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		db:                   vm.versiondb,
 		atomicBackend:        vm.atomicBackend,
 		toEngine:             vm.toEngine,
+		network:              vm.Network,
+		appSender:            vm.p2pSender,
+		stateSyncNodes:       stateSyncIDs,
+		useUpstream:          vm.config.StateSyncUseUpstream,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1051,6 +1059,11 @@ func (vm *VM) onBootstrapStarted() error {
 	if err := vm.StateSyncClient.Error(); err != nil {
 		return err
 	}
+
+	// If we are dynamically syncing, don't set the snapshot.
+	if vm.config.StateSyncUseUpstream {
+		return vm.fx.Bootstrapping()
+	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
 	if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
 		return err
@@ -1352,7 +1365,16 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
+	if err := blk.syntacticVerify(); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("syntactic block verification failed: %w", err)
+	}
+	if err := blk.verifyPredicates(predicateCtx); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("failed to verify predicates: %w", err)
+	}
+
+	if err := blk.verify(false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
@@ -1435,6 +1457,11 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	block, err := vm.GetBlockInternal(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
+	}
+
+	if vm.StateSyncClient.AsyncReceive() {
+		log.Warn("cannot set preference while state sync is in progress", "block", blkID)
+		return nil
 	}
 
 	return vm.blockChain.SetPreference(block.(*Block).ethBlock)

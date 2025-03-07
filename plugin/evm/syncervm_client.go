@@ -13,12 +13,15 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	ethstatesync "github.com/ava-labs/coreth/plugin/evm/statesync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
@@ -57,6 +60,12 @@ type stateSyncClientConfig struct {
 	client syncclient.Client
 
 	toEngine chan<- commonEng.Message
+
+	///
+	useUpstream    bool
+	network        peer.Network
+	appSender      commonEng.AppSender
+	stateSyncNodes []ids.NodeID
 }
 
 type stateSyncerClient struct {
@@ -70,12 +79,21 @@ type stateSyncerClient struct {
 	// State Sync results
 	syncSummary  message.SyncSummary
 	stateSyncErr error
+
+	// Dynamic sync
+	syncing        utils.Atomic[bool]
+	dl             *ethstatesync.Downloader
+	downloaderLock sync.Mutex
+	atomicDone     chan struct{} // to prevent writing during atomic sync
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
-	return &stateSyncerClient{
+	client := &stateSyncerClient{
 		stateSyncClientConfig: config,
+		atomicDone:            make(chan struct{}),
 	}
+	close(client.atomicDone) // close first in case we don't state sync
+	return client
 }
 
 type StateSyncClient interface {
@@ -88,6 +106,10 @@ type StateSyncClient interface {
 	ClearOngoingSummary() error
 	Shutdown() error
 	Error() error
+
+	// Methods to enable dynamic state sync
+	AsyncReceive() bool
+	QueueBlockOrPivot(*Block, ethstatesync.SyncBlockRequest) error
 }
 
 // Syncer represents a step in state sync,
@@ -97,6 +119,42 @@ type StateSyncClient interface {
 type Syncer interface {
 	Start(ctx context.Context) error
 	Done() <-chan error
+}
+
+// AsyncReceive returns true if the client is ready to receive a message from the engine
+// Should return true if syncing and useUpstream is true, i.e. currently dynamicaling syncing
+func (client *stateSyncerClient) AsyncReceive() bool {
+	// Block until atomic sync is completed for bootstrapping and after sync completes until blockchain updates
+	<-client.atomicDone
+	client.downloaderLock.Lock()
+	client.downloaderLock.Unlock()
+	return client.useUpstream && client.syncing.Get() && client.dl != nil
+}
+
+func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.SyncBlockRequest) error {
+	// Wait for atomic sync to be done prior to queueing
+	log.Debug("Queueing block", "hash", b.ID(), "height", b.Height(), "req", req)
+	err := client.dl.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
+	if err != nil {
+		log.Error("Queue failed", "error", err)
+	}
+	return err
+}
+
+// Depending on the request type, returns the hook to properly handle the block
+// If final, will run normal operation. Otherwise, will only perform atomic ops
+func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func() error {
+	switch req {
+	case ethstatesync.AcceptSyncBlockRequest:
+		return func() error { return b.acceptAfterSync() }
+	case ethstatesync.RejectSyncBlockRequest:
+		return func() error { return b.rejectAfterSync() }
+	case ethstatesync.VerifySyncBlockRequest:
+		return func() error { return b.verifyAfterSync() }
+	default:
+		log.Error("Invalid statesync.SyncBlockRequest", "ID", req)
+	}
+	return func() error { return nil }
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
@@ -145,17 +203,21 @@ func (client *stateSyncerClient) ParseStateSummary(_ context.Context, summaryByt
 // stateSync blockingly performs the state sync for the EVM state and the atomic state
 // to [client.syncSummary]. returns an error if one occurred.
 func (client *stateSyncerClient) stateSync(ctx context.Context) error {
+	client.syncing.Set(true)
+	defer client.syncing.Set(false)
 	if err := client.syncBlocks(ctx, client.syncSummary.BlockHash, client.syncSummary.BlockNumber, parentsToGet); err != nil {
 		return err
 	}
 
 	// Sync the EVM trie and then the atomic trie. These steps could be done
-	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
-	if err := client.syncStateTrie(ctx); err != nil {
+	// in parallel or in the opposite order in the static case
+	// For dynamic, much simpler to do atomic trie first
+
+	if err := client.syncAtomicTrie(ctx); err != nil {
 		return err
 	}
 
-	return client.syncAtomicTrie(ctx)
+	return client.syncStateTrie(ctx)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -205,14 +267,49 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	ctx, cancel := context.WithCancel(context.Background())
 	client.cancel = cancel
 	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
+	if client.useUpstream {
+		// Set downloader using pivot
+		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
+		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
+		ethBlock := evmBlock.ethBlock
+
+		// Do all of updateVMMarkers EXCEPT acceptBlockDB.Put, since this breaks resume
+		if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(ethBlock.NumberU64()); err != nil {
+			return block.StateSyncSkipped, err
+		}
+		client.atomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
+		if err := client.db.Commit(); err != nil {
+			return block.StateSyncSkipped, err
+		}
+		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
+			return block.StateSyncSkipped, err
+		}
+		if err := client.atomicBackend.ApplyToSharedMemory(ethBlock.NumberU64()); err != nil {
+			return block.StateSyncSkipped, err
+		}
+
+		log.Info("Set LastAcceptedBlock as first pivot", "id", evmBlock.ID(), "height", evmBlock.Height(), "timestamp", evmBlock.Timestamp())
+	}
 	go func() {
 		defer client.wg.Done()
 		defer cancel()
 
 		if err := client.stateSync(ctx); err != nil {
+			log.Error("Returned from stateSync with error")
 			client.stateSyncErr = err
 		} else {
-			client.stateSyncErr = client.finishSync()
+			if client.useUpstream {
+				log.Info("No state sync error, final pivot", "hash", client.dl.Pivot().Hash(), "height", client.dl.Pivot().NumberU64())
+				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
+				defer func() {
+					log.Debug("Closing downloader in defer")
+					client.dl.Close()
+				}()
+				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
+			} else {
+				log.Error("Called incorrect finishSync?????", "useUpstream", client.useUpstream)
+				client.stateSyncErr = client.finishSync(client.syncSummary.BlockHash)
+			}
 		}
 		// notify engine regardless of whether err == nil,
 		// this error will be propagated to the engine when it calls
@@ -220,6 +317,12 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		log.Info("stateSync completed, notifying engine", "err", client.stateSyncErr)
 		client.toEngine <- commonEng.StateSyncDone
 	}()
+
+	// block incoming verify/accept until state sync is done
+	client.atomicDone = make(chan struct{})
+	if client.useUpstream {
+		return block.StateSyncDynamic, nil
+	}
 	return block.StateSyncStatic, nil
 }
 
@@ -291,30 +394,55 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 		return err
 	}
 	err = <-atomicSyncer.Done()
+	close(client.atomicDone)
 	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
 	return err
 }
 
 func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", client.syncSummary.BlockRoot)
-	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
-		Client:                   client.client,
-		Root:                     client.syncSummary.BlockRoot,
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.chaindb,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.stateSyncRequestSize,
-	})
-	if err != nil {
+
+	if client.useUpstream {
+		log.Warn("Using upstream state syncer (untested)")
+		return client.upstreamSyncStateTrie(ctx)
+	} else {
+		evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
+			Client:                   client.client,
+			Root:                     client.syncSummary.BlockRoot,
+			BatchSize:                ethdb.IdealBatchSize,
+			DB:                       client.chaindb,
+			MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
+			NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
+			RequestSize:              client.stateSyncRequestSize,
+		})
+		if err != nil {
+			return err
+		}
+		if err := evmSyncer.Start(ctx); err != nil {
+			return err
+		}
+		err = <-evmSyncer.Done()
+		log.Info("state sync: sync finished", "root", client.syncSummary.BlockRoot, "err", err)
 		return err
 	}
-	if err := evmSyncer.Start(ctx); err != nil {
+}
+
+// upstreamSyncStateTrie syncs the state trie using the upstream state syncer
+func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) error {
+	p2pClient := client.network.NewClient(ethstatesync.ProtocolID)
+	if len(client.stateSyncNodes) > 0 {
+		for _, nodeID := range client.stateSyncNodes {
+			client.dl.SnapSyncer.Register(ethstatesync.NewOutboundPeer(nodeID, client.dl, p2pClient))
+		}
+	} else {
+		client.network.AddConnector(ethstatesync.NewConnector(client.dl, p2pClient))
+	}
+
+	if err := client.dl.SnapSync(ctx); err != nil {
 		return err
 	}
-	err = <-evmSyncer.Done()
-	log.Info("state sync: sync finished", "root", client.syncSummary.BlockRoot, "err", err)
-	return err
+	log.Info("Upstream state syncer completed")
+	return nil
 }
 
 func (client *stateSyncerClient) Shutdown() error {
@@ -325,31 +453,38 @@ func (client *stateSyncerClient) Shutdown() error {
 	return nil
 }
 
-// finishSync is responsible for updating disk and memory pointers so the VM is prepared
-// for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (client *stateSyncerClient) finishSync() error {
-	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(client.syncSummary.BlockHash))
+func (client *stateSyncerClient) getEVMBlockFromHash(blockHash common.Hash) *Block {
+	// Must first find first pivot block to signal bootstrapper
+	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(blockHash))
 	if err != nil {
-		return fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
+		log.Error("could not get block by hash from client state", "hash", blockHash)
+		return nil
 	}
-
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
 	if !ok {
-		return fmt.Errorf("could not convert block(%T) to *chain.BlockWrapper", wrapper)
+		log.Error("could not convert block to *chain.BlockWrapper", "type", wrapper, "hash", blockHash)
+		return nil
 	}
 	evmBlock, ok := wrapper.Block.(*Block)
 	if !ok {
-		return fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
+		log.Error("could not convert block(%T) to evm.Block", stateBlock)
+		return nil
+	}
+
+	return evmBlock
+}
+
+// finishSync is responsible for updating disk and memory pointers so the VM is prepared
+// for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
+func (client *stateSyncerClient) finishSync(blockHash common.Hash) error {
+	log.Debug("Called finishSync with", "hash", blockHash)
+	evmBlock := client.getEVMBlockFromHash(blockHash)
+	if evmBlock == nil {
+		return fmt.Errorf("Could not get evmBlock form hash %s", blockHash)
 	}
 
 	block := evmBlock.ethBlock
-
-	if block.Hash() != client.syncSummary.BlockHash {
-		return fmt.Errorf("attempted to set last summary block to unexpected block hash: (%s != %s)", block.Hash(), client.syncSummary.BlockHash)
-	}
-	if block.NumberU64() != client.syncSummary.BlockNumber {
-		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), client.syncSummary.BlockNumber)
-	}
+	log.Debug("Found block for finishSync", "hash", block.Hash(), "height", block.NumberU64())
 
 	// BloomIndexer needs to know that some parts of the chain are not available
 	// and cannot be indexed. This is done by calling [AddCheckpoint] here.
@@ -367,7 +502,7 @@ func (client *stateSyncerClient) finishSync() error {
 		return err
 	}
 
-	if err := client.updateVMMarkers(); err != nil {
+	if err := client.updateVMMarkers(blockHash, block.NumberU64()); err != nil {
 		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
 	}
 
@@ -390,15 +525,15 @@ func (client *stateSyncerClient) finishSync() error {
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
 // - removes state sync progress markers
-func (client *stateSyncerClient) updateVMMarkers() error {
+func (client *stateSyncerClient) updateVMMarkers(blockHash common.Hash, lastAcceptedHeight uint64) error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.syncSummary] when ApplyToSharedMemory
 	// is called.
-	if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(client.lastAcceptedHeight); err != nil {
+	if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(lastAcceptedHeight); err != nil {
 		return err
 	}
-	client.atomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
-	if err := client.acceptedBlockDB.Put(lastAcceptedKey, client.syncSummary.BlockHash[:]); err != nil {
+	client.atomicBackend.SetLastAccepted(blockHash)
+	if err := client.acceptedBlockDB.Put(lastAcceptedKey, blockHash[:]); err != nil {
 		return err
 	}
 	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {
