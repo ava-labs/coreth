@@ -221,6 +221,7 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
 // in a goroutine.
 func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncSummary) (block.StateSyncMode, error) {
+	close(client.atomicDone) // close first in case we don't state sync
 	isResume := proposedSummary.BlockHash == client.resumableSummary.BlockHash
 	if !isResume {
 		// Skip syncing if the blockchain is not significantly ahead of local state,
@@ -316,6 +317,8 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		client.toEngine <- commonEng.StateSyncDone
 	}()
 
+	// block incoming verify/accept until state sync is done
+	client.atomicDone = make(chan struct{})
 	if client.useUpstream {
 		return block.StateSyncDynamic, nil
 	}
