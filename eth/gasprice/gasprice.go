@@ -243,13 +243,14 @@ func (oracle *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 
 	// We calculate the `nextBaseFee` if a block were to be produced immediately.
 	nextBaseFee, err := oracle.estimateNextBaseFee(ctx)
-	if nextBaseFee == nil {
-		// This occurs if AP3 has not been activated
-		return tip, nil
-	} else if err != nil {
+	if err != nil {
 		log.Warn("failed to estimate next base fee", "err", err)
 		return nil, err
+	} else if nextBaseFee == nil {
+		// This occurs if AP3 has not been scheduled yet
+		return tip, nil
 	}
+
 	return new(big.Int).Add(tip, nextBaseFee), nil
 }
 
