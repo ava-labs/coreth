@@ -393,6 +393,17 @@ func TestNewBlockWithExtData(t *testing.T) {
 			},
 		},
 		{
+			name:   "header_nil_extra",
+			header: &Header{},
+			wantBlock: func() *Block {
+				header := WithHeaderExtra(&Header{}, &HeaderExtra{})
+				block := NewBlock(header, nil, nil, nil, stubHasher{})
+				blockExtra := &BlockBodyExtra{ExtData: &[]byte{}}
+				extras.Block.Set(block, blockExtra)
+				return block
+			},
+		},
+		{
 			name: "with_recalc",
 			header: WithHeaderExtra(
 				&Header{},
