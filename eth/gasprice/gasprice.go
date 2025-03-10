@@ -37,7 +37,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -65,7 +64,6 @@ const (
 var (
 	DefaultMaxPrice           = big.NewInt(150 * params.GWei)
 	DefaultMinPrice           = big.NewInt(acp176.MinGasPrice)
-	DefaultMinBaseFee         = big.NewInt(ap3.InitialBaseFee)
 	DefaultMinGasUsed         = big.NewInt(acp176.MinTargetPerSecond)
 	DefaultMaxLookbackSeconds = uint64(80)
 )
@@ -105,10 +103,9 @@ type OracleBackend interface {
 // Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type Oracle struct {
-	backend     OracleBackend
-	lastHead    common.Hash
-	lastPrice   *big.Int
-	lastBaseFee *big.Int
+	backend   OracleBackend
+	lastHead  common.Hash
+	lastPrice *big.Int
 	// [minPrice] ensures we don't get into a positive feedback loop where tips
 	// sink to 0 during a period of slow block production, such that nobody's
 	// transactions will be included until the full block fee duration has
@@ -195,7 +192,6 @@ func NewOracle(backend OracleBackend, config Config) (*Oracle, error) {
 	return &Oracle{
 		backend:             backend,
 		lastPrice:           minPrice,
-		lastBaseFee:         DefaultMinBaseFee,
 		minPrice:            minPrice,
 		maxPrice:            maxPrice,
 		checkBlocks:         blocks,
