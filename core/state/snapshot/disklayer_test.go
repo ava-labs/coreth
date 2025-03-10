@@ -30,7 +30,7 @@ import (
 	"bytes"
 	"testing"
 
-	crawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
@@ -107,7 +107,7 @@ func TestDiskMerge(t *testing.T) {
 	rawdb.WriteAccountSnapshot(db, conNukeCache, conNukeCache[:])
 	rawdb.WriteStorageSnapshot(db, conNukeCache, conNukeCacheSlot, conNukeCacheSlot[:])
 
-	crawdb.WriteSnapshotBlockHash(db, baseBlockHash)
+	customrawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
 	// Create a disk layer based on the above and cache in some data
@@ -298,7 +298,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		insertAccount(conNukeCache, conNukeCache[:])
 		insertStorage(conNukeCache, conNukeCacheSlot, conNukeCacheSlot[:])
 
-		crawdb.WriteSnapshotBlockHash(db, baseBlockHash)
+		customrawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 		rawdb.WriteSnapshotRoot(db, baseRoot)
 
 		// Create a disk layer based on the above using a random progress marker
@@ -453,7 +453,7 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	rawdb.WriteAccountSnapshot(db, accOne, accOne[:])
 	rawdb.WriteStorageSnapshot(db, accOne, accOneSlotOne, accOneSlotOne[:])
 	rawdb.WriteStorageSnapshot(db, accOne, accOneSlotTwo, accOneSlotTwo[:])
-	crawdb.WriteSnapshotBlockHash(db, baseBlockHash)
+	customrawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
 	// Create a disk layer based on all above updates
@@ -528,7 +528,7 @@ func TestDiskSeek(t *testing.T) {
 
 	baseRoot := randomHash()
 	baseBlockHash := randomHash()
-	crawdb.WriteSnapshotBlockHash(db, baseBlockHash)
+	customrawdb.WriteSnapshotBlockHash(db, baseBlockHash)
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
 	snaps := NewTestTree(db, baseBlockHash, baseRoot)
