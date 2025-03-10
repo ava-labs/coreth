@@ -442,7 +442,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	if configExtra.IsApricotPhase4(header.Time) {
 		headerExtra.ExtDataGasUsed = extDataGasUsed
 		if headerExtra.ExtDataGasUsed == nil {
-			headerExtra.ExtDataGasUsed = new(big.Int).Set(common.Big0)
+			headerExtra.ExtDataGasUsed = new(big.Int)
 		}
 
 		// Verify that this block covers the block fee.
