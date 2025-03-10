@@ -245,7 +245,7 @@ func (oracle *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	nextBaseFee, err := oracle.estimateNextBaseFee(ctx)
 	if nextBaseFee == nil {
 		// This occurs if AP3 has not been activated
-		return nil, nil
+		return tip, nil
 	} else if err != nil {
 		log.Warn("failed to estimate next base fee", "err", err)
 		return nil, err
