@@ -208,12 +208,7 @@ func NewOracle(backend OracleBackend, config Config) (*Oracle, error) {
 // produced at the current time. If ApricotPhase3 has not been activated, it may
 // return a nil value and a nil error.
 func (oracle *Oracle) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
-	nextBaseFee, err := oracle.estimateNextBaseFee(ctx)
-	if nextBaseFee == nil {
-		// This occurs if AP3 has not been activated
-		return nil, nil
-	}
-	return nextBaseFee, err
+	return oracle.estimateNextBaseFee(ctx)
 }
 
 // estimateNextBaseFee calculates what the base fee should be on the next block if it
@@ -265,8 +260,7 @@ func (oracle *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 // necessary to add the basefee to the returned number to fall back to the legacy
 // behavior.
 func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
-	tip, err := oracle.suggestTip(ctx)
-	return tip, err
+	return oracle.suggestTip(ctx)
 }
 
 // suggestTip estimates the gas tip based on a simple sampling method
