@@ -213,14 +213,19 @@ func NewOracle(backend OracleBackend, config Config) (*Oracle, error) {
 // produced at the current time. If ApricotPhase3 has not been activated, it may
 // return a nil value and a nil error.
 func (oracle *Oracle) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
-	_, baseFee, err := oracle.suggestDynamicFees(ctx)
-	if err != nil {
-		return nil, err
+	// If Fortuna is activated, we should only estimate the base fee as the next expected
+	if oracle.backend.ChainConfig().IsFortuna(oracle.clock.Unix()) {
+		return oracle.estimateNextBaseFee(ctx)
 	}
 
 	// We calculate the [nextBaseFee] if a block were to be produced immediately.
 	// If [nextBaseFee] is lower than the estimate from sampling, then we return it
 	// to prevent returning an incorrectly high fee when the network is quiescent.
+	_, baseFee, err := oracle.suggestDynamicFees(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	nextBaseFee, err := oracle.estimateNextBaseFee(ctx)
 	if err != nil {
 		log.Warn("failed to estimate next base fee", "err", err)
