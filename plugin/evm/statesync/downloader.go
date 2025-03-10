@@ -92,8 +92,11 @@ func (d *Downloader) Pivot() *types.Block {
 }
 
 // Opens bufferLock to allow block requests to go through after finalizing the sync
+// assumes bufferLock is held
 func (d *Downloader) Close() {
-	d.flushQueue(true) // ignores errors
+	if err := d.flushQueue(true); err != nil {
+		log.Error("Issue flushing queue", "err", err)
+	}
 	d.bufferLock.Unlock()
 }
 
@@ -185,7 +188,11 @@ func (d *Downloader) SnapSync(ctx context.Context) error {
 			return sync.err
 		case <-ctx.Done():
 			log.Warn("Sync interrupted by context", "err", ctx.Err())
+			close(d.quitCh)
 			return ctx.Err()
+		case <-d.quitCh:
+			log.Warn("Sync interrupted by quit channel")
+			return errors.New("Snap sync interrupted by quit channel")
 		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
@@ -225,8 +232,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		select {
 		case next := <-d.stateSyncStart:
 			return next
-
 		case <-s.done:
+			return nil
+		case <-d.quitCh:
 			return nil
 		}
 	}
