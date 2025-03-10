@@ -21,8 +21,8 @@ import (
 )
 
 // TestGetSenderNativeAssetCall checks that the NativeAssetCall proxies the
-// caller address This behavior is disabled on the network and is only to test
-// previous behavior. Note the test uses ApricotPhase2Config.
+// caller address. This behavior is disabled on the network and is only to
+// test previous behavior. Note the test uses ApricotPhase2Config.
 func TestGetSenderNativeAssetCall(t *testing.T) {
 	// pragma solidity >=0.8.0 <0.9.0;
 	// contract GetSenderNativeAssetCall {
