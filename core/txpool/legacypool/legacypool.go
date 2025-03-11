@@ -1778,13 +1778,14 @@ func (pool *LegacyPool) demoteUnexecutables() {
 }
 
 func (pool *LegacyPool) startPeriodicFeeUpdate() {
-	if params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp == nil {
+	ap3Timestamp := params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp
+	if ap3Timestamp == nil {
 		return
 	}
 
 	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
 	// when starting up in ApricotPhase3 before the base fee is updated.
-	if time.Now().After(utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp)) {
+	if time.Now().After(utils.Uint64ToTime(ap3Timestamp)) {
 		pool.updateBaseFee()
 	}
 
