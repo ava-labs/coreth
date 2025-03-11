@@ -41,16 +41,17 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/params"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
@@ -58,45 +59,57 @@ import (
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/core"
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() have been replaced with
+// metrics.GetOrRegister*() and this package's corresponding libevm package
+// imported above. Together these ensure that the metric here is the same as the
+// one with the same name in libevm.
+//
+// Note, however, those that have had their types overridden as
+// [metrics.Counter].
 var (
-	accountReadTimer         = metrics.NewRegisteredCounter("chain/account/reads", nil)
-	accountHashTimer         = metrics.NewRegisteredCounter("chain/account/hashes", nil)
-	accountUpdateTimer       = metrics.NewRegisteredCounter("chain/account/updates", nil)
-	accountCommitTimer       = metrics.NewRegisteredCounter("chain/account/commits", nil)
-	storageReadTimer         = metrics.NewRegisteredCounter("chain/storage/reads", nil)
-	storageHashTimer         = metrics.NewRegisteredCounter("chain/storage/hashes", nil)
-	storageUpdateTimer       = metrics.NewRegisteredCounter("chain/storage/updates", nil)
-	storageCommitTimer       = metrics.NewRegisteredCounter("chain/storage/commits", nil)
-	snapshotAccountReadTimer = metrics.NewRegisteredCounter("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredCounter("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredCounter("chain/snapshot/commits", nil)
+	accountReadTimer         = getOrOverrideAsRegisteredCounter("chain/account/reads", nil)
+	accountHashTimer         = getOrOverrideAsRegisteredCounter("chain/account/hashes", nil)
+	accountUpdateTimer       = getOrOverrideAsRegisteredCounter("chain/account/updates", nil)
+	accountCommitTimer       = getOrOverrideAsRegisteredCounter("chain/account/commits", nil)
+	storageReadTimer         = getOrOverrideAsRegisteredCounter("chain/storage/reads", nil)
+	storageHashTimer         = getOrOverrideAsRegisteredCounter("chain/storage/hashes", nil)
+	storageUpdateTimer       = getOrOverrideAsRegisteredCounter("chain/storage/updates", nil)
+	storageCommitTimer       = getOrOverrideAsRegisteredCounter("chain/storage/commits", nil)
+	snapshotAccountReadTimer = getOrOverrideAsRegisteredCounter("chain/snapshot/account/reads", nil)
+	snapshotStorageReadTimer = getOrOverrideAsRegisteredCounter("chain/snapshot/storage/reads", nil)
+	snapshotCommitTimer      = getOrOverrideAsRegisteredCounter("chain/snapshot/commits", nil)
 
-	triedbCommitTimer = metrics.NewRegisteredCounter("chain/triedb/commits", nil)
+	triedbCommitTimer = getOrOverrideAsRegisteredCounter("chain/triedb/commits", nil)
 
-	blockInsertTimer            = metrics.NewRegisteredCounter("chain/block/inserts", nil)
-	blockInsertCount            = metrics.NewRegisteredCounter("chain/block/inserts/count", nil)
-	blockContentValidationTimer = metrics.NewRegisteredCounter("chain/block/validations/content", nil)
-	blockStateInitTimer         = metrics.NewRegisteredCounter("chain/block/inits/state", nil)
-	blockExecutionTimer         = metrics.NewRegisteredCounter("chain/block/executions", nil)
-	blockTrieOpsTimer           = metrics.NewRegisteredCounter("chain/block/trie", nil)
-	blockValidationTimer        = metrics.NewRegisteredCounter("chain/block/validations/state", nil)
-	blockWriteTimer             = metrics.NewRegisteredCounter("chain/block/writes", nil)
+	blockInsertTimer            = metrics.GetOrRegisterCounter("chain/block/inserts", nil)
+	blockInsertCount            = metrics.GetOrRegisterCounter("chain/block/inserts/count", nil)
+	blockContentValidationTimer = metrics.GetOrRegisterCounter("chain/block/validations/content", nil)
+	blockStateInitTimer         = metrics.GetOrRegisterCounter("chain/block/inits/state", nil)
+	blockExecutionTimer         = metrics.GetOrRegisterCounter("chain/block/executions", nil)
+	blockTrieOpsTimer           = metrics.GetOrRegisterCounter("chain/block/trie", nil)
+	blockValidationTimer        = metrics.GetOrRegisterCounter("chain/block/validations/state", nil)
+	blockWriteTimer             = metrics.GetOrRegisterCounter("chain/block/writes", nil)
 
-	acceptorQueueGauge           = metrics.NewRegisteredGauge("chain/acceptor/queue/size", nil)
-	acceptorWorkTimer            = metrics.NewRegisteredCounter("chain/acceptor/work", nil)
-	acceptorWorkCount            = metrics.NewRegisteredCounter("chain/acceptor/work/count", nil)
-	processedBlockGasUsedCounter = metrics.NewRegisteredCounter("chain/block/gas/used/processed", nil)
-	acceptedBlockGasUsedCounter  = metrics.NewRegisteredCounter("chain/block/gas/used/accepted", nil)
-	badBlockCounter              = metrics.NewRegisteredCounter("chain/block/bad/count", nil)
+	acceptorQueueGauge           = metrics.GetOrRegisterGauge("chain/acceptor/queue/size", nil)
+	acceptorWorkTimer            = metrics.GetOrRegisterCounter("chain/acceptor/work", nil)
+	acceptorWorkCount            = metrics.GetOrRegisterCounter("chain/acceptor/work/count", nil)
+	processedBlockGasUsedCounter = metrics.GetOrRegisterCounter("chain/block/gas/used/processed", nil)
+	acceptedBlockGasUsedCounter  = metrics.GetOrRegisterCounter("chain/block/gas/used/accepted", nil)
+	badBlockCounter              = metrics.GetOrRegisterCounter("chain/block/bad/count", nil)
 
-	txUnindexTimer      = metrics.NewRegisteredCounter("chain/txs/unindex", nil)
-	acceptedTxsCounter  = metrics.NewRegisteredCounter("chain/txs/accepted", nil)
-	processedTxsCounter = metrics.NewRegisteredCounter("chain/txs/processed", nil)
+	txUnindexTimer      = metrics.GetOrRegisterCounter("chain/txs/unindex", nil)
+	acceptedTxsCounter  = metrics.GetOrRegisterCounter("chain/txs/accepted", nil)
+	processedTxsCounter = metrics.GetOrRegisterCounter("chain/txs/processed", nil)
 
-	acceptedLogsCounter  = metrics.NewRegisteredCounter("chain/logs/accepted", nil)
-	processedLogsCounter = metrics.NewRegisteredCounter("chain/logs/processed", nil)
+	acceptedLogsCounter  = metrics.GetOrRegisterCounter("chain/logs/accepted", nil)
+	processedLogsCounter = metrics.GetOrRegisterCounter("chain/logs/processed", nil)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
@@ -436,7 +449,7 @@ func NewBlockChain(
 
 	// if txlookup limit is 0 (uindexing disabled), we don't need to repair the tx index tail.
 	if bc.cacheConfig.TransactionHistory != 0 {
-		latestStateSynced := rawdb.GetLatestSyncPerformed(bc.db)
+		latestStateSynced := customrawdb.GetLatestSyncPerformed(bc.db)
 		bc.repairTxIndexTail(latestStateSynced)
 	}
 
@@ -469,7 +482,7 @@ func (bc *BlockChain) batchBlockAcceptedIndices(batch ethdb.Batch, b *types.Bloc
 	if !bc.cacheConfig.SkipTxIndexing {
 		rawdb.WriteTxLookupEntriesByBlock(batch, b)
 	}
-	if err := rawdb.WriteAcceptorTip(batch, b.Hash()); err != nil {
+	if err := customrawdb.WriteAcceptorTip(batch, b.Hash()); err != nil {
 		return fmt.Errorf("%w: failed to write acceptor tip key", err)
 	}
 	return nil
@@ -1733,7 +1746,7 @@ func (bc *BlockChain) initSnapshot(b *types.Header) {
 // state that reprocessing will start from.
 func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error {
 	origin := current.NumberU64()
-	acceptorTip, err := rawdb.ReadAcceptorTip(bc.db)
+	acceptorTip, err := customrawdb.ReadAcceptorTip(bc.db)
 	if err != nil {
 		return fmt.Errorf("%w: unable to get Acceptor tip", err)
 	}
@@ -1864,9 +1877,9 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 func (bc *BlockChain) protectTrieIndex() error {
 	if !bc.cacheConfig.Pruning {
-		return rawdb.WritePruningDisabled(bc.db)
+		return customrawdb.WritePruningDisabled(bc.db)
 	}
-	pruningDisabled, err := rawdb.HasPruningDisabled(bc.db)
+	pruningDisabled, err := customrawdb.HasPruningDisabled(bc.db)
 	if err != nil {
 		return fmt.Errorf("failed to check if the chain has been run with pruning disabled: %w", err)
 	}
@@ -1951,7 +1964,7 @@ func (bc *BlockChain) populateMissingTries() error {
 	// Write marker to DB to indicate populate missing tries finished successfully.
 	// Note: writing the marker here means that we do allow consecutive runs of re-populating
 	// missing tries if it does not finish during the prior run.
-	if err := rawdb.WritePopulateMissingTries(bc.db); err != nil {
+	if err := customrawdb.WritePopulateMissingTries(bc.db); err != nil {
 		return fmt.Errorf("failed to write offline pruning success marker: %w", err)
 	}
 
@@ -2049,9 +2062,9 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	}
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
-	rawdb.WriteSnapshotBlockHash(batch, block.Hash())
+	customrawdb.WriteSnapshotBlockHash(batch, block.Hash())
 	rawdb.WriteSnapshotRoot(batch, block.Root())
-	if err := rawdb.WriteSyncPerformed(batch, block.NumberU64()); err != nil {
+	if err := customrawdb.WriteSyncPerformed(batch, block.NumberU64()); err != nil {
 		return err
 	}
 
