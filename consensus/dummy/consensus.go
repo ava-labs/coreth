@@ -377,19 +377,19 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		}
 	}
 
-	configExtra := params.GetExtra(chain.Config())
+	config := params.GetExtra(chain.Config())
 	timestamp := block.Time()
 	// Verify the BlockGasCost set in the header matches the expected value.
 	blockGasCost := customtypes.BlockGasCost(block)
 	expectedBlockGasCost := customheader.BlockGasCost(
-		configExtra,
+		config,
 		parent,
 		timestamp,
 	)
 	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 	}
-	if configExtra.IsApricotPhase4(timestamp) {
+	if config.IsApricotPhase4(timestamp) {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
