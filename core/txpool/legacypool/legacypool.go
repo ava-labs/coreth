@@ -1797,8 +1797,9 @@ func (pool *LegacyPool) periodicBaseFeeUpdate() {
 	defer pool.wg.Done()
 
 	// Sleep until its time to start the periodic base fee update or the tx pool is shutting down
+	ap3Time := utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp)
 	select {
-	case <-time.After(time.Until(utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp))):
+	case <-time.After(time.Until(ap3Time)):
 	case <-pool.generalShutdownChan:
 		return // Return early if shutting down
 	}
