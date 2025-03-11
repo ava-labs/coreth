@@ -195,7 +195,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		config.DBOverride = hashdb.Config{
 			CleanCacheSize:                  c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:                     trieCleanCacheStatsNamespace,
-			ReferenceRootAtomicallyOnUpdate: true, // Automatically reference root nodes when an update is made
+			ReferenceRootAtomicallyOnUpdate: true,
 		}.BackendConstructor
 	}
 	if c.StateScheme == rawdb.PathScheme {
