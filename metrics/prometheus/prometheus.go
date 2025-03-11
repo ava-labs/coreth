@@ -11,7 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ava-labs/libevm/metrics"
 
 	dto "github.com/prometheus/client_model/go"
 )
@@ -67,6 +67,12 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 	name = strings.ReplaceAll(name, "/", "_")
 
 	switch m := metric.(type) {
+	case metrics.NilCounter, metrics.NilCounterFloat64, metrics.NilEWMA,
+		metrics.NilGauge, metrics.NilGaugeFloat64, metrics.NilGaugeInfo,
+		metrics.NilHealthcheck, metrics.NilHistogram, metrics.NilMeter,
+		metrics.NilResettingTimer, metrics.NilSample, metrics.NilTimer:
+		return nil, fmt.Errorf("%w: %q metric is nil", errMetricSkip, name)
+
 	case metrics.Counter:
 		return &dto.MetricFamily{
 			Name: &name,
@@ -191,6 +197,7 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 				},
 			}},
 		}, nil
+
 	default:
 		return nil, fmt.Errorf("metric %q: type is not supported: %T", name, metric)
 	}

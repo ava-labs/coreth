@@ -6,8 +6,12 @@ package predicate
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
+
+// HeaderFeeWindowSize is defined in the predicate package to avoid a circular dependency.
+// After Durango, the extra data past the dynamic fee rollup window represents predicate results.
+const HeaderFeeWindowSize = 80
 
 // EndByte is used as a delimiter for the bytes packed into a precompile predicate.
 // Precompile predicates are encoded in the Access List of transactions in the access tuples

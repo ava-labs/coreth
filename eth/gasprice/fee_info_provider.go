@@ -94,8 +94,8 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (
 	}
 
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
-	if header.ExtDataGasUsed != nil {
-		totalGasUsed.Add(totalGasUsed, header.ExtDataGasUsed)
+	if used := types.GetHeaderExtra(header).ExtDataGasUsed; used != nil {
+		totalGasUsed.Add(totalGasUsed, used)
 	}
 	minGasUsed := new(big.Int).SetUint64(f.minGasUsed)
 
