@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
@@ -25,6 +24,7 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 )
@@ -376,7 +376,14 @@ func (client *stateSyncerClient) syncBlocks(ctx context.Context, fromHash common
 
 func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 	log.Info("atomic tx: sync starting", "root", client.syncSummary.AtomicRoot)
-	atomicSyncer, err := client.atomicBackend.Syncer(client.client, client.syncSummary.AtomicRoot, client.syncSummary.BlockNumber, client.stateSyncRequestSize)
+	atomicSyncer, err := newAtomicSyncer(
+		client.client,
+		client.db,
+		client.atomicBackend.AtomicTrie(),
+		client.syncSummary.AtomicRoot,
+		client.syncSummary.BlockNumber,
+		client.stateSyncRequestSize,
+	)
 	if err != nil {
 		return err
 	}

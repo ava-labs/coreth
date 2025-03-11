@@ -27,9 +27,9 @@ import (
 	"testing"
 	"time"
 
-	ethrawdb "github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
+	ethrawdb "github.com/ava-labs/libevm/core/rawdb"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"

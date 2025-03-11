@@ -26,9 +26,9 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"

@@ -9,18 +9,23 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/trie"
 
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
-	apricotPhase0MinGasPrice = big.NewInt(params.LaunchMinGasPrice)
-	apricotPhase1MinGasPrice = big.NewInt(params.ApricotPhase1MinGasPrice)
+	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
+	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
 
 type BlockValidator interface {
@@ -48,7 +53,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	if !rulesExtra.IsApricotPhase1 {
 		if v.extDataHashes != nil {
-			extData := b.ethBlock.ExtData()
+			extData := types.BlockExtData(b.ethBlock)
 			extDataHash := types.CalcExtDataHash(extData)
 			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
 			// have a block that is unexpectedly missing extra data.
@@ -73,15 +78,18 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	}
 
 	// Verify the ExtDataHash field
+	headerExtra := types.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase1 {
-		if hash := types.CalcExtDataHash(b.ethBlock.ExtData()); ethHeader.ExtDataHash != hash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", ethHeader.ExtDataHash, hash)
+		extraData := types.BlockExtData(b.ethBlock)
+		hash := types.CalcExtDataHash(extraData)
+		if headerExtra.ExtDataHash != hash {
+			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
 		}
 	} else {
-		if ethHeader.ExtDataHash != (common.Hash{}) {
+		if headerExtra.ExtDataHash != (common.Hash{}) {
 			return fmt.Errorf(
 				"expected ExtDataHash to be empty but got %x",
-				ethHeader.ExtDataHash,
+				headerExtra.ExtDataHash,
 			)
 		}
 	}
@@ -104,58 +112,13 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		return fmt.Errorf("invalid mix digest: %v", ethHeader.MixDigest)
 	}
 
-	// Enforce static gas limit after ApricotPhase1 (prior to ApricotPhase1 it's handled in processing).
-	if rulesExtra.IsCortina {
-		if ethHeader.GasLimit != params.CortinaGasLimit {
-			return fmt.Errorf(
-				"expected gas limit to be %d after cortina but got %d",
-				params.CortinaGasLimit, ethHeader.GasLimit,
-			)
-		}
-	} else if rulesExtra.IsApricotPhase1 {
-		if ethHeader.GasLimit != params.ApricotPhase1GasLimit {
-			return fmt.Errorf(
-				"expected gas limit to be %d after apricot phase 1 but got %d",
-				params.ApricotPhase1GasLimit, ethHeader.GasLimit,
-			)
-		}
+	// Verify the extra data is well-formed.
+	if err := header.VerifyExtra(rulesExtra.AvalancheRules, ethHeader.Extra); err != nil {
+		return err
 	}
 
-	// Check that the size of the header's Extra data field is correct for [rules].
-	headerExtraDataSize := len(ethHeader.Extra)
-	switch {
-	case rulesExtra.IsDurango:
-		if headerExtraDataSize < params.DynamicFeeExtraDataSize {
-			return fmt.Errorf(
-				"expected header ExtraData to be len >= %d but got %d",
-				params.DynamicFeeExtraDataSize, len(ethHeader.Extra),
-			)
-		}
-	case rulesExtra.IsApricotPhase3:
-		if headerExtraDataSize != params.DynamicFeeExtraDataSize {
-			return fmt.Errorf(
-				"expected header ExtraData to be len %d but got %d",
-				params.DynamicFeeExtraDataSize, headerExtraDataSize,
-			)
-		}
-	case rulesExtra.IsApricotPhase1:
-		if headerExtraDataSize != 0 {
-			return fmt.Errorf(
-				"expected header ExtraData to be 0 but got %d",
-				headerExtraDataSize,
-			)
-		}
-	default:
-		if uint64(headerExtraDataSize) > params.MaximumExtraDataSize {
-			return fmt.Errorf(
-				"expected header ExtraData to be <= %d but got %d",
-				params.MaximumExtraDataSize, headerExtraDataSize,
-			)
-		}
-	}
-
-	if b.ethBlock.Version() != 0 {
-		return fmt.Errorf("invalid version: %d", b.ethBlock.Version())
+	if version := types.BlockVersion(b.ethBlock); version != 0 {
+		return fmt.Errorf("invalid version: %d", version)
 	}
 
 	// Check that the tx hash in the header matches the body
@@ -188,15 +151,15 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	case !rulesExtra.IsApricotPhase1:
 		// If we are in ApricotPhase0, enforce each transaction has a minimum gas price of at least the LaunchMinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(apricotPhase0MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), params.LaunchMinGasPrice)
+			if tx.GasPrice().Cmp(ap0MinGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap0.MinGasPrice)
 			}
 		}
 	case !rulesExtra.IsApricotPhase3:
 		// If we are prior to ApricotPhase3, enforce each transaction has a minimum gas price of at least the ApricotPhase1MinGasPrice
 		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(apricotPhase1MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), params.ApricotPhase1MinGasPrice)
+			if tx.GasPrice().Cmp(ap1MinGasPrice) < 0 {
+				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap1.MinGasPrice)
 			}
 		}
 	}
@@ -221,17 +184,11 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
 	if rulesExtra.IsApricotPhase4 {
-		// Make sure ExtDataGasUsed is not nil and correct
-		if ethHeader.ExtDataGasUsed == nil {
-			return errNilExtDataGasUsedApricotPhase4
-		}
-		if rulesExtra.IsApricotPhase5 {
-			if ethHeader.ExtDataGasUsed.Cmp(params.AtomicGasLimit) == 1 {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
-			}
-		} else {
-			if !ethHeader.ExtDataGasUsed.IsUint64() {
-				return fmt.Errorf("too large extDataGasUsed: %d", ethHeader.ExtDataGasUsed)
+		// After the F upgrade, the extDataGasUsed field is validated by
+		// [header.VerifyGasUsed].
+		if !rulesExtra.IsFortuna && rulesExtra.IsApricotPhase5 {
+			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
+				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
 			}
 		}
 		var totalGasUsed uint64
@@ -243,22 +200,22 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			if err != nil {
 				return err
 			}
-			totalGasUsed, err = safemath.Add64(totalGasUsed, gasUsed)
+			totalGasUsed, err = safemath.Add(totalGasUsed, gasUsed)
 			if err != nil {
 				return err
 			}
 		}
 
 		switch {
-		case ethHeader.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0:
-			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", ethHeader.ExtDataGasUsed, totalGasUsed)
+		case !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed):
+			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
 
 		// Make sure BlockGasCost is not nil
 		// NOTE: ethHeader.BlockGasCost correctness is checked in header verification
-		case ethHeader.BlockGasCost == nil:
+		case headerExtra.BlockGasCost == nil:
 			return errNilBlockGasCostApricotPhase4
-		case !ethHeader.BlockGasCost.IsUint64():
-			return fmt.Errorf("too large blockGasCost: %d", ethHeader.BlockGasCost)
+		case !headerExtra.BlockGasCost.IsUint64():
+			return fmt.Errorf("too large blockGasCost: %d", headerExtra.BlockGasCost)
 		}
 	}
 

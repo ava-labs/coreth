@@ -676,7 +676,14 @@ func (n *proofList) Delete(key []byte) error {
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
+// If the requested block is part of historical blocks and the node does not accept
+// getting proofs for historical blocks, an error is returned.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	err := s.stateQueryBlockNumberAllowed(blockNrOrHash)
+	if err != nil {
+		return nil, fmt.Errorf("historical proof query not allowed: %s", err)
+	}
+
 	var (
 		keys         = make([]common.Hash, len(storageKeys))
 		keyLengths   = make([]int, len(storageKeys))
@@ -1225,6 +1232,7 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+	headExtra := types.GetHeaderExtra(head)
 	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
 		"hash":             head.Hash(),
@@ -1242,16 +1250,16 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"timestamp":        hexutil.Uint64(head.Time),
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
-		"extDataHash":      head.ExtDataHash,
+		"extDataHash":      headExtra.ExtDataHash,
 	}
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
-	if head.ExtDataGasUsed != nil {
-		result["extDataGasUsed"] = (*hexutil.Big)(head.ExtDataGasUsed)
+	if headExtra.ExtDataGasUsed != nil {
+		result["extDataGasUsed"] = (*hexutil.Big)(headExtra.ExtDataGasUsed)
 	}
-	if head.BlockGasCost != nil {
-		result["blockGasCost"] = (*hexutil.Big)(head.BlockGasCost)
+	if headExtra.BlockGasCost != nil {
+		result["blockGasCost"] = (*hexutil.Big)(headExtra.BlockGasCost)
 	}
 	if head.BlobGasUsed != nil {
 		result["blobGasUsed"] = hexutil.Uint64(*head.BlobGasUsed)
@@ -1271,7 +1279,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) map[string]interface{} {
 	fields := RPCMarshalHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
-	fields["blockExtraData"] = hexutil.Bytes(block.ExtData())
+	fields["blockExtraData"] = hexutil.Bytes(types.BlockExtData(block))
 
 	if inclTx {
 		formatTx := func(idx int, tx *types.Transaction) interface{} {
@@ -2012,7 +2020,7 @@ func (api *DebugAPI) GetRawHeader(ctx context.Context, blockNrOrHash rpc.BlockNu
 		hash = h
 	} else {
 		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return nil, err
 		}
 		hash = block.Hash()
@@ -2031,7 +2039,7 @@ func (api *DebugAPI) GetRawBlock(ctx context.Context, blockNrOrHash rpc.BlockNum
 		hash = h
 	} else {
 		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return nil, err
 		}
 		hash = block.Hash()
@@ -2050,7 +2058,7 @@ func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.Block
 		hash = h
 	} else {
 		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return nil, err
 		}
 		hash = block.Hash()

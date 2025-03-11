@@ -45,17 +45,18 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/bloombits"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/blocktest"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/accounts"
 	"github.com/ava-labs/libevm/accounts/keystore"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
@@ -484,6 +485,7 @@ func (b testBackend) ExtRPCEnabled() bool                        { return false 
 func (b testBackend) RPCGasCap() uint64                          { return 10000000 }
 func (b testBackend) RPCEVMTimeout() time.Duration               { return time.Second }
 func (b testBackend) RPCTxFeeCap() float64                       { return 0 }
+func (b testBackend) PriceOptionsConfig() PriceOptionConfig      { return PriceOptionConfig{} }
 func (b testBackend) UnprotectedAllowed(*types.Transaction) bool { return false }
 func (b testBackend) SetHead(number uint64)                      {}
 func (b testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -625,6 +627,12 @@ func (b testBackend) LastAcceptedBlock() *types.Block { panic("implement me") }
 func (b testBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	panic("implement me")
 }
+func (b testBackend) IsArchive() bool {
+	panic("implement me")
+}
+func (b testBackend) HistoricalProofQueryWindow() (queryWindow uint64) {
+	panic("implement me")
+}
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
@@ -722,7 +730,7 @@ func TestEstimateGas(t *testing.T) {
 			call: TransactionArgs{
 				From:     &accounts[0].addr,
 				Input:    hex2Bytes("6080604052348015600f57600080fd5b50483a1015601c57600080fd5b60003a111560315760004811603057600080fd5b5b603f80603e6000396000f3fe6080604052600080fdfea264697066735822122060729c2cee02b10748fae5200f1c9da4661963354973d9154c13a8e9ce9dee1564736f6c63430008130033"),
-				GasPrice: (*hexutil.Big)(big.NewInt(params.ApricotPhase3InitialBaseFee)), // Legacy as pricing
+				GasPrice: (*hexutil.Big)(big.NewInt(ap3.InitialBaseFee)), // Legacy as pricing
 			},
 			expectErr: nil,
 			want:      67617,
@@ -732,7 +740,7 @@ func TestEstimateGas(t *testing.T) {
 			call: TransactionArgs{
 				From:         &accounts[0].addr,
 				Input:        hex2Bytes("6080604052348015600f57600080fd5b50483a1015601c57600080fd5b60003a111560315760004811603057600080fd5b5b603f80603e6000396000f3fe6080604052600080fdfea264697066735822122060729c2cee02b10748fae5200f1c9da4661963354973d9154c13a8e9ce9dee1564736f6c63430008130033"),
-				MaxFeePerGas: (*hexutil.Big)(big.NewInt(params.ApricotPhase3InitialBaseFee)), // 1559 gas pricing
+				MaxFeePerGas: (*hexutil.Big)(big.NewInt(ap3.InitialBaseFee)), // 1559 gas pricing
 			},
 			expectErr: nil,
 			want:      67617,
@@ -1015,7 +1023,10 @@ func TestSignTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expect := `{"type":"0x2","chainId":"0x1","nonce":"0x0","to":"0x703c4b2bd70c169f5717101caee543299fc946c7","gas":"0x5208","gasPrice":null,"maxPriorityFeePerGas":"0x0","maxFeePerGas":"0x68c6171400","value":"0x1","input":"0x","accessList":[],"v":"0x1","r":"0x83cf4820cfd50fdd240fea74eaf7227e2e3919507cc567c885a6e6bf27543567","s":"0x899543bbe903a76b705e03cfba217e5cb91fc7204309170c0e91f34988d5fb2","yParity":"0x1","hash":"0x09572232b67f69faab343c5b417c8964b15263c5abbbcdb1ebf7f5eda8ed3a63"}`
+	// The expected result has deviated from upstream because the base fee, and
+	// therefore the `maxFeePerGas`, resulting from [params.TestChainConfig] is
+	// different.
+	expect := `{"type":"0x2","chainId":"0x1","nonce":"0x0","to":"0x703c4b2bd70c169f5717101caee543299fc946c7","gas":"0x5208","gasPrice":null,"maxPriorityFeePerGas":"0x0","maxFeePerGas":"0x2","value":"0x1","input":"0x","accessList":[],"v":"0x1","r":"0x5a32230e497be0277b58afb995227a167e087462fb770057ed6946f5ef5a2df5","s":"0x431e048124baffbd67bc35df940bb9f5ddf8a36afb2672616d075ac39415e885","yParity":"0x1","hash":"0xf5e941beeca516d3d3dca2707d74c54a58e07365b89efc5de58dd7b6041ef78e"}`
 	if !bytes.Equal(tx, []byte(expect)) {
 		t.Errorf("result mismatch. Have:\n%s\nWant:\n%s\n", tx, expect)
 	}

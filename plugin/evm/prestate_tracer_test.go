@@ -13,12 +13,12 @@ import (
 	"unicode"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/tests"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/core/rawdb"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 )
@@ -38,7 +38,6 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
-		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 

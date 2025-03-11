@@ -1,4 +1,4 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// (c) 2019-2025, Ava Labs, Inc.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -30,24 +30,10 @@ import (
 	ethtypes "github.com/ava-labs/libevm/core/types"
 )
 
-type (
-	// Import these types from the go-ethereum package
-	StateAccount = ethtypes.StateAccount
-	SlimAccount  = ethtypes.SlimAccount
-)
-
-var (
-	// Import these functions from the go-ethereum package
-	NewEmptyStateAccount = ethtypes.NewEmptyStateAccount
-	SlimAccountRLP       = ethtypes.SlimAccountRLP
-	FullAccount          = ethtypes.FullAccount
-	FullAccountRLP       = ethtypes.FullAccountRLP
-)
-
 type isMultiCoin bool
 
-var IsMultiCoinPayloads = ethtypes.RegisterExtras[isMultiCoin]()
+var IsMultiCoinPayloads = extras.StateAccount
 
-func IsMultiCoin(a ethtypes.ExtraPayloadCarrier) bool {
-	return bool(IsMultiCoinPayloads.FromPayloadCarrier(a))
+func IsMultiCoin(s ethtypes.StateOrSlimAccount) bool {
+	return bool(IsMultiCoinPayloads.Get(s))
 }
