@@ -290,6 +290,10 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 
 		log.Info("Set LastAcceptedBlock as first pivot", "id", evmBlock.ID(), "height", evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	}
+
+	// block incoming verify/accept until state sync is done
+	client.atomicDone = make(chan struct{})
+
 	go func() {
 		defer client.wg.Done()
 		defer cancel()
@@ -313,9 +317,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		log.Info("stateSync completed, notifying engine", "err", client.stateSyncErr)
 		client.toEngine <- commonEng.StateSyncDone
 	}()
-
-	// block incoming verify/accept until state sync is done
-	client.atomicDone = make(chan struct{})
 
 	if client.useUpstream {
 		return block.StateSyncDynamic, nil
