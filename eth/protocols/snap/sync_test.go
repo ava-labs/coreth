@@ -1868,8 +1868,9 @@ func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *test
 // TestSyncAccountPerformance tests how efficient the snap algo is at minimizing
 // state healing
 func TestSyncAccountPerformance(t *testing.T) {
-	t.Parallel()
-
+	// These tests must not run in parallel: they modify the
+	// global var accountConcurrency
+	// t.Parallel()
 	testSyncAccountPerformance(t, ethrawdb.HashScheme)
 	testSyncAccountPerformance(t, ethrawdb.PathScheme)
 }
