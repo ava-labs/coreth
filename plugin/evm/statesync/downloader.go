@@ -93,7 +93,9 @@ func (d *Downloader) Pivot() *types.Block {
 
 // Opens bufferLock to allow block requests to go through after finalizing the sync
 func (d *Downloader) Close() {
-	d.flushQueue(true) // ignores errors
+	if err := d.flushQueue(true); err != nil {
+		log.Error("Issue flushing queue", "err", err)
+	}
 	d.bufferLock.Unlock()
 }
 
@@ -111,13 +113,13 @@ func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 	d.bufferLen++
 
 	// Should change to debug prior to production
-	log.Info("Received queue request", "hash", b.Hash(), "height", b.Number(), "req", req, "timestamp", b.Timestamp())
+	log.Info("Received queue request", "hash", b.Hash(), "height", b.Number(), "req type", req)
 
 	// If on pivot interval, we should pivot (regardless of whether the queue is full)
 	if req == AcceptSyncBlockRequest && b.NumberU64()%pivotInterval == 0 {
-		log.Info("Setting new pivot block", "hash", b.Hash(), "height", b.NumberU64(), "timestamp", b.Timestamp())
+		log.Info("Setting new pivot block", "hash", b.Hash(), "height", b.NumberU64())
 		if b.NumberU64() <= d.pivotBlock.NumberU64() {
-			log.Warn("Received pivot with height <= pivot block", "old hash", b.Hash(), "old height", b.NumberU64(), "timestamp", b.Timestamp())
+			log.Warn("Received pivot with height <= pivot block", "old hash", b.Hash(), "old height")
 		}
 
 		// Reset pivot first in other goroutine
@@ -185,7 +187,11 @@ func (d *Downloader) SnapSync(ctx context.Context) error {
 			return sync.err
 		case <-ctx.Done():
 			log.Warn("Sync interrupted by context", "err", ctx.Err())
+			close(d.quitCh)
 			return ctx.Err()
+		case <-d.quitCh: // currently only triggered by queue overflow
+			log.Warn("Sync interrupted by quit channel")
+			return errors.New("Snap sync interrupted by quit channel")
 		case newPivot := <-d.newPivot:
 			// If a new pivot block is found, cancel the current state sync and
 			// start a new one.
@@ -225,7 +231,8 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		select {
 		case next := <-d.stateSyncStart:
 			return next
-
+		case <-d.quitCh:
+			return nil
 		case <-s.done:
 			return nil
 		}

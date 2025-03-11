@@ -88,10 +88,12 @@ type stateSyncerClient struct {
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
-	return &stateSyncerClient{
+	client := &stateSyncerClient{
 		stateSyncClientConfig: config,
 		atomicDone:            make(chan struct{}),
 	}
+	close(client.atomicDone) // close first in case we don't state sync
+	return client
 }
 
 type StateSyncClient interface {
@@ -297,15 +299,11 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			client.stateSyncErr = err
 		} else {
 			if client.useUpstream {
-				log.Info("No state sync error, final pivot", "hash", client.dl.Pivot().Hash(), "height", client.dl.Pivot().NumberU64())
+				log.Info("Final pivot", "hash", client.dl.Pivot().Hash(), "height", client.dl.Pivot().NumberU64())
 				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
-				defer func() {
-					log.Debug("Closing downloader in defer")
-					client.dl.Close()
-				}()
+				client.dl.Close()
 				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
 			} else {
-				log.Error("Called incorrect finishSync?????", "useUpstream", client.useUpstream)
 				client.stateSyncErr = client.finishSync(client.syncSummary.BlockHash)
 			}
 		}
@@ -315,6 +313,9 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		log.Info("stateSync completed, notifying engine", "err", client.stateSyncErr)
 		client.toEngine <- commonEng.StateSyncDone
 	}()
+
+	// block incoming verify/accept until state sync is done
+	client.atomicDone = make(chan struct{})
 
 	if client.useUpstream {
 		return block.StateSyncDynamic, nil
@@ -491,7 +492,7 @@ func (client *stateSyncerClient) finishSync(blockHash common.Hash) error {
 		return err
 	}
 
-	if err := client.updateVMMarkers(blockHash, block.NumberU64()); err != nil {
+	if err := client.updateVMMarkers(blockHash); err != nil {
 		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
 	}
 
@@ -514,11 +515,11 @@ func (client *stateSyncerClient) finishSync(blockHash common.Hash) error {
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
 // - removes state sync progress markers
-func (client *stateSyncerClient) updateVMMarkers(blockHash common.Hash, lastAcceptedHeight uint64) error {
+func (client *stateSyncerClient) updateVMMarkers(blockHash common.Hash) error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.syncSummary] when ApplyToSharedMemory
 	// is called.
-	if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(lastAcceptedHeight); err != nil {
+	if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(client.lastAcceptedHeight); err != nil {
 		return err
 	}
 	client.atomicBackend.SetLastAccepted(blockHash)
