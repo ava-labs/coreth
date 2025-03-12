@@ -268,23 +268,15 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	client.cancel = cancel
 	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
 	if client.useUpstream {
-		// Set downloader using pivot
+		// Set downloader using first pivot
 		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
 		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
-		ethBlock := evmBlock.ethBlock
 
-		// Do all of updateVMMarkers EXCEPT acceptBlockDB.Put, since this breaks resume
-		if err := client.atomicBackend.MarkApplyToSharedMemoryCursor(ethBlock.NumberU64()); err != nil {
-			return block.StateSyncSkipped, err
-		}
+		// Set atomic last accepted to avoid failed verification on first block
 		client.atomicBackend.SetLastAccepted(client.syncSummary.BlockHash)
-		if err := client.db.Commit(); err != nil {
-			return block.StateSyncSkipped, err
-		}
+
+		// Ensures bootstrapping begins at the correct place
 		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
-			return block.StateSyncSkipped, err
-		}
-		if err := client.atomicBackend.ApplyToSharedMemory(ethBlock.NumberU64()); err != nil {
 			return block.StateSyncSkipped, err
 		}
 
@@ -305,7 +297,7 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			if client.useUpstream {
 				log.Info("Final pivot", "hash", client.dl.Pivot().Hash(), "height", client.dl.Pivot().NumberU64())
 				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
-				client.dl.Close()
+				defer client.dl.Close()
 				client.stateSyncErr = client.finishSync(client.dl.Pivot().Hash())
 			} else {
 				client.stateSyncErr = client.finishSync(client.syncSummary.BlockHash)

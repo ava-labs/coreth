@@ -1463,8 +1463,8 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
 
+	// Ignore all SetPreference requests while dynamically syncing
 	if vm.StateSyncClient.AsyncReceive() {
-		log.Warn("cannot set preference while state sync is in progress", "block", blkID)
 		return nil
 	}
 
