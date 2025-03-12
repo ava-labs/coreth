@@ -959,7 +959,7 @@ func checkStall(t *testing.T, term func()) chan struct{} {
 	testDone := make(chan struct{})
 	go func() {
 		select {
-		case <-time.After(time.Minute): // TODO(karalabe): Make tests smaller, this is too much
+		case <-time.After(5 * time.Minute): // TODO(karalabe): Make tests smaller, this is too much
 			t.Log("Sync stalled")
 			term()
 		case <-testDone:

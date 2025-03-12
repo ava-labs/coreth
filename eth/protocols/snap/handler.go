@@ -27,7 +27,6 @@ import (
 	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
@@ -339,12 +338,12 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		//hash, account := it.Hash(), common.CopyBytes(it.Account())
 		//hash, account := common.BytesToHash(it.Key), it.Value
 		hash, account := common.BytesToHash(leafResponseKey), leafsResponse.Vals[i]
-		acc := new(types.StateAccount)
+		acc := new(ethtypes.StateAccount)
 		if err := rlp.DecodeBytes(account, &acc); err != nil {
 			log.Warn("Failed to unmarshal account", "hash", hash, "err", err)
 			continue
 		}
-		account = types.SlimAccountRLP(*acc)
+		account = ethtypes.SlimAccountRLP(*acc)
 
 		// Track the returned interval for the Merkle proofs
 		last = hash
