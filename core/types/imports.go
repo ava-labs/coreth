@@ -20,6 +20,7 @@ type (
 	Blocks            = ethtypes.Blocks
 	Bloom             = ethtypes.Bloom
 	Body              = ethtypes.Body
+	DerivableList     = ethtypes.DerivableList
 	DynamicFeeTx      = ethtypes.DynamicFeeTx
 	GenesisAlloc      = ethtypes.GenesisAlloc
 	Header            = ethtypes.Header
@@ -34,6 +35,7 @@ type (
 	StateAccount      = ethtypes.StateAccount
 	Transaction       = ethtypes.Transaction
 	Transactions      = ethtypes.Transactions
+	TrieHasher        = ethtypes.TrieHasher
 	TxByNonce         = ethtypes.TxByNonce
 	TxData            = ethtypes.TxData
 )
@@ -69,6 +71,7 @@ var (
 	CalcUncleHash        = ethtypes.CalcUncleHash
 	CopyHeader           = ethtypes.CopyHeader
 	CreateBloom          = ethtypes.CreateBloom
+	DeriveSha            = ethtypes.DeriveSha
 	EncodeNonce          = ethtypes.EncodeNonce
 	FullAccount          = ethtypes.FullAccount
 	FullAccountRLP       = ethtypes.FullAccountRLP
