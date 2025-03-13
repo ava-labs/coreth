@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
@@ -53,7 +54,7 @@ func TestSuggestPriceOptions(t *testing.T) {
 		MaxBaseFee:        100 * params.GWei,
 		MaxTip:            20 * params.GWei,
 	}
-	minBaseFee := 1 * params.GWei
+	minBaseFee := etna.MinBaseFee
 	bigMinBaseFee := big.NewInt(int64(minBaseFee))
 	fortunaMinBaseFee := acp176.MinGasPrice
 	bigFortunaMinBaseFee := big.NewInt(int64(fortunaMinBaseFee))

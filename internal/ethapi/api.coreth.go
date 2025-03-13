@@ -65,20 +65,19 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 	// TODO: This can be removed after Fortuna is activated
 	time := s.b.CurrentHeader().Time
 	chainConfig := s.b.ChainConfig()
-	var minBaseFee int64
+	minBaseFee := new(big.Int)
 	if chainConfig.IsFortuna(time) {
-		minBaseFee = acp176.MinGasPrice
+		minBaseFee.SetUint64(acp176.MinGasPrice)
 	} else {
-		minBaseFee = etna.MinBaseFee
+		minBaseFee.SetUint64(etna.MinBaseFee)
 	}
-	bigMinBaseFee := big.NewInt(minBaseFee)
 
 	cfg := s.b.PriceOptionsConfig()
 	bigSlowFeePercent := new(big.Int).SetUint64(cfg.SlowFeePercentage)
 	bigFastFeePercent := new(big.Int).SetUint64(cfg.FastFeePercentage)
 
 	baseFees := calculateFeeSpeeds(
-		bigMinBaseFee,
+		minBaseFee,
 		baseFee,
 		big.NewInt(int64(cfg.MaxBaseFee)),
 		bigSlowFeePercent,
