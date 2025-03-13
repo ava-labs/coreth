@@ -25,6 +25,7 @@ type (
 	Header            = ethtypes.Header
 	HomesteadSigner   = ethtypes.HomesteadSigner
 	LegacyTx          = ethtypes.LegacyTx
+	Log               = ethtypes.Log
 	Receipt           = ethtypes.Receipt
 	ReceiptForStorage = ethtypes.ReceiptForStorage
 	Receipts          = ethtypes.Receipts
