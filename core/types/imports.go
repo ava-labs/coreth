@@ -13,6 +13,7 @@ type (
 	AccessList        = ethtypes.AccessList
 	AccessListTx      = ethtypes.AccessListTx
 	AccessTuple       = ethtypes.AccessTuple
+	Account           = ethtypes.Account
 	BlobTx            = ethtypes.BlobTx
 	BlobTxSidecar     = ethtypes.BlobTxSidecar
 	Block             = ethtypes.Block
@@ -21,6 +22,7 @@ type (
 	Bloom             = ethtypes.Bloom
 	Body              = ethtypes.Body
 	DynamicFeeTx      = ethtypes.DynamicFeeTx
+	GenesisAlloc      = ethtypes.GenesisAlloc
 	Header            = ethtypes.Header
 	HomesteadSigner   = ethtypes.HomesteadSigner
 	LegacyTx          = ethtypes.LegacyTx
