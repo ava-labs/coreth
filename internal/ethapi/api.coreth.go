@@ -47,11 +47,6 @@ type PriceOptions struct {
 // SuggestPriceOptions returns suggestions for what to display to a user for
 // current transaction fees.
 func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, error) {
-	var (
-		minBaseFee    int64
-		bigMinBaseFee *big.Int
-	)
-
 	baseFee, err := s.b.EstimateBaseFee(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate base fee: %w", err)
@@ -66,14 +61,17 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 		return nil, nil
 	}
 
+	// Find min base fee based on chain config
+	// TODO: This can be removed after Fortuna is activated
 	time := s.b.CurrentHeader().Time
 	chainConfig := s.b.ChainConfig()
+	var minBaseFee int64
 	if chainConfig.IsFortuna(time) {
 		minBaseFee = acp176.MinGasPrice
 	} else {
 		minBaseFee = etna.MinBaseFee
 	}
-	bigMinBaseFee = big.NewInt(minBaseFee)
+	bigMinBaseFee := big.NewInt(minBaseFee)
 
 	cfg := s.b.PriceOptionsConfig()
 	bigSlowFeePercent := new(big.Int).SetUint64(cfg.SlowFeePercentage)
