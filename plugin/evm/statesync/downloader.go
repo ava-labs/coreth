@@ -162,20 +162,35 @@ func (d *downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 // If `final`, executes blocks as normal. Otherwise executes only atomic operations
 // To avoid duplicating actions, should adjust length at higher level
 func (d *downloader) flushQueue(final bool) error {
-	defer func() { d.bufferLen = 0 }()
-	// During sync, can ignore queue
+	newLength := 0
 	log.Debug("Flushing queue", "final", final, "bufferLen", d.bufferLen)
-	if !final {
-		return nil
-	}
+	defer func() {
+		d.bufferLen = newLength
+		log.Debug("Queue flushed", "newLength", newLength)
+	}()
 
-	for i, elem := range d.blockBuffer {
-		if i >= d.bufferLen {
-			return nil
+	if final {
+		// We should execute all blocks if final
+		for i, elem := range d.blockBuffer {
+			if i >= d.bufferLen {
+				return nil
+			}
+
+			if err := elem.resolver(); err != nil {
+				return err
+			}
 		}
+	} else {
+		// We should only remove blocks earlier than the pivot
+		for i, elem := range d.blockBuffer {
+			if i >= d.bufferLen {
+				return nil
+			}
 
-		if err := elem.resolver(); err != nil {
-			return err
+			if elem.block.NumberU64() > d.pivotBlock.NumberU64() {
+				d.blockBuffer[newLength] = elem
+				newLength++
+			}
 		}
 	}
 
