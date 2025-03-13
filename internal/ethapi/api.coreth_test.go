@@ -42,6 +42,8 @@ func TestSuggestPriceOptions(t *testing.T) {
 		MaxBaseFee:        100 * params.GWei,
 		MaxTip:            20 * params.GWei,
 	}
+	minBaseFee := 1 * params.GWei
+	bigMinBaseFee := big.NewInt(int64(minBaseFee))
 	slowFeeNumerator := testCfg.SlowFeePercentage
 	fastFeeNumerator := testCfg.FastFeePercentage
 	maxNormalGasTip := testCfg.MaxTip

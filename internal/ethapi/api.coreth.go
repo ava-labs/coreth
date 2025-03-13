@@ -8,20 +8,18 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
 const (
-	minBaseFee = etna.MinBaseFee // 1 nAVAX
-	minGasTip  = 1               // 1 wei
-
+	minGasTip      = 1 // 1 wei
 	feeDenominator = 100
 )
 
 var (
-	bigMinBaseFee     = big.NewInt(minBaseFee)
 	bigMinGasTip      = big.NewInt(minGasTip)
 	bigFeeDenominator = big.NewInt(feeDenominator)
 )
@@ -49,6 +47,11 @@ type PriceOptions struct {
 // SuggestPriceOptions returns suggestions for what to display to a user for
 // current transaction fees.
 func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, error) {
+	var (
+		minBaseFee    int64
+		bigMinBaseFee *big.Int
+	)
+
 	baseFee, err := s.b.EstimateBaseFee(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate base fee: %w", err)
@@ -62,6 +65,15 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 	if baseFee == nil || gasTip == nil {
 		return nil, nil
 	}
+
+	time := s.b.CurrentHeader().Time
+	chainConfig := s.b.ChainConfig()
+	if chainConfig.IsFortuna(time) {
+		minBaseFee = acp176.MinGasPrice
+	} else {
+		minBaseFee = etna.MinBaseFee
+	}
+	bigMinBaseFee = big.NewInt(minBaseFee)
 
 	cfg := s.b.PriceOptionsConfig()
 	bigSlowFeePercent := new(big.Int).SetUint64(cfg.SlowFeePercentage)
