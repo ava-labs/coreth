@@ -8,7 +8,6 @@ import (
 )
 
 // The following types are used directly as their upstream definitions.
-// So we list them all here to avoid having many individual files.
 type (
 	AccessList        = ethtypes.AccessList
 	AccessListTx      = ethtypes.AccessListTx
@@ -52,6 +51,16 @@ const (
 	LegacyTxType     = ethtypes.LegacyTxType
 )
 
+// The following variables are used directly as their upstream definitions.
+var (
+	EmptyRootHash     = ethtypes.EmptyRootHash
+	EmptyUncleHash    = ethtypes.EmptyUncleHash
+	EmptyCodeHash     = ethtypes.EmptyCodeHash
+	EmptyTxsHash      = ethtypes.EmptyTxsHash
+	EmptyReceiptsHash = ethtypes.EmptyReceiptsHash
+	EmptyVerkleHash   = ethtypes.EmptyVerkleHash
+)
+
 // The following functions are used directly as their upstream definitions.
 var (
 	BloomLookup          = ethtypes.BloomLookup
@@ -69,6 +78,7 @@ var (
 	NewReceipt           = ethtypes.NewReceipt
 	NewTransaction       = ethtypes.NewTransaction
 	SlimAccountRLP       = ethtypes.SlimAccountRLP
+	TrieRootHash         = ethtypes.TrieRootHash
 
 	// Signers
 	LatestSigner           = ethtypes.LatestSigner
