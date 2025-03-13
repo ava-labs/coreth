@@ -32,11 +32,11 @@ var (
 )
 
 type Connector struct {
-	downloader *Downloader
+	downloader *downloader
 	sender     *p2p.Client
 }
 
-func NewConnector(downloader *Downloader, sender *p2p.Client) *Connector {
+func NewConnector(downloader *downloader, sender *p2p.Client) *Connector {
 	return &Connector{downloader: downloader, sender: sender}
 }
 
@@ -50,11 +50,11 @@ func (c *Connector) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 
 type outbound struct {
 	peerID     ids.NodeID
-	downloader *Downloader
+	downloader *downloader
 	sender     *p2p.Client
 }
 
-func NewOutboundPeer(nodeID ids.NodeID, downloader *Downloader, sender *p2p.Client) *snap.Peer {
+func NewOutboundPeer(nodeID ids.NodeID, downloader *downloader, sender *p2p.Client) *snap.Peer {
 	return snap.NewFakePeer(protocolVersion, nodeID.String(), &outbound{
 		peerID:     nodeID,
 		downloader: downloader,

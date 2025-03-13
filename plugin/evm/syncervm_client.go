@@ -82,7 +82,7 @@ type stateSyncerClient struct {
 
 	// Dynamic sync
 	syncing        utils.Atomic[bool]
-	dl             *ethstatesync.Downloader
+	dl             ethstatesync.Downloader
 	downloaderLock sync.Mutex
 	atomicDone     chan struct{} // to prevent writing during atomic sync
 }
@@ -419,13 +419,8 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 
 // upstreamSyncStateTrie syncs the state trie using the upstream state syncer
 func (client *stateSyncerClient) upstreamSyncStateTrie(ctx context.Context) error {
-	p2pClient := client.network.NewClient(ethstatesync.ProtocolID)
-	if len(client.stateSyncNodes) > 0 {
-		for _, nodeID := range client.stateSyncNodes {
-			client.dl.SnapSyncer.Register(ethstatesync.NewOutboundPeer(nodeID, client.dl, p2pClient))
-		}
-	} else {
-		client.network.AddConnector(ethstatesync.NewConnector(client.dl, p2pClient))
+	if err := client.dl.RegisterSyncNodes(client.network, client.stateSyncNodes); err != nil {
+		return err
 	}
 
 	if err := client.dl.SnapSync(ctx); err != nil {

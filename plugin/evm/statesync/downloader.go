@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/protocols/snap"
+	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
@@ -24,14 +26,14 @@ const (
 	VerifySyncBlockRequest SyncBlockRequest = iota + 1
 	AcceptSyncBlockRequest
 	RejectSyncBlockRequest
-)
 
-const (
 	// Dynamic state switches state root occasionally
 	// Buffer must be large enough to
 	pivotInterval = 128
 	bufferSize    = 3 * pivotInterval
 )
+
+var _ Downloader = &downloader{}
 
 type queueElement struct {
 	block    *types.Block
@@ -39,7 +41,23 @@ type queueElement struct {
 	resolver func() error
 }
 
-type Downloader struct {
+type Downloader interface {
+	// Returns the current pivot
+	Pivot() *types.Block
+	// Opens bufferLock to allow block requests to go through after finalizing the sync
+	Close()
+	// QueueBlock queues a block for processing by the state syncer.
+	QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func() error) error
+	// It controls the synchronisation of state nodes of the pivot block.
+	SnapSync(ctx context.Context) error
+	// RegisterSyncNodes registers the state sync nodes to the network
+	RegisterSyncNodes(network peer.Network, stateSyncNodes []ids.NodeID) error
+	// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
+	// data packet for the local node to consume.
+	DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error
+}
+
+type downloader struct {
 	pivotBlock  *types.Block
 	pivotLock   sync.RWMutex
 	SnapSyncer  *snap.Syncer
@@ -53,8 +71,8 @@ type Downloader struct {
 	// quitLock       sync.Mutex    // Lock to prevent double closes
 }
 
-func NewDownloader(chaindb ethdb.Database, firstPivot *types.Block, bufferLock *sync.Mutex) *Downloader {
-	d := &Downloader{
+func NewDownloader(chaindb ethdb.Database, firstPivot *types.Block, bufferLock *sync.Mutex) Downloader {
+	d := &downloader{
 		pivotBlock:     firstPivot,
 		SnapSyncer:     snap.NewSyncer(chaindb, rawdb.HashScheme),
 		blockBuffer:    make([]*queueElement, bufferSize),
@@ -71,7 +89,7 @@ func NewDownloader(chaindb ethdb.Database, firstPivot *types.Block, bufferLock *
 
 // stateFetcher manages the active state sync and accepts requests
 // on its behalf.
-func (d *Downloader) stateFetcher() {
+func (d *downloader) stateFetcher() {
 	for {
 		select {
 		case s := <-d.stateSyncStart:
@@ -85,23 +103,24 @@ func (d *Downloader) stateFetcher() {
 }
 
 // Returns the current pivot
-func (d *Downloader) Pivot() *types.Block {
+func (d *downloader) Pivot() *types.Block {
 	d.pivotLock.RLock()
 	defer d.pivotLock.RUnlock()
 	return d.pivotBlock
 }
 
 // Opens bufferLock to allow block requests to go through after finalizing the sync
-func (d *Downloader) Close() {
+func (d *downloader) Close() {
 	if err := d.flushQueue(true); err != nil {
 		log.Error("Issue flushing queue", "err", err)
 	}
 	d.bufferLock.Unlock()
+	log.Info("Downloader closed")
 }
 
 // QueueBlock queues a block for processing by the state syncer.
 // This assumes the queue lock is NOT held
-func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func() error) error {
+func (d *downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func() error) error {
 	d.bufferLock.Lock()
 	defer d.bufferLock.Unlock()
 	if d.bufferLen >= len(d.blockBuffer) {
@@ -142,7 +161,7 @@ func (d *Downloader) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, res
 // Clears queue of blocks. Assumes no elements are past pivot and bufferLock is held
 // If `final`, executes blocks as normal. Otherwise executes only atomic operations
 // To avoid duplicating actions, should adjust length at higher level
-func (d *Downloader) flushQueue(final bool) error {
+func (d *downloader) flushQueue(final bool) error {
 	defer func() { d.bufferLen = 0 }()
 	// During sync, can ignore queue
 	log.Debug("Flushing queue", "final", final, "bufferLen", d.bufferLen)
@@ -165,7 +184,7 @@ func (d *Downloader) flushQueue(final bool) error {
 
 // processSnapSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *Downloader) SnapSync(ctx context.Context) error {
+func (d *downloader) SnapSync(ctx context.Context) error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	sync := d.syncState(d.pivotBlock.Root())
@@ -203,7 +222,7 @@ func (d *Downloader) SnapSync(ctx context.Context) error {
 }
 
 // syncState starts downloading state with the given root hash.
-func (d *Downloader) syncState(root common.Hash) *stateSync {
+func (d *downloader) syncState(root common.Hash) *stateSync {
 	// Create the state sync
 	s := newStateSync(d, root)
 	select {
@@ -221,7 +240,7 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 
 // runStateSync runs a state synchronisation until it completes or another root
 // hash is requested to be switched over to.
-func (d *Downloader) runStateSync(s *stateSync) *stateSync {
+func (d *downloader) runStateSync(s *stateSync) *stateSync {
 	log.Debug("State sync starting", "root", s.root)
 
 	go s.run()
@@ -242,7 +261,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 // stateSync schedules requests for downloading a particular state trie defined
 // by a given state root.
 type stateSync struct {
-	d    *Downloader // Downloader instance to access and manage current peerset
+	d    *downloader // Downloader instance to access and manage current peerset
 	root common.Hash // State root currently being synced
 
 	started    chan struct{} // Started is signalled once the sync loop starts
@@ -254,7 +273,7 @@ type stateSync struct {
 
 // newStateSync creates a new state trie download scheduler. This method does not
 // yet start the sync. The user needs to call run to initiate.
-func newStateSync(d *Downloader, root common.Hash) *stateSync {
+func newStateSync(d *downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
 		root:    root,
@@ -287,9 +306,25 @@ func (s *stateSync) Cancel() error {
 	return s.Wait()
 }
 
+func (d *downloader) RegisterSyncNodes(network peer.Network, stateSyncNodes []ids.NodeID) error {
+	p2pClient := network.NewClient(ProtocolID)
+	if len(stateSyncNodes) > 0 {
+		for _, nodeID := range stateSyncNodes {
+			if err := d.SnapSyncer.Register(NewOutboundPeer(nodeID, d, p2pClient)); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := network.AddConnector(NewConnector(d, p2pClient)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // DeliverSnapPacket is invoked from a peer's message handler when it transmits a
 // data packet for the local node to consume.
-func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
+func (d *downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
 	switch packet := packet.(type) {
 	case *snap.AccountRangePacket:
 		hashes, accounts, err := packet.Unpack()
