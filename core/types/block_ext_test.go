@@ -173,7 +173,7 @@ func TestBlockWithNonZeroFields(t *testing.T) {
 // bodyWithNonZeroFields returns a [Body] and a [BlockBodyExtra],
 // each with all fields set to non-zero values.
 // The [BlockBodyExtra] extra payload is set in the [Body] via `extras.Block.Set`
-// and the extra copying done in [Block.Body].
+// and the extra copying done in `Block.Body()`.
 //
 // NOTE: They can be used to demonstrate that RLP round-trip encoding
 // can recover all fields, but not that the encoded format is correct. This is

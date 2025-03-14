@@ -91,7 +91,6 @@ var (
 	SignNewTx              = ethtypes.SignNewTx
 
 	// Transactions
-
 	TxDifference = ethtypes.TxDifference
 
 	// Errors
