@@ -209,15 +209,24 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
+	// In the dynamic case, sync atomic trie first. Otherwise, sync EVM trie first.
 	// Sync the EVM trie and then the atomic trie. These steps could be done
-	// in parallel or in the opposite order in the static case
+	// in parallel or in the opposite order in the static case, as long as
+	// the finishing steps are done together afterward (which they are not).
+	// Otherwise, stateTrie must go first
 	// For dynamic, much simpler to do atomic trie first
+	if client.useUpstream {
+		if err := client.syncAtomicTrie(ctx); err != nil {
+			return err
+		}
 
-	if err := client.syncAtomicTrie(ctx); err != nil {
-		return err
+		return client.syncStateTrie(ctx)
 	}
 
-	return client.syncStateTrie(ctx)
+	if err := client.syncStateTrie(ctx); err != nil {
+		return err
+	}
+	return client.syncAtomicTrie(ctx)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -269,7 +278,10 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
 	if client.useUpstream {
 		// Set downloader using first pivot
-		evmBlock := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
+		evmBlock, err := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
+		if err != nil {
+			return block.StateSyncSkipped, fmt.Errorf("Could not get evmBlock from hash during acceptSyncSummary: %s, err: %w", client.syncSummary.BlockHash, err)
+		}
 		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
 
 		// Ensures bootstrapping begins at the correct place
@@ -386,7 +398,7 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 
 func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", client.syncSummary.BlockRoot)
-	finalHash := client.syncSummary.BlockRoot
+	finalHash := client.syncSummary.BlockHash
 
 	var err error
 	if client.useUpstream {
@@ -439,34 +451,31 @@ func (client *stateSyncerClient) Shutdown() error {
 	return nil
 }
 
-func (client *stateSyncerClient) getEVMBlockFromHash(blockHash common.Hash) *Block {
+func (client *stateSyncerClient) getEVMBlockFromHash(blockHash common.Hash) (*Block, error) {
 	// Must first find first pivot block to signal bootstrapper
 	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(blockHash))
 	if err != nil {
-		log.Error("could not get block by hash from client state", "hash", blockHash)
-		return nil
+		return nil, fmt.Errorf("could not get block by hash %s from client state: %w", blockHash, err)
 	}
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
 	if !ok {
-		log.Error("could not convert block to *chain.BlockWrapper", "type", wrapper, "hash", blockHash)
-		return nil
+		return nil, fmt.Errorf("could not convert block to *chain.BlockWrapper, type %T, hash %s", wrapper, blockHash)
 	}
 	evmBlock, ok := wrapper.Block.(*Block)
 	if !ok {
-		log.Error("could not convert block(%T) to evm.Block", stateBlock)
-		return nil
+		return nil, fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
 	}
 
-	return evmBlock
+	return evmBlock, nil
 }
 
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
 func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	log.Debug("Called finishSync with", "hash", blockHash)
-	evmBlock := client.getEVMBlockFromHash(blockHash)
-	if evmBlock == nil {
-		return fmt.Errorf("Could not get evmBlock form hash %s", blockHash)
+	evmBlock, err := client.getEVMBlockFromHash(blockHash)
+	if err != nil {
+		return fmt.Errorf("Could not get evmBlock from hash during finishStateSync: %w", err)
 	}
 
 	block := evmBlock.ethBlock
@@ -512,9 +521,9 @@ func (client *stateSyncerClient) finishAtomicSync(blockHash common.Hash) error {
 		return err
 	}
 
-	evmBlock := client.getEVMBlockFromHash(blockHash)
-	if evmBlock == nil {
-		return fmt.Errorf("Could not get evmBlock form hash %s", blockHash)
+	evmBlock, err := client.getEVMBlockFromHash(blockHash)
+	if err != nil {
+		return fmt.Errorf("Could not get evmBlock from hash during finishAtomicSync: %w", err)
 	}
 	// TODO edit this comment
 	// the chain state is already restored, and from this point on
