@@ -24,8 +24,6 @@ import (
 
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/holiman/uint256"
-
-	. "github.com/ava-labs/libevm/core/types"
 )
 
 func decodeEncode(input []byte, val interface{}) error {

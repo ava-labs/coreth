@@ -38,8 +38,6 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/rlp"
-
-	. "github.com/ava-labs/libevm/core/types"
 )
 
 // This test has been modified from https://github.com/ethereum/go-ethereum/blob/v1.9.21/core/types/block_test.go#L35 to fit

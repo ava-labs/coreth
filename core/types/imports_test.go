@@ -24,16 +24,17 @@ type (
 	Header            = ethtypes.Header
 	HomesteadSigner   = ethtypes.HomesteadSigner
 	LegacyTx          = ethtypes.LegacyTx
-	Receipt           = ethtypes.Receipt
+	Log               = ethtypes.Log
 	ReceiptForStorage = ethtypes.ReceiptForStorage
 	Receipts          = ethtypes.Receipts
 	Signer            = ethtypes.Signer
 	SlimAccount       = ethtypes.SlimAccount
 	StateAccount      = ethtypes.StateAccount
-	Transaction       = ethtypes.Transaction
 	Transactions      = ethtypes.Transactions
 	TxByNonce         = ethtypes.TxByNonce
 	TxData            = ethtypes.TxData
+	Withdrawal        = ethtypes.Withdrawal
+	Withdrawals       = ethtypes.Withdrawals
 )
 
 // The following constants are used directly as their upstream definitions.
