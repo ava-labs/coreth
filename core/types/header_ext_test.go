@@ -16,6 +16,11 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
+	// package so assume the presence of identifiers. A dot-import reduces PR
+	// noise during the refactoring.
+	. "github.com/ava-labs/libevm/core/types"
 )
 
 func TestHeaderRLP(t *testing.T) {
