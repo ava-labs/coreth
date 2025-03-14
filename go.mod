@@ -11,6 +11,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/fjl/gencodec v0.1.1-0.20250314100332-a3c3302847ce
 	github.com/google/go-cmp v0.7.0
+	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/go-bexpr v0.1.10
