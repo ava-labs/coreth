@@ -1,4 +1,4 @@
-// (c) 2024, Ava Labs, Inc. All rights reserved.
+// (c) 2024-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package types
@@ -21,7 +21,6 @@ type (
 	Bloom             = ethtypes.Bloom
 	Body              = ethtypes.Body
 	DerivableList     = ethtypes.DerivableList
-	DynamicFeeTx      = ethtypes.DynamicFeeTx
 	GenesisAlloc      = ethtypes.GenesisAlloc
 	Header            = ethtypes.Header
 	HomesteadSigner   = ethtypes.HomesteadSigner
@@ -42,10 +41,8 @@ type (
 
 // The following constants are used directly as their upstream definitions.
 const (
-	BloomBitLength          = ethtypes.BloomBitLength
-	BloomByteLength         = ethtypes.BloomByteLength
-	ReceiptStatusFailed     = ethtypes.ReceiptStatusFailed
-	ReceiptStatusSuccessful = ethtypes.ReceiptStatusSuccessful
+	BloomBitLength  = ethtypes.BloomBitLength
+	BloomByteLength = ethtypes.BloomByteLength
 
 	// Transaction types.
 	AccessListTxType = ethtypes.AccessListTxType
@@ -80,7 +77,6 @@ var (
 	NewContractCreation  = ethtypes.NewContractCreation
 	NewEmptyStateAccount = ethtypes.NewEmptyStateAccount
 	NewReceipt           = ethtypes.NewReceipt
-	NewTransaction       = ethtypes.NewTransaction
 	SlimAccountRLP       = ethtypes.SlimAccountRLP
 	TrieRootHash         = ethtypes.TrieRootHash
 
@@ -90,15 +86,12 @@ var (
 	MakeSigner             = ethtypes.MakeSigner
 	MustSignNewTx          = ethtypes.MustSignNewTx
 	NewCancunSigner        = ethtypes.NewCancunSigner
-	NewEIP155Signer        = ethtypes.NewEIP155Signer
 	NewEIP2930Signer       = ethtypes.NewEIP2930Signer
-	NewLondonSigner        = ethtypes.NewLondonSigner
 	Sender                 = ethtypes.Sender
 	SignNewTx              = ethtypes.SignNewTx
-	SignTx                 = ethtypes.SignTx
 
 	// Transactions
-	NewTx        = ethtypes.NewTx
+
 	TxDifference = ethtypes.TxDifference
 
 	// Errors
