@@ -38,7 +38,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
-	customtypes "github.com/ava-labs/coreth/core/types"
+	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/eth/gasestimator"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"

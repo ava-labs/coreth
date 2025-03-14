@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"testing"
 
-	customtypes "github.com/ava-labs/coreth/core/types"
+	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"

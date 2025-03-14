@@ -43,7 +43,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	customtypes "github.com/ava-labs/coreth/core/types"
+	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/params"
 	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
