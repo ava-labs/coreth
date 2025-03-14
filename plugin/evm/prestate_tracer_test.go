@@ -13,7 +13,7 @@ import (
 	"unicode"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/tests"
 	"github.com/ava-labs/libevm/common"

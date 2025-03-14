@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/event"
 	"github.com/holiman/uint256"

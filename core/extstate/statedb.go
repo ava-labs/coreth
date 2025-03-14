@@ -6,7 +6,7 @@ package extstate
 import (
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"

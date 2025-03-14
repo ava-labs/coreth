@@ -13,10 +13,11 @@ import (
 	"unsafe"
 
 	"github.com/ava-labs/libevm/common"
-	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/ava-labs/libevm/core/types"
 )
 
 func TestHeaderRLP(t *testing.T) {
@@ -87,7 +88,7 @@ func TestHeaderWithNonZeroFields(t *testing.T) {
 // can recover all fields, but not that the encoded format is correct. This is
 // very important as the RLP encoding of a [Header] defines its hash.
 func headerWithNonZeroFields() (*Header, *HeaderExtra) {
-	header := &ethtypes.Header{
+	header := &Header{
 		ParentHash:       common.Hash{1},
 		UncleHash:        common.Hash{2},
 		Coinbase:         common.Address{3},
@@ -164,7 +165,7 @@ func allFieldsSet[T interface {
 				assertNonZero(t, f)
 			case *Header:
 				assertNonZero(t, f)
-			case []uint8, []*Header, Transactions, []*Transaction, ethtypes.Withdrawals, []*ethtypes.Withdrawal:
+			case []uint8, []*Header, Transactions, []*Transaction, Withdrawals, []*Withdrawal:
 				assert.NotEmpty(t, f)
 			default:
 				t.Errorf("Field %q has unsupported type %T", field.Name, f)

@@ -34,7 +34,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"

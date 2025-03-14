@@ -19,7 +19,7 @@ import (
 	core "github.com/ava-labs/coreth/core"
 	bloombits "github.com/ava-labs/coreth/core/bloombits"
 	state "github.com/ava-labs/coreth/core/state"
-	types "github.com/ava-labs/coreth/core/types"
+	types "github.com/ava-labs/libevm/core/types"
 	params "github.com/ava-labs/coreth/params"
 	rpc "github.com/ava-labs/coreth/rpc"
 	accounts "github.com/ava-labs/libevm/accounts"

@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
+	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/common/hexutil"
 )
 
@@ -22,7 +23,7 @@ func (h HeaderSerializable) MarshalJSON() ([]byte, error) {
 		Root             common.Hash     `json:"stateRoot"        gencodec:"required"`
 		TxHash           common.Hash     `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash      common.Hash     `json:"receiptsRoot"     gencodec:"required"`
-		Bloom            Bloom           `json:"logsBloom"        gencodec:"required"`
+		Bloom            ethtypes.Bloom           `json:"logsBloom"        gencodec:"required"`
 		Difficulty       *hexutil.Big    `json:"difficulty"       gencodec:"required"`
 		Number           *hexutil.Big    `json:"number"           gencodec:"required"`
 		GasLimit         hexutil.Uint64  `json:"gasLimit"         gencodec:"required"`
@@ -30,7 +31,7 @@ func (h HeaderSerializable) MarshalJSON() ([]byte, error) {
 		Time             hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
 		Extra            hexutil.Bytes   `json:"extraData"        gencodec:"required"`
 		MixDigest        common.Hash     `json:"mixHash"`
-		Nonce            BlockNonce      `json:"nonce"`
+		Nonce            ethtypes.BlockNonce      `json:"nonce"`
 		ExtDataHash      common.Hash     `json:"extDataHash"      gencodec:"required"`
 		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
 		ExtDataGasUsed   *hexutil.Big    `json:"extDataGasUsed" rlp:"optional"`
@@ -76,7 +77,7 @@ func (h *HeaderSerializable) UnmarshalJSON(input []byte) error {
 		Root             *common.Hash    `json:"stateRoot"        gencodec:"required"`
 		TxHash           *common.Hash    `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash      *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom            *Bloom          `json:"logsBloom"        gencodec:"required"`
+		Bloom            *ethtypes.Bloom          `json:"logsBloom"        gencodec:"required"`
 		Difficulty       *hexutil.Big    `json:"difficulty"       gencodec:"required"`
 		Number           *hexutil.Big    `json:"number"           gencodec:"required"`
 		GasLimit         *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
@@ -84,7 +85,7 @@ func (h *HeaderSerializable) UnmarshalJSON(input []byte) error {
 		Time             *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra            *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest        *common.Hash    `json:"mixHash"`
-		Nonce            *BlockNonce     `json:"nonce"`
+		Nonce            *ethtypes.BlockNonce     `json:"nonce"`
 		ExtDataHash      *common.Hash    `json:"extDataHash"      gencodec:"required"`
 		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
 		ExtDataGasUsed   *hexutil.Big    `json:"extDataGasUsed" rlp:"optional"`
