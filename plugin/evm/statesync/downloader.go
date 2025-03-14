@@ -187,6 +187,7 @@ func (d *downloader) flushQueue(final bool) error {
 				return nil
 			}
 
+			// TODO: This *shouldn't* cause a race, but obvious protection would be nice
 			if elem.block.NumberU64() > d.pivotBlock.NumberU64() {
 				d.blockBuffer[newLength] = elem
 				newLength++
