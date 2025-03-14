@@ -17,11 +17,10 @@ func getOrOverrideAsRegisteredCounter(name string, r metrics.Registry) metrics.C
 		r = metrics.DefaultRegistry
 	}
 
-	switch c := r.GetOrRegister(name, metrics.NewCounter).(type) {
-	case metrics.Counter:
+	if c, ok := r.GetOrRegister(name, metrics.NewCounter).(metrics.Counter); ok {
 		return c
-	default: // `name` must have already been registered to be any other type
-		r.Unregister(name)
-		return metrics.NewRegisteredCounter(name, r)
 	}
+	// `name` must have already been registered to be any other type
+	r.Unregister(name)
+	return metrics.NewRegisteredCounter(name, r)
 }
