@@ -208,28 +208,46 @@ func (b *Block) acceptDuringSync() error {
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
 
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	_, lastHeight, err := vm.readLastAccepted()
+	if err != nil {
+		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 
-	// Update VM state for atomic txs in this block. This includes updating the
-	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-	if err != nil {
-		// should never occur since [b] must be verified before calling Accept
-		return err
-	}
-	// Get pending operations on the vm's versionDB so we can apply them atomically
-	// with the shared memory changes.
-	vdbBatch, err := b.vm.versiondb.CommitBatch()
-	if err != nil {
-		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+	// Only perform shared memory transitions if we haven't already done them
+	if lastHeight < b.Height() {
+		if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+			return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+		}
+
+		// Update VM state for atomic txs in this block. This includes updating the
+		// atomic tx repo, atomic trie, and shared memory.
+		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+		if err != nil {
+			// should never occur since [b] must be verified before calling Accept
+			return err
+		}
+		// Get pending operations on the vm's versionDB so we can apply them atomically
+		// with the shared memory changes.
+		vdbBatch, err := b.vm.versiondb.CommitBatch()
+		if err != nil {
+			return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+		}
+
+		// Apply any shared memory changes atomically with other pending changes to
+		// the vm's versionDB.
+		if err := atomicState.Accept(vdbBatch, nil); err != nil {
+			return err
+		}
+	} else {
+		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height",
+			b.Height())
 	}
 
-	// Apply any shared memory changes atomically with other pending changes to
-	// the vm's versionDB.
-	if err := atomicState.Accept(vdbBatch, nil); err != nil {
-		return err
+	// Write the canonical hash to the chain database
+	batch := vm.chaindb.NewBatch()
+	rawdb.WriteCanonicalHash(batch, b.ethBlock.Hash(), b.ethBlock.NumberU64())
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to write block during sync: %w", err)
 	}
 
 	log.Debug("Returning from accept without error", "block", b.ID(), "height", b.Height())
@@ -492,8 +510,11 @@ func (b *Block) verifyDuringSync() error {
 		return err
 	}
 
-	if err := vm.blockChain.InsertBlockDuringSync(block); err != nil {
-		return err
+	// Write the block to the database using chaindb
+	batch := vm.chaindb.NewBatch()
+	rawdb.WriteBlock(batch, block)
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to write block during sync: %w", err)
 	}
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.

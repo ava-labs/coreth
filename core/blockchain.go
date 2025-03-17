@@ -1157,19 +1157,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, parentRoot common
 	return nil
 }
 
-// InsertBlockDuringSync writes the block to the database without receipts or state.
-// skipping pruning management for simplicity
-func (bc *BlockChain) InsertBlockDuringSync(block *types.Block) error {
-	// Write the block to the database
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, block)
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("failed to write block during sync: %w", err)
-	}
-
-	return nil
-}
-
 // writeBlockWithState writes the block and all associated state to the database,
 // but it expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, state *state.StateDB) error {
