@@ -585,8 +585,16 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
-	if err := vm.initializeChain(lastAcceptedHash); err != nil {
-		return err
+
+	if vm.config.StateSyncUseUpstream {
+		log.Info("Iniitializing with genesis hash", "hash", vm.genesisHash)
+		if err := vm.initializeChain(vm.genesisHash); err != nil {
+			return err
+		}
+	} else {
+		if err := vm.initializeChain(lastAcceptedHash); err != nil {
+			return err
+		}
 	}
 	// initialize bonus blocks on mainnet
 	var (

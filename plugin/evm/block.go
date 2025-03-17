@@ -172,32 +172,47 @@ func (b *Block) accept() error {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
 	}
 
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
-	}
-
 	for _, tx := range b.atomicTxs {
 		// Remove the accepted transaction from the mempool
 		vm.mempool.RemoveTx(tx)
 	}
 
-	// Update VM state for atomic txs in this block. This includes updating the
-	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	_, lastHeight, err := vm.readLastAccepted()
 	if err != nil {
-		// should never occur since [b] must be verified before calling Accept
-		return err
-	}
-	// Get pending operations on the vm's versionDB so we can apply them atomically
-	// with the shared memory changes.
-	vdbBatch, err := b.vm.versiondb.CommitBatch()
-	if err != nil {
-		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 
-	// Apply any shared memory changes atomically with other pending changes to
-	// the vm's versionDB.
-	return atomicState.Accept(vdbBatch, nil)
+	// If normal dynamic sync is halted after finishing the sync, we need to
+	// ensure we do not perform shared memory transitions multiple times
+	if lastHeight < b.Height() {
+		if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+			return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+		}
+
+		// Update VM state for atomic txs in this block. This includes updating the
+		// atomic tx repo, atomic trie, and shared memory.
+		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+		if err != nil {
+			// should never occur since [b] must be verified before calling Accept
+			return err
+		}
+		// Get pending operations on the vm's versionDB so we can apply them atomically
+		// with the shared memory changes.
+		vdbBatch, err := b.vm.versiondb.CommitBatch()
+		if err != nil {
+			return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+		}
+
+		// Apply any shared memory changes atomically with other pending changes to
+		// the vm's versionDB.
+		if err := atomicState.Accept(vdbBatch, nil); err != nil {
+			return fmt.Errorf("failed to accept %s atomic state: %w", b.ID(), err)
+		}
+	} else {
+		log.Warn("Skipping shared memory transitions for block", "hash", b.ID(), "height", b.Height())
+	}
+
+	return nil
 }
 
 func (b *Block) acceptDuringSync() error {
