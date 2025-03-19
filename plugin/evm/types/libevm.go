@@ -7,8 +7,19 @@ import (
 	ethtypes "github.com/ava-labs/libevm/core/types"
 )
 
-var extras = ethtypes.RegisterExtras[
-	HeaderExtra, *HeaderExtra,
-	BlockBodyExtra, *BlockBodyExtra,
-	isMultiCoin,
-]()
+var SkipRegisterExtras = false
+
+var extras ethtypes.ExtraPayloads[*HeaderExtra, *BlockBodyExtra, isMultiCoin]
+
+func init() {
+	if SkipRegisterExtras {
+		return
+	} else {
+		extras = ethtypes.RegisterExtras[
+			HeaderExtra, *HeaderExtra,
+			BlockBodyExtra, *BlockBodyExtra,
+			isMultiCoin,
+		]()
+	}
+
+}
