@@ -112,6 +112,13 @@ func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	return uint64(result), err
 }
 
+// PeerCount returns the number of p2p peers as reported by the net_peerCount method.
+func (ec *Client) PeerCount(ctx context.Context) (uint64, error) {
+	var result hexutil.Uint64
+	err := ec.c.CallContext(ctx, &result, "net_peerCount")
+	return uint64(result), err
+}
+
 // BlockReceipts returns the receipts of a given block number or hash.
 func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
 	var r []*types.Receipt
@@ -485,6 +492,44 @@ func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 	return arg, nil
 }
 
+// Pending State
+
+// PendingBalanceAt returns the wei balance of the given account in the pending state.
+func (ec *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, "pending")
+	return (*big.Int)(&result), err
+}
+
+// PendingStorageAt returns the value of key in the contract storage of the given account in the pending state.
+func (ec *Client) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
+	var result hexutil.Bytes
+	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, "pending")
+	return result, err
+}
+
+// PendingCodeAt returns the contract code of the given account in the pending state.
+func (ec *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
+	var result hexutil.Bytes
+	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, "pending")
+	return result, err
+}
+
+// PendingNonceAt returns the account nonce of the given account in the pending state.
+// This is the nonce that should be used for the next transaction.
+func (ec *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+	var result hexutil.Uint64
+	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, "pending")
+	return uint64(result), err
+}
+
+// PendingTransactionCount returns the total number of transactions in the pending state.
+func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
+	var num hexutil.Uint
+	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
+	return uint(num), err
+}
+
 // Contract Calling
 
 // CallContract executes a message call transaction, which is directly executed in the VM
@@ -507,6 +552,17 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 func (ec *Client) CallContractAtHash(ctx context.Context, msg ethereum.CallMsg, blockHash common.Hash) ([]byte, error) {
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), rpc.BlockNumberOrHashWithHash(blockHash, false))
+	if err != nil {
+		return nil, err
+	}
+	return hex, nil
+}
+
+// PendingCallContract executes a message call transaction using the EVM.
+// The state seen by the contract call is the pending state.
+func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+	var hex hexutil.Bytes
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
 	if err != nil {
 		return nil, err
 	}
@@ -638,4 +694,56 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 		arg["blobVersionedHashes"] = msg.BlobHashes
 	}
 	return arg
+}
+
+// rpcProgress is a copy of SyncProgress with hex-encoded fields.
+type rpcProgress struct {
+	StartingBlock hexutil.Uint64
+	CurrentBlock  hexutil.Uint64
+	HighestBlock  hexutil.Uint64
+
+	PulledStates hexutil.Uint64
+	KnownStates  hexutil.Uint64
+
+	SyncedAccounts         hexutil.Uint64
+	SyncedAccountBytes     hexutil.Uint64
+	SyncedBytecodes        hexutil.Uint64
+	SyncedBytecodeBytes    hexutil.Uint64
+	SyncedStorage          hexutil.Uint64
+	SyncedStorageBytes     hexutil.Uint64
+	HealedTrienodes        hexutil.Uint64
+	HealedTrienodeBytes    hexutil.Uint64
+	HealedBytecodes        hexutil.Uint64
+	HealedBytecodeBytes    hexutil.Uint64
+	HealingTrienodes       hexutil.Uint64
+	HealingBytecode        hexutil.Uint64
+	TxIndexFinishedBlocks  hexutil.Uint64
+	TxIndexRemainingBlocks hexutil.Uint64
+}
+
+func (p *rpcProgress) toSyncProgress() *ethereum.SyncProgress {
+	if p == nil {
+		return nil
+	}
+	return &ethereum.SyncProgress{
+		StartingBlock:          uint64(p.StartingBlock),
+		CurrentBlock:           uint64(p.CurrentBlock),
+		HighestBlock:           uint64(p.HighestBlock),
+		PulledStates:           uint64(p.PulledStates),
+		KnownStates:            uint64(p.KnownStates),
+		SyncedAccounts:         uint64(p.SyncedAccounts),
+		SyncedAccountBytes:     uint64(p.SyncedAccountBytes),
+		SyncedBytecodes:        uint64(p.SyncedBytecodes),
+		SyncedBytecodeBytes:    uint64(p.SyncedBytecodeBytes),
+		SyncedStorage:          uint64(p.SyncedStorage),
+		SyncedStorageBytes:     uint64(p.SyncedStorageBytes),
+		HealedTrienodes:        uint64(p.HealedTrienodes),
+		HealedTrienodeBytes:    uint64(p.HealedTrienodeBytes),
+		HealedBytecodes:        uint64(p.HealedBytecodes),
+		HealedBytecodeBytes:    uint64(p.HealedBytecodeBytes),
+		HealingTrienodes:       uint64(p.HealingTrienodes),
+		HealingBytecode:        uint64(p.HealingBytecode),
+		TxIndexFinishedBlocks:  uint64(p.TxIndexFinishedBlocks),
+		TxIndexRemainingBlocks: uint64(p.TxIndexRemainingBlocks),
+	}
 }
