@@ -1959,7 +1959,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 	s.bytecodeSynced += codes
 	s.bytecodeBytes += bytes
 
-	log.Debug("Persisted set of bytecodes", "count", codes, "bytes", bytes)
+	log.Trace("Persisted set of bytecodes", "count", codes, "bytes", bytes)
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2197,7 +2197,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			// If the chunk's root is an overflown but full delivery,
 			// clear the heal request.
 			accountHash := res.accounts[len(res.accounts)-1]
-			if root == res.subTask.root { //&& ethrawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
+			if root == res.subTask.root && ethrawdb.HasTrieNode(s.db, accountHash, nil, root, s.scheme) {
 				for i, account := range res.mainTask.res.hashes {
 					if account == accountHash {
 						res.mainTask.needHeal[i] = false
@@ -2219,7 +2219,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	}
 	s.storageSynced += uint64(slots)
 
-	log.Debug("Persisted set of storage slots", "accounts", len(res.hashes), "slots", slots, "bytes", s.storageBytes-oldStorageBytes)
+	log.Trace("Persisted set of storage slots", "accounts", len(res.hashes), "slots", slots, "bytes", s.storageBytes-oldStorageBytes)
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2435,7 +2435,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		size += common.StorageSize(len(node))
 	}
 	logger := peer.Log().New("reqid", id)
-	logger.Debug("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
+	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
