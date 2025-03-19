@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/spf13/cast"
@@ -59,6 +62,14 @@ const (
 	// - state sync time: ~6 hrs.
 	defaultStateSyncMinBlocks   = 300_000
 	DefaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
+
+	estimatedBlockAcceptPeriod        = 2 * time.Second
+	defaultHistoricalProofQueryWindow = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
+	// Price Option Defaults
+	defaultPriceOptionSlowFeePercentage = uint64(95)
+	defaultPriceOptionFastFeePercentage = uint64(105)
+	defaultPriceOptionMaxBaseFee        = uint64(100 * utils.GWei)
+	defaultPriceOptionMaxTip            = uint64(20 * utils.GWei)
 )
 
 var (
@@ -82,6 +93,11 @@ type Duration struct {
 
 // Config ...
 type Config struct {
+	// GasTarget is the target gas per second that this node will attempt to use
+	// when creating blocks. If this config is not specified, the node will
+	// default to use the parent block's target gas per second.
+	GasTarget *gas.Gas `json:"gas-target,omitempty"`
+
 	// Coreth APIs
 	SnowmanAPIEnabled     bool   `json:"snowman-api-enabled"`
 	AdminAPIEnabled       bool   `json:"admin-api-enabled"`
@@ -124,11 +140,20 @@ type Config struct {
 	PopulateMissingTriesParallelism int     `json:"populate-missing-tries-parallelism"` // Number of concurrent readers to use when re-populating missing tries on startup.
 	PruneWarpDB                     bool    `json:"prune-warp-db-enabled"`              // Determines if the warpDB should be cleared on startup
 
+	// HistoricalProofQueryWindow is, when running in archive mode only, the number of blocks before the
+	// last accepted block to be accepted for proof state queries.
+	HistoricalProofQueryWindow uint64 `json:"historical-proof-query-window,omitempty"`
+
 	// Metric Settings
 	MetricsExpensiveEnabled bool `json:"metrics-expensive-enabled"` // Debug-level metrics that might impact runtime performance
 
 	// API Settings
 	LocalTxsEnabled bool `json:"local-txs-enabled"`
+	// Price Option Settings
+	PriceOptionSlowFeePercentage uint64 `json:"price-options-slow-fee-percentage"`
+	PriceOptionFastFeePercentage uint64 `json:"price-options-fast-fee-percentage"`
+	PriceOptionMaxBaseFee        uint64 `json:"price-options-max-base-fee"`
+	PriceOptionMaxTip            uint64 `json:"price-options-max-tip"`
 
 	TxPoolPriceLimit   uint64   `json:"tx-pool-price-limit"`
 	TxPoolPriceBump    uint64   `json:"tx-pool-price-bump"`
@@ -291,6 +316,13 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.StateSyncRequestSize = DefaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
+	c.HistoricalProofQueryWindow = defaultHistoricalProofQueryWindow
+
+	// Price Option Settings
+	c.PriceOptionSlowFeePercentage = defaultPriceOptionSlowFeePercentage
+	c.PriceOptionFastFeePercentage = defaultPriceOptionFastFeePercentage
+	c.PriceOptionMaxBaseFee = defaultPriceOptionMaxBaseFee
+	c.PriceOptionMaxTip = defaultPriceOptionMaxTip
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {
@@ -341,6 +373,10 @@ func (c *Config) Validate(networkID uint32) error {
 
 	if c.PushGossipPercentStake < 0 || c.PushGossipPercentStake > 1 {
 		return fmt.Errorf("push-gossip-percent-stake is %f but must be in the range [0, 1]", c.PushGossipPercentStake)
+	}
+
+	if c.PriceOptionMaxBaseFee < etna.MinBaseFee {
+		return fmt.Errorf("max base fee %d is less than the minimum base fee %d", c.PriceOptionMaxBaseFee, etna.MinBaseFee)
 	}
 	return nil
 }
