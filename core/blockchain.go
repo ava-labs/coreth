@@ -67,13 +67,15 @@ import (
 
 // ====== If resolving merge conflicts ======
 //
-// All calls to metrics.NewRegistered*() have been replaced with
-// metrics.GetOrRegister*() and this package's corresponding libevm package
-// imported above. Together these ensure that the metric here is the same as the
-// one with the same name in libevm.
+// All calls to metrics.NewRegistered*() for metrics also defined in libevm/core have been
+// replaced either with:
+//   - metrics.GetOrRegister*() to get a metric already registered in libevm/core, or register it
+//     here otherwise
+//   - [getOrOverrideAsRegisteredCounter] to get a metric already registered in libevm/core
+//     only if it is a [metrics.Counter]. If it is not, the metric is unregistered and registered
+//     as a [metrics.Counter] here.
 //
-// Note, however, those that have had their types overridden as
-// [metrics.Counter].
+// These replacements ensure the same metrics are shared between the two packages.
 var (
 	accountReadTimer         = getOrOverrideAsRegisteredCounter("chain/account/reads", nil)
 	accountHashTimer         = getOrOverrideAsRegisteredCounter("chain/account/hashes", nil)
