@@ -29,11 +29,11 @@ package corethclient
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"runtime"
 	"runtime/debug"
 
-	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
@@ -111,7 +111,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 	}
 
 	var res accountResult
-	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, ethclient.ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
 	// Turn hexutils back to normal datatypes
 	storageResults := make([]StorageResult, 0, len(res.StorageProof))
 	for _, st := range res.StorageProof {
@@ -156,7 +156,7 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(
 		ctx, &hex, "eth_call", toCallArg(msg),
-		ethclient.ToBlockNumArg(blockNumber), toOverrideMap(overrides),
+		toBlockNumArg(blockNumber), toOverrideMap(overrides),
 	)
 	return hex, err
 }
@@ -237,4 +237,19 @@ func toOverrideMap(overrides *map[common.Address]OverrideAccount) interface{} {
 		}
 	}
 	return &result
+}
+
+func toBlockNumArg(number *big.Int) string {
+	if number == nil {
+		return "latest"
+	}
+	if number.Sign() >= 0 {
+		return hexutil.EncodeBig(number)
+	}
+	// It's negative.
+	if number.IsInt64() {
+		return rpc.BlockNumber(number.Int64()).String()
+	}
+	// It's negative and large, which is invalid.
+	return fmt.Sprintf("<invalid %d>", number)
 }
