@@ -101,7 +101,7 @@ func (ec *client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Blo
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
 func (ec *client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
-	return ec.getBlock(ctx, "eth_getBlockByNumber", ToBlockNumArg(number), true)
+	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
 // BlockNumber returns the most recent block number
@@ -212,7 +212,7 @@ func (ec *client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.He
 // nil, the latest known header is returned.
 func (ec *client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	var head *types.Header
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", ToBlockNumArg(number), false)
+	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
 	if err == nil && head == nil {
 		err = interfaces.NotFound
 	}
@@ -367,7 +367,7 @@ func (ec *client) NetworkID(ctx context.Context) (*big.Int, error) {
 // The block number can be nil, in which case the balance is taken from the latest known block.
 func (ec *client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, toBlockNumArg(blockNumber))
 	return (*big.Int)(&result), err
 }
 
@@ -382,7 +382,7 @@ func (ec *client) BalanceAtHash(ctx context.Context, account common.Address, blo
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, toBlockNumArg(blockNumber))
 	return result, err
 }
 
@@ -397,7 +397,7 @@ func (ec *client) StorageAtHash(ctx context.Context, account common.Address, key
 // The block number can be nil, in which case the code is taken from the latest known block.
 func (ec *client) CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, toBlockNumArg(blockNumber))
 	return result, err
 }
 
@@ -412,7 +412,7 @@ func (ec *client) CodeAtHash(ctx context.Context, account common.Address, blockH
 // The block number can be nil, in which case the nonce is taken from the latest known block.
 func (ec *client) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, toBlockNumArg(blockNumber))
 	return uint64(result), err
 }
 
@@ -466,9 +466,9 @@ func toFilterArg(q interfaces.FilterQuery) (interface{}, error) {
 		if q.FromBlock == nil {
 			arg["fromBlock"] = "0x0"
 		} else {
-			arg["fromBlock"] = ToBlockNumArg(q.FromBlock)
+			arg["fromBlock"] = toBlockNumArg(q.FromBlock)
 		}
-		arg["toBlock"] = ToBlockNumArg(q.ToBlock)
+		arg["toBlock"] = toBlockNumArg(q.ToBlock)
 	}
 	return arg, nil
 }
@@ -483,7 +483,7 @@ func toFilterArg(q interfaces.FilterQuery) (interface{}, error) {
 // blocks might not be available.
 func (ec *client) CallContract(ctx context.Context, msg interfaces.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +531,7 @@ type feeHistoryResultMarshaling struct {
 // FeeHistory retrieves the fee market history.
 func (ec *client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*interfaces.FeeHistory, error) {
 	var res feeHistoryResultMarshaling
-	if err := ec.c.CallContext(ctx, &res, "eth_feeHistory", hexutil.Uint(blockCount), ToBlockNumArg(lastBlock), rewardPercentiles); err != nil {
+	if err := ec.c.CallContext(ctx, &res, "eth_feeHistory", hexutil.Uint(blockCount), toBlockNumArg(lastBlock), rewardPercentiles); err != nil {
 		return nil, err
 	}
 	reward := make([][]*big.Int, len(res.Reward))
@@ -578,7 +578,7 @@ func (ec *client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
-func ToBlockNumArg(number *big.Int) string {
+func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
 	}
