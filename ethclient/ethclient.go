@@ -339,18 +339,16 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 // SyncProgress retrieves the current progress of the sync algorithm. If there's
 // no sync currently running, it returns nil.
 func (ec *Client) SyncProgress(ctx context.Context) error {
-	var (
-		raw     json.RawMessage
-		syncing bool
-	)
-
+	var raw json.RawMessage
 	if err := ec.c.CallContext(ctx, &raw, "eth_syncing"); err != nil {
 		return err
 	}
+
 	// If not syncing, the response will be 'false'. To detect this
 	// we unmarshal into a boolean and return nil on success.
 	// If the chain is syncing, the engine will not forward the
 	// request to the chain and a non-nil err will be returned.
+	var syncing bool
 	return json.Unmarshal(raw, &syncing)
 }
 
