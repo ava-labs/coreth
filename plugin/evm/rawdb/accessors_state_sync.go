@@ -9,13 +9,13 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/ethdb"
+	ethrawdb "github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 )
 
 // ReadSyncRoot reads the root corresponding to the main trie of an in-progress
 // sync and returns common.Hash{} if no in-progress sync was found.
-func ReadSyncRoot(db ethdb.KeyValueReader) (common.Hash, error) {
+func ReadSyncRoot(db ethrawdb.KeyValueReader) (common.Hash, error) {
 	has, err := db.Has(syncRootKey)
 	if err != nil || !has {
 		return common.Hash{}, err
@@ -28,19 +28,19 @@ func ReadSyncRoot(db ethdb.KeyValueReader) (common.Hash, error) {
 }
 
 // WriteSyncRoot writes root as the root of the main trie of the in-progress sync.
-func WriteSyncRoot(db ethdb.KeyValueWriter, root common.Hash) error {
+func WriteSyncRoot(db ethrawdb.KeyValueWriter, root common.Hash) error {
 	return db.Put(syncRootKey, root[:])
 }
 
 // AddCodeToFetch adds a marker that we need to fetch the code for `hash`.
-func AddCodeToFetch(db ethdb.KeyValueWriter, hash common.Hash) {
+func AddCodeToFetch(db ethrawdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(codeToFetchKey(hash), nil); err != nil {
 		log.Crit("Failed to put code to fetch", "codeHash", hash, "err", err)
 	}
 }
 
 // DeleteCodeToFetch removes the marker that the code corresponding to `hash` needs to be fetched.
-func DeleteCodeToFetch(db ethdb.KeyValueWriter, hash common.Hash) {
+func DeleteCodeToFetch(db ethrawdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(codeToFetchKey(hash)); err != nil {
 		log.Crit("Failed to delete code to fetch", "codeHash", hash, "err", err)
 	}
@@ -49,7 +49,7 @@ func DeleteCodeToFetch(db ethdb.KeyValueWriter, hash common.Hash) {
 // NewCodeToFetchIterator returns a KeyLength iterator over all code
 // hashes that are pending syncing. It is the caller's responsibility to
 // unpack the key and call Release on the returned iterator.
-func NewCodeToFetchIterator(db ethdb.Iteratee) ethdb.Iterator {
+func NewCodeToFetchIterator(db ethrawdb.Iteratee) ethrawdb.Iterator {
 	return rawdb.NewKeyLengthIterator(
 		db.NewIterator(CodeToFetchPrefix, nil),
 		codeToFetchKeyLength,
@@ -66,7 +66,7 @@ func codeToFetchKey(hash common.Hash) []byte {
 // NewSyncSegmentsIterator returns a KeyLength iterator over all trie segments
 // added for root. It is the caller's responsibility to unpack the key and call
 // Release on the returned iterator.
-func NewSyncSegmentsIterator(db ethdb.Iteratee, root common.Hash) ethdb.Iterator {
+func NewSyncSegmentsIterator(db ethrawdb.Iteratee, root common.Hash) ethrawdb.Iterator {
 	segmentsPrefix := make([]byte, len(syncSegmentsPrefix)+common.HashLength)
 	copy(segmentsPrefix, syncSegmentsPrefix)
 	copy(segmentsPrefix[len(syncSegmentsPrefix):], root[:])
@@ -78,12 +78,12 @@ func NewSyncSegmentsIterator(db ethdb.Iteratee, root common.Hash) ethdb.Iterator
 }
 
 // WriteSyncSegment adds a trie segment for root at the given start position.
-func WriteSyncSegment(db ethdb.KeyValueWriter, root common.Hash, start common.Hash) error {
+func WriteSyncSegment(db ethrawdb.KeyValueWriter, root common.Hash, start common.Hash) error {
 	return db.Put(packSyncSegmentKey(root, start), []byte{0x01})
 }
 
 // ClearSyncSegments removes segment markers for root from db
-func ClearSyncSegments(db ethdb.KeyValueStore, root common.Hash) error {
+func ClearSyncSegments(db ethrawdb.KeyValueStore, root common.Hash) error {
 	segmentsPrefix := make([]byte, len(syncSegmentsPrefix)+common.HashLength)
 	copy(segmentsPrefix, syncSegmentsPrefix)
 	copy(segmentsPrefix[len(syncSegmentsPrefix):], root[:])
@@ -91,7 +91,7 @@ func ClearSyncSegments(db ethdb.KeyValueStore, root common.Hash) error {
 }
 
 // ClearAllSyncSegments removes all segment markers from db
-func ClearAllSyncSegments(db ethdb.KeyValueStore) error {
+func ClearAllSyncSegments(db ethrawdb.KeyValueStore) error {
 	return clearPrefix(db, syncSegmentsPrefix, syncSegmentsKeyLength)
 }
 
@@ -116,18 +116,18 @@ func packSyncSegmentKey(root common.Hash, start common.Hash) []byte {
 // NewSyncStorageTriesIterator returns a KeyLength iterator over all storage tries
 // added for syncing (beginning at seek). It is the caller's responsibility to unpack
 // the key and call Release on the returned iterator.
-func NewSyncStorageTriesIterator(db ethdb.Iteratee, seek []byte) ethdb.Iterator {
+func NewSyncStorageTriesIterator(db ethrawdb.Iteratee, seek []byte) ethrawdb.Iterator {
 	return rawdb.NewKeyLengthIterator(db.NewIterator(syncStorageTriesPrefix, seek), syncStorageTriesKeyLength)
 }
 
 // WriteSyncStorageTrie adds a storage trie for account (with the given root) to be synced.
-func WriteSyncStorageTrie(db ethdb.KeyValueWriter, root common.Hash, account common.Hash) error {
+func WriteSyncStorageTrie(db ethrawdb.KeyValueWriter, root common.Hash, account common.Hash) error {
 	return db.Put(packSyncStorageTrieKey(root, account), []byte{0x01})
 }
 
 // ClearSyncStorageTrie removes all storage trie accounts (with the given root) from db.
 // Intended for use when the trie with root has completed syncing.
-func ClearSyncStorageTrie(db ethdb.KeyValueStore, root common.Hash) error {
+func ClearSyncStorageTrie(db ethrawdb.KeyValueStore, root common.Hash) error {
 	accountsPrefix := make([]byte, len(syncStorageTriesPrefix)+common.HashLength)
 	copy(accountsPrefix, syncStorageTriesPrefix)
 	copy(accountsPrefix[len(syncStorageTriesPrefix):], root[:])
@@ -135,7 +135,7 @@ func ClearSyncStorageTrie(db ethdb.KeyValueStore, root common.Hash) error {
 }
 
 // ClearAllSyncStorageTries removes all storage tries added for syncing from db
-func ClearAllSyncStorageTries(db ethdb.KeyValueStore) error {
+func ClearAllSyncStorageTries(db ethrawdb.KeyValueStore) error {
 	return clearPrefix(db, syncStorageTriesPrefix, syncStorageTriesKeyLength)
 }
 
@@ -158,7 +158,7 @@ func packSyncStorageTrieKey(root common.Hash, account common.Hash) []byte {
 }
 
 // WriteSyncPerformed logs an entry in `db` indicating the VM state synced to `blockNumber`.
-func WriteSyncPerformed(db ethdb.KeyValueWriter, blockNumber uint64) error {
+func WriteSyncPerformed(db ethrawdb.KeyValueWriter, blockNumber uint64) error {
 	syncPerformedPrefixLen := len(syncPerformedPrefix)
 	bytes := make([]byte, syncPerformedPrefixLen+wrappers.LongLen)
 	copy(bytes[:syncPerformedPrefixLen], syncPerformedPrefix)
@@ -168,7 +168,7 @@ func WriteSyncPerformed(db ethdb.KeyValueWriter, blockNumber uint64) error {
 
 // NewSyncPerformedIterator returns an iterator over all block numbers the VM
 // has state synced to.
-func NewSyncPerformedIterator(db ethdb.Iteratee) ethdb.Iterator {
+func NewSyncPerformedIterator(db ethrawdb.Iteratee) ethrawdb.Iterator {
 	return rawdb.NewKeyLengthIterator(db.NewIterator(syncPerformedPrefix, nil), syncPerformedKeyLength)
 }
 
@@ -179,7 +179,7 @@ func UnpackSyncPerformedKey(key []byte) uint64 {
 }
 
 // GetLatestSyncPerformed returns the latest block number state synced performed to.
-func GetLatestSyncPerformed(db ethdb.Iteratee) uint64 {
+func GetLatestSyncPerformed(db ethrawdb.Iteratee) uint64 {
 	it := NewSyncPerformedIterator(db)
 	defer it.Release()
 
@@ -195,7 +195,7 @@ func GetLatestSyncPerformed(db ethdb.Iteratee) uint64 {
 
 // clearPrefix removes all keys in db that begin with prefix and match an
 // expected key length. `keyLen` must include the length of the prefix.
-func clearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
+func clearPrefix(db ethrawdb.KeyValueStore, prefix []byte, keyLen int) error {
 	it := db.NewIterator(prefix, nil)
 	defer it.Release()
 
@@ -208,7 +208,7 @@ func clearPrefix(db ethdb.KeyValueStore, prefix []byte, keyLen int) error {
 		if err := batch.Delete(key); err != nil {
 			return err
 		}
-		if batch.ValueSize() > ethdb.IdealBatchSize {
+		if batch.ValueSize() > ethrawdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return err
 			}
