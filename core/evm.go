@@ -143,14 +143,14 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 // NewEVMBlockContextWithPredicateResults creates a new context for use in the
 // EVM with an override for the predicate results. The miner uses this to pass
 // predicate results to the EVM when header.Extra is not fully formed yet.
-func NewEVMBlockContextWithPredicateResults(rules extras.AvalancheRules, header *types.Header, chain ChainContext, author *common.Address, predicateResults []byte) vm.BlockContext {
+func NewEVMBlockContextWithPredicateResults(rules extras.AvalancheRules, header *types.Header, chain ChainContext, author *common.Address, predicateBytes []byte) vm.BlockContext {
 	blockCtx := NewEVMBlockContext(header, chain, author)
 	// Note this only sets the block context, which is the hand-off point for
 	// the EVM. The actual header is not modified.
 	blockCtx.Header.Extra = customheader.SetPredicateBytesInExtra(
 		rules,
 		bytes.Clone(header.Extra),
-		predicateResults,
+		predicateBytes,
 	)
 	return blockCtx
 }
