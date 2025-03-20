@@ -40,27 +40,27 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 				// Without an immediate Finalise call after the Suicide, a reconfigured precompiled state can be wiped out
 				// since Suicide will be committed after the reconfiguration.
 				statedb.Finalise(true)
+				continue
+			}
+			var printIntf interface{}
+			marshalled, err := json.Marshal(activatingConfig)
+			if err == nil {
+				printIntf = string(marshalled)
 			} else {
-				var printIntf interface{}
-				marshalled, err := json.Marshal(activatingConfig)
-				if err == nil {
-					printIntf = string(marshalled)
-				} else {
-					printIntf = activatingConfig
-				}
+				printIntf = activatingConfig
+			}
 
-				log.Info("Activating new precompile", "name", module.ConfigKey, "config", printIntf)
-				// Set the nonce of the precompile's address (as is done when a contract is created) to ensure
-				// that it is marked as non-empty and will not be cleaned up when the statedb is finalized.
-				statedb.SetNonce(module.Address, 1)
-				// Set the code of the precompile's address to a non-zero length byte slice to ensure that the precompile
-				// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
-				// that it does not attempt to invoke a non-existent contract.
-				statedb.SetCode(module.Address, []byte{0x1})
-				extstatedb := &extstate.StateDB{VmStateDB: statedb}
-				if err := module.Configure(params.GetExtra(c), activatingConfig, extstatedb, blockContext); err != nil {
-					return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
-				}
+			log.Info("Activating new precompile", "name", module.ConfigKey, "config", printIntf)
+			// Set the nonce of the precompile's address (as is done when a contract is created) to ensure
+			// that it is marked as non-empty and will not be cleaned up when the statedb is finalized.
+			statedb.SetNonce(module.Address, 1)
+			// Set the code of the precompile's address to a non-zero length byte slice to ensure that the precompile
+			// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
+			// that it does not attempt to invoke a non-existent contract.
+			statedb.SetCode(module.Address, []byte{0x1})
+			extstatedb := &extstate.StateDB{VmStateDB: statedb}
+			if err := module.Configure(params.GetExtra(c), activatingConfig, extstatedb, blockContext); err != nil {
+				return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
 			}
 		}
 	}
