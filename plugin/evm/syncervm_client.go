@@ -501,11 +501,12 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 		return fmt.Errorf("could not set last accepted block: %w", err)
 	}
 
-	// Start by checking accounts
+	// Must rebuild the snapshot if snap-sync is enabled
 	snaps := evmBlock.vm.blockChain.Snapshots()
-	// tr := trie.NewStackTrie()
-	// it, err := snaps.AccountIterator()
 	cb := evmBlock.vm.blockChain.CurrentBlock()
+	if client.useUpstream {
+		snaps.Rebuild(cb.Hash(), cb.Root)
+	}
 
 	if err := snaps.Verify(cb.Root); err != nil {
 		return fmt.Errorf("could not verify snapshots: %w", err)
