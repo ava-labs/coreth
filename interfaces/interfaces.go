@@ -33,36 +33,22 @@ import (
 
 var NotFound = ethereum.NotFound
 
-type Subscription = ethereum.Subscription
-
-type ChainReader = ethereum.ChainReader
-
-type TransactionReader = ethereum.TransactionReader
-
-type ChainStateReader = ethereum.ChainStateReader
-
-type CallMsg = ethereum.CallMsg
-
-type ContractCaller = ethereum.ContractCaller
-
-type FilterQuery = ethereum.FilterQuery
-
-type LogFilterer = ethereum.LogFilterer
-
-type TransactionSender = ethereum.TransactionSender
-
-type GasPricer = ethereum.GasPricer
-
-type GasPricer1559 = ethereum.GasPricer1559
-
-type FeeHistoryReader = ethereum.FeeHistoryReader
-
-type FeeHistory = ethereum.FeeHistory
-
-type GasEstimator = ethereum.GasEstimator
-
-type PendingStateEventer = ethereum.PendingStateEventer
-
-type BlockNumberReader = ethereum.BlockNumberReader
-
-type ChainIDReader = ethereum.ChainIDReader
+type (
+	BlockNumberReader   = ethereum.BlockNumberReader
+	CallMsg             = ethereum.CallMsg
+	ChainIDReader       = ethereum.ChainIDReader
+	ChainReader         = ethereum.ChainReader
+	ChainStateReader    = ethereum.ChainStateReader
+	ContractCaller      = ethereum.ContractCaller
+	FeeHistory          = ethereum.FeeHistory
+	FeeHistoryReader    = ethereum.FeeHistoryReader
+	FilterQuery         = ethereum.FilterQuery
+	GasEstimator        = ethereum.GasEstimator
+	GasPricer           = ethereum.GasPricer
+	GasPricer1559       = ethereum.GasPricer1559
+	LogFilterer         = ethereum.LogFilterer
+	PendingStateEventer = ethereum.PendingStateEventer
+	Subscription        = ethereum.Subscription
+	TransactionReader   = ethereum.TransactionReader
+	TransactionSender   = ethereum.TransactionSender
+)
