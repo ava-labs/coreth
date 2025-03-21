@@ -24,6 +24,23 @@ Now that AvalancheGo depends on the local version of Coreth, we can build with t
 
 Note: the C-Chain originally ran in a separate process from the main AvalancheGo process and communicated with it over a local gRPC connection. When this was the case, AvalancheGo's build script would download Coreth, compile it, and place the binary into the `avalanchego/build/plugins` directory.
 
+### Optional Dev Shell
+
+Some activities, such as collecting metrics and logs from the nodes targeted by an e2e
+test run, require binary dependencies. One way of making these dependencies available is
+to use a nix shell which will give access to the dependencies expected by the test
+tooling:
+
+ - Install [nix](https://nixos.org/). The [determinate systems
+   installer](https://github.com/DeterminateSystems/nix-installer?tab=readme-ov-file#install-nix)
+   is recommended.
+ - Use ./scripts/dev_shell.sh to start a nix shell
+ - Execute the dependency-requiring command (e.g. `./scripts/tests.e2e.sh --start-collectors`)
+
+This repo also defines a `.envrc` file to configure [devenv](https://direnv.net/). With
+`devenv` and `nix` installed, a shell at the root of the repo will automatically start a nix
+dev shell.
+
 ## API
 
 The C-Chain supports the following API namespaces:
@@ -33,7 +50,7 @@ The C-Chain supports the following API namespaces:
 - `txpool`
 - `debug`
 
-Only the `eth` namespace is enabled by default. 
+Only the `eth` namespace is enabled by default.
 To enable the other namespaces see the instructions for passing the C-Chain config to AvalancheGo [here.](https://docs.avax.network/nodes/configure/chain-config-flags#enabling-evm-apis)
 Full documentation for the C-Chain's API can be found [here.](https://docs.avax.network/reference/avalanchego/c-chain/api)
 
