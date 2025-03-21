@@ -28,29 +28,15 @@
 package interfaces
 
 import (
-	"context"
-	"errors"
-	"math/big"
-
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ethereum/go-ethereum/common"
+	ethinterfaces "github.com/ethereum/go-ethereum"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
-var NotFound = errors.New("not found")
+var NotFound = ethinterfaces.NotFound
 
 // Subscription represents an event subscription where events are
 // delivered on a data channel.
-type Subscription interface {
-	// Unsubscribe cancels the sending of events to the data channel
-	// and closes the error channel.
-	Unsubscribe()
-	// Err returns the subscription error channel. The error channel receives
-	// a value if there is an issue with the subscription (e.g. the network connection
-	// delivering the events has been closed). Only one value will ever be sent.
-	// The error channel is closed by Unsubscribe.
-	Err() <-chan error
-}
+type Subscription = ethinterfaces.Subscription
 
 // ChainReader provides access to the blockchain. The methods in this interface access raw
 // data from either the canonical chain (when requesting by block number) or any
@@ -59,18 +45,7 @@ type Subscription interface {
 // should be preferred over full blocks whenever possible.
 //
 // The returned error is NotFound if the requested item does not exist.
-type ChainReader interface {
-	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-	BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error)
-	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
-	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
-	TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error)
-	TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error)
-
-	// This method subscribes to notifications about changes of the head block of
-	// the canonical chain.
-	SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (Subscription, error)
-}
+type ChainReader = ethinterfaces.ChainReader
 
 // TransactionReader provides access to past transactions and their receipts.
 // Implementations may impose arbitrary restrictions on the transactions and receipts that
@@ -81,84 +56,31 @@ type ChainReader interface {
 // reorganisations.
 //
 // The returned error is NotFound if the requested item does not exist.
-type TransactionReader interface {
-	// TransactionByHash checks the pool of pending transactions in addition to the
-	// blockchain. The isPending return value indicates whether the transaction has been
-	// mined yet. Note that the transaction may not be part of the canonical chain even if
-	// it's not pending.
-	TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error)
-	// TransactionReceipt returns the receipt of a mined transaction. Note that the
-	// transaction may not be included in the current canonical chain even if a receipt
-	// exists.
-	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
-}
+type TransactionReader = ethinterfaces.TransactionReader
 
 // ChainStateReader wraps access to the state trie of the canonical blockchain. Note that
 // implementations of the interface may be unable to return state values for old blocks.
 // In many cases, using CallContract can be preferable to reading raw contract storage.
-type ChainStateReader interface {
-	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
-	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
-	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
-	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
-}
+type ChainStateReader = ethinterfaces.ChainStateReader
 
 // CallMsg contains parameters for contract calls.
-type CallMsg struct {
-	From      common.Address  // the sender of the 'transaction'
-	To        *common.Address // the destination contract (nil for contract creation)
-	Gas       uint64          // if 0, the call executes with near-infinite gas
-	GasPrice  *big.Int        // wei <-> gas exchange ratio
-	GasFeeCap *big.Int        // EIP-1559 fee cap per gas.
-	GasTipCap *big.Int        // EIP-1559 tip per gas.
-	Value     *big.Int        // amount of wei sent along with the call
-	Data      []byte          // input data, usually an ABI-encoded contract method invocation
-
-	AccessList types.AccessList // EIP-2930 access list.
-
-	// For BlobTxType
-	BlobGasFeeCap *big.Int
-	BlobHashes    []common.Hash
-}
+type CallMsg = ethinterfaces.CallMsg
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by
 // the EVM but not mined into the blockchain. ContractCall is a low-level method to
 // execute such calls. For applications which are structured around specific contracts,
 // the abigen tool provides a nicer, properly typed way to perform calls.
-type ContractCaller interface {
-	CallContract(ctx context.Context, call CallMsg, blockNumber *big.Int) ([]byte, error)
-}
+type ContractCaller = ethinterfaces.ContractCaller
 
 // FilterQuery contains options for contract log filtering.
-type FilterQuery struct {
-	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
-	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
-	ToBlock   *big.Int         // end of the range, nil means latest block
-	Addresses []common.Address // restricts matches to events created by specific contracts
-
-	// The Topic list restricts matches to particular event topics. Each event has a list
-	// of topics. Topics matches a prefix of that list. An empty element slice matches any
-	// topic. Non-empty elements represent an alternative that matches any of the
-	// contained topics.
-	//
-	// Examples:
-	// {} or nil          matches any topic list
-	// {{A}}              matches topic A in first position
-	// {{}, {B}}          matches any topic in first position AND B in second position
-	// {{A}, {B}}         matches topic A in first position AND B in second position
-	// {{A, B}, {C, D}}   matches topic (A OR B) in first position AND (C OR D) in second position
-	Topics [][]common.Hash
-}
+type FilterQuery = ethinterfaces.FilterQuery
 
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //
 // Logs received through a streaming query subscription may have Removed set to true,
 // indicating that the log was reverted due to a chain reorganisation.
-type LogFilterer interface {
-	FilterLogs(ctx context.Context, q FilterQuery) ([]types.Log, error)
-	SubscribeFilterLogs(ctx context.Context, q FilterQuery, ch chan<- types.Log) (Subscription, error)
-}
+type LogFilterer = ethinterfaces.LogFilterer
 
 // TransactionSender wraps transaction sending. The SendTransaction method injects a
 // signed transaction into the pending transaction pool for execution. If the transaction
@@ -167,56 +89,35 @@ type LogFilterer interface {
 //
 // The transaction must be signed and have a valid nonce to be included. Consumers of the
 // API can use package accounts to maintain local private keys and need can retrieve the
-// next available nonce using AcceptedNonceAt.
-type TransactionSender interface {
-	SendTransaction(ctx context.Context, tx *types.Transaction) error
-}
+// next available nonce using PendingNonceAt.
+type TransactionSender = ethinterfaces.TransactionSender
 
 // GasPricer wraps the gas price oracle, which monitors the blockchain to determine the
 // optimal gas price given current fee market conditions.
-type GasPricer interface {
-	SuggestGasPrice(ctx context.Context) (*big.Int, error)
-}
+type GasPricer = ethinterfaces.GasPricer
 
 // GasPricer1559 provides access to the EIP-1559 gas price oracle.
-type GasPricer1559 interface {
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
-}
+type GasPricer1559 = ethinterfaces.GasPricer1559
 
 // FeeHistoryReader provides access to the fee history oracle.
-type FeeHistoryReader interface {
-	FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*FeeHistory, error)
-}
+type FeeHistoryReader = ethinterfaces.FeeHistoryReader
 
 // FeeHistory provides recent fee market data that consumers can use to determine
 // a reasonable maxPriorityFeePerGas value.
-type FeeHistory struct {
-	OldestBlock  *big.Int     // block corresponding to first response value
-	Reward       [][]*big.Int // list every txs priority fee per block
-	BaseFee      []*big.Int   // list of each block's base fee
-	GasUsedRatio []float64    // ratio of gas used out of the total available limit
-}
+type FeeHistory = ethinterfaces.FeeHistory
 
 // GasEstimator wraps EstimateGas, which tries to estimate the gas needed to execute a
 // specific transaction based on the pending state. There is no guarantee that this is the
 // true gas limit requirement as other transactions may be added or removed by miners, but
 // it should provide a basis for setting a reasonable default.
-type GasEstimator interface {
-	EstimateGas(ctx context.Context, call CallMsg) (uint64, error)
-}
+type GasEstimator = ethinterfaces.GasEstimator
 
 // A PendingStateEventer provides access to real time notifications about changes to the
 // pending state.
-type PendingStateEventer interface {
-	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
-}
+type PendingStateEventer = ethinterfaces.PendingStateEventer
 
 // BlockNumberReader provides access to the current block number.
-type BlockNumberReader interface {
-	BlockNumber(ctx context.Context) (uint64, error)
-}
+type BlockNumberReader = ethinterfaces.BlockNumberReader
 
 // ChainIDReader provides access to the chain ID.
-type ChainIDReader interface {
-	ChainID(ctx context.Context) (*big.Int, error)
-}
+type ChainIDReader = ethinterfaces.ChainIDReader
