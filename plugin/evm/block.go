@@ -493,7 +493,7 @@ func (b *Block) verifyDuringSync() error {
 	}
 
 	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
-	if lastHeight < b.Height() {
+	if b.Height() <= lastHeight {
 		tempAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil
 		defer func() { vm.atomicBackend = tempAtomicBackend }()
@@ -548,7 +548,7 @@ func (b *Block) verifyAtomicOps(writes bool) error {
 	}
 
 	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
-	if lastHeight < b.Height() {
+	if b.Height() <= lastHeight {
 		log.Warn("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
 		tempAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil
