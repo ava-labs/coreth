@@ -193,18 +193,6 @@ type FeeHistory struct {
 	GasUsedRatio []float64    // ratio of gas used out of the total available limit
 }
 
-// An AcceptedStateReceiver provides access to the accepted state ie. the state of the
-// most recently accepted block.
-type AcceptedStateReader interface {
-	AcceptedCodeAt(ctx context.Context, account common.Address) ([]byte, error)
-	AcceptedNonceAt(ctx context.Context, account common.Address) (uint64, error)
-}
-
-// AcceptedContractCaller can be used to perform calls against the accepted state.
-type AcceptedContractCaller interface {
-	AcceptedCallContract(ctx context.Context, call CallMsg) ([]byte, error)
-}
-
 // GasEstimator wraps EstimateGas, which tries to estimate the gas needed to execute a
 // specific transaction based on the pending state. There is no guarantee that this is the
 // true gas limit requirement as other transactions may be added or removed by miners, but
