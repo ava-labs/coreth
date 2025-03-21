@@ -33,36 +33,22 @@ import (
 
 var NotFound = ethinterfaces.NotFound
 
-type Subscription = ethinterfaces.Subscription
-
-type ChainReader = ethinterfaces.ChainReader
-
-type TransactionReader = ethinterfaces.TransactionReader
-
-type ChainStateReader = ethinterfaces.ChainStateReader
-
-type CallMsg = ethinterfaces.CallMsg
-
-type ContractCaller = ethinterfaces.ContractCaller
-
-type FilterQuery = ethinterfaces.FilterQuery
-
-type LogFilterer = ethinterfaces.LogFilterer
-
-type TransactionSender = ethinterfaces.TransactionSender
-
-type GasPricer = ethinterfaces.GasPricer
-
-type GasPricer1559 = ethinterfaces.GasPricer1559
-
-type FeeHistoryReader = ethinterfaces.FeeHistoryReader
-
-type FeeHistory = ethinterfaces.FeeHistory
-
-type GasEstimator = ethinterfaces.GasEstimator
-
-type PendingStateEventer = ethinterfaces.PendingStateEventer
-
-type BlockNumberReader = ethinterfaces.BlockNumberReader
-
-type ChainIDReader = ethinterfaces.ChainIDReader
+type (
+	BlockNumberReader   = ethinterfaces.BlockNumberReader
+	CallMsg             = ethinterfaces.CallMsg
+	ChainIDReader       = ethinterfaces.ChainIDReader
+	ChainReader         = ethinterfaces.ChainReader
+	ChainStateReader    = ethinterfaces.ChainStateReader
+	ContractCaller      = ethinterfaces.ContractCaller
+	FeeHistory          = ethinterfaces.FeeHistory
+	FeeHistoryReader    = ethinterfaces.FeeHistoryReader
+	FilterQuery         = ethinterfaces.FilterQuery
+	GasEstimator        = ethinterfaces.GasEstimator
+	GasPricer           = ethinterfaces.GasPricer
+	GasPricer1559       = ethinterfaces.GasPricer1559
+	LogFilterer         = ethinterfaces.LogFilterer
+	PendingStateEventer = ethinterfaces.PendingStateEventer
+	Subscription        = ethinterfaces.Subscription
+	TransactionReader   = ethinterfaces.TransactionReader
+	TransactionSender   = ethinterfaces.TransactionSender
+)
