@@ -146,11 +146,11 @@ func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.Sy
 func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func() error {
 	switch req {
 	case ethstatesync.AcceptSyncBlockRequest:
-		return func() error { return b.acceptAfterSync() }
+		return func() error { return b.accept() }
 	case ethstatesync.RejectSyncBlockRequest:
-		return func() error { return b.rejectAfterSync() }
+		return func() error { return b.reject() }
 	case ethstatesync.VerifySyncBlockRequest:
-		return func() error { return b.verifyAfterSync() }
+		return func() error { return b.verify(true) }
 	default:
 		log.Error("Invalid statesync.SyncBlockRequest", "ID", req)
 	}
@@ -497,7 +497,20 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 		return err
 	}
 
-	return client.state.SetLastAcceptedBlock(evmBlock)
+	if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
+		return fmt.Errorf("could not set last accepted block: %w", err)
+	}
+
+	// Start by checking accounts
+	snaps := evmBlock.vm.blockChain.Snapshots()
+	// tr := trie.NewStackTrie()
+	// it, err := snaps.AccountIterator()
+	cb := evmBlock.vm.blockChain.CurrentBlock()
+
+	if err := snaps.Verify(cb.Root); err != nil {
+		return fmt.Errorf("could not verify snapshots: %w", err)
+	}
+	return nil
 }
 
 // updateVMMarkers updates the following markers in the VM's database

@@ -172,44 +172,8 @@ func (b *Block) accept() error {
 		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
 	}
 
-	for _, tx := range b.atomicTxs {
-		// Remove the accepted transaction from the mempool
-		vm.mempool.RemoveTx(tx)
-	}
-
-	_, lastHeight, err := vm.readLastAccepted()
-	if err != nil {
-		return fmt.Errorf("failed to read last accepted block: %w", err)
-	}
-
-	// If normal dynamic sync is halted after finishing the sync, we need to
-	// ensure we do not perform shared memory transitions multiple times
-	if lastHeight < b.Height() {
-		if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-			return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
-		}
-
-		// Update VM state for atomic txs in this block. This includes updating the
-		// atomic tx repo, atomic trie, and shared memory.
-		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-		if err != nil {
-			// should never occur since [b] must be verified before calling Accept
-			return err
-		}
-		// Get pending operations on the vm's versionDB so we can apply them atomically
-		// with the shared memory changes.
-		vdbBatch, err := b.vm.versiondb.CommitBatch()
-		if err != nil {
-			return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
-		}
-
-		// Apply any shared memory changes atomically with other pending changes to
-		// the vm's versionDB.
-		if err := atomicState.Accept(vdbBatch, nil); err != nil {
-			return fmt.Errorf("failed to accept %s atomic state: %w", b.ID(), err)
-		}
-	} else {
-		log.Warn("Skipping shared memory transitions for block", "hash", b.ID(), "height", b.Height())
+	if err := b.acceptAtomicOps(); err != nil {
+		return fmt.Errorf("failed to accept atomic ops: %w", err)
 	}
 
 	return nil
@@ -223,11 +187,26 @@ func (b *Block) acceptDuringSync() error {
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
 
+	if err := b.acceptAtomicOps(); err != nil {
+		return fmt.Errorf("failed to accept atomic ops during accept: %w", err)
+	}
+
+	// Write the canonical hash to the chain database
+	batch := vm.chaindb.NewBatch()
+	rawdb.WriteCanonicalHash(batch, b.ethBlock.Hash(), b.ethBlock.NumberU64())
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to write block during sync: %w", err)
+	}
+
+	return nil
+}
+
+func (b *Block) acceptAtomicOps() error {
+	vm := b.vm
 	_, lastHeight, err := vm.readLastAccepted()
 	if err != nil {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-
 	// Only perform shared memory transitions if we haven't already done them
 	if lastHeight < b.Height() {
 		if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
@@ -253,38 +232,16 @@ func (b *Block) acceptDuringSync() error {
 		if err := atomicState.Accept(vdbBatch, nil); err != nil {
 			return err
 		}
+
+		// No-op if still syncing
+		for _, tx := range b.atomicTxs {
+			// Remove the accepted transaction from the mempool
+			vm.mempool.RemoveTx(tx)
+		}
 	} else {
-		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height",
+		log.Warn("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height",
 			b.Height())
 	}
-
-	// Write the canonical hash to the chain database
-	batch := vm.chaindb.NewBatch()
-	rawdb.WriteCanonicalHash(batch, b.ethBlock.Hash(), b.ethBlock.NumberU64())
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("failed to write block during sync: %w", err)
-	}
-
-	log.Debug("Returning from accept without error", "block", b.ID(), "height", b.Height())
-
-	return nil
-}
-
-func (b *Block) acceptAfterSync() error {
-	vm := b.vm
-	log.Debug("Accepting block after sync", "hash", b.ID(), "height", b.Height())
-
-	// Call Accept for relevant precompile logs. Note we do this prior to
-	// calling Accept on the blockChain so any side effects (eg warp signatures)
-	// take place before the accepted log is emitted to subscribers.
-	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Time())
-	if err := b.handlePrecompileAccept(*params.GetRulesExtra(rules)); err != nil {
-		return err
-	}
-	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
-		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
-	}
-
 	return nil
 }
 
@@ -335,43 +292,67 @@ func (b *Block) Reject(context.Context) error {
 }
 
 func (b *Block) reject() error {
-	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
-	for _, tx := range b.atomicTxs {
-		// Re-issue the transaction in the mempool, continue even if it fails
-		b.vm.mempool.RemoveTx(tx)
-		if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
-			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
-		}
-	}
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	log.Error(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
+	vm := b.vm
+
+	_, lastHeight, err := vm.readLastAccepted()
 	if err != nil {
-		// should never occur since [b] must be verified before calling Reject
-		return err
+		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-	if err := atomicState.Reject(); err != nil {
-		return err
+	// Only perform shared memory transitions if we haven't already done them
+	if lastHeight < b.Height() {
+		// No-op if still syncing
+		for _, tx := range b.atomicTxs {
+			// Re-issue the transaction in the mempool, continue even if it fails
+			b.vm.mempool.RemoveTx(tx)
+			if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
+				log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
+			}
+		}
+		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+		if err != nil {
+			// should never occur since [b] must be verified before calling Reject
+			return err
+		}
+		if err := atomicState.Reject(); err != nil {
+			return err
+		}
 	}
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
 func (b *Block) rejectDuringSync() error {
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	var (
+		vm    = b.vm
+		block = b.ethBlock
+	)
+
+	_, lastHeight, err := vm.readLastAccepted()
 	if err != nil {
-		// should never occur since [b] must be verified before calling Reject
-		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
-		return err
+		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-	if err := atomicState.Reject(); err != nil {
-		return err
+	// Only perform shared memory transitions if we haven't already done them
+	if lastHeight < b.Height() {
+		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+		if err != nil {
+			// should never occur since [b] must be verified before calling Reject
+			log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
+			return err
+		}
+		if err := atomicState.Reject(); err != nil {
+			return err
+		}
+	}
+
+	// Remove the block since its data is no longer needed
+	batch := vm.chaindb.NewBatch()
+	rawdb.DeleteBlock(batch, block.Hash(), block.NumberU64())
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to write delete block batch: %w", err)
 	}
 
 	log.Debug("Returning from reject without error", "block", b.ID(), "height", b.Height())
 	return nil
-}
-
-func (b *Block) rejectAfterSync() error {
-	log.Debug("Rejecting block after sync", b.ID(), "height", b.Height())
-	return b.vm.blockChain.Reject(b.ethBlock)
 }
 
 // Parent implements the snowman.Block interface
@@ -482,11 +463,6 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *Block) verify(writes bool) error {
-	// verify UTXOs named in import txs are present in shared memory.
-	if err := b.verifyUTXOsPresent(); err != nil {
-		return err
-	}
-
 	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
 	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
 	// Additionally, if a block is already in processing, then it has already passed verification and
@@ -496,16 +472,7 @@ func (b *Block) verify(writes bool) error {
 		return nil
 	}
 
-	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if err != nil || !writes {
-		// if an error occurred inserting the block into the chain
-		// or if we are not pinning to memory, unpin the atomic trie
-		// changes from memory (if they were pinned).
-		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
-			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
-		}
-	}
-	return err
+	return b.verifyAtomicOps(writes)
 }
 
 func (b *Block) verifyDuringSync() error {
@@ -520,9 +487,16 @@ func (b *Block) verifyDuringSync() error {
 		rulesExtra = *params.GetRulesExtra(rules)
 	)
 
-	txs, err := atomic.ExtractAtomicTxs(types.BlockExtData(block), rulesExtra.IsApricotPhase5, atomic.Codec)
+	_, lastHeight, err := vm.readLastAccepted()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read last accepted block: %w", err)
+	}
+
+	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
+	if lastHeight < b.Height() {
+		tempAtomicBackend := vm.atomicBackend
+		vm.atomicBackend = nil
+		defer func() { vm.atomicBackend = tempAtomicBackend }()
 	}
 
 	// Write the block to the database using chaindb
@@ -534,6 +508,15 @@ func (b *Block) verifyDuringSync() error {
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
 	if vm.atomicBackend != nil {
+		// verify UTXOs named in import txs are present in shared memory.
+		if err := b.verifyUTXOsPresent(); err != nil {
+			return err
+		}
+
+		txs, err := atomic.ExtractAtomicTxs(types.BlockExtData(block), rulesExtra.IsApricotPhase5, atomic.Codec)
+		if err != nil {
+			return err
+		}
 		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
 			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
 		} else {
@@ -546,7 +529,7 @@ func (b *Block) verifyDuringSync() error {
 		//
 		// Note: The atomic trie canonically contains the duplicate operations
 		// from any bonus blocks.
-		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
+		_, err = vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
 		if err != nil {
 			return err
 		}
@@ -557,23 +540,37 @@ func (b *Block) verifyDuringSync() error {
 	return nil
 }
 
-func (b *Block) verifyAfterSync() error {
-	log.Debug("Verifying block after sync", b.ID(), "height", b.Height())
-	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
-	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
-	// Additionally, if a block is already in processing, then it has already passed verification and
-	// at this point we have checked the predicates are still valid in the different context so we
-	// can return nil.
-	if b.vm.State.IsProcessing(b.id) {
-		return nil
+func (b *Block) verifyAtomicOps(writes bool) error {
+	vm := b.vm
+	_, lastHeight, err := vm.readLastAccepted()
+	if err != nil {
+		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 
 	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
-	tempAtomicBackend := b.vm.atomicBackend
-	b.vm.atomicBackend = nil
-	defer func() { b.vm.atomicBackend = tempAtomicBackend }()
+	if lastHeight < b.Height() {
+		log.Warn("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
+		tempAtomicBackend := vm.atomicBackend
+		vm.atomicBackend = nil
+		defer func() { vm.atomicBackend = tempAtomicBackend }()
+	} else {
+		// verify UTXOs named in import txs are present in shared memory.
+		if err := b.verifyUTXOsPresent(); err != nil {
+			return err
+		}
+	}
 
-	return b.vm.blockChain.InsertBlockManual(b.ethBlock, true)
+	err = b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+	if vm.atomicBackend != nil && (err != nil || !writes) {
+		// if an error occurred inserting the block into the chain
+		// or if we are not pinning to memory, unpin the atomic trie
+		// changes from memory (if they were pinned).
+		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
+			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
+		}
+	}
+
+	return err
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
