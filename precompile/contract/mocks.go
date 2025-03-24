@@ -135,21 +135,6 @@ func (mr *MockStateDBMockRecorder) GetBalanceMultiCoin(arg0, arg1 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalanceMultiCoin", reflect.TypeOf((*MockStateDB)(nil).GetBalanceMultiCoin), arg0, arg1)
 }
 
-// GetLogData mocks base method.
-func (m *MockStateDB) GetLogData() ([][]common.Hash, [][]byte) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLogData")
-	ret0, _ := ret[0].([][]common.Hash)
-	ret1, _ := ret[1].([][]byte)
-	return ret0, ret1
-}
-
-// GetLogData indicates an expected call of GetLogData.
-func (mr *MockStateDBMockRecorder) GetLogData() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogData", reflect.TypeOf((*MockStateDB)(nil).GetLogData))
-}
-
 // GetNonce mocks base method.
 func (m *MockStateDB) GetNonce(arg0 common.Address) uint64 {
 	m.ctrl.T.Helper()

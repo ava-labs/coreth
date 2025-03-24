@@ -45,7 +45,7 @@ type StateDB interface {
 	Exist(common.Address) bool
 
 	AddLog(*Log)
-	GetLogData() (topics [][]common.Hash, data [][]byte)
+	Logs() []*ethtypes.Log
 	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
 	SetPredicateStorageSlots(address common.Address, predicates [][]byte)
 

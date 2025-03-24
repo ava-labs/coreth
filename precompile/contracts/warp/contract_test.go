@@ -147,7 +147,12 @@ func TestSendWarpMessage(t *testing.T) {
 				return bytes
 			}(),
 			AfterHook: func(t testing.TB, state contract.StateDB) {
-				logsTopics, logsData := state.GetLogData()
+				var logsTopics [][]common.Hash
+				var logsData [][]byte
+				for _, log := range state.Logs() {
+					logsTopics = append(logsTopics, log.Topics)
+					logsData = append(logsData, common.CopyBytes(log.Data))
+				}
 				require.Len(t, logsTopics, 1)
 				topics := logsTopics[0]
 				require.Len(t, topics, 3)
