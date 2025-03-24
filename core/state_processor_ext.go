@@ -77,16 +77,16 @@ func ApplyUpgrades(c *params.ChainConfig, parentTimestamp *uint64, blockContext 
 	return ApplyPrecompileActivations(c, parentTimestamp, blockContext, statedb)
 }
 
-// BlockContext implements the `contract.ConfigurationBlockContext` interface.
+// BlockContext implements [contract.ConfigurationBlockContext].
 type BlockContext struct {
 	number    *big.Int
 	timestamp uint64
 }
 
-// NewBlockContext creates a new block context using the block number
-// and block time provided. This function is usually necessary to convert
-// a `*types.Block` to be passed as a `contract.ConfigurationBlockContext`
-// interface to [ApplyUpgrades].
+// NewBlockContext creates a [BlockContext] using the block number
+// and block timestamp provided. This function is usually necessary to convert
+// a `*types.Block` to be passed as a [contract.ConfigurationBlockContext]
+// to [ApplyUpgrades].
 func NewBlockContext(number *big.Int, timestamp uint64) *BlockContext {
 	return &BlockContext{
 		number:    number,
