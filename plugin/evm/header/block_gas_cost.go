@@ -89,20 +89,19 @@ func EstimateRequiredTip(
 	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
-	extra := customtypes.GetHeaderExtra(header)
+	headerExtra := customtypes.GetHeaderExtra(header)
 	switch {
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:
 		return nil, errBaseFeeNil
-	case extra.BlockGasCost == nil:
+	case headerExtra.BlockGasCost == nil:
 		return nil, errBlockGasCostNil
-	case extra.ExtDataGasUsed == nil:
+	case headerExtra.ExtDataGasUsed == nil:
 		return nil, errExtDataGasUsedNil
 	}
 
 	// totalGasUsed = GasUsed + ExtDataGasUsed
-	headerExtra := customtypes.GetHeaderExtra(header)
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
 	totalGasUsed.Add(totalGasUsed, headerExtra.ExtDataGasUsed)
 	if totalGasUsed.Sign() == 0 {
