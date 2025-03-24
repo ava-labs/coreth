@@ -5,7 +5,7 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"io"
+	"crypto/rand"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
@@ -16,8 +16,8 @@ type Key struct {
 	PrivateKey *ecdsa.PrivateKey
 }
 
-func NewKey(rand io.Reader) (*Key, error) {
-	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), rand)
+func NewKey() (*Key, error) {
+	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
