@@ -1174,8 +1174,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 	}
 
 	// Commit all cached state changes into underlying memory database.
-	var err error
-	_, err = bc.commitWithSnap(block, parentRoot, state)
+	_, err := bc.commitWithSnap(block, parentRoot, state)
 	if err != nil {
 		return err
 	}
