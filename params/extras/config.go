@@ -172,8 +172,7 @@ func isForkTimestampIncompatible(s1, s2 *uint64, head uint64) bool {
 }
 
 // isTimestampForked returns whether a fork scheduled at timestamp s is active
-// at the given head timestamp. Whilst this method is the same as isBlockForked,
-// they are explicitly separate for clearer reading.
+// at the given head timestamp.
 func isTimestampForked(s *uint64, head uint64) bool {
 	if s == nil {
 		return false
