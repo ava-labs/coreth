@@ -183,7 +183,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, blockContext 
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
-func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, statedb *state.StateDB) {
+func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
 	// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with
 	// the new root
 	msg := &Message{
@@ -195,8 +195,8 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, statedb *state.
 		To:        &params.BeaconRootsStorageAddress,
 		Data:      beaconRoot[:],
 	}
-	evm.Reset(NewEVMTxContext(msg), statedb)
+	vmenv.Reset(NewEVMTxContext(msg), statedb)
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
-	_, _, _ = evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
 }
