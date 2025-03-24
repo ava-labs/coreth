@@ -27,7 +27,7 @@ type StateDB struct {
 	VmStateDB
 
 	// Ordered storage slots to be used in predicate verification as set in the tx access list.
-	// Only set in PrepareAccessList, and un-modified through execution.
+	// Only set in [StateDB.Prepare], and un-modified through execution.
 	predicateStorageSlots map[common.Address][][]byte
 }
 
