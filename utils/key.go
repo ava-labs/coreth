@@ -21,12 +21,8 @@ func NewKey(rand io.Reader) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewKeyFromECDSA(privateKeyECDSA), nil
-}
-
-func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	return &Key{
 		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
-	}
+	}, nil
 }
