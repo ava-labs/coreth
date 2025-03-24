@@ -124,7 +124,7 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 	}
 	newcfg, ok := newcfg_.Hooks().(*ChainConfig)
 	if !ok {
-		// Proper registration of the extras on libevm side should prevent this from happening.
+		// Proper registration of the extras on the libevm side should prevent this from happening.
 		// Return an error to prevent the chain from starting, just in case.
 		return newTimestampCompatError(
 			fmt.Sprintf("ChainConfig.Hooks() is not of the expected type *extras.ChainConfig, got %T", newcfg_.Hooks()),
@@ -192,7 +192,7 @@ func configTimestampEqual(x, y *uint64) bool {
 }
 
 // ConfigCompatError is raised if the locally-stored blockchain is initialised with a
-// ChainConfig that would alter the past.
+// [ChainConfig] that would alter the past.
 type ConfigCompatError = ethparams.ConfigCompatError
 
 // newTimestampCompatError is taken verbatim from upstream.
@@ -269,7 +269,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 }
 
 // checkForks checks that forks are enabled in order and returns an error if not.
-// [blockFork] is true if the fork is a block number fork, false if it is a timestamp fork
+// `blockFork` is true if the fork is a block number fork, false if it is a timestamp fork
 // TODO: This code was adapted from CheckConfigForkOrder, consider refactoring to avoid duplication.
 func checkForks(forks []fork, blockFork bool) error {
 	lastFork := fork{}
@@ -321,17 +321,17 @@ func (c *ChainConfig) Verify() error {
 	return nil
 }
 
-// IsPrecompileEnabled returns whether precompile with [address] is enabled at [timestamp].
+// IsPrecompileEnabled returns whether precompile with `address` is enabled at `timestamp`.
 func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint64) bool {
 	config := c.GetActivePrecompileConfig(address, timestamp)
 	return config != nil && !config.IsDisabled()
 }
 
-// IsForkTransition returns true if [fork] activates during the transition from
-// [parent] to [current].
-// Taking [parent] as a pointer allows for us to pass nil when checking forks
+// IsForkTransition returns true if `fork` activates during the transition from
+// `parent` to `current`.
+// Taking `parent` as a pointer allows for us to pass nil when checking forks
 // that activate during genesis.
-// Note: [parent] and [current] can be either both timestamp values, or both
+// Note: `parent` and `current` can be either both timestamp values, or both
 // block number values, since this function works for both block number and
 // timestamp activated forks.
 func IsForkTransition(fork *uint64, parent *uint64, current uint64) bool {
