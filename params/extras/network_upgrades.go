@@ -253,3 +253,10 @@ func (n *NetworkUpgrades) GetAvalancheRules(timestamp uint64) AvalancheRules {
 		IsFortuna:           n.IsFortuna(timestamp),
 	}
 }
+
+func ptrToString(val *uint64) string {
+	if val == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", *val)
+}

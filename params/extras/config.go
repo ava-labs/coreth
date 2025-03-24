@@ -342,10 +342,3 @@ func IsForkTransition(fork *uint64, parent *uint64, current uint64) bool {
 	currentForked := isTimestampForked(fork, current)
 	return !parentForked && currentForked
 }
-
-func ptrToString(val *uint64) string {
-	if val == nil {
-		return "nil"
-	}
-	return fmt.Sprintf("%d", *val)
-}
