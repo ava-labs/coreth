@@ -175,10 +175,7 @@ func FillAccounts(
 			t.Fatalf("failed to rlp encode account: %v", err)
 		}
 
-		key, err := utils.NewKey()
-		if err != nil {
-			t.Fatal(err)
-		}
+		key := utils.NewKey(t)
 		tr.MustUpdate(key.Address[:], accBytes)
 		accounts[key] = &acc
 	}
