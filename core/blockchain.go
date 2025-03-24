@@ -1696,8 +1696,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) commitWithSnap(
 	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
-	// blockHashes must be passed through Commit since snapshots are based on the
-	// block hash.
+	// blockHashes must be passed through [state.StateDB]'s Commit since snapshots
+	// are based on the block hash.
 	blockHashes := snapshot.WithBlockHashes(current.Hash(), current.ParentHash())
 	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), blockHashes)
 	if err != nil {
