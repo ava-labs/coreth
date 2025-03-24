@@ -6,7 +6,6 @@ package vm
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"
@@ -63,7 +62,7 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 	rulesExtra := params.GetRulesExtra(rules)
 	if !rulesExtra.IsApricotPhase1 {
 		if be.extDataHashes != nil {
-			extData := ethBlock.ExtData()
+			extData := types.BlockExtData(ethBlock)
 			extDataHash := types.CalcExtDataHash(extData)
 			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
 			// have a block that is unexpectedly missing extra data.
@@ -85,7 +84,9 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 	// Verify the ExtDataHash field
 	headerExtra := types.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase1 {
-		if hash := types.CalcExtDataHash(ethBlock.ExtData()); headerExtra.ExtDataHash != hash {
+		extraData := types.BlockExtData(ethBlock)
+		hash := types.CalcExtDataHash(extraData)
+		if headerExtra.ExtDataHash != hash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
 		}
 	} else {
@@ -109,16 +110,10 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
 	if rulesExtra.IsApricotPhase4 {
-		// Make sure ExtDataGasUsed is not nil and correct
-		if headerExtra.ExtDataGasUsed == nil {
-			return errNilExtDataGasUsedApricotPhase4
-		}
-		if rulesExtra.IsApricotPhase5 {
+		// After the F upgrade, the extDataGasUsed field is validated by
+		// [header.VerifyGasUsed].
+		if !rulesExtra.IsFortuna && rulesExtra.IsApricotPhase5 {
 			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
-				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
-			}
-		} else {
-			if !headerExtra.ExtDataGasUsed.IsUint64() {
 				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
 			}
 		}
@@ -137,7 +132,7 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 			}
 		}
 
-		if headerExtra.ExtDataGasUsed.Cmp(new(big.Int).SetUint64(totalGasUsed)) != 0 {
+		if !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed) {
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
 		}
 	}
@@ -244,7 +239,7 @@ func extractAtomicTxsFromBlock(b extension.VMBlock, chainConfig *params.ChainCon
 	}
 	extraConf := params.GetExtra(chainConfig)
 	isApricotPhase5 := extraConf.IsApricotPhase5(ethBlock.Time())
-	atomicTxs, err := atomic.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, atomic.Codec)
+	atomicTxs, err := atomic.ExtractAtomicTxs(types.BlockExtData(ethBlock), isApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, err
 	}

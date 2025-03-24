@@ -1418,7 +1418,7 @@ func TestUncleBlock(t *testing.T) {
 		uncles,
 		nil,
 		trie.NewStackTrie(nil),
-		blkDEthBlock.ExtData(),
+		types.BlockExtData(blkDEthBlock),
 		false,
 	)
 	uncleBlock, err := vm2.newBlock(uncleEthBlock)
@@ -1682,7 +1682,7 @@ func TestFutureBlock(t *testing.T) {
 		nil,
 		nil,
 		new(trie.Trie),
-		internalBlkA.ethBlock.ExtData(),
+		types.BlockExtData(internalBlkA.ethBlock),
 		false,
 	)
 

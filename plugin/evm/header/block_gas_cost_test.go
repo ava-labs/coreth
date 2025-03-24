@@ -18,51 +18,60 @@ import (
 
 func TestBlockGasCost(t *testing.T) {
 	tests := []struct {
-		name         string
-		ap5Timestamp *uint64
-		parentTime   uint64
-		parentCost   *big.Int
-		timestamp    uint64
-		expected     uint64
+		name       string
+		upgrades   extras.NetworkUpgrades
+		parentTime uint64
+		parentCost *big.Int
+		timestamp  uint64
+		expected   *big.Int
 	}{
+		{
+			name:       "before_ap4",
+			parentTime: 10,
+			upgrades:   extras.TestApricotPhase3Config.NetworkUpgrades,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   nil,
+		},
 		{
 			name:       "normal_ap4",
 			parentTime: 10,
+			upgrades:   extras.TestApricotPhase4Config.NetworkUpgrades,
 			parentCost: big.NewInt(ap4.MaxBlockGasCost),
 			timestamp:  10 + ap4.TargetBlockRate + 1,
-			expected:   ap4.MaxBlockGasCost - ap4.BlockGasCostStep,
+			expected:   big.NewInt(ap4.MaxBlockGasCost - ap4.BlockGasCostStep),
 		},
 		{
-			name:         "normal_ap5",
-			ap5Timestamp: utils.NewUint64(0),
-			parentTime:   10,
-			parentCost:   big.NewInt(ap4.MaxBlockGasCost),
-			timestamp:    10 + ap4.TargetBlockRate + 1,
-			expected:     ap4.MaxBlockGasCost - ap5.BlockGasCostStep,
+			name:       "normal_ap5",
+			upgrades:   extras.TestApricotPhase5Config.NetworkUpgrades,
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   big.NewInt(ap4.MaxBlockGasCost - ap5.BlockGasCostStep),
 		},
 		{
 			name:       "negative_time_elapsed",
+			upgrades:   extras.TestApricotPhase4Config.NetworkUpgrades,
 			parentTime: 10,
 			parentCost: big.NewInt(ap4.MinBlockGasCost),
 			timestamp:  9,
-			expected:   ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate,
+			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			config := &extras.ChainConfig{
-				NetworkUpgrades: extras.NetworkUpgrades{
-					ApricotPhase5BlockTimestamp: test.ap5Timestamp,
+				NetworkUpgrades: test.upgrades,
+			}
+			parent := types.WithHeaderExtra(
+				&types.Header{
+					Time: test.parentTime,
 				},
-			}
-			parent := &types.Header{
-				Time: test.parentTime,
-			}
-			extra := &types.HeaderExtra{
-				BlockGasCost: test.parentCost,
-			}
-			types.SetHeaderExtra(parent, extra)
+				&types.HeaderExtra{
+					BlockGasCost: test.parentCost,
+				},
+			)
 
 			assert.Equal(t, test.expected, BlockGasCost(
 				config,
@@ -170,7 +179,6 @@ func TestEstimateRequiredTip(t *testing.T) {
 		name         string
 		ap4Timestamp *uint64
 		header       *types.Header
-		headerExtra  *types.HeaderExtra
 		want         *big.Int
 		wantErr      error
 	}{
@@ -182,50 +190,91 @@ func TestEstimateRequiredTip(t *testing.T) {
 		{
 			name:         "nil_base_fee",
 			ap4Timestamp: utils.NewUint64(0),
-			header:       &types.Header{},
-			headerExtra: &types.HeaderExtra{
-				ExtDataGasUsed: big.NewInt(1),
-				BlockGasCost:   big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(1),
+					BlockGasCost:   big.NewInt(1),
+				},
+			),
 			wantErr: errBaseFeeNil,
 		},
 		{
 			name:         "nil_block_gas_cost",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee: big.NewInt(1),
-			},
-			headerExtra: &types.HeaderExtra{
-				ExtDataGasUsed: big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(1),
+				},
+			),
 			wantErr: errBlockGasCostNil,
 		},
 		{
 			name:         "nil_extra_data_gas_used",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				BaseFee: big.NewInt(1),
-			},
-			headerExtra: &types.HeaderExtra{
-				BlockGasCost: big.NewInt(1),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					BlockGasCost: big.NewInt(1),
+				},
+			),
 			wantErr: errExtDataGasUsedNil,
+		},
+		{
+			name:         "no_gas_used",
+			ap4Timestamp: utils.NewUint64(0),
+			header: types.WithHeaderExtra(
+				&types.Header{
+					GasUsed: 0,
+					BaseFee: big.NewInt(1),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(0),
+					BlockGasCost:   big.NewInt(1),
+				},
+			),
+			wantErr: errNoGasUsed,
 		},
 		{
 			name:         "success",
 			ap4Timestamp: utils.NewUint64(0),
-			header: &types.Header{
-				GasUsed: 123,
-				BaseFee: big.NewInt(456),
-			},
-			headerExtra: &types.HeaderExtra{
-				ExtDataGasUsed: big.NewInt(789),
-				BlockGasCost:   big.NewInt(101112),
-			},
+			header: types.WithHeaderExtra(
+				&types.Header{
+					GasUsed: 123,
+					BaseFee: big.NewInt(456),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(789),
+					BlockGasCost:   big.NewInt(101112),
+				},
+			),
 			// totalGasUsed = GasUsed + ExtDataGasUsed
 			// totalRequiredTips = BlockGasCost * BaseFee
 			// estimatedTip = totalRequiredTips / totalGasUsed
 			want: big.NewInt((101112 * 456) / (123 + 789)),
+		},
+		{
+			name:         "success_rounds_up",
+			ap4Timestamp: utils.NewUint64(0),
+			header: types.WithHeaderExtra(
+				&types.Header{
+					GasUsed: 124,
+					BaseFee: big.NewInt(456),
+				},
+				&types.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(789),
+					BlockGasCost:   big.NewInt(101112),
+				},
+			),
+			// totalGasUsed = GasUsed + ExtDataGasUsed
+			// totalRequiredTips = BlockGasCost * BaseFee
+			// estimatedTip = totalRequiredTips / totalGasUsed
+			want: big.NewInt((101112*456)/(124+789) + 1), // +1 to round up
 		},
 	}
 	for _, test := range tests {
@@ -237,7 +286,6 @@ func TestEstimateRequiredTip(t *testing.T) {
 					ApricotPhase4BlockTimestamp: test.ap4Timestamp,
 				},
 			}
-			types.SetHeaderExtra(test.header, test.headerExtra)
 			requiredTip, err := EstimateRequiredTip(config, test.header)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, requiredTip)

@@ -678,7 +678,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, state *state.StateDB, chain
 		rulesExtra = *params.GetRulesExtra(rules)
 	)
 
-	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rulesExtra.IsApricotPhase5, atomic.Codec)
+	txs, err := atomic.ExtractAtomicTxs(types.BlockExtData(block), rulesExtra.IsApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, nil, err
 	}

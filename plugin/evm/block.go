@@ -18,7 +18,6 @@ import (
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
@@ -29,6 +28,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/libevm/core/rawdb"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
@@ -113,8 +113,8 @@ func (b *Block) SyntacticVerify() error {
 		return err
 	}
 
-	if b.ethBlock.Version() != 0 {
-		return fmt.Errorf("invalid version: %d", b.ethBlock.Version())
+	if version := types.BlockVersion(b.ethBlock); version != 0 {
+		return fmt.Errorf("invalid version: %d", version)
 	}
 
 	// Check that the tx hash in the header matches the body
@@ -444,10 +444,8 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 		return fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
 	extraData := b.ethBlock.Extra()
-	headerPredicateResultsBytes := predicate.GetPredicateResultBytes(extraData)
-	if len(headerPredicateResultsBytes) == 0 {
-		return fmt.Errorf("failed to find predicate results in extra data: %x", extraData)
-	}
+	avalancheRules := params.GetRulesExtra(rules).AvalancheRules
+	headerPredicateResultsBytes := customheader.PredicateBytesFromExtra(avalancheRules, extraData)
 	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {
 		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, headerPredicateResultsBytes, predicateResultsBytes)
 	}

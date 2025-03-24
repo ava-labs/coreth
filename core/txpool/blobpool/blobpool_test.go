@@ -41,7 +41,6 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
@@ -49,6 +48,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
@@ -76,13 +76,6 @@ func init() {
 
 	testChainConfig.CancunTime = new(uint64)
 	*testChainConfig.CancunTime = uint64(time.Now().Unix())
-}
-
-// overrideMinFee sets the minimum base fee to 1 wei for the duration of the test.
-func overrideMinFee(t *testing.T) {
-	orig := header.EtnaMinBaseFee
-	header.EtnaMinBaseFee = big.NewInt(1)
-	t.Cleanup(func() { header.EtnaMinBaseFee = orig })
 }
 
 // testBlockChain is a mock of the live chain for testing the pool.
@@ -120,7 +113,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			GasLimit: gasLimit,
 			GasUsed:  0,
 			BaseFee:  mid,
-			Extra:    make([]byte, header.FeeWindowSize),
+			Extra:    make([]byte, ap3.WindowSize),
 		}
 		configExtra := params.GetExtra(bc.config)
 		baseFee, err := header.BaseFee(
@@ -160,7 +153,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
-		Extra:         make([]byte, header.FeeWindowSize),
+		Extra:         make([]byte, ap3.WindowSize),
 	}
 }
 
@@ -756,7 +749,6 @@ func TestOpenIndex(t *testing.T) {
 // Tests that after indexing all the loaded transactions from disk, a price heap
 // is correctly constructed based on the head basefee and blobfee.
 func TestOpenHeap(t *testing.T) {
-	overrideMinFee(t)
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
@@ -844,7 +836,6 @@ func TestOpenHeap(t *testing.T) {
 // Tests that after the pool's previous state is loaded back, any transactions
 // over the new storage cap will get dropped.
 func TestOpenCap(t *testing.T) {
-	overrideMinFee(t)
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend

@@ -1,8 +1,11 @@
 # Release Notes
 
 ## Pending Release
+
 - Bump golang version to v1.23.6
 - Bump golangci-lint to v1.63 and add linters
+- Implement ACP-176
+- Add `GasTarget` to the chain config to allow modifying the chain's `GasTarget` based on the ACP-176 rules
 
 - Moved atomic codebase from plugin/evm to plugin/evm/atomic package
 

@@ -30,16 +30,17 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
@@ -610,7 +611,7 @@ func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Bl
 	header.Root = root
 	receipts := rawdb.ReadRawReceipts(db, blk.Hash(), blk.NumberU64())
 	newBlk := types.NewBlockWithExtData(
-		header, blk.Transactions(), blk.Uncles(), receipts, trie.NewStackTrie(nil), blk.ExtData(), true,
+		header, blk.Transactions(), blk.Uncles(), receipts, trie.NewStackTrie(nil), types.BlockExtData(blk), true,
 	)
 	rawdb.WriteBlock(db, newBlk)
 	rawdb.WriteCanonicalHash(db, newBlk.Hash(), newBlk.NumberU64())
@@ -667,12 +668,12 @@ func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, 
 // assertSyncPerformedHeights iterates over all heights the VM has synced to and
 // verifies it matches [expected].
 func assertSyncPerformedHeights(t *testing.T, db ethdb.Iteratee, expected map[uint64]struct{}) {
-	it := rawdb.NewSyncPerformedIterator(db)
+	it := customrawdb.NewSyncPerformedIterator(db)
 	defer it.Release()
 
 	found := make(map[uint64]struct{}, len(expected))
 	for it.Next() {
-		found[rawdb.UnpackSyncPerformedKey(it.Key())] = struct{}{}
+		found[customrawdb.UnpackSyncPerformedKey(it.Key())] = struct{}{}
 	}
 	require.NoError(t, it.Error())
 	require.Equal(t, expected, found)
