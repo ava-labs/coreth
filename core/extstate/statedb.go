@@ -16,7 +16,6 @@ import (
 type VmStateDB interface {
 	vm.StateDB
 	Logs() []*types.Log
-
 	GetTxHash() common.Hash
 	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
 	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
