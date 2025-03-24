@@ -17,16 +17,17 @@ import (
 )
 
 // ApplyPrecompileActivations checks if any of the precompiles specified by the chain config are enabled or disabled by the block
-// transition from [parentTimestamp] to the timestamp set in [blockContext]. If this is the case, it calls [Configure]
+// transition from `parentTimestamp“ to the timestamp set in `blockContext`. If this is the case, it calls [modules.Module]'s Configure
 // to apply the necessary state transitions for the upgrade.
 // This function is called within genesis setup to configure the starting state for precompiles enabled at genesis.
-// In block processing and building, ApplyUpgrades is called instead which also applies state upgrades.
+// In block processing and building, [ApplyUpgrades] is called instead which also applies state upgrades.
 func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, blockContext contract.ConfigurationBlockContext, statedb *state.StateDB) error {
 	blockTimestamp := blockContext.Timestamp()
-	// Note: RegisteredModules returns precompiles sorted by module addresses.
-	// This ensures that the order we call Configure for each precompile is consistent.
-	// This ensures even if precompiles read/write state other than their own they will observe
-	// an identical global state in a deterministic order when they are configured.
+	// Note: [modules.RegisteredModules] returns precompiles sorted by module addresses.
+	// This ensures:
+	// - the order we call [modules.Module]'s Configure for each precompile is consistent
+	// - even if precompiles read/write state other than their own they will observe
+	//   an identical global state in a deterministic order when they are configured.
 	extra := params.GetExtra(c)
 	for _, module := range modules.RegisteredModules() {
 		for _, activatingConfig := range extra.GetActivatingPrecompileConfigs(module.Address, parentTimestamp, blockTimestamp, extra.PrecompileUpgrades) {
@@ -35,7 +36,7 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 			if activatingConfig.IsDisabled() {
 				log.Info("Disabling precompile", "name", module.ConfigKey)
 				statedb.SelfDestruct(module.Address)
-				// Calling Finalise here effectively commits Suicide call and wipes the contract state.
+				// Calling [state.StateDB]'s Finalise here effectively commits Suicide call and wipes the contract state.
 				// This enables re-configuration of the same contract state in the same block.
 				// Without an immediate Finalise call after the Suicide, a reconfigured precompiled state can be wiped out
 				// since Suicide will be committed after the reconfiguration.
