@@ -58,10 +58,7 @@ func (s *StateDB) GetLogData() (topics [][]common.Hash, data [][]byte) {
 // GetPredicateStorageSlots(AddrA, 1) -> Predicate3
 func (s *StateDB) GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool) {
 	predicates, exists := s.predicateStorageSlots[address]
-	if !exists {
-		return nil, false
-	}
-	if index >= len(predicates) {
+	if !exists || index >= len(predicates) {
 		return nil, false
 	}
 	return predicates[index], true
