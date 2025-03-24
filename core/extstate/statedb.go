@@ -37,7 +37,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	s.VmStateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
 }
 
-// GetLogData returns the underlying topics and data from each log included in the StateDB
+// GetLogData returns the underlying topics and data from each log included in the [StateDB].
 // Test helper function.
 func (s *StateDB) GetLogData() (topics [][]common.Hash, data [][]byte) {
 	for _, log := range s.Logs() {
