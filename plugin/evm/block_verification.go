@@ -11,16 +11,12 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/trie"
 
-	safemath "github.com/ava-labs/avalanchego/utils/math"
-
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/types"
 )
 
@@ -29,72 +25,21 @@ var (
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
 
-type BlockValidator interface {
-	SyntacticVerify(b *Block, rules params.Rules) error
-}
-
-type blockValidator struct {
-	extDataHashes map[common.Hash]common.Hash
-}
-
-func NewBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockValidator {
-	return &blockValidator{
-		extDataHashes: extDataHashes,
-	}
-}
-
-func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
-	rulesExtra := params.GetRulesExtra(rules)
+// syntacticVerify verifies that a *Block is well-formed.
+// TODO: This is kept here to reduce the diff, move this function to block.go
+func (b *Block) syntacticVerify() error {
 	if b == nil || b.ethBlock == nil {
 		return errInvalidBlock
 	}
 
-	ethHeader := b.ethBlock.Header()
-	blockHash := b.ethBlock.Hash()
-
-	if !rulesExtra.IsApricotPhase1 {
-		if v.extDataHashes != nil {
-			extData := customtypes.BlockExtData(b.ethBlock)
-			extDataHash := customtypes.CalcExtDataHash(extData)
-			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
-			// have a block that is unexpectedly missing extra data.
-			expectedExtDataHash, ok := v.extDataHashes[blockHash]
-			if len(extData) == 0 {
-				if ok {
-					return fmt.Errorf("found block with unexpected missing extra data (%s, %d), expected extra data hash: %s", blockHash, b.Height(), expectedExtDataHash)
-				}
-			} else {
-				// If there is extra data, check to make sure that the extra data hash matches the expected extra data hash for this
-				// block
-				if extDataHash != expectedExtDataHash {
-					return fmt.Errorf("extra data hash in block (%s, %d): %s, did not match the expected extra data hash: %s", blockHash, b.Height(), extDataHash, expectedExtDataHash)
-				}
-			}
-		}
-	}
-
 	// Skip verification of the genesis block since it should already be marked as accepted.
-	if blockHash == b.vm.genesisHash {
+	if b.ethBlock.Hash() == b.vm.genesisHash {
 		return nil
 	}
 
-	// Verify the ExtDataHash field
-	headerExtra := customtypes.GetHeaderExtra(ethHeader)
-	if rulesExtra.IsApricotPhase1 {
-		extraData := customtypes.BlockExtData(b.ethBlock)
-		hash := customtypes.CalcExtDataHash(extraData)
-		if headerExtra.ExtDataHash != hash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
-		}
-	} else {
-		if headerExtra.ExtDataHash != (common.Hash{}) {
-			return fmt.Errorf(
-				"expected ExtDataHash to be empty but got %x",
-				headerExtra.ExtDataHash,
-			)
-		}
-	}
-
+	ethHeader := b.ethBlock.Header()
+	rules := b.vm.chainConfig.Rules(ethHeader.Number, params.IsMergeTODO, ethHeader.Time)
+	rulesExtra := params.GetRulesExtra(rules)
 	// Perform block and header sanity checks
 	if !ethHeader.Number.IsUint64() {
 		return fmt.Errorf("invalid block number: %v", ethHeader.Number)
@@ -141,12 +86,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		return errUnclesUnsupported
 	}
 
-	// Block must not be empty
-	txs := b.ethBlock.Transactions()
-	if len(txs) == 0 && len(b.atomicTxs) == 0 {
-		return errEmptyBlock
-	}
-
 	// Enforce minimum gas prices here prior to dynamic fees going into effect.
 	switch {
 	case !rulesExtra.IsApricotPhase1:
@@ -165,13 +104,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	// Make sure the block isn't too far in the future
-	// TODO: move this to only be part of semantic verification.
-	blockTimestamp := b.ethBlock.Time()
-	if maxBlockTime := uint64(b.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
-		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", blockTimestamp, maxBlockTime)
-	}
-
 	// Ensure BaseFee is non-nil as of ApricotPhase3.
 	if rulesExtra.IsApricotPhase3 {
 		if ethHeader.BaseFee == nil {
@@ -183,34 +115,9 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
+	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase4 {
-		// After the F upgrade, the extDataGasUsed field is validated by
-		// [header.VerifyGasUsed].
-		if !rulesExtra.IsFortuna && rulesExtra.IsApricotPhase5 {
-			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
-				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
-			}
-		}
-		var totalGasUsed uint64
-		for _, atomicTx := range b.atomicTxs {
-			// We perform this check manually here to avoid the overhead of having to
-			// reparse the atomicTx in `CalcExtDataGasUsed`.
-			fixedFee := rulesExtra.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
-			gasUsed, err := atomicTx.GasUsed(fixedFee)
-			if err != nil {
-				return err
-			}
-			totalGasUsed, err = safemath.Add(totalGasUsed, gasUsed)
-			if err != nil {
-				return err
-			}
-		}
-
 		switch {
-		case !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed):
-			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
-
 		// Make sure BlockGasCost is not nil
 		// NOTE: ethHeader.BlockGasCost correctness is checked in header verification
 		case headerExtra.BlockGasCost == nil:
@@ -237,8 +144,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	if !cancun && ethHeader.ParentBeaconRoot != nil {
 		return fmt.Errorf("invalid parentBeaconRoot: have %x, expected nil", *ethHeader.ParentBeaconRoot)
 	}
-	// TODO: decide what to do after Cancun
-	// currently we are enforcing it to be empty hash
 	if cancun {
 		switch {
 		case ethHeader.ParentBeaconRoot == nil:
@@ -250,6 +155,12 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			return fmt.Errorf("blob gas used must not be nil in Cancun")
 		} else if *ethHeader.BlobGasUsed > 0 {
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
+		}
+	}
+
+	if b.extension != nil {
+		if err := b.extension.SyntacticVerify(b, rules); err != nil {
+			return err
 		}
 	}
 	return nil
