@@ -222,7 +222,7 @@ func GetNetworkUpgrades(agoUpgrade upgrade.Config) NetworkUpgrades {
 		CortinaBlockTimestamp:           utils.TimeToNewUint64(agoUpgrade.CortinaTime),
 		DurangoBlockTimestamp:           utils.TimeToNewUint64(agoUpgrade.DurangoTime),
 		EtnaTimestamp:                   utils.TimeToNewUint64(agoUpgrade.EtnaTime),
-		FortunaTimestamp:                utils.TimeToNewUint64(agoUpgrade.FortunaTime),
+		FortunaTimestamp:                utils.TimeToNewUint64(agoUpgrade.FUpgradeTime),
 	}
 }
 
