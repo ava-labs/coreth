@@ -17,7 +17,7 @@ import (
 )
 
 // ApplyPrecompileActivations checks if any of the precompiles specified by the chain config are enabled or disabled by the block
-// transition from `parentTimestamp“ to the timestamp set in `blockContext`. If this is the case, it calls [modules.Module]'s Configure
+// transition from `parentTimestamp` to the timestamp set in `blockContext`. If this is the case, it calls [modules.Module]'s Configure
 // to apply the necessary state transitions for the upgrade.
 // This function is called within genesis setup to configure the starting state for precompiles enabled at genesis.
 // In block processing and building, [ApplyUpgrades] is called instead which also applies state upgrades.
