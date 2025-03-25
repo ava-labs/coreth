@@ -632,7 +632,7 @@ func reprocess(
 			if i%uint64(logEach) == 0 {
 				took := time.Since(lastLogTime)
 				lastLogTime = time.Now()
-				t.Logf("(%v) Block: %d, Txs: %d (+ %d atomic), Parent State: %s", took.Truncate(time.Millisecond), i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString())
+				t.Logf("(%v) Block: %d, Txs: %d (+ %d atomic), db root: %s, block root: %s", took.Truncate(time.Millisecond), i, len(block.Transactions()), len(atomicTxs), lastRoot.TerminalString(), block.Root().TerminalString())
 			}
 		}
 
