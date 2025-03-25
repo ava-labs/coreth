@@ -269,7 +269,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 
 // checkForks checks that forks are enabled in order and returns an error if not.
 // `blockFork` is true if the fork is a block number fork, false if it is a timestamp fork
-// TODO: This code was adapted from CheckConfigForkOrder, consider refactoring to avoid duplication.
 func checkForks(forks []fork, blockFork bool) error {
 	lastFork := fork{}
 	for _, cur := range forks {
