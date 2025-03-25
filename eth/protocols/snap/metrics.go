@@ -17,41 +17,53 @@
 package snap
 
 import (
-	ethmetrics "github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/metrics"
 )
 
 var (
 	ingressRegistrationErrorName = "eth/protocols/snap/ingress/registration/error"
 	egressRegistrationErrorName  = "eth/protocols/snap/egress/registration/error"
 
-	IngressRegistrationErrorMeter = ethmetrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
-	EgressRegistrationErrorMeter  = ethmetrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
+	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
+	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
 
-	// deletionGauge is the metric to track how many trie node deletions
-	// are performed in total during the sync process.
-	deletionGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/delete", nil)
+	// accountInnerDeleteGauge is the metric to track how many dangling trie nodes
+	// covered by extension node in account trie are deleted during the sync.
+	accountInnerDeleteGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete/account/inner", nil)
+
+	// storageInnerDeleteGauge is the metric to track how many dangling trie nodes
+	// covered by extension node in storage trie are deleted during the sync.
+	storageInnerDeleteGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete/storage/inner", nil)
+
+	// accountOuterDeleteGauge is the metric to track how many dangling trie nodes
+	// above the committed nodes in account trie are deleted during the sync.
+	accountOuterDeleteGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete/account/outer", nil)
+
+	// storageOuterDeleteGauge is the metric to track how many dangling trie nodes
+	// above the committed nodes in storage trie are deleted during the sync.
+	storageOuterDeleteGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete/storage/outer", nil)
 
 	// lookupGauge is the metric to track how many trie node lookups are
 	// performed to determine if node needs to be deleted.
-	lookupGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/lookup", nil)
-
-	// boundaryAccountNodesGauge is the metric to track how many boundary trie
-	// nodes in account trie are met.
-	boundaryAccountNodesGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/account", nil)
-
-	// boundaryAccountNodesGauge is the metric to track how many boundary trie
-	// nodes in storage tries are met.
-	boundaryStorageNodesGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/storage", nil)
+	accountInnerLookupGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/account/lookup/inner", nil)
+	accountOuterLookupGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/account/lookup/outer", nil)
+	storageInnerLookupGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/lookup/inner", nil)
+	storageOuterLookupGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/lookup/outer", nil)
 
 	// smallStorageGauge is the metric to track how many storages are small enough
 	// to retrieved in one or two request.
-	smallStorageGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/small", nil)
+	smallStorageGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/small", nil)
 
 	// largeStorageGauge is the metric to track how many storages are large enough
 	// to retrieved concurrently.
-	largeStorageGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/large", nil)
+	largeStorageGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/large", nil)
 
 	// skipStorageHealingGauge is the metric to track how many storages are retrieved
 	// in multiple requests but healing is not necessary.
-	skipStorageHealingGauge = ethmetrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/noheal", nil)
+	skipStorageHealingGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/noheal", nil)
+
+	// largeStorageDiscardGauge is the metric to track how many chunked storages are
+	// discarded during the snap sync.
+	largeStorageDiscardGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/chunk/discard", nil)
+	largeStorageResumedGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/chunk/resume", nil)
 )

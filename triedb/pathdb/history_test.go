@@ -32,9 +32,9 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/internal/testrand"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
-	"github.com/ava-labs/libevm/trie/testutil"
 	"github.com/ava-labs/libevm/trie/triestate"
 )
 
@@ -45,11 +45,11 @@ func randomStateSet(n int) *triestate.Set {
 		storages = make(map[common.Address]map[common.Hash][]byte)
 	)
 	for i := 0; i < n; i++ {
-		addr := testutil.RandomAddress()
+		addr := testrand.Address()
 		storages[addr] = make(map[common.Hash][]byte)
 		for j := 0; j < 3; j++ {
-			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testutil.RandBytes(32)))
-			storages[addr][testutil.RandomHash()] = v
+			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+			storages[addr][testrand.Hash()] = v
 		}
 		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
@@ -58,7 +58,7 @@ func randomStateSet(n int) *triestate.Set {
 }
 
 func makeHistory() *history {
-	return newHistory(testutil.RandomHash(), types.EmptyRootHash, 0, randomStateSet(3))
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, randomStateSet(3))
 }
 
 // nolint: unused
@@ -68,7 +68,7 @@ func makeHistories(n int) []*history {
 		result []*history
 	)
 	for i := 0; i < n; i++ {
-		root := testutil.RandomHash()
+		root := testrand.Hash()
 		h := newHistory(root, parent, uint64(i), randomStateSet(3))
 		parent = root
 		result = append(result, h)
