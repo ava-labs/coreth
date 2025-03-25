@@ -4,7 +4,9 @@
 package params
 
 import (
+	"maps"
 	"math/big"
+	"slices"
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/nativeasset"
@@ -18,7 +20,6 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
-	"golang.org/x/exp/maps"
 )
 
 type RulesExtra extras.Rules
@@ -74,7 +75,7 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 	}
 
 	var addresses []common.Address
-	addresses = append(addresses, maps.Keys(precompiles)...)
+	slices.AppendSeq(addresses, maps.Keys(precompiles))
 	addresses = append(addresses, existing...)
 	return addresses
 }
