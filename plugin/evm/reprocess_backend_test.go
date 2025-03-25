@@ -164,6 +164,7 @@ func getMainnetGenesis(t *testing.T) core.Genesis {
 	}
 
 	t.Logf("Mainnet chain config: %v", g.Config)
+	t.Logf("Mainnet genesis: %v", g.Alloc)
 	return g
 }
 

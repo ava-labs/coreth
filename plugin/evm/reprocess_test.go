@@ -558,6 +558,11 @@ func reprocess(
 	require.NoError(t, err)
 	defer bc.Stop()
 
+	// check the genesis contract was deployed
+	genesisCodeHash := common.HexToHash("611445c10cb8404ad2103d510e139c3ace61b5acec80505bd1f5870528f587d7")
+	genesisCode := rawdb.ReadCode(db, genesisCodeHash)
+	t.Logf("Genesis code: %x", genesisCode)
+
 	// continuous profiler
 	shutdownChan := make(chan struct{})
 	go startContinuousProfiler(shutdownChan)
