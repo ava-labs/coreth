@@ -71,7 +71,7 @@ func (mr *MockStateDBMockRecorder) AddBalanceMultiCoin(arg0, arg1, arg2 any) *go
 }
 
 // AddLog mocks base method.
-func (m *MockStateDB) AddLog(arg0 *Log) {
+func (m *MockStateDB) AddLog(arg0 *types.Log) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddLog", arg0)
 }
