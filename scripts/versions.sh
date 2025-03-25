@@ -24,4 +24,3 @@ if [[ -z ${AVALANCHE_VERSION:-} ]]; then
     AVALANCHE_VERSION="${MODULE_HASH::8}"
   fi
 fi
-echo $AVALANCHE_VERSION
