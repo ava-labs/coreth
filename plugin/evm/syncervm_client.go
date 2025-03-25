@@ -66,6 +66,7 @@ type stateSyncClientConfig struct {
 	network        peer.Network
 	appSender      commonEng.AppSender
 	stateSyncNodes []ids.NodeID
+	scheme         string
 }
 
 type stateSyncerClient struct {
@@ -282,7 +283,10 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		if err != nil {
 			return block.StateSyncSkipped, fmt.Errorf("Could not get evmBlock from hash during acceptSyncSummary: %s, err: %w", client.syncSummary.BlockHash, err)
 		}
-		client.dl = ethstatesync.NewDownloader(client.chaindb, evmBlock.ethBlock, &client.downloaderLock)
+		client.dl, err = ethstatesync.NewDownloader(client.chaindb, client.scheme, evmBlock.ethBlock, &client.downloaderLock)
+		if err != nil {
+			return block.StateSyncSkipped, fmt.Errorf("Could not create downloader: %w", err)
+		}
 
 		// Ensures bootstrapping begins at the correct place
 		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {

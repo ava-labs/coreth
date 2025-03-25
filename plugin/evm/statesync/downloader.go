@@ -71,10 +71,15 @@ type downloader struct {
 	// quitLock       sync.Mutex    // Lock to prevent double closes
 }
 
-func NewDownloader(chaindb ethdb.Database, firstPivot *types.Block, bufferLock *sync.Mutex) Downloader {
+func NewDownloader(chaindb ethdb.Database, scheme string, firstPivot *types.Block, bufferLock *sync.Mutex) (*downloader, error) {
+	cleanScheme, err := rawdb.ParseStateScheme(scheme, chaindb)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse state scheme: %w", err)
+	}
+
 	d := &downloader{
 		pivotBlock:     firstPivot,
-		SnapSyncer:     snap.NewSyncer(chaindb, rawdb.HashScheme),
+		SnapSyncer:     snap.NewSyncer(chaindb, cleanScheme),
 		blockBuffer:    make([]*queueElement, bufferSize),
 		stateSyncStart: make(chan *stateSync),
 		quitCh:         make(chan struct{}),
@@ -84,7 +89,7 @@ func NewDownloader(chaindb ethdb.Database, firstPivot *types.Block, bufferLock *
 
 	go d.stateFetcher()
 
-	return d
+	return d, nil
 }
 
 // stateFetcher manages the active state sync and accepts requests
