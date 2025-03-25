@@ -457,7 +457,7 @@ func TestSetPreferenceRace(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -689,7 +689,7 @@ func TestReorgProtection(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -853,7 +853,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1044,7 +1044,7 @@ func TestStickyPreference(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1298,7 +1298,7 @@ func TestUncleBlock(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1483,7 +1483,7 @@ func TestAcceptReorg(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1666,7 +1666,7 @@ func TestFutureBlock(t *testing.T) {
 
 	blkA, err := vm.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	// Create empty block from blkA
@@ -1835,7 +1835,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := blk.Verify(context.Background()); err != nil {
@@ -2076,22 +2076,14 @@ func TestParentBeaconRootBlock(t *testing.T) {
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
-				t.Fatalf("Failed to build block with import transaction: %s", err)
+				t.Fatalf("Failed to build block with transaction: %s", err)
 			}
 
 			// Modify the block to have a parent beacon root
 			ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
 			header := types.CopyHeader(ethBlock.Header())
 			header.ParentBeaconRoot = test.beaconRoot
-			parentBeaconEthBlock := customtypes.NewBlockWithExtData(
-				header,
-				nil,
-				nil,
-				nil,
-				new(trie.Trie),
-				customtypes.BlockExtData(ethBlock),
-				false,
-			)
+			parentBeaconEthBlock := ethBlock.WithSeal(header)
 
 			parentBeaconBlock, err := vm.newBlock(parentBeaconEthBlock)
 			if err != nil {
