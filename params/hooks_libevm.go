@@ -75,7 +75,7 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 	}
 
 	var addresses []common.Address
-	slices.AppendSeq(addresses, maps.Keys(precompiles))
+	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
 	addresses = append(addresses, existing...)
 	return addresses
 }
