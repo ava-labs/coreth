@@ -159,9 +159,6 @@ func (c *NativeAssetCall) run(env vm.PrecompileEnvironment, stateDB contract.Sta
 		if err != vm.ErrExecutionReverted {
 			env.UseGas(env.Gas())
 		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, err
 }
