@@ -36,10 +36,10 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 			if activatingConfig.IsDisabled() {
 				log.Info("Disabling precompile", "name", module.ConfigKey)
 				statedb.SelfDestruct(module.Address)
-				// Calling [state.StateDB]'s Finalise here effectively commits Suicide call and wipes the contract state.
+				// Calling [state.StateDB]'s Finalise here effectively commits the SelfDestruct call and wipes the contract state.
 				// This enables re-configuration of the same contract state in the same block.
-				// Without an immediate Finalise call after the Suicide, a reconfigured precompiled state can be wiped out
-				// since Suicide will be committed after the reconfiguration.
+				// Without an immediate Finalise call after the SelfDestruct, a reconfigured precompiled state can be wiped out
+				// since SelfDestruct will be committed after the reconfiguration.
 				statedb.Finalise(true)
 				continue
 			}
