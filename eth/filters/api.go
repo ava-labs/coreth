@@ -364,7 +364,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 }
 
 // FilterCriteria represents a request to create a new filter.
-// Same as interfaces.FilterQuery but with UnmarshalJSON() method.
+// Same as [ethereum.FilterQuery] with the method [FilterCriteria.UnmarshalJSON].
 type FilterCriteria ethereum.FilterQuery
 
 // NewFilter creates a new filter and returns the filter id. It can be
