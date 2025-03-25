@@ -1,54 +1,23 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 
-// Package ethereum defines interfaces for interacting with Ethereum.
 package interfaces
 
 import (
+	"context"
+
 	ethereum "github.com/ava-labs/libevm"
+	"github.com/ava-labs/libevm/common"
 )
 
-var NotFound = ethereum.NotFound
+// An AcceptedStateReceiver provides access to the accepted state ie. the state of the
+// most recently accepted block.
+type AcceptedStateReader interface {
+	AcceptedCodeAt(ctx context.Context, account common.Address) ([]byte, error)
+	AcceptedNonceAt(ctx context.Context, account common.Address) (uint64, error)
+}
 
-type (
-	BlockNumberReader   = ethereum.BlockNumberReader
-	CallMsg             = ethereum.CallMsg
-	ChainIDReader       = ethereum.ChainIDReader
-	ChainReader         = ethereum.ChainReader
-	ChainStateReader    = ethereum.ChainStateReader
-	ContractCaller      = ethereum.ContractCaller
-	FeeHistory          = ethereum.FeeHistory
-	FeeHistoryReader    = ethereum.FeeHistoryReader
-	FilterQuery         = ethereum.FilterQuery
-	GasEstimator        = ethereum.GasEstimator
-	GasPricer           = ethereum.GasPricer
-	GasPricer1559       = ethereum.GasPricer1559
-	LogFilterer         = ethereum.LogFilterer
-	PendingStateEventer = ethereum.PendingStateEventer
-	Subscription        = ethereum.Subscription
-	TransactionReader   = ethereum.TransactionReader
-	TransactionSender   = ethereum.TransactionSender
-)
+// AcceptedContractCaller can be used to perform calls against the accepted state.
+type AcceptedContractCaller interface {
+	AcceptedCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error)
+}

@@ -34,8 +34,8 @@ import (
 	"runtime/debug"
 
 	"github.com/ava-labs/coreth/ethclient"
-	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/rpc"
+	interfaces "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"

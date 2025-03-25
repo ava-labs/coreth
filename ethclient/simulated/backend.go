@@ -28,10 +28,11 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/ethclient"
-	"github.com/ava-labs/coreth/interfaces"
+	custominterfaces "github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
+	interfaces "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -54,8 +55,8 @@ type Client interface {
 	interfaces.GasPricer1559
 	interfaces.FeeHistoryReader
 	interfaces.LogFilterer
-	interfaces.AcceptedStateReader
-	interfaces.AcceptedContractCaller
+	custominterfaces.AcceptedStateReader
+	custominterfaces.AcceptedContractCaller
 	interfaces.TransactionReader
 	interfaces.TransactionSender
 	interfaces.ChainIDReader

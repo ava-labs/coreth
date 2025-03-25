@@ -31,7 +31,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ava-labs/coreth/interfaces"
+	interfaces "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"

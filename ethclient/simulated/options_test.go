@@ -23,9 +23,9 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	interfaces "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/core/types"
 )
 

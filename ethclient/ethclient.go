@@ -35,9 +35,10 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/interfaces"
+	custominterfaces "github.com/ava-labs/coreth/interfaces"
 	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/rpc"
+	interfaces "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"
@@ -54,16 +55,16 @@ var (
 	_ bind.ContractTransactor     = (*client)(nil)
 	_ bind.DeployBackend          = (*client)(nil)
 
-	_ interfaces.ChainReader            = (*client)(nil)
-	_ interfaces.ChainStateReader       = (*client)(nil)
-	_ interfaces.TransactionReader      = (*client)(nil)
-	_ interfaces.TransactionSender      = (*client)(nil)
-	_ interfaces.ContractCaller         = (*client)(nil)
-	_ interfaces.GasEstimator           = (*client)(nil)
-	_ interfaces.GasPricer              = (*client)(nil)
-	_ interfaces.LogFilterer            = (*client)(nil)
-	_ interfaces.AcceptedStateReader    = (*client)(nil)
-	_ interfaces.AcceptedContractCaller = (*client)(nil)
+	_ interfaces.ChainReader                  = (*client)(nil)
+	_ interfaces.ChainStateReader             = (*client)(nil)
+	_ interfaces.TransactionReader            = (*client)(nil)
+	_ interfaces.TransactionSender            = (*client)(nil)
+	_ interfaces.ContractCaller               = (*client)(nil)
+	_ interfaces.GasEstimator                 = (*client)(nil)
+	_ interfaces.GasPricer                    = (*client)(nil)
+	_ interfaces.LogFilterer                  = (*client)(nil)
+	_ custominterfaces.AcceptedStateReader    = (*client)(nil)
+	_ custominterfaces.AcceptedContractCaller = (*client)(nil)
 
 	_ Client = (*client)(nil)
 )
