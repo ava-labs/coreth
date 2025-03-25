@@ -38,6 +38,7 @@ import (
 	"github.com/ava-labs/coreth/trie/trienode"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -539,6 +540,7 @@ func (s *stateObject) CodeSize() int {
 	}
 	size, err := s.db.db.ContractCodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
+		log.Error("Failed to load code size", "addr", s.address, "addrHash", s.addrHash, "root", s.data.Root, "balance", s.data.Balance, "nonce", s.data.Nonce, "codeHash", s.CodeHash(), "err", err)
 		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
 	}
 	return size
