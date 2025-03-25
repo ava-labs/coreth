@@ -34,17 +34,12 @@ import (
 
 	"github.com/ava-labs/coreth/internal/blocktest"
 	"github.com/ava-labs/coreth/params"
+	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
+	. "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/rlp"
-
-	. "github.com/ava-labs/coreth/plugin/evm/types"
-
-	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
-	// package so assume the presence of identifiers. A dot-import reduces PR
-	// noise during the refactoring.
-	. "github.com/ava-labs/libevm/core/types"
 )
 
 // This test has been modified from https://github.com/ethereum/go-ethereum/blob/v1.9.21/core/types/block_test.go#L35 to fit
@@ -76,10 +71,10 @@ func TestBlockEncoding(t *testing.T) {
 	check("Extra", block.Extra(), common.FromHex(""))
 	check("MixDigest", block.MixDigest(), common.HexToHash("0000000000000000000000000000000000000000000000000000000000000000"))
 	check("Nonce", block.Nonce(), uint64(0))
-	check("ExtDataHash", GetHeaderExtra(block.Header()).ExtDataHash, common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"))
+	check("ExtDataHash", customtypes.GetHeaderExtra(block.Header()).ExtDataHash, common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"))
 	check("BaseFee", block.BaseFee(), (*big.Int)(nil))
-	check("ExtDataGasUsed", BlockExtDataGasUsed(&block), (*big.Int)(nil))
-	check("BlockGasCost", BlockGasCost(&block), (*big.Int)(nil))
+	check("ExtDataGasUsed", customtypes.BlockExtDataGasUsed(&block), (*big.Int)(nil))
+	check("BlockGasCost", customtypes.BlockGasCost(&block), (*big.Int)(nil))
 
 	check("Size", block.Size(), uint64(len(blockEnc)))
 	check("BlockHash", block.Hash(), common.HexToHash("0608e5d5e13c337f226b621a0b08b3d50470f1961329826fd59f5a241d1df49e"))
@@ -120,8 +115,8 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), uint64(len(blockEnc)))
 	check("BaseFee", block.BaseFee(), new(big.Int).SetUint64(1_000_000_000))
-	check("ExtDataGasUsed", BlockExtDataGasUsed(&block), (*big.Int)(nil))
-	check("BlockGasCost", BlockGasCost(&block), (*big.Int)(nil))
+	check("ExtDataGasUsed", customtypes.BlockExtDataGasUsed(&block), (*big.Int)(nil))
+	check("BlockGasCost", customtypes.BlockGasCost(&block), (*big.Int)(nil))
 
 	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
@@ -184,10 +179,10 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), uint64(len(blockEnc)))
-	check("ExtDataHash", GetHeaderExtra(block.Header()).ExtDataHash, common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"))
+	check("ExtDataHash", customtypes.GetHeaderExtra(block.Header()).ExtDataHash, common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"))
 	check("BaseFee", block.BaseFee(), (*big.Int)(nil))
-	check("ExtDataGasUsed", BlockExtDataGasUsed(&block), (*big.Int)(nil))
-	check("BlockGasCost", BlockGasCost(&block), (*big.Int)(nil))
+	check("ExtDataGasUsed", customtypes.BlockExtDataGasUsed(&block), (*big.Int)(nil))
+	check("BlockGasCost", customtypes.BlockGasCost(&block), (*big.Int)(nil))
 
 	// Create legacy tx.
 	to := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
@@ -219,8 +214,8 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	check("Transactions[1].Hash", block.Transactions()[1].Hash(), tx2.Hash())
 	check("Transactions[1].Type()", block.Transactions()[1].Type(), uint8(AccessListTxType))
 
-	if !bytes.Equal(BlockExtData(&block), []byte{}) {
-		t.Errorf("Block ExtraData field mismatch, expected empty byte array, but found 0x%x", BlockExtData(&block))
+	if !bytes.Equal(customtypes.BlockExtData(&block), []byte{}) {
+		t.Errorf("Block ExtraData field mismatch, expected empty byte array, but found 0x%x", customtypes.BlockExtData(&block))
 	}
 
 	ourBlockEnc, err := rlp.EncodeToBytes(&block)
@@ -259,10 +254,10 @@ func TestBlockEncodingWithExtraData(t *testing.T) {
 	check("Extra", block.Extra(), common.FromHex(""))
 	check("MixDigest", block.MixDigest(), common.HexToHash("0000000000000000000000000000000000000000000000000000000000000000"))
 	check("Nonce", block.Nonce(), uint64(0))
-	check("ExtDataHash", GetHeaderExtra(block.Header()).ExtDataHash, common.HexToHash("296ff3bfdebf7c4b1fb71f589d69ed03b1c59b278d1780d54dc86ea7cb87cf17"))
+	check("ExtDataHash", customtypes.GetHeaderExtra(block.Header()).ExtDataHash, common.HexToHash("296ff3bfdebf7c4b1fb71f589d69ed03b1c59b278d1780d54dc86ea7cb87cf17"))
 	check("BaseFee", block.BaseFee(), (*big.Int)(nil))
-	check("ExtDataGasUsed", BlockExtDataGasUsed(&block), (*big.Int)(nil))
-	check("BlockGasCost", BlockGasCost(&block), (*big.Int)(nil))
+	check("ExtDataGasUsed", customtypes.BlockExtDataGasUsed(&block), (*big.Int)(nil))
+	check("BlockGasCost", customtypes.BlockGasCost(&block), (*big.Int)(nil))
 
 	check("Size", block.Size(), uint64(len(blockEnc)))
 	check("BlockHash", block.Hash(), common.HexToHash("4504ee98a94d16dbd70a35370501a3cb00c2965b012672085fbd328a72962902"))
@@ -270,8 +265,8 @@ func TestBlockEncodingWithExtraData(t *testing.T) {
 	check("len(Transactions)", len(block.Transactions()), 0)
 
 	expectedBlockExtraData := common.FromHex("00000000000000003039c85fc1980a77c5da78fe5486233fc09a769bb812bcb2cc548cf9495d046b3f1bd891ad56056d9c01f18f43f58b5c784ad07a4a49cf3d1f11623804b5cba2c6bf000000028a0f7c3e4d840143671a4c4ecacccb4d60fb97dce97a7aa5d60dfd072a7509cf00000001dbcf890f77f49b96857648b72b77f9f82937f28a68704af05da0dc12ba53f2db0000000500002d79883d20000000000100000000e0d5c4edc78f594b79025a56c44933c28e8ba3e51e6e23318727eeaac10eb27d00000001dbcf890f77f49b96857648b72b77f9f82937f28a68704af05da0dc12ba53f2db0000000500002d79883d20000000000100000000000000016dc8ea73dd39ab12fa2ecbc3427abaeb87d56fd800005af3107a4000dbcf890f77f49b96857648b72b77f9f82937f28a68704af05da0dc12ba53f2db0000000200000009000000010d9f115cd63c3ab78b5b82cfbe4339cd6be87f21cda14cf192b269c7a6cb2d03666aa8f8b23ca0a2ceee4050e75c9b05525a17aa1dd0e9ea391a185ce395943f0000000009000000010d9f115cd63c3ab78b5b82cfbe4339cd6be87f21cda14cf192b269c7a6cb2d03666aa8f8b23ca0a2ceee4050e75c9b05525a17aa1dd0e9ea391a185ce395943f00")
-	if !bytes.Equal(BlockExtData(&block), expectedBlockExtraData) {
-		t.Errorf("Block ExtraData field mismatch, expected 0x%x, but found 0x%x", BlockExtData(&block), expectedBlockExtraData)
+	if !bytes.Equal(customtypes.BlockExtData(&block), expectedBlockExtraData) {
+		t.Errorf("Block ExtraData field mismatch, expected 0x%x, but found 0x%x", customtypes.BlockExtData(&block), expectedBlockExtraData)
 	}
 
 	ourBlockEnc, err := rlp.EncodeToBytes(&block)
@@ -366,14 +361,14 @@ func TestAP4BlockEncoding(t *testing.T) {
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
 	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
-	// Hash of EIP-1559 block without ExtDataGasUsed and BlockGasCost is `0x2aefaa81ae43541bf2d608e2bb26a157212394abad4d219c06163be0d5d010f8`
+	// Hash of EIP-1559 block without ExtDataGasUsed and customtypes.BlockGasCost is `0x2aefaa81ae43541bf2d608e2bb26a157212394abad4d219c06163be0d5d010f8`
 	check("Hash", block.Hash(), common.HexToHash("0xc41340f5d2af79a12373bc8d6f0f05f9f98b240834608f428da171449e8a1468"))
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), uint64(len(blockEnc)))
 	check("BaseFee", block.BaseFee(), big.NewInt(1_000_000_000))
-	check("ExtDataGasUsed", BlockExtDataGasUsed(&block), big.NewInt(25_000))
-	check("BlockGasCost", BlockGasCost(&block), big.NewInt(1_000_000))
+	check("ExtDataGasUsed", customtypes.BlockExtDataGasUsed(&block), big.NewInt(25_000))
+	check("BlockGasCost", customtypes.BlockGasCost(&block), big.NewInt(1_000_000))
 
 	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
