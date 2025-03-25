@@ -71,6 +71,7 @@ var (
 	startPProf             = false
 	pprofAddr              = "localhost:6060"
 	metricsExpensive       = true
+	verifyRoot             = false
 
 	// continuous profiler options
 	continuousProfilerDir       = ""
@@ -133,6 +134,7 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&continuousProfilerDir, "continuousProfilerDir", continuousProfilerDir, "continuous profiler directory")
 	flag.DurationVar(&continuousProfilerFrequency, "continuousProfilerFrequency", continuousProfilerFrequency, "continuous profiler frequency")
 	flag.IntVar(&continuousProfilerMaxFiles, "continuousProfilerMaxFiles", continuousProfilerMaxFiles, "continuous profiler max files")
+	flag.BoolVar(&verifyRoot, "verifyRoot", verifyRoot, "verify root (will always verify for legacy)")
 
 	// merkledb options
 	flag.IntVar(&merkleDBBranchFactor, "merkleDBBranchFactor", merkleDBBranchFactor, "merkleDB branch factor")
@@ -438,7 +440,13 @@ func CleanupOnInterrupt(cleanup func()) {
 func TestReprocessGenesis(t *testing.T) {
 	// nomt commented out as needs separate process to function
 	for _, backend := range []string{"merkledb", "legacy", "firewood" /* , "nomt" */} {
-		t.Run(backend, func(t *testing.T) { testReprocessGenesis(t, backend) })
+		t.Run(backend, func(t *testing.T) {
+			if backend == "firewood" {
+				verifyRoot = true
+				defer func() { verifyRoot = false }()
+			}
+			testReprocessGenesis(t, backend)
+		})
 	}
 }
 

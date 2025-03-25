@@ -142,7 +142,7 @@ func getBackend(t *testing.T, name string, blocksCount int, dbs dbs) *reprocessB
 		Disk:        dbs.chain,
 		Metadata:    dbs.metadata,
 		Name:        name,
-		VerifyRoot:  name == "legacy",
+		VerifyRoot:  name == "legacy" || verifyRoot,
 	}
 }
 
@@ -190,7 +190,7 @@ func getMainnetBackend(t *testing.T, name string, source ethdb.Database, dbs dbs
 		Disk:        dbs.chain,
 		Metadata:    dbs.metadata,
 		Name:        name,
-		VerifyRoot:  name == "legacy",
+		VerifyRoot:  name == "legacy" || verifyRoot,
 	}
 }
 
@@ -204,21 +204,29 @@ func getKVBackend(t *testing.T, name string, merkleKVStore database.Database) tr
 		return nomt.New(conn)
 	}
 	if name == "firewood" {
-		opts := []firewood.OpenOption{
-			firewood.WithPath(firewoodDBFile),
-			firewood.WithCreate(!fileExists(firewoodDBFile)),
-			firewood.WithReadCacheStrategy(uint8(firewoodReadCacheStrategy)),
-			firewood.WithMetricsPort(uint16(firewoodMetricsPort)),
+		conf := firewood.DefaultConfig()
+		conf.Create = !fileExists(firewoodDBFile)
+		switch firewoodReadCacheStrategy {
+		case 0:
+			conf.ReadCacheStrategy = firewood.OnlyCacheWrites
+		case 1:
+			conf.ReadCacheStrategy = firewood.CacheBranchReads
+		case 2:
+			conf.ReadCacheStrategy = firewood.CacheAllReads
+		default:
+			t.Fatalf("invalid read cache strategy: %d", firewoodReadCacheStrategy)
 		}
+		conf.MetricsPort = uint16(firewoodMetricsPort)
 		if firewoodCacheEntries >= 0 {
-			opts = append(opts, firewood.WithNodeCacheEntries(uintptr(firewoodCacheEntries)))
+			conf.NodeCacheEntries = uint(firewoodCacheEntries)
 		}
 		if firewoodRevisions >= 0 {
-			opts = append(opts, firewood.WithRevisions(uintptr(firewoodRevisions)))
+			conf.Revisions = uint(firewoodRevisions)
 		}
 
-		fwdb := firewood.NewDatabase(opts...)
-		return &fw.Firewood{Firewood: fwdb}
+		fwdb, err := firewood.New(firewoodDBFile, conf)
+		require.NoError(t, err)
+		return &fw.Firewood{Database: fwdb}
 	}
 	return nil
 }

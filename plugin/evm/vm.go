@@ -509,11 +509,14 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 	if file := vm.config.FirewoodDBFile; file != "" {
-		fwdb := firewood.NewDatabase(
-			firewood.WithPath(file),
-			firewood.WithCreate(!fileExists(file)),
-		)
-		vm.ethConfig.KVBackend = &fw.Firewood{Firewood: fwdb}
+		conf := firewood.DefaultConfig()
+		conf.Create = !fileExists(file)
+
+		fwdb, err := firewood.New(file, conf)
+		if err != nil {
+			return fmt.Errorf("failed to create firewood database: %w", err)
+		}
+		vm.ethConfig.KVBackend = &fw.Firewood{Database: fwdb}
 		log.Warn("Using Firewood database (experimental)", "file", file)
 	}
 
