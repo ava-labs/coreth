@@ -28,11 +28,11 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/ethclient"
-	custominterfaces "github.com/ava-labs/coreth/interfaces"
+	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	interfaces "github.com/ava-labs/libevm"
+	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -46,20 +46,20 @@ func (*fakePushGossiper) Add(*types.Transaction) {}
 
 // Client exposes the methods provided by the Ethereum RPC client.
 type Client interface {
-	interfaces.BlockNumberReader
-	interfaces.ChainReader
-	interfaces.ChainStateReader
-	interfaces.ContractCaller
-	interfaces.GasEstimator
-	interfaces.GasPricer
-	interfaces.GasPricer1559
-	interfaces.FeeHistoryReader
-	interfaces.LogFilterer
-	custominterfaces.AcceptedStateReader
-	custominterfaces.AcceptedContractCaller
-	interfaces.TransactionReader
-	interfaces.TransactionSender
-	interfaces.ChainIDReader
+	ethereum.BlockNumberReader
+	ethereum.ChainReader
+	ethereum.ChainStateReader
+	ethereum.ContractCaller
+	ethereum.GasEstimator
+	ethereum.GasPricer
+	ethereum.GasPricer1559
+	ethereum.FeeHistoryReader
+	ethereum.LogFilterer
+	interfaces.AcceptedStateReader
+	interfaces.AcceptedContractCaller
+	ethereum.TransactionReader
+	ethereum.TransactionSender
+	ethereum.ChainIDReader
 }
 
 // simClient wraps ethclient. This exists to prevent extracting ethclient.Client

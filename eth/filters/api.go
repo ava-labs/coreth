@@ -37,7 +37,7 @@ import (
 
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/rpc"
-	interfaces "github.com/ava-labs/libevm"
+	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"
@@ -333,12 +333,12 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	)
 
 	if api.sys.backend.IsAllowUnfinalizedQueries() {
-		logsSub, err = api.events.SubscribeLogs(interfaces.FilterQuery(crit), matchedLogs)
+		logsSub, err = api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		logsSub, err = api.events.SubscribeAcceptedLogs(interfaces.FilterQuery(crit), matchedLogs)
+		logsSub, err = api.events.SubscribeAcceptedLogs(ethereum.FilterQuery(crit), matchedLogs)
 		if err != nil {
 			return nil, err
 		}
@@ -365,7 +365,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 
 // FilterCriteria represents a request to create a new filter.
 // Same as interfaces.FilterQuery but with UnmarshalJSON() method.
-type FilterCriteria interfaces.FilterQuery
+type FilterCriteria ethereum.FilterQuery
 
 // NewFilter creates a new filter and returns the filter id. It can be
 // used to retrieve logs when the state changes. This method cannot be
@@ -386,12 +386,12 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	)
 
 	if api.sys.backend.IsAllowUnfinalizedQueries() {
-		logsSub, err = api.events.SubscribeLogs(interfaces.FilterQuery(crit), logs)
+		logsSub, err = api.events.SubscribeLogs(ethereum.FilterQuery(crit), logs)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		logsSub, err = api.events.SubscribeAcceptedLogs(interfaces.FilterQuery(crit), logs)
+		logsSub, err = api.events.SubscribeAcceptedLogs(ethereum.FilterQuery(crit), logs)
 		if err != nil {
 			return "", err
 		}
