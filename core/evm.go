@@ -79,7 +79,7 @@ func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
 	if params.GetRulesExtra(rules).IsApricotPhase1 {
 		db = &StateDbAP1{db.(extstate.VmStateDB)}
 	}
-	return &extstate.StateDB{VmStateDB: db.(extstate.VmStateDB)}
+	return extstate.New(db.(extstate.VmStateDB))
 }
 
 type StateDbAP1 struct {

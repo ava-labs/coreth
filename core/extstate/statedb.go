@@ -30,6 +30,15 @@ type StateDB struct {
 	predicateStorageSlots map[common.Address][][]byte
 }
 
+// New creates a new [*StateDB] with the given [VmStateDB], effectively wrapping it
+// with additional functionality.
+func New(vm VmStateDB) *StateDB {
+	return &StateDB{
+		VmStateDB:             vm,
+		predicateStorageSlots: make(map[common.Address][][]byte),
+	}
+}
+
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	rulesExtra := params.GetRulesExtra(rules)
 	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rulesExtra, list)
@@ -66,8 +75,5 @@ func (s *StateDB) GetPredicateStorageSlots(address common.Address, index int) ([
 
 // SetPredicateStorageSlots sets the predicate storage slots for the given address
 func (s *StateDB) SetPredicateStorageSlots(address common.Address, predicates [][]byte) {
-	if s.predicateStorageSlots == nil {
-		s.predicateStorageSlots = make(map[common.Address][][]byte)
-	}
 	s.predicateStorageSlots[address] = predicates
 }
