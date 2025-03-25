@@ -96,7 +96,6 @@ func (b *Block) Accept(context.Context) error {
 		// Apply any changes atomically with other pending changes to
 		// the vm's versionDB.
 		// OnAccept flushes the changes in the batch to the database.
-		// TODO: Should we rename this to WriteBatch?
 		return b.extension.OnAccept(b, vdbBatch)
 	}
 
