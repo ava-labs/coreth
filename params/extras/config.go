@@ -126,7 +126,7 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 	if !ok {
 		// Proper registration of the extras on the libevm side should prevent this from happening.
 		// Return an error to prevent the chain from starting, just in case.
-		return newTimestampCompatError(
+		return ethparams.NewTimestampCompatError(
 			fmt.Sprintf("ChainConfig.Hooks() is not of the expected type *extras.ChainConfig, got %T", newcfg_.Hooks()),
 			utils.NewUint64(0),
 			nil,
@@ -187,30 +187,6 @@ func configTimestampEqual(x, y *uint64) bool {
 // ConfigCompatError is raised if the locally-stored blockchain is initialised with a
 // [ChainConfig] that would alter the past.
 type ConfigCompatError = ethparams.ConfigCompatError
-
-// newTimestampCompatError is taken verbatim from upstream.
-// TODO: export this function from upstream in libevm, so it can be used here.
-func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCompatError {
-	var rew *uint64
-	switch {
-	case storedtime == nil:
-		rew = newtime
-	case newtime == nil || *storedtime < *newtime:
-		rew = storedtime
-	default:
-		rew = newtime
-	}
-	err := &ConfigCompatError{
-		What:         what,
-		StoredTime:   storedtime,
-		NewTime:      newtime,
-		RewindToTime: 0,
-	}
-	if rew != nil && *rew > 0 {
-		err.RewindToTime = *rew - 1
-	}
-	return err
-}
 
 // UnmarshalJSON parses the JSON-encoded data and stores the result in the
 // object pointed to by c.
