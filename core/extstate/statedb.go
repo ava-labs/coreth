@@ -22,8 +22,10 @@ type VmStateDB interface {
 	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
 }
 
+type vmStateDB = VmStateDB
+
 type StateDB struct {
-	VmStateDB
+	vmStateDB
 
 	// Ordered storage slots to be used in predicate verification as set in the tx access list.
 	// Only set in [StateDB.Prepare], and un-modified through execution.
@@ -34,7 +36,7 @@ type StateDB struct {
 // with additional functionality.
 func New(vm VmStateDB) *StateDB {
 	return &StateDB{
-		VmStateDB:             vm,
+		vmStateDB:             vm,
 		predicateStorageSlots: make(map[common.Address][][]byte),
 	}
 }
@@ -42,7 +44,7 @@ func New(vm VmStateDB) *StateDB {
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	rulesExtra := params.GetRulesExtra(rules)
 	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rulesExtra, list)
-	s.VmStateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
+	s.vmStateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
 }
 
 // GetLogData returns the underlying topics and data from each log included in the [StateDB].
