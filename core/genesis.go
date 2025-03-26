@@ -232,7 +232,10 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	}
 	head, root := g.toBlockWithState(db, statedb)
 	log.Info("Calling statedb.Commit on genesis block")
-	statedb.Commit(0, false)
+	_, err = statedb.Commit(0, false)
+	if err != nil {
+		panic(err)
+	}
 	// Commit newly generated states into disk if it's not empty.
 	if root != types.EmptyRootHash {
 		if err := triedb.Commit(root, true); err != nil {
