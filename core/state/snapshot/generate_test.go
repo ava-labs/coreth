@@ -90,7 +90,7 @@ func testGeneration(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
@@ -131,7 +131,7 @@ func testGenerateExistentState(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
@@ -139,16 +139,16 @@ func testGenerateExistentState(t *testing.T, scheme string) {
 	<-stop
 }
 
-func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
+func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash, scheme string) {
 	t.Helper()
 	accIt := snap.AccountIterator(common.Hash{})
 	defer accIt.Release()
-	snapRoot, err := generateTrieRoot(nil, "", accIt, common.Hash{}, stackTrieGenerate,
+	snapRoot, err := generateTrieRoot(nil, scheme, accIt, common.Hash{}, stackTrieGenerate,
 		func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 			storageIt, _ := snap.StorageIterator(accountHash, common.Hash{})
 			defer storageIt.Release()
 
-			hash, err := generateTrieRoot(nil, "", storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+			hash, err := generateTrieRoot(nil, scheme, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -347,7 +347,7 @@ func testGenerateExistentStateWithWrongStorage(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
 	snap.genAbort <- stop
@@ -409,7 +409,7 @@ func testGenerateExistentStateWithWrongAccounts(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
@@ -600,7 +600,7 @@ func testGenerateWithExtraAccounts(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
@@ -662,7 +662,7 @@ func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 	case <-time.After(5 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
 	snap.genAbort <- stop
@@ -710,7 +710,7 @@ func testGenerateWithExtraBeforeAndAfter(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
 	snap.genAbort <- stop
@@ -749,7 +749,7 @@ func testGenerateWithMalformedSnapdata(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
 	snap.genAbort <- stop
@@ -784,7 +784,7 @@ func testGenerateFromEmptySnap(t *testing.T, scheme string) {
 	case <-time.After(1 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
 	snap.genAbort <- stop
@@ -834,7 +834,7 @@ func testGenerateWithIncompleteStorage(t *testing.T, scheme string) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
 	snap.genAbort <- stop
@@ -929,7 +929,7 @@ func testGenerateCompleteSnapshotWithDanglingStorage(t *testing.T, scheme string
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})
@@ -966,7 +966,7 @@ func testGenerateBrokenSnapshotWithDanglingStorage(t *testing.T, scheme string) 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
-	checkSnapRoot(t, snap, root)
+	checkSnapRoot(t, snap, root, scheme)
 
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan struct{})

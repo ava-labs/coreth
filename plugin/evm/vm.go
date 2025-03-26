@@ -43,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
 	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -467,6 +468,12 @@ func (vm *VM) Initialize(
 		return err
 	}
 	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
+	blockchainInitHash, blockchainInitHeight, err := vm.readInitChainState()
+	if err != nil {
+		return err
+	}
+	log.Info(fmt.Sprintf("blockchainInit = %s", blockchainInitHash))
+	stateSyncEnabled := vm.stateSyncEnabled(blockchainInitHeight)
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -501,7 +508,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.PopulateMissingTries = vm.config.PopulateMissingTries
 	vm.ethConfig.PopulateMissingTriesParallelism = vm.config.PopulateMissingTriesParallelism
 	vm.ethConfig.AllowMissingTries = vm.config.AllowMissingTries
-	vm.ethConfig.SnapshotDelayInit = vm.stateSyncEnabled(lastAcceptedHeight)
+	vm.ethConfig.SnapshotDelayInit = stateSyncEnabled
 	vm.ethConfig.SnapshotWait = vm.config.SnapshotWait
 	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
 	vm.ethConfig.HistoricalProofQueryWindow = vm.config.HistoricalProofQueryWindow
@@ -589,16 +596,11 @@ func (vm *VM) Initialize(
 		return err
 	}
 
-	if vm.config.StateSyncUseUpstream {
-		log.Info("Iniitializing with genesis hash", "hash", vm.genesisHash)
-		if err := vm.initializeChain(vm.genesisHash); err != nil {
-			return err
-		}
-	} else {
-		if err := vm.initializeChain(lastAcceptedHash); err != nil {
-			return err
-		}
+	// Initialize the Ethereum backend
+	if err := vm.initializeChain(blockchainInitHash); err != nil {
+		return err
 	}
+
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights map[uint64]ids.ID
@@ -650,7 +652,7 @@ func (vm *VM) Initialize(
 		AtomicTrie:       vm.atomicTrie,
 		SyncableInterval: vm.config.StateSyncCommitInterval,
 	})
-	return vm.initializeStateSyncClient(lastAcceptedHeight)
+	return vm.initializeStateSyncClient(lastAcceptedHeight, stateSyncEnabled)
 }
 
 func (vm *VM) initializeMetrics() error {
@@ -719,8 +721,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // initializeStateSyncClient initializes the client for performing state sync.
 // If state sync is disabled, this function will wipe any ongoing summary from
 // disk to ensure that we do not continue syncing from an invalid snapshot.
-func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
-	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
+func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64, stateSyncEnabled bool) error {
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
 	if stateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
@@ -1854,6 +1855,38 @@ func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 		}
 		return lastAcceptedHash, *height, nil
 	}
+}
+
+// This should only be called prior to initializing the backend
+// Afterward, the blockchain should be used
+func (vm *VM) readInitChainState() (common.Hash, uint64, error) {
+	// Check if currently syncing
+	summaryBytes, err := vm.metadataDB.Get(stateSyncSummaryKey)
+	// err != nil expected when syncing finished
+	if err == nil && len(summaryBytes) > 0 {
+		return vm.genesisHash, 0, nil
+	}
+
+	// No summary implies either hasn't synced or finished syncing
+	hash, err := customrawdb.ReadAcceptorTip(vm.chaindb)
+	switch {
+	case err == database.ErrNotFound:
+		// If there is nothing in the database, return the genesis block hash and height
+		return vm.genesisHash, 0, nil
+	case err != nil:
+		return common.Hash{}, 0, fmt.Errorf("failed to read acceptor tip: %w", err)
+	case hash == (common.Hash{}):
+		// havent started syncing yet
+		return vm.genesisHash, 0, nil
+	}
+
+	number := rawdb.ReadHeaderNumber(vm.chaindb, hash)
+	if number == nil {
+		return common.Hash{}, 0, fmt.Errorf("failed to retrieve header number of last accepted block: %s", hash)
+	}
+
+	// Found acceptor tip, should return this
+	return hash, *number, nil
 }
 
 // attachEthService registers the backend RPC services provided by Ethereum

@@ -327,21 +327,15 @@ func (b *Block) rejectDuringSync() error {
 		block = b.ethBlock
 	)
 
-	_, lastHeight, err := vm.readLastAccepted()
+	// Because this will not be called during bootstrapping, this is guaranteed to be a valid atomic operation
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
 	if err != nil {
-		return fmt.Errorf("failed to read last accepted block: %w", err)
+		// should never occur since [b] must be verified before calling Reject
+		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
+		return err
 	}
-	// Only perform shared memory transitions if we haven't already done them
-	if lastHeight < b.Height() {
-		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-		if err != nil {
-			// should never occur since [b] must be verified before calling Reject
-			log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
-			return err
-		}
-		if err := atomicState.Reject(); err != nil {
-			return err
-		}
+	if err := atomicState.Reject(); err != nil {
+		return err
 	}
 
 	// Remove the block since its data is no longer needed

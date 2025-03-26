@@ -1,3 +1,5 @@
+// (c) 2024-2025, Ava Labs, Inc.
+//
 // Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
