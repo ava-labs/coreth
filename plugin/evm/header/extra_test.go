@@ -617,14 +617,12 @@ func TestPredicateBytesExtra(t *testing.T) {
 		extra                  []byte
 		predicate              []byte
 		wantExtraWithPredicate []byte
-		wantPredicateBytes     []byte
 	}{
 		{
 			name:                   "empty_extra_predicate",
 			extra:                  nil,
 			predicate:              nil,
 			wantExtraWithPredicate: make([]byte, ap3.WindowSize),
-			wantPredicateBytes:     nil,
 		},
 		{
 			name: "empty_extra_predicate_fortuna",
@@ -634,7 +632,6 @@ func TestPredicateBytesExtra(t *testing.T) {
 			extra:                  nil,
 			predicate:              nil,
 			wantExtraWithPredicate: make([]byte, acp176.StateSize),
-			wantPredicateBytes:     nil,
 		},
 		{
 			name: "extra_too_short",
@@ -647,7 +644,6 @@ func TestPredicateBytesExtra(t *testing.T) {
 				0:              1,
 				ap3.WindowSize: 2,
 			},
-			wantPredicateBytes: []byte{2},
 		},
 		{
 			name: "extra_too_short_fortuna",
@@ -663,15 +659,20 @@ func TestPredicateBytesExtra(t *testing.T) {
 				0:                1,
 				acp176.StateSize: 2,
 			},
-			wantPredicateBytes: []byte{2},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			var wantPredicate []byte
+			if test.predicate != nil {
+				wantPredicate = make([]byte, len(test.predicate))
+				copy(wantPredicate, test.predicate)
+			}
+
 			gotExtra := SetPredicateBytesInExtra(test.rules, test.extra, test.predicate)
 			require.Equal(t, test.wantExtraWithPredicate, gotExtra)
-			gotPredicateBytes := PredicateBytesFromExtra(test.rules, gotExtra)
-			require.Equal(t, test.wantPredicateBytes, gotPredicateBytes)
+			gotPredicate := PredicateBytesFromExtra(test.rules, gotExtra)
+			require.Equal(t, wantPredicate, gotPredicate)
 		})
 	}
 }
