@@ -264,6 +264,9 @@ func (g *Genesis) toBlockWithState(db ethdb.Database, statedb *state.StateDB) (*
 
 	for addr, account := range g.Alloc {
 		statedb.SetBalance(addr, uint256.MustFromBig(account.Balance))
+		if len(account.Code) > 0 {
+			log.Info("Setting code for account", "address", addr, "code", hexutil.Encode(account.Code))
+		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
