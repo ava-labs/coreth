@@ -152,7 +152,8 @@ type accessibleState struct {
 }
 
 func (a accessibleState) GetStateDB() contract.StateDB {
-	// XXX: this should be moved to the precompiles
+	// TODO the contracts should be refactored to call `env.ReadOnlyState`
+	// or `env.StateDB` based on the env.ReadOnly() flag
 	var state libevm.StateReader
 	if a.env.ReadOnly() {
 		state = a.env.ReadOnlyState()
