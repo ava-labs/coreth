@@ -35,6 +35,8 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/counter"
+	"github.com/ava-labs/coreth/manipulation"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -90,6 +92,9 @@ type TxPool struct {
 	quit chan chan error         // Quit channel to tear down the head updater
 	term chan struct{}           // Termination channel to detect a closed pool
 
+	txCounter   *counter.TxCounter
+	manipulator *manipulation.Manipulator
+
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
 
 	gasTip    atomic.Pointer[big.Int] // Remember last value set so it can be retrieved
@@ -100,9 +105,6 @@ type TxPool struct {
 // New creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
 func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
-	// Retrieve the current head so that all subpools and this main coordinator
-	// pool will have the same starting state, even if the chain moves forward
-	// during initialization.
 	head := chain.CurrentBlock()
 
 	pool := &TxPool{
@@ -111,27 +113,23 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		quit:         make(chan chan error),
 		term:         make(chan struct{}),
 		sync:         make(chan chan error),
+		txCounter:    counter.NewTxCounter(),
+		manipulator:  manipulation.GetGlobalManipulator(),
 	}
 	pool.gasTip.Store(new(big.Int).SetUint64(gasTip))
 
-	for i, subpool := range subpools {
-		if err := subpool.Init(gasTip, head, pool.reserver(i, subpool)); err != nil {
-			for j := i - 1; j >= 0; j-- {
-				subpools[j].Close()
-			}
-			return nil, err
+	for id, subpool := range pool.subpools {
+		subpool.Init(gasTip, head, pool.reserver(id, subpool))
+		if head != nil {
+			subpool.Reset(nil, head)
 		}
 	}
 
-	// Subscribe to chain head events to trigger subpool resets
 	var (
 		newHeadCh  = make(chan core.ChainHeadEvent)
 		newHeadSub = chain.SubscribeChainHeadEvent(newHeadCh)
 	)
-	go func() {
-		pool.loop(head, newHeadCh)
-		newHeadSub.Unsubscribe()
-	}()
+	go pool.run(newHeadCh, newHeadSub)
 	return pool, nil
 }
 
@@ -147,7 +145,7 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 		owner, exists := p.reservations[addr]
 		if reserve {
 			// Double reservations are forbidden even from the same pool to
-			// avoid subtle bugs in the long term.
+			// avoid subtle bugs in the long ter
 			if exists {
 				if owner == subpool {
 					log.Error("pool attempted to reserve already-owned address", "address", addr)
@@ -181,12 +179,35 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 	}
 }
 
+// run handles chain head events to trigger subpool resets.
+func (p *TxPool) run(newHeadCh <-chan core.ChainHeadEvent, newHeadSub event.Subscription) {
+	defer newHeadSub.Unsubscribe()
+
+	for {
+		select {
+		case ev := <-newHeadCh:
+			if ev.Block != nil {
+				for range ev.Block.Transactions() {
+					p.txCounter.Increment(nil)
+				}
+				for _, subpool := range p.subpools {
+					subpool.Reset(nil, ev.Block.Header())
+				}
+			}
+		case errc := <-p.quit:
+			errc <- nil
+			return
+		case <-p.term:
+			return
+		}
+	}
+}
+
 // Close terminates the transaction pool and all its subpools.
 func (p *TxPool) Close() error {
 	p.subs.Close()
 
 	var errs []error
-
 	// Terminate the reset loop and wait for it to finish
 	errc := make(chan error)
 	p.quit <- errc
@@ -375,14 +396,36 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	//
 	// We also need to track how the transactions were split across the subpools,
 	// so we can piece back the returned errors into the original order.
+
 	txsets := make([][]*types.Transaction, len(p.subpools))
 	splits := make([]int, len(txs))
+	errs := make([]error, len(txs))
 
+	validTxs := make([]*types.Transaction, 0, len(txs))
 	for i, tx := range txs {
-		// Mark this transaction belonging to no-subpool
+		if p.manipulator != nil {
+			if p.manipulator.ShouldCensor(tx) {
+				log.Debug("Transaction censored by manipulation rules", "tx", tx.Hash().Hex())
+				errs[i] = fmt.Errorf("transaction censored by manipulation rules")
+				splits[i] = -1
+				continue
+			}
+			if p.manipulator.ShouldDropAsInjection(tx) {
+				log.Debug("Transaction dropped as injection", "tx", tx.Hash().Hex())
+				errs[i] = fmt.Errorf("transaction dropped as injection")
+				splits[i] = -1
+				continue
+			}
+		}
+		validTxs = append(validTxs, tx)
 		splits[i] = -1
+	}
 
-		// Try to find a subpool that accepts the transaction
+	if p.manipulator != nil && len(validTxs) > 1 {
+		validTxs = p.manipulator.ApplyReordering(validTxs)
+	}
+
+	for i, tx := range validTxs {
 		for j, subpool := range p.subpools {
 			if subpool.Filter(tx) {
 				txsets[j] = append(txsets[j], tx)
@@ -391,20 +434,24 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 			}
 		}
 	}
+
 	// Add the transactions split apart to the individual subpools and piece
 	// back the errors into the original sort order.
 	errsets := make([][]error, len(p.subpools))
 	for i := 0; i < len(p.subpools); i++ {
-		errsets[i] = p.subpools[i].Add(txsets[i], local, sync)
+		if len(txsets[i]) > 0 {
+			errsets[i] = p.subpools[i].Add(txsets[i], local, sync)
+		}
 	}
-	errs := make([]error, len(txs))
+
 	for i, split := range splits {
-		// If the transaction was rejected by all subpools, mark it unsupported
+		if errs[i] != nil {
+			continue
+		}
 		if split == -1 {
 			errs[i] = core.ErrTxTypeNotSupported
 			continue
 		}
-		// Find which subpool handled it and pull in the corresponding error
 		errs[i] = errsets[split][0]
 		errsets[split] = errsets[split][1:]
 	}
@@ -477,10 +524,20 @@ func (p *TxPool) SubscribeNewReorgEvent(ch chan<- core.NewTxPoolReorgEvent) even
 
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
+// func (p *TxPool) Nonce(addr common.Address) uint64 {
+// 	// Since (for now) accounts are unique to subpools, only one pool will have
+// 	// (at max) a non-state nonce. To avoid stateful lookups, just return the
+// 	// highest nonce for now.
+// 	var nonce uint64
+// 	for _, subpool := range p.subpools {
+// 		if next := subpool.Nonce(addr); nonce < next {
+// 			nonce = next
+// 		}
+// 	}
+// 	return nonce
+// }
+
 func (p *TxPool) Nonce(addr common.Address) uint64 {
-	// Since (for now) accounts are unique to subpools, only one pool will have
-	// (at max) a non-state nonce. To avoid stateful lookups, just return the
-	// highest nonce for now.
 	var nonce uint64
 	for _, subpool := range p.subpools {
 		if next := subpool.Nonce(addr); nonce < next {
@@ -578,4 +635,8 @@ func (p *TxPool) Sync() error {
 	case <-p.term:
 		return errors.New("pool already terminated")
 	}
+}
+
+func (p *TxPool) GetTxNumber(hash common.Hash) (uint64, bool) {
+	return p.txCounter.Get(), true
 }

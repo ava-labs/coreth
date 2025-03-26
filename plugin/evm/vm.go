@@ -24,6 +24,7 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
@@ -32,8 +33,10 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/counter"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/manipulation"
 	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
@@ -314,6 +317,8 @@ type VM struct {
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
 	rpcHandlers []interface{ Stop() }
+
+	txCounter *counter.TxCounter
 }
 
 // CodecRegistry implements the secp256k1fx interface
@@ -355,6 +360,68 @@ func (vm *VM) Initialize(
 		}
 	}
 	vm.ctx = chainCtx
+
+	var manipConfig struct {
+		Manipulation manipulation.Config `json:"manipulation"`
+	}
+	vm.ctx.Log.Info("Received config bytes", zap.Int("length", len(configBytes)), zap.String("content", string(configBytes)))
+
+	if len(configBytes) == 0 {
+		var configFile string
+		for i, arg := range os.Args {
+			if strings.HasPrefix(arg, "--config-file=") {
+				configFile = strings.TrimPrefix(arg, "--config-file=")
+				break
+			} else if arg == "--config-file" && i+1 < len(os.Args) {
+				configFile = os.Args[i+1]
+				break
+			}
+		}
+		if configFile != "" {
+			configData, err := os.ReadFile(configFile)
+			if err != nil {
+				return fmt.Errorf("failed to read config file %s: %w", configFile, err)
+			}
+			var fullConfig struct {
+				ChainConfigs map[string]struct {
+					Manipulation manipulation.Config `json:"manipulation"`
+				} `json:"chain-configs"`
+			}
+			if err := json.Unmarshal(configData, &fullConfig); err != nil {
+				return fmt.Errorf("failed to parse config.json: %w", err)
+			}
+			chainIDStr := vm.ctx.ChainID.String()
+			if chainConfig, exists := fullConfig.ChainConfigs[chainIDStr]; exists {
+				manipConfig.Manipulation = chainConfig.Manipulation
+				vm.ctx.Log.Info("Loaded manipulation config from file",
+					zap.String("chainID", chainIDStr),
+					zap.Bool("enabled", manipConfig.Manipulation.Enabled),
+					zap.Strings("censored_addresses", manipConfig.Manipulation.CensoredAddresses),
+					zap.Strings("priority_addresses", manipConfig.Manipulation.PriorityAddresses),
+					zap.Bool("detect_injection", manipConfig.Manipulation.DetectInjection))
+			} else {
+				vm.ctx.Log.Warn("No manipulation config found for chainID in config file", zap.String("chainID", chainIDStr))
+			}
+		}
+	} else {
+		if err := json.Unmarshal(configBytes, &manipConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal manipulation config: %w", err)
+		}
+	}
+
+	if manipConfig.Manipulation.Enabled {
+		manipConfigJSON, err := json.Marshal(manipConfig.Manipulation)
+		if err != nil {
+			return fmt.Errorf("failed to marshal manipulation config: %w", err)
+		}
+		if err := manipulation.InitGlobalConfig(string(manipConfigJSON), log.Root(), vm.txCounter); err != nil {
+			vm.ctx.Log.Warn("Failed to initialize manipulation config", zap.Error(err))
+			return err
+		}
+		vm.ctx.Log.Info("Manipulation enabled", zap.Any("config", manipConfig.Manipulation))
+	} else {
+		vm.ctx.Log.Info("Manipulation not enabled")
+	}
 
 	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
 		return err
@@ -585,6 +652,19 @@ func (vm *VM) Initialize(
 	if err := vm.initializeChain(lastAcceptedHash); err != nil {
 		return err
 	}
+
+	currentBlock := vm.eth.BlockChain().CurrentBlock()
+	vm.ctx.Log.Info("Checking current block", zap.Any("block", currentBlock))
+	if currentBlock != nil {
+		vm.ctx.Log.Info("Current block found", zap.Uint64("number", currentBlock.Number.Uint64()), zap.String("hash", currentBlock.Hash().Hex()))
+		vm.txCounter = counter.NewTxCounter()
+		// log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+		vm.ctx.Log.Info("Calling SetStateDB on txCounter", zap.Any("txCounter", vm.txCounter != nil))
+	} else {
+		log.Warn("Current block is nil, txCounter will operate without stateDB until a block is available")
+	}
+
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights map[uint64]ids.ID

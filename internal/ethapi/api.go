@@ -164,48 +164,35 @@ func (s *TxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
 		"queued":  make(map[string]map[string]*RPCTransaction),
 	}
 	pending, queue := s.b.TxPoolContent()
-	curHeader := s.b.CurrentHeader()
 	estimatedBaseFee, _ := s.b.EstimateBaseFee(context.Background())
-	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCTransaction(tx, curHeader, estimatedBaseFee, s.b.ChainConfig())
+			txNum := uint64(0)
+			if num, exists := s.b.TxPool().GetTxNumber(tx.Hash()); exists {
+				txNum = num
+			}
+			rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, estimatedBaseFee, s.b.ChainConfig(), txNum)
+			if rpcTx != nil {
+				dump[fmt.Sprintf("%d", tx.Nonce())] = rpcTx
+			}
 		}
 		content["pending"][account.Hex()] = dump
 	}
-	// Flatten the queued transactions
 	for account, txs := range queue {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCTransaction(tx, curHeader, estimatedBaseFee, s.b.ChainConfig())
+			txNum := uint64(0)
+			if num, exists := s.b.TxPool().GetTxNumber(tx.Hash()); exists {
+				txNum = num
+			}
+			rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, estimatedBaseFee, s.b.ChainConfig(), txNum)
+			if rpcTx != nil {
+				dump[fmt.Sprintf("%d", tx.Nonce())] = rpcTx
+			}
 		}
 		content["queued"][account.Hex()] = dump
 	}
-	return content
-}
-
-// ContentFrom returns the transactions contained within the transaction pool.
-func (s *TxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCTransaction {
-	content := make(map[string]map[string]*RPCTransaction, 2)
-	pending, queue := s.b.TxPoolContentFrom(addr)
-	curHeader := s.b.CurrentHeader()
-	estimatedBaseFee, _ := s.b.EstimateBaseFee(context.Background())
-
-	// Build the pending transactions
-	dump := make(map[string]*RPCTransaction, len(pending))
-	for _, tx := range pending {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCTransaction(tx, curHeader, estimatedBaseFee, s.b.ChainConfig())
-	}
-	content["pending"] = dump
-
-	// Build the queued transactions
-	dump = make(map[string]*RPCTransaction, len(queue))
-	for _, tx := range queue {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCTransaction(tx, curHeader, estimatedBaseFee, s.b.ChainConfig())
-	}
-	content["queued"] = dump
-
 	return content
 }
 
@@ -1342,6 +1329,7 @@ type RPCTransaction struct {
 	Nonce               hexutil.Uint64    `json:"nonce"`
 	To                  *common.Address   `json:"to"`
 	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
+	TxNum               *hexutil.Uint64   `json:"txNum,omitempty"`
 	Value               *hexutil.Big      `json:"value"`
 	Type                hexutil.Uint64    `json:"type"`
 	Accesses            *types.AccessList `json:"accessList,omitempty"`
@@ -1355,7 +1343,7 @@ type RPCTransaction struct {
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig, txNum uint64) *RPCTransaction {
 	signer := types.MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime)
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
@@ -1378,21 +1366,22 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
+	if txNum > 0 {
+		txNumHex := hexutil.Uint64(txNum)
+		result.TxNum = &txNumHex
+	}
 
 	switch tx.Type() {
 	case types.LegacyTxType:
-		// if a legacy transaction has an EIP-155 chain id, include it explicitly
 		if id := tx.ChainId(); id.Sign() != 0 {
 			result.ChainID = (*hexutil.Big)(id)
 		}
-
 	case types.AccessListTxType:
 		al := tx.AccessList()
 		yparity := hexutil.Uint64(v.Sign())
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
-
 	case types.DynamicFeeTxType:
 		al := tx.AccessList()
 		yparity := hexutil.Uint64(v.Sign())
@@ -1408,7 +1397,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
-
 	case types.BlobTxType:
 		al := tx.AccessList()
 		yparity := hexutil.Uint64(v.Sign())
@@ -1453,7 +1441,7 @@ func NewRPCTransaction(tx *types.Transaction, current *types.Header, baseFee *bi
 		blockNumber = current.Number.Uint64()
 		blockTime = current.Time
 	}
-	return newRPCTransaction(tx, common.Hash{}, blockNumber, blockTime, 0, baseFee, config)
+	return newRPCTransaction(tx, common.Hash{}, blockNumber, blockTime, 0, baseFee, config, 0)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1462,7 +1450,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config)
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config, 0)
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1651,7 +1639,15 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 		// No finalized transaction, try to retrieve it from the pool
 		if tx := s.b.GetPoolTransaction(hash); tx != nil {
 			estimatedBaseFee, _ := s.b.EstimateBaseFee(ctx)
-			return NewRPCTransaction(tx, s.b.CurrentHeader(), estimatedBaseFee, s.b.ChainConfig()), nil
+			txNum := uint64(0)
+			if num, exists := s.b.TxPool().GetTxNumber(hash); exists {
+				txNum = num
+			}
+			rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, estimatedBaseFee, s.b.ChainConfig(), txNum)
+			if rpcTx == nil {
+				return nil, nil
+			}
+			return rpcTx, nil
 		}
 		if err == nil {
 			return nil, nil
@@ -1662,7 +1658,15 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 	if err != nil {
 		return nil, err
 	}
-	return newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, s.b.ChainConfig()), nil
+	txNum := uint64(0)
+	if num, exists := s.b.TxPool().GetTxNumber(hash); exists {
+		txNum = num
+	}
+	rpcTx := newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, s.b.ChainConfig(), txNum)
+	if rpcTx == nil {
+		return nil, nil
+	}
+	return rpcTx, nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
@@ -1937,13 +1941,20 @@ func (s *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 			accounts[account.Address] = struct{}{}
 		}
 	}
-	curHeader := s.b.CurrentHeader()
+	// curHeader := s.b.CurrentHeader()
+	estimatedBaseFee, _ := s.b.EstimateBaseFee(context.Background())
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
-			estimatedBaseFee, _ := s.b.EstimateBaseFee(context.Background())
-			transactions = append(transactions, NewRPCTransaction(tx, curHeader, estimatedBaseFee, s.b.ChainConfig()))
+			txNum := uint64(0)
+			if num, exists := s.b.TxPool().GetTxNumber(tx.Hash()); exists {
+				txNum = num
+			}
+			rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, estimatedBaseFee, s.b.ChainConfig(), txNum)
+			if rpcTx != nil {
+				transactions = append(transactions, rpcTx)
+			}
 		}
 	}
 	return transactions, nil

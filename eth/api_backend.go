@@ -533,3 +533,7 @@ func (b *EthAPIBackend) MinRequiredTip(ctx context.Context, header *types.Header
 func (b *EthAPIBackend) isLatestAndAllowed(number rpc.BlockNumber) bool {
 	return number.IsLatest() && b.IsAllowUnfinalizedQueries()
 }
+
+func (b *EthAPIBackend) TxPool() *txpool.TxPool {
+	return b.eth.txPool
+}

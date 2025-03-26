@@ -81,9 +81,9 @@ type PushGossiper interface {
 type Ethereum struct {
 	config *Config
 
-	// Handlers
 	txPool *txpool.TxPool
 
+	// Handlers
 	blockchain *core.BlockChain
 	gossiper   PushGossiper
 
