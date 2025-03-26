@@ -1349,16 +1349,13 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 		return common.Hash{}, err
 	}
 	// Handle all state updates afterwards
-	log.Info("State objects dirty", "count", len(s.stateObjectsDirty))
 	for addr := range s.stateObjectsDirty {
 		obj := s.stateObjects[addr]
-		log.Info("Committing state object", "address", addr, "deleted", obj.deleted, "dirtyCode", obj.dirtyCode, "code", obj.code != nil)
 		if obj.deleted {
 			continue
 		}
 		// Write any contract code associated with the state object
 		if obj.code != nil && obj.dirtyCode {
-			log.Info("Writing code to disk", "address", addr, "hash", common.BytesToHash(obj.CodeHash()))
 			rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 			obj.dirtyCode = false
 		}
