@@ -137,12 +137,6 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 		return err
 	}
 
-	// Check that the precompiles on the new config are compatible with the existing precompile config.
-	// XXX: This is missing in master?
-	// if err := c.checkPrecompilesCompatible(newcfg.PrecompileUpgrades, headTimestamp); err != nil {
-	// 	return err
-	// }
-
 	return nil
 }
 
