@@ -118,7 +118,7 @@ type ChainConfig struct {
 	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Not serialized.
 }
 
-func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
+func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ethparams.ConfigCompatError {
 	if c == nil {
 		return nil
 	}
@@ -183,10 +183,6 @@ func configTimestampEqual(x, y *uint64) bool {
 	}
 	return *x == *y
 }
-
-// ConfigCompatError is raised if the locally-stored blockchain is initialised with a
-// [ChainConfig] that would alter the past.
-type ConfigCompatError = ethparams.ConfigCompatError
 
 // UnmarshalJSON parses the JSON-encoded data and stores the result in the
 // object pointed to by c.
