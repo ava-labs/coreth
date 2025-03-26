@@ -33,6 +33,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/types"
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -102,6 +103,10 @@ type ChainStateReader interface {
 	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 }
+
+// SyncProgress gives progress indications when the node is synchronising with
+// the Ethereum network.
+type SyncProgress = ethereum.SyncProgress
 
 // CallMsg contains parameters for contract calls.
 type CallMsg struct {
