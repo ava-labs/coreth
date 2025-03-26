@@ -1349,6 +1349,7 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 		return common.Hash{}, err
 	}
 	// Handle all state updates afterwards
+	log.Info("State objects dirty", "count", len(s.stateObjectsDirty))
 	for addr := range s.stateObjectsDirty {
 		obj := s.stateObjects[addr]
 		log.Info("Committing state object", "address", addr, "deleted", obj.deleted, "dirtyCode", obj.dirtyCode, "code", obj.code != nil)
