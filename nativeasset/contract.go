@@ -64,7 +64,14 @@ func (b *NativeAssetBalance) Run(accessibleState contract.AccessibleState, calle
 		return nil, remainingGas, vm.ErrExecutionReverted
 	}
 
-	res, overflow := uint256.FromBig(accessibleState.GetStateDB().GetBalanceMultiCoin(address, assetID))
+	var stateDB contract.StateDB
+	if accessibleState.ReadOnly() {
+		stateDB = accessibleState.ReadOnlyState()
+	} else {
+		stateDB = accessibleState.StateDB()
+	}
+
+	res, overflow := uint256.FromBig(stateDB.GetBalanceMultiCoin(address, assetID))
 	if overflow {
 		return nil, remainingGas, vm.ErrExecutionReverted
 	}
@@ -108,7 +115,15 @@ func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller c
 	if !env.UseGas(c.GasCost) {
 		return nil, 0, vm.ErrOutOfGas
 	}
-	ret, err = c.run(env, accessibleState.GetStateDB(), caller, addr, input, readOnly)
+
+	var stateDB contract.StateDB
+	if accessibleState.ReadOnly() {
+		stateDB = accessibleState.ReadOnlyState()
+	} else {
+		stateDB = accessibleState.StateDB()
+	}
+
+	ret, err = c.run(env, stateDB, caller, addr, input, readOnly)
 	// This precompile will be wrapped in a libevm `legacy.PrecompiledStatefulContract`, which
 	// allows for the deprecated pattern of returning remaining gas by calling
 	// env.UseGas() on the difference between gas in and gas out. Since we call

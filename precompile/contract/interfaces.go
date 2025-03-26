@@ -51,7 +51,9 @@ type StateDB interface {
 
 // AccessibleState defines the interface exposed to stateful precompile contracts
 type AccessibleState interface {
-	GetStateDB() StateDB
+	ReadOnly() bool
+	ReadOnlyState() StateDB
+	StateDB() StateDB
 	GetBlockContext() BlockContext
 	GetSnowContext() *snow.Context
 	GetChainConfig() precompileconfig.ChainConfig

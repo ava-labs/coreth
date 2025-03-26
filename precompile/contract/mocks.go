@@ -361,18 +361,46 @@ func (mr *MockAccessibleStateMockRecorder) GetSnowContext() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnowContext", reflect.TypeOf((*MockAccessibleState)(nil).GetSnowContext))
 }
 
-// GetStateDB mocks base method.
-func (m *MockAccessibleState) GetStateDB() StateDB {
+// ReadOnly mocks base method.
+func (m *MockAccessibleState) ReadOnly() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStateDB")
+	ret := m.ctrl.Call(m, "ReadOnly")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// ReadOnly indicates an expected call of ReadOnly.
+func (mr *MockAccessibleStateMockRecorder) ReadOnly() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadOnly", reflect.TypeOf((*MockAccessibleState)(nil).ReadOnly))
+}
+
+// ReadOnlyState mocks base method.
+func (m *MockAccessibleState) ReadOnlyState() StateDB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadOnlyState")
 	ret0, _ := ret[0].(StateDB)
 	return ret0
 }
 
-// GetStateDB indicates an expected call of GetStateDB.
-func (mr *MockAccessibleStateMockRecorder) GetStateDB() *gomock.Call {
+// ReadOnlyState indicates an expected call of ReadOnlyState.
+func (mr *MockAccessibleStateMockRecorder) ReadOnlyState() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateDB", reflect.TypeOf((*MockAccessibleState)(nil).GetStateDB))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadOnlyState", reflect.TypeOf((*MockAccessibleState)(nil).ReadOnlyState))
+}
+
+// StateDB mocks base method.
+func (m *MockAccessibleState) StateDB() StateDB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StateDB")
+	ret0, _ := ret[0].(StateDB)
+	return ret0
+}
+
+// StateDB indicates an expected call of StateDB.
+func (mr *MockAccessibleStateMockRecorder) StateDB() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateDB", reflect.TypeOf((*MockAccessibleState)(nil).StateDB))
 }
 
 // MockBlockContext is a mock of BlockContext interface.

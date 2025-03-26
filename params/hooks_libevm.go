@@ -151,15 +151,16 @@ type accessibleState struct {
 	blockContext *precompileBlockContext
 }
 
-func (a accessibleState) GetStateDB() contract.StateDB {
-	// XXX: this should be moved to the precompiles
-	var state libevm.StateReader
-	if a.env.ReadOnly() {
-		state = a.env.ReadOnlyState()
-	} else {
-		state = a.env.StateDB()
-	}
-	return state.(contract.StateDB)
+func (a accessibleState) ReadOnly() bool {
+	return a.env.ReadOnly()
+}
+
+func (a accessibleState) ReadOnlyState() contract.StateDB {
+	return a.env.ReadOnlyState().(contract.StateDB)
+}
+
+func (a accessibleState) StateDB() contract.StateDB {
+	return a.env.StateDB().(contract.StateDB)
 }
 
 func (a accessibleState) GetBlockContext() contract.BlockContext {

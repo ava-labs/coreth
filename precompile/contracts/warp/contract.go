@@ -281,7 +281,14 @@ func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Add
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	accessibleState.GetStateDB().AddLog(&types.Log{
+
+	var stateDB contract.StateDB
+	if accessibleState.ReadOnly() {
+		stateDB = accessibleState.ReadOnlyState()
+	} else {
+		stateDB = accessibleState.StateDB()
+	}
+	stateDB.AddLog(&types.Log{
 		Address:     ContractAddress,
 		Topics:      topics,
 		Data:        data,

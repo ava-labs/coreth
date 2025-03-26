@@ -106,7 +106,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 	snowContext := utils.TestSnowContext()
 
 	accessibleState := contract.NewMockAccessibleState(ctrl)
-	accessibleState.EXPECT().GetStateDB().Return(state).AnyTimes()
+	accessibleState.EXPECT().StateDB().Return(state).AnyTimes()
 	accessibleState.EXPECT().GetBlockContext().Return(blockContext).AnyTimes()
 	accessibleState.EXPECT().GetSnowContext().Return(snowContext).AnyTimes()
 	accessibleState.EXPECT().GetChainConfig().Return(chainConfig).AnyTimes()
@@ -138,7 +138,7 @@ func (test PrecompileTest) Bench(b *testing.B, module modules.Module, state cont
 		b.Skip("Skipping precompile benchmark due to nil input (used for configuration tests)")
 	}
 
-	stateDB := runParams.AccessibleState.GetStateDB()
+	stateDB := runParams.AccessibleState.StateDB()
 	snapshot := stateDB.Snapshot()
 
 	ret, remainingGas, err := module.Contract.Run(runParams.AccessibleState, runParams.Caller, runParams.ContractAddress, runParams.Input, runParams.SuppliedGas, runParams.ReadOnly)
