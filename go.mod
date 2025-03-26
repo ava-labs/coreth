@@ -4,7 +4,7 @@ go 1.23.6
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
-	github.com/ava-labs/avalanchego v1.13.0-fuji-rc.2.0.20250320111141-fef07a6db96b
+	github.com/ava-labs/avalanchego v1.12.3-name-fortuna.0.0.20250325171534-e5413707e886
 	github.com/ava-labs/libevm v1.13.14-0.2.0.rc.3
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
