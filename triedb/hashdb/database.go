@@ -114,7 +114,7 @@ type Config struct {
 	ReferenceRootAtomicallyOnUpdate bool   // Whether to reference the root node on update
 }
 
-func (c Config) BackendConstructor(diskdb ethdb.Database, _ *triedb.Config) triedb.DBOverride {
+func (c Config) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
 	return New(diskdb, &c, trie.MerkleResolver{})
 }
 
