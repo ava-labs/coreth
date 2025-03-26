@@ -1356,6 +1356,7 @@ func (s *StateDB) commit(block uint64, deleteEmptyObjects bool, snaps *snapshot.
 		}
 		// Write any contract code associated with the state object
 		if obj.code != nil && obj.dirtyCode {
+			log.Info("Writing code to disk", "address", addr, "hash", obj.CodeHash())
 			rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 			obj.dirtyCode = false
 		}
