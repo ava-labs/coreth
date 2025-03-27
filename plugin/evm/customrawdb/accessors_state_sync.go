@@ -8,7 +8,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/libevm/common"
-	ethrawdb "github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 )
@@ -50,7 +50,7 @@ func DeleteCodeToFetch(db ethdb.KeyValueWriter, hash common.Hash) {
 // hashes that are pending syncing. It is the caller's responsibility to
 // unpack the key and call Release on the returned iterator.
 func NewCodeToFetchIterator(db ethdb.Iteratee) ethdb.Iterator {
-	return ethrawdb.NewKeyLengthIterator(
+	return rawdb.NewKeyLengthIterator(
 		db.NewIterator(CodeToFetchPrefix, nil),
 		codeToFetchKeyLength,
 	)
@@ -71,7 +71,7 @@ func NewSyncSegmentsIterator(db ethdb.Iteratee, root common.Hash) ethdb.Iterator
 	copy(segmentsPrefix, syncSegmentsPrefix)
 	copy(segmentsPrefix[len(syncSegmentsPrefix):], root[:])
 
-	return ethrawdb.NewKeyLengthIterator(
+	return rawdb.NewKeyLengthIterator(
 		db.NewIterator(segmentsPrefix, nil),
 		syncSegmentsKeyLength,
 	)
@@ -117,7 +117,7 @@ func packSyncSegmentKey(root common.Hash, start common.Hash) []byte {
 // added for syncing (beginning at seek). It is the caller's responsibility to unpack
 // the key and call Release on the returned iterator.
 func NewSyncStorageTriesIterator(db ethdb.Iteratee, seek []byte) ethdb.Iterator {
-	return ethrawdb.NewKeyLengthIterator(db.NewIterator(syncStorageTriesPrefix, seek), syncStorageTriesKeyLength)
+	return rawdb.NewKeyLengthIterator(db.NewIterator(syncStorageTriesPrefix, seek), syncStorageTriesKeyLength)
 }
 
 // WriteSyncStorageTrie adds a storage trie for account (with the given root) to be synced.
@@ -169,7 +169,7 @@ func WriteSyncPerformed(db ethdb.KeyValueWriter, blockNumber uint64) error {
 // NewSyncPerformedIterator returns an iterator over all block numbers the VM
 // has state synced to.
 func NewSyncPerformedIterator(db ethdb.Iteratee) ethdb.Iterator {
-	return ethrawdb.NewKeyLengthIterator(db.NewIterator(syncPerformedPrefix, nil), syncPerformedKeyLength)
+	return rawdb.NewKeyLengthIterator(db.NewIterator(syncPerformedPrefix, nil), syncPerformedKeyLength)
 }
 
 // UnpackSyncPerformedKey returns the block number from keys the iterator returned

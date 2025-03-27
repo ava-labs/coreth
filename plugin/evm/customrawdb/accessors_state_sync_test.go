@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
-	ethrawdb "github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClearPrefix(t *testing.T) {
 	require := require.New(t)
-	db := ethrawdb.NewMemoryDatabase()
+	db := rawdb.NewMemoryDatabase()
 	// add a key that should be cleared
 	require.NoError(WriteSyncSegment(db, common.Hash{1}, common.Hash{}))
 
