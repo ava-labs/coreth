@@ -1852,7 +1852,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
-			if previousRoot != (common.Hash{}) {
+			if previousRoot != (common.Hash{}) && previousRoot != root {
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root
