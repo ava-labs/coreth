@@ -29,7 +29,7 @@ func TestMultiCoinOperations(t *testing.T) {
 	s.state.AddBalance(addr, new(uint256.Int))
 
 	balance := s.state.GetBalanceMultiCoin(addr, assetID)
-	require.Equal(t, big.NewInt(0).String(), balance.String(), "expected zero multicoin balance")
+	require.Equal(t, "0", balance.String(), "expected zero big.Int multicoin balance as string")
 
 	s.state.AddBalanceMultiCoin(addr, assetID, big.NewInt(10))
 	s.state.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
