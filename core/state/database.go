@@ -28,6 +28,8 @@ package state
 
 import (
 	ethstate "github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/triedb"
 )
 
 type (
@@ -35,8 +37,14 @@ type (
 	Trie     = ethstate.Trie
 )
 
-var (
-	NewDatabase           = ethstate.NewDatabase
-	NewDatabaseWithConfig = ethstate.NewDatabaseWithConfig
-	NewDatabaseWithNodeDB = ethstate.NewDatabaseWithNodeDB
-)
+func NewDatabase(db ethdb.Database) ethstate.Database {
+	return ethstate.NewDatabase(db)
+}
+
+func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) ethstate.Database {
+	return ethstate.NewDatabaseWithConfig(db, config)
+}
+
+func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) ethstate.Database {
+	return ethstate.NewDatabaseWithNodeDB(db, triedb)
+}
