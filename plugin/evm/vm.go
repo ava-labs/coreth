@@ -807,7 +807,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules := vm.rulesExtra(header.Number, header.Time)
+		rules := vm.rules(header.Number, header.Time)
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
@@ -854,7 +854,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.rulesExtra(header.Number, header.Time)
+		rules                      = vm.rules(header.Number, header.Time)
 		size              int
 	)
 
@@ -970,7 +970,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules                      = vm.rulesExtra(header.Number, header.Time)
+		rules                      = vm.rules(header.Number, header.Time)
 	)
 
 	txs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(block), rules.IsApricotPhase5, atomic.Codec)
@@ -1745,7 +1745,7 @@ func (vm *VM) chainConfigExtra() *extras.ChainConfig {
 	return params.GetExtra(vm.chainConfig)
 }
 
-func (vm *VM) rulesExtra(number *big.Int, time uint64) extras.Rules {
+func (vm *VM) rules(number *big.Int, time uint64) extras.Rules {
 	ethrules := vm.chainConfig.Rules(number, params.IsMergeTODO, time)
 	return *params.GetRulesExtra(ethrules)
 }
@@ -1753,7 +1753,7 @@ func (vm *VM) rulesExtra(number *big.Int, time uint64) extras.Rules {
 // currentRules returns the chain rules for the current block.
 func (vm *VM) currentRules() extras.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.rulesExtra(header.Number, header.Time)
+	return vm.rules(header.Number, header.Time)
 }
 
 // requirePrimaryNetworkSigners returns true if warp messages from the primary
