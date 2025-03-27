@@ -536,8 +536,8 @@ func (client *stateSyncerClient) finishAtomicSync(blockHash common.Hash, blockHe
 	if lastAcceptedErr == nil && len(lastAcceptedBytes) == common.HashLength {
 		lastAcceptedHash := common.BytesToHash(lastAcceptedBytes)
 		height := rawdb.ReadHeaderNumber(client.chaindb, lastAcceptedHash)
-		if *height > blockHeight {
-			log.Info("Skipping ApplyToSharedMemory due to restart", "accepted height", height, "syncHeight", blockHeight)
+		if height != nil && *height > blockHeight {
+			log.Info("Skipping ApplyToSharedMemory due to restart", "accepted height", *height, "syncHeight", blockHeight)
 			return nil
 		}
 	}
