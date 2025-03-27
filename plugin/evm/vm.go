@@ -523,6 +523,9 @@ func (vm *VM) Initialize(
 
 	///
 	vm.ethConfig.StateScheme = vm.config.StateScheme
+	if vm.config.StateScheme == rawdb.PathScheme && vm.config.Pruning {
+		return fmt.Errorf("pruning is not supported with path scheme")
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {

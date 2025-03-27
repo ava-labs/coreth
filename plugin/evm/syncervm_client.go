@@ -397,7 +397,11 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 	err = <-atomicSyncer.Done()
 	close(client.atomicDone)
 	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
-	return client.finishAtomicSync(client.syncSummary.BlockHash)
+	if err != nil {
+		return fmt.Errorf("atomic sync failed: %w", err)
+	}
+
+	return client.finishAtomicSync(client.syncSummary.BlockHash, client.syncSummary.BlockNumber)
 }
 
 func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
@@ -508,7 +512,8 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	// Must rebuild the snapshot if snap-sync is enabled
 	snaps := evmBlock.vm.blockChain.Snapshots()
 	cb := evmBlock.vm.blockChain.CurrentBlock()
-	if client.useUpstream {
+	if err := snaps.Verify(cb.Root); err != nil {
+		log.Error("could not verify snapshots, attempt rebuild", "err", err)
 		snaps.Rebuild(cb.Hash(), cb.Root)
 	}
 
@@ -524,7 +529,19 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
 // - removes state sync progress markers
-func (client *stateSyncerClient) finishAtomicSync(blockHash common.Hash) error {
+func (client *stateSyncerClient) finishAtomicSync(blockHash common.Hash, blockHeight uint64) error {
+	// It's possible that the height in acceptedBlockDB > syncSummary.Height if the node
+	// was restarted during state sync. In this case, we should not apply to shared memory
+	lastAcceptedBytes, lastAcceptedErr := client.acceptedBlockDB.Get(lastAcceptedKey)
+	if lastAcceptedErr == nil && len(lastAcceptedBytes) == common.HashLength {
+		lastAcceptedHash := common.BytesToHash(lastAcceptedBytes)
+		height := rawdb.ReadHeaderNumber(client.chaindb, lastAcceptedHash)
+		if *height > blockHeight {
+			log.Info("Skipping ApplyToSharedMemory due to restart", "accepted height", height, "syncHeight", blockHeight)
+			return nil
+		}
+	}
+
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.syncSummary] when ApplyToSharedMemory
 	// is called.
