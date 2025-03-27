@@ -30,9 +30,10 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ava-labs/coreth/internal/testrand"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/trie/testutil"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/trie/trienode"
 )
 
@@ -76,8 +77,9 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
 			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
 			if npath == nil && depth == index {
@@ -122,8 +124,9 @@ func BenchmarkPersist(b *testing.B) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
 			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
 		}
@@ -159,8 +162,9 @@ func BenchmarkJournal(b *testing.B) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
 			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
 		}

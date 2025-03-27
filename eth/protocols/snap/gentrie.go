@@ -268,15 +268,9 @@ type hashTrie struct {
 
 // newHashTrie initializes the hash trie.
 func newHashTrie(batch ethdb.Batch) *hashTrie {
-	// Legacy declaration - insufficient for pathdb
-	options := trie.NewStackTrieOptions()
-	options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+	return &hashTrie{tr: trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		rawdb.WriteLegacyTrieNode(batch, hash, blob)
-	})
-	return &hashTrie{tr: trie.NewStackTrie(options)}
-	// return &hashTrie{tr: trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-	// 	rawdb.WriteLegacyTrieNode(batch, hash, blob)
-	// })}
+	})}
 }
 
 // update implements genTrie interface, inserting a (key, value) pair into

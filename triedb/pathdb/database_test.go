@@ -34,11 +34,11 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/internal/testrand"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/rlp"
-	"github.com/ava-labs/libevm/trie/testutil"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
 	"github.com/holiman/uint256"
@@ -65,7 +65,7 @@ func generateAccount(storageRoot common.Hash) types.StateAccount {
 	return types.StateAccount{
 		Nonce:    uint64(rand.Intn(100)),
 		Balance:  uint256.NewInt(rand.Uint64()),
-		CodeHash: testutil.RandBytes(32),
+		CodeHash: testrand.Bytes(32),
 		Root:     storageRoot,
 	}
 }
@@ -159,8 +159,8 @@ func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 		origin   = make(map[common.Hash][]byte)
 	)
 	for i := 0; i < 10; i++ {
-		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testutil.RandBytes(32)))
-		hash := testutil.RandomHash()
+		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+		hash := testrand.Hash()
 
 		storage[hash] = v
 		origin[hash] = nil
@@ -188,8 +188,8 @@ func (t *tester) mutateStorage(ctx *genctx, addr common.Address, root common.Has
 		}
 	}
 	for i := 0; i < 3; i++ {
-		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testutil.RandBytes(32)))
-		hash := testutil.RandomHash()
+		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+		hash := testrand.Hash()
 
 		storage[hash] = v
 		origin[hash] = nil
@@ -235,7 +235,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 		switch op {
 		case createAccountOp:
 			// account creation
-			addr := testutil.RandomAddress()
+			addr := testrand.Address()
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
 			if _, ok := t.accounts[addrHash]; ok {
 				continue

@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/internal/testrand"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	ethrawdb "github.com/ava-labs/libevm/core/rawdb"
@@ -36,7 +37,6 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
-	"github.com/ava-labs/libevm/trie/testutil"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
@@ -1816,8 +1816,8 @@ func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (c
 			break
 		}
 		for j := 0; j < slots/3; j++ {
-			key := append([]byte{byte(n)}, testutil.RandBytes(31)...)
-			val, _ := rlp.EncodeToBytes(testutil.RandBytes(32))
+			key := append([]byte{byte(n)}, testrand.Bytes(31)...)
+			val, _ := rlp.EncodeToBytes(testrand.Bytes(32))
 
 			elem := &kv{key, val}
 			tr.MustUpdate(elem.k, elem.v)
