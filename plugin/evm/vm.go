@@ -514,6 +514,12 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 
+	///
+	vm.ethConfig.StateScheme = vm.config.StateScheme
+	if vm.ethConfig.StateScheme == rawdb.PathScheme && vm.config.Pruning {
+		return fmt.Errorf("pruning is not supported with path scheme")
+	}
+
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
 		if err := os.MkdirAll(vm.ethConfig.OfflinePruningDataDirectory, perms.ReadWriteExecute); err != nil {
@@ -751,6 +757,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		appSender:            vm.p2pSender,
 		stateSyncNodes:       stateSyncIDs,
 		useUpstream:          vm.config.StateSyncUseUpstream,
+		stateScheme:          vm.config.StateScheme,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

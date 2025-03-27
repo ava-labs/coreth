@@ -66,6 +66,7 @@ type stateSyncClientConfig struct {
 	network        peer.Network
 	appSender      commonEng.AppSender
 	stateSyncNodes []ids.NodeID
+	stateScheme    string
 }
 
 type stateSyncerClient struct {
@@ -162,7 +163,7 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
 	if client.useUpstream {
 		log.Warn("Using upstream state syncer (untested)")
-		syncer := snap.NewSyncer(client.chaindb, rawdb.HashScheme)
+		syncer := snap.NewSyncer(client.chaindb, client.stateScheme)
 		p2pClient := client.network.NewClient(ethstatesync.ProtocolID)
 		if len(client.stateSyncNodes) > 0 {
 			for _, nodeID := range client.stateSyncNodes {
