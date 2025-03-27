@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils"
-	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"

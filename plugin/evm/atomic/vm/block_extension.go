@@ -12,8 +12,8 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/utils"
 
