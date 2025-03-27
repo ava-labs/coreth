@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var networkCodec = messagetest.TestBlockSyncSummaryCodec
+var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestMessageSignatureHandler(t *testing.T) {
 	testutils.WithMetrics(t)

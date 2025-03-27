@@ -1,3 +1,6 @@
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package vm
 
 import (
@@ -1256,10 +1259,7 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatalf("emptyEthBlock should not have any extra data")
 	}
 
-	emptyBlock, err := vm.NewVMBlock(emptyEthBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
+	emptyBlock := vm.NewVMBlock(emptyEthBlock)
 
 	if _, err := vm.ParseBlock(context.Background(), emptyBlock.Bytes()); !errors.Is(err, errEmptyBlock) {
 		t.Fatalf("VM should have failed with errEmptyBlock but got %s", err.Error())

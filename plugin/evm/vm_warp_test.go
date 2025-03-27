@@ -72,7 +72,7 @@ const (
 	testNetworkID uint32 = 10
 )
 
-var networkCodec = messagetest.TestBlockSyncSummaryCodec
+var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)

@@ -669,10 +669,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
-	block, err := vm.newBlock(lastAcceptedBlock)
-	if err != nil {
-		return fmt.Errorf("failed to create block wrapper for the last accepted block: %w", err)
-	}
+	block := vm.newBlock(lastAcceptedBlock)
 
 	config := &chain.Config{
 		DecidedCacheSize:      decidedCacheSize,
@@ -886,13 +883,13 @@ func (vm *VM) Shutdown(context.Context) error {
 }
 
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
-func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
+func (vm *VM) newBlock(ethBlock *types.Block) *Block {
 	return &Block{
 		id:        ids.ID(ethBlock.Hash()),
 		ethBlock:  ethBlock,
 		extension: vm.extensionConfig.BlockExtension,
 		vm:        vm,
-	}, nil
+	}
 }
 
 // buildBlock builds a block to be wrapped by ChainState
@@ -918,11 +915,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	}
 
 	// Note: the status of block is set by ChainState
-	blk, err := vm.newBlock(block)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", vmerrors.ErrMakeNewBlockFailed, err)
-	}
-
+	blk := vm.newBlock(block)
 	// Verify is called on a non-wrapped block here, such that this
 	// does not add [blk] to the processing blocks map in ChainState.
 	//
@@ -951,10 +944,7 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	}
 
 	// Note: the status of block is set by ChainState
-	block, err := vm.newBlock(ethBlock)
-	if err != nil {
-		return nil, err
-	}
+	block := vm.newBlock(ethBlock)
 	// Performing syntactic verification in ParseBlock allows for
 	// short-circuiting bad blocks before they are processed by the VM.
 	if err := block.syntacticVerify(); err != nil {
@@ -982,7 +972,7 @@ func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 		return nil, avalanchedatabase.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
-	return vm.newBlock(ethBlock)
+	return vm.newBlock(ethBlock), nil
 }
 
 // GetAcceptedBlock attempts to retrieve block [blkID] from the VM. This method

@@ -23,7 +23,7 @@ func (a *AtomicSummaryProvider) Initialize(atomicTrie AtomicTrie) {
 	a.atomicTrie = atomicTrie
 }
 
-// StateSummaryAtBlock returns the block state summary at [block] if valid.
+// StateSummaryAtBlock returns the block state summary at [blk] if valid.
 func (a *AtomicSummaryProvider) StateSummaryAtBlock(blk *types.Block) (block.StateSummary, error) {
 	height := blk.NumberU64()
 	atomicRoot, err := a.atomicTrie.Root(height)

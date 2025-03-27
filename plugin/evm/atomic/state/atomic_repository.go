@@ -27,14 +27,14 @@ const (
 )
 
 var (
-	atomicTxIDDBPrefix           = []byte("atomicTxDB")
-	atomicHeightTxDBPrefix       = []byte("atomicHeightTxDB")
-	atomicRepoMetadataDBPrefix   = []byte("atomicRepoMetadataDB")
-	atomicTrieDBPrefix           = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix       = []byte("atomicTrieMetaDB")
+	atomicTxIDDBPrefix         = []byte("atomicTxDB")
+	atomicHeightTxDBPrefix     = []byte("atomicHeightTxDB")
+	atomicRepoMetadataDBPrefix = []byte("atomicRepoMetadataDB")
+	atomicTrieDBPrefix         = []byte("atomicTrieDB")
+	atomicTrieMetaDBPrefix     = []byte("atomicTrieMetaDB")
+
 	appliedSharedMemoryCursorKey = []byte("atomicTrieLastAppliedToSharedMemory")
 	maxIndexedHeightKey          = []byte("maxIndexedAtomicTxHeight")
-
 	// Historically used to track the completion of a migration
 	// bonusBlocksRepairedKey     = []byte("bonusBlocksRepaired")
 )

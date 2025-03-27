@@ -35,7 +35,7 @@ const testSyncTimeout = 30 * time.Second
 
 var errInterrupted = errors.New("interrupted sync")
 
-var networkCodec = messagetest.TestBlockSyncSummaryCodec
+var networkCodec = messagetest.BlockSyncSummaryCodec
 
 type syncTest struct {
 	ctx               context.Context

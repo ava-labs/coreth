@@ -1422,10 +1422,7 @@ func TestUncleBlock(t *testing.T) {
 		customtypes.BlockExtData(blkDEthBlock),
 		false,
 	)
-	uncleBlock, err := vm2.newBlock(uncleEthBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
+	uncleBlock := vm2.newBlock(uncleEthBlock)
 	if err := uncleBlock.Verify(context.Background()); !errors.Is(err, errUnclesUnsupported) {
 		t.Fatalf("VM2 should have failed with %q but got %q", errUnclesUnsupported, err.Error())
 	}
@@ -1687,11 +1684,7 @@ func TestFutureBlock(t *testing.T) {
 		false,
 	)
 
-	futureBlock, err := vm.newBlock(modifiedBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	futureBlock := vm.newBlock(modifiedBlock)
 	if err := futureBlock.Verify(context.Background()); err == nil {
 		t.Fatal("Future block should have failed verification due to block timestamp too far in the future")
 	} else if !strings.Contains(err.Error(), "block timestamp is too far in the future") {
@@ -2085,10 +2078,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			header.ParentBeaconRoot = test.beaconRoot
 			parentBeaconEthBlock := ethBlock.WithSeal(header)
 
-			parentBeaconBlock, err := vm.newBlock(parentBeaconEthBlock)
-			if err != nil {
-				t.Fatal(err)
-			}
+			parentBeaconBlock := vm.newBlock(parentBeaconEthBlock)
 
 			errCheck := func(err error) {
 				if test.expectedError {
@@ -2146,8 +2136,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail
-	vmBlock, err := vm.newBlock(blocks[0])
-	require.NoError(err)
+	vmBlock := vm.newBlock(blocks[0])
 	_, err = vm.ParseBlock(ctx, vmBlock.Bytes())
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = vmBlock.Verify(ctx)

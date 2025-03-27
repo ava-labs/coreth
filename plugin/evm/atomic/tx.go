@@ -114,7 +114,7 @@ func (in *EVMInput) Verify() error {
 	return nil
 }
 
-// Allow vm to execute custom logic against the underlying transaction types.
+// Visitor allows executing custom logic against the underlying transaction types.
 type Visitor interface {
 	ImportTx(*UnsignedImportTx) error
 	ExportTx(*UnsignedExportTx) error
@@ -152,7 +152,8 @@ type UnsignedAtomicTx interface {
 	InputUTXOs() set.Set[ids.ID]
 	// Verify attempts to verify that the transaction is well formed
 	Verify(ctx *snow.Context, rules extras.Rules) error
-	// Visit calls the corresponding method for the underlying transaction type.
+	// Visit calls the corresponding method for the underlying transaction type
+	// implementing [Visitor].
 	// This is used in semantic verification of the tx.
 	Visit(v Visitor) error
 	// AtomicOps returns the blockchainID and set of atomic requests that

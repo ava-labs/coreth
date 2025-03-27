@@ -1,3 +1,6 @@
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package testutils
 
 import (
@@ -5,11 +8,11 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
-var TestBlockSyncSummaryCodec codec.Manager
+var BlockSyncSummaryCodec codec.Manager
 
 func init() {
 	var err error
-	TestBlockSyncSummaryCodec, err = message.NewCodec(message.BlockSyncSummary{})
+	BlockSyncSummaryCodec, err = message.NewCodec(message.BlockSyncSummary{})
 	if err != nil {
 		panic(err)
 	}
