@@ -89,21 +89,21 @@ func EstimateRequiredTip(
 	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
-	headerExtra := customtypes.GetHeaderExtra(header)
+	extra := customtypes.GetHeaderExtra(header)
 	switch {
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:
 		return nil, errBaseFeeNil
-	case headerExtra.BlockGasCost == nil:
+	case extra.BlockGasCost == nil:
 		return nil, errBlockGasCostNil
-	case headerExtra.ExtDataGasUsed == nil:
+	case extra.ExtDataGasUsed == nil:
 		return nil, errExtDataGasUsedNil
 	}
 
 	// totalGasUsed = GasUsed + ExtDataGasUsed
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
-	totalGasUsed.Add(totalGasUsed, headerExtra.ExtDataGasUsed)
+	totalGasUsed.Add(totalGasUsed, extra.ExtDataGasUsed)
 	if totalGasUsed.Sign() == 0 {
 		return nil, errNoGasUsed
 	}
@@ -113,7 +113,7 @@ func EstimateRequiredTip(
 	// We add totalGasUsed - 1 to ensure that the total required tips
 	// calculation rounds up.
 	totalRequiredTips := new(big.Int)
-	totalRequiredTips.Mul(headerExtra.BlockGasCost, header.BaseFee)
+	totalRequiredTips.Mul(extra.BlockGasCost, header.BaseFee)
 	totalRequiredTips.Add(totalRequiredTips, totalGasUsed)
 	totalRequiredTips.Sub(totalRequiredTips, common.Big1)
 
