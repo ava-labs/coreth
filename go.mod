@@ -4,7 +4,7 @@ go 1.23.6
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
-	github.com/ava-labs/avalanchego v1.12.3-0.20250325180559-18a523ba9c6c
+	github.com/ava-labs/avalanchego v1.13.1-0.20250327215100-aebcea325a46
 	github.com/ava-labs/libevm v1.13.14-0.2.0.rc.4
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
@@ -42,7 +42,7 @@ require (
 require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/StephenButtolph/canoto v0.10.0 // indirect
+	github.com/StephenButtolph/canoto v0.15.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
@@ -62,6 +62,7 @@ require (
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127 // indirect
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
+	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08 // indirect
