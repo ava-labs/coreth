@@ -63,7 +63,7 @@ func newPathTrie(owner common.Hash, skipLeftBoundary bool, db ethdb.KeyValueRead
 		batch:            batch,
 	}
 	// TODO: This is requires the upstream declaration
-	tr.tr = trie.NewStackTrie(nil) //(tr.onTrieNode)
+	tr.tr = trie.NewStackTrie(tr.onTrieNode)
 	return tr
 }
 
