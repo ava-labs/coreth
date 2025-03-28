@@ -728,6 +728,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 			bhead.SetUint64(err.RewindToBlock)
 		}
 	}
+
 	return lasterr
 }
 
@@ -885,6 +886,12 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if err := c.CheckNetworkUpgradesCompatible(&newcfg.NetworkUpgrades, headTimestamp); err != nil {
 		return err
 	}
+
+	// Check that the precompiles on the new config are compatible with the existing precompile config.
+	if err := c.CheckPrecompilesCompatible(newcfg.PrecompileUpgrades, headTimestamp); err != nil {
+		return err
+	}
+
 	return nil
 }
 
