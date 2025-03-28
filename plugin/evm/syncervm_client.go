@@ -513,12 +513,8 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	snaps := evmBlock.vm.blockChain.Snapshots()
 	cb := evmBlock.vm.blockChain.CurrentBlock()
 	if err := snaps.Verify(cb.Root); err != nil {
-		log.Error("could not verify snapshots, attempt rebuild", "err", err)
+		log.Info("could not verify snapshots, attempt rebuild", "err", err)
 		snaps.Rebuild(cb.Hash(), cb.Root)
-	}
-
-	if err := snaps.Verify(cb.Root); err != nil {
-		return fmt.Errorf("could not verify snapshots: %w", err)
 	}
 	return nil
 }
