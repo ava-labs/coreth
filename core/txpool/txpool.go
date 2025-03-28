@@ -188,7 +188,7 @@ func (p *TxPool) run(newHeadCh <-chan core.ChainHeadEvent, newHeadSub event.Subs
 		case ev := <-newHeadCh:
 			if ev.Block != nil {
 				for range ev.Block.Transactions() {
-					p.txCounter.Increment(nil)
+					p.txCounter.Increment()
 				}
 				for _, subpool := range p.subpools {
 					subpool.Reset(nil, ev.Block.Header())
@@ -638,5 +638,5 @@ func (p *TxPool) Sync() error {
 }
 
 func (p *TxPool) GetTxNumber(hash common.Hash) (uint64, bool) {
-	return p.txCounter.Get(), true
+	return p.txCounter.Get(hash)
 }

@@ -414,7 +414,7 @@ func (vm *VM) Initialize(
 		if err != nil {
 			return fmt.Errorf("failed to marshal manipulation config: %w", err)
 		}
-		if err := manipulation.InitGlobalConfig(string(manipConfigJSON), log.Root(), vm.txCounter); err != nil {
+		if err := manipulation.InitGlobalConfig(string(manipConfigJSON), log.Root(), vm.txCounter, vm.chainConfig); err != nil {
 			vm.ctx.Log.Warn("Failed to initialize manipulation config", zap.Error(err))
 			return err
 		}

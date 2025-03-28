@@ -5,6 +5,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/counter"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -16,10 +17,11 @@ type Manipulator struct {
 	DetectInjection   bool
 	logger            log.Logger
 	txCounter         *counter.TxCounter
+	ChainConfig       *params.ChainConfig
 	mu                sync.RWMutex
 }
 
-func New(enabled, detectInjection bool, logger log.Logger, txCounter *counter.TxCounter) *Manipulator {
+func New(enabled, detectInjection bool, logger log.Logger, txCounter *counter.TxCounter, chainConfig *params.ChainConfig) *Manipulator {
 	return &Manipulator{
 		Enabled:           enabled,
 		CensoredAddresses: make(map[common.Address]struct{}),
@@ -27,6 +29,7 @@ func New(enabled, detectInjection bool, logger log.Logger, txCounter *counter.Tx
 		DetectInjection:   detectInjection,
 		logger:            logger,
 		txCounter:         txCounter,
+		ChainConfig:       chainConfig,
 	}
 }
 
@@ -35,7 +38,7 @@ func (m *Manipulator) ShouldCensor(tx *types.Transaction) bool {
 		return false
 	}
 
-	signer := types.LatestSigner(nil)
+	signer := types.LatestSigner(m.ChainConfig)
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		m.logger.Warn("Failed to recover sender", "tx", tx.Hash().Hex(), "err", err)
@@ -63,7 +66,11 @@ func (m *Manipulator) ShouldDropAsInjection(tx *types.Transaction) bool {
 		return false
 	}
 
-	m.logger.Info("Injection detection not implemented in simplified counter", "tx", tx.Hash().Hex())
+	txHash := tx.Hash()
+	if !m.txCounter.HasTxNum(txHash) {
+		m.logger.Info("Dropping tx as injection", "tx", txHash.Hex())
+		return true
+	}
 	return false
 }
 
@@ -72,7 +79,7 @@ func (m *Manipulator) ShouldPrioritize(tx *types.Transaction) bool {
 		return false
 	}
 
-	signer := types.LatestSigner(nil)
+	signer := types.LatestSigner(m.ChainConfig)
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		return false

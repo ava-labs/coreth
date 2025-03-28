@@ -4,29 +4,50 @@
 package counter
 
 import (
-	"sync/atomic"
+	"sync"
 
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ethereum/go-ethereum/common"
 )
 
-// TxCounter is a simple counter for transactions included in blocks.
 type TxCounter struct {
-	counter uint64
+	mu    sync.Mutex
+	txNum uint64
+	txMap map[common.Hash]uint64
 }
 
-// NewTxCounter creates a new transaction counter.
 func NewTxCounter() *TxCounter {
 	return &TxCounter{
-		counter: 0,
+		txNum: 0,
+		txMap: make(map[common.Hash]uint64),
 	}
 }
 
-// Increment increments the counter and returns the new value.
-func (tc *TxCounter) Increment(tx *types.Transaction) uint64 {
-	return atomic.AddUint64(&tc.counter, 1)
+func (tc *TxCounter) Increment() uint64 {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.txNum++
+	return tc.txNum
 }
 
-// Get returns the current value of the counter.
-func (tc *TxCounter) Get() uint64 {
-	return atomic.LoadUint64(&tc.counter)
+func (tc *TxCounter) AddTx(tx *types.Transaction) (*types.Transaction, uint64) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.txNum++
+	tc.txMap[tx.Hash()] = tc.txNum
+	return tx, tc.txNum
+}
+
+func (tc *TxCounter) HasTxNum(txHash common.Hash) bool {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	_, exists := tc.txMap[txHash]
+	return exists
+}
+
+func (tc *TxCounter) Get(txHash common.Hash) (uint64, bool) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	txNum, exists := tc.txMap[txHash]
+	return txNum, exists
 }

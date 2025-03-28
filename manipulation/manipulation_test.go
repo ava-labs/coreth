@@ -1,208 +1,147 @@
-package manipulation_test
+package manipulation
 
 import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/manipulation"
+	"github.com/ava-labs/coreth/counter"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestManipulatorInitialization(t *testing.T) {
-	logger := logging.NoLog{}
-	_, ethAddresses := setupTestWallets(t)
-	blockedAddresses := ethAddresses[:2]
-	priorityAddress := ethAddresses[2]
+func TestManipulator(t *testing.T) {
+	key1, _ := crypto.GenerateKey()
+	key2, _ := crypto.GenerateKey()
+	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+	addr2 := crypto.PubkeyToAddress(key2.PublicKey)
+	addr3 := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	addr4 := common.HexToAddress("0xabcdef1234567890abcdef1234567890abcdef12")
 
-	configJSON := `{
-		"enabled": true,
-		"censored_addresses": ["` + blockedAddresses[0].Hex() + `", "` + blockedAddresses[1].Hex() + `"],
-		"priority_addresses": ["` + priorityAddress.Hex() + `"],
-		"detect_injection": true
-	}`
-	if err := manipulation.InitGlobalConfig(configJSON, logger); err != nil {
-		t.Fatalf("failed to initialize manipulator: %v", err)
+	chainID := big.NewInt(1)
+	testChainConfig := &params.ChainConfig{
+		ChainID:             chainID,
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
 	}
+	tx1 := types.NewTransaction(0, addr2, big.NewInt(100), 21000, big.NewInt(1e9), nil)
+	tx1Signed, _ := types.SignTx(tx1, types.NewEIP155Signer(chainID), key1)
+	tx2 := types.NewTransaction(0, addr1, big.NewInt(200), 21000, big.NewInt(1e9), nil)
+	tx2Signed, _ := types.SignTx(tx2, types.NewEIP155Signer(chainID), key2)
+	tx3 := types.NewTransaction(0, addr3, big.NewInt(300), 21000, big.NewInt(1e9), nil)
+	tx3Signed, _ := types.SignTx(tx3, types.NewEIP155Signer(chainID), key1)
+	tx4 := types.NewTransaction(0, addr4, big.NewInt(400), 21000, big.NewInt(1e9), nil)
+	tx4Signed, _ := types.SignTx(tx4, types.NewEIP155Signer(chainID), key2)
 
-	m := manipulation.GetGlobalManipulator()
-	if !m.Enabled {
-		t.Errorf("expected Enabled to be true, got false")
-	}
-	if !m.DetectInjection {
-		t.Errorf("expected DetectInjection to be true, got false")
-	}
-	if m.CensoredAddresses == nil {
-		t.Errorf("expected CensoredAddresses to be non-nil")
-	}
-	if m.PriorityAddresses == nil {
-		t.Errorf("expected PriorityAddresses to be non-nil")
-	}
-	if len(m.CensoredAddresses) != 2 {
-		t.Errorf("expected 2 censored addresses, got %d", len(m.CensoredAddresses))
-	}
-	if len(m.PriorityAddresses) != 1 {
-		t.Errorf("expected 1 priority address, got %d", len(m.PriorityAddresses))
-	}
-}
+	// Test 1: Manipulator
+	t.Run("Initialization", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		m := New(true, true, logger, tc, testChainConfig)
 
-func TestManipulatorCensorship(t *testing.T) {
-	logger := logging.NoLog{}
-	wallets, ethAddresses := setupTestWallets(t)
-	blockedAddresses := ethAddresses[:2]
+		assert.True(t, m.Enabled, "Manipulator should be enabled")
+		assert.True(t, m.DetectInjection, "DetectInjection should be enabled")
+		assert.NotNil(t, m.CensoredAddresses, "CensoredAddresses should be initialized")
+		assert.NotNil(t, m.PriorityAddresses, "PriorityAddresses should be initialized")
+		assert.Equal(t, 0, len(m.CensoredAddresses), "CensoredAddresses should be empty initially")
+		assert.Equal(t, 0, len(m.PriorityAddresses), "PriorityAddresses should be empty initially")
+	})
 
-	configJSON := `{
-		"enabled": true,
-		"censored_addresses": ["` + blockedAddresses[0].Hex() + `", "` + blockedAddresses[1].Hex() + `"],
-		"priority_addresses": [],
-		"detect_injection": false
-	}`
-	if err := manipulation.InitGlobalConfig(configJSON, logger); err != nil {
-		t.Fatalf("failed to initialize manipulator: %v", err)
-	}
+	// Test 2: Checking censorship
+	t.Run("Censorship", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		m := New(true, false, logger, tc, testChainConfig)
+		m.AddCensoredAddress(addr1)
+		m.AddCensoredAddress(addr3)
 
-	m := manipulation.GetGlobalManipulator()
-	for i, key := range wallets {
-		tx := newTestTx(t, key, ethAddresses[i], big.NewInt(1000))
-		if i < 2 {
-			if !m.ShouldCensor(tx) {
-				t.Errorf("expected transaction from blocked address %s to be censored", ethAddresses[i].Hex())
-			}
-		} else {
-			if m.ShouldCensor(tx) {
-				t.Errorf("expected transaction from non-blocked address %s not to be censored", ethAddresses[i].Hex())
-			}
-		}
-	}
+		assert.True(t, m.ShouldCensor(tx1Signed), "Transaction from censored sender should be censored")
+		assert.True(t, m.ShouldCensor(tx2Signed), "Transaction to censored recipient should be censored")
+		assert.True(t, m.ShouldCensor(tx3Signed), "Transaction to censored recipient should be censored")
+		assert.False(t, m.ShouldCensor(tx4Signed), "Transaction from non-censored sender to non-censored recipient should not be censored")
+		assert.False(t, m.ShouldCensor(tx2), "Unsigned transaction should not be censored due to sender error")
+	})
 
-	txUnsigned := newTestTx(t, nil, ethAddresses[0], big.NewInt(1000))
-	if m.ShouldCensor(txUnsigned) {
-		t.Errorf("expected unsigned transaction not to be censored due to sender error")
-	}
-}
+	// Test 3: Checking prioritization
+	t.Run("Prioritization", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		m := New(true, false, logger, tc, testChainConfig)
+		m.AddPriorityAddress(addr2)
 
-func TestManipulatorPriority(t *testing.T) {
-	logger := logging.NoLog{}
-	wallets, ethAddresses := setupTestWallets(t)
-	priorityAddress := ethAddresses[2]
+		assert.True(t, m.ShouldPrioritize(tx2Signed), "Transaction from priority address should be prioritized")
+		assert.False(t, m.ShouldPrioritize(tx1Signed), "Transaction from non-priority address should not be prioritized")
+		assert.False(t, m.ShouldPrioritize(tx3), "Unsigned transaction should not be prioritized due to sender error")
+	})
 
-	configJSON := `{
-		"enabled": true,
-		"censored_addresses": [],
-		"priority_addresses": ["` + priorityAddress.Hex() + `"],
-		"detect_injection": false
-	}`
-	if err := manipulation.InitGlobalConfig(configJSON, logger); err != nil {
-		t.Fatalf("failed to initialize manipulator: %v", err)
-	}
+	// Test 4: Checking reordering
+	t.Run("Reordering", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		m := New(true, false, logger, tc, testChainConfig)
+		m.AddPriorityAddress(addr2)
 
-	m := manipulation.GetGlobalManipulator()
-	txPriority := newTestTx(t, wallets[2], ethAddresses[2], big.NewInt(1000))
-	tx1 := newTestTx(t, wallets[0], ethAddresses[0], big.NewInt(1000))
-	tx2 := newTestTx(t, wallets[1], ethAddresses[1], big.NewInt(1000))
+		txs := []*types.Transaction{tx1Signed, tx2Signed, tx3Signed}
+		reordered := m.ApplyReordering(txs)
 
-	if !m.ShouldPrioritize(txPriority) {
-		t.Errorf("expected transaction from priority address %s to be prioritized", ethAddresses[2].Hex())
-	}
-	if m.ShouldPrioritize(tx1) {
-		t.Errorf("expected transaction from non-priority address %s not to be prioritized", ethAddresses[0].Hex())
-	}
-	if m.ShouldPrioritize(tx2) {
-		t.Errorf("expected transaction from non-priority address %s not to be prioritized", ethAddresses[1].Hex())
-	}
+		assert.Equal(t, 3, len(reordered), "Length of reordered transactions should match input")
+		assert.Equal(t, tx2Signed.Hash(), reordered[0].Hash(), "Priority transaction should be first")
+	})
 
-	txUnsigned := newTestTx(t, nil, ethAddresses[2], big.NewInt(1000))
-	if m.ShouldPrioritize(txUnsigned) {
-		t.Errorf("expected unsigned transaction not to be prioritized due to sender error")
-	}
-}
+	// Test 5: Disabled Manipulator
+	t.Run("Disabled", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		m := New(false, true, logger, tc, testChainConfig)
+		m.AddCensoredAddress(addr1)
+		m.AddPriorityAddress(addr2)
 
-func TestManipulatorInjectionDetection(t *testing.T) {
-	logger := logging.NoLog{}
-	wallets, ethAddresses := setupTestWallets(t)
+		assert.False(t, m.ShouldCensor(tx1Signed), "Censorship should be disabled")
+		assert.False(t, m.ShouldPrioritize(tx2Signed), "Prioritization should be disabled")
+		assert.False(t, m.ShouldDropAsInjection(tx1Signed), "Injection detection should be disabled when Manipulator is off")
+	})
 
-	configJSON := `{
-		"enabled": true,
-		"censored_addresses": [],
-		"priority_addresses": [],
-		"detect_injection": true
-	}`
-	if err := manipulation.InitGlobalConfig(configJSON, logger); err != nil {
-		t.Fatalf("failed to initialize manipulator: %v", err)
-	}
+	// Test 6: Testing InitGlobalConfig
+	t.Run("InitGlobalConfig", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		configJSON := `{
+			"enabled": true,
+			"censored_addresses": ["` + addr1.Hex() + `"],
+			"priority_addresses": ["` + addr2.Hex() + `"],
+			"detect_injection": true
+		}`
 
-	m := manipulation.GetGlobalManipulator()
-	tx := newTestTx(t, wallets[0], ethAddresses[0], big.NewInt(1000))
-	if m.ShouldDropAsInjection(tx) {
-		t.Errorf("expected ShouldDropAsInjection to return false, got true")
-	}
+		err := InitGlobalConfig(configJSON, logger, tc, testChainConfig)
+		assert.NoError(t, err, "InitGlobalConfig should succeed")
 
-	txUnsigned := newTestTx(t, nil, ethAddresses[0], big.NewInt(1000))
-	if m.ShouldDropAsInjection(txUnsigned) {
-		t.Errorf("expected ShouldDropAsInjection to return false for unsigned tx, got true")
-	}
-}
+		m := GetGlobalManipulator()
+		assert.True(t, m.Enabled, "Manipulator should be enabled")
+		assert.True(t, m.DetectInjection, "DetectInjection should be enabled")
+		assert.Equal(t, 1, len(m.CensoredAddresses), "Should have 1 censored address")
+		assert.Equal(t, 1, len(m.PriorityAddresses), "Should have 1 priority address")
+		assert.True(t, m.ShouldCensor(tx1Signed), "Censorship should work after init")
+		assert.True(t, m.ShouldPrioritize(tx2Signed), "Prioritization should work after init")
+	})
 
-func TestManipulatorDisabled(t *testing.T) {
-	logger := logging.NoLog{}
-	wallets, ethAddresses := setupTestWallets(t)
+	// Test 7: Injections
+	t.Run("InjectionDetection", func(t *testing.T) {
+		logger := log.Root()
+		tc := counter.NewTxCounter()
+		m := New(true, true, logger, tc, testChainConfig)
 
-	configJSON := `{
-		"enabled": false,
-		"censored_addresses": ["` + ethAddresses[0].Hex() + `"],
-		"priority_addresses": ["` + ethAddresses[0].Hex() + `"],
-		"detect_injection": true
-	}`
-	if err := manipulation.InitGlobalConfig(configJSON, logger); err != nil {
-		t.Fatalf("failed to initialize manipulator: %v", err)
-	}
+		tc.AddTx(tx1Signed)
 
-	m := manipulation.GetGlobalManipulator()
-	tx := newTestTx(t, wallets[0], ethAddresses[0], big.NewInt(1000))
-
-	if m.ShouldCensor(tx) {
-		t.Errorf("expected censorship to be disabled")
-	}
-	if m.ShouldPrioritize(tx) {
-		t.Errorf("expected prioritization to be disabled")
-	}
-	if m.ShouldDropAsInjection(tx) {
-		t.Errorf("expected injection detection to be disabled")
-	}
-}
-
-func setupTestWallets(t *testing.T) ([]*secp256k1.PrivateKey, []common.Address) {
-	wallets := make([]*secp256k1.PrivateKey, 5)
-	ethAddresses := make([]common.Address, 5)
-	for i := 0; i < 5; i++ {
-		key, err := secp256k1.NewPrivateKey()
-		if err != nil {
-			t.Fatalf("failed to generate private key: %v", err)
-		}
-		wallets[i] = key
-		ethAddresses[i] = crypto.PubkeyToAddress(*key.PublicKey().ToECDSA())
-	}
-	return wallets, ethAddresses
-}
-
-func newTestTx(t *testing.T, key *secp256k1.PrivateKey, to common.Address, amount *big.Int) *types.Transaction {
-	chainID := big.NewInt(43112)
-	nonce := uint64(0)
-	gasLimit := uint64(21000)
-	gasPrice := big.NewInt(1000000000) // 1 Gwei
-
-	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, nil)
-	if key == nil {
-		return tx
-	}
-
-	ethKey := key.ToECDSA()
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), ethKey)
-	if err != nil {
-		t.Fatalf("failed to sign transaction: %v", err)
-	}
-	return signedTx
+		assert.False(t, m.ShouldDropAsInjection(tx1Signed), "Known transaction should not be dropped")
+		assert.True(t, m.ShouldDropAsInjection(tx2Signed), "Unknown transaction should be dropped as injection")
+	})
 }

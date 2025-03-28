@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/counter"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -15,11 +16,11 @@ var (
 	initOnce          sync.Once
 )
 
-func InitGlobalConfig(configJSON string, logger log.Logger, txCounter *counter.TxCounter) error {
+func InitGlobalConfig(configJSON string, logger log.Logger, txCounter *counter.TxCounter, chainConfig *params.ChainConfig) error {
 	var err error
 	initOnce.Do(func() {
 		if configJSON == "" {
-			globalManipulator = New(false, false, logger, txCounter)
+			globalManipulator = New(false, false, logger, txCounter, chainConfig)
 			logger.Info("Manipulation disabled", "reason", "empty config")
 			return
 		}
@@ -31,7 +32,7 @@ func InitGlobalConfig(configJSON string, logger log.Logger, txCounter *counter.T
 			return
 		}
 
-		globalManipulator = New(config.Enabled, config.DetectInjection, logger, txCounter)
+		globalManipulator = New(config.Enabled, config.DetectInjection, logger, txCounter, chainConfig)
 
 		for _, addrStr := range config.CensoredAddresses {
 			addr := common.HexToAddress(addrStr)
@@ -53,7 +54,7 @@ func InitGlobalConfig(configJSON string, logger log.Logger, txCounter *counter.T
 
 func GetGlobalManipulator() *Manipulator {
 	if globalManipulator == nil {
-		globalManipulator = New(false, false, log.Root(), nil)
+		globalManipulator = New(false, false, log.Root(), nil, nil)
 	}
 	return globalManipulator
 }
