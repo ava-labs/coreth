@@ -1756,8 +1756,20 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	// initialized (i.e., this node has not accepted any blocks asynchronously).
 	acceptorTipUpToDate := acceptorTip == (common.Hash{}) || acceptorTip == current.Hash()
 
+	// Check trie state availability
+	trieStateUpToDate := bc.HasState(current.Root())
+	if !trieStateUpToDate && bc.triedb.Scheme() == rawdb.PathScheme {
+		// If the state is not available, we may be able to recover in path scheme
+		if trieStateUpToDate := bc.stateRecoverable(current.Root()); trieStateUpToDate {
+			log.Info("State is recoverable", "root", current.Root())
+			if err := bc.triedb.Recover(current.Root()); err != nil {
+				return fmt.Errorf("failed to recover state: %w", err)
+			}
+		}
+	}
+
 	// If the state is already available and the acceptor tip is up to date, skip re-processing.
-	if bc.HasState(current.Root()) && acceptorTipUpToDate {
+	if trieStateUpToDate && acceptorTipUpToDate {
 		log.Info("Skipping state reprocessing", "root", current.Root())
 		return nil
 	}
