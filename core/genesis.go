@@ -301,7 +301,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	}
 
 	if _, err := statedb.Commit(0, false); err != nil {
-		panic(fmt.Sprintf("unable to commit genesis block: %v", err))
+		panic(fmt.Sprintf("unable to commit genesis block to statedb: %v", err))
 	}
 	// Commit newly generated states into disk if it's not empty.
 	if root != types.EmptyRootHash {
