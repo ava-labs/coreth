@@ -154,12 +154,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-
-	defer func() {
-		if err := syncDisabledVM.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, syncDisabledVM.Shutdown(context.Background()))
+	})
 
 	if height := syncDisabledVM.LastAcceptedBlockInternal().Height(); height != 0 {
 		t.Fatalf("Unexpected last accepted height: %d", height)
@@ -219,6 +216,9 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		require.NoError(t, syncReEnabledVM.Shutdown(context.Background()))
+	})
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	vmSetup.serverAppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
