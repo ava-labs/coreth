@@ -58,8 +58,9 @@ type Config struct {
 	GasPrice  *big.Int       // Minimum gas price for mining a transaction
 	Recommit  time.Duration  // The time interval for miner to re-create mining work.
 
-	NewPayloadTimeout            time.Duration // The maximum time allowance for creating a new payload
-	TestOnlyAllowDuplicateBlocks bool          // Allow mining of duplicate blocks (used in tests only)
+	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
+
+	TestOnlyAllowDuplicateBlocks bool // Allow mining of duplicate blocks (used in tests only)
 }
 
 // DefaultConfig contains default settings for miner.
@@ -81,14 +82,33 @@ type Miner struct {
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, clock *mockable.Clock) *Miner {
+	isLocalBlock := (func(*types.Header) bool)(nil)
 	return &Miner{
-		worker: newWorker(config, chainConfig, engine, eth, mux, false),
+		worker: newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, false),
 		clock:  clock,
 	}
 }
 
+func (miner *Miner) Start() {
+	miner.worker.start()
+}
+
+func (miner *Miner) Stop() {
+	miner.worker.stop()
+}
+
+func (miner *Miner) Close() {
+	miner.worker.close()
+}
+
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.worker.setEtherbase(addr)
+}
+
+// SubscribePendingLogs starts delivering logs from pending transactions
+// to the given channel.
+func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
+	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
 
 func (miner *Miner) GenerateBlock(predicateContext *precompileconfig.PredicateContext) (*types.Block, error) {
@@ -100,22 +120,4 @@ func (miner *Miner) GenerateBlock(predicateContext *precompileconfig.PredicateCo
 		beaconRoot:       &common.Hash{},
 	})
 	return result.block, result.err
-}
-
-// SubscribePendingLogs starts delivering logs from pending transactions
-// to the given channel.
-func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
-	return miner.worker.pendingLogsFeed.Subscribe(ch)
-}
-
-func (miner *Miner) Stop() {
-	miner.worker.stop()
-}
-
-func (miner *Miner) Start() {
-	miner.worker.start()
-}
-
-func (miner *Miner) Close() {
-	miner.worker.close()
 }
