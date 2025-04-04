@@ -45,8 +45,13 @@ func TestGenesisEthUpgrades(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	preEthUpgrades := params.WithExtra(
 		&params.ChainConfig{
-			ChainID:             big.NewInt(43114), // Specifically refers to mainnet for this UT
-			HomesteadBlock:      big.NewInt(0),
+			ChainID:        big.NewInt(43114), // Specifically refers to mainnet for this UT
+			HomesteadBlock: big.NewInt(0),
+			// For this test to be a proper regression test, DAOForkBlock and
+			// DAOForkSupport should be set to match the values in
+			// [params.SetEthUpgrades]. Otherwise, in case of a regression, the test
+			// would pass as there would be a mismatch at genesis, which is
+			// incorrectly considered a success.
 			DAOForkBlock:        big.NewInt(0),
 			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
