@@ -42,3 +42,7 @@ issues:
       text: "func `\\(\\*worker\\)\\.(setGasCeil|setExtra|setGasTip|setRecommitInterval|pending|pendingBlock|pendingBlockAndReceipts|getSealingBlock)` is unused"
       linters:
         - unused
+    - path: "miner\\/worker\\.go"
+      text: "field `withdrawals` is unused"
+      linters:
+        - unused
