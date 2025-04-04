@@ -34,3 +34,11 @@ linters-settings:
     min-len: 3 # minimum length of string constant
     min-occurrences: 6 # minimum number of occurrences
     ignore-tests: true
+
+issues:
+  exclude-rules:
+    # Exclude unused geth functions from miner/worker.go to simplify upgrading Geth to a newer version.
+    - path: "miner\\/worker\\.go"
+      text: "func `\\(\\*worker\\)\\.(setGasCeil|setExtra|setGasTip|setRecommitInterval|pending|pendingBlock|pendingBlockAndReceipts|getSealingBlock)` is unused"
+      linters:
+        - unused
