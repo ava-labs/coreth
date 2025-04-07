@@ -79,10 +79,6 @@ var (
 const (
 	badBlockLimit = 10
 
-	// statsReportLimit is the time limit during import and export after which we
-	// always print out progress. This avoids the user wondering what's going on.
-	statsReportLimit = 8 * time.Second
-
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "hashdb/memcache/clean/fastcache"
