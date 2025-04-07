@@ -256,8 +256,6 @@ type VM struct {
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB database.Database
 
-	toEngine chan<- commonEng.Message
-
 	syntacticBlockValidator BlockValidator
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
@@ -295,6 +293,8 @@ type VM struct {
 
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
+
+	stateSyncDone <-chan commonEng.Message
 
 	logger CorethLogger
 	// State sync server and client
@@ -345,9 +345,8 @@ func (vm *VM) Initialize(
 	chainCtx *snow.Context,
 	db database.Database,
 	genesisBytes []byte,
-	upgradeBytes []byte,
+	_ []byte,
 	configBytes []byte,
-	toEngine chan<- commonEng.Message,
 	fxs []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
@@ -399,7 +398,6 @@ func (vm *VM) Initialize(
 	// Enable debug-level metrics that might impact runtime performance
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
 
-	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
 	if err := vm.initializeMetrics(); err != nil {
@@ -722,6 +720,9 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
+	stateSyncDone := make(chan commonEng.Message, 1)
+	vm.stateSyncDone = stateSyncDone
+
 	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
 		chain: vm.eth,
 		state: vm.State,
@@ -744,7 +745,7 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		acceptedBlockDB:      vm.acceptedBlockDB,
 		db:                   vm.versiondb,
 		atomicBackend:        vm.atomicBackend,
-		toEngine:             vm.toEngine,
+		stateSyncDone:        stateSyncDone,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1156,7 +1157,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	vm.builder = vm.NewBlockBuilder(vm.toEngine)
+	vm.builder = vm.NewBlockBuilder()
 	vm.builder.awaitSubmittedTxs()
 
 	var p2pValidators p2p.ValidatorSet = &validatorSet{}
@@ -1263,6 +1264,37 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	return nil
+}
+
+func (vm *VM) SubscribeToEvents(ctx context.Context) commonEng.Message {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	pending := make(chan commonEng.Message, 1)
+
+	var wg sync.WaitGroup
+
+	if vm.builder != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pending <- vm.builder.waitForTxEnqueue(ctx)
+		}()
+	}
+
+	defer wg.Wait()
+
+	select {
+	case ss := <-vm.stateSyncDone:
+		return ss
+	case pendingTx := <-pending:
+		return pendingTx
+	case <-ctx.Done():
+		vm.builder.pendingSignal.Broadcast()
+		return commonEng.Message(0)
+	case <-vm.shutdownChan:
+		return commonEng.Message(0)
+	}
 }
 
 // setAppRequestHandlers sets the request handlers for the VM to serve state sync
