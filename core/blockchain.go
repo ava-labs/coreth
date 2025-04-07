@@ -92,8 +92,9 @@ var (
 	blockExecutionTimer  = metrics.GetOrRegisterCounter("chain/block/executions", nil)
 	blockWriteTimer      = metrics.GetOrRegisterCounter("chain/block/writes", nil)
 
-	errInvalidOldChain = errors.New("invalid old chain")
-	errInvalidNewChain = errors.New("invalid new chain")
+	errInvalidOldChain      = errors.New("invalid old chain")
+	errInvalidNewChain      = errors.New("invalid new chain")
+	______________________0 struct{} // For git diff text alignment only
 )
 
 const (
@@ -134,12 +135,13 @@ const (
 // CacheConfig contains the configuration values for the trie database
 // and state snapshot these are resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit int    // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieDirtyLimit int    // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	SnapshotLimit  int    // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages      bool   // Whether to store preimage of trie key to the disk
-	StateHistory   uint64 // Number of blocks from head whose state histories are reserved.
-	StateScheme    string // Scheme used to store ethereum states and merkle tree nodes on top
+	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages           bool          // Whether to store preimage of trie key to the disk
+	StateHistory        uint64        // Number of blocks from head whose state histories are reserved.
+	StateScheme         string        // Scheme used to store ethereum states and merkle tree nodes on top
+	__________________0 time.Duration // For git diff text alignment only
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
@@ -229,11 +231,12 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db         ethdb.Database   // Low level persistent database to store final content in
-	snaps      *snapshot.Tree   // Snapshot tree for fast trie leaf access
-	triedb     *triedb.Database // The database handler for maintaining trie nodes.
-	stateCache state.Database   // State database to reuse between imports (contains state cache)
-	txIndexer  *txIndexer       // Transaction indexer, might be nil if not enabled
+	db            ethdb.Database                   // Low level persistent database to store final content in
+	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
+	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
+	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
+	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
+	____________0 struct{ ____________0 struct{} } // For git diff text alignment only
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -253,21 +256,24 @@ type BlockChain struct {
 	// Readers don't need to take it, they can just read the database.
 	chainmu sync.RWMutex
 
-	currentBlock atomic.Pointer[types.Header] // Current head of the block chain
+	currentBlock      atomic.Pointer[types.Header] // Current head of the chain
+	________________0 struct{}                     // for git diff text alignment only
 
 	bodyCache     *lru.Cache[common.Hash, *types.Body]
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt]
 	blockCache    *lru.Cache[common.Hash, *types.Block]
 	txLookupCache *lru.Cache[common.Hash, txLookup]
 
-	wg       sync.WaitGroup
-	quit     chan struct{} // shutdown signal, closed in Stop.
-	stopping atomic.Bool   // false if chain is running, true when stopped
+	wg            sync.WaitGroup
+	quit          chan struct{} // shutdown signal, closed in Stop.
+	stopping      atomic.Bool   // false if chain is running, true when stopped
+	____________1 struct{}      // for git diff text alignment only
 
-	engine    consensus.Engine
-	validator Validator // Block and state validator interface
-	processor Processor // Block transaction processor interface
-	vmConfig  vm.Config
+	engine     consensus.Engine
+	validator  Validator // Block and state validator interface
+	processor  Processor // Block transaction processor interface
+	vmConfig   vm.Config
+	_________0 struct{} // for git diff text alignment only
 
 	lastAccepted *types.Block // Prevents reorgs past this height
 	senderCacher *TxSenderCacher
