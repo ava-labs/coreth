@@ -8,6 +8,9 @@ import (
 	"math/big"
 	"testing"
 
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -26,7 +29,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			assert := assert.New(t)
 
 			// we use AP3 genesis here to not trip any block fees
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase3, "", "")
+			vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase3, "", "")
 			defer func() {
 				err := vm.Shutdown(context.Background())
 				assert.NoError(err)
@@ -41,7 +44,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				importTxs := createImportTxOptions(t, vm, sharedMemory)
 				tx, conflictingTx = importTxs[0], importTxs[1]
 			} else {
-				exportTxs := createExportTxOptions(t, vm, issuer, sharedMemory)
+				exportTxs := createExportTxOptions(t, vm, sharedMemory)
 				tx, conflictingTx = exportTxs[0], exportTxs[1]
 			}
 			txID := tx.ID()
@@ -59,7 +62,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			<-issuer
+			require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
@@ -118,7 +121,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 
 	// we use AP3 genesis here to not trip any block fees
 	importAmount := uint64(50000000)
-	_, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase3, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase3, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 		testShortIDAddrs[1]: importAmount,
 	})

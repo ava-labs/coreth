@@ -239,7 +239,6 @@ func setupGenesis(
 ) (*snow.Context,
 	database.Database,
 	[]byte,
-	chan commonEng.Message,
 	*avalancheatomic.Memory,
 ) {
 	if len(genesisJSON) == 0 {
@@ -258,9 +257,8 @@ func setupGenesis(
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
 
-	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
-	return ctx, prefixedDB, genesisBytes, issuer, atomicMemory
+	return ctx, prefixedDB, genesisBytes, atomicMemory
 }
 
 // GenesisVM creates a VM instance with the genesis test bytes and returns
@@ -273,7 +271,6 @@ func GenesisVM(t *testing.T,
 	configJSON string,
 	upgradeJSON string,
 ) (
-	chan commonEng.Message,
 	*VM,
 	database.Database,
 	*avalancheatomic.Memory,
@@ -292,14 +289,13 @@ func GenesisVMWithClock(
 	upgradeJSON string,
 	clock mockable.Clock,
 ) (
-	chan commonEng.Message,
 	*VM,
 	database.Database,
 	*avalancheatomic.Memory,
 	*enginetest.Sender,
 ) {
 	vm := &VM{clock: clock}
-	ctx, dbManager, genesisBytes, issuer, m := setupGenesis(t, genesisJSON)
+	ctx, dbManager, genesisBytes, m := setupGenesis(t, genesisJSON)
 	appSender := &enginetest.Sender{T: t}
 	appSender.CantSendAppGossip = true
 	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
@@ -310,7 +306,6 @@ func GenesisVMWithClock(
 		genesisBytes,
 		[]byte(upgradeJSON),
 		[]byte(configJSON),
-		issuer,
 		[]*commonEng.Fx{},
 		appSender,
 	)
@@ -321,7 +316,7 @@ func GenesisVMWithClock(
 		require.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
 	}
 
-	return issuer, vm, dbManager, m, appSender
+	return vm, dbManager, m, appSender
 }
 
 func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.ID, index uint32, assetID ids.ID, amount uint64, addr ids.ShortID) (*avax.UTXO, error) {
@@ -362,8 +357,8 @@ func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.I
 // GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map
 // Generates UTXOIDs by using a hash of the address in the [utxos] map such that the UTXOs will be generated deterministically.
 // If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
-func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (chan commonEng.Message, *VM, database.Database, *avalancheatomic.Memory, *enginetest.Sender) {
-	issuer, vm, db, sharedMemory, sender := GenesisVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON)
+func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (*VM, database.Database, *avalancheatomic.Memory, *enginetest.Sender) {
+	vm, db, sharedMemory, sender := GenesisVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON)
 	for addr, avaxAmount := range utxos {
 		txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
 		if err != nil {
@@ -374,7 +369,7 @@ func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON stri
 		}
 	}
 
-	return issuer, vm, db, sharedMemory, sender
+	return vm, db, sharedMemory, sender
 }
 
 // resetMetrics resets the vm avalanchego metrics, and allows
@@ -387,7 +382,7 @@ func TestVMConfig(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": %s}`, txFeeCap, fmt.Sprintf("[%q]", enabledEthAPIs[0]))
-	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
+	vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
 	require.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
 	require.Equal(t, vm.config.EthAPIs(), enabledEthAPIs, "EnabledEthAPIs should be set")
 	require.NoError(t, vm.Shutdown(context.Background()))
@@ -397,7 +392,7 @@ func TestVMConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": %s}`, txFeeCap, fmt.Sprintf("[%q]", enabledEthAPIs[0]))
-	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
+	vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
 
 	var vmConfig config.Config
 	vmConfig.SetDefaults(defaultTxPoolConfig)
@@ -408,7 +403,7 @@ func TestVMConfigDefaults(t *testing.T) {
 }
 
 func TestVMNilConfig(t *testing.T) {
-	_, vm, _, _, _ := GenesisVM(t, false, "", "", "")
+	vm, _, _, _ := GenesisVM(t, false, "", "", "")
 
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
@@ -421,7 +416,7 @@ func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
 	configJSON := fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir)
-	_, vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
+	vm, _, _, _ := GenesisVM(t, false, "", configJSON, "")
 	require.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
 	require.Equal(t, vm.config.ContinuousProfilerFrequency.Duration, profilerFrequency, "profiler frequency should be set")
 
@@ -490,7 +485,7 @@ func TestVMUpgrades(t *testing.T) {
 	}
 	for _, test := range genesisTests {
 		t.Run(test.name, func(t *testing.T) {
-			_, vm, _, _, _ := GenesisVM(t, true, test.genesis, "", "")
+			vm, _, _, _ := GenesisVM(t, true, test.genesis, "", "")
 
 			if gasPrice := vm.txPool.GasTip(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
 				t.Fatalf("Expected pool gas price to be %d but found %d", test.expectedGasPrice, gasPrice)
@@ -545,7 +540,7 @@ func TestVMUpgrades(t *testing.T) {
 func TestImportMissingUTXOs(t *testing.T) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
 	importAmount := uint64(50000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 	defer func() {
@@ -557,12 +552,12 @@ func TestImportMissingUTXOs(t *testing.T) {
 	require.NoError(t, err)
 	err = vm.mempool.AddLocalTx(importTx)
 	require.NoError(t, err)
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 	blk, err := vm.BuildBlock(context.Background())
 	require.NoError(t, err)
 
 	// make another VM which is missing the UTXO in shared memory
-	_, vm2, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase2, "", "")
+	vm2, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase2, "", "")
 	defer func() {
 		err := vm2.Shutdown(context.Background())
 		require.NoError(t, err)
@@ -579,11 +574,125 @@ func TestImportMissingUTXOs(t *testing.T) {
 	require.Len(t, badBlocks, 0)
 }
 
+func TestSubscribeToEvents(t *testing.T) {
+	importAmount := uint64(20000000)
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
+		testShortIDAddrs[0]: importAmount,
+	})
+
+	defer func() {
+		if err := vm.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		// Test that subscribing to events is a no-op after shutdown
+		require.Equal(t, commonEng.Message(0), vm.SubscribeToEvents(context.Background()))
+	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Subscribing to events returns once a transaction has entered the mem-pool.
+
+	if err := vm.mempool.AddLocalTx(importTx); err != nil {
+		t.Fatal(err)
+	}
+
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+
+	buildVerifyAcceptBlock(t, vm)
+
+	// Further subscription to events doesn't return, since we have built a block and have not
+	// added any new transactions to the mem-pool since.
+
+	assertNoSubscriptionEventsEmitted(t, vm)
+
+	// Subscribing to events returns once several transactions have entered the mem-pool.
+
+	events := make(chan core.NewTxPoolReorgEvent, 10)
+	sub := vm.txPool.SubscribeNewReorgEvent(events)
+
+	txs := make([]*types.Transaction, 10)
+	for i := 0; i < 10; i++ {
+		tx := types.NewTransaction(uint64(i), testEthAddrs[0], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), testKeys[0].ToECDSA())
+		if err != nil {
+			t.Fatal(err)
+		}
+		txs[i] = signedTx
+	}
+	errs := vm.txPool.Add(txs, true, true)
+	for i, err := range errs {
+		require.NoErrorf(t, err, "Failed to add tx at index %d: %s", i, err)
+	}
+
+	// As long as a block isn't built, successive subscriptions to events should indicate pending transactions.
+
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+
+	buildVerifyAcceptBlock(t, vm)
+
+	select {
+	case <-sub.Err():
+	case <-events:
+	}
+
+	sub.Unsubscribe()
+
+	// Despite several transactions being added to the mem-pool, the subscription to events
+	// after building a block does not fire.
+	assertNoSubscriptionEventsEmitted(t, vm)
+}
+
+func assertNoSubscriptionEventsEmitted(t *testing.T, vm *VM) {
+	subscriptionTime := time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(time.Millisecond * 10)
+		cancel()
+	}()
+	msg := vm.SubscribeToEvents(ctx)
+	require.False(t, time.Since(subscriptionTime) < time.Millisecond*10, vm.builder.needToBuild())
+	require.Equal(t, commonEng.Message(0), msg)
+}
+
+func buildVerifyAcceptBlock(t *testing.T, vm *VM) {
+	blk, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := blk.Accept(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	block := blk.(*chain.BlockWrapper).Block.(*Block)
+
+	if len(block.atomicTxs) == 0 {
+		require.Equal(t, 1, block.ethBlock.Transactions().Len())
+	} else {
+		require.Len(t, block.AtomicTxs(), 1)
+	}
+}
+
 // Simple test to ensure we can issue an import transaction followed by an export transaction
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
 	importAmount := uint64(50000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -602,7 +711,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -653,7 +762,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk2, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -690,7 +799,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 
 func TestBuildEthTxBlock(t *testing.T) {
 	importAmount := uint64(20000000)
-	issuer, vm, dbManager, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
+	vm, dbManager, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase2, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -712,7 +821,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk1, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -752,7 +861,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk2, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -810,7 +919,6 @@ func TestBuildEthTxBlock(t *testing.T) {
 		[]byte(genesisJSONApricotPhase2),
 		[]byte(""),
 		[]byte(`{"pruning-enabled":true}`),
-		issuer,
 		[]*commonEng.Fx{},
 		nil,
 	); err != nil {
@@ -831,7 +939,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 func testConflictingImportTxs(t *testing.T, genesis string) {
 	importAmount := uint64(10000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesis, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesis, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 		testShortIDAddrs[1]: importAmount,
 		testShortIDAddrs[2]: importAmount,
@@ -869,7 +977,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 			t.Fatal(err)
 		}
 
-		<-issuer
+		require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 		blk, err := vm.BuildBlock(context.Background())
@@ -902,7 +1010,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 		if err := vm.mempool.ForceAddTx(tx); err != nil {
 			t.Fatal(err)
 		}
-		<-issuer
+		require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 		_, err = vm.BuildBlock(context.Background())
@@ -920,7 +1028,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	if err := vm.mempool.AddLocalTx(importTxs[2]); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 	vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 
 	validBlock, err := vm.BuildBlock(context.Background())
@@ -1114,7 +1222,7 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
+			vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
 			issuedTxs, evictedTxs := issueTxs(t, vm, sharedMemory)
 
 			for i, tx := range issuedTxs {
@@ -1158,10 +1266,10 @@ func TestSetPreferenceRace(t *testing.T) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
 	importAmount := uint64(1000000000)
-	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
+	vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-	issuer2, vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
+	vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":true}`, "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -1189,7 +1297,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1253,7 +1361,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1278,7 +1386,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1305,7 +1413,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -1387,7 +1495,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 
 	importAmount := uint64(1000000000)
 
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "",
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "",
 		map[ids.ShortID]uint64{
 			addr0: importAmount,
 			addr1: importAmount,
@@ -1416,7 +1524,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatalf("Failed to issue importTx0A: %s", err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk0, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1450,7 +1558,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk1, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1474,7 +1582,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk2, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1496,7 +1604,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	if err := vm.mempool.ForceAddTx(importTx0B); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	_, err = vm.BuildBlock(context.Background())
 	if err == nil {
@@ -1505,7 +1613,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1553,7 +1661,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1604,10 +1712,10 @@ func TestBonusBlocksTxs(t *testing.T) {
 // get rejected.
 func TestReorgProtection(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":false}`, "", map[ids.ShortID]uint64{
+	vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":false}`, "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-	issuer2, vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":false}`, "", map[ids.ShortID]uint64{
+	vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, `{"pruning-enabled":false}`, "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -1638,7 +1746,7 @@ func TestReorgProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1702,7 +1810,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1727,7 +1835,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1772,10 +1880,10 @@ func TestReorgProtection(t *testing.T) {
 //	B   C
 func TestNonCanonicalAccept(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-	issuer2, vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -1806,7 +1914,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1887,7 +1995,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1921,7 +2029,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1967,10 +2075,10 @@ func TestNonCanonicalAccept(t *testing.T) {
 //	    D
 func TestStickyPreference(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-	issuer2, vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2001,7 +2109,7 @@ func TestStickyPreference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -2065,7 +2173,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -2095,7 +2203,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -2121,7 +2229,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -2226,10 +2334,10 @@ func TestStickyPreference(t *testing.T) {
 //	    D
 func TestUncleBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-	issuer2, vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2259,7 +2367,7 @@ func TestUncleBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -2320,7 +2428,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -2342,7 +2450,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -2368,7 +2476,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -2408,7 +2516,7 @@ func TestUncleBlock(t *testing.T) {
 // contains no transactions.
 func TestEmptyBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2427,7 +2535,7 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2474,10 +2582,10 @@ func TestEmptyBlock(t *testing.T) {
 //	    D
 func TestAcceptReorg(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer1, vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm1, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
-	issuer2, vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm2, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2508,7 +2616,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -2571,7 +2679,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -2593,7 +2701,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
@@ -2620,7 +2728,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	require.Equal(t, commonEng.PendingTxs, vm2.SubscribeToEvents(context.Background()))
 
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
@@ -2673,7 +2781,7 @@ func TestAcceptReorg(t *testing.T) {
 
 func TestFutureBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2692,7 +2800,7 @@ func TestFutureBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blkA, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2733,7 +2841,7 @@ func TestFutureBlock(t *testing.T) {
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 	defer func() {
@@ -2757,7 +2865,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2805,7 +2913,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2842,7 +2950,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 
@@ -2861,7 +2969,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2910,7 +3018,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 // that does not conflict. Accepts [blkB] and rejects [blkA], then asserts that the virtuous atomic
 // transaction in [blkA] is correctly re-issued into the atomic transaction mempool.
 func TestReissueAtomicTx(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: 10000000,
 		testShortIDAddrs[1]: 10000000,
 	})
@@ -2935,7 +3043,7 @@ func TestReissueAtomicTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blkA, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2966,7 +3074,7 @@ func TestReissueAtomicTx(t *testing.T) {
 	// than [blkA] so that the block will be unique. This is necessary since we have marked [blkA]
 	// as Rejected.
 	time.Sleep(2 * time.Second)
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 	blkB, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3004,7 +3112,7 @@ func TestReissueAtomicTx(t *testing.T) {
 }
 
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -3012,13 +3120,13 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 		}
 	}()
 
-	exportTxs := createExportTxOptions(t, vm, issuer, sharedMemory)
+	exportTxs := createExportTxOptions(t, vm, sharedMemory)
 	exportTx1, exportTx2 := exportTxs[0], exportTxs[1]
 
 	if err := vm.mempool.AddLocalTx(exportTx1); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 	exportBlk1, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3043,7 +3151,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	if err := vm.mempool.ForceAddTx(exportTx2); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	_, err = vm.BuildBlock(context.Background())
 	if err == nil {
@@ -3052,7 +3160,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 }
 
 func TestBuildInvalidBlockHead(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	vm, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -3102,7 +3210,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	if _, err := vm.BuildBlock(context.Background()); err == nil {
 		t.Fatalf("Unexpectedly created a block")
@@ -3140,7 +3248,7 @@ func TestConfigureLogLevel(t *testing.T) {
 	for _, test := range configTests {
 		t.Run(test.name, func(t *testing.T) {
 			vm := &VM{}
-			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, test.genesisJSON)
+			ctx, dbManager, genesisBytes, _ := setupGenesis(t, test.genesisJSON)
 			appSender := &enginetest.Sender{T: t}
 			appSender.CantSendAppGossip = true
 			appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
@@ -3151,7 +3259,6 @@ func TestConfigureLogLevel(t *testing.T) {
 				genesisBytes,
 				[]byte(""),
 				[]byte(test.logConfig),
-				issuer,
 				[]*commonEng.Fx{},
 				appSender,
 			)
@@ -3194,7 +3301,7 @@ func TestConfigureLogLevel(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 4 ruleset in genesis.
 func TestBuildApricotPhase4Block(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase4, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase4, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -3248,7 +3355,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3311,7 +3418,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3364,7 +3471,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 5 ruleset in genesis.
 func TestBuildApricotPhase5Block(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -3418,7 +3525,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3473,7 +3580,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3527,7 +3634,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 // in onFinalizeAndAssemble it will not cause a panic due to calling RevertToSnapshot(revID) on the
 // same revision ID twice.
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase1, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -3546,7 +3653,7 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3582,7 +3689,7 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 
 func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	importAmount := uint64(10000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase5, "", "", map[ids.ShortID]uint64{
+	vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase5, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 		testShortIDAddrs[1]: importAmount,
 		testShortIDAddrs[2]: importAmount,
@@ -3616,7 +3723,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		vm.mempool.ForceAddTx(conflictTx)
 		conflictSets[index].Add(conflictTx.ID())
 	}
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 	// Note: this only checks the path through OnFinalizeAndAssemble, we should make sure to add a test
 	// that verifies blocks received from the network will also fail verification
 	blk, err := vm.BuildBlock(context.Background())
@@ -3648,7 +3755,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 
 func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	importAmount := uint64(10000000)
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -3675,7 +3782,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3696,8 +3803,8 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// We create two VMs one in ApriotPhase4 and one in ApricotPhase5, so that we can construct a block
 	// containing a large enough atomic transaction that it will exceed the atomic gas limit in
 	// ApricotPhase5.
-	issuer, vm1, _, sharedMemory1, _ := GenesisVM(t, true, genesisJSONApricotPhase4, "", "")
-	_, vm2, _, sharedMemory2, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
+	vm1, _, sharedMemory1, _ := GenesisVM(t, true, genesisJSONApricotPhase4, "", "")
+	vm2, _, sharedMemory2, _ := GenesisVM(t, true, genesisJSONApricotPhase5, "", "")
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -3733,7 +3840,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm1.SubscribeToEvents(context.Background()))
 	blk1, err := vm1.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3773,7 +3880,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importAmount := uint64(50000000)
-	issuer, vm, dbManager, _, appSender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
+	vm, dbManager, _, appSender := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
 		testShortIDAddrs[0]: importAmount,
 	})
 	defer func() { require.NoError(t, vm.Shutdown(context.Background())) }()
@@ -3783,7 +3890,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
 	require.NoError(t, vm.mempool.AddLocalTx(importTx))
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	require.NoError(t, err)
@@ -3803,14 +3910,14 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	resetMetrics(vm)
 
 	// this will not be allowed
-	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, appSender)
+	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, []*commonEng.Fx{}, appSender)
 	require.ErrorContains(t, err, "mismatching ApricotPhase2 fork block timestamp in database")
 
 	resetMetrics(vm)
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)
-	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, config, issuer, []*commonEng.Fx{}, appSender)
+	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, config, []*commonEng.Fx{}, appSender)
 	require.NoError(t, err)
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
@@ -3867,7 +3974,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			importAmount := uint64(1000000000)
-			issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, test.genesisJSON, "", "", map[ids.ShortID]uint64{
+			vm, _, _, _ := GenesisVMWithUTXOs(t, true, test.genesisJSON, "", "", map[ids.ShortID]uint64{
 				testShortIDAddrs[0]: importAmount,
 			})
 
@@ -3886,7 +3993,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
@@ -3964,7 +4071,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.NoError(err)
 
 	// Create a VM with the genesis (will use header verification)
-	_, vm, _, _, _ := GenesisVM(t, true, genesisJSONCancun, "", "")
+	vm, _, _, _ := GenesisVM(t, true, genesisJSONCancun, "", "")
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
@@ -104,7 +106,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if len(genesisJSON) == 0 {
 		genesisJSON = genesisJSONApricotPhase0
 	}
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, !test.bootstrapping, genesisJSON, test.configJSON, test.upgradeJSON)
+	vm, _, sharedMemory, _ := GenesisVM(t, !test.bootstrapping, genesisJSON, test.configJSON, test.upgradeJSON)
 	rules := vm.currentRules()
 
 	tx := test.setup(t, vm, sharedMemory)
@@ -168,7 +170,8 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if err := vm.mempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
 	blk, err := vm.BuildBlock(context.Background())

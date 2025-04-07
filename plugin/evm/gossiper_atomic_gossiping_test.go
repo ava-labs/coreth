@@ -27,7 +27,7 @@ import (
 func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
+	vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -118,7 +118,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
+	vm, _, sharedMemory, sender := GenesisVM(t, true, "", "", "")
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
