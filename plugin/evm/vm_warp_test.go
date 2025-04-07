@@ -72,12 +72,13 @@ const (
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	acceptedLogsChan := make(chan []*types.Log, 10)
 	logsSub := tvm.vm.eth.APIBackend.SubscribeAcceptedLogsEvent(acceptedLogsChan)
@@ -107,7 +108,7 @@ func TestSendWarpMessage(t *testing.T) {
 	errs := tvm.vm.txPool.AddRemotesSync([]*types.Transaction{signedTx0})
 	require.NoError(errs[0])
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	require.NoError(err)
 
@@ -264,12 +265,13 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	acceptedLogsChan := make(chan []*types.Log, 10)
 	logsSub := tvm.vm.eth.APIBackend.SubscribeAcceptedLogsEvent(acceptedLogsChan)
@@ -375,7 +377,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 		blockCtx.PChainHeight = minimumValidPChainHeight
 	}
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	warpBlock, err := tvm.vm.BuildBlockWithContext(context.Background(), blockCtx)
 	require.NoError(err)
@@ -417,12 +419,13 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	// enable warp at the default genesis time
 	enableTime := upgrade.InitiallyActiveTime
@@ -508,14 +511,14 @@ func TestReceiveWarpMessage(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testReceiveWarpMessage(
-				t, tvm.toEngine, tvm.vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
+				t, tvm.vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
 			)
 		})
 	}
 }
 
 func testReceiveWarpMessage(
-	t *testing.T, issuer chan commonEng.Message, vm *VM,
+	t *testing.T, vm *VM,
 	sourceChainID ids.ID,
 	msgFrom warpMsgFrom, useSigners useWarpMsgSigners,
 	blockTime time.Time,
@@ -655,8 +658,11 @@ func testReceiveWarpMessage(
 	validProposerCtx := &block.Context{
 		PChainHeight: minimumValidPChainHeight,
 	}
+
 	vm.clock.Set(blockTime)
-	<-issuer
+	msg, returnedMinimumValidPChainHeight := vm.SubscribeToEvents(context.Background(), minimumValidPChainHeight)
+	require.Equal(commonEng.PendingTxs, msg)
+	require.Equal(minimumValidPChainHeight, returnedMinimumValidPChainHeight)
 
 	block2, err := vm.BuildBlockWithContext(context.Background(), validProposerCtx)
 	require.NoError(err)
@@ -734,12 +740,13 @@ func testReceiveWarpMessage(
 
 func TestMessageSignatureRequestsToVM(t *testing.T) {
 	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
 		require.NoError(t, tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	// Generate a new warp unsigned message and add to warp backend
 	warpMessage, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, []byte{1, 2, 3})
@@ -795,12 +802,13 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 
 func TestBlockSignatureRequestsToVM(t *testing.T) {
 	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
 		require.NoError(t, tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	lastAcceptedID, err := tvm.vm.LastAccepted(context.Background())
 	require.NoError(t, err)
@@ -852,18 +860,10 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 }
 
 func TestClearWarpDB(t *testing.T) {
-	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, upgradetest.Latest)
+	ctx, db, genesisBytes, _, _ := setupGenesis(t, upgradetest.Latest)
 	vm := &VM{}
-	require.NoError(t, vm.Initialize(
-		context.Background(),
-		ctx,
-		db,
-		genesisBytes,
-		[]byte{},
-		[]byte{},
-		issuer,
-		[]*commonEng.Fx{},
-		&enginetest.Sender{}))
+	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, []*commonEng.Fx{}, &enginetest.Sender{})
+	require.NoError(t, err)
 
 	// use multiple messages to test that all messages get cleared
 	payloads := [][]byte{[]byte("test1"), []byte("test2"), []byte("test3"), []byte("test4"), []byte("test5")}
@@ -886,16 +886,8 @@ func TestClearWarpDB(t *testing.T) {
 	vm = &VM{}
 	// we need new context since the previous one has registered metrics.
 	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
-	require.NoError(t, vm.Initialize(
-		context.Background(),
-		ctx,
-		db,
-		genesisBytes,
-		[]byte{},
-		[]byte{},
-		issuer,
-		[]*commonEng.Fx{},
-		&enginetest.Sender{}))
+	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, []*commonEng.Fx{}, &enginetest.Sender{})
+	require.NoError(t, err)
 
 	// check messages are still present
 	for _, message := range messages {
@@ -910,16 +902,8 @@ func TestClearWarpDB(t *testing.T) {
 	vm = &VM{}
 	config := `{"prune-warp-db-enabled": true}`
 	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
-	require.NoError(t, vm.Initialize(
-		context.Background(),
-		ctx,
-		db,
-		genesisBytes,
-		[]byte{},
-		[]byte(config),
-		issuer,
-		[]*commonEng.Fx{},
-		&enginetest.Sender{}))
+	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), []*commonEng.Fx{}, &enginetest.Sender{})
+	require.NoError(t, err)
 
 	it := vm.warpDB.NewIterator()
 	require.False(t, it.Next())

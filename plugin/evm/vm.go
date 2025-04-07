@@ -223,7 +223,7 @@ type VM struct {
 	cancel context.CancelFunc
 	// *chain.State helps to implement the VM interface by wrapping blocks
 	// with an efficient caching layer.
-	*chain.State
+	s *chain.State
 
 	config config.Config
 
@@ -261,8 +261,6 @@ type VM struct {
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB database.Database
 
-	toEngine chan<- commonEng.Message
-
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
@@ -272,9 +270,10 @@ type VM struct {
 
 	builder *blockBuilder
 
-	baseCodec codec.Registry
-	clock     *mockable.Clock
-	mempool   *atomictxpool.Mempool
+	baseCodec   codec.Registry
+	clock       lockedClock
+	mempool     atomictxpool.MemPool
+	mempoolLock *sync.RWMutex
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -293,6 +292,8 @@ type VM struct {
 
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
+
+	stateSyncDone chan commonEng.Message
 
 	logger corethlog.Logger
 	// State sync server and client
@@ -313,14 +314,57 @@ type VM struct {
 
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
-	rpcHandlers []interface{ Stop() }
+	rpcHandlers            []interface{ Stop() }
+	blockFailureRetrySleep func()
+	lock                   sync.Mutex
+}
+
+func (vm *VM) SetLastAcceptedBlock(lastAcceptedBlock snowman.Block) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.s.SetLastAcceptedBlock(lastAcceptedBlock)
+}
+
+func (vm *VM) GetBlock(ctx context.Context, blkID ids.ID) (snowman.Block, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+	return vm.s.GetBlock(ctx, blkID)
+}
+
+func (vm *VM) ParseBlock(ctx context.Context, blockBytes []byte) (snowman.Block, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.s.ParseBlock(ctx, blockBytes)
+}
+
+func (vm *VM) BuildBlock(ctx context.Context) (snowman.Block, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.s.BuildBlock(ctx)
+}
+
+func (vm *VM) LastAccepted(ctx context.Context) (ids.ID, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.s.LastAccepted(ctx)
+}
+
+func (vm *VM) BuildBlockWithContext(ctx context.Context, blockCtx *block.Context) (snowman.Block, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.s.BuildBlockWithContext(ctx, blockCtx)
 }
 
 // CodecRegistry implements the secp256k1fx interface
 func (vm *VM) CodecRegistry() codec.Registry { return vm.baseCodec }
 
 // Clock implements the secp256k1fx interface
-func (vm *VM) Clock() *mockable.Clock { return vm.clock }
+func (vm *VM) Clock() *mockable.Clock { return &vm.clock.Clock }
 
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
@@ -333,7 +377,6 @@ func (vm *VM) Initialize(
 	genesisBytes []byte,
 	_ []byte,
 	configBytes []byte,
-	toEngine chan<- commonEng.Message,
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
@@ -345,17 +388,19 @@ func (vm *VM) Initialize(
 	// See https://github.com/ava-labs/coreth/pull/998 for the resolution of this TODO.
 	if vm.atomicVM == nil {
 		vm.atomicVM = atomicvm.WrapVM(vm)
-		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, toEngine, nil, appSender); err != nil {
+		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, nil, appSender); err != nil {
 			return fmt.Errorf("failed to initialize atomic VM: %w", err)
 		}
 		return nil
 	}
-
+	vm.blockFailureRetrySleep = func() {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err := vm.extensionConfig.Validate(); err != nil {
 		return fmt.Errorf("failed to validate extension config: %w", err)
 	}
 	if vm.extensionConfig.Clock != nil {
-		vm.clock = vm.extensionConfig.Clock
+		vm.clock.Clock = *vm.extensionConfig.Clock
 	}
 	vm.config.SetDefaults(defaultTxPoolConfig)
 	if len(configBytes) > 0 {
@@ -401,7 +446,6 @@ func (vm *VM) Initialize(
 	// Enable debug-level metrics that might impact runtime performance
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
 
-	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
 	if err := vm.initializeMetrics(); err != nil {
@@ -495,10 +539,16 @@ func (vm *VM) Initialize(
 	vm.secpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
 	// TODO: read size from settings
-	vm.mempool, err = atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	atomicMemPool, err := atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
+
+	lockedMemPool := &lockedMemPool{
+		Mempool: atomicMemPool,
+	}
+	vm.mempool = lockedMemPool
+	vm.mempoolLock = &lockedMemPool.lock
 
 	vm.networkCodec = message.Codec
 	vm.Network, err = network.NewNetwork(vm.ctx, appSender, vm.networkCodec, vm.config.MaxOutboundActiveRequests, vm.sdkMetrics)
@@ -579,6 +629,8 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
+	vm.clock.lock = &vm.lock
+
 	return vm.initializeStateSync(lastAcceptedHeight)
 }
 
@@ -653,10 +705,10 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		dummy.NewDummyEngine(
 			callbacks,
 			dummy.Mode{},
-			vm.clock,
+			&vm.clock.Clock,
 			desiredTargetExcess,
 		),
-		vm.clock,
+		&vm.clock.Clock,
 	)
 	if err != nil {
 		return err
@@ -738,11 +790,14 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		}
 	}
 
+	stateSyncDone := make(chan commonEng.Message, 1)
+	vm.stateSyncDone = stateSyncDone
+
 	// Initialize the state sync client
 
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
 		Chain: vm.eth,
-		State: vm.State,
+		State: vm.s,
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.Network,
@@ -760,10 +815,10 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		ChaindDB:           vm.chaindb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
-		ToEngine:           vm.toEngine,
 		Acceptor:           vm,
 		Parser:             vm.extensionConfig.SyncableParser,
 		Extender:           vm.extensionConfig.SyncExtender,
+		StateSyncDone:      stateSyncDone,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -799,7 +854,7 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 	if err != nil {
 		return fmt.Errorf("could not create metered state: %w", err)
 	}
-	vm.State = state
+	vm.s = state
 
 	if !metrics.Enabled {
 		return nil
@@ -1175,8 +1230,10 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	vm.builder = vm.NewBlockBuilder(vm.toEngine)
+	vm.lock.Lock()
+	vm.builder = vm.NewBlockBuilder()
 	vm.builder.awaitSubmittedTxs()
+	vm.lock.Unlock()
 
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
@@ -1271,6 +1328,90 @@ func (vm *VM) initBlockBuilding() error {
 	return nil
 }
 
+// SubscribeToEvents blocks until either the given context is cancelled, or a message is returned.
+// The given pChainHeight is the height of the P-chain at the time of subscription.
+// The returned uint64 corresponds to the P-chain height at the time of returning the message.
+// The caller is expected to propagate to subsequent calls the P-chain height returned and not the one passed in.
+func (vm *VM) SubscribeToEvents(ctx context.Context, pChainHeight uint64) (commonEng.Message, uint64) {
+	for {
+		event := vm.waitForEvent(ctx)
+		if event != commonEng.PendingTxs {
+			return event, pChainHeight
+		}
+		vm.lock.Lock()
+		vm.mempoolLock.Lock()
+		block, err := vm.buildBlockWithContext(ctx, &block.Context{
+			PChainHeight: pChainHeight,
+		})
+		if err != nil {
+			log.Debug("Failed building block", "err", err)
+			vm.mempoolLock.Unlock()
+			vm.lock.Unlock()
+			vm.blockFailureRetrySleep()
+			continue
+		}
+
+		for _, tx := range block.(*wrappedBlock).extension.(*atomicvm.BlockExtension).AtomicTxs() {
+			vm.AtomicMempool().RemoveTx(tx)
+			if err := vm.AtomicMempool().ForceAddTx(tx); err != nil {
+				log.Debug("Failed re-adding transaction back to block", "err", err)
+			}
+		}
+		vm.mempoolLock.Unlock()
+		vm.lock.Unlock()
+		return event, pChainHeight
+	}
+}
+
+func (vm *VM) waitForEvent(ctx context.Context) commonEng.Message {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	pending := make(chan commonEng.Message, 1)
+
+	var wg sync.WaitGroup
+
+	vm.lock.Lock()
+	builder := vm.builder
+	vm.lock.Unlock()
+
+	if builder != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pending <- builder.waitForTxEnqueue(ctx)
+		}()
+	}
+
+	defer func() {
+		if builder != nil {
+			select {
+			case <-ctx.Done():
+				builder.buildBlockLock.Lock()
+				builder.pendingSignal.Broadcast()
+				builder.buildBlockLock.Unlock()
+			default:
+
+			}
+		}
+		wg.Wait()
+	}()
+
+	select {
+	case ss := <-vm.stateSyncDone:
+		return ss
+	case pendingTx := <-pending:
+		return pendingTx
+	case <-ctx.Done():
+		if builder != nil {
+			builder.pendingSignal.Broadcast()
+		}
+		return commonEng.Message(0)
+	case <-vm.shutdownChan:
+		return commonEng.Message(0)
+	}
+}
+
 // Shutdown implements the snowman.ChainVM interface
 func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
@@ -1298,7 +1439,7 @@ func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
 	return vm.buildBlockWithContext(ctx, nil)
 }
 
-func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
+func (vm *VM) buildBlockWithContext(_ context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
 	if proposerVMBlockCtx != nil {
 		log.Debug("Building block with context", "pChainBlockHeight", proposerVMBlockCtx.PChainHeight)
 	} else {
@@ -1415,10 +1556,13 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 
 // SetPreference sets what the current tail of the chain is
 func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	// Since each internal handler used by [vm.State] always returns a block
 	// with non-nil ethBlock value, GetExtendedBlock should never return a
 	// (*Block) with a nil ethBlock value.
-	block, err := vm.GetExtendedBlock(ctx, blkID)
+	block, err := vm.getExtendedBlock(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
@@ -1431,7 +1575,10 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 // [database.ErrNotFound] will be returned. This indicates that the VM has state
 // synced and does not have all historical blocks available.
 func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {
-	lastAcceptedBlock := vm.LastAcceptedBlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	lastAcceptedBlock := vm.s.LastAcceptedBlock()
 	if lastAcceptedBlock.Height() < height {
 		return ids.ID{}, database.ErrNotFound
 	}
@@ -1616,7 +1763,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
 func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
-	parent, err := vm.GetExtendedBlock(context.TODO(), ids.ID(parentHash))
+	parent, err := vm.getExtendedBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
 	}
@@ -1652,7 +1799,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// it was called.
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
-	ancestor, err := vm.GetExtendedBlock(context.TODO(), ancestorID)
+	ancestor, err := vm.getExtendedBlock(context.TODO(), ancestorID)
 	if err != nil {
 		return errRejectedParent
 	}
@@ -1838,9 +1985,9 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 }
 
 func (vm *VM) newImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
+	chainID ids.ID,               // chain to import from
+	to common.Address,            // Address of recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Keys to import the funds
 ) (*atomic.Tx, error) {
 	kc := secp256k1fx.NewKeychain()
@@ -1858,11 +2005,11 @@ func (vm *VM) newImportTx(
 
 // newExportTx returns a new ExportTx
 func (vm *VM) newExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
+	assetID ids.ID,               // AssetID of the tokens to export
+	amount uint64,                // Amount of tokens to export
+	chainID ids.ID,               // Chain to send the UTXOs to
+	to ids.ShortID,               // Address of chain recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*atomic.Tx, error) {
 	state, err := vm.blockChain.State()
@@ -1891,4 +2038,87 @@ func (vm *VM) newExportTx(
 
 func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
 	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
+}
+
+type lockedClock struct {
+	lock *sync.Mutex
+	mockable.Clock
+}
+
+func (lc *lockedClock) Set(time time.Time) {
+	lc.lock.Lock()
+	defer lc.lock.Unlock()
+	lc.Clock.Set(time)
+}
+
+type lockedMemPool struct {
+	*atomictxpool.Mempool
+	lock sync.RWMutex
+}
+
+func (l *lockedMemPool) Len() int {
+	return l.Mempool.Len()
+}
+
+func (l *lockedMemPool) Add(tx *atomic.Tx) error {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.Add(tx)
+}
+
+func (l *lockedMemPool) AddRemoteTx(tx *atomic.Tx) error {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.AddRemoteTx(tx)
+}
+
+func (l *lockedMemPool) AddLocalTx(tx *atomic.Tx) error {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.AddLocalTx(tx)
+}
+
+func (l *lockedMemPool) ForceAddTx(tx *atomic.Tx) error {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.ForceAddTx(tx)
+}
+
+func (l *lockedMemPool) Iterate(f func(tx *atomic.Tx) bool) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	l.Mempool.Iterate(f)
+}
+
+func (l *lockedMemPool) GetPendingTx(txID ids.ID) (*atomic.Tx, bool) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.GetPendingTx(txID)
+}
+
+func (l *lockedMemPool) GetTx(txID ids.ID) (*atomic.Tx, bool, bool) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.GetTx(txID)
+}
+
+func (l *lockedMemPool) RemoveTx(tx *atomic.Tx) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	l.Mempool.RemoveTx(tx)
+}
+
+func (l *lockedMemPool) GetFilter() ([]byte, []byte) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.Mempool.GetFilter()
 }

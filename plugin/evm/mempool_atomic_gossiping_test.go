@@ -25,13 +25,16 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// we use AP3 here to not trip any block fees
 			fork := upgradetest.ApricotPhase3
-			tvm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &fork,
 			})
 			defer func() {
 				err := tvm.vm.Shutdown(context.Background())
 				assert.NoError(err)
 			}()
+
+			defer cleanup()
+
 			mempool := tvm.vm.mempool
 
 			// generate a valid and conflicting tx
@@ -42,7 +45,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				importTxs := createImportTxOptions(t, tvm.vm, tvm.atomicMemory)
 				tx, conflictingTx = importTxs[0], importTxs[1]
 			} else {
-				exportTxs := createExportTxOptions(t, tvm.vm, tvm.toEngine, tvm.atomicMemory)
+				exportTxs := createExportTxOptions(t, tvm.vm, tvm.atomicMemory)
 				tx, conflictingTx = exportTxs[0], exportTxs[1]
 			}
 			txID := tx.ID()
@@ -60,7 +63,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			<-tvm.toEngine
+			tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")

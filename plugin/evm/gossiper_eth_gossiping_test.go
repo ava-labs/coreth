@@ -83,13 +83,14 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
 	assert.NoError(err)
 
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		genesisJSON: genesisJSON,
 	})
 	defer func() {
 		err := tvm.vm.Shutdown(context.Background())
 		assert.NoError(err)
 	}()
+	defer cleanup()
 	tvm.vm.txPool.SetGasTip(common.Big1)
 	tvm.vm.txPool.SetMinFee(common.Big0)
 

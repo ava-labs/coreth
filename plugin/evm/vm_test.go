@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	atomic2 "sync/atomic"
 	"testing"
 	"time"
 
@@ -180,13 +182,12 @@ type testVMConfig struct {
 
 type testVM struct {
 	vm           *VM
-	toEngine     chan commonEng.Message
 	db           *prefixdb.Database
 	atomicMemory *avalancheatomic.Memory
 	appSender    *enginetest.Sender
 }
 
-func newVM(t *testing.T, config testVMConfig) *testVM {
+func newVM(t *testing.T, config testVMConfig) (*testVM, func()) {
 	ctx := snowtest.Context(t, snowtest.CChainID)
 	fork := upgradetest.Latest
 	if config.fork != nil {
@@ -208,7 +209,6 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
 
-	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
 
 	vm := &VM{}
@@ -224,7 +224,6 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		[]byte(config.genesisJSON),
 		nil,
 		[]byte(config.configJSON),
-		issuer,
 		nil,
 		appSender,
 	), "error initializing vm")
@@ -244,12 +243,53 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		}
 	}
 
-	return &testVM{
+	tvm := &testVM{
 		vm:           vm,
-		toEngine:     issuer,
 		db:           prefixedDB,
 		atomicMemory: atomicMemory,
 		appSender:    appSender,
+	}
+
+	return tvm, tvm.subscribeInTheBackground()
+}
+
+func (vm *testVM) subscribeInTheBackground() func() {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		var stateSyncDone bool
+		for {
+			innerContext, cancel := context.WithTimeout(ctx, time.Millisecond*10)
+			msg, _ := vm.vm.SubscribeToEvents(innerContext, 0)
+			cancel()
+			if msg == commonEng.StateSyncDone {
+				stateSyncDone = true
+			}
+			if stateSyncDone && msg != commonEng.StateSyncDone && msg != commonEng.PendingTxs {
+				// If we have grabbed the state sync done flag in the past, we artificially inject it,
+				// so the test can grab it.
+				select {
+				case vm.vm.stateSyncDone <- commonEng.StateSyncDone:
+				default:
+
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+
+			}
+		}
+	}()
+
+	return func() {
+		cancel()
+		wg.Wait()
 	}
 }
 
@@ -320,51 +360,58 @@ func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.I
 func TestVMConfig(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
-	vm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		configJSON: fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0]),
-	}).vm
+	})
+	vm := tvm.vm
 	require.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
 	require.Equal(t, vm.config.EthAPIs(), enabledEthAPIs, "EnabledEthAPIs should be set")
+	cleanup()
 	require.NoError(t, vm.Shutdown(context.Background()))
 }
 
 func TestVMConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
-	vm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		configJSON: fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0]),
-	}).vm
+	})
+	vm := tvm.vm
 
 	var vmConfig config.Config
 	vmConfig.SetDefaults(defaultTxPoolConfig)
 	vmConfig.RPCTxFeeCap = txFeeCap
 	vmConfig.EnabledEthAPIs = enabledEthAPIs
 	require.Equal(t, vmConfig, vm.config, "VM Config should match default with overrides")
+	cleanup()
 	require.NoError(t, vm.Shutdown(context.Background()))
 }
 
 func TestVMNilConfig(t *testing.T) {
-	vm := newVM(t, testVMConfig{}).vm
-
+	tvm, cleanup := newVM(t, testVMConfig{})
+	vm := tvm.vm
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
 	vmConfig.SetDefaults(defaultTxPoolConfig)
 	require.Equal(t, vmConfig, vm.config, "VM Config should match default config")
+	cleanup()
 	require.NoError(t, vm.Shutdown(context.Background()))
 }
 
 func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
-	vm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		configJSON: fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir),
-	}).vm
+	})
+	vm := tvm.vm
 	require.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
 	require.Equal(t, vm.config.ContinuousProfilerFrequency.Duration, profilerFrequency, "profiler frequency should be set")
 
 	// Sleep for twice the frequency of the profiler to give it time
 	// to generate the first profile.
 	time.Sleep(2 * time.Second)
+	cleanup()
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// Check that the first profile was generated
@@ -419,12 +466,14 @@ func TestVMUpgrades(t *testing.T) {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			require := require.New(t)
 
-			vm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &test.fork,
-			}).vm
+			})
+			vm := tvm.vm
 			defer func() {
 				require.NoError(vm.Shutdown(context.Background()))
 			}()
+			defer cleanup()
 
 			require.Equal(test.expectedGasPrice, vm.txPool.GasTip())
 
@@ -447,7 +496,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
-	tvm1 := newVM(t, testVMConfig{
+	tvm1, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -456,21 +505,23 @@ func TestImportMissingUTXOs(t *testing.T) {
 	defer func() {
 		require.NoError(t, tvm1.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	importTx, err := tvm1.vm.newImportTx(tvm1.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
 	require.NoError(t, tvm1.vm.mempool.AddLocalTx(importTx))
-	<-tvm1.toEngine
 	blk, err := tvm1.vm.BuildBlock(context.Background())
 	require.NoError(t, err)
 
 	// make another VM which is missing the UTXO in shared memory
-	vm2 := newVM(t, testVMConfig{
+	tvm2, cleanup2 := newVM(t, testVMConfig{
 		fork: &fork,
-	}).vm
+	})
+	vm2 := tvm2.vm
 	defer func() {
 		require.NoError(t, vm2.Shutdown(context.Background()))
 	}()
+	defer cleanup2()
 
 	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
 	require.NoError(t, err)
@@ -488,7 +539,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 func TestIssueAtomicTxs(t *testing.T) {
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -499,6 +550,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup()
 
 	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
@@ -509,7 +561,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -560,7 +612,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk2, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -598,7 +650,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 func TestBuildEthTxBlock(t *testing.T) {
 	importAmount := uint64(20000000)
 	fork := upgradetest.ApricotPhase2
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork:       &fork,
 		configJSON: `{"pruning-enabled":true}`,
 		utxos: map[ids.ShortID]uint64{
@@ -610,6 +662,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -623,7 +676,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk1, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -663,7 +716,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		}
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk2, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -697,14 +750,14 @@ func TestBuildEthTxBlock(t *testing.T) {
 	}
 
 	// Clear the cache and ensure that GetBlock returns internal blocks with the correct status
-	tvm.vm.State.Flush()
-	blk2Refreshed, err := tvm.vm.GetBlockInternal(context.Background(), blk2.ID())
+	tvm.vm.s.Flush()
+	blk2Refreshed, err := tvm.vm.s.GetBlockInternal(context.Background(), blk2.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blk1RefreshedID := blk2Refreshed.Parent()
-	blk1Refreshed, err := tvm.vm.GetBlockInternal(context.Background(), blk1RefreshedID)
+	blk1Refreshed, err := tvm.vm.s.GetBlockInternal(context.Background(), blk1RefreshedID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -723,7 +776,6 @@ func TestBuildEthTxBlock(t *testing.T) {
 		[]byte(genesisJSON(forkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(`{"pruning-enabled":true}`),
-		tvm.toEngine,
 		[]*commonEng.Fx{},
 		nil,
 	); err != nil {
@@ -744,7 +796,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 	importAmount := uint64(10000000)
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -757,6 +809,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup()
 
 	importTxs := make([]*atomic.Tx, 0, 3)
 	conflictTxs := make([]*atomic.Tx, 0, 3)
@@ -784,9 +837,9 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 			t.Fatal(err)
 		}
 
-		<-tvm.toEngine
-
 		tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
+		tvm.vm.SubscribeToEvents(context.Background(), 0)
+
 		blk, err := tvm.vm.BuildBlock(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -817,7 +870,6 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 		if err := tvm.vm.mempool.ForceAddTx(tx); err != nil {
 			t.Fatal(err)
 		}
-		<-tvm.toEngine
 
 		tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
 		_, err = tvm.vm.BuildBlock(context.Background())
@@ -835,8 +887,8 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 	if err := tvm.vm.mempool.AddLocalTx(importTxs[2]); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	validBlock, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1030,10 +1082,16 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			fork := upgradetest.ApricotPhase5
-			tvm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &fork,
 			})
+
 			issuedTxs, evictedTxs := issueTxs(t, tvm.vm, tvm.atomicMemory)
+
+			// Building a block in parallel to checking if it's in the mempool is racy.
+			cleanup()
+
+			tvm.vm.lock.Lock()
 
 			for i, tx := range issuedTxs {
 				_, issued := tvm.vm.mempool.GetPendingTx(tx.ID())
@@ -1044,6 +1102,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				_, discarded, _ := tvm.vm.mempool.GetTx(tx.ID())
 				assert.True(t, discarded, "expected discarded tx at index %d to be discarded", i)
 			}
+
+			tvm.vm.lock.Unlock()
 		})
 	}
 }
@@ -1084,8 +1144,8 @@ func TestSetPreferenceRace(t *testing.T) {
 			testShortIDAddrs[0]: importAmount,
 		},
 	}
-	tvm1 := newVM(t, tvmConfig)
-	tvm2 := newVM(t, tvmConfig)
+	tvm1, cleanup1 := newVM(t, tvmConfig)
+	tvm2, cleanup2 := newVM(t, tvmConfig)
 
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
@@ -1096,6 +1156,9 @@ func TestSetPreferenceRace(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup1()
+	defer cleanup2()
 
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm1.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
@@ -1111,7 +1174,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1175,7 +1238,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1200,7 +1263,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1227,7 +1290,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -1310,7 +1373,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	importAmount := uint64(1000000000)
 
 	fork := upgradetest.NoUpgrades
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			addr0: importAmount,
@@ -1322,6 +1385,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -1340,7 +1404,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatalf("Failed to issue importTx0A: %s", err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk0, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1374,7 +1438,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		}
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk1, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1398,7 +1462,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk2, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1420,8 +1484,6 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	if err := tvm.vm.mempool.ForceAddTx(importTx0B); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
-
 	_, err = tvm.vm.BuildBlock(context.Background())
 	if err == nil {
 		t.Fatal("Shouldn't have been able to build an invalid block")
@@ -1430,7 +1492,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 
 func TestBonusBlocksTxs(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -1438,6 +1500,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup()
 
 	importAmount := uint64(10000000)
 	utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
@@ -1479,7 +1542,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1538,8 +1601,8 @@ func TestReorgProtection(t *testing.T) {
 			testShortIDAddrs[0]: importAmount,
 		},
 	}
-	tvm1 := newVM(t, tvmConfig)
-	tvm2 := newVM(t, tvmConfig)
+	tvm1, cleanup1 := newVM(t, tvmConfig)
+	tvm2, cleanup2 := newVM(t, tvmConfig)
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -1549,6 +1612,8 @@ func TestReorgProtection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup1()
+	defer cleanup2()
 
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm1.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
@@ -1567,7 +1632,7 @@ func TestReorgProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1631,7 +1696,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1656,7 +1721,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1708,8 +1773,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 			testShortIDAddrs[0]: importAmount,
 		},
 	}
-	tvm1 := newVM(t, tvmConfig)
-	tvm2 := newVM(t, tvmConfig)
+	tvm1, cleanup1 := newVM(t, tvmConfig)
+	tvm2, cleanup2 := newVM(t, tvmConfig)
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -1719,6 +1784,8 @@ func TestNonCanonicalAccept(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	defer cleanup1()
+	defer cleanup2()
 
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm1.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
@@ -1737,7 +1804,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1818,7 +1885,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1852,7 +1919,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1905,8 +1972,8 @@ func TestStickyPreference(t *testing.T) {
 			testShortIDAddrs[0]: importAmount,
 		},
 	}
-	tvm1 := newVM(t, tvmConfig)
-	tvm2 := newVM(t, tvmConfig)
+	tvm1, cleanup1 := newVM(t, tvmConfig)
+	tvm2, cleanup2 := newVM(t, tvmConfig)
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -1916,6 +1983,9 @@ func TestStickyPreference(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup1()
+	defer cleanup2()
 
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm1.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
@@ -1934,7 +2004,7 @@ func TestStickyPreference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1998,7 +2068,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2028,7 +2098,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -2054,7 +2124,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -2166,8 +2236,8 @@ func TestUncleBlock(t *testing.T) {
 			testShortIDAddrs[0]: importAmount,
 		},
 	}
-	tvm1 := newVM(t, tvmConfig)
-	tvm2 := newVM(t, tvmConfig)
+	tvm1, cleanup1 := newVM(t, tvmConfig)
+	tvm2, cleanup2 := newVM(t, tvmConfig)
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -2176,6 +2246,9 @@ func TestUncleBlock(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	cleanup1()
+	cleanup2()
 
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm1.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
@@ -2194,7 +2267,7 @@ func TestUncleBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2255,7 +2328,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2277,7 +2350,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -2303,7 +2376,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -2344,7 +2417,7 @@ func TestUncleBlock(t *testing.T) {
 func TestEmptyBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -2356,6 +2429,8 @@ func TestEmptyBlock(t *testing.T) {
 		}
 	}()
 
+	defer cleanup()
+
 	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
@@ -2365,7 +2440,7 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2419,8 +2494,8 @@ func TestAcceptReorg(t *testing.T) {
 			testShortIDAddrs[0]: importAmount,
 		},
 	}
-	tvm1 := newVM(t, tvmConfig)
-	tvm2 := newVM(t, tvmConfig)
+	tvm1, cleanup1 := newVM(t, tvmConfig)
+	tvm2, cleanup2 := newVM(t, tvmConfig)
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -2430,6 +2505,9 @@ func TestAcceptReorg(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	cleanup1()
+	cleanup2()
 
 	newTxPoolHeadChan1 := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm1.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan1)
@@ -2448,7 +2526,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2511,7 +2589,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-tvm1.toEngine
+	tvm1.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2533,7 +2611,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2560,7 +2638,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-tvm2.toEngine
+	tvm2.vm.SubscribeToEvents(context.Background(), 0)
 
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2614,7 +2692,7 @@ func TestAcceptReorg(t *testing.T) {
 func TestFutureBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -2626,6 +2704,8 @@ func TestFutureBlock(t *testing.T) {
 		}
 	}()
 
+	defer cleanup()
+
 	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
@@ -2635,7 +2715,7 @@ func TestFutureBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blkA, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2677,7 +2757,7 @@ func TestFutureBlock(t *testing.T) {
 func TestBuildApricotPhase1Block(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.ApricotPhase1
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -2688,6 +2768,8 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -2704,7 +2786,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2752,7 +2834,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		}
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err = tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2790,7 +2872,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -2802,6 +2884,8 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		}
 	}()
 
+	defer cleanup()
+
 	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
@@ -2811,7 +2895,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2861,7 +2945,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 // transaction in [blkA] is correctly re-issued into the atomic transaction mempool.
 func TestReissueAtomicTx(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: 10000000,
@@ -2873,6 +2957,8 @@ func TestReissueAtomicTx(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	genesisBlkID, err := tvm.vm.LastAccepted(context.Background())
 	if err != nil {
@@ -2888,7 +2974,7 @@ func TestReissueAtomicTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blkA, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2919,7 +3005,7 @@ func TestReissueAtomicTx(t *testing.T) {
 	// than [blkA] so that the block will be unique. This is necessary since we have marked [blkA]
 	// as Rejected.
 	time.Sleep(2 * time.Second)
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 	blkB, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -2958,7 +3044,7 @@ func TestReissueAtomicTx(t *testing.T) {
 
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -2967,13 +3053,15 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 		}
 	}()
 
-	exportTxs := createExportTxOptions(t, tvm.vm, tvm.toEngine, tvm.atomicMemory)
+	defer cleanup()
+
+	exportTxs := createExportTxOptions(t, tvm.vm, tvm.atomicMemory)
 	exportTx1, exportTx2 := exportTxs[0], exportTxs[1]
 
 	if err := tvm.vm.mempool.AddLocalTx(exportTx1); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 	exportBlk1, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -2998,7 +3086,6 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	if err := tvm.vm.mempool.ForceAddTx(exportTx2); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
 
 	_, err = tvm.vm.BuildBlock(context.Background())
 	if err == nil {
@@ -3008,7 +3095,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 
 func TestBuildInvalidBlockHead(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -3016,6 +3103,8 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	key0 := testKeys[0]
 	addr0 := key0.Address()
@@ -3059,8 +3148,6 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
-
 	if _, err := tvm.vm.BuildBlock(context.Background()); err == nil {
 		t.Fatalf("Unexpectedly created a block")
 	}
@@ -3076,7 +3163,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 // Apricot Phase 4 ruleset in genesis.
 func TestBuildApricotPhase4Block(t *testing.T) {
 	fork := upgradetest.ApricotPhase4
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -3084,6 +3171,8 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -3131,7 +3220,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3194,7 +3283,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		}
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err = tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3248,7 +3337,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 // Apricot Phase 5 ruleset in genesis.
 func TestBuildApricotPhase5Block(t *testing.T) {
 	fork := upgradetest.ApricotPhase5
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -3256,6 +3345,8 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -3303,7 +3394,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3358,7 +3449,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		}
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err = tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3413,7 +3504,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 // same revision ID twice.
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -3421,6 +3512,8 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -3433,7 +3526,7 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3470,7 +3563,7 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -3484,6 +3577,8 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	// Create a conflict set for each pair of transactions
 	conflictSets := make([]set.Set[ids.ID], len(testKeys))
@@ -3507,7 +3602,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		tvm.vm.mempool.ForceAddTx(conflictTx)
 		conflictSets[index].Add(conflictTx.ID())
 	}
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 	// Note: this only checks the path through OnFinalizeAndAssemble, we should make sure to add a test
 	// that verifies blocks received from the network will also fail verification
 	blk, err := tvm.vm.BuildBlock(context.Background())
@@ -3540,7 +3635,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -3548,6 +3643,8 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(testKeys[0])
@@ -3568,7 +3665,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		}
 	}
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3590,11 +3687,11 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// containing a large enough atomic transaction that it will exceed the atomic gas limit in
 	// ApricotPhase5.
 	ap4 := upgradetest.ApricotPhase4
-	tvm1 := newVM(t, testVMConfig{
+	tvm1, cleanup1 := newVM(t, testVMConfig{
 		fork: &ap4,
 	})
 	ap5 := upgradetest.ApricotPhase5
-	tvm2 := newVM(t, testVMConfig{
+	tvm2, cleanup2 := newVM(t, testVMConfig{
 		fork: &ap5,
 	})
 	defer func() {
@@ -3605,6 +3702,9 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	cleanup1()
+	cleanup2()
 
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(testKeys[0])
@@ -3631,7 +3731,8 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-tvm1.toEngine
+	msg, _ := tvm1.vm.SubscribeToEvents(context.Background(), 0)
+	require.Equal(t, commonEng.PendingTxs, msg)
 	blk1, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3672,7 +3773,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importAmount := uint64(50000000)
 	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -3680,12 +3781,14 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	})
 	defer func() { require.NoError(t, tvm.vm.Shutdown(context.Background())) }()
 
+	defer cleanup()
+
 	// Since rewinding is permitted for last accepted height of 0, we must
 	// accept one block to test the SkipUpgradeCheck functionality.
 	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
 	require.NoError(t, tvm.vm.mempool.AddLocalTx(importTx))
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	require.NoError(t, err)
@@ -3701,7 +3804,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
 	genesis := []byte(genesisJSON(forkToChainConfig[fork]))
-	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, []byte{}, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
+	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, []byte{}, []*commonEng.Fx{}, tvm.appSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
 	reinitVM = &VM{}
@@ -3709,16 +3812,8 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)
-	require.NoError(t, reinitVM.Initialize(
-		context.Background(),
-		newCTX,
-		tvm.db,
-		genesis,
-		[]byte{},
-		config,
-		tvm.toEngine,
-		[]*commonEng.Fx{},
-		tvm.appSender))
+	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, config, []*commonEng.Fx{}, tvm.appSender)
+	require.NoError(t, err)
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
 
@@ -3774,7 +3869,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			importAmount := uint64(1000000000)
-			tvm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &test.fork,
 				utxos: map[ids.ShortID]uint64{
 					testShortIDAddrs[0]: importAmount,
@@ -3785,6 +3880,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 					t.Fatal(err)
 				}
 			}()
+			defer cleanup()
 
 			importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
@@ -3795,7 +3891,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -3872,15 +3968,16 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.NoError(err)
 
 	// Create a VM with the genesis (will use header verification)
-	vm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		genesisJSON: genesisJSONCancun,
-	}).vm
-	defer func() { require.NoError(vm.Shutdown(ctx)) }()
+	})
+	defer func() { require.NoError(tvm.vm.Shutdown(ctx)) }()
+	defer cleanup()
 
 	// Verification should fail
-	vmBlock, err := wrapBlock(blocks[0], vm)
+	vmBlock, err := wrapBlock(blocks[0], tvm.vm)
 	require.NoError(err)
-	_, err = vm.ParseBlock(ctx, vmBlock.Bytes())
+	_, err = tvm.vm.ParseBlock(ctx, vmBlock.Bytes())
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = vmBlock.Verify(ctx)
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
@@ -3892,7 +3989,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 
 	importAmount := uint64(2_000_000_000_000_000) // 2M AVAX
 	fork := upgradetest.Fortuna
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -3901,6 +3998,8 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(ctx))
 	}()
+
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -3926,7 +4025,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(ctx, 0)
 	blk2, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -3938,15 +4037,19 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	<-tvm.toEngine
 	// Expect block building to fail due to insufficient gas capacity
 	_, err = tvm.vm.BuildBlock(ctx)
 	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
 
+	// But when subscribing to events, we manage to build the block, because it waits until the capacity is refilled.
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
+	_, err = tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
 	// Wait to fill block capacity and retry block builiding
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(ctx, 0)
 	blk3, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -3960,7 +4063,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 
 	importAmount := uint64(2_000_000_000_000_000) // 2M AVAX
 	fork := upgradetest.Fortuna
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -3970,6 +4073,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(ctx))
 	}()
+	defer cleanup()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
@@ -3982,7 +4086,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.NoError(err)
 	require.NoError(tvm.vm.mempool.AddLocalTx(importTx2))
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(ctx, 0)
 	blk1, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -4018,7 +4122,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(ctx, 0)
 	blk2, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -4039,13 +4143,12 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	<-tvm.toEngine
 	_, err = tvm.vm.BuildBlock(ctx)
 	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
 
 	// Wait to fill block capacity and retry block building
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(ctx, 0)
 	blk4, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 	ethBlk4 := blk4.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
@@ -4055,4 +4158,35 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 
 	require.NoError(blk4.Verify(ctx))
 	require.NoError(blk4.Accept(ctx))
+}
+
+type syncClock struct {
+	time atomic2.Value
+}
+
+// Set the time on the clock
+func (c *syncClock) Set(time time.Time) {
+	c.time.Store(time)
+}
+
+// Sync this clock with global time
+func (c *syncClock) Sync() {
+
+}
+
+// Time returns the time on this clock
+func (c *syncClock) Time() time.Time {
+	return c.time.Load().(time.Time)
+}
+
+// Time returns the unix time on this clock
+func (c *syncClock) UnixTime() time.Time {
+	resTime := c.Time()
+	return resTime.Truncate(time.Second)
+}
+
+// Unix returns the unix timestamp on this clock.
+func (c *syncClock) Unix() uint64 {
+	unix := max(c.Time().Unix(), 0)
+	return uint64(unix)
 }

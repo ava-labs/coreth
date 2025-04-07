@@ -9,9 +9,11 @@ import (
 	"math/big"
 	"testing"
 
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/stretchr/testify/require"
+
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
-	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
@@ -30,7 +32,7 @@ import (
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
 // that attempt to send the funds to each of the test keys (list of length 3).
-func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
+func createExportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
 	// Add a UTXO to shared memory
 	utxo := &avax.UTXO{
 		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
@@ -70,7 +72,8 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 
-	<-issuer
+	msg, _ := vm.SubscribeToEvents(context.Background(), 0)
+	require.Equal(t, commonEng.PendingTxs, msg)
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -329,7 +332,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fork := upgradetest.NoUpgrades
-			tvm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &fork,
 			})
 			defer func() {
@@ -337,6 +340,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 					t.Fatal(err)
 				}
 			}()
+			defer cleanup()
 
 			avaxUTXO := &avax.UTXO{
 				UTXOID: avaxUTXOID,
@@ -389,7 +393,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -449,14 +453,17 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 
 func TestExportTxSemanticVerify(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	vm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
-	}).vm
+	})
+	vm := tvm.vm
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	parent := vm.LastAcceptedExtendedBlock()
 
@@ -954,7 +961,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 
 func TestExportTxAccept(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	tvm := newVM(t, testVMConfig{
+	tvm, cleanup := newVM(t, testVMConfig{
 		fork: &fork,
 	})
 	defer func() {
@@ -962,6 +969,8 @@ func TestExportTxAccept(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	defer cleanup()
 
 	xChainSharedMemory := tvm.atomicMemory.NewSharedMemory(tvm.vm.ctx.XChainID)
 
@@ -1700,7 +1709,7 @@ func TestNewExportTx(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.fork.String(), func(t *testing.T) {
-			tvm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &test.fork,
 			})
 			defer func() {
@@ -1708,6 +1717,7 @@ func TestNewExportTx(t *testing.T) {
 					t.Fatal(err)
 				}
 			}()
+			defer cleanup()
 
 			parent := tvm.vm.LastAcceptedExtendedBlock()
 			importAmount := uint64(50000000)
@@ -1750,7 +1760,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1869,7 +1879,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.fork.String(), func(t *testing.T) {
-			tvm := newVM(t, testVMConfig{
+			tvm, cleanup := newVM(t, testVMConfig{
 				fork: &test.fork,
 			})
 			defer func() {
@@ -1877,6 +1887,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 					t.Fatal(err)
 				}
 			}()
+			defer cleanup()
 
 			parent := tvm.vm.LastAcceptedExtendedBlock()
 			importAmount := uint64(50000000)
@@ -1949,7 +1960,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
