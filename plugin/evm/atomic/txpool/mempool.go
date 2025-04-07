@@ -34,6 +34,27 @@ var (
 	ErrTooManyAtomicTx         = errors.New("too many atomic tx")
 )
 
+type MemPool interface {
+	Len() int
+	Add(tx *atomic.Tx) error
+	AddRemoteTx(tx *atomic.Tx) error
+	AddLocalTx(tx *atomic.Tx) error
+	ForceAddTx(tx *atomic.Tx) error
+	Iterate(f func(tx *atomic.Tx) bool)
+	NextTx() (*atomic.Tx, bool)
+	GetPendingTx(txID ids.ID) (*atomic.Tx, bool)
+	GetTx(txID ids.ID) (*atomic.Tx, bool, bool)
+	RemoveTx(tx *atomic.Tx)
+	CancelCurrentTxs()
+	CancelCurrentTx(txID ids.ID)
+	DiscardCurrentTx(txID ids.ID)
+	DiscardCurrentTxs()
+	IssueCurrentTxs()
+	Has(txID ids.ID) bool
+	GetFilter() ([]byte, []byte)
+	SubscribePendingTxs() <-chan struct{}
+}
+
 // mempoolMetrics defines the metrics for the atomic mempool
 type mempoolMetrics struct {
 	pendingTxs metrics.Gauge // Gauge of currently pending transactions in the txHeap
