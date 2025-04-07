@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -391,41 +390,20 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		return nil, fmt.Errorf("head state missing %d:%s", head.Number, head.Hash())
 	}
 
-	if err := bc.protectTrieIndex(); err != nil {
-		return nil, err
+	// Start future block processor.
+	// Note:
+	// - the comment above is only present for block git diffs with Geth code
+	// - the error below is named setupErr for block git diffs with Geth code
+	setupErr := setupBlockChainWithHead(bc, head)
+	if setupErr != nil {
+		return nil, fmt.Errorf("%w", err)
 	}
-
-	// Populate missing tries if required
-	if err := bc.populateMissingTries(); err != nil {
-		return nil, fmt.Errorf("could not populate missing tries: %v", err)
-	}
-
-	// If snapshot initialization is delayed for fast sync, skip initializing it here.
-	// This assumes that no blocks will be processed until ResetState is called to initialize
-	// the state of fast sync.
-	if !bc.cacheConfig.SnapshotDelayInit {
-		// Load any existing snapshot, regenerating it if loading failed (if not
-		// already initialized in recovery)
-		bc.initSnapshot(head)
-	}
-
-	// Warm up [hc.acceptedNumberCache] and [acceptedLogsCache]
-	bc.warmAcceptedCaches()
-
-	// if txlookup limit is 0 (uindexing disabled), we don't need to repair the tx index tail.
-	if bc.cacheConfig.TransactionHistory != 0 {
-		latestStateSynced := customrawdb.GetLatestSyncPerformed(bc.db)
-		bc.repairTxIndexTail(latestStateSynced)
-	}
-
-	// Start processing accepted blocks effects in the background
-	go bc.startAcceptor()
-
 	var txLookupLimit *uint64
 	if bc.cacheConfig.TransactionHistory != 0 {
 		txLookupLimit = new(uint64)
 		*txLookupLimit = bc.cacheConfig.TransactionHistory
 	}
+
 	// Start tx indexer if it's enabled.
 	if txLookupLimit != nil {
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
@@ -563,12 +541,8 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 
-	log.Info("Shutting down state manager")
-	start := time.Now()
-	if err := bc.stateManager.Shutdown(); err != nil {
-		log.Error("Failed to Shutdown state manager", "err", err)
-	}
-	log.Info("State manager shut down", "t", time.Since(start))
+	shutdownStateManager(bc.stateManager)
+
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
@@ -615,21 +589,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 		return nil
 	}
 
-	// Note: if InsertTrie must be the last step in verification that can return an error.
-	// This allows [stateManager] to assume that if it inserts a trie without returning an
-	// error then the block has passed verification and either AcceptTrie/RejectTrie will
-	// eventually be called on [root] unless a fatal error occurs. It does not assume that
-	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
-	if err := bc.stateManager.InsertTrie(block); err != nil {
-		if bc.snaps != nil {
-			discardErr := bc.snaps.Discard(block.Hash())
-			if discardErr != nil {
-				log.Debug("failed to discard snapshot after being unable to insert block trie", "block", block.Hash(), "root", block.Root())
-			}
-		}
-		return err
-	}
-	return nil
+	return insertTrie(bc, block)
 }
 
 // InsertChain attempts to insert the given batch of blocks in to the canonical
@@ -662,58 +622,16 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Pre-checks passed, start the full block imports
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
-	for n, block := range chain {
-		if err := bc.insertBlock(block, true); err != nil {
-			return n, err
-		}
-	}
-
-	return len(chain), nil
+	return insertChain(bc, chain)
 }
 
 func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
-	start := time.Now()
-	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), block.Time()), block.Transactions())
-
-	substart := time.Now()
-	err := bc.engine.VerifyHeader(bc, block.Header())
-	if err == nil {
-		err = bc.validator.ValidateBody(block)
+	start, substart, parent, xerr := insertBlockBeginning(bc, block, writes)
+	if xerr != nil {
+		// the error is named `xerr` and this comment is placed here
+		// for git to clearly distinguish this new block from geth original code.
+		return xerr
 	}
-
-	switch {
-	case errors.Is(err, ErrKnownBlock):
-		// even if the block is already known, we still need to generate the
-		// snapshot layer and add a reference to the triedb, so we re-execute
-		// the block. Note that insertBlock should only be called on a block
-		// once if it returns nil
-		if bc.newTip(block) {
-			log.Debug("Setting head to be known block", "number", block.Number(), "hash", block.Hash())
-		} else {
-			log.Debug("Reprocessing already known block", "number", block.Number(), "hash", block.Hash())
-		}
-
-	// If an ancestor has been pruned, then this block cannot be acceptable.
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		return errors.New("side chain insertion is not supported")
-
-	// Future blocks are not supported, but should not be reported, so we return an error
-	// early here
-	case errors.Is(err, consensus.ErrFutureBlock):
-		return errFutureBlockUnsupported
-
-	// Some other error occurred, abort
-	case err != nil:
-		bc.reportBlock(block, nil, err)
-		return err
-	}
-	blockContentValidationTimer.Inc(time.Since(substart).Milliseconds())
-
-	// No validation errors for the block
-
-	// Retrieve the parent block to determine which root to build state on
-	substart = time.Now()
-	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 
 	// Instantiate the statedb to use for processing transactions
 	//
