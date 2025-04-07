@@ -81,7 +81,7 @@ type ClientConfig struct {
 
 	Client syncclient.Client
 
-	ToEngine chan<- commonEng.Message
+	StateSyncDone chan<- commonEng.Message
 }
 
 type client struct {
@@ -246,7 +246,10 @@ func (client *client) acceptSyncSummary(proposedSummary message.Syncable) (block
 		// this error will be propagated to the engine when it calls
 		// vm.SetState(snow.Bootstrapping)
 		log.Info("stateSync completed, notifying engine", "err", client.err)
-		client.ToEngine <- commonEng.StateSyncDone
+		select {
+		case client.StateSyncDone <- commonEng.StateSyncDone:
+		default:
+		}
 	}()
 	return block.StateSyncStatic, nil
 }
