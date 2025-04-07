@@ -262,8 +262,6 @@ type VM struct {
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB database.Database
 
-	toEngine chan<- commonEng.Message
-
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
@@ -295,6 +293,8 @@ type VM struct {
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
 
+	stateSyncDone <-chan commonEng.Message
+
 	logger corethlog.Logger
 	// State sync server and client
 	vmsync.Server
@@ -314,7 +314,8 @@ type VM struct {
 
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
-	rpcHandlers []interface{ Stop() }
+	rpcHandlers            []interface{ Stop() }
+	blockFailureRetrySleep func()
 }
 
 // CodecRegistry implements the secp256k1fx interface
@@ -334,7 +335,6 @@ func (vm *VM) Initialize(
 	genesisBytes []byte,
 	_ []byte,
 	configBytes []byte,
-	toEngine chan<- commonEng.Message,
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
@@ -346,12 +346,14 @@ func (vm *VM) Initialize(
 	// See https://github.com/ava-labs/coreth/pull/998 for the resolution of this TODO.
 	if vm.atomicVM == nil {
 		vm.atomicVM = atomicvm.WrapVM(vm)
-		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, toEngine, nil, appSender); err != nil {
+		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, nil, appSender); err != nil {
 			return fmt.Errorf("failed to initialize atomic VM: %w", err)
 		}
 		return nil
 	}
-
+	vm.blockFailureRetrySleep = func() {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err := vm.extensionConfig.Validate(); err != nil {
 		return fmt.Errorf("failed to validate extension config: %w", err)
 	}
@@ -399,7 +401,6 @@ func (vm *VM) Initialize(
 	// Enable debug-level metrics that might impact runtime performance
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
 
-	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
 	if err := vm.initializeMetrics(); err != nil {
@@ -736,6 +737,9 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		}
 	}
 
+	stateSyncDone := make(chan commonEng.Message, 1)
+	vm.stateSyncDone = stateSyncDone
+
 	// Initialize the state sync client
 	leafMetricsNames := make(map[message.NodeType]string)
 	leafMetricsNames[stateLeafRequestConfig.LeafType] = stateLeafRequestConfig.MetricName
@@ -761,10 +765,10 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		ChaindDB:           vm.chaindb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
-		ToEngine:           vm.toEngine,
 		Acceptor:           vm,
 		Parser:             atomicsync.NewSummaryParser(),
 		Extender:           atomicsync.NewExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
+		StateSyncDone:      stateSyncDone,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1176,7 +1180,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	vm.builder = vm.NewBlockBuilder(vm.toEngine)
+	vm.builder = vm.NewBlockBuilder()
 	vm.builder.awaitSubmittedTxs()
 
 	if vm.ethTxGossipHandler == nil {
@@ -1272,6 +1276,62 @@ func (vm *VM) initBlockBuilding() error {
 	return nil
 }
 
+func (vm *VM) SubscribeToEvents(ctx context.Context, pChainHeight uint64) (commonEng.Message, uint64) {
+	for {
+		event := vm.waitForEvent(ctx)
+		if event != commonEng.PendingTxs {
+			return event, pChainHeight
+		}
+		block, err := vm.buildBlockWithContext(ctx, &block.Context{
+			PChainHeight: pChainHeight,
+		})
+		if err != nil {
+			log.Debug("Failed building block", "err", err)
+			vm.blockFailureRetrySleep()
+			continue
+		}
+		for _, tx := range block.(*wrappedBlock).extension.(*atomicvm.BlockExtension).AtomicTxs() {
+			vm.mempool.RemoveTx(tx)
+			err := vm.mempool.ForceAddTx(tx)
+			if err != nil {
+				log.Debug("Failed re-adding transaction back to block", "err", err)
+			}
+		}
+		return event, pChainHeight
+	}
+}
+
+func (vm *VM) waitForEvent(ctx context.Context) commonEng.Message {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	pending := make(chan commonEng.Message, 1)
+
+	var wg sync.WaitGroup
+
+	if vm.builder != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pending <- vm.builder.waitForTxEnqueue(ctx)
+		}()
+	}
+
+	defer wg.Wait()
+
+	select {
+	case ss := <-vm.stateSyncDone:
+		return ss
+	case pendingTx := <-pending:
+		return pendingTx
+	case <-ctx.Done():
+		vm.builder.pendingSignal.Broadcast()
+		return commonEng.Message(0)
+	case <-vm.shutdownChan:
+		return commonEng.Message(0)
+	}
+}
+
 // Shutdown implements the snowman.ChainVM interface
 func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
@@ -1320,6 +1380,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// Note: the status of block is set by ChainState
 	blk, err := wrapBlock(block, vm)
 	if err != nil {
+		fmt.Println("discarding txs due to error making new block", err)
 		log.Debug("discarding txs due to error making new block", "err", err)
 		vm.mempool.DiscardCurrentTxs()
 		return nil, err
@@ -1839,9 +1900,9 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 }
 
 func (vm *VM) newImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
+	chainID ids.ID,               // chain to import from
+	to common.Address,            // Address of recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Keys to import the funds
 ) (*atomic.Tx, error) {
 	kc := secp256k1fx.NewKeychain()
@@ -1859,11 +1920,11 @@ func (vm *VM) newImportTx(
 
 // newExportTx returns a new ExportTx
 func (vm *VM) newExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
+	assetID ids.ID,               // AssetID of the tokens to export
+	amount uint64,                // Amount of tokens to export
+	chainID ids.ID,               // Chain to send the UTXOs to
+	to ids.ShortID,               // Address of chain recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*atomic.Tx, error) {
 	state, err := vm.blockChain.State()

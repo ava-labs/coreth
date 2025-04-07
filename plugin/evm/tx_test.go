@@ -9,14 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/ava-labs/libevm/common"
-
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/stretchr/testify/require"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -171,7 +169,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if err := tvm.vm.mempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
+	tvm.vm.SubscribeToEvents(context.Background(), 0)
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
 	blk, err := tvm.vm.BuildBlock(context.Background())
