@@ -69,9 +69,9 @@ type Mempool struct {
 	// discardedTxs is an LRU Cache of transactions that have been discarded after failing
 	// verification.
 	discardedTxs *cache.LRU[ids.ID, *atomic.Tx]
-	// Pending is a channel of length one, which the mempool ensures has an item on
+	// pending is a channel of length one, which the mempool ensures has an item on
 	// it as long as there is an unissued transaction remaining in [txs]
-	Pending chan struct{}
+	pending chan struct{}
 	// txHeap is a sorted record of all txs in the mempool by [gasPrice]
 	// NOTE: [txHeap] ONLY contains pending txs
 	txHeap *txHeap
@@ -85,7 +85,7 @@ type Mempool struct {
 	verify func(tx *atomic.Tx) error
 }
 
-// Initialize initializes the Mempool with [maxSize]
+// Initialize initializes the Mempool with `maxSize`
 func (m *Mempool) Initialize(ctx *snow.Context, registerer prometheus.Registerer, maxSize int, verify func(tx *atomic.Tx) error) error {
 	bloom, err := gossip.NewBloomFilter(registerer, "atomic_mempool_bloom_filter",
 		config.TxGossipBloomMinTargetElements,
@@ -100,7 +100,7 @@ func (m *Mempool) Initialize(ctx *snow.Context, registerer prometheus.Registerer
 	m.issuedTxs = make(map[ids.ID]*atomic.Tx)
 	m.discardedTxs = &cache.LRU[ids.ID, *atomic.Tx]{Size: discardedTxsCacheSize}
 	m.currentTxs = make(map[ids.ID]*atomic.Tx)
-	m.Pending = make(chan struct{}, 1)
+	m.pending = make(chan struct{}, 1)
 	m.txHeap = newTxHeap(maxSize)
 	m.maxSize = maxSize
 	m.utxoSpenders = make(map[ids.ID]*atomic.Tx)
@@ -111,7 +111,6 @@ func (m *Mempool) Initialize(ctx *snow.Context, registerer prometheus.Registerer
 }
 
 // PendingLen returns the number of pending transactions in the mempool
-// it implements the BuilderMempool interface
 func (m *Mempool) PendingLen() int {
 	return m.Len()
 }
@@ -581,13 +580,13 @@ func (m *Mempool) RemoveTx(tx *atomic.Tx) {
 // addPending makes sure that an item is in the Pending channel.
 func (m *Mempool) addPending() {
 	select {
-	case m.Pending <- struct{}{}:
+	case m.pending <- struct{}{}:
 	default:
 	}
 }
 
 // SubscribePendingTxs implements the BuilderMempool interface and returns a channel
-// that signals when there are pending transactions in the mempool and a block should be built.
+// that signals when there is at least one pending transaction in the mempool
 func (m *Mempool) SubscribePendingTxs() <-chan struct{} {
-	return m.Pending
+	return m.pending
 }

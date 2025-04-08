@@ -668,7 +668,7 @@ func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, 
 }
 
 // assertSyncPerformedHeights iterates over all heights the VM has synced to and
-// verifies it matches [expected].
+// verifies they all match the heights present in `expected`.
 func assertSyncPerformedHeights(t *testing.T, db ethdb.Iteratee, expected map[uint64]struct{}) {
 	it := customrawdb.NewSyncPerformedIterator(db)
 	defer it.Release()

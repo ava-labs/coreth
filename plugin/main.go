@@ -19,7 +19,7 @@ import (
 func main() {
 	version, err := PrintVersion()
 	if err != nil {
-		fmt.Printf("couldn't get config: %s", err)
+		fmt.Printf("couldn't get config: %s\n", err)
 		os.Exit(1)
 	}
 	if version {
@@ -27,13 +27,8 @@ func main() {
 		os.Exit(0)
 	}
 	if err := ulimit.Set(ulimit.DefaultFDLimit, logging.NoLog{}); err != nil {
-		fmt.Printf("failed to set fd limit correctly due to: %s", err)
+		fmt.Printf("failed to set fd limit correctly due to: %s\n", err)
 		os.Exit(1)
 	}
-	vm, err := factory.NewPluginVM()
-	if err != nil {
-		fmt.Printf("couldn't create evm plugin: %s", err)
-		os.Exit(1)
-	}
-	rpcchainvm.Serve(context.Background(), vm)
+	rpcchainvm.Serve(context.Background(), factory.NewPluginVM())
 }

@@ -58,13 +58,8 @@ func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
 	return lastAcceptedBlock.(*Block)
 }
 
-func (vm *VM) NewVMBlock(ethBlock *types.Block) (extension.VMBlock, error) {
-	blk, err := vm.newBlock(ethBlock)
-	if err != nil {
-		return nil, err
-	}
-
-	return blk, nil
+func (vm *VM) NewVMBlock(ethBlock *types.Block) extension.VMBlock {
+	return vm.newBlock(ethBlock)
 }
 
 // IsBootstrapped returns true if the VM has finished bootstrapping

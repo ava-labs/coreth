@@ -47,7 +47,7 @@ func newBlockExtension(
 	}
 }
 
-// SyntacticVerify checks the syntactic validity of the block. This is called the wrapper
+// SyntacticVerify checks the syntactic validity of the block. This is called by the wrapper
 // block manager's SyntacticVerify method.
 func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rules) error {
 	ethBlock := b.GetEthBlock()
@@ -139,7 +139,7 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 	return nil
 }
 
-// SemanticVerify checks the semantic validity of the block. This is called the wrapper
+// SemanticVerify checks the semantic validity of the block. This is called by the wrapper
 // block manager's SemanticVerify method.
 func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
 	// If the VM is not bootstrapped, we cannot verify atomic transactions
@@ -153,8 +153,8 @@ func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
 	return be.verifyUTXOsPresent(b, atomicTxs)
 }
 
-// OnAccept is called when the block is accepted. This is called the wrapper
-// block manager's OnAccept method. The acceptedBatch contains the changes that
+// OnAccept is called when the block is accepted. This is called by the wrapper
+// block manager's Accept method. The acceptedBatch contains the changes that
 // were made to the database as a result of accepting the block, and it's flushed
 // to the database in this method.
 func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.Batch) error {
@@ -178,8 +178,8 @@ func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.B
 	return atomicState.Accept(acceptedBatch)
 }
 
-// OnReject is called when the block is rejected. This is called the wrapper
-// block manager's OnReject method.
+// OnReject is called when the block is rejected. This is called by the wrapper
+// block manager's Reject method.
 func (be *blockExtension) OnReject(b extension.VMBlock) error {
 	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
 	if err != nil {

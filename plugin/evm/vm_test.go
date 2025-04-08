@@ -457,7 +457,7 @@ func TestSetPreferenceRace(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -689,7 +689,7 @@ func TestReorgProtection(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -853,7 +853,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1044,7 +1044,7 @@ func TestStickyPreference(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1298,7 +1298,7 @@ func TestUncleBlock(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1422,10 +1422,7 @@ func TestUncleBlock(t *testing.T) {
 		customtypes.BlockExtData(blkDEthBlock),
 		false,
 	)
-	uncleBlock, err := vm2.newBlock(uncleEthBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
+	uncleBlock := vm2.newBlock(uncleEthBlock)
 	if err := uncleBlock.Verify(context.Background()); !errors.Is(err, errUnclesUnsupported) {
 		t.Fatalf("VM2 should have failed with %q but got %q", errUnclesUnsupported, err.Error())
 	}
@@ -1483,7 +1480,7 @@ func TestAcceptReorg(t *testing.T) {
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
@@ -1666,7 +1663,7 @@ func TestFutureBlock(t *testing.T) {
 
 	blkA, err := vm.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	// Create empty block from blkA
@@ -1687,11 +1684,7 @@ func TestFutureBlock(t *testing.T) {
 		false,
 	)
 
-	futureBlock, err := vm.newBlock(modifiedBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	futureBlock := vm.newBlock(modifiedBlock)
 	if err := futureBlock.Verify(context.Background()); err == nil {
 		t.Fatal("Future block should have failed verification due to block timestamp too far in the future")
 	} else if !strings.Contains(err.Error(), "block timestamp is too far in the future") {
@@ -1835,7 +1828,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
+		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
 	if err := blk.Verify(context.Background()); err != nil {
@@ -2076,27 +2069,16 @@ func TestParentBeaconRootBlock(t *testing.T) {
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
-				t.Fatalf("Failed to build block with import transaction: %s", err)
+				t.Fatalf("Failed to build block with transaction: %s", err)
 			}
 
 			// Modify the block to have a parent beacon root
 			ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
 			header := types.CopyHeader(ethBlock.Header())
 			header.ParentBeaconRoot = test.beaconRoot
-			parentBeaconEthBlock := customtypes.NewBlockWithExtData(
-				header,
-				nil,
-				nil,
-				nil,
-				new(trie.Trie),
-				customtypes.BlockExtData(ethBlock),
-				false,
-			)
+			parentBeaconEthBlock := ethBlock.WithSeal(header)
 
-			parentBeaconBlock, err := vm.newBlock(parentBeaconEthBlock)
-			if err != nil {
-				t.Fatal(err)
-			}
+			parentBeaconBlock := vm.newBlock(parentBeaconEthBlock)
 
 			errCheck := func(err error) {
 				if test.expectedError {
@@ -2154,8 +2136,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail
-	vmBlock, err := vm.newBlock(blocks[0])
-	require.NoError(err)
+	vmBlock := vm.newBlock(blocks[0])
 	_, err = vm.ParseBlock(ctx, vmBlock.Bytes())
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = vmBlock.Verify(ctx)

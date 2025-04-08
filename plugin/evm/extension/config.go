@@ -1,3 +1,6 @@
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package extension
 
 import (
@@ -49,7 +52,7 @@ type ExtensibleVM interface {
 	// GetVMBlock returns the VMBlock for the given ID or an error if the block is not found
 	GetVMBlock(context.Context, ids.ID) (VMBlock, error)
 	// NewVMBlock returns a new VMBlock for the given Eth block
-	NewVMBlock(*types.Block) (VMBlock, error)
+	NewVMBlock(*types.Block) VMBlock
 	// LastAcceptedVMBlock returns the last accepted VM block
 	LastAcceptedVMBlock() VMBlock
 	// IsBootstrapped returns true if the VM is bootstrapped

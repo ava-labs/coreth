@@ -26,6 +26,6 @@ func (*Factory) New(logging.Logger) (interface{}, error) {
 	return atomicvm.WrapVM(&evm.VM{}), nil
 }
 
-func NewPluginVM() (block.ChainVM, error) {
-	return atomicvm.WrapVM(&evm.VM{IsPlugin: true}), nil
+func NewPluginVM() block.ChainVM {
+	return atomicvm.WrapVM(&evm.VM{IsPlugin: true})
 }

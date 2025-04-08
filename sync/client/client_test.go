@@ -31,7 +31,7 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
-var networkCodec = messagetest.TestBlockSyncSummaryCodec
+var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestGetCode(t *testing.T) {
 	mockNetClient := &mockNetwork{}

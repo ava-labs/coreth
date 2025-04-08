@@ -1,3 +1,6 @@
+// (c) 2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package vm
 
 import (
@@ -746,7 +749,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
 	// atomic gas limit.
 	if rulesExtra.IsApricotPhase5 {
-		atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
+		chainConfigExtra := params.GetExtra(chainConfig)
+		atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(chainConfigExtra, parent, header)
 		if err != nil {
 			return nil, nil, err
 		}

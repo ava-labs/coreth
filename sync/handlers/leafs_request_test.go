@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var networkCodec = messagetest.TestBlockSyncSummaryCodec
+var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	rand.Seed(1)
