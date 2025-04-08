@@ -197,6 +197,9 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 				},
 			}},
 		}, nil
+	case metrics.StandardGaugeInfo:
+		// TODO(qdm12) handle this somehow maybe with dto.MetricType_UNTYPED
+		return nil, fmt.Errorf("%w: %q is a %T", errMetricSkip, name, metric)
 	default:
 		return nil, fmt.Errorf("metric %q: type is not supported: %T", name, metric)
 	}
