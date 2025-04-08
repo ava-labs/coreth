@@ -48,6 +48,7 @@ import (
 	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -97,6 +98,11 @@ var (
 
 	acceptedLogsCounter  = metrics.NewRegisteredCounter("chain/logs/accepted", nil)
 	processedLogsCounter = metrics.NewRegisteredCounter("chain/logs/processed", nil)
+
+	latestBaseFeeGauge     = metrics.NewRegisteredGauge("chain/latest/basefee", nil)
+	latestGasExcessGauge   = metrics.NewRegisteredGauge("chain/latest/gas/excess", nil)
+	latestGasCapacityGauge = metrics.NewRegisteredGauge("chain/latest/gas/capacity", nil)
+	latestGasTargetGauge   = metrics.NewRegisteredGauge("chain/latest/gas/target", nil)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
@@ -1060,6 +1066,20 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
+	if baseFee := block.BaseFee(); baseFee != nil {
+		latestBaseFeeGauge.Update(baseFee.Int64())
+	}
+	if bc.Config().IsFortuna(block.Time()) {
+		s, err := acp176.ParseState(block.Extra())
+		if err != nil {
+			log.Warn("Failed to update fee metrics", "err", err)
+			return nil
+		}
+
+		latestGasExcessGauge.Update(int64(s.Gas.Excess))
+		latestGasCapacityGauge.Update(int64(s.Gas.Capacity))
+		latestGasTargetGauge.Update(int64(s.Target()))
+	}
 	return nil
 }
 
