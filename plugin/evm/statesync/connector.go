@@ -32,33 +32,33 @@ var (
 )
 
 type Connector struct {
-	downloader *downloader
-	sender     *p2p.Client
+	manager *snapManager
+	sender  *p2p.Client
 }
 
-func NewConnector(downloader *downloader, sender *p2p.Client) *Connector {
-	return &Connector{downloader: downloader, sender: sender}
+func NewConnector(manager *snapManager, sender *p2p.Client) *Connector {
+	return &Connector{manager: manager, sender: sender}
 }
 
 func (c *Connector) Connected(ctx context.Context, nodeID ids.NodeID, version *version.Application) error {
-	return c.downloader.SnapSyncer.Register(NewOutboundPeer(nodeID, c.downloader, c.sender))
+	return c.manager.snapSyncer.Register(NewOutboundPeer(nodeID, c.manager, c.sender))
 }
 
 func (c *Connector) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
-	return c.downloader.SnapSyncer.Unregister(nodeID.String())
+	return c.manager.snapSyncer.Unregister(nodeID.String())
 }
 
 type outbound struct {
-	peerID     ids.NodeID
-	downloader *downloader
-	sender     *p2p.Client
+	peerID  ids.NodeID
+	manager *snapManager
+	sender  *p2p.Client
 }
 
-func NewOutboundPeer(nodeID ids.NodeID, downloader *downloader, sender *p2p.Client) *snap.Peer {
+func NewOutboundPeer(nodeID ids.NodeID, manager *snapManager, sender *p2p.Client) *snap.Peer {
 	return snap.NewFakePeer(protocolVersion, nodeID.String(), &outbound{
-		peerID:     nodeID,
-		downloader: downloader,
-		sender:     sender,
+		peerID:  nodeID,
+		manager: manager,
+		sender:  sender,
 	})
 }
 
@@ -136,5 +136,5 @@ func (o *outbound) RunPeer(*snap.Peer, snap.Handler) error { panic("not expected
 func (o *outbound) PeerInfo(id enode.ID) interface{}       { panic("not expected to be called") }
 
 func (o *outbound) Handle(peer *snap.Peer, packet snap.Packet) error {
-	return o.downloader.DeliverSnapPacket(peer, packet)
+	return o.manager.DeliverSnapPacket(peer, packet)
 }

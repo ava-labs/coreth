@@ -523,8 +523,11 @@ func (vm *VM) Initialize(
 
 	///
 	vm.ethConfig.StateScheme = vm.config.StateScheme
-	if vm.config.StateScheme == rawdb.PathScheme && vm.config.Pruning {
-		return fmt.Errorf("pruning is not supported with path scheme")
+	if vm.config.StateScheme == rawdb.PathScheme {
+		if vm.config.Pruning {
+			return fmt.Errorf("pruning is not supported with path scheme")
+		}
+		log.Warn("Path scheme is enabled, experimental feature, use at your own risk")
 	}
 
 	// Create directory for offline pruning
@@ -737,6 +740,11 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64, stateSyncEnab
 			}
 			stateSyncIDs[i] = nodeID
 		}
+	}
+
+	// If we don't allow state sync resume, shared memory will be incorrect
+	if vm.config.StateSyncUseUpstream && vm.config.StateSyncSkipResume {
+		return fmt.Errorf("StateSyncUseUpstream and StateSyncSkipResume cannot be used together")
 	}
 
 	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
