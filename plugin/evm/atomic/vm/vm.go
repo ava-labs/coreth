@@ -37,11 +37,11 @@ import (
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/utils"
@@ -529,9 +529,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules := vm.InnerVM.Ethereum().BlockChain().Config().Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra := params.GetRulesExtra(rules)
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, *rulesExtra); err != nil {
+		rules := vm.rules(header.Number, header.Time)
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
 			vm.mempool.DiscardCurrentTx(tx.ID())
@@ -548,8 +547,8 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
-		if rulesExtra.IsApricotPhase4 {
-			contribution, gasUsed, err = tx.BlockFeeContribution(rulesExtra.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
+		if rules.IsApricotPhase4 {
+			contribution, gasUsed, err = tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -577,9 +576,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		chainConfig                = vm.InnerVM.Ethereum().BlockChain().Config()
-		rules                      = chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-		rulesExtra                 = *params.GetRulesExtra(rules)
+		rules                      = vm.rules(header.Number, header.Time)
 		size              int
 	)
 
@@ -633,7 +630,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		}
 
 		snapshot := state.Snapshot()
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rulesExtra); err != nil {
+		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool and reset the state to [snapshot]
 			// if it fails verification here.
 			// Note: prior to this point, we have not modified [state] so there is no need to
@@ -832,10 +829,13 @@ func (vm *VM) chainConfigExtra() *extras.ChainConfig {
 	return params.GetExtra(vm.Ethereum().BlockChain().Config())
 }
 
+func (vm *VM) rules(number *big.Int, time uint64) extras.Rules {
+	ethrules := vm.Ethereum().BlockChain().Config().Rules(number, params.IsMergeTODO, time)
+	return *params.GetRulesExtra(ethrules)
+}
+
 // currentRules returns the chain rules for the current block.
 func (vm *VM) currentRules() extras.Rules {
 	header := vm.Ethereum().BlockChain().CurrentHeader()
-	chainConfig := vm.Ethereum().BlockChain().Config()
-	rules := chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return *params.GetRulesExtra(rules)
+	return vm.rules(header.Number, header.Time)
 }

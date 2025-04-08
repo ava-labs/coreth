@@ -38,38 +38,26 @@ import (
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
-	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/metrics"
-	ethparams "github.com/ava-labs/libevm/params"
-	"github.com/ava-labs/libevm/triedb"
-
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 
-	// Force-load tracer engine to trigger registration
-	//
-	// We must import this package (not referenced elsewhere) so that the native "callTracer"
-	// is added to a map of client-accessible tracers. In geth, this is done
-	// inside of cmd/geth.
-	_ "github.com/ava-labs/libevm/eth/tracers/js"
-	_ "github.com/ava-labs/libevm/eth/tracers/native"
-
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	// Force-load precompiles to trigger registration
-	_ "github.com/ava-labs/coreth/precompile/registry"
-
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/triedb"
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
@@ -81,8 +69,10 @@ import (
 	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/upgrade"
+	avalancheUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
@@ -90,9 +80,16 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	// Force-load tracer engine to trigger registration
+	//
+	// We must import this package (not referenced elsewhere) so that the native "callTracer"
+	// is added to a map of client-accessible tracers. In geth, this is done
+	// inside of cmd/geth.
+	_ "github.com/ava-labs/libevm/eth/tracers/js"
+	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
-	avalancheUtils "github.com/ava-labs/avalanchego/utils"
+	// Force-load precompiles to trigger registration
+	_ "github.com/ava-labs/coreth/precompile/registry"
 )
 
 var (
@@ -1111,11 +1108,15 @@ func (vm *VM) chainConfigExtra() *extras.ChainConfig {
 	return params.GetExtra(vm.chainConfig)
 }
 
+func (vm *VM) rules(number *big.Int, time uint64) extras.Rules {
+	ethrules := vm.chainConfig.Rules(number, params.IsMergeTODO, time)
+	return *params.GetRulesExtra(ethrules)
+}
+
 // currentRules returns the chain rules for the current block.
 func (vm *VM) currentRules() extras.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
-	rules := vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return *params.GetRulesExtra(rules)
+	return vm.rules(header.Number, header.Time)
 }
 
 // requirePrimaryNetworkSigners returns true if warp messages from the primary

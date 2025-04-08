@@ -2,7 +2,6 @@ package vm
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"math/big"
@@ -29,10 +28,10 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
-	customtypes "github.com/ava-labs/coreth/plugin/evm/types"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/utils"
@@ -590,10 +589,7 @@ func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	key, err := utils.NewKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	key := utils.NewKey(t)
 
 	key0 := testutils.TestKeys[0]
 	addr0 := key0.Address()
@@ -1014,10 +1010,8 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		testutils.TestShortIDAddrs[1]: importAmount,
 		testutils.TestShortIDAddrs[2]: importAmount,
 	})
-	conflictKey, err := utils.NewKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	conflictKey := utils.NewKey(t)
+
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
