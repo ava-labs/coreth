@@ -131,6 +131,7 @@ func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
 		newPivot:          make(chan *types.Block),
 		done:              make(chan error),
 		DynamicSyncConfig: config,
+		pivotBlock:        config.FirstPivotBlock,
 	}
 
 	if config.SyncType == "snap" {
@@ -206,6 +207,7 @@ func (d *DynamicSyncer) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, 
 		if err := d.manager.UpdateSyncTarget(b.Root()); err != nil {
 			return fmt.Errorf("failed to update sync target: %w", err)
 		}
+		log.Info("Set new pivot block", "hash", b.Hash(), "height", b.NumberU64())
 
 		// Clear queue
 		if err := d.flushQueue(false); err != nil {

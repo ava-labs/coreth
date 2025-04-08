@@ -45,6 +45,7 @@ func NewSnapManager(d *DynamicSyncer) *snapManager {
 		pivotRoot:      d.FirstPivotBlock.Root(),
 		stateSyncStart: make(chan *stateSync),
 		quitCh:         make(chan struct{}),
+		newPivot:       make(chan common.Hash),
 	}
 
 	m.registerSnapSyncNodes(m.network, d.StateSyncNodes)
@@ -86,6 +87,7 @@ func (m *snapManager) Wait(ctx context.Context) error {
 			defer m.errorLock.Unlock()
 			return m.fatalError
 		case <-ctx.Done():
+			close(m.quitCh)
 			return ctx.Err()
 		}
 	}

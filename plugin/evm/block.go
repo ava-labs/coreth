@@ -217,7 +217,7 @@ func (b *Block) acceptAtomicOps() error {
 			vm.mempool.RemoveTx(tx)
 		}
 	} else {
-		log.Warn("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height",
+		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height",
 			b.Height())
 	}
 	return nil
@@ -428,7 +428,7 @@ func (b *Block) verifyAtomicOps(writes bool) error {
 
 	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
 	if b.Height() <= lastHeight {
-		log.Warn("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
+		log.Debug("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
 		tempAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil
 		defer func() { vm.atomicBackend = tempAtomicBackend }()
