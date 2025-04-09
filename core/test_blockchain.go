@@ -223,7 +223,7 @@ func TestInsertChainAcceptSingleBlock(t *testing.T, create func(db ethdb.Databas
 
 	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 3, 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -294,7 +294,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 
 	numBlocks := 129
 	signer := types.HomesteadSigner{}
-	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -304,7 +304,7 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 	}
 	// Generate the forked chain to be longer than the original chain to check for a regression where
 	// a longer chain can trigger a reorg.
-	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks+1, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, numBlocks+1, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction with a different amount to ensure [chain2] is different than [chain1].
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(5000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -313,8 +313,8 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 		t.Fatal(err)
 	}
 
-	if blockchain.snaps != nil {
-		if want, got := 1, blockchain.snaps.NumBlockLayers(); got != want {
+	if blockchain.ethBlockChain.snaps != nil {
+		if want, got := 1, blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 			t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 		}
 	}
@@ -324,8 +324,8 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 		t.Fatal(err)
 	}
 
-	if blockchain.snaps != nil {
-		if want, got := 1+len(chain1), blockchain.snaps.NumBlockLayers(); got != want {
+	if blockchain.ethBlockChain.snaps != nil {
+		if want, got := 1+len(chain1), blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 			t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 		}
 	}
@@ -334,8 +334,8 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 		t.Fatal(err)
 	}
 
-	if blockchain.snaps != nil {
-		if want, got := 1+len(chain1)+len(chain2), blockchain.snaps.NumBlockLayers(); got != want {
+	if blockchain.ethBlockChain.snaps != nil {
+		if want, got := 1+len(chain1)+len(chain2), blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 			t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 		}
 	}
@@ -358,9 +358,9 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 	}
 	blockchain.DrainAcceptorQueue()
 
-	if blockchain.snaps != nil {
+	if blockchain.ethBlockChain.snaps != nil {
 		// Snap layer count should be 1 fewer
-		if want, got := len(chain1)+len(chain2), blockchain.snaps.NumBlockLayers(); got != want {
+		if want, got := len(chain1)+len(chain2), blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 			t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 		}
 	}
@@ -370,16 +370,16 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 			t.Fatal(err)
 		}
 
-		if blockchain.snaps != nil {
+		if blockchain.ethBlockChain.snaps != nil {
 			// Snap layer count should decrease by 1 per Reject
-			if want, got := len(chain1)+len(chain2)-i-1, blockchain.snaps.NumBlockLayers(); got != want {
+			if want, got := len(chain1)+len(chain2)-i-1, blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 				t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 			}
 		}
 	}
 
-	if blockchain.snaps != nil {
-		if want, got := len(chain1), blockchain.snaps.NumBlockLayers(); got != want {
+	if blockchain.ethBlockChain.snaps != nil {
+		if want, got := len(chain1), blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 			t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 		}
 	}
@@ -390,9 +390,9 @@ func TestInsertLongForkedChain(t *testing.T, create func(db ethdb.Database, gspe
 		}
 		blockchain.DrainAcceptorQueue()
 
-		if blockchain.snaps != nil {
+		if blockchain.ethBlockChain.snaps != nil {
 			// Snap layer count should decrease by 1 per Accept
-			if want, got := len(chain1)-i, blockchain.snaps.NumBlockLayers(); got != want {
+			if want, got := len(chain1)-i, blockchain.ethBlockChain.snaps.NumBlockLayers(); got != want {
 				t.Fatalf("incorrect snapshot layer count; got %d, want %d", got, want)
 			}
 		}
@@ -460,7 +460,7 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, gs
 
 	numBlocks := 3
 	signer := types.HomesteadSigner{}
-	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -468,7 +468,7 @@ func TestAcceptNonCanonicalBlock(t *testing.T, create func(db ethdb.Database, gs
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction with a different amount to create a chain of blocks different from [chain1]
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(5000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -569,7 +569,7 @@ func TestSetPreferenceRewind(t *testing.T, create func(db ethdb.Database, gspec 
 
 	numBlocks := 3
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -706,7 +706,7 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec
 
 	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	genDB, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 20, 10, func(i int, gen *BlockGen) {
+	genDB, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 20, 10, func(i int, gen *BlockGen) {
 		// Send all funds back and forth between the two accounts
 		if i%2 == 0 {
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, genesisBalance, params.TxGas, nil, nil), signer, key1)
@@ -720,7 +720,7 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec
 		t.Fatal(err)
 	}
 	// Build second chain forked off of the 10th block in [chain1]
-	chain2, _, err := GenerateChain(gspec.Config, chain1[9], blockchain.engine, genDB, 10, 10, func(i int, gen *BlockGen) {
+	chain2, _, err := GenerateChain(gspec.Config, chain1[9], blockchain.ethBlockChain.engine, genDB, 10, 10, func(i int, gen *BlockGen) {
 		// Send all funds back and forth between the two accounts
 		if i%2 == 0 {
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr3), addr2, genesisBalance, params.TxGas, nil, nil), signer, key3)
@@ -736,7 +736,7 @@ func TestBuildOnVariousStages(t *testing.T, create func(db ethdb.Database, gspec
 	// Build third chain forked off of the 5th block in [chain1].
 	// The parent of this chain will be accepted before this fork
 	// is inserted.
-	chain3, _, err := GenerateChain(gspec.Config, chain1[4], blockchain.engine, genDB, 10, 10, func(i int, gen *BlockGen) {
+	chain3, _, err := GenerateChain(gspec.Config, chain1[4], blockchain.ethBlockChain.engine, genDB, 10, 10, func(i int, gen *BlockGen) {
 		// Send all funds back and forth between accounts 2 and 3.
 		if i%2 == 0 {
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, genesisBalance, params.TxGas, nil, nil), signer, key2)
@@ -859,7 +859,7 @@ func TestEmptyBlocks(t *testing.T, create func(db ethdb.Database, gspec *Genesis
 	}
 	defer blockchain.Stop()
 
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {})
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 3, 10, func(i int, gen *BlockGen) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -907,7 +907,7 @@ func TestReorgReInsert(t *testing.T, create func(db ethdb.Database, gspec *Genes
 
 	signer := types.HomesteadSigner{}
 	numBlocks := 3
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, numBlocks, 10, func(i int, gen *BlockGen) {
 		// Generate a transaction to create a unique block
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
@@ -1012,7 +1012,7 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	defer blockchain.Stop()
 
 	signer := types.HomesteadSigner{}
-	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 3, 10, func(i int, gen *BlockGen) {
 		if i < 2 {
 			// Send half the funds from addr1 to addr2 in one transaction per each of the two blocks in [chain1]
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(500000000), params.TxGas, nil, nil), signer, key1)
@@ -1023,7 +1023,7 @@ func TestAcceptBlockIdenticalStateRoot(t *testing.T, create func(db ethdb.Databa
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 2, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 2, 10, func(i int, gen *BlockGen) {
 		// Send 1/4 of the funds from addr1 to addr2 in tx1 and 3/4 of the funds in tx2. This will produce the identical state
 		// root in the second block of [chain2] as is present in the second block of [chain1].
 		if i == 0 {
@@ -1155,7 +1155,7 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	}
 
 	signer := types.HomesteadSigner{}
-	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {
+	_, chain1, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 3, 10, func(i int, gen *BlockGen) {
 		if i < 2 {
 			// Send half the funds from addr1 to addr2 in one transaction per each of the two blocks in [chain1]
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(500000000), params.TxGas, nil, nil), signer, key1)
@@ -1166,7 +1166,7 @@ func TestReprocessAcceptBlockIdenticalStateRoot(t *testing.T, create func(db eth
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 2, 10, func(i int, gen *BlockGen) {
+	_, chain2, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 2, 10, func(i int, gen *BlockGen) {
 		// Send 1/4 of the funds from addr1 to addr2 in tx1 and 3/4 of the funds in tx2. This will produce the identical state
 		// root in the second block of [chain2] as is present in the second block of [chain1].
 		if i == 0 {
@@ -1310,7 +1310,7 @@ func TestGenerateChainInvalidBlockFee(t *testing.T, create func(db ethdb.Databas
 
 	// This call generates a chain of 3 blocks.
 	signer := types.LatestSigner(params.TestChainConfig)
-	_, _, _, err = GenerateChainWithGenesis(gspec, blockchain.engine, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
+	_, _, _, err = GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
@@ -1399,7 +1399,7 @@ func TestInsertChainValidBlockFee(t *testing.T, create func(db ethdb.Database, g
 	signer := types.LatestSigner(params.TestChainConfig)
 	tip := big.NewInt(50000 * params.GWei)
 	transfer := big.NewInt(10000)
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
 		feeCap := new(big.Int).Add(gen.BaseFee(), tip)
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,

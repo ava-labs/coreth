@@ -97,7 +97,7 @@ func (bc *blockChain) GetHeaderByNumber(number uint64) *types.Header {
 
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
-func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
+func (bc *blockChain) GetBody(hash common.Hash) *types.Body {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := bc.bodyCache.Get(hash); ok {
 		return cached
@@ -127,7 +127,7 @@ func (bc *blockChain) HasBlock(hash common.Hash, number uint64) bool {
 }
 
 // HasFastBlock checks if a fast block is fully present in the database or not.
-func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
+func (bc *blockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 	if !bc.HasBlock(hash, number) {
 		return false
 	}
@@ -174,7 +174,7 @@ func (bc *blockChain) GetBlockByNumber(number uint64) *types.Block {
 
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
 // [deprecated by eth/62]
-func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+func (bc *blockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -192,7 +192,7 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 }
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
-func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
+func (bc *blockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
@@ -227,7 +227,7 @@ func (bc *blockChain) GetCanonicalHash(number uint64) common.Hash {
 // A null will be returned in the transaction is not found and background
 // transaction indexing is already finished. The transaction is not existent
 // from the node's perspective.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
+func (bc *blockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if item, exist := bc.txLookupCache.Get(hash); exist {
 		return item.lookup, item.transaction, nil
@@ -286,12 +286,12 @@ func (bc *blockChain) stateRecoverable(root common.Hash) bool {
 }
 
 // State returns a new mutable state based on the current HEAD block.
-func (bc *BlockChain) State() (*state.StateDB, error) {
+func (bc *blockChain) State() (*state.StateDB, error) {
 	return bc.StateAt(bc.CurrentBlock().Root)
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
+func (bc *blockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateCache, bc.snaps)
 }
 
@@ -302,106 +302,77 @@ func (bc *blockChain) Config() *params.ChainConfig { return bc.chainConfig }
 func (bc *blockChain) Engine() consensus.Engine { return bc.engine }
 
 // Snapshots returns the blockchain snapshot tree.
-func (bc *BlockChain) Snapshots() *snapshot.Tree {
+func (bc *blockChain) Snapshots() *snapshot.Tree {
 	return bc.snaps
 }
 
 // Validator returns the current validator.
-func (bc *BlockChain) Validator() Validator {
+func (bc *blockChain) Validator() Validator {
 	return bc.validator
 }
 
 // Processor returns the current processor.
-func (bc *BlockChain) Processor() Processor {
+func (bc *blockChain) Processor() Processor {
 	return bc.processor
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
+func (bc *blockChain) StateCache() state.Database {
 	return bc.stateCache
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
-func (bc *BlockChain) GasLimit() uint64 {
+func (bc *blockChain) GasLimit() uint64 {
 	return bc.CurrentBlock().GasLimit
 }
 
 // Genesis retrieves the chain's genesis block.
-func (bc *BlockChain) Genesis() *types.Block {
+func (bc *blockChain) Genesis() *types.Block {
 	return bc.genesisBlock
 }
 
 // GetVMConfig returns the block chain VM config.
-func (bc *BlockChain) GetVMConfig() *vm.Config {
+func (bc *blockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
 // TrieDB retrieves the low level trie database used for data storage.
-func (bc *BlockChain) TrieDB() *triedb.Database {
+func (bc *blockChain) TrieDB() *triedb.Database {
 	return bc.triedb
 }
 
 // HeaderChain returns the underlying header chain.
-func (bc *BlockChain) HeaderChain() *HeaderChain {
+func (bc *blockChain) HeaderChain() *HeaderChain {
 	return bc.hc
 }
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
-func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
+func (bc *blockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
 }
 
 // SubscribeChainEvent registers a subscription of ChainEvent.
-func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
+func (bc *blockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
-func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
+func (bc *blockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+func (bc *blockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.
-func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+func (bc *blockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
 }
 
 // SubscribeBlockProcessingEvent registers a subscription of bool where true means
 // block processing has started while false means it has stopped.
-func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
+func (bc *blockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
-}
-
-// SubscribeChainAcceptedEvent registers a subscription of ChainEvent.
-func (bc *BlockChain) SubscribeChainAcceptedEvent(ch chan<- ChainEvent) event.Subscription {
-	return bc.scope.Track(bc.chainAcceptedFeed.Subscribe(ch))
-}
-
-// SubscribeAcceptedLogsEvent registers a subscription of accepted []*types.Log.
-func (bc *BlockChain) SubscribeAcceptedLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return bc.scope.Track(bc.logsAcceptedFeed.Subscribe(ch))
-}
-
-// SubscribeAcceptedTransactionEvent registers a subscription of accepted transactions
-func (bc *BlockChain) SubscribeAcceptedTransactionEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return bc.scope.Track(bc.txAcceptedFeed.Subscribe(ch))
-}
-
-// GetLogs fetches all logs from a given block.
-func (bc *BlockChain) GetLogs(hash common.Hash, number uint64) [][]*types.Log {
-	logs, ok := bc.acceptedLogsCache.Get(hash) // this cache is thread-safe
-	if ok {
-		return logs
-	}
-	block := bc.GetBlockByHash(hash)
-	if block == nil {
-		return nil
-	}
-	logs = bc.collectUnflattenedLogs(block, false)
-	return logs
 }

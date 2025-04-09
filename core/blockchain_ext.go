@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"runtime"
 	"strings"
@@ -202,7 +203,7 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
-	*blockChain
+	ethBlockChain *blockChain
 
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
@@ -314,7 +315,7 @@ func NewBlockChain(
 	headHash := rawdb.ReadHeadBlockHash(db)
 	headHeaderHash := rawdb.ReadHeadHeaderHash(db)
 
-	bc.blockChain, err = newBlockChain(db, triedb, cacheConfig.cacheConfig(), genesis, nil, engine, vmConfig, nil, nil)
+	bc.ethBlockChain, err = newBlockChain(db, triedb, cacheConfig.cacheConfig(), genesis, nil, engine, vmConfig, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +323,7 @@ func NewBlockChain(
 	rawdb.WriteHeadBlockHash(db, headHash)
 	rawdb.WriteHeadHeaderHash(db, headHeaderHash)
 
-	bc.hc.InitializeAcceptedNumberCache(cacheConfig.AcceptedCacheSize)
+	bc.ethBlockChain.hc.InitializeAcceptedNumberCache(cacheConfig.AcceptedCacheSize)
 
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
@@ -360,7 +361,7 @@ func NewBlockChain(
 	if !bc.cacheConfig.SnapshotDelayInit {
 		// Load any existing snapshot, regenerating it if loading failed (if not
 		// already initialized in recovery)
-		bc.initSnapshot(head)
+		bc.ethBlockChain.initSnapshot(head)
 	}
 
 	// Warm up [hc.acceptedNumberCache] and [acceptedLogsCache]
@@ -410,13 +411,13 @@ func (bc *BlockChain) batchBlockAcceptedIndices(batch ethdb.Batch, b *types.Bloc
 // flattenSnapshot attempts to flatten a block of [hash] to disk.
 func (bc *BlockChain) flattenSnapshot(postAbortWork func() error, hash common.Hash) error {
 	// If snapshots are not initialized, perform [postAbortWork] immediately.
-	if bc.snaps == nil {
+	if bc.ethBlockChain.snaps == nil {
 		return postAbortWork()
 	}
 
 	// Abort snapshot generation before pruning anything from trie database
 	// (could occur in AcceptTrie)
-	bc.snaps.AbortGeneration()
+	bc.ethBlockChain.snaps.AbortGeneration()
 
 	// Perform work after snapshot generation is aborted (typically trie updates)
 	if err := postAbortWork(); err != nil {
@@ -432,7 +433,7 @@ func (bc *BlockChain) flattenSnapshot(postAbortWork func() error, hash common.Ha
 	// Flatten the entire snap Trie to disk
 	//
 	// Note: This resumes snapshot generation.
-	return bc.snaps.Flatten(hash)
+	return bc.ethBlockChain.snaps.Flatten(hash)
 }
 
 // warmAcceptedCaches fetches previously accepted headers and logs from disk to
@@ -465,7 +466,7 @@ func (bc *BlockChain) warmAcceptedCaches() {
 			break
 		}
 		// TODO: handle blocks written to disk during state sync
-		bc.hc.acceptedNumberCache.Put(block.NumberU64(), block.Header())
+		bc.ethBlockChain.hc.acceptedNumberCache.Put(block.NumberU64(), block.Header())
 		logs := bc.collectUnflattenedLogs(block, false)
 		bc.acceptedLogsCache.Put(block.Hash(), logs)
 	}
@@ -493,7 +494,7 @@ func (bc *BlockChain) startAcceptor() {
 		}
 
 		// Ensure [hc.acceptedNumberCache] and [acceptedLogsCache] have latest content
-		bc.hc.acceptedNumberCache.Put(next.NumberU64(), next.Header())
+		bc.ethBlockChain.hc.acceptedNumberCache.Put(next.NumberU64(), next.Header())
 		logs := bc.collectUnflattenedLogs(next, false)
 		bc.acceptedLogsCache.Put(next.Hash(), logs)
 
@@ -582,13 +583,13 @@ func (bc *BlockChain) InitializeSnapshots() {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
-	head := bc.CurrentBlock()
-	bc.initSnapshot(head)
+	head := bc.ethBlockChain.CurrentBlock()
+	bc.ethBlockChain.initSnapshot(head)
 }
 
 // SenderCacher returns the *TxSenderCacher used within the core package.
 func (bc *BlockChain) SenderCacher() *TxSenderCacher {
-	return bc.senderCacher
+	return bc.ethBlockChain.senderCacher
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -597,8 +598,8 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
 	if lastAcceptedHash == (common.Hash{}) {
 		bc.lastAccepted = bc.Genesis()
-		bc.SetFinalized(bc.Genesis().Header())
-		return bc.ResetWithGenesisBlock(bc.Genesis())
+		bc.ethBlockChain.SetFinalized(bc.Genesis().Header())
+		return bc.ethBlockChain.ResetWithGenesisBlock(bc.Genesis())
 	}
 
 	// Restore the last known head block
@@ -612,16 +613,16 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 		return fmt.Errorf("could not load head block %s", head.Hex())
 	}
 	// Everything seems to be fine, set as the head block
-	bc.currentBlock.Store(headBlock.Header())
+	bc.ethBlockChain.currentBlock.Store(headBlock.Header())
 
 	// Restore the last known head header
 	currentHeader := headBlock.Header()
 	if head := rawdb.ReadHeadHeaderHash(bc.db); head != (common.Hash{}) {
-		if header := bc.GetHeaderByHash(head); header != nil {
+		if header := bc.ethBlockChain.GetHeaderByHash(head); header != nil {
 			currentHeader = header
 		}
 	}
-	bc.hc.SetCurrentHeader(currentHeader)
+	bc.ethBlockChain.hc.SetCurrentHeader(currentHeader)
 
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "age", common.PrettyAge(time.Unix(int64(currentHeader.Time), 0)))
 	log.Info("Loaded most recent local full block", "number", headBlock.Number(), "hash", headBlock.Hash(), "age", common.PrettyAge(time.Unix(int64(headBlock.Time()), 0)))
@@ -631,7 +632,7 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	if bc.lastAccepted == nil {
 		return fmt.Errorf("could not load last accepted block")
 	}
-	bc.SetFinalized(bc.lastAccepted.Header())
+	bc.ethBlockChain.SetFinalized(bc.lastAccepted.Header())
 
 	// This ensures that the head block is updated to the last accepted block on startup
 	if err := bc.setPreference(bc.lastAccepted); err != nil {
@@ -771,7 +772,7 @@ func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
 
 	// Stop senderCacher's goroutines
 	log.Info("Shutting down sender cacher")
-	bc.senderCacher.Shutdown()
+	bc.ethBlockChain.senderCacher.Shutdown()
 
 	// Unsubscribe all subscriptions registered from blockchain.
 	log.Info("Closing scope")
@@ -782,7 +783,7 @@ func (bc *BlockChain) stopWithoutSaving(stopInner bool) {
 	bc.wg.Wait()
 
 	if stopInner {
-		bc.blockChain.stopWithoutSaving()
+		bc.ethBlockChain.stopWithoutSaving()
 	}
 }
 
@@ -794,14 +795,14 @@ func (bc *BlockChain) Stop() {
 	if _, err := bc.db.Has([]byte{}); err == nil {
 		// This prevents us from stopping the blockchain if the database is already
 		// closed.
-		bc.blockChain.Stop()
+		bc.ethBlockChain.Stop()
 	} else {
-		bc.blockChain.stopWithoutSaving()
+		bc.ethBlockChain.stopWithoutSaving()
 	}
 
 	// Ensure that the entirety of the state snapshot is journaled to disk.
-	if bc.snaps != nil {
-		bc.snaps.Release()
+	if bc.ethBlockChain.snaps != nil {
+		bc.ethBlockChain.snaps.Release()
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		// Ensure that the in-memory trie nodes are journaled to disk properly.
@@ -852,7 +853,7 @@ func (bc *BlockChain) setPreference(block *types.Block) error {
 	}
 
 	log.Debug("Setting preference", "number", block.Number(), "hash", block.Hash())
-	_, err := bc.blockChain.SetCanonical(block)
+	_, err := bc.ethBlockChain.SetCanonical(block)
 	return err
 }
 
@@ -908,7 +909,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
-	bc.SetFinalized(block.Header())
+	bc.ethBlockChain.SetFinalized(block.Header())
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
@@ -924,8 +925,8 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 		return fmt.Errorf("unable to reject trie: %w", err)
 	}
 
-	if bc.snaps != nil {
-		if err := bc.snaps.Discard(block.Hash()); err != nil {
+	if bc.ethBlockChain.snaps != nil {
+		if err := bc.ethBlockChain.snaps.Discard(block.Hash()); err != nil {
 			log.Error("unable to discard snap from rejected block", "block", block.Hash(), "number", block.NumberU64(), "root", block.Root())
 		}
 	}
@@ -938,7 +939,7 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 	}
 
 	// Remove the block from the block cache (ignore return value of whether it was in the cache)
-	_ = bc.blockCache.Remove(block.Hash())
+	_ = bc.ethBlockChain.blockCache.Remove(block.Hash())
 
 	return nil
 }
@@ -1002,10 +1003,10 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
 	// are stored by block hash.
 	var updateOpts []stateconf.SnapshotUpdateOption
-	if bc.snaps != nil {
+	if bc.ethBlockChain.snaps != nil {
 		updateOpts = append(updateOpts, snapshot.WithBlockHashes(block.Hash(), block.ParentHash()))
 	}
-	_, err := bc.blockChain.insertChain([]*types.Block{block}, true, opts...)
+	_, err := bc.ethBlockChain.insertChain([]*types.Block{block}, true, opts...)
 	if err != nil {
 		return err
 	}
@@ -1013,8 +1014,8 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// Upstream does not perform a snapshot update if the root is the same as the
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
-	if bc.snaps != nil && block.Root() == parent.Root {
-		if err := bc.snaps.Update(block.Root(), parent.Root, nil, nil, nil, updateOpts...); err != nil {
+	if bc.ethBlockChain.snaps != nil && block.Root() == parent.Root {
+		if err := bc.ethBlockChain.snaps.Update(block.Root(), parent.Root, nil, nil, nil, updateOpts...); err != nil {
 			return err
 		}
 	}
@@ -1031,8 +1032,8 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// eventually be called on [root] unless a fatal error occurs. It does not assume that
 	// the node will not shutdown before either AcceptTrie/RejectTrie is called.
 	if err := bc.stateManager.InsertTrie(block); err != nil {
-		if bc.snaps != nil {
-			discardErr := bc.snaps.Discard(block.Hash())
+		if bc.ethBlockChain.snaps != nil {
+			discardErr := bc.ethBlockChain.snaps.Discard(block.Hash())
 			if discardErr != nil {
 				log.Debug("failed to discard snapshot after being unable to insert block trie", "block", block.Hash(), "root", block.Root())
 			}
@@ -1151,11 +1152,11 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
 	// are stored by block hash.
 	var updateOpts []stateconf.SnapshotUpdateOption // XYZ simplify that and above slice as well
-	if bc.snaps != nil {
+	if bc.ethBlockChain.snaps != nil {
 		updateOpts = append(updateOpts, snapshot.WithBlockHashes(current.Hash(), current.ParentHash()))
 		// bc.snaps.WithBlockHashesOLD(current.Hash(), current.ParentHash())
 	}
-	if _, err := bc.blockChain.insertChain([]*types.Block{current}, true); err != nil {
+	if _, err := bc.ethBlockChain.insertChain([]*types.Block{current}, true); err != nil {
 		return common.Hash{}, err
 	}
 	log.Debug("Processed block", "block", current.Hash(), "number", current.NumberU64())
@@ -1164,8 +1165,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	// Upstream does not perform a snapshot update if the root is the same as the
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
-	if bc.snaps != nil && root == parent.Root() {
-		if err := bc.snaps.Update(root, parent.Root(), nil, nil, nil, updateOpts...); err != nil {
+	if bc.ethBlockChain.snaps != nil && root == parent.Root() {
+		if err := bc.ethBlockChain.snaps.Update(root, parent.Root(), nil, nil, nil, updateOpts...); err != nil {
 			return common.Hash{}, err
 		}
 	}
@@ -1247,7 +1248,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
 		}
 		current = parent
-		_, err = bc.stateCache.OpenTrie(current.Root())
+		_, err = bc.ethBlockChain.stateCache.OpenTrie(current.Root())
 		if err == nil {
 			break
 		}
@@ -1296,7 +1297,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			// that the node stops mid-way through snapshot flattening (performed across multiple DB batches).
 			// If snapshot initialization is delayed due to state sync, skip initializing snaps here
 			if !bc.cacheConfig.SnapshotDelayInit {
-				bc.initSnapshot(parent.Header())
+				bc.ethBlockChain.initSnapshot(parent.Header())
 			}
 			writeIndices = true // Set [writeIndices] to true, so that the indices will be updated from the last accepted tip onwards.
 		}
@@ -1538,13 +1539,13 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 
 	// Update all in-memory chain markers
 	bc.lastAccepted = block
-	bc.SetFinalized(block.Header())
+	bc.ethBlockChain.SetFinalized(block.Header())
 	bc.acceptorTip = block
-	bc.currentBlock.Store(block.Header())
-	bc.hc.SetCurrentHeader(block.Header())
+	bc.ethBlockChain.currentBlock.Store(block.Header())
+	bc.ethBlockChain.hc.SetCurrentHeader(block.Header())
 
 	lastAcceptedHash := block.Hash()
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.ethBlockChain.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return err
@@ -1558,7 +1559,7 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 		return fmt.Errorf("head state missing %d:%s", head.Number, head.Hash())
 	}
 
-	bc.initSnapshot(head)
+	bc.ethBlockChain.initSnapshot(head)
 	return nil
 }
 
@@ -1579,4 +1580,12 @@ func (bc *BlockChain) repairTxIndexTail(newTail uint64) error {
 		rawdb.WriteTxIndexTail(bc.db, newTail)
 	}
 	return nil
+}
+
+func (bc *BlockChain) Export(w io.Writer) error {
+	return bc.ethBlockChain.Export(w)
+}
+
+func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
+	return bc.ethBlockChain.ExportN(w, first, last)
 }

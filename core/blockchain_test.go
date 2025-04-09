@@ -323,7 +323,7 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 
 	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 10, 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -438,7 +438,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 
 	// This call generates a chain of 10 blocks.
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 10, 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -525,7 +525,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 	allTxs := append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
-		if bc.snaps == nil {
+		if bc.ethBlockChain.snaps == nil {
 			t.Fatal("snapshot initialization failed")
 		}
 

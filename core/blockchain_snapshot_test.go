@@ -119,7 +119,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 			}
 			chain.DrainAcceptorQueue()
 
-			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
+			diskRoot, blockRoot := chain.ethBlockChain.snaps.DiskRoot(), blocks[point-1].Root()
 			if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
 				t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)
 			}
@@ -155,14 +155,14 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	block := chain.GetBlockByNumber(basic.expSnapshotBottom)
 	if block == nil {
 		t.Errorf("The corresponding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
-	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
-		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
-	} else if len(chain.snaps.Snapshots(block.Hash(), -1, false)) != 1 {
+	} else if !bytes.Equal(chain.ethBlockChain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
+		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.ethBlockChain.snaps.DiskRoot())
+	} else if len(chain.ethBlockChain.snaps.Snapshots(block.Hash(), -1, false)) != 1 {
 		t.Errorf("The corresponding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
 	}
 
 	// Check the snapshot, ensure it's integrated
-	if err := chain.snaps.Verify(block.Root()); err != nil {
+	if err := chain.ethBlockChain.snaps.Verify(block.Root()); err != nil {
 		t.Errorf("The disk layer is not integrated %v", err)
 	}
 }
