@@ -108,6 +108,12 @@ func (e *GenesisMismatchError) Error() string {
 	return fmt.Sprintf("database contains incompatible genesis (have %x, new %x)", e.Stored, e.New)
 }
 
+// ChainOverrides contains the changes to chain config.
+type ChainOverrides struct {
+	OverrideCancun *uint64
+	OverrideVerkle *uint64
+}
+
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
@@ -124,7 +130,16 @@ func (e *GenesisMismatchError) Error() string {
 // specify a fork block below the local head block). In case of a conflict, the
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 func SetupGenesisBlock(
-	db ethdb.Database, triedb *triedb.Database, genesis *Genesis, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+	db ethdb.Database, triedb *triedb.Database, genesis *Genesis,
+	lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlockWithOverride(db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible, nil)
+}
+
+func SetupGenesisBlockWithOverride(
+	db ethdb.Database, triedb *triedb.Database, genesis *Genesis,
+	lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+	overrides *ChainOverrides,
 ) (*params.ChainConfig, common.Hash, error) {
 	if genesis == nil {
 		return nil, common.Hash{}, ErrNoGenesis
@@ -132,10 +147,21 @@ func SetupGenesisBlock(
 	if genesis.Config == nil {
 		return nil, common.Hash{}, errGenesisNoConfig
 	}
+	applyOverrides := func(config *params.ChainConfig) {
+		if config != nil {
+			if overrides != nil && overrides.OverrideCancun != nil {
+				config.CancunTime = overrides.OverrideCancun
+			}
+			if overrides != nil && overrides.OverrideVerkle != nil {
+				config.VerkleTime = overrides.OverrideVerkle
+			}
+		}
+	}
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		log.Info("Writing genesis to database")
+		applyOverrides(genesis.Config)
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
@@ -148,6 +174,7 @@ func SetupGenesisBlock(
 	// in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
 	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
+		applyOverrides(genesis.Config)
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock().Hash()
 		if hash != stored {
@@ -157,12 +184,14 @@ func SetupGenesisBlock(
 		return genesis.Config, common.Hash{}, err
 	}
 	// Check whether the genesis block is already written.
+	applyOverrides(genesis.Config)
 	hash := genesis.ToBlock().Hash()
 	if hash != stored {
 		return genesis.Config, common.Hash{}, &GenesisMismatchError{stored, hash}
 	}
 	// Get the existing chain configuration.
 	newcfg := genesis.Config
+	applyOverrides(newcfg)
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -174,23 +203,23 @@ func SetupGenesisBlock(
 	}
 	params.SetEthUpgrades(storedcfg)
 	storedData, _ := json.Marshal(storedcfg)
-	// Check config compatibility and write the config. Compatibility errors
-	// are returned to the caller unless we're already at block zero.
-	// we use last accepted block for cfg compatibility check. Note this allows
-	// the node to continue if it previously halted due to attempting to process blocks with
-	// an incorrect chain config.
-	lastBlock := ReadBlockByHash(db, lastAcceptedHash)
-	// this should never happen, but we check anyway
-	// when we start syncing from scratch, the last accepted block
-	// will be genesis block
-	if lastBlock == nil {
-		return newcfg, common.Hash{}, errors.New("missing last accepted block")
-	}
-	height := lastBlock.NumberU64()
-	timestamp := lastBlock.Time()
 	if skipChainConfigCheckCompatible {
 		log.Info("skipping verifying activated network upgrades on chain config")
 	} else {
+		// Check config compatibility and write the config. Compatibility errors
+		// are returned to the caller unless we're already at block zero.
+		// we use last accepted block for cfg compatibility check. Note this allows
+		// the node to continue if it previously halted due to attempting to process blocks with
+		// an incorrect chain config.
+		lastBlock := ReadBlockByHash(db, lastAcceptedHash)
+		// this should never happen, but we check anyway
+		// when we start syncing from scratch, the last accepted block
+		// will be genesis block
+		if lastBlock == nil {
+			return newcfg, common.Hash{}, errors.New("missing last accepted block")
+		}
+		height := lastBlock.NumberU64()
+		timestamp := lastBlock.Time()
 		compatErr := storedcfg.CheckCompatible(newcfg, height, timestamp)
 		if compatErr != nil && ((height != 0 && compatErr.RewindToBlock != 0) || (timestamp != 0 && compatErr.RewindToTime != 0)) {
 			return newcfg, stored, compatErr
@@ -322,6 +351,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
+	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())

@@ -349,8 +349,10 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 		t.Fatal(err)
 	}
 
-	// Confirm that the node does not have the state for intermediate nodes (exclude the last accepted block)
-	for _, block := range chain[:len(chain)-1] {
+	// Confirm that the node does not have the state for intermediate nodes
+	// Exclude the last accepted block, and the one prior which are persisted
+	// on shutdown.
+	for _, block := range chain[:len(chain)-2] {
 		if blockchain.HasState(block.Root()) {
 			t.Fatalf("Expected blockchain to be missing state for intermediate block %d with pruning enabled", block.NumberU64())
 		}
