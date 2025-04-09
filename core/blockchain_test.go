@@ -323,7 +323,7 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 
 	// This call generates a chain of 3 blocks.
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 10, 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -349,8 +349,10 @@ func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
 		t.Fatal(err)
 	}
 
-	// Confirm that the node does not have the state for intermediate nodes (exclude the last accepted block)
-	for _, block := range chain[:len(chain)-1] {
+	// Confirm that the node does not have the state for intermediate nodes
+	// Exclude the last accepted block, and the one prior which are persisted
+	// on shutdown.
+	for _, block := range chain[:len(chain)-2] {
 		if blockchain.HasState(block.Root()) {
 			t.Fatalf("Expected blockchain to be missing state for intermediate block %d with pruning enabled", block.NumberU64())
 		}
@@ -436,7 +438,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 
 	// This call generates a chain of 10 blocks.
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.ethBlockChain.engine, 10, 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -523,7 +525,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 	allTxs := append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
-		if bc.snaps == nil {
+		if bc.ethBlockChain.snaps == nil {
 			t.Fatal("snapshot initialization failed")
 		}
 

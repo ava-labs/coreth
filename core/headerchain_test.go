@@ -43,9 +43,10 @@ import (
 )
 
 func verifyUnbrokenCanonchain(bc *BlockChain) error {
-	h := bc.hc.CurrentHeader()
+	hc := bc.ethBlockChain.hc
+	h := hc.CurrentHeader()
 	for {
-		canonHash := rawdb.ReadCanonicalHash(bc.hc.chainDb, h.Number.Uint64())
+		canonHash := rawdb.ReadCanonicalHash(hc.chainDb, h.Number.Uint64())
 		if exp := h.Hash(); canonHash != exp {
 			return fmt.Errorf("Canon hash chain broken, block %d got %x, expected %x",
 				h.Number, canonHash[:8], exp[:8])
@@ -53,7 +54,7 @@ func verifyUnbrokenCanonchain(bc *BlockChain) error {
 		if h.Number.Uint64() == 0 {
 			break
 		}
-		h = bc.hc.GetHeader(h.ParentHash, h.Number.Uint64()-1)
+		h = hc.GetHeader(h.ParentHash, h.Number.Uint64()-1)
 	}
 	return nil
 }
