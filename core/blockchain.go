@@ -1547,12 +1547,6 @@ func (bc *blockChain) InsertChain(chain types.Blocks) (int, error) {
 	return bc.insertChain(chain, true)
 }
 
-type InsertOption int
-
-const (
-	NoWrites InsertOption = iota
-)
-
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
@@ -1810,20 +1804,15 @@ func (bc *blockChain) insertChain(chain types.Blocks, setHead bool, opts ...Inse
 		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
 		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
 
-		// Write the block to the chain and get the status.
-		var (
-			wstart     = time.Now()
-			status     WriteStatus
-			skipWrites = false
-		)
-		for _, opt := range opts {
-			if opt == NoWrites {
-				skipWrites = true
-			}
-		}
-		if skipWrites {
+		if skipWrites(opts) {
 			continue
 		}
+
+		// Write the block to the chain and get the status.
+		var (
+			wstart = time.Now()
+			status WriteStatus
+		)
 		if !setHead {
 			// Don't set the head, only insert the block
 			err = bc.writeBlockWithState(block, receipts, statedb)
@@ -2189,7 +2178,8 @@ func (bc *blockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// If the commonBlock is less than the last accepted height, we return an error
 	// because performing a reorg would mean removing an accepted block from the
 	// canonical chain.
-	if final := bc.CurrentFinalBlock(); final != nil && commonBlock.NumberU64() < final.Number.Uint64() {
+	final := bc.CurrentFinalBlock()
+	if final != nil && commonBlock.NumberU64() < final.Number.Uint64() {
 		return fmt.Errorf("cannot orphan finalized block at height: %d to common block at height: %d", final.Number.Uint64(), commonBlock.NumberU64())
 	}
 

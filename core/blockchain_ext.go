@@ -1582,6 +1582,21 @@ func (bc *BlockChain) repairTxIndexTail(newTail uint64) error {
 	return nil
 }
 
+type InsertOption int
+
+const (
+	NoWrites InsertOption = iota
+)
+
+func skipWrites(opts []InsertOption) bool {
+	for _, opt := range opts {
+		if opt == NoWrites {
+			return true
+		}
+	}
+	return false
+}
+
 func (bc *BlockChain) Export(w io.Writer) error {
 	return bc.ethBlockChain.Export(w)
 }
