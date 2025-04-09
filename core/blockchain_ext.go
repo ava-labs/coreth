@@ -65,6 +65,13 @@ func (h *blockChainHooks) reportBlock(block *types.Block, receipts types.Receipt
 	// log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
 }
 
+func (h *blockChainHooks) postInsert(block *types.Block, logs []*types.Log) {
+	processedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
+	processedTxsCounter.Inc(int64(block.Transactions().Len()))
+	processedLogsCounter.Inc(int64(len(logs)))
+	blockInsertCount.Inc(1)
+}
+
 // getOrOverrideAsRegisteredCounter searches for a metric already registered
 // with `name`. If a metric is found and it is a [metrics.Counter], it is returned. If a
 // metric is found and it is not a [metrics.Counter], it is unregistered and replaced with

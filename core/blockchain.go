@@ -1869,6 +1869,8 @@ func (bc *blockChain) insertChain(chain types.Blocks, setHead bool, opts ...Inse
 
 			lastCanon = block
 
+			bc.hooks.postInsert(block, logs)
+
 			// Only count canonical blocks for GC processing time
 			bc.gcproc += proctime
 
