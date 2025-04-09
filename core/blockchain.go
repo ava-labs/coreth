@@ -150,7 +150,6 @@ const (
 	BlockChainVersion uint64 = 8
 )
 
-// XXX: this type was renamed
 // CacheConfig contains the configuration values for the trie database
 // and state snapshot these are resident in a blockchain.
 type cacheConfig struct {
@@ -184,12 +183,9 @@ var defaultCacheConfig = &cacheConfig{
 	StateScheme:    rawdb.HashScheme,
 }
 
-// XXX: this function was renamed
 // DefaultCacheConfigWithScheme returns a deep copied default cache config with
 // a provided trie node scheme.
-//
-//nolint:unused
-func defaultCacheConfigWithScheme(scheme string) *cacheConfig {
+func defaultCacheConfigWithScheme(scheme string) *cacheConfig { //nolint:unused
 	config := *defaultCacheConfig
 	config.StateScheme = scheme
 	return &config
@@ -202,7 +198,6 @@ type txLookup struct {
 	transaction *types.Transaction
 }
 
-// XXX: this type was renamed
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -277,7 +272,6 @@ type blockChain struct {
 	vmConfig   vm.Config
 }
 
-// XXX: this function was renamed
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
