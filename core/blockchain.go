@@ -221,6 +221,7 @@ type txLookup struct {
 type blockChain struct {
 	// ADDED FIELDS
 	senderCacher *TxSenderCacher
+	hooks        blockChainHooks
 	// END OF ADDED FIELDS
 
 	chainConfig *params.ChainConfig // Chain & network configuration
@@ -281,7 +282,10 @@ type blockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func newBlockChain(db ethdb.Database, triedb *triedb.Database, cacheConfig *cacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*blockChain, error) {
+func newBlockChain(db ethdb.Database, triedb *triedb.Database, cacheConfig *cacheConfig,
+	genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine,
+	vmConfig vm.Config, shouldPreserve func(header *types.Header) bool,
+	txLookupLimit *uint64, badBlocksCache *lru.Cache[common.Hash, *badBlock]) (*blockChain, error) {
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
@@ -305,6 +309,11 @@ func newBlockChain(db ethdb.Database, triedb *triedb.Database, cacheConfig *cach
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
+	hooks := blockChainHooks{
+		config:         chainConfig,
+		badBlocksCache: badBlocksCache,
+	}
+
 	bc := &blockChain{
 		chainConfig:   chainConfig,
 		cacheConfig:   cacheConfig,
@@ -322,6 +331,7 @@ func newBlockChain(db ethdb.Database, triedb *triedb.Database, cacheConfig *cach
 		engine:        engine,
 		vmConfig:      vmConfig,
 		senderCacher:  NewTxSenderCacher(runtime.NumCPU()),
+		hooks:         hooks,
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -2409,8 +2419,7 @@ func (bc *blockChain) skipBlock(err error, it *insertIterator) bool {
 
 // reportBlock logs a bad block error.
 func (bc *blockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
-	rawdb.WriteBadBlock(bc.db, block)
-	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
+	bc.hooks.reportBlock(block, receipts, err)
 }
 
 // summarizeBadBlock returns a string summarizing the bad block and other

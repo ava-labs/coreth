@@ -39,6 +39,32 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
+type blockChainHooks struct {
+	config         *params.ChainConfig
+	badBlocksCache *lru.Cache[common.Hash, *badBlock]
+}
+
+func (h *blockChainHooks) reportBlock(block *types.Block, receipts types.Receipts, err error) {
+	reason := &BadBlockReason{
+		ChainConfig: h.config,
+		Receipts:    receipts,
+		Number:      block.NumberU64(),
+		Hash:        block.Hash(),
+		Error:       err.Error(),
+	}
+
+	badBlockCounter.Inc(1)
+	h.badBlocksCache.Add(block.Hash(), &badBlock{
+		block:  block,
+		reason: reason,
+	})
+	log.Debug(reason.String())
+
+	// No-op behavior should be:
+	// rawdb.WriteBadBlock(bc.db, block)
+	// log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
+}
+
 // getOrOverrideAsRegisteredCounter searches for a metric already registered
 // with `name`. If a metric is found and it is a [metrics.Counter], it is returned. If a
 // metric is found and it is not a [metrics.Counter], it is unregistered and replaced with
@@ -300,6 +326,8 @@ func NewBlockChain(
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
+	badBlocksCache := lru.NewCache[common.Hash, *badBlock](badBlockLimit)
+
 	bc := &BlockChain{
 		chainConfig:       chainConfig,
 		cacheConfig:       cacheConfig,
@@ -307,7 +335,7 @@ func NewBlockChain(
 		triedb:            triedb,
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		txLookupCache:     lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
-		badBlocks:         lru.NewCache[common.Hash, *badBlock](badBlockLimit),
+		badBlocks:         badBlocksCache,
 		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
@@ -315,7 +343,8 @@ func NewBlockChain(
 	headHash := rawdb.ReadHeadBlockHash(db)
 	headHeaderHash := rawdb.ReadHeadHeaderHash(db)
 
-	bc.ethBlockChain, err = newBlockChain(db, triedb, cacheConfig.cacheConfig(), genesis, nil, engine, vmConfig, nil, nil)
+	bc.ethBlockChain, err = newBlockChain(db, triedb, cacheConfig.cacheConfig(),
+		genesis, nil, engine, vmConfig, nil, nil, badBlocksCache)
 	if err != nil {
 		return nil, err
 	}
@@ -1121,29 +1150,6 @@ func (bc *BlockChain) BadBlocks() ([]*types.Block, []*BadBlockReason) {
 		}
 	}
 	return blocks, reasons
-}
-
-// addBadBlock adds a bad block to the bad-block LRU cache
-func (bc *BlockChain) addBadBlock(block *types.Block, reason *BadBlockReason) {
-	bc.badBlocks.Add(block.Hash(), &badBlock{
-		block:  block,
-		reason: reason,
-	})
-}
-
-// reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
-	reason := &BadBlockReason{
-		ChainConfig: bc.chainConfig,
-		Receipts:    receipts,
-		Number:      block.NumberU64(),
-		Hash:        block.Hash(),
-		Error:       err.Error(),
-	}
-
-	badBlockCounter.Inc(1)
-	bc.addBadBlock(block, reason)
-	log.Debug(reason.String())
 }
 
 // reprocessBlock reprocesses a previously accepted block. This is often used
