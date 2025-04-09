@@ -18,6 +18,8 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
+var errSyncCanceled = errors.New("Sync canceled externally")
+
 type snapManager struct {
 	// The peer network instance
 	network peer.Network
@@ -75,17 +77,17 @@ func (m *snapManager) Start(ctx context.Context) error {
 	return nil
 }
 
+// Close closes the snap manager and stops the state sync.
 func (m *snapManager) Close() {
 	close(m.quitCh)
 }
 
+// Blocks until the snap manager is done or an error occurs.
 func (m *snapManager) Wait(ctx context.Context) error {
 	for {
 		select {
 		case <-m.quitCh:
-			m.errorLock.Lock()
-			defer m.errorLock.Unlock()
-			return m.fatalError
+			return m.Error()
 		case <-ctx.Done():
 			close(m.quitCh)
 			return ctx.Err()
@@ -97,6 +99,12 @@ func (m *snapManager) Error() error {
 	m.errorLock.Lock()
 	defer m.errorLock.Unlock()
 	return m.fatalError
+}
+
+func (m *snapManager) setError(err error) {
+	m.errorLock.Lock()
+	defer m.errorLock.Unlock()
+	m.fatalError = err
 }
 
 func (m *snapManager) UpdateSyncTarget(root common.Hash) error {
@@ -124,9 +132,7 @@ func (m *snapManager) snapSync(ctx context.Context) {
 		// If err, just return so we can see it
 		case <-sync.done:
 			log.Info("Sync completed with", "err", sync.err)
-			m.errorLock.Lock()
-			m.fatalError = sync.err
-			defer m.errorLock.Unlock()
+			m.setError(sync.err)
 			close(m.quitCh)
 			return
 		case <-ctx.Done():
@@ -135,7 +141,7 @@ func (m *snapManager) snapSync(ctx context.Context) {
 			// No need to report error
 			return
 		case <-m.quitCh:
-			log.Warn("Sync canceled externally")
+			// Sync canceled externally
 			return
 		case newPivot := <-m.newPivot:
 			sync.Cancel()
@@ -155,7 +161,7 @@ func (m *snapManager) syncState(root common.Hash) *stateSync {
 		// out or been delivered
 		<-s.started
 	case <-m.quitCh:
-		s.err = errors.New("errCancelStateFetch") //errCancelStateFetch from geth
+		s.err = errSyncCanceled
 		close(s.done)
 	}
 	return s

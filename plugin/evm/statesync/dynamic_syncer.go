@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/avalanchego/ids"
+	// xsync "github.com/ava-labs/avalanchego/x/sync"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/libevm/common"
@@ -30,15 +31,16 @@ const (
 	// Buffer must be large enough to
 	pivotInterval = 128
 	bufferSize    = 3 * pivotInterval
+
+	snapSyncType = "snap"
 )
 
 var (
 	queueOverflowError = errors.New("Snap sync queue overflow")
 
 	_ manager = &snapManager{}
+	// _ manager = &xsync.Manager{} TODO: ensure this matches
 )
-
-// var _ Downloader = &downloader{}
 
 type queueElement struct {
 	block    *types.Block
@@ -69,26 +71,6 @@ type manager interface {
 	Wait(ctx context.Context) error
 }
 
-// Downloader is the interface that manages queueing and processing of blocks
-// and updating the pivot block.
-// type Downloader interface {
-// 	// Returns the current pivot
-// 	Pivot() *types.Block
-// 	// Opens bufferLock to allow block requests to go through after finalizing the sync
-// 	Close()
-// 	// QueueBlock queues a block for processing by the state syncer.
-// 	QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, resolver func() error) error
-// 	// It controls the synchronisation of state nodes of the pivot block.
-// 	Start(ctx context.Context) error
-// 	// Done returns a channel that is closed when the downloader is done
-// 	Done() <-chan error
-// 	// RegisterSyncNodes registers the state sync nodes to the network
-// 	RegisterSyncNodes(network peer.Network, stateSyncNodes []ids.NodeID) error
-// 	// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
-// 	// data packet for the local node to consume.
-// 	DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error
-// }
-
 type DynamicSyncConfig struct {
 	// ChainDB is the database that the downloader will use to store the synced state
 	ChainDB ethdb.Database
@@ -111,7 +93,7 @@ type DynamicSyncer struct {
 	manager manager
 
 	// Note the pivot block does not need to be locked as it is only updated during queueing,
-	// which is protected by avalnchego's lock
+	// which is protected by queue lock. This may deserve its own lock for readability
 	pivotBlock  *types.Block
 	blockBuffer []*queueElement
 	bufferLen   int
@@ -134,7 +116,7 @@ func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
 		pivotBlock:        config.FirstPivotBlock,
 	}
 
-	if config.SyncType == "snap" {
+	if config.SyncType == snapSyncType {
 		d.manager = NewSnapManager(d)
 	} else {
 		return nil, fmt.Errorf("unsupported sync type: %s", config.SyncType)
@@ -143,11 +125,11 @@ func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
 	return d, nil
 }
 
-// Implement Syncer interface
+// Starts manager in background with `ctx` context
+// If manager doesn't start, will not update done channel
 func (d *DynamicSyncer) Start(ctx context.Context) error {
 	if err := d.manager.Start(ctx); err != nil {
 		log.Error("Failed to start manager", "err", err)
-		d.done <- err
 		return err
 	}
 
@@ -163,6 +145,7 @@ func (d *DynamicSyncer) Done() <-chan error {
 }
 
 // Returns the current pivot
+// This should only be accessed when the queue lock is held externally
 func (d *DynamicSyncer) Pivot() *types.Block {
 	return d.pivotBlock
 }
@@ -220,8 +203,9 @@ func (d *DynamicSyncer) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, 
 	return nil
 }
 
-// Clears queue of blocks. Assumes no elements are past pivot and bufferLock is held
-// If `final`, executes blocks only eth operations. Otherwise executes only atomic operations
+// Clears queue of blocks. Assumes queue lock is held
+// If `final`, executes block resolvers.
+// Otherwise removes all elements prior to pivot
 func (d *DynamicSyncer) flushQueue(final bool) error {
 	newLength := 0
 	log.Debug("Flushing queue", "final", final, "bufferLen", d.bufferLen)
@@ -229,29 +213,22 @@ func (d *DynamicSyncer) flushQueue(final bool) error {
 		d.bufferLen = newLength
 	}()
 
-	if final {
-		// We should execute all blocks if final
-		for i, elem := range d.blockBuffer {
-			if i >= d.bufferLen {
-				return nil
-			}
-
-			if err := elem.resolver(); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// We should only remove blocks earlier than the pivot
 	for i, elem := range d.blockBuffer {
+		// Viewed all elements
 		if i >= d.bufferLen {
 			return nil
 		}
 
-		// TODO: This *shouldn't* cause a race, but obvious protection would be nice
-		if elem.block.NumberU64() > d.pivotBlock.NumberU64() {
-			d.blockBuffer[newLength] = elem
+		if final {
+			// Execute resolver for element
+			if err := elem.resolver(); err != nil {
+				return err
+			}
+		} else if elem.block.NumberU64() > d.pivotBlock.NumberU64() {
+			// This is a safe access to the pivot block because the queue lock is held
+
+			// Postpone eviction until next pivot
+			d.blockBuffer[newLength] = elem // newLength <= i, so this element was already viewed
 			newLength++
 		}
 	}
