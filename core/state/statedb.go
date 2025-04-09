@@ -29,9 +29,9 @@ package state
 
 import (
 	"math/big"
+	"reflect"
 
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
 	"github.com/holiman/uint256"
@@ -62,6 +62,14 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps ethstate.SnapshotTree) (*StateDB, error) {
+	if snaps != nil {
+		// XXX: Make sure we treat incoming `nil` ptrs as `nil` values, not an
+		// interface to a nil ptr
+		v := reflect.ValueOf(snaps)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			snaps = nil
+		}
+	}
 	stateDB, err := ethstate.New(root, db, snaps)
 	if err != nil {
 		return nil, err
@@ -73,21 +81,11 @@ func New(root common.Hash, db Database, snaps ethstate.SnapshotTree) (*StateDB, 
 	}, nil
 }
 
-type workerPool struct {
-	*utils.BoundedWorkers
-}
-
-func (wp *workerPool) Done() {
-	// Done is guaranteed to only be called after all work is already complete,
-	// so we call Wait for goroutines to finish before returning.
-	wp.BoundedWorkers.Wait()
-}
-
-func WithConcurrentWorkers(prefetchers int) ethstate.PrefetcherOption {
-	pool := &workerPool{
-		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),
-	}
-	return ethstate.WithWorkerPools(func() ethstate.WorkerPool { return pool })
+// StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
+// state trie concurrently while the state is mutated so that when we reach the
+// commit phase, most of the needed data is already hot.
+func (s *StateDB) StartPrefetcher(namespace string, maxConcurrency int) {
+	s.StateDB.StartPrefetcher(namespace) // XXX: Trie prefetcher parallelism should be added back
 }
 
 // Retrieve the balance from the given address or 0 if object not found

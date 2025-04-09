@@ -960,6 +960,14 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 
+	// var predicateResults params.PredicateResults
+	// predicateBytes, ok := predicate.GetPredicateResultBytes(vmctx.Header.Extra)
+	// if ok {
+	// 	predicateResults, err = predicate.ParseResults(predicateBytes)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 	// Apply the customization rules if required.
 	if config != nil {
 		originalTime := block.Time()
@@ -967,6 +975,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
 		// Should be applied before the state overrides.
 		blockContext := core.NewBlockContext(block.Number(), block.Time())
+		// blockContext := params.NewBlockContext(vmctx.BlockNumber, vmctx.Time, predicateResults)
 		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, blockContext, statedb)
 		if err != nil {
 			return nil, err

@@ -27,6 +27,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
@@ -41,37 +43,55 @@ import (
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (bc *BlockChain) CurrentHeader() *types.Header {
+func (bc *blockChain) CurrentHeader() *types.Header {
 	return bc.hc.CurrentHeader()
 }
 
 // CurrentBlock retrieves the current head block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentBlock() *types.Header {
+func (bc *blockChain) CurrentBlock() *types.Header {
 	return bc.currentBlock.Load()
+}
+
+// CurrentSnapBlock retrieves the current snap-sync head block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *blockChain) CurrentSnapBlock() *types.Header {
+	return bc.currentSnapBlock.Load()
+}
+
+// CurrentFinalBlock retrieves the current finalized block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *blockChain) CurrentFinalBlock() *types.Header {
+	return bc.currentFinalBlock.Load()
+}
+
+// CurrentSafeBlock retrieves the current safe block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *blockChain) CurrentSafeBlock() *types.Header {
+	return bc.currentSafeBlock.Load()
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
+func (bc *blockChain) HasHeader(hash common.Hash, number uint64) bool {
 	return bc.hc.HasHeader(hash, number)
 }
 
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
-func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+func (bc *blockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
-func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
+func (bc *blockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return bc.hc.GetHeaderByHash(hash)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
-func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
+func (bc *blockChain) GetHeaderByNumber(number uint64) *types.Header {
 	return bc.hc.GetHeaderByNumber(number)
 }
 
@@ -96,7 +116,7 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 }
 
 // HasBlock checks if a block is fully present in the database or not.
-func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
+func (bc *blockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
@@ -119,7 +139,7 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 
 // GetBlock retrieves a block from the database by hash and number,
 // caching it if found.
-func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+func (bc *blockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block
@@ -134,7 +154,7 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 }
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
-func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
+func (bc *blockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -144,7 +164,7 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
-func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
+func (bc *blockChain) GetBlockByNumber(number uint64) *types.Block {
 	hash := rawdb.ReadCanonicalHash(bc.db, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -193,7 +213,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 }
 
 // GetCanonicalHash returns the canonical hash for a given block number
-func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
+func (bc *blockChain) GetCanonicalHash(number uint64) common.Hash {
 	return bc.hc.GetCanonicalHash(number)
 }
 
@@ -230,21 +250,39 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 	return lookup, tx, nil
 }
 
+// GetTd retrieves a block's total difficulty in the canonical chain from the
+// database by hash and number, caching it if found.
+func (bc *blockChain) GetTd(hash common.Hash, number uint64) *big.Int {
+	return bc.hc.GetTd(hash, number)
+}
+
 // HasState checks if state trie is fully present in the database or not.
-func (bc *BlockChain) HasState(hash common.Hash) bool {
+func (bc *blockChain) HasState(hash common.Hash) bool {
 	_, err := bc.stateCache.OpenTrie(hash)
 	return err == nil
 }
 
 // HasBlockAndState checks if a block and associated state trie is fully present
 // in the database or not, caching it if present.
-func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
+func (bc *blockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	// Check first that the block itself is known
 	block := bc.GetBlock(hash, number)
 	if block == nil {
 		return false
 	}
 	return bc.HasState(block.Root())
+}
+
+// stateRecoverable checks if the specified state is recoverable.
+// Note, this function assumes the state is not present, because
+// state is not treated as recoverable if it's available, thus
+// false will be returned in this case.
+func (bc *blockChain) stateRecoverable(root common.Hash) bool {
+	if bc.triedb.Scheme() == rawdb.HashScheme {
+		return false
+	}
+	result, _ := bc.triedb.Recoverable(root)
+	return result
 }
 
 // State returns a new mutable state based on the current HEAD block.
@@ -258,10 +296,10 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 }
 
 // Config retrieves the chain's fork configuration.
-func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
+func (bc *blockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
 // Engine retrieves the blockchain's consensus engine.
-func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
+func (bc *blockChain) Engine() consensus.Engine { return bc.engine }
 
 // Snapshots returns the blockchain snapshot tree.
 func (bc *BlockChain) Snapshots() *snapshot.Tree {

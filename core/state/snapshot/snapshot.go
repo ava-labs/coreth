@@ -342,11 +342,10 @@ func (t *Tree) Update(
 	if !ok {
 		return fmt.Errorf("invalid block hashes payload type: %T", payload)
 	}
-
-	return t.UpdateWithBlockHashes(p.blockHash, blockRoot, p.parentBlockHash, destructs, accounts, storage)
+	return t.updateWithBlockHashes(p.blockHash, blockRoot, p.parentBlockHash, destructs, accounts, storage)
 }
 
-func (t *Tree) UpdateWithBlockHashes(
+func (t *Tree) updateWithBlockHashes(
 	blockHash, blockRoot, parentBlockHash common.Hash,
 	destructs map[common.Hash]struct{},
 	accounts map[common.Hash][]byte,
