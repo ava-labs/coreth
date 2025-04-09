@@ -36,7 +36,8 @@ type snapManager struct {
 	// Signals new pivot block
 	newPivot chan common.Hash
 	// The channel to signal when the state sync is done
-	quitCh chan struct{}
+	quitCh     chan struct{}
+	cancelOnce sync.Once
 }
 
 // NewSnapManager creates a new snap manager instance.
@@ -79,7 +80,10 @@ func (m *snapManager) Start(ctx context.Context) error {
 
 // Close closes the snap manager and stops the state sync.
 func (m *snapManager) Close() {
-	close(m.quitCh)
+	// Cancel the state sync
+	m.cancelOnce.Do(func() {
+		close(m.quitCh)
+	})
 }
 
 // Blocks until the snap manager is done or an error occurs.
@@ -89,7 +93,7 @@ func (m *snapManager) Wait(ctx context.Context) error {
 		case <-m.quitCh:
 			return m.Error()
 		case <-ctx.Done():
-			close(m.quitCh)
+			m.Close()
 			return ctx.Err()
 		}
 	}
@@ -133,11 +137,11 @@ func (m *snapManager) snapSync(ctx context.Context) {
 		case <-sync.done:
 			log.Info("Sync completed with", "err", sync.err)
 			m.setError(sync.err)
-			close(m.quitCh)
+			m.Close()
 			return
 		case <-ctx.Done():
 			log.Error("Sync interrupted by context", "err", ctx.Err())
-			close(m.quitCh)
+			m.Close()
 			// No need to report error
 			return
 		case <-m.quitCh:

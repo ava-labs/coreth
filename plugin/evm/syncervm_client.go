@@ -294,7 +294,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			SyncQueueLock:   &client.syncQueueLock,
 			StateSyncNodes:  client.stateSyncNodes,
 			Network:         client.network,
-			SyncType:        "snap",
 		})
 
 		if err != nil {

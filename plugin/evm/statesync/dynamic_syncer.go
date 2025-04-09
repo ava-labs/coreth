@@ -84,8 +84,6 @@ type DynamicSyncConfig struct {
 	StateSyncNodes []ids.NodeID
 	// Network is the network that the downloader will use to connect to other nodes
 	Network peer.Network
-	// SyncType is the type of sync that will be used
-	SyncType string
 }
 
 type DynamicSyncer struct {
@@ -103,7 +101,7 @@ type DynamicSyncer struct {
 }
 
 func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
-	_, err := rawdb.ParseStateScheme(config.Scheme, config.ChainDB)
+	cleanScheme, err := rawdb.ParseStateScheme(config.Scheme, config.ChainDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse state scheme: %w", err)
 	}
@@ -115,11 +113,12 @@ func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
 		DynamicSyncConfig: config,
 		pivotBlock:        config.FirstPivotBlock,
 	}
+	d.Scheme = cleanScheme
 
-	if config.SyncType == snapSyncType {
+	if cleanScheme == rawdb.PathScheme || cleanScheme == rawdb.HashScheme {
 		d.manager = NewSnapManager(d)
 	} else {
-		return nil, fmt.Errorf("unsupported sync type: %s", config.SyncType)
+		return nil, fmt.Errorf("unsupported database type: %s", cleanScheme)
 	}
 
 	return d, nil
