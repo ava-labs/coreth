@@ -1047,12 +1047,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	if !writes {
 		opts = append(opts, NoWrites)
 	}
-	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
-	// are stored by block hash.
-	var updateOpts []stateconf.SnapshotUpdateOption
-	if bc.ethBlockChain.snaps != nil {
-		updateOpts = append(updateOpts, snapshot.WithBlockHashes(block.Hash(), block.ParentHash()))
-	}
 	_, err := bc.ethBlockChain.insertChain([]*types.Block{block}, true, opts...)
 	if err != nil {
 		return err
@@ -1062,7 +1056,10 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
 	if bc.ethBlockChain.snaps != nil && block.Root() == parent.Root {
-		if err := bc.ethBlockChain.snaps.Update(block.Root(), parent.Root, nil, nil, nil, updateOpts...); err != nil {
+		// [snapshot.WithBlockHashes] must be called because snapshot layers are stored by block hash.
+		err := bc.ethBlockChain.snaps.Update(block.Root(), parent.Root, nil, nil, nil,
+			snapshot.WithBlockHashes(block.Hash(), block.ParentHash()))
+		if err != nil {
 			return err
 		}
 	}
@@ -1173,13 +1170,6 @@ func (bc *BlockChain) BadBlocks() ([]*types.Block, []*BadBlockReason) {
 // reprocessBlock reprocesses a previously accepted block. This is often used
 // to regenerate previously pruned state tries.
 func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) (common.Hash, error) {
-	// If snapshots are enabled, WithBlockHashes must be called as snapshot layers
-	// are stored by block hash.
-	var updateOpts []stateconf.SnapshotUpdateOption // XYZ simplify that and above slice as well
-	if bc.ethBlockChain.snaps != nil {
-		updateOpts = append(updateOpts, snapshot.WithBlockHashes(current.Hash(), current.ParentHash()))
-		// bc.snaps.WithBlockHashesOLD(current.Hash(), current.ParentHash())
-	}
 	if _, err := bc.ethBlockChain.insertChain([]*types.Block{current}, true); err != nil {
 		return common.Hash{}, err
 	}
@@ -1190,7 +1180,10 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	// parent root, however here the snapshots are based on the block hash, so
 	// this update is necessary.
 	if bc.ethBlockChain.snaps != nil && root == parent.Root() {
-		if err := bc.ethBlockChain.snaps.Update(root, parent.Root(), nil, nil, nil, updateOpts...); err != nil {
+		// [snapshot.WithBlockHashes] must be called because snapshot layers are stored by block hash.
+		err := bc.ethBlockChain.snaps.Update(root, parent.Root(), nil, nil, nil,
+			snapshot.WithBlockHashes(current.Hash(), current.ParentHash()))
+		if err != nil {
 			return common.Hash{}, err
 		}
 	}
