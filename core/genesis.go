@@ -133,14 +133,17 @@ func SetupGenesisBlock(
 	db ethdb.Database, triedb *triedb.Database, genesis *Genesis,
 	lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
 ) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible, nil)
+	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil,
+		withLastAcceptedHash(lastAcceptedHash),
+		withSkipChainConfigCheckCompatible(skipChainConfigCheckCompatible))
 }
 
 func SetupGenesisBlockWithOverride(
 	db ethdb.Database, triedb *triedb.Database, genesis *Genesis,
-	lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
-	overrides *ChainOverrides,
-) (*params.ChainConfig, common.Hash, error) {
+	overrides *ChainOverrides, opts ...genesisBlockOption) (
+	*params.ChainConfig, common.Hash, error) {
+	options := makeGenesisBlockOptions(opts)
+
 	if genesis == nil {
 		return nil, common.Hash{}, ErrNoGenesis
 	}
@@ -203,7 +206,7 @@ func SetupGenesisBlockWithOverride(
 	}
 	params.SetEthUpgrades(storedcfg)
 	storedData, _ := json.Marshal(storedcfg)
-	if skipChainConfigCheckCompatible {
+	if options.skipChainConfigCheckCompatible {
 		log.Info("skipping verifying activated network upgrades on chain config")
 	} else {
 		// Check config compatibility and write the config. Compatibility errors
@@ -211,7 +214,7 @@ func SetupGenesisBlockWithOverride(
 		// we use last accepted block for cfg compatibility check. Note this allows
 		// the node to continue if it previously halted due to attempting to process blocks with
 		// an incorrect chain config.
-		lastBlock := ReadBlockByHash(db, lastAcceptedHash)
+		lastBlock := ReadBlockByHash(db, options.lastAcceptedHash)
 		// this should never happen, but we check anyway
 		// when we start syncing from scratch, the last accepted block
 		// will be genesis block

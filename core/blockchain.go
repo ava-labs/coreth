@@ -289,15 +289,11 @@ func newBlockChain(db ethdb.Database, triedb *triedb.Database, cacheConfig *cach
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
-
-	// Note: skipChainConfigCheckCompatible is set to true, since the caller
-	// will handle the compatibility check.
-	// In this case lastAcceptedHash is not used, so we set it to the zero hash.
-	// In the long term, we should refactor SetupGenesisBlockWithOverride
-	lastAcceptedHash, skipChainConfigCheckCompatible := common.Hash{}, true
-	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(
-		db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible, overrides,
-	)
+	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides,
+		// skipChainConfigCheckCompatible is set to true because the caller will handle the compatibility check.
+		// lastAcceptedHash is not used, so the option is not passed.
+		// In the long term, we should refactor SetupGenesisBlockWithOverride
+		withSkipChainConfigCheckCompatible(true))
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
