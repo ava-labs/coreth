@@ -53,7 +53,6 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
-	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/params"
@@ -1374,10 +1373,8 @@ func (bc *blockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	opts := []stateconf.SnapshotUpdateOption{
-		snapshot.WithBlockHashes(block.Hash(), block.ParentHash()),
-	}
-	root, err := state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), opts...)
+	root, err := state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()),
+		bc.hooks.snapshotUpdateOptions(block)...)
 	if err != nil {
 		return err
 	}

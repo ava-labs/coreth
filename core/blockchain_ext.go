@@ -75,6 +75,14 @@ func (h *blockChainHooks) postInsert(block *types.Block, logs []*types.Log) {
 	blockInsertCount.Inc(1)
 }
 
+func (h *blockChainHooks) snapshotUpdateOptions(block *types.Block) []stateconf.SnapshotUpdateOption {
+	return []stateconf.SnapshotUpdateOption{
+		snapshot.WithBlockHashes(block.Hash(), block.ParentHash()),
+	}
+
+	// No-op should be a nil slice
+}
+
 // getOrOverrideAsRegisteredCounter searches for a metric already registered
 // with `name`. If a metric is found and it is a [metrics.Counter], it is returned. If a
 // metric is found and it is not a [metrics.Counter], it is unregistered and replaced with
