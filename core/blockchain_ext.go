@@ -37,6 +37,9 @@ import (
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/core"
 )
 
 type blockChainHooks struct {
