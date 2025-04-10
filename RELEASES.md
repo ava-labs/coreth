@@ -2,16 +2,15 @@
 
 ## Pending Release
 
+## [v0.15.0](https://github.com/ava-labs/coreth/releases/v0.15.0)
+
 - Bump golang version to v1.23.6
 - Bump golangci-lint to v1.63 and add linters
 - Implement ACP-176
 - Add `GasTarget` to the chain config to allow modifying the chain's `GasTarget` based on the ACP-176 rules
-
 - Added `eth_suggestPriceOptions` API to suggest gas prices (slow, normal, fast) based on the current network conditions
 - Added `"po-slow-fee-percentage"`, `"po-fast-fee-percentage"`, `"po-max-base-fee"`, and `"po-max-tip"` config flags to configure the new `eth_suggestPriceOptions` API
-
-## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
-
+- Remove eth_getAssetBalance API
 - Removed deprecated `ExportKey`, `ExportAVAX`, `Export`, `ImportKey`, `ImportAVAX`, `Import` APIs
 - IMPORTANT: `eth_getProof` calls for historical state will be rejected by default.
   - On archive nodes (`"pruning-enabled": false`): queries for historical proofs for state older than approximately 24 hours preceding the last accepted block will be rejected by default. This can be adjusted with the new option `historical-proof-query-window` which defines the number of blocks before the last accepted block which should be accepted for state proof queries, or set to `0` to accept any block number state query (previous behavior).
@@ -19,6 +18,8 @@
 - Remove API eth_getAssetBalance that was used to query ANT balances (deprecated since v0.10.0)
 - Remove legacy gossip handler and metrics (deprecated since v0.10.0)
 - Refactored trie_prefetcher.go to be structurally similar to [upstream](https://github.com/ethereum/go-ethereum/tree/v1.13.14).
+
+[Commit logs](https://github.com/ava-labs/coreth/compare/v0.14.0...v0.15.0-rc.1)
 
 ## [v0.14.0](https://github.com/ava-labs/coreth/releases/tag/v0.14.0)
 - Minor version update to correspond to avalanchego v1.12.0 / Etna.
