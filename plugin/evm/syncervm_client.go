@@ -133,8 +133,8 @@ type DynamicSyncer interface {
 	Close() error // Must be called after the sync is done
 }
 
-// AsyncReceive returns true if the client is ready to receive a message from the engine
-// Should return true if syncing and useUpstream is true, i.e. currently dynamicaling syncing
+// AsyncReceive returns true if the client should intercept a block from the vm
+// Returns true if syncing and useUpstream is true, i.e. currently dynamically syncing
 func (client *stateSyncerClient) AsyncReceive() bool {
 	// Block until atomic sync is completed for bootstrapping and after sync completes until blockchain updates
 	<-client.atomicDone
@@ -144,7 +144,6 @@ func (client *stateSyncerClient) AsyncReceive() bool {
 }
 
 func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.SyncBlockRequest) error {
-	// Wait for atomic sync to be done prior to queueing
 	log.Debug("Queueing block", "hash", b.ID(), "height", b.Height(), "req", req)
 	err := client.dynamicSyncer.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
 	if err != nil {

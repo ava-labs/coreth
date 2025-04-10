@@ -28,7 +28,7 @@ const (
 	RejectSyncBlockRequest
 
 	// Dynamic state switches state root occasionally
-	// Buffer must be large enough to
+	// Buffer must be large enough to store [pivotInterval] verifies and accepts, plus a few extra
 	pivotInterval = 128
 	bufferSize    = 3 * pivotInterval
 )
@@ -46,12 +46,12 @@ type queueElement struct {
 	resolver func() error
 }
 
-// Interface used by x/sync
+// Interface provided by x/sync
 type manager interface {
 	// Stops syncing progress
 	Close()
 
-	// Nonnil if a fatal error occurred
+	// Non-nil if a fatal error occurred
 	Error() error
 
 	// Initiates state sync in the background
@@ -72,7 +72,7 @@ type manager interface {
 type DynamicSyncConfig struct {
 	// ChainDB is the database that the downloader will use to store the synced state
 	ChainDB ethdb.Database
-	// PivotBlock is the block that the downloader will use as the pivot block
+	// FirstPivotBlock is the block that the downloader will use as the pivot block
 	FirstPivotBlock *types.Block
 	// Scheme is the state scheme that the downloader will use to store the synced state
 	Scheme string
@@ -99,7 +99,7 @@ type DynamicSyncer struct {
 }
 
 func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
-	cleanScheme, err := rawdb.ParseStateScheme(config.Scheme, config.ChainDB)
+	parsedScheme, err := rawdb.ParseStateScheme(config.Scheme, config.ChainDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse state scheme: %w", err)
 	}
@@ -111,12 +111,12 @@ func NewDynamicSyncer(config *DynamicSyncConfig) (*DynamicSyncer, error) {
 		DynamicSyncConfig: config,
 		pivotBlock:        config.FirstPivotBlock,
 	}
-	d.Scheme = cleanScheme
+	d.Scheme = parsedScheme
 
-	if cleanScheme == rawdb.PathScheme || cleanScheme == rawdb.HashScheme {
+	if parsedScheme == rawdb.PathScheme || parsedScheme == rawdb.HashScheme {
 		d.manager = NewSnapManager(d)
 	} else {
-		return nil, fmt.Errorf("unsupported database type: %s", cleanScheme)
+		return nil, fmt.Errorf("unsupported database type: %s", parsedScheme)
 	}
 
 	return d, nil
@@ -174,27 +174,29 @@ func (d *DynamicSyncer) QueueBlockOrPivot(b *types.Block, req SyncBlockRequest, 
 
 	log.Debug("Received queue request", "hash", b.Hash(), "height", b.Number(), "req type", req)
 
-	// If on pivot interval, we should pivot (regardless of whether the queue is full)
-	if req == AcceptSyncBlockRequest && b.NumberU64()%pivotInterval == 0 {
-		log.Debug("Found new pivot block", "hash", b.Hash(), "height", b.NumberU64())
-		if b.NumberU64() <= d.pivotBlock.NumberU64() {
-			// Should never happen, attempt to handle
-			log.Warn("Received pivot with height <= pivot block", "old hash", b.Hash(), "old height")
-		}
+	// If not a pivot block, just return
+	if req != AcceptSyncBlockRequest || b.NumberU64()%pivotInterval != 0 {
+		return nil
+	}
 
-		// Reset pivot first in other goroutine
-		d.pivotBlock = b
-		if err := d.manager.UpdateSyncTarget(b.Root()); err != nil {
-			return fmt.Errorf("failed to update sync target: %w", err)
-		}
-		log.Info("Set new pivot block", "hash", b.Hash(), "height", b.NumberU64())
+	log.Debug("Found new pivot block", "hash", b.Hash(), "height", b.NumberU64())
+	if b.NumberU64() <= d.pivotBlock.NumberU64() {
+		// Should never happen, attempt to handle
+		panic(fmt.Sprintf("New pivot block is older than current pivot block: %d <= %d", b.NumberU64(), d.pivotBlock.NumberU64()))
+	}
 
-		// Clear queue
-		if err := d.flushQueue(false); err != nil {
-			log.Error("Issue flushing queue", "err", err)
-			d.manager.Close()
-			d.done <- err
-		}
+	// Reset pivot first in other goroutine
+	d.pivotBlock = b
+	if err := d.manager.UpdateSyncTarget(b.Root()); err != nil {
+		return fmt.Errorf("failed to update sync target: %w", err)
+	}
+	log.Info("Set new pivot block", "hash", b.Hash(), "height", b.NumberU64())
+
+	// Clear queue
+	if err := d.flushQueue(false); err != nil {
+		log.Error("Issue flushing queue", "err", err)
+		d.manager.Close()
+		d.done <- err
 	}
 
 	return nil

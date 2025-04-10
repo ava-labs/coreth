@@ -283,8 +283,9 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 // If [requestID] is not known, this function will emit a log and return a nil error.
 // If the response handler returns an error it is propagated as a fatal error.
 func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
-	handler, exists := n.markRequestFulfilled(requestID)
 	log.Debug("received AppResponse from peer", "nodeID", nodeID, "requestID", requestID)
+
+	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
 		log.Debug("forwarding AppResponse to SDK network", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
 		return n.p2pNetwork.AppResponse(ctx, nodeID, requestID, response)

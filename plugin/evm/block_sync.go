@@ -77,9 +77,9 @@ func (b *Block) verifyDuringSync() error {
 
 	// Used to avoid re-evaluating atomic transactions, since they were executed synchronously
 	if b.Height() <= lastHeight {
-		tempAtomicBackend := vm.atomicBackend
+		currentAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil
-		defer func() { vm.atomicBackend = tempAtomicBackend }()
+		defer func() { vm.atomicBackend = currentAtomicBackend }()
 	}
 
 	// Write the block to the database using chaindb
@@ -117,8 +117,6 @@ func (b *Block) verifyDuringSync() error {
 			return err
 		}
 	}
-
-	log.Debug("Returning from verify without error", "block", b.ID(), "height", b.Height())
 
 	return nil
 }
