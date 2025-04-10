@@ -1085,7 +1085,9 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	if baseFee := block.BaseFee(); baseFee != nil {
 		latestBaseFeeGauge.Update(baseFee.Int64())
 	}
-	if bc.Config().IsFortuna(block.Time()) {
+	chainConfig := bc.Config()
+	extraConfig := params.GetExtra(chainConfig)
+	if extraConfig.IsFortuna(block.Time()) {
 		s, err := acp176.ParseState(block.Extra())
 		if err != nil {
 			log.Warn("Failed to update fee metrics", "err", err)
