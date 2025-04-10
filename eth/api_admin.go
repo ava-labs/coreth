@@ -35,8 +35,8 @@ import (
 	"strings"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 // AdminAPI is the collection of Ethereum full node related APIs for node

@@ -18,14 +18,14 @@ import (
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/crypto"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 func fundAddressByGenesis(addrs []common.Address) (string, error) {
@@ -34,9 +34,9 @@ func fundAddressByGenesis(addrs []common.Address) (string, error) {
 		Difficulty: common.Big0,
 		GasLimit:   uint64(5000000),
 	}
-	funds := make(map[common.Address]types.GenesisAccount)
+	funds := make(map[common.Address]types.Account)
 	for _, addr := range addrs {
-		funds[addr] = types.GenesisAccount{
+		funds[addr] = types.Account{
 			Balance: balance,
 		}
 	}

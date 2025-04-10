@@ -31,35 +31,45 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/triedb"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGenesisEthUpgrades(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	preEthUpgrades := &params.ChainConfig{
-		ChainID:             big.NewInt(43114), // Specifically refers to mainnet for this UT
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      false,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		NetworkUpgrades: params.NetworkUpgrades{
-			ApricotPhase1BlockTimestamp: utils.NewUint64(0),
-			ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+	preEthUpgrades := params.WithExtra(
+		&params.ChainConfig{
+			ChainID:        big.NewInt(43114), // Specifically refers to mainnet for this UT
+			HomesteadBlock: big.NewInt(0),
+			// For this test to be a proper regression test, DAOForkBlock and
+			// DAOForkSupport should be set to match the values in
+			// [params.SetEthUpgrades]. Otherwise, in case of a regression, the test
+			// would pass as there would be a mismatch at genesis, which is
+			// incorrectly considered a success.
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
 		},
-	}
+		&extras.ChainConfig{
+			NetworkUpgrades: extras.NetworkUpgrades{
+				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+			},
+		},
+	)
 
 	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
 	config := *preEthUpgrades
@@ -84,7 +94,7 @@ func TestGenesisEthUpgrades(t *testing.T) {
 
 	// We should still be able to re-initialize
 	config = *preEthUpgrades
-	config.SetEthUpgrades() // New versions will set additional fields eg, LondonBlock
+	params.SetEthUpgrades(&config) // New versions will set additional fields eg, LondonBlock
 	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
 }

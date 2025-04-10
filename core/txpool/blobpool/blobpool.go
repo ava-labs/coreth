@@ -43,14 +43,14 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
 )
@@ -411,7 +411,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 		p.recheck(addr, nil)
 	}
 	baseFee, err := header.EstimateNextBaseFee(
-		p.chain.Config(),
+		params.GetExtra(p.chain.Config()),
 		p.head,
 		uint64(time.Now().Unix()),
 	)
@@ -841,7 +841,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
 	}
 	baseFeeBig, err := header.EstimateNextBaseFee(
-		p.chain.Config(),
+		params.GetExtra(p.chain.Config()),
 		p.head,
 		uint64(time.Now().Unix()),
 	)

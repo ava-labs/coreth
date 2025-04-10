@@ -6,36 +6,24 @@ package params
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
 	maxJSONLen = 64 * 1024 * 1024 // 64MB
 
+	// TODO: Value to pass to geth's Rules by default where the appropriate
+	// context is not available in the avalanche code. (similar to context.TODO())
+	IsMergeTODO = true
 )
-
-// UpgradeConfig includes the following configs that may be specified in upgradeBytes:
-// - Timestamps that enable avalanche network upgrades,
-// - Enabling or disabling precompiles as network upgrades.
-type UpgradeConfig struct {
-	// Config for enabling and disabling precompiles as network upgrades.
-	PrecompileUpgrades []PrecompileUpgrade `json:"precompileUpgrades,omitempty"`
-}
-
-// AvalancheContext provides Avalanche specific context directly into the EVM.
-type AvalancheContext struct {
-	SnowCtx *snow.Context
-}
 
 // SetEthUpgrades enables Etheruem network upgrades using the same time as
 // the Avalanche network upgrade that enables them.
-func (c *ChainConfig) SetEthUpgrades() {
+func SetEthUpgrades(c *ChainConfig) {
 	// Set Ethereum block upgrades to initially activated as they were already activated on launch.
 	c.HomesteadBlock = big.NewInt(0)
 	c.DAOForkBlock = big.NewInt(0)
@@ -60,51 +48,47 @@ func (c *ChainConfig) SetEthUpgrades() {
 		// to the initially active time. This is likely to correspond to an intended block
 		// number of 0 as well.
 		initiallyActive := uint64(upgrade.InitiallyActiveTime.Unix())
-		if c.ApricotPhase2BlockTimestamp != nil && *c.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
+		extra := GetExtra(c)
+		if extra.ApricotPhase2BlockTimestamp != nil && *extra.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
 			c.BerlinBlock = big.NewInt(0)
 		}
-		if c.ApricotPhase3BlockTimestamp != nil && *c.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
+		if extra.ApricotPhase3BlockTimestamp != nil && *extra.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
 			c.LondonBlock = big.NewInt(0)
 		}
 	}
-	if c.DurangoBlockTimestamp != nil {
-		c.ShanghaiTime = utils.NewUint64(*c.DurangoBlockTimestamp)
+	extra := GetExtra(c)
+	if extra.DurangoBlockTimestamp != nil {
+		c.ShanghaiTime = utils.NewUint64(*extra.DurangoBlockTimestamp)
 	}
-	if c.EtnaTimestamp != nil {
-		c.CancunTime = utils.NewUint64(*c.EtnaTimestamp)
+	if extra.EtnaTimestamp != nil {
+		c.CancunTime = utils.NewUint64(*extra.EtnaTimestamp)
 	}
 }
 
-// UnmarshalJSON parses the JSON-encoded data and stores the result in the
-// object pointed to by c.
-// This is a custom unmarshaler to handle the Precompiles field.
-// Precompiles was presented as an inline object in the JSON.
-// This custom unmarshaler ensures backwards compatibility with the old format.
-func (c *ChainConfig) UnmarshalJSON(data []byte) error {
-	// Alias ChainConfig to avoid recursion
-	type _ChainConfig ChainConfig
-	tmp := _ChainConfig{}
-	if err := json.Unmarshal(data, &tmp); err != nil {
-		return err
+func GetExtra(c *ChainConfig) *extras.ChainConfig {
+	ex := payloads.ChainConfig.Get(c)
+	if ex == nil {
+		ex = &extras.ChainConfig{}
+		payloads.ChainConfig.Set(c, ex)
 	}
-
-	// At this point we have populated all fields except PrecompileUpgrade
-	*c = ChainConfig(tmp)
-
-	return nil
+	return ex
 }
 
-// MarshalJSON returns the JSON encoding of c.
-// This is a custom marshaler to handle the Precompiles field.
-func (c ChainConfig) MarshalJSON() ([]byte, error) {
-	// Alias ChainConfig to avoid recursion
-	type _ChainConfig ChainConfig
-	return json.Marshal(_ChainConfig(c))
+func Copy(c *ChainConfig) ChainConfig {
+	cpy := *c
+	extraCpy := *GetExtra(c)
+	return *WithExtra(&cpy, &extraCpy)
+}
+
+// WithExtra sets the extra payload on `c` and returns the modified argument.
+func WithExtra(c *ChainConfig, extra *extras.ChainConfig) *ChainConfig {
+	payloads.ChainConfig.Set(c, extra)
+	return c
 }
 
 type ChainConfigWithUpgradesJSON struct {
 	ChainConfig
-	UpgradeConfig UpgradeConfig `json:"upgrades,omitempty"`
+	UpgradeConfig extras.UpgradeConfig `json:"upgrades,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler. This is a workaround for the fact that
@@ -114,7 +98,7 @@ type ChainConfigWithUpgradesJSON struct {
 // ChainConfig struct.
 func (cu ChainConfigWithUpgradesJSON) MarshalJSON() ([]byte, error) {
 	// embed the ChainConfig struct into the response
-	chainConfigJSON, err := json.Marshal(cu.ChainConfig)
+	chainConfigJSON, err := json.Marshal(&cu.ChainConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +107,7 @@ func (cu ChainConfigWithUpgradesJSON) MarshalJSON() ([]byte, error) {
 	}
 
 	type upgrades struct {
-		UpgradeConfig UpgradeConfig `json:"upgrades"`
+		UpgradeConfig extras.UpgradeConfig `json:"upgrades"`
 	}
 
 	upgradeJSON, err := json.Marshal(upgrades{cu.UpgradeConfig})
@@ -149,7 +133,7 @@ func (cu *ChainConfigWithUpgradesJSON) UnmarshalJSON(input []byte) error {
 	}
 
 	type upgrades struct {
-		UpgradeConfig UpgradeConfig `json:"upgrades"`
+		UpgradeConfig extras.UpgradeConfig `json:"upgrades"`
 	}
 
 	var u upgrades
@@ -161,64 +145,12 @@ func (cu *ChainConfigWithUpgradesJSON) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// Verify verifies chain config and returns error
-func (c *ChainConfig) Verify() error {
-	// Verify the precompile upgrades are internally consistent given the existing chainConfig.
-	if err := c.verifyPrecompileUpgrades(); err != nil {
-		return fmt.Errorf("invalid precompile upgrades: %w", err)
-	}
-
-	return nil
-}
-
-// IsPrecompileEnabled returns whether precompile with [address] is enabled at [timestamp].
-func (c *ChainConfig) IsPrecompileEnabled(address common.Address, timestamp uint64) bool {
-	config := c.getActivePrecompileConfig(address, timestamp)
-	return config != nil && !config.IsDisabled()
-}
-
 // ToWithUpgradesJSON converts the ChainConfig to ChainConfigWithUpgradesJSON with upgrades explicitly displayed.
 // ChainConfig does not include upgrades in its JSON output.
 // This is a workaround for showing upgrades in the JSON output.
-func (c *ChainConfig) ToWithUpgradesJSON() *ChainConfigWithUpgradesJSON {
+func ToWithUpgradesJSON(c *ChainConfig) *ChainConfigWithUpgradesJSON {
 	return &ChainConfigWithUpgradesJSON{
 		ChainConfig:   *c,
-		UpgradeConfig: c.UpgradeConfig,
+		UpgradeConfig: GetExtra(c).UpgradeConfig,
 	}
-}
-
-func (r *Rules) PredicatersExist() bool {
-	return len(r.Predicaters) > 0
-}
-
-func (r *Rules) PredicaterExists(addr common.Address) bool {
-	_, PredicaterExists := r.Predicaters[addr]
-	return PredicaterExists
-}
-
-// IsPrecompileEnabled returns true if the precompile at [addr] is enabled for this rule set.
-func (r *Rules) IsPrecompileEnabled(addr common.Address) bool {
-	_, ok := r.ActivePrecompiles[addr]
-	return ok
-}
-
-func ptrToString(val *uint64) string {
-	if val == nil {
-		return "nil"
-	}
-	return fmt.Sprintf("%d", *val)
-}
-
-// IsForkTransition returns true if [fork] activates during the transition from
-// [parent] to [current].
-// Taking [parent] as a pointer allows for us to pass nil when checking forks
-// that activate during genesis.
-// Note: this works for both block number and timestamp activated forks.
-func IsForkTransition(fork *uint64, parent *uint64, current uint64) bool {
-	var parentForked bool
-	if parent != nil {
-		parentForked = isTimestampForked(fork, *parent)
-	}
-	currentForked := isTimestampForked(fork, current)
-	return !parentForked && currentForked
 }

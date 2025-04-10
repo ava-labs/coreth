@@ -37,15 +37,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/triedb"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/triedb"
 )
 
 const (
@@ -217,7 +218,7 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, star
 
 	// Write marker to DB to indicate offline pruning finished successfully. We write before calling os.RemoveAll
 	// to guarantee that if the node dies midway through pruning, then this will run during RecoverPruning.
-	if err := rawdb.WriteOfflinePruning(maindb); err != nil {
+	if err := customrawdb.WriteOfflinePruning(maindb); err != nil {
 		return fmt.Errorf("failed to write offline pruning success marker: %w", err)
 	}
 

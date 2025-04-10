@@ -40,17 +40,17 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 const (
@@ -959,13 +959,15 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	defer release()
 
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+
 	// Apply the customization rules if required.
 	if config != nil {
 		originalTime := block.Time()
 		config.BlockOverrides.Apply(&vmctx)
 		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
 		// Should be applied before the state overrides.
-		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, &vmctx, statedb)
+		blockContext := core.NewBlockContext(block.Number(), block.Time())
+		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, blockContext, statedb)
 		if err != nil {
 			return nil, err
 		}
@@ -1056,57 +1058,58 @@ func APIs(backend Backend) []rpc.API {
 // along with a boolean that indicates whether the copy is canonical (equivalent to the original).
 func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) (*params.ChainConfig, bool) {
 	copy := new(params.ChainConfig)
-	*copy = *original
+	*copy = params.Copy(original)
 	canon := true
 
 	// Apply network upgrades (after Berlin) to the copy.
 	// Note in coreth, ApricotPhase2 is the "equivalent" to Berlin.
-	if timestamp := override.ApricotPhase2BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase2BlockTimestamp = timestamp
+	overrideExtra := params.GetExtra(override)
+	if timestamp := overrideExtra.ApricotPhase2BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase2BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase3BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase3BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase3BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase3BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase4BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase4BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase4BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase4BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase5BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase5BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase5BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase5BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePre6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePre6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhasePre6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhasePre6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePost6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePost6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhasePost6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhasePost6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.BanffBlockTimestamp; timestamp != nil {
-		copy.BanffBlockTimestamp = timestamp
+	if timestamp := overrideExtra.BanffBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).BanffBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.CortinaBlockTimestamp; timestamp != nil {
-		copy.CortinaBlockTimestamp = timestamp
+	if timestamp := overrideExtra.CortinaBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).CortinaBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.DurangoBlockTimestamp; timestamp != nil {
-		copy.DurangoBlockTimestamp = timestamp
+	if timestamp := overrideExtra.DurangoBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).DurangoBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.EtnaTimestamp; timestamp != nil {
-		copy.EtnaTimestamp = timestamp
+	if timestamp := overrideExtra.EtnaTimestamp; timestamp != nil {
+		params.GetExtra(copy).EtnaTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.FortunaTimestamp; timestamp != nil {
-		copy.FortunaTimestamp = timestamp
+	if timestamp := overrideExtra.FortunaTimestamp; timestamp != nil {
+		params.GetExtra(copy).FortunaTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {

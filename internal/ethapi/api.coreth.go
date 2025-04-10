@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/common/math"
 )
 
 const (
@@ -64,7 +65,7 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 	// Find min base fee based on chain config
 	// TODO: This can be removed after Fortuna is activated
 	time := s.b.CurrentHeader().Time
-	chainConfig := s.b.ChainConfig()
+	chainConfig := params.GetExtra(s.b.ChainConfig())
 	minBaseFee := new(big.Int)
 	if chainConfig.IsFortuna(time) {
 		minBaseFee.SetUint64(acp176.MinGasPrice)
