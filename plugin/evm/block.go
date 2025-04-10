@@ -186,40 +186,41 @@ func (b *Block) acceptAtomicOps() error {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 	// Only perform shared memory transitions if we haven't already done them
-	if lastHeight < b.Height() {
-		if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-			return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
-		}
-
-		// Update VM state for atomic txs in this block. This includes updating the
-		// atomic tx repo, atomic trie, and shared memory.
-		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-		if err != nil {
-			// should never occur since [b] must be verified before calling Accept
-			return err
-		}
-		// Get pending operations on the vm's versionDB so we can apply them atomically
-		// with the shared memory changes.
-		vdbBatch, err := b.vm.versiondb.CommitBatch()
-		if err != nil {
-			return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
-		}
-
-		// Apply any shared memory changes atomically with other pending changes to
-		// the vm's versionDB.
-		if err := atomicState.Accept(vdbBatch, nil); err != nil {
-			return err
-		}
-
-		// No-op if still syncing
-		for _, tx := range b.atomicTxs {
-			// Remove the accepted transaction from the mempool
-			vm.mempool.RemoveTx(tx)
-		}
-	} else {
-		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height",
-			b.Height())
+	if lastHeight >= b.Height() {
+		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height", b.Height())
+		return nil
 	}
+
+	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	}
+
+	// Update VM state for atomic txs in this block. This includes updating the
+	// atomic tx repo, atomic trie, and shared memory.
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Accept
+		return err
+	}
+	// Get pending operations on the vm's versionDB so we can apply them atomically
+	// with the shared memory changes.
+	vdbBatch, err := b.vm.versiondb.CommitBatch()
+	if err != nil {
+		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+	}
+
+	// No-op if still syncing
+	for _, tx := range b.atomicTxs {
+		// Remove the accepted transaction from the mempool
+		vm.mempool.RemoveTx(tx)
+	}
+
+	// Apply any shared memory changes atomically with other pending changes to
+	// the vm's versionDB.
+	if err := atomicState.Accept(vdbBatch, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -260,6 +261,7 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
+	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	if b.vm.StateSyncClient.AsyncReceive() {
 		if err := b.rejectDuringSync(); err != nil {
 			return err
@@ -270,7 +272,6 @@ func (b *Block) Reject(context.Context) error {
 }
 
 func (b *Block) reject() error {
-	log.Error(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	vm := b.vm
 
 	_, lastHeight, err := vm.readLastAccepted()
@@ -278,23 +279,26 @@ func (b *Block) reject() error {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 	// Only perform shared memory transitions if we haven't already done them
-	if lastHeight < b.Height() {
-		// No-op if still syncing
-		for _, tx := range b.atomicTxs {
-			// Re-issue the transaction in the mempool, continue even if it fails
-			b.vm.mempool.RemoveTx(tx)
-			if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
-				log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
-			}
+	if lastHeight >= b.Height() {
+		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height", b.Height())
+		return nil
+	}
+
+	// No-op if still syncing
+	for _, tx := range b.atomicTxs {
+		// Re-issue the transaction in the mempool, continue even if it fails
+		b.vm.mempool.RemoveTx(tx)
+		if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
+			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
-		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-		if err != nil {
-			// should never occur since [b] must be verified before calling Reject
-			return err
-		}
-		if err := atomicState.Reject(); err != nil {
-			return err
-		}
+	}
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	if err != nil {
+		// should never occur since [b] must be verified before calling Reject
+		return err
+	}
+	if err := atomicState.Reject(); err != nil {
+		return err
 	}
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
@@ -426,7 +430,7 @@ func (b *Block) verifyAtomicOps(writes bool) error {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 
-	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
+	// Used to avoid re-evaluating atomic transactions, since they were executed synchronously
 	if b.Height() <= lastHeight {
 		log.Debug("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
 		tempAtomicBackend := vm.atomicBackend

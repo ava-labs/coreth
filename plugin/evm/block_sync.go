@@ -34,17 +34,14 @@ func (b *Block) acceptDuringSync() error {
 }
 
 func (b *Block) rejectDuringSync() error {
-	var (
-		vm    = b.vm
-		block = b.ethBlock
-	)
+	vm := b.vm
+	block := b.ethBlock
 
 	// Because this will not be called during bootstrapping, this is guaranteed to be a valid atomic operation
 	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
-		log.Error("Should never happen because block must be verified before calling Reject", "block", b.ID(), "height", b.Height())
-		return err
+		panic(fmt.Sprintf("failed to get atomic state for block height %d during sync: %v", b.Height(), err))
 	}
 	if err := atomicState.Reject(); err != nil {
 		return err
@@ -78,7 +75,7 @@ func (b *Block) verifyDuringSync() error {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
 
-	// HACK to avoid re-evaluating atomic transactions, since they were executed synchronously
+	// Used to avoid re-evaluating atomic transactions, since they were executed synchronously
 	if b.Height() <= lastHeight {
 		tempAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil

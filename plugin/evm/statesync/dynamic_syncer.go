@@ -31,8 +31,6 @@ const (
 	// Buffer must be large enough to
 	pivotInterval = 128
 	bufferSize    = 3 * pivotInterval
-
-	snapSyncType = "snap"
 )
 
 var (
