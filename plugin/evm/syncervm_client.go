@@ -417,7 +417,6 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 
 func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", client.syncSummary.BlockRoot)
-	finalHash := client.syncSummary.BlockHash
 
 	var (
 		evmSyncer Syncer
@@ -444,6 +443,12 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 		return err
 	}
 	err = <-evmSyncer.Done()
+
+	// Use pivot hash if available
+	finalHash := client.syncSummary.BlockHash
+	if client.useUpstream {
+		finalHash = client.dynamicSyncer.Pivot().Hash()
+	}
 	log.Info("state sync: sync finished", "root", finalHash, "err", err)
 	if err != nil {
 		return fmt.Errorf("state sync failed: %w", err)
@@ -499,7 +504,11 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	// by [params.BloomBitsBlocks].
 	parentHeight := block.NumberU64() - 1
 	parentHash := block.ParentHash()
-	client.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
+
+	// Silence the bloom indexer if we dynamically synced
+	if !client.useUpstream {
+		client.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
+	}
 
 	if err := client.chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
 		return err
