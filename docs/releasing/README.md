@@ -25,6 +25,7 @@ export VERSION=v0.15.0
     git checkout -b "releases/$VERSION_RC"
     ```
 
+1. Update the [RELEASES.md](../../RELEASES.md) file with the new release version `$VERSION`.
 1. Modify the [plugin/evm/version.go](../../plugin/evm/version.go) `Version` global string variable and set it to the desired `$VERSION`.
 1. Ensure the AvalancheGo version used in [go.mod](../../go.mod) is [its last release](https://github.com/ava-labs/avalanchego/releases). If not, upgrade it with, for example:
 
@@ -34,7 +35,13 @@ export VERSION=v0.15.0
     ```
 
     And fix any errors that may arise from the upgrade. If it requires significant changes, you may want to create a separate PR for the upgrade and wait for it to be merged before continuing with this procedure.
-1. Update the [RELEASES.md](../../RELEASES.md) file with the new version.
+1. Specify the AvalancheGo compatibility in the [README.md relevant section](../../README.md#avalanchego-compatibility). For example we would add:
+
+    ```text
+    ...
+    [v0.7.3] AvalancheGo@v1.12.2/1.13.0-fuji/1.13.0 (Protocol Version: 39)
+    ```
+
 1. Commit your changes and push the branch
 
     ```bash
@@ -49,32 +56,84 @@ export VERSION=v0.15.0
     gh pr create --repo github.com/ava-labs/subnet-evm --base master --title "chore: release $VERSION_RC"
     ```
 
-1. Once the PR checks pass, squash and merge it
-1. Update your master branch, create a tag and push it:
+1. Wait for the PR checks to pass with
 
     ```bash
-    git checkout master
-    git fetch origin master:master
-    git tag "$VERSION_RC"
-    git push -u origin "$VERSION_RC"
+    gh pr checks --watch
     ```
 
-Once the tag is created, you need to test it on the Fuji testnet.
+1. Squash and merge your release branch into `master`, for example:
+
+    ```bash
+    gh pr merge "releases/$VERSION" --squash --delete-branch --subject "chore: release $VERSION" --body "\n- Update AvalancheGo from v1.12.3 to v1.13.0"
+    ```
+
+1. Create and push a tag from the `master` branch:
+
+    ```bash
+    git fetch origin master:master
+    git checkout master
+    # Double check the tip of the master branch is the expected commit
+    # of the squashed release branch
+    git log -1
+    git tag -s "$VERSION_RC"
+    git push origin "$VERSION_RC"
+    ```
+
+1. Once the release candidate tag is created, create a pull request on the AvalancheGo repository, bumping the coreth dependency to use this release candidate. Once proven stable, you can create a release.
 
 ### Release
 
 If a successful release candidate was created, you can now create a release.
 
-Following the previous example in the [Release candidate section](#release-candidate), we will create a release `v0.15.0` indicated by the `$VERSION` variable.
+Following the previous example in the [Release candidate section](#release-candidate) we will create a release `v0.15.0` indicated by the `$VERSION` variable.
 
-1. Head to the last release candidate pull request, and **restore** the deleted branch at the bottom of the Github page.
-1. Create a new release through the [Github web interface](https://github.com/ava-labs/subnet-evm/releases/new)
-    1. In the "Choose a tag" box, enter `$VERSION` (`v0.15.0`)
-    1. In the "Target", pick the previously restored last release candidate branch `releases/${VERSION_RC}`, for example `releases/v0.15.0-rc.0`.
-    Do not select `master` as the target branch to prevent adding new master branch commits to the release.
-    1. Pick the previous release, for example as `v0.14.0` in our case, since the default would be the last release candidate.
-    1. Set the "Release title" to `$VERSION` (`v0.15.0`)
-    1. Set the description (breaking changes, features, fixes, documentation); you might want to use the [RELEASES.md](../../RELEASES.md) document.
-    1. Only tick the box "Set as the latest release"
-    1. Click on the "Create release" button
+1. Create and push a tag from the `master` branch:
+
+    ```bash
+    git checkout master
+    git pull origin
+    # Double check the tip of the master branch is the expected commit
+    # of the squashed release branch
+    git log -1
+    git tag -s "$VERSION"
+    git push origin "$VERSION"
+    ```
+
+1. Create a new release on Github, either using:
+    - the [Github web interface](https://github.com/ava-labs/subnet-evm/releases/new)
+        1. In the "Choose a tag" box, select the tag previously created `$VERSION` (`v0.15.0`)
+        1. Pick the previous tag, for example as `v0.14.0`.
+        1. Set the "Release title" to `$VERSION` (`v0.15.0`)
+        1. Set the description using this format:
+
+            ```markdown
+            # Breaking changes
+
+            # Features
+
+            # Fixes
+
+            # Documentation
+
+            ```
+
+        1. Only tick the box "Set as the latest release"
+        1. Click on the "Create release" button
+    - the Github CLI `gh`:
+
+        ```bash
+        PREVIOUS_VERSION=v0.14.0
+        NOTES="# Breaking changes
+
+        # Features
+
+        # Fixes
+
+        # Documentation
+
+        "
+        gh release create "$VERSION" --notes-start-tag "$PREVIOUS_VERSION" --notes-from-tag "$VERSION" --title "$VERSION" --notes "$NOTES" --verify-tag
+        ```
+
 1. Create a pull request upgrading the coreth dependency on [AvalancheGo](https://github.com/ava-labs/avalanchego).
