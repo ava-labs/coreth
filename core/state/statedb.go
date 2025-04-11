@@ -30,7 +30,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
@@ -108,8 +108,8 @@ func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 		s.AddBalance(addr, new(uint256.Int)) // used to cause touch
 		return
 	}
-	if !ethstate.GetExtra(s.StateDB, types.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s.StateDB, types.IsMultiCoinPayloads, addr, true)
+	if !ethstate.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
+		ethstate.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
 	}
 	newAmount := new(big.Int).Add(s.GetBalanceMultiCoin(addr, coinID), amount)
 	NormalizeCoinID(&coinID)
@@ -124,8 +124,8 @@ func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 	// Note: It's not needed to set the IsMultiCoin (extras) flag here, as this
 	// call would always be preceded by a call to AddBalanceMultiCoin, which would
 	// set the extra flag. Seems we should remove the redundant code.
-	if !ethstate.GetExtra(s.StateDB, types.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s.StateDB, types.IsMultiCoinPayloads, addr, true)
+	if !ethstate.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
+		ethstate.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
 	}
 	newAmount := new(big.Int).Sub(s.GetBalanceMultiCoin(addr, coinID), amount)
 	NormalizeCoinID(&coinID)
@@ -162,7 +162,7 @@ func (s *StateDB) Copy() *StateDB {
 }
 
 // NormalizeCoinID ORs the 0th bit of the first byte in
-// [coinID], which ensures this bit will be 1 and all other
+// `coinID`, which ensures this bit will be 1 and all other
 // bits are left the same.
 // This partitions multicoin storage from normal state storage.
 func NormalizeCoinID(coinID *common.Hash) {
@@ -170,7 +170,7 @@ func NormalizeCoinID(coinID *common.Hash) {
 }
 
 // NormalizeStateKey ANDs the 0th bit of the first byte in
-// [key], which ensures this bit will be 0 and all other bits
+// `key`, which ensures this bit will be 0 and all other bits
 // are left the same.
 // This partitions normal state storage from multicoin storage.
 func NormalizeStateKey(key *common.Hash) {

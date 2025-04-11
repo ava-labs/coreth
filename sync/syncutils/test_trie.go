@@ -4,14 +4,13 @@
 package syncutils
 
 import (
-	cryptoRand "crypto/rand"
 	"encoding/binary"
 	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
@@ -176,10 +175,7 @@ func FillAccounts(
 			t.Fatalf("failed to rlp encode account: %v", err)
 		}
 
-		key, err := utils.NewKey(cryptoRand.Reader)
-		if err != nil {
-			t.Fatal(err)
-		}
+		key := utils.NewKey(t)
 		tr.MustUpdate(key.Address[:], accBytes)
 		accounts[key] = &acc
 	}

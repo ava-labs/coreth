@@ -32,10 +32,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie/trienode"
@@ -103,7 +103,7 @@ type Config struct {
 	ReadOnly       bool   // Flag whether the database is opened in read only mode.
 }
 
-func (c Config) BackendConstructor(diskdb ethdb.Database, _ *triedb.Config) triedb.DBOverride {
+func (c Config) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
 	return New(diskdb, &c)
 }
 

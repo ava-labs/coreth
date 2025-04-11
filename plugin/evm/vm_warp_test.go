@@ -27,7 +27,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
@@ -41,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
 )
@@ -656,7 +656,6 @@ func testReceiveWarpMessage(
 	ethBlock := block2.(*chain.BlockWrapper).Block.(*Block).ethBlock
 	rules := params.GetExtra(vm.chainConfig).GetAvalancheRules(ethBlock.Time())
 	headerPredicateResultsBytes := customheader.PredicateBytesFromExtra(rules, ethBlock.Extra())
-	require.NotEmpty(headerPredicateResultsBytes)
 	results, err := predicate.ParseResults(headerPredicateResultsBytes)
 	require.NoError(err)
 

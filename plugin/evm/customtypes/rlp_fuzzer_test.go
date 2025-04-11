@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package customtypes
 
 import (
 	"bytes"
@@ -24,6 +24,11 @@ import (
 
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/holiman/uint256"
+
+	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
+	// package so assume the presence of identifiers. A dot-import reduces PR
+	// noise during the refactoring.
+	. "github.com/ava-labs/libevm/core/types"
 )
 
 func decodeEncode(input []byte, val interface{}) error {

@@ -33,10 +33,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
@@ -57,10 +57,10 @@ const (
 
 // ====== If resolving merge conflicts ======
 //
-// All calls to metrics.NewRegistered*() have been replaced with
-// metrics.GetOrRegister*() and this package's corresponding libevm package
-// imported above. Together these ensure that the metric here is the same as the
-// one with the same name in libevm.
+// All calls to metrics.NewRegistered*() for metrics also defined in libevm/triedb/hashdb
+// have been replaced with metrics.GetOrRegister*() to get metrics already registered in
+// libevm/triedb/hashdb or register them here otherwise. These replacements ensure the same
+// metrics are shared between the two packages.
 var (
 	memcacheCleanHitMeter   = metrics.GetOrRegisterMeter("hashdb/memcache/clean/hit", nil)
 	memcacheCleanMissMeter  = metrics.GetOrRegisterMeter("hashdb/memcache/clean/miss", nil)
@@ -114,15 +114,8 @@ type Config struct {
 	ReferenceRootAtomicallyOnUpdate bool   // Whether to reference the root node on update
 }
 
-func (c Config) BackendConstructor(diskdb ethdb.Database, config *triedb.Config) triedb.DBOverride {
-	var resolver ChildResolver
-	if config.IsVerkle {
-		// TODO define verkle resolver
-		log.Crit("Verkle node resolver is not defined")
-	} else {
-		resolver = trie.MerkleResolver{}
-	}
-	return New(diskdb, &c, resolver)
+func (c Config) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
+	return New(diskdb, &c, trie.MerkleResolver{})
 }
 
 // Defaults is the default setting for database if it's not specified.

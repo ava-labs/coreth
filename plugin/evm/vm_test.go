@@ -5,7 +5,6 @@ package evm
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -61,10 +60,11 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/libevm/core/types"
 
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
@@ -946,7 +946,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 		t.Fatal(err)
 	}
 
-	conflictingAtomicTxBlock := types.NewBlockWithExtData(
+	conflictingAtomicTxBlock := customtypes.NewBlockWithExtData(
 		types.CopyHeader(validEthBlock.Header()),
 		nil,
 		nil,
@@ -980,10 +980,10 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	}
 
 	header := types.CopyHeader(validEthBlock.Header())
-	headerExtra := types.GetHeaderExtra(header)
+	headerExtra := customtypes.GetHeaderExtra(header)
 	headerExtra.ExtDataGasUsed.Mul(common.Big2, headerExtra.ExtDataGasUsed)
 
-	internalConflictBlock := types.NewBlockWithExtData(
+	internalConflictBlock := customtypes.NewBlockWithExtData(
 		header,
 		nil,
 		nil,
@@ -1377,10 +1377,7 @@ func TestSetPreferenceRace(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	key, err := utils.NewKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	key := utils.NewKey(t)
 
 	key0 := testKeys[0]
 	addr0 := key0.Address()
@@ -2383,13 +2380,13 @@ func TestUncleBlock(t *testing.T) {
 	uncleBlockHeader := types.CopyHeader(blkDEthBlock.Header())
 	uncleBlockHeader.UncleHash = types.CalcUncleHash(uncles)
 
-	uncleEthBlock := types.NewBlockWithExtData(
+	uncleEthBlock := customtypes.NewBlockWithExtData(
 		uncleBlockHeader,
 		blkDEthBlock.Transactions(),
 		uncles,
 		nil,
 		trie.NewStackTrie(nil),
-		types.BlockExtData(blkDEthBlock),
+		customtypes.BlockExtData(blkDEthBlock),
 		false,
 	)
 	uncleBlock, err := vm2.newBlock(uncleEthBlock)
@@ -2440,7 +2437,7 @@ func TestEmptyBlock(t *testing.T) {
 	// Create empty block from blkA
 	ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
 
-	emptyEthBlock := types.NewBlockWithExtData(
+	emptyEthBlock := customtypes.NewBlockWithExtData(
 		types.CopyHeader(ethBlock.Header()),
 		nil,
 		nil,
@@ -2450,7 +2447,7 @@ func TestEmptyBlock(t *testing.T) {
 		false,
 	)
 
-	if len(types.BlockExtData(emptyEthBlock)) != 0 || types.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash != (common.Hash{}) {
+	if len(customtypes.BlockExtData(emptyEthBlock)) != 0 || customtypes.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash != (common.Hash{}) {
 		t.Fatalf("emptyEthBlock should not have any extra data")
 	}
 
@@ -2710,13 +2707,13 @@ func TestFutureBlock(t *testing.T) {
 	// Set the modified time to exceed the allowed future time
 	modifiedTime := modifiedHeader.Time + uint64(maxFutureBlockTime.Seconds()+1)
 	modifiedHeader.Time = modifiedTime
-	modifiedBlock := types.NewBlockWithExtData(
+	modifiedBlock := customtypes.NewBlockWithExtData(
 		modifiedHeader,
 		nil,
 		nil,
 		nil,
 		new(trie.Trie),
-		types.BlockExtData(internalBlkA.ethBlock),
+		customtypes.BlockExtData(internalBlkA.ethBlock),
 		false,
 	)
 
@@ -3271,10 +3268,10 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 
 	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if eBlockGasCost := types.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
+	if eBlockGasCost := customtypes.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
-	if eExtDataGasUsed := types.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
+	if eExtDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
 	}
 	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
@@ -3330,11 +3327,11 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 	}
 
 	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if types.BlockGasCost(ethBlk) == nil || types.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", types.BlockGasCost(ethBlk))
+	if customtypes.BlockGasCost(ethBlk) == nil || customtypes.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
+		t.Fatalf("expected blockGasCost to be at least 100 but got %d", customtypes.BlockGasCost(ethBlk))
 	}
-	if types.BlockExtDataGasUsed(ethBlk) == nil || types.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", types.BlockExtDataGasUsed(ethBlk))
+	if customtypes.BlockExtDataGasUsed(ethBlk) == nil || customtypes.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
+		t.Fatalf("expected extDataGasUsed to be 0 but got %d", customtypes.BlockExtDataGasUsed(ethBlk))
 	}
 	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
@@ -3441,10 +3438,10 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	}
 
 	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if eBlockGasCost := types.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
+	if eBlockGasCost := customtypes.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
-	if eExtDataGasUsed := types.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
+	if eExtDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
 		t.Fatalf("expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
 	}
 	minRequiredTip, err := header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
@@ -3492,11 +3489,11 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 	}
 
 	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	if types.BlockGasCost(ethBlk) == nil || types.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", types.BlockGasCost(ethBlk))
+	if customtypes.BlockGasCost(ethBlk) == nil || customtypes.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
+		t.Fatalf("expected blockGasCost to be at least 100 but got %d", customtypes.BlockGasCost(ethBlk))
 	}
-	if types.BlockExtDataGasUsed(ethBlk) == nil || types.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", types.BlockExtDataGasUsed(ethBlk))
+	if customtypes.BlockExtDataGasUsed(ethBlk) == nil || customtypes.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
+		t.Fatalf("expected extDataGasUsed to be 0 but got %d", customtypes.BlockExtDataGasUsed(ethBlk))
 	}
 	minRequiredTip, err = header.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
 	if err != nil {
@@ -3590,10 +3587,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		testShortIDAddrs[1]: importAmount,
 		testShortIDAddrs[2]: importAmount,
 	})
-	conflictKey, err := utils.NewKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	conflictKey := utils.NewKey(t)
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -3756,7 +3750,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	}
 
 	// Construct the new block with the extra data in the new format (slice of atomic transactions).
-	ethBlk2 := types.NewBlockWithExtData(
+	ethBlk2 := customtypes.NewBlockWithExtData(
 		types.CopyHeader(validEthBlock.Header()),
 		nil,
 		nil,
@@ -3903,13 +3897,13 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
 			header := types.CopyHeader(ethBlock.Header())
 			header.ParentBeaconRoot = test.beaconRoot
-			parentBeaconEthBlock := types.NewBlockWithExtData(
+			parentBeaconEthBlock := customtypes.NewBlockWithExtData(
 				header,
 				nil,
 				nil,
 				nil,
 				new(trie.Trie),
-				types.BlockExtData(ethBlock),
+				customtypes.BlockExtData(ethBlock),
 				false,
 			)
 

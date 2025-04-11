@@ -43,12 +43,12 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
@@ -115,9 +115,9 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			BaseFee:  mid,
 			Extra:    make([]byte, ap3.WindowSize),
 		}
-		configExtra := params.GetExtra(bc.config)
+		config := params.GetExtra(bc.config)
 		baseFee, err := header.BaseFee(
-			configExtra, parent, blockTime,
+			config, parent, blockTime,
 		)
 		if err != nil {
 			panic(err)

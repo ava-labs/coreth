@@ -3,9 +3,9 @@ package evm
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/log"
@@ -96,7 +96,7 @@ func (b *Block) verifyDuringSync() error {
 			return err
 		}
 
-		txs, err := atomic.ExtractAtomicTxs(types.BlockExtData(block), rulesExtra.IsApricotPhase5, atomic.Codec)
+		txs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(block), rulesExtra.IsApricotPhase5, atomic.Codec)
 		if err != nil {
 			return err
 		}

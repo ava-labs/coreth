@@ -43,15 +43,17 @@ import (
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/params"
-	customrawdb "github.com/ava-labs/coreth/plugin/evm/rawdb"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
@@ -66,13 +68,15 @@ import (
 
 // ====== If resolving merge conflicts ======
 //
-// All calls to metrics.NewRegistered*() have been replaced with
-// metrics.GetOrRegister*() and this package's corresponding libevm package
-// imported above. Together these ensure that the metric here is the same as the
-// one with the same name in libevm.
+// All calls to metrics.NewRegistered*() for metrics also defined in libevm/core have been
+// replaced either with:
+//   - metrics.GetOrRegister*() to get a metric already registered in libevm/core, or register it
+//     here otherwise
+//   - [getOrOverrideAsRegisteredCounter] to get a metric already registered in libevm/core
+//     only if it is a [metrics.Counter]. If it is not, the metric is unregistered and registered
+//     as a [metrics.Counter] here.
 //
-// Note, however, those that have had their types overridden as
-// [metrics.Counter].
+// These replacements ensure the same metrics are shared between the two packages.
 var (
 	accountReadTimer         = getOrOverrideAsRegisteredCounter("chain/account/reads", nil)
 	accountHashTimer         = getOrOverrideAsRegisteredCounter("chain/account/hashes", nil)
@@ -110,6 +114,11 @@ var (
 
 	acceptedLogsCounter  = metrics.GetOrRegisterCounter("chain/logs/accepted", nil)
 	processedLogsCounter = metrics.GetOrRegisterCounter("chain/logs/processed", nil)
+
+	latestBaseFeeGauge     = metrics.NewRegisteredGauge("chain/latest/basefee", nil)
+	latestGasExcessGauge   = metrics.NewRegisteredGauge("chain/latest/gas/excess", nil)
+	latestGasCapacityGauge = metrics.NewRegisteredGauge("chain/latest/gas/capacity", nil)
+	latestGasTargetGauge   = metrics.NewRegisteredGauge("chain/latest/gas/target", nil)
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
@@ -194,7 +203,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		config.DBOverride = hashdb.Config{
 			CleanCacheSize:                  c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:                     trieCleanCacheStatsNamespace,
-			ReferenceRootAtomicallyOnUpdate: true, // Automatically reference root nodes when an update is made
+			ReferenceRootAtomicallyOnUpdate: true,
 		}.BackendConstructor
 	}
 	if c.StateScheme == rawdb.PathScheme {
@@ -585,7 +594,7 @@ func (bc *BlockChain) startAcceptor() {
 		bc.acceptorTipLock.Unlock()
 
 		// Update accepted feeds
-		flattenedLogs := types.FlattenLogs(logs)
+		flattenedLogs := customtypes.FlattenLogs(logs)
 		bc.chainAcceptedFeed.Send(ChainEvent{Block: next, Hash: next.Hash(), Logs: flattenedLogs})
 		if len(flattenedLogs) > 0 {
 			bc.logsAcceptedFeed.Send(flattenedLogs)
@@ -1075,6 +1084,22 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
+	if baseFee := block.BaseFee(); baseFee != nil {
+		latestBaseFeeGauge.Update(baseFee.Int64())
+	}
+	chainConfig := bc.Config()
+	extraConfig := params.GetExtra(chainConfig)
+	if extraConfig.IsFortuna(block.Time()) {
+		s, err := acp176.ParseState(block.Extra())
+		if err != nil {
+			log.Warn("Failed to update fee metrics", "err", err)
+			return nil
+		}
+
+		latestGasExcessGauge.Update(int64(s.Gas.Excess))
+		latestGasCapacityGauge.Update(int64(s.Gas.Capacity))
+		latestGasTargetGauge.Update(int64(s.Target()))
+	}
 	return nil
 }
 
@@ -1173,8 +1198,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 	}
 
 	// Commit all cached state changes into underlying memory database.
-	var err error
-	_, err = bc.commitWithSnap(block, parentRoot, state)
+	_, err := bc.commitWithSnap(block, parentRoot, state)
 	if err != nil {
 		return err
 	}
@@ -1382,7 +1406,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 		"parentHash", block.ParentHash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"elapsed", common.PrettyDuration(time.Since(start)),
-		"root", block.Root(), "baseFeePerGas", block.BaseFee(), "blockGasCost", types.BlockGasCost(block),
+		"root", block.Root(), "baseFeePerGas", block.BaseFee(), "blockGasCost", customtypes.BlockGasCost(block),
 	)
 
 	processedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
@@ -1425,7 +1449,7 @@ func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*
 // the processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	unflattenedLogs := bc.collectUnflattenedLogs(b, removed)
-	return types.FlattenLogs(unflattenedLogs)
+	return customtypes.FlattenLogs(unflattenedLogs)
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
@@ -1696,8 +1720,8 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) commitWithSnap(
 	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
-	// blockHashes must be passed through Commit since snapshots are based on the
-	// block hash.
+	// blockHashes must be passed through [state.StateDB]'s Commit since snapshots
+	// are based on the block hash.
 	blockHashes := snapshot.WithBlockHashes(current.Hash(), current.ParentHash())
 	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), blockHashes)
 	if err != nil {
@@ -1864,7 +1888,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
-			if previousRoot != (common.Hash{}) {
+			if previousRoot != (common.Hash{}) && previousRoot != root {
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root
