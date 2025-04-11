@@ -35,13 +35,6 @@ export VERSION=v0.15.0
     ```
 
     And fix any errors that may arise from the upgrade. If it requires significant changes, you may want to create a separate PR for the upgrade and wait for it to be merged before continuing with this procedure.
-1. Specify the AvalancheGo compatibility in the [README.md relevant section](../../README.md#avalanchego-compatibility). For example we would add:
-
-    ```text
-    ...
-    [v0.7.3] AvalancheGo@v1.12.2/1.13.0-fuji/1.13.0 (Protocol Version: 39)
-    ```
-
 1. Commit your changes and push the branch
 
     ```bash
