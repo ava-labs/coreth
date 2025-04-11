@@ -101,6 +101,8 @@ Following the previous example in the [Release candidate section](#release-candi
         1. Set the description using this format:
 
             ```markdown
+            This is the Coreth version used in AvalancheGo@v1.13.1
+
             # Breaking changes
 
             # Features
@@ -117,7 +119,9 @@ Following the previous example in the [Release candidate section](#release-candi
 
         ```bash
         PREVIOUS_VERSION=v0.14.0
-        NOTES="# Breaking changes
+        NOTES="This is the Coreth version used in AvalancheGo@v1.13.1
+
+        # Breaking changes
 
         # Features
 
