@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie"
 
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
@@ -479,5 +480,21 @@ func (*DummyEngine) CalcDifficulty(chain consensus.ChainHeaderReader, time uint6
 }
 
 func (*DummyEngine) Close() error {
+	return nil
+}
+
+func (*DummyEngine) SealHash(header *types.Header) common.Hash {
+	return header.Hash()
+}
+
+func (d *DummyEngine) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	header := block.Header()
+	go func() {
+		select {
+		case results <- block:
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", d.SealHash(header))
+		}
+	}()
 	return nil
 }
