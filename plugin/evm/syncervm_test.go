@@ -148,7 +148,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		[]byte(genesisJSONLatest),
 		nil,
 		[]byte(stateSyncDisabledConfigJSON),
-		vmSetup.syncerVM.toEngine,
+		nil,
 		[]*commonEng.Fx{},
 		appSender,
 	); err != nil {
@@ -213,7 +213,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		[]byte(genesisJSONLatest),
 		nil,
 		[]byte(configJSON),
-		vmSetup.syncerVM.toEngine,
+		nil,
 		[]*commonEng.Fx{},
 		appSender,
 	); err != nil {
@@ -285,7 +285,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			testShortIDAddrs[0]: importAmount,
 		}
 	)
-	_, serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
+	serverVM, _, serverAtomicMemory, serverAppSender := GenesisVMWithUTXOs(
 		t, true, "", "", "", alloc,
 	)
 	t.Cleanup(func() {
@@ -361,7 +361,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 
 	// initialise [syncerVM] with blank genesis state
 	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d}`, test.stateSyncMinBlocks, 4)
-	syncerEngineChan, syncerVM, syncerDB, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
+	syncerVM, syncerDB, syncerAtomicMemory, syncerAppSender := GenesisVMWithUTXOs(
 		t, false, "", stateSyncEnabledJSON, "", alloc,
 	)
 	shutdownOnceSyncerVM := &shutdownOnceVM{VM: syncerVM}
@@ -415,7 +415,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		fundedAccounts:       accounts,
 		syncerVM:             syncerVM,
 		syncerDB:             syncerDB,
-		syncerEngineChan:     syncerEngineChan,
 		syncerAtomicMemory:   syncerAtomicMemory,
 		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
 	}
@@ -432,7 +431,6 @@ type syncVMSetup struct {
 
 	syncerVM             *VM
 	syncerDB             avalanchedatabase.Database
-	syncerEngineChan     <-chan commonEng.Message
 	syncerAtomicMemory   *avalancheatomic.Memory
 	shutdownOnceSyncerVM *shutdownOnceVM
 }
@@ -465,7 +463,6 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		includedAtomicTxs  = vmSetup.includedAtomicTxs
 		fundedAccounts     = vmSetup.fundedAccounts
 		syncerVM           = vmSetup.syncerVM
-		syncerEngineChan   = vmSetup.syncerEngineChan
 		syncerAtomicMemory = vmSetup.syncerAtomicMemory
 	)
 	// get last summary and test related methods
@@ -484,8 +481,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		return
 	}
 
-	msg := <-syncerEngineChan
-	require.Equal(commonEng.StateSyncDone, msg)
+	require.Equal(commonEng.StateSyncDone, syncerVM.SubscribeToEvents(context.Background()))
 
 	// If the test is expected to error, assert the correct error is returned and finish the test.
 	err = syncerVM.StateSyncClient.Error()

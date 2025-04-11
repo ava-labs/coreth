@@ -9,9 +9,11 @@ import (
 	"math/big"
 	"testing"
 
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/stretchr/testify/require"
+
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
-	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
@@ -26,7 +28,7 @@ import (
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
 // that attempt to send the funds to each of the test keys (list of length 3).
-func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
+func createExportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
 	// Add a UTXO to shared memory
 	utxo := &avax.UTXO{
 		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
@@ -66,7 +68,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 
-	<-issuer
+	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -324,7 +326,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+			vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
@@ -382,7 +384,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
@@ -441,7 +443,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 }
 
 func TestExportTxSemanticVerify(t *testing.T) {
-	_, vm, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	vm, _, _, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -938,7 +940,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 }
 
 func TestExportTxAccept(t *testing.T) {
-	_, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
+	vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase0, "", "")
 
 	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
 
@@ -1697,7 +1699,7 @@ func TestNewExportTx(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
+			vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
 
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
@@ -1746,7 +1748,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1870,7 +1872,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
+			vm, _, sharedMemory, _ := GenesisVM(t, true, test.genesis, "", "")
 
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
@@ -1949,7 +1951,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
