@@ -17,6 +17,7 @@ import (
 	agoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
+	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/set"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
@@ -93,7 +94,10 @@ func init() {
 	}
 
 	for _, testVdr := range testVdrs {
-		blsSignature := testVdr.sk.Sign(unsignedMsg.Bytes())
+		blsSignature, err := testVdr.sk.Sign(unsignedMsg.Bytes())
+		if err != nil {
+			panic(err)
+		}
 		blsSignatures = append(blsSignatures, blsSignature)
 	}
 
@@ -111,7 +115,7 @@ func (v *testValidator) Compare(o *testValidator) int {
 }
 
 func newTestValidator() *testValidator {
-	sk, err := bls.NewSigner()
+	sk, err := localsigner.New()
 	if err != nil {
 		panic(err)
 	}
@@ -123,7 +127,7 @@ func newTestValidator() *testValidator {
 		sk:     sk,
 		vdr: &avalancheWarp.Validator{
 			PublicKey:      pk,
-			PublicKeyBytes: pk.Serialize(),
+			PublicKeyBytes: bls.PublicKeyToUncompressedBytes(pk),
 			Weight:         3,
 			NodeIDs:        []ids.NodeID{nodeID},
 		},
@@ -240,7 +244,9 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			PublicKey: testVdrs[i].vdr.PublicKey,
 		}
 		getValidatorsOutput[testVdrs[i].nodeID] = validatorOutput
-		blsSignatures = append(blsSignatures, testVdrs[i].sk.Sign(unsignedMsg.Bytes()))
+		signature, err := testVdrs[i].sk.Sign(unsignedMsg.Bytes())
+		require.NoError(err)
+		blsSignatures = append(blsSignatures, signature)
 	}
 	aggregateSignature, err := bls.AggregateSignatures(blsSignatures)
 	require.NoError(err)
