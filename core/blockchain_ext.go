@@ -2,7 +2,12 @@
 // See the file LICENSE for licensing terms.
 package core
 
-import "github.com/ava-labs/libevm/metrics"
+import (
+	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/libevm/core"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/metrics"
+)
 
 // getOrOverrideAsRegisteredCounter searches for a metric already registered
 // with `name`. If a metric is found and it is a [metrics.Counter], it is returned. If a
@@ -23,4 +28,8 @@ func getOrOverrideAsRegisteredCounter(name string, r metrics.Registry) metrics.C
 	// `name` must have already been registered to be any other type
 	r.Unregister(name)
 	return metrics.NewRegisteredCounter(name, r)
+}
+
+func (b *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status core.WriteStatus, err error) {
+	return core.NonStatTy, nil
 }
