@@ -333,7 +333,7 @@ func (w *worker) etherbase() common.Address {
 func (w *worker) setGasCeil(ceil uint64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	// w.config.GasCeil = ceil
+	w.config.GasCeil = ceil
 }
 
 // setExtra sets the content used to initialize the block extra field.
