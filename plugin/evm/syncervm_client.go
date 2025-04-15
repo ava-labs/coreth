@@ -91,11 +91,10 @@ type stateSyncerClient struct {
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
-	client := &stateSyncerClient{
+	return &stateSyncerClient{
 		stateSyncClientConfig: config,
 		syncQueue:             NewSyncQueue(),
 	}
-	return client
 }
 
 type StateSyncClient interface {
@@ -117,7 +116,7 @@ type StateSyncClient interface {
 // along with Start/Done methods to control
 // and monitor progress.
 type Syncer interface {
-	Start(context.Context) error
+	Start(ctx context.Context) error
 	Done() <-chan error
 }
 
@@ -278,7 +277,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		defer cancel()
 
 		if err := client.stateSync(ctx); err != nil {
-			log.Error("Returned from stateSync with error")
 			client.stateSyncErr = err
 		} else {
 			client.stateSyncErr = client.finalizeStateSync()
@@ -365,10 +363,6 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 	}
 	err = <-atomicSyncer.Done()
 	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
-	if err != nil {
-		return fmt.Errorf("atomic sync failed: %w", err)
-	}
-
 	return client.finishAtomicSync(client.syncSummary.BlockHash, client.syncSummary.BlockNumber)
 }
 
@@ -414,11 +408,10 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 			return err
 		}
 	}
-	if err = evmSyncer.Start(ctx); err != nil {
+	if err := evmSyncer.Start(ctx); err != nil {
 		return err
 	}
 	err = <-evmSyncer.Done()
-
 	if err != nil {
 		return fmt.Errorf("state sync failed: %w", err)
 	}
@@ -484,7 +477,7 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	}
 
 	if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
-		return fmt.Errorf("could not set last accepted block: %w", err)
+		return err
 	}
 
 	// Must rebuild the snapshot if snap-sync is enabled

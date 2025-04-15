@@ -685,7 +685,6 @@ func (bc *BlockChain) SenderCacher() *TxSenderCacher {
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	// Initialize genesis state
-	log.Debug("Called loadLastState with", "hash", lastAcceptedHash)
 	if lastAcceptedHash == (common.Hash{}) {
 		return bc.loadGenesisState()
 	}
@@ -700,7 +699,6 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	if headBlock == nil {
 		return fmt.Errorf("could not load head block %s", head.Hex())
 	}
-	log.Debug("Put head block in loadLastState as", "hash", headBlock.Hash(), "height", headBlock.NumberU64())
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(headBlock.Header())
 
@@ -1782,20 +1780,8 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	// initialized (i.e., this node has not accepted any blocks asynchronously).
 	acceptorTipUpToDate := acceptorTip == (common.Hash{}) || acceptorTip == current.Hash()
 
-	// Check trie state availability
-	trieStateUpToDate := bc.HasState(current.Root())
-	if !trieStateUpToDate && bc.triedb.Scheme() == rawdb.PathScheme {
-		// If the state is not available, we may be able to recover in path scheme
-		if trieStateUpToDate := bc.stateRecoverable(current.Root()); trieStateUpToDate {
-			log.Info("State is recoverable", "root", current.Root())
-			if err := bc.triedb.Recover(current.Root()); err != nil {
-				return fmt.Errorf("failed to recover state: %w", err)
-			}
-		}
-	}
-
 	// If the state is already available and the acceptor tip is up to date, skip re-processing.
-	if trieStateUpToDate && acceptorTipUpToDate {
+	if bc.HasState(current.Root()) && acceptorTipUpToDate {
 		log.Info("Skipping state reprocessing", "root", current.Root())
 		return nil
 	}
@@ -2090,7 +2076,6 @@ func (bc *BlockChain) gatherBlockRootsAboveLastAccepted() map[common.Hash]struct
 // in-memory and on disk current block pointers to [block].
 // Only should be called after state sync has completed.
 func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
-	log.Debug("Called ResetToStateSyncedBlock with", "hash", block.Hash(), "height", block.NumberU64())
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
