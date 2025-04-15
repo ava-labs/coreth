@@ -83,10 +83,11 @@ type Miner struct {
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, clock *mockable.Clock) *Miner {
 	isLocalBlock := (func(*types.Header) bool)(nil)
-	return &Miner{
+	miner := &Miner{
 		worker: newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, false),
-		clock:  clock,
 	}
+	miner.clock = clock
+	return miner
 }
 
 func (miner *Miner) Start() {

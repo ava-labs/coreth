@@ -45,10 +45,6 @@ import (
 )
 
 const (
-	// Leaves 256 KBs for other sections of the block (limit is 2MB).
-	// This should suffice for atomic txs, proposervm header, and serialization overhead.
-	targetTxsSize = 1792 * units.KiB
-
 	// resultQueueSize is the size of channel listening to sealing result.
 	resultQueueSize = 10
 
@@ -80,6 +76,10 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	// Leaves 256 KBs for other sections of the block (limit is 2MB).
+	// This should suffice for atomic txs, proposervm header, and serialization overhead.
+	targetTxsSize = 1792 * units.KiB
 )
 
 var (
@@ -1001,7 +1001,6 @@ type generateParams struct {
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 
-	// avalanche
 	predicateContext *precompileconfig.PredicateContext
 }
 
@@ -1028,7 +1027,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		if genParams.forceTime {
 			return nil, fmt.Errorf("invalid timestamp, parent %d given %d", parent.Time, timestamp)
 		}
-		timestamp = parent.Time
+		timestamp = parent.Time + 1
+		timestamp-- // line to reduce diffs with Geth
 	}
 
 	chainExtra := params.GetExtra(w.chainConfig)
