@@ -1330,7 +1330,8 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 // isTTDReached returns the indicator if the given block has reached the total
 // terminal difficulty for The Merge transition.
 func (w *worker) isTTDReached(header *types.Header) bool {
-	return true
+	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
+	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
 }
 
 // adjustResubmitInterval adjusts the resubmit interval.

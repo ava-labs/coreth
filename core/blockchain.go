@@ -374,6 +374,7 @@ func NewBlockChain(
 	if err != nil {
 		return nil, err
 	}
+	chainConfig.TerminalTotalDifficulty = big.NewInt(0)
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
