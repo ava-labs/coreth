@@ -25,6 +25,7 @@ const (
 
 type StateSyncerConfig struct {
 	Root                     common.Hash
+	Hash                     common.Hash
 	Client                   syncclient.Client
 	DB                       ethdb.Database
 	BatchSize                int
@@ -37,6 +38,7 @@ type StateSyncerConfig struct {
 type stateSync struct {
 	db        ethdb.Database            // database we are syncing
 	root      common.Hash               // root of the EVM state we are syncing to
+	hash      common.Hash               // hash of the EVM state we are syncing to - used to implement Hash()
 	trieDB    *triedb.Database          // trieDB on top of db we are syncing. used to restore any existing tries.
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
 	batchSize int                       // write batches when they reach this size
@@ -67,6 +69,7 @@ func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
 		batchSize:       config.BatchSize,
 		db:              config.DB,
 		client:          config.Client,
+		hash:            config.Hash,
 		root:            config.Root,
 		trieDB:          triedb.NewDatabase(config.DB, nil),
 		snapshot:        snapshot.NewDiskLayer(config.DB),
@@ -107,6 +110,11 @@ func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
 	ss.addTrieInProgress(ss.root, ss.mainTrie)
 	ss.mainTrie.startSyncing() // start syncing after tracking the trie as in progress
 	return ss, nil
+}
+
+// Hash returns the hash of the state we are syncing to.
+func (t *stateSync) Hash() common.Hash {
+	return t.hash
 }
 
 // onStorageTrieFinished is called after a storage trie finishes syncing.

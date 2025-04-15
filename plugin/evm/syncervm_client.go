@@ -25,13 +25,12 @@ import (
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 )
 
 var (
-	_ DynamicSyncer = &ethstatesync.DynamicSyncer{}
+	_ EVMSyncer = &ethstatesync.DynamicSyncer{}
 )
 
 const (
@@ -88,17 +87,15 @@ type stateSyncerClient struct {
 
 	// Dynamic sync
 	syncing       utils.Atomic[bool]
-	dynamicSyncer DynamicSyncer
-	syncQueueLock sync.Mutex
-	atomicDone    chan struct{} // to prevent writing during atomic sync
+	dynamicSyncer EVMSyncer
+	syncQueue     *SyncQueue
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
 	client := &stateSyncerClient{
 		stateSyncClientConfig: config,
-		atomicDone:            make(chan struct{}),
+		syncQueue:             NewSyncQueue(),
 	}
-	close(client.atomicDone) // close first in case we don't state sync
 	return client
 }
 
@@ -114,8 +111,7 @@ type StateSyncClient interface {
 	Error() error
 
 	// Methods to enable dynamic state sync
-	AsyncReceive() bool
-	QueueBlockOrPivot(*Block, ethstatesync.SyncBlockRequest) error
+	GetSyncQueue() *SyncQueue
 }
 
 // Syncer represents a step in state sync,
@@ -126,46 +122,18 @@ type Syncer interface {
 	Done() <-chan error
 }
 
-type DynamicSyncer interface {
+// EVMSyncer represents a Syncer that
+// has a block hash that can be used to identify the
+// eth block that was synced to.
+type EVMSyncer interface {
 	Syncer
-	Pivot() *types.Block // If nil, default to StateSyncSummary
-	QueueBlockOrPivot(*types.Block, ethstatesync.SyncBlockRequest, func() error) error
-	Close() error // Must be called after the sync is done
+	Hash() common.Hash
 }
 
-// AsyncReceive returns true if the client should intercept a block from the vm
-// Returns true if syncing and useUpstream is true, i.e. currently dynamically syncing
-func (client *stateSyncerClient) AsyncReceive() bool {
-	// Block until atomic sync is completed for bootstrapping and after sync completes until blockchain updates
-	<-client.atomicDone
-	client.syncQueueLock.Lock()
-	client.syncQueueLock.Unlock()
-	return client.useUpstream && client.syncing.Get() && client.dynamicSyncer != nil
-}
-
-func (client *stateSyncerClient) QueueBlockOrPivot(b *Block, req ethstatesync.SyncBlockRequest) error {
-	log.Debug("Queueing block", "hash", b.ID(), "height", b.Height(), "req", req)
-	err := client.dynamicSyncer.QueueBlockOrPivot(b.ethBlock, req, getSyncBlockHandler(b, req))
-	if err != nil {
-		log.Error("Queue failed", "error", err)
-	}
-	return err
-}
-
-// Depending on the request type, returns the hook to properly handle the block
-// If final, will run normal operation. Otherwise, will only perform atomic ops
-func getSyncBlockHandler(b *Block, req ethstatesync.SyncBlockRequest) func() error {
-	switch req {
-	case ethstatesync.AcceptSyncBlockRequest:
-		return func() error { return b.accept() }
-	case ethstatesync.RejectSyncBlockRequest:
-		return func() error { return b.reject() }
-	case ethstatesync.VerifySyncBlockRequest:
-		return func() error { return b.verify(true) }
-	default:
-		log.Error("Invalid statesync.SyncBlockRequest", "ID", req)
-	}
-	return func() error { return nil }
+// GetSyncQueue returns the client sync queue.
+// May return nil.
+func (client *stateSyncerClient) GetSyncQueue() *SyncQueue {
+	return client.syncQueue
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
@@ -230,7 +198,17 @@ func (client *stateSyncerClient) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	return client.syncStateTrie(ctx)
+	// Now that the atomic trie is synced, we can unblock the state sync queue
+	client.syncQueue.Unblock()
+
+	// Sync the state trie
+	if err := client.syncStateTrie(ctx); err != nil {
+		return err
+	}
+
+	// Now that the state trie is synced, we can execute the callbacks in the queue
+	client.syncQueue.Block()
+	return client.syncQueue.ExecQueue()
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -280,35 +258,21 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 	ctx, cancel := context.WithCancel(context.Background())
 	client.cancel = cancel
 	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
+
 	if client.useUpstream {
-		// Set downloader using first pivot
+		// Ensures bootstrapping begins at the correct place
 		evmBlock, err := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
 		if err != nil {
-			return block.StateSyncSkipped, fmt.Errorf("Could not get evmBlock from hash during acceptSyncSummary: %s, err: %w", client.syncSummary.BlockHash, err)
+			return block.StateSyncSkipped, fmt.Errorf("could not get block by hash %s from client state: %w", client.syncSummary.BlockHash, err)
 		}
-		client.dynamicSyncer, err = ethstatesync.NewDynamicSyncer(&ethstatesync.DynamicSyncConfig{
-			ChainDB:         client.chaindb,
-			Scheme:          client.scheme,
-			FirstPivotBlock: evmBlock.ethBlock,
-			SyncQueueLock:   &client.syncQueueLock,
-			StateSyncNodes:  client.stateSyncNodes,
-			Network:         client.network,
-		})
-
-		if err != nil {
-			return block.StateSyncSkipped, fmt.Errorf("Could not create downloader: %w", err)
-		}
-
-		// Ensures bootstrapping begins at the correct place
 		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
 			return block.StateSyncSkipped, err
 		}
-
-		log.Info("Set LastAcceptedBlock as first pivot", "id", evmBlock.ID(), "height", evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	}
 
-	// block incoming verify/accept until state sync is done
-	client.atomicDone = make(chan struct{})
+	// Block sync queue until the atomic trie is synced
+	client.syncQueue.Block()
+	client.syncQueue.SetEnabled(true)
 
 	go func() {
 		defer client.wg.Done()
@@ -318,11 +282,6 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 			log.Error("Returned from stateSync with error")
 			client.stateSyncErr = err
 		} else {
-			if client.useUpstream {
-				log.Info("Final pivot", "hash", client.dynamicSyncer.Pivot().Hash(), "height", client.dynamicSyncer.Pivot().NumberU64())
-				// finish sync on final pivot, Close() will clear queue as if bootstrapping from static sync
-				defer client.dynamicSyncer.Close()
-			}
 			client.stateSyncErr = client.finalizeStateSync()
 		}
 		// notify engine regardless of whether err == nil,
@@ -406,7 +365,6 @@ func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
 		return err
 	}
 	err = <-atomicSyncer.Done()
-	close(client.atomicDone)
 	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
 	if err != nil {
 		return fmt.Errorf("atomic sync failed: %w", err)
@@ -419,16 +377,34 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	log.Info("state sync: sync starting", "root", client.syncSummary.BlockRoot)
 
 	var (
-		evmSyncer Syncer
+		evmSyncer EVMSyncer
 		err       error
 	)
 	if client.useUpstream {
 		log.Warn("Using upstream state syncer (untested)")
-		evmSyncer = client.dynamicSyncer
+		evmBlock, err := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
+		if err != nil {
+			return fmt.Errorf("Could not get evmBlock from hash during acceptSyncSummary: %s, err: %w", client.syncSummary.BlockHash, err)
+		}
+		client.dynamicSyncer, err = ethstatesync.NewDynamicSyncer(&ethstatesync.DynamicSyncConfig{
+			ChainDB:         client.chaindb,
+			Scheme:          client.scheme,
+			FirstPivotBlock: evmBlock.ethBlock,
+			StateSyncNodes:  client.stateSyncNodes,
+			Network:         client.network,
+			PivotChan:       client.syncQueue.ReceivePivot(),
+		})
+
+		if err != nil {
+			return fmt.Errorf("Could not create dynamic syncer: %w", err)
+		}
+
+		log.Info("Set LastAcceptedBlock as first pivot", "id", evmBlock.ID(), "height", evmBlock.Height(), "timestamp", evmBlock.Timestamp())
 	} else {
 		evmSyncer, err = statesync.NewStateSyncer(&statesync.StateSyncerConfig{
 			Client:                   client.client,
 			Root:                     client.syncSummary.BlockRoot,
+			Hash:                     client.syncSummary.BlockHash,
 			BatchSize:                ethdb.IdealBatchSize,
 			DB:                       client.chaindb,
 			MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
@@ -444,16 +420,10 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 	}
 	err = <-evmSyncer.Done()
 
-	// Use pivot hash if available
-	finalHash := client.syncSummary.BlockHash
-	if client.useUpstream {
-		finalHash = client.dynamicSyncer.Pivot().Hash()
-	}
-	log.Info("state sync: sync finished", "root", finalHash, "err", err)
 	if err != nil {
 		return fmt.Errorf("state sync failed: %w", err)
 	}
-	return client.finishStateSync(finalHash)
+	return client.finishStateSync(evmSyncer.Hash())
 }
 
 func (client *stateSyncerClient) Shutdown() error {
@@ -579,7 +549,18 @@ func (client *stateSyncerClient) finalizeStateSync() error {
 	if err := client.metadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return err
 	}
-	return client.db.Commit()
+	if err := client.db.Commit(); err != nil {
+		return fmt.Errorf("failed to commit db while clearing ongoing summary: %w", err)
+	}
+
+	// If state sync finished, we can unblock the queue
+	// If there was an error, will likely immediately cause critical error
+	client.syncQueue.SetEnabled(false)
+	client.syncQueue.Unblock()
+
+	// To avoid checking locks, will cleanup syncQueue
+	client.syncQueue = nil
+	return nil
 }
 
 // Error returns a non-nil error if one occurred during the sync.

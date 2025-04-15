@@ -1487,7 +1487,7 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	}
 
 	// Ignore all SetPreference requests while dynamically syncing
-	if vm.StateSyncClient.AsyncReceive() {
+	if vm.StateSyncClient.GetSyncQueue() != nil {
 		return nil
 	}
 

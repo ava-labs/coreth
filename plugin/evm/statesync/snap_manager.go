@@ -112,12 +112,16 @@ func (m *snapManager) setError(err error) {
 }
 
 func (m *snapManager) UpdateSyncTarget(root common.Hash) error {
-	m.newPivot <- root
+	select {
+	case m.newPivot <- root:
+	default:
+		// This could happen after the sync is finished, but prior to blocking
+	}
 	return nil
 }
 
-// sync takes fetch results from the queue and writes them to the
-// database. It also controls the synchronisation of state nodes of the pivot block.
+// snapSync starts the state sync process. It will block until the sync is
+// completed or canceled.
 func (m *snapManager) snapSync(ctx context.Context) {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.

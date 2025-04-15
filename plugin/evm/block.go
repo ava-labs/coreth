@@ -20,7 +20,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -143,12 +142,13 @@ func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
 // Accept implements the snowman.Block interface
 func (b *Block) Accept(context.Context) error {
-	if b.vm.StateSyncClient.AsyncReceive() {
-		if err := b.acceptDuringSync(); err != nil {
-			log.Warn("Failed to accept block during sync", "block", b.ID(), "height", b.Height(), "err", err)
-			return err
+	syncQueue := b.vm.StateSyncClient.GetSyncQueue()
+	if syncQueue != nil {
+		syncQueue.Block()
+		defer syncQueue.Unblock()
+		if syncQueue.Enabled() {
+			return syncQueue.Accept(b)
 		}
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.AcceptSyncBlockRequest)
 	}
 	return b.accept()
 }
@@ -263,11 +263,13 @@ func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
 	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
-	if b.vm.StateSyncClient.AsyncReceive() {
-		if err := b.rejectDuringSync(); err != nil {
-			return err
+	syncQueue := b.vm.StateSyncClient.GetSyncQueue()
+	if syncQueue != nil {
+		syncQueue.Block()
+		defer syncQueue.Unblock()
+		if syncQueue.Enabled() {
+			return syncQueue.Reject(b)
 		}
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.RejectSyncBlockRequest)
 	}
 	return b.reject()
 }
@@ -341,12 +343,13 @@ func (b *Block) Verify(context.Context) error {
 	}
 
 	// If currently dynamically syncing, postpone non-atomic operations
-	if b.vm.StateSyncClient.AsyncReceive() {
-		if err := b.verifyDuringSync(); err != nil {
-			log.Warn("Failed to verify block during sync", "block", b.ID(), "height", b.Height(), "err", err)
-			return err
+	syncQueue := b.vm.StateSyncClient.GetSyncQueue()
+	if syncQueue != nil {
+		syncQueue.Block()
+		defer syncQueue.Unblock()
+		if syncQueue.Enabled() {
+			return syncQueue.Verify(b)
 		}
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
 	}
 	return b.verify(true)
 }
@@ -397,12 +400,13 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 	}
 
 	// If currently dynamically syncing, postpone non-atomic operations
-	if b.vm.StateSyncClient.AsyncReceive() {
-		if err := b.verifyDuringSync(); err != nil {
-			log.Warn("Failed to verify block during sync", "block", b.ID(), "height", b.Height(), "err", err)
-			return err
+	syncQueue := b.vm.StateSyncClient.GetSyncQueue()
+	if syncQueue != nil {
+		syncQueue.Block()
+		defer syncQueue.Unblock()
+		if syncQueue.Enabled() {
+			return syncQueue.Verify(b)
 		}
-		return b.vm.StateSyncClient.QueueBlockOrPivot(b, statesync.VerifySyncBlockRequest)
 	}
 
 	return b.verify(true)
@@ -437,7 +441,9 @@ func (b *Block) verifyAtomicOps(writes bool) error {
 		tempAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil
 		defer func() { vm.atomicBackend = tempAtomicBackend }()
-	} else {
+	}
+
+	if vm.atomicBackend != nil {
 		// verify UTXOs named in import txs are present in shared memory.
 		if err := b.verifyUTXOsPresent(); err != nil {
 			return err
