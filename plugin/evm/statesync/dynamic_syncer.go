@@ -139,7 +139,7 @@ func (d *DynamicSyncer) pivotFetcher(ctx context.Context) {
 				continue
 			}
 			d.pivotBlock = block
-			log.Debug("Updated pivot block", "block", block.Hash(), "height", block.NumberU64())
+			log.Info("Updated pivot block", "block", block.Hash(), "height", block.NumberU64())
 		case <-ctx.Done():
 			log.Debug("Context done, stopping pivot channel")
 			return

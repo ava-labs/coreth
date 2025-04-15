@@ -86,9 +86,8 @@ type stateSyncerClient struct {
 	stateSyncErr error
 
 	// Dynamic sync
-	syncing       utils.Atomic[bool]
-	dynamicSyncer EVMSyncer
-	syncQueue     *SyncQueue
+	syncing   utils.Atomic[bool]
+	syncQueue *SyncQueue
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
@@ -386,7 +385,7 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("Could not get evmBlock from hash during acceptSyncSummary: %s, err: %w", client.syncSummary.BlockHash, err)
 		}
-		client.dynamicSyncer, err = ethstatesync.NewDynamicSyncer(&ethstatesync.DynamicSyncConfig{
+		evmSyncer, err = ethstatesync.NewDynamicSyncer(&ethstatesync.DynamicSyncConfig{
 			ChainDB:         client.chaindb,
 			Scheme:          client.scheme,
 			FirstPivotBlock: evmBlock.ethBlock,
