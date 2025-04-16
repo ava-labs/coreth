@@ -126,7 +126,8 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	}
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
 	blockContext := NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
-	receipt, err := ApplyTransaction(b.cm.config, bc, blockContext, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	coinbase := (*common.Address)(nil)
+	receipt, err := ApplyTransaction(b.cm.config, bc, coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig, blockContext)
 	if err != nil {
 		panic(err)
 	}
@@ -292,7 +293,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 		// Finalize and seal the block
-		block, err := b.engine.FinalizeAndAssemble(cm, b.header, parent.Header(), statedb, b.txs, b.uncles, b.receipts)
+		withdrawals := types.Withdrawals(nil)
+		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb,
+			b.txs, b.uncles, b.receipts, withdrawals, parent.Header())
 		if err != nil {
 			return nil, nil, fmt.Errorf("Failed to finalize and assemble block at index %d: %w", i, err)
 		}

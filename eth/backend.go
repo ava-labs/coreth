@@ -384,6 +384,7 @@ func (s *Ethereum) Stop() error {
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
 	s.txPool.Close()
+	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
 
