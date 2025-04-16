@@ -75,7 +75,7 @@ func (q *SyncQueue) Unblock() {
 // Executes all callbacks in the queue.
 // This should be called when the sync manager is done.
 func (q *SyncQueue) ExecQueue() error {
-	q.bufferLen = 0 // if this fails, state is irreparable
+	defer func() { q.bufferLen = 0 }() // if this fails, state is irreparable
 
 	for i := range q.bufferLen {
 		elem := q.buffer[i]

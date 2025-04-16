@@ -468,9 +468,7 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	parentHash := block.ParentHash()
 
 	// Silence the bloom indexer if we dynamically synced
-	if !client.useUpstream {
-		client.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
-	}
+	client.chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
 	if err := client.chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
 		return err
@@ -483,6 +481,12 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	// Must rebuild the snapshot if snap-sync is enabled
 	snaps := evmBlock.vm.blockChain.Snapshots()
 	cb := evmBlock.vm.blockChain.CurrentBlock()
+	if snaps == nil {
+		log.Debug("No snapshots, skipping")
+		return nil
+	}
+
+	// Eventually will be removed. Currently good to know for debugging purposes
 	if err := snaps.Verify(cb.Root); err != nil {
 		log.Info("could not verify snapshots, attempt rebuild", "err", err)
 		snaps.Rebuild(cb.Hash(), cb.Root)
@@ -490,12 +494,11 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 	return nil
 }
 
-// updateVMMarkers updates the following markers in the VM's database
+// finishAtomicSync updates the following markers in the VM's database
 // and commits them atomically:
 // - updates atomic trie so it will have necessary metadata for the last committed root
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
-// - removes state sync progress markers
 func (client *stateSyncerClient) finishAtomicSync(blockHash common.Hash, blockHeight uint64) error {
 	// It's possible that the height in acceptedBlockDB > syncSummary.Height if the node
 	// was restarted during state sync. In this case, we should not apply to shared memory
