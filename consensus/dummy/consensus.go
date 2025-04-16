@@ -417,9 +417,17 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 	return nil
 }
 
-func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt,
+func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+	uncles []*types.Header, receipts []*types.Receipt, _ types.Withdrawals, extraArgs ...any,
 ) (*types.Block, error) {
+	if len(extraArgs) != 1 {
+		panic(fmt.Sprintf("expected 1 extra arg, got %d", len(extraArgs)))
+	}
+	parent, ok := extraArgs[0].(*types.Header)
+	if !ok {
+		panic(fmt.Sprintf("expected *types.Header, got %T", extraArgs[0]))
+	}
+
 	var (
 		contribution, extDataGasUsed *big.Int
 		extraData                    []byte

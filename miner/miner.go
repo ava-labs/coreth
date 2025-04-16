@@ -60,7 +60,7 @@ type Config struct {
 
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
 
-	TestOnlyAllowDuplicateBlocks bool // Allow mining of duplicate blocks (used in tests only)
+	Hooks configHooks
 }
 
 // DefaultConfig contains default settings for miner.
@@ -114,11 +114,13 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 
 func (miner *Miner) GenerateBlock(predicateContext *precompileconfig.PredicateContext) (*types.Block, error) {
 	result := miner.worker.generateWork(&generateParams{
-		predicateContext: predicateContext,
-		timestamp:        miner.clock.Unix(),
-		parentHash:       miner.worker.chain.CurrentBlock().Hash(),
-		coinbase:         miner.worker.etherbase(),
-		beaconRoot:       &common.Hash{},
+		timestamp:  miner.clock.Unix(),
+		parentHash: miner.worker.chain.CurrentBlock().Hash(),
+		coinbase:   miner.worker.etherbase(),
+		beaconRoot: &common.Hash{},
+		hooks: &generateParamsHooks{
+			predicateContext: predicateContext,
+		},
 	})
 	return result.block, result.err
 }

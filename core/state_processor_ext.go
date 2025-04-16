@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
+	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/log"
 )
 
@@ -97,3 +98,14 @@ func NewBlockContext(number *big.Int, timestamp uint64) *BlockContext {
 
 func (bc *BlockContext) Number() *big.Int  { return bc.number }
 func (bc *BlockContext) Timestamp() uint64 { return bc.timestamp }
+
+func getBlockContext(extraArgs []any) vm.BlockContext {
+	if len(extraArgs) == 0 {
+		panic("not enough arguments")
+	}
+	blockContext, ok := extraArgs[0].(vm.BlockContext)
+	if !ok {
+		panic("wrong argument type")
+	}
+	return blockContext
+}

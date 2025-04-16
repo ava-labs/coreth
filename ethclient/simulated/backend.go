@@ -96,7 +96,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	}
 	ethConf.AllowUnfinalizedQueries = true
 	ethConf.Miner.Etherbase = constants.BlackholeAddr
-	ethConf.Miner.TestOnlyAllowDuplicateBlocks = true
+	ethConf.Miner.Hooks.SetTestOnlyAllowDuplicateBlocks()
 	ethConf.TxPool.NoLocals = true
 
 	for _, option := range options {
