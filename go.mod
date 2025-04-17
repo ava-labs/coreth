@@ -146,4 +146,4 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-// replace github.com/ava-labs/firewood/ffi/v2 => /Users/aaronbuchwald/code/ava-labs/firewood/ffi
+replace github.com/ava-labs/firewood/ffi/v2 => /Users/aaronbuchwald/code/ava-labs/firewood/ffi
