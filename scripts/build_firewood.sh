@@ -70,7 +70,7 @@ build_firewood() {
     return ${build_status} # Return the status of the cargo build
 }
 
-check_prerequisites cargo git || exit 1
+check_prerequisites cargo git make cc protoc || exit 1
 
 if [[ "${FIREWOOD_IGNORE_CHECKOUT}" == "false" ]]; then
     echo "Checking out Firewood..."
