@@ -41,3 +41,44 @@ This will build the shared library in place and update the `go.mod` file to poin
 ## Using Coreth
 
 With the current setup, you must build Firewood locally before building Coreth or running unit tests/benchmarks as it will not compile without the Firewood shared library present.
+
+As an example, try cloning or using this branch of Coreth and running (without building Firewood):
+
+```bash
+./scripts/build.sh`
+```
+
+This should fail with:
+
+```
+Using branch: aaronbuchwald/prefetch-state
+Building Coreth @ GitCommit: b39c2484deccd47f9e0f268559e041f97ba0f836
+# github.com/ava-labs/coreth/shim/fw
+shim/fw/firewood.go:11:12: undefined: firewood.Database
+```
+
+or running one of the reprocess unit tests via:
+
+```bash
+go test -timeout 30s -run ^TestReprocessGenesis$ github.com/ava-labs/coreth/plugin/evm -timeout=15s
+```
+
+This should fail with:
+
+```
+# github.com/ava-labs/coreth/shim/fw
+shim/fw/firewood.go:11:12: undefined: firewood.Database
+FAIL    github.com/ava-labs/coreth/plugin/evm [build failed]
+FAIL
+```
+
+Now try building Firewood and re-running the same commands:
+
+```bash
+./scripts/build_firewood.sh
+./scripts/build.sh
+```
+
+```bash
+go test -timeout 30s -run ^TestReprocessGenesis$ github.com/ava-labs/coreth/plugin/evm -timeout=15s
+```

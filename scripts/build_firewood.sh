@@ -11,7 +11,7 @@ set -o pipefail
 # This necessitates a two-step build process, where Coreth can only build correctly when it points to
 # pre-built Firewood shared library with CGO compatible bindings.
 FIREWOOD_REMOTE=${FIREWOOD_REMOTE:-"git@github.com:ava-labs/firewood.git"}
-FIREWOOD_PATH=${FIREWOOD_PATH:-"/Users/aaronbuchwald/code/ava-labs/firewood"}
+FIREWOOD_PATH=${FIREWOOD_PATH:-"./build/firewood"}
 FIREWOOD_VERSION=${FIREWOOD_VERSION:-"main"}
 FIREWOOD_IGNORE_CHECKOUT=${FIREWOOD_IGNORE_CHECKOUT:-"false"}
 
