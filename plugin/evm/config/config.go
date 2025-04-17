@@ -245,6 +245,10 @@ type Config struct {
 
 	// RPC settings
 	HttpBodyLimit uint64 `json:"http-body-limit"`
+
+	// Experimental
+	StateSyncUseUpstream bool   `json:"state-sync-use-upstream"`
+	StateScheme          string `json:"state-scheme"`
 }
 
 // TxPoolConfig contains the transaction pool config to be passed
