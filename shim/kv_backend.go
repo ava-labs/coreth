@@ -80,7 +80,7 @@ func NewAccountTrieKV(stateRoot common.Hash, kv KVBackend, db database.Database)
 	}
 	kvRoot := common.BytesToHash(kv.Root())
 	if kvRoot != stateRoot {
-		return nil, fmt.Errorf("%w: expected %x, got %x", ErrRootMismatch, stateRoot, kvRoot)
+		return nil, fmt.Errorf("failed to create new account trie kv %w: expected %x, got %x", ErrRootMismatch, stateRoot, kvRoot)
 	}
 
 	tr := &Trie{
