@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/common/math"
 )
@@ -28,7 +25,6 @@ var (
 type PriceOptionConfig struct {
 	SlowFeePercentage uint64
 	FastFeePercentage uint64
-	MaxBaseFee        uint64
 	MaxTip            uint64
 }
 
@@ -62,38 +58,21 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 		return nil, nil
 	}
 
-	// Find min base fee based on chain config
-	// TODO: This can be removed after Fortuna is activated
-	time := s.b.CurrentHeader().Time
-	chainConfig := params.GetExtra(s.b.ChainConfig())
-	minBaseFee := new(big.Int)
-	if chainConfig.IsFortuna(time) {
-		minBaseFee.SetUint64(acp176.MinGasPrice)
-	} else {
-		minBaseFee.SetUint64(etna.MinBaseFee)
-	}
-
-	cfg := s.b.PriceOptionsConfig()
-	bigSlowFeePercent := new(big.Int).SetUint64(cfg.SlowFeePercentage)
-	bigFastFeePercent := new(big.Int).SetUint64(cfg.FastFeePercentage)
-
-	baseFees := calculateFeeSpeeds(
-		minBaseFee,
-		baseFee,
-		big.NewInt(int64(cfg.MaxBaseFee)),
-		bigSlowFeePercent,
-		bigFastFeePercent,
-	)
+	config := s.b.PriceOptionsConfig()
 	gasTips := calculateFeeSpeeds(
 		bigMinGasTip,
 		gasTip,
-		big.NewInt(int64(cfg.MaxTip)),
-		bigSlowFeePercent,
-		bigFastFeePercent,
+		new(big.Int).SetUint64(config.MaxTip),
+		new(big.Int).SetUint64(config.SlowFeePercentage),
+		new(big.Int).SetUint64(config.FastFeePercentage),
 	)
-	slowGasFee := new(big.Int).Add(baseFees.slow, gasTips.slow)
-	normalGasFee := new(big.Int).Add(baseFees.normal, gasTips.normal)
-	fastGasFee := new(big.Int).Add(baseFees.fast, gasTips.fast)
+
+	// Double the baseFee estimate without modifying the original variable.
+	baseFee = new(big.Int).Lsh(baseFee, 1)
+
+	slowGasFee := new(big.Int).Add(baseFee, gasTips.slow)
+	normalGasFee := new(big.Int).Add(baseFee, gasTips.normal)
+	fastGasFee := new(big.Int).Add(baseFee, gasTips.fast)
 	return &PriceOptions{
 		Slow: &Price{
 			GasTip: (*hexutil.Big)(gasTips.slow),
@@ -119,28 +98,28 @@ type feeSpeeds struct {
 // calculateFeeSpeeds returns the slow, normal, and fast price options for a
 // given min, estimate, and max,
 //
-// slow   = max(slowFeePerc/100 * min(estimate, maxFee), minFee)
+// slow   = max(slowFeePercent/100 * min(estimate, maxFee), minFee)
 // normal = min(estimate, maxFee)
-// fast   = fastFeePerc/100 * estimate
+// fast   = fastFeePercent/100 * estimate
 func calculateFeeSpeeds(
 	minFee *big.Int,
 	estimate *big.Int,
 	maxFee *big.Int,
-	slowFeePerc *big.Int,
-	fastFeePerc *big.Int,
+	slowFeePercent *big.Int,
+	fastFeePercent *big.Int,
 ) feeSpeeds {
 	// Cap the fee to keep slow and normal options reasonable during fee spikes.
 	cappedFee := math.BigMin(estimate, maxFee)
 
 	slowFee := new(big.Int).Set(cappedFee)
-	slowFee.Mul(slowFee, slowFeePerc)
+	slowFee.Mul(slowFee, slowFeePercent)
 	slowFee.Div(slowFee, bigFeeDenominator)
 	slowFee = math.BigMax(slowFee, minFee)
 
 	normalFee := cappedFee
 
 	fastFee := new(big.Int).Set(estimate)
-	fastFee.Mul(fastFee, fastFeePerc)
+	fastFee.Mul(fastFee, fastFeePercent)
 	fastFee.Div(fastFee, bigFeeDenominator)
 	return feeSpeeds{
 		slow:   slowFee,
