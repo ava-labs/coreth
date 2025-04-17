@@ -106,20 +106,34 @@ func (q *SyncQueue) clearQueue(keepAfter uint64) {
 func (q *SyncQueue) Accept(b *Block) error {
 	log.Debug("Accepting block during sync", "hash", b.ID(), "height", b.Height())
 	vm := b.vm
+	_, lastHeight, err := vm.readLastAccepted()
+	if err != nil {
+		return fmt.Errorf("failed to read last accepted block: %w", err)
+	}
+
+	// Only perform shared memory transitions if we haven't done them
+	// Still enables EVMStateTransfer to be called, without inserting them in atomicBackend
+	if lastHeight >= b.Height() {
+		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height", b.Height())
+		currentAtomicBackend := vm.atomicBackend
+		vm.atomicBackend = nil
+		defer func() { vm.atomicBackend = currentAtomicBackend }()
+	}
 
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
 
-	if err := b.acceptAtomicOps(); err != nil {
-		return fmt.Errorf("failed to accept atomic ops during accept: %w", err)
-	}
-
-	// Write the canonical hash to the chain database
+	// rawdb updates from blockchain.Accept
 	batch := vm.chaindb.NewBatch()
 	rawdb.WriteCanonicalHash(batch, b.ethBlock.Hash(), b.ethBlock.NumberU64())
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to write block during sync: %w", err)
+	}
+
+	// If [atomicBackend] is nil, will not perform any operations
+	if err := b.acceptAtomicOps(); err != nil {
+		return fmt.Errorf("failed to accept atomic ops during accept: %w", err)
 	}
 
 	// Add new block to queue
@@ -128,10 +142,11 @@ func (q *SyncQueue) Accept(b *Block) error {
 		callback: func() error { return b.accept() },
 	})
 
+	// Check for pivot block
 	if b.Height()%statesync.PivotInterval == 0 {
 		// If this is a pivot block, notify the sync manager
 		// If no one is listening, we will not block - could happen if
-		// the sync manager is not started yet or it has finisehd
+		// the sync manager has not started yet or it has finisehd
 		select {
 		case q.ethBlockPivotChan <- b.ethBlock:
 		default:
@@ -145,17 +160,24 @@ func (q *SyncQueue) Accept(b *Block) error {
 }
 
 func (q *SyncQueue) Reject(b *Block) error {
+	log.Debug("Rejecting block during sync", "block", b.ID(), "height", b.Height())
 	vm := b.vm
 	block := b.ethBlock
 
-	// Because this will not be called during bootstrapping, this is guaranteed to be a valid atomic operation
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	_, lastHeight, err := vm.readLastAccepted()
 	if err != nil {
-		// should never occur since [b] must be verified before calling Reject
-		panic(fmt.Sprintf("failed to get atomic state for block height %d during sync: %v", b.Height(), err))
+		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-	if err := atomicState.Reject(); err != nil {
-		return err
+	// Only perform shared memory transitions if we haven't already done them
+	if lastHeight >= b.Height() {
+		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+		if err != nil {
+			// should never occur since [b] must be verified before calling Reject
+			panic(fmt.Sprintf("failed to get atomic state for block height %d during sync: %v", b.Height(), err))
+		}
+		if err := atomicState.Reject(); err != nil {
+			return err
+		}
 	}
 
 	// Remove the block since its data is no longer needed
@@ -171,14 +193,12 @@ func (q *SyncQueue) Reject(b *Block) error {
 		callback: func() error { return b.reject() },
 	})
 
-	log.Debug("Returning from reject without error", "block", b.ID(), "height", b.Height())
 	return nil
 }
 
 func (q *SyncQueue) Verify(b *Block) error {
 	log.Debug("Verifying block during sync", "block", b.ID(), "height", b.Height())
 
-	// Emulate vm.onExtraStateChange to only apply atomic operations
 	var (
 		block      = b.ethBlock
 		header     = block.Header()
@@ -193,20 +213,24 @@ func (q *SyncQueue) Verify(b *Block) error {
 	}
 
 	// Used to avoid re-evaluating atomic transactions, since they were executed synchronously
+	// Emulate vm.onExtraStateChange to only apply atomic operations
 	if b.Height() <= lastHeight {
 		currentAtomicBackend := vm.atomicBackend
 		vm.atomicBackend = nil
 		defer func() { vm.atomicBackend = currentAtomicBackend }()
 	}
 
-	// Write the block to the database using chaindb
+	// rawdb updates from bc.insertBlock
 	batch := vm.chaindb.NewBatch()
 	rawdb.WriteBlock(batch, block)
+	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to write block during sync: %w", err)
 	}
 
-	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
+	// If [atomicBackend] is nil, we are either boostrapping or already applied ops to shared memory
 	if vm.atomicBackend != nil {
 		// verify UTXOs named in import txs are present in shared memory.
 		if err := b.verifyUTXOsPresent(); err != nil {

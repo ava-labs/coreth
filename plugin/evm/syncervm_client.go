@@ -474,8 +474,11 @@ func (client *stateSyncerClient) finishStateSync(blockHash common.Hash) error {
 		return err
 	}
 
-	if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
-		return err
+	// If static-syncing, must set the last accepted block for bootstrapping
+	if !client.useUpstream {
+		if err := client.state.SetLastAcceptedBlock(evmBlock); err != nil {
+			return err
+		}
 	}
 
 	// Must rebuild the snapshot if snap-sync is enabled

@@ -154,13 +154,25 @@ func (b *Block) Accept(context.Context) error {
 }
 
 func (b *Block) accept() error {
+	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 	vm := b.vm
+	_, lastHeight, err := vm.readLastAccepted()
+	if err != nil {
+		return fmt.Errorf("failed to read last accepted block: %w", err)
+	}
+
+	// Only perform shared memory transitions if we haven't done them
+	// Still enables EVMStateTransfer to be called, without inserting them in atomicBackend
+	if lastHeight >= b.Height() {
+		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height", b.Height())
+		currentAtomicBackend := vm.atomicBackend
+		vm.atomicBackend = nil
+		defer func() { vm.atomicBackend = currentAtomicBackend }()
+	}
 
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
-
-	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
 
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
@@ -182,18 +194,20 @@ func (b *Block) accept() error {
 
 func (b *Block) acceptAtomicOps() error {
 	vm := b.vm
-	_, lastHeight, err := vm.readLastAccepted()
-	if err != nil {
-		return fmt.Errorf("failed to read last accepted block: %w", err)
-	}
-	// Only perform shared memory transitions if we haven't already done them
-	if lastHeight >= b.Height() {
-		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height", b.Height())
+
+	// Return early if these operations have already been performed
+	if vm.atomicBackend == nil {
 		return nil
 	}
 
 	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
 		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	}
+
+	// No-op if still syncing
+	for _, tx := range b.atomicTxs {
+		// Remove the accepted transaction from the mempool
+		vm.mempool.RemoveTx(tx)
 	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
@@ -210,19 +224,9 @@ func (b *Block) acceptAtomicOps() error {
 		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
 	}
 
-	// No-op if still syncing
-	for _, tx := range b.atomicTxs {
-		// Remove the accepted transaction from the mempool
-		vm.mempool.RemoveTx(tx)
-	}
-
 	// Apply any shared memory changes atomically with other pending changes to
 	// the vm's versionDB.
-	if err := atomicState.Accept(vdbBatch, nil); err != nil {
-		return err
-	}
-
-	return nil
+	return atomicState.Accept(vdbBatch, nil)
 }
 
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
@@ -284,24 +288,23 @@ func (b *Block) reject() error {
 	// Only perform shared memory transitions if we haven't already done them
 	if lastHeight >= b.Height() {
 		log.Debug("Skipping shared memory transitions for block during sync", "hash", b.ID(), "height", b.Height())
-		return nil
-	}
-
-	// No-op if still syncing
-	for _, tx := range b.atomicTxs {
-		// Re-issue the transaction in the mempool, continue even if it fails
-		b.vm.mempool.RemoveTx(tx)
-		if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
-			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
+	} else {
+		// No-op if still syncing
+		for _, tx := range b.atomicTxs {
+			// Re-issue the transaction in the mempool, continue even if it fails
+			b.vm.mempool.RemoveTx(tx)
+			if err := b.vm.mempool.AddRemoteTx(tx); err != nil {
+				log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
+			}
 		}
-	}
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
-	if err != nil {
-		// should never occur since [b] must be verified before calling Reject
-		return err
-	}
-	if err := atomicState.Reject(); err != nil {
-		return err
+		atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+		if err != nil {
+			// should never occur since [b] must be verified before calling Reject
+			return err
+		}
+		if err := atomicState.Reject(); err != nil {
+			return err
+		}
 	}
 	return b.vm.blockChain.Reject(b.ethBlock)
 }
@@ -425,33 +428,12 @@ func (b *Block) verify(writes bool) error {
 		return nil
 	}
 
-	return b.verifyAtomicOps(writes)
-}
-
-func (b *Block) verifyAtomicOps(writes bool) error {
-	vm := b.vm
-	_, lastHeight, err := vm.readLastAccepted()
-	if err != nil {
-		return fmt.Errorf("failed to read last accepted block: %w", err)
+	if err := b.verifyAtomicOps(writes); err != nil {
+		return fmt.Errorf("failed to verify atomic operations: %w", err)
 	}
 
-	// Used to avoid re-evaluating atomic transactions, since they were executed synchronously
-	if b.Height() <= lastHeight {
-		log.Debug("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
-		tempAtomicBackend := vm.atomicBackend
-		vm.atomicBackend = nil
-		defer func() { vm.atomicBackend = tempAtomicBackend }()
-	}
-
-	if vm.atomicBackend != nil {
-		// verify UTXOs named in import txs are present in shared memory.
-		if err := b.verifyUTXOsPresent(); err != nil {
-			return err
-		}
-	}
-
-	err = b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if vm.atomicBackend != nil && (err != nil || !writes) {
+	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+	if b.vm.atomicBackend != nil && (err != nil || !writes) {
 		// if an error occurred inserting the block into the chain
 		// or if we are not pinning to memory, unpin the atomic trie
 		// changes from memory (if they were pinned).
@@ -461,6 +443,22 @@ func (b *Block) verifyAtomicOps(writes bool) error {
 	}
 
 	return err
+}
+
+func (b *Block) verifyAtomicOps(writes bool) error {
+	vm := b.vm
+	_, lastHeight, err := vm.readLastAccepted()
+	if err != nil {
+		return fmt.Errorf("failed to read last accepted block: %w", err)
+	}
+
+	// Only perform shared memory transitions if we haven't already done them
+	if b.Height() <= lastHeight {
+		log.Debug("Skipping atomic tx verification for block", "hash", b.ID(), "height", b.Height())
+		return nil
+	}
+
+	return b.verifyUTXOsPresent()
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
