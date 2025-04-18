@@ -384,12 +384,30 @@ func getMetadata(db database.Database) (lastHash, lastRoot common.Hash, lastHeig
 	return lastHash, lastRoot, lastHeight
 }
 
+func updateMetadata(t *testing.T, db database.Database, lastHash, lastRoot common.Hash, lastHeight uint64) {
+	require.NoError(t, db.Put(lastAcceptedRootKey, lastRoot.Bytes()))
+	require.NoError(t, db.Put(lastAcceptedHashKey, lastHash.Bytes()))
+	require.NoError(t, database.PutUInt64(db, lastAcceptedHeightKey, lastHeight))
+}
+
 func TestPersistedMetadata(t *testing.T) {
 	dbs := openDBs(t)
 	defer dbs.Close()
 
 	lastHash, lastRoot, lastHeight := getMetadata(dbs.metadata)
 	t.Logf("Last hash: %x, Last root: %x, Last height: %d", lastHash, lastRoot, lastHeight)
+}
+
+func TestOverwriteMetadata(t *testing.T) {
+	dbs := openDBs(t)
+	defer dbs.Close()
+
+	var (
+		lastHash   = common.HexToHash("0xbb88edda33c3cbb82b5e6d48b844ccd20e8ce80d854bcc7cf41279ebe103765f")
+		lastRoot   = common.HexToHash("0x79bbbc1869f666fe9082e08f081662fc6d4d9f8f1a59d9fcfc33cf5ac15838e4")
+		lastHeight = uint64(33_000_000)
+	)
+	updateMetadata(t, dbs.metadata, lastHash, lastRoot, lastHeight)
 }
 
 func TestCalculatePrefix(t *testing.T) {
@@ -661,12 +679,6 @@ func reprocess(
 	}
 
 	return lastHash, lastRoot
-}
-
-func updateMetadata(t *testing.T, db database.Database, lastHash, lastRoot common.Hash, lastHeight uint64) {
-	require.NoError(t, db.Put(lastAcceptedRootKey, lastRoot.Bytes()))
-	require.NoError(t, db.Put(lastAcceptedHashKey, lastHash.Bytes()))
-	require.NoError(t, database.PutUInt64(db, lastAcceptedHeightKey, lastHeight))
 }
 
 func TestCheckSnapshot(t *testing.T) {
