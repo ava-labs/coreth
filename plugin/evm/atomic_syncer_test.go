@@ -64,8 +64,17 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	// For each checkpoint, replace the leafsIntercept to shut off the syncer at the correct point and force resume from the checkpoint's
 	// next trie.
 	for i, checkpoint := range checkpoints {
+		target, err := message.NewSyncSummary(
+			common.Hash{},
+			checkpoint.targetHeight,
+			checkpoint.targetRoot,
+			common.Hash{},
+		)
+		if err != nil {
+			t.Fatal("could not create sync summary", err)
+		}
 		// Create syncer targeting the current [syncTrie].
-		syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize)
+		syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), config.DefaultStateSyncRequestSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -80,8 +89,8 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 			return leafsResponse, nil
 		}
 
-		syncer.Start(ctx)
-		if err := <-syncer.Done(); err == nil {
+		syncer.Start(ctx, &target)
+		if err := syncer.Wait(ctx); err == nil {
 			t.Fatalf("Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 		}
 
@@ -92,7 +101,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	}
 
 	// Create syncer targeting the current [targetRoot].
-	syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize)
+	syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), config.DefaultStateSyncRequestSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,8 +113,17 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 		return leafsResponse, nil
 	}
 
-	syncer.Start(ctx)
-	if err := <-syncer.Done(); err != nil {
+	target, err := message.NewSyncSummary(
+		common.Hash{},
+		targetHeight,
+		targetRoot,
+		common.Hash{},
+	)
+	if err != nil {
+		t.Fatal("could not create sync summary", err)
+	}
+	syncer.Start(ctx, &target)
+	if err := syncer.Wait(ctx); err != nil {
 		t.Fatalf("Expected syncer to finish successfully but failed due to %s", err)
 	}
 

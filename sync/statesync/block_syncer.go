@@ -1,0 +1,103 @@
+// (c) 2021-2025, Ava Labs, Inc. All rights reserved.
+
+package statesync
+
+import (
+	"context"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	syncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+)
+
+const (
+	// State sync fetches [ParentsToGet] parents of the block it syncs to.
+	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
+	ParentsToGet = 256
+)
+
+type blockSyncer struct {
+	*BlockSyncerConfig
+}
+
+type BlockSyncerConfig struct {
+	Client  syncclient.Client
+	ChainDB ethdb.Database
+}
+
+func NewBlockSyncer(config *BlockSyncerConfig) (*blockSyncer, error) {
+	return &blockSyncer{BlockSyncerConfig: config}, nil
+}
+
+func (syncer *blockSyncer) Start(ctx context.Context, target *message.SyncSummary) error {
+	go func() {
+		if err := syncer.syncBlocks(ctx, target); err != nil {
+			log.Error("failed to sync blocks", "err", err)
+		}
+	}()
+	return nil
+}
+
+func (syncer *blockSyncer) syncBlocks(ctx context.Context, target *message.SyncSummary) error {
+	nextHash := target.BlockHash
+	nextHeight := target.BlockNumber
+	parentsPerRequest := uint16(32)
+	parentsToGet := ParentsToGet // rescope out of const
+
+	// first, check for blocks already available on disk so we don't
+	// request them from peers.
+	for parentsToGet >= 0 {
+		blk := rawdb.ReadBlock(syncer.ChainDB, nextHash, nextHeight)
+		if blk != nil {
+			// block exists
+			nextHash = blk.ParentHash()
+			nextHeight--
+			parentsToGet--
+			continue
+		}
+
+		// block was not found
+		break
+	}
+
+	// get any blocks we couldn't find on disk from peers and write
+	// them to disk.
+	batch := syncer.ChainDB.NewBatch()
+	for i := parentsToGet - 1; i >= 0 && (nextHash != common.Hash{}); {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		blocks, err := syncer.Client.GetBlocks(ctx, nextHash, nextHeight, parentsPerRequest)
+		if err != nil {
+			log.Error("could not get blocks from peer", "err", err, "nextHash", nextHash, "remaining", i+1)
+			return err
+		}
+		for _, block := range blocks {
+			rawdb.WriteBlock(batch, block)
+			rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+
+			i--
+			nextHash = block.ParentHash()
+			nextHeight--
+		}
+		log.Info("fetching blocks from peer", "remaining", i+1, "total", parentsToGet)
+	}
+	log.Info("fetched blocks from peer", "total", parentsToGet)
+	return batch.Write()
+}
+
+func (syncer *blockSyncer) Wait(ctx context.Context) error {
+	return nil
+}
+
+func (syncer *blockSyncer) Close() error {
+	// No resources to close
+	return nil
+}
+
+func (syncer *blockSyncer) UpdateSyncTarget(ctx context.Context, target *message.SyncSummary) error {
+	panic("not implemented")
+}

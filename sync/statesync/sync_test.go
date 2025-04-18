@@ -4,11 +4,9 @@
 package statesync
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/rand"
-	"runtime/pprof"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,7 +56,6 @@ func testSync(t *testing.T, test syncTest) {
 
 	s, err := NewStateSyncer(&StateSyncerConfig{
 		Client:                   mockClient,
-		Root:                     root,
 		DB:                       clientDB,
 		BatchSize:                1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
@@ -69,8 +66,12 @@ func testSync(t *testing.T, test syncTest) {
 		t.Fatal(err)
 	}
 	// begin sync
-	s.Start(ctx)
-	waitFor(t, s.Done(), test.expectedError, testSyncTimeout)
+	summary, err := message.NewSyncSummary(common.Hash{}, 0, root, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Start(ctx, &summary)
+	waitFor(t, s.Wait, test.expectedError, testSyncTimeout)
 	if test.expectedError != nil {
 		return
 	}
@@ -88,26 +89,20 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 }
 
 // waitFor waits for a result on the [result] channel to match [expected], or a timeout.
-func waitFor(t *testing.T, result <-chan error, expected error, timeout time.Duration) {
+func waitFor(t *testing.T, wait func(context.Context) error, expected error, timeout time.Duration) {
 	t.Helper()
-	select {
-	case err := <-result:
-		if expected != nil {
-			if err == nil {
-				t.Fatalf("Expected error %s, but got nil", expected)
-			}
-			assert.Contains(t, err.Error(), expected.Error())
-		} else if err != nil {
-			t.Fatal("unexpected error waiting for sync result", err)
+	ctx, err := context.WithDeadline(context.Background(), time.Now().Add(timeout))
+	if err != nil {
+		t.Fatal("could not create context with deadline", err)
+	}
+	result := wait(ctx)
+	if expected != nil {
+		if result == nil {
+			t.Fatalf("Expected error %s, but got nil", expected)
 		}
-	case <-time.After(timeout):
-		// print a stack trace to assist with debugging
-		// if the test times out.
-		var stackBuf bytes.Buffer
-		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
-		t.Log(stackBuf.String())
-		// fail the test
-		t.Fatal("unexpected timeout waiting for sync result")
+		assert.Contains(t, result.Error(), expected.Error())
+	} else if result != nil {
+		t.Fatal("unexpected error waiting for sync result", err)
 	}
 }
 

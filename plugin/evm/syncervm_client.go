@@ -6,7 +6,6 @@ package evm
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -21,15 +20,9 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
-)
-
-const (
-	// State sync fetches [parentsToGet] parents of the block it syncs to.
-	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
-	parentsToGet = 256
+	"golang.org/x/sync/errgroup"
 )
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
@@ -65,11 +58,14 @@ type stateSyncerClient struct {
 	resumableSummary message.SyncSummary
 
 	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	eg     *errgroup.Group
 
 	// State Sync results
 	syncSummary  message.SyncSummary
 	stateSyncErr error
+
+	// New
+	syncers []Syncer[*message.SyncSummary]
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
@@ -94,9 +90,11 @@ type StateSyncClient interface {
 // along with Start/Done methods to control
 // and monitor progress.
 // Error returns an error if any was encountered.
-type Syncer interface {
-	Start(ctx context.Context) error
-	Done() <-chan error
+type Syncer[T any] interface {
+	Start(ctx context.Context, target T) error
+	Wait(ctx context.Context) error
+	Close() error
+	UpdateSyncTarget(ctx context.Context, target T) error
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
@@ -142,22 +140,6 @@ func (client *stateSyncerClient) ParseStateSummary(_ context.Context, summaryByt
 	return message.NewSyncSummaryFromBytes(summaryBytes, client.acceptSyncSummary)
 }
 
-// stateSync blockingly performs the state sync for the EVM state and the atomic state
-// to [client.syncSummary]. returns an error if one occurred.
-func (client *stateSyncerClient) stateSync(ctx context.Context) error {
-	if err := client.syncBlocks(ctx, client.syncSummary.BlockHash, client.syncSummary.BlockNumber, parentsToGet); err != nil {
-		return err
-	}
-
-	// Sync the EVM trie and then the atomic trie. These steps could be done
-	// in parallel or in the opposite order. Keeping them serial for simplicity for now.
-	if err := client.syncStateTrie(ctx); err != nil {
-		return err
-	}
-
-	return client.syncAtomicTrie(ctx)
-}
-
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
 // in a goroutine.
 func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncSummary) (block.StateSyncMode, error) {
@@ -199,107 +181,68 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 		return block.StateSyncSkipped, fmt.Errorf("failed to commit db: %w", err)
 	}
 
-	log.Info("Starting state sync", "summary", proposedSummary)
+	return block.StateSyncStatic, client.startSync()
+}
+
+func (client *stateSyncerClient) startSync() error {
+	log.Info("Starting state sync", "summary", client.syncSummary)
 
 	// create a cancellable ctx for the state sync goroutine
-	ctx, cancel := context.WithCancel(context.Background())
-	client.cancel = cancel
-	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
-	go func() {
-		defer client.wg.Done()
-		defer cancel()
+	var detachedCtx context.Context
+	detachedCtx, client.cancel = context.WithCancel(context.Background())
 
-		if err := client.stateSync(ctx); err != nil {
-			client.stateSyncErr = err
-		} else {
-			client.stateSyncErr = client.finishSync()
-		}
-		// notify engine regardless of whether err == nil,
-		// this error will be propagated to the engine when it calls
-		// vm.SetState(snow.Bootstrapping)
-		log.Info("stateSync completed, notifying engine", "err", client.stateSyncErr)
-		client.toEngine <- commonEng.StateSyncDone
-	}()
-	return block.StateSyncStatic, nil
-}
-
-// syncBlocks fetches (up to) [parentsToGet] blocks from peers
-// using [client] and writes them to disk.
-// the process begins with [fromHash] and it fetches parents recursively.
-// fetching starts from the first ancestor not found on disk
-func (client *stateSyncerClient) syncBlocks(ctx context.Context, fromHash common.Hash, fromHeight uint64, parentsToGet int) error {
-	nextHash := fromHash
-	nextHeight := fromHeight
-	parentsPerRequest := uint16(32)
-
-	// first, check for blocks already available on disk so we don't
-	// request them from peers.
-	for parentsToGet >= 0 {
-		blk := rawdb.ReadBlock(client.chaindb, nextHash, nextHeight)
-		if blk != nil {
-			// block exists
-			nextHash = blk.ParentHash()
-			nextHeight--
-			parentsToGet--
-			continue
-		}
-
-		// block was not found
-		break
-	}
-
-	// get any blocks we couldn't find on disk from peers and write
-	// them to disk.
-	batch := client.chaindb.NewBatch()
-	for i := parentsToGet - 1; i >= 0 && (nextHash != common.Hash{}); {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		blocks, err := client.client.GetBlocks(ctx, nextHash, nextHeight, parentsPerRequest)
-		if err != nil {
-			log.Error("could not get blocks from peer", "err", err, "nextHash", nextHash, "remaining", i+1)
-			return err
-		}
-		for _, block := range blocks {
-			rawdb.WriteBlock(batch, block)
-			rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-
-			i--
-			nextHash = block.ParentHash()
-			nextHeight--
-		}
-		log.Info("fetching blocks from peer", "remaining", i+1, "total", parentsToGet)
-	}
-	log.Info("fetched blocks from peer", "total", parentsToGet)
-	return batch.Write()
-}
-
-func (client *stateSyncerClient) syncAtomicTrie(ctx context.Context) error {
-	log.Info("atomic tx: sync starting", "root", client.syncSummary.AtomicRoot)
-	atomicSyncer, err := newAtomicSyncer(
-		client.client,
-		client.db,
-		client.atomicBackend.AtomicTrie(),
-		client.syncSummary.AtomicRoot,
-		client.syncSummary.BlockNumber,
-		client.stateSyncRequestSize,
-	)
+	err := client.initSyncers()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize syncers: %w", err)
 	}
-	if err := atomicSyncer.Start(ctx); err != nil {
-		return err
+
+	for _, syncer := range client.syncers {
+		if err := syncer.Start(detachedCtx, &client.syncSummary); err != nil {
+			// client.finish(ctx, err)
+			return err
+		}
 	}
-	err = <-atomicSyncer.Done()
-	log.Info("atomic tx: sync finished", "root", client.syncSummary.AtomicRoot, "err", err)
-	return err
+
+	var egCtx context.Context
+	client.eg, egCtx = errgroup.WithContext(detachedCtx)
+	for _, syncer := range client.syncers {
+		client.eg.Go(func() error {
+			if err := syncer.Wait(egCtx); err != nil {
+				return fmt.Errorf("state syncer %T failed: %w", syncer, err)
+			}
+			return nil
+		})
+	}
+
+	go func() {
+		log.Info("Waiting for state syncer(s) to complete", "numSyncers", len(client.syncers))
+		err := client.eg.Wait()
+		if err != nil {
+			log.Crit("State sync failed", "err", err)
+			panic(fmt.Sprintf("state sync failed: %s", err)) // Fail loudly
+		} else {
+			log.Info("State syncer(s) completed", "numSyncers", len(client.syncers))
+		}
+		// client.finish(detachedCtx, err)
+		log.Info("State sync completed")
+		client.finishSync()
+	}()
+
+	return nil
 }
 
-func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
-	log.Info("state sync: sync starting", "root", client.syncSummary.BlockRoot)
+// initSyncers initializes the syncers for the state sync process
+func (client *stateSyncerClient) initSyncers() error {
+	blockSyncer, err := statesync.NewBlockSyncer(&statesync.BlockSyncerConfig{
+		Client:  client.client,
+		ChainDB: client.chaindb,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create block syncer: %w", err)
+	}
+
 	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
 		Client:                   client.client,
-		Root:                     client.syncSummary.BlockRoot,
 		BatchSize:                ethdb.IdealBatchSize,
 		DB:                       client.chaindb,
 		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
@@ -307,41 +250,83 @@ func (client *stateSyncerClient) syncStateTrie(ctx context.Context) error {
 		RequestSize:              client.stateSyncRequestSize,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create EVM syncer: %w", err)
 	}
-	if err := evmSyncer.Start(ctx); err != nil {
-		return err
+
+	atomicSyncer, err := newAtomicSyncer(
+		client.client,
+		client.db,
+		client.atomicBackend.AtomicTrie(),
+		client.stateSyncRequestSize,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create atomic syncer: %w", err)
 	}
-	err = <-evmSyncer.Done()
-	log.Info("state sync: sync finished", "root", client.syncSummary.BlockRoot, "err", err)
-	return err
+	client.syncers = []Syncer[*message.SyncSummary]{
+		blockSyncer,
+		evmSyncer,
+		atomicSyncer,
+	}
+	return nil
+}
+
+// Updates dynamic syncing targets. Should never be called yet.
+func (c *stateSyncerClient) UpdateSyncTarget(ctx context.Context, target Block) error {
+	// TODO: remove critical log when this is fully implemented
+	log.Crit("state syncer client should not be called to update sync target", "id", target.ID(), "height", target.Height())
+	newSyncSummary, err := message.NewSyncSummary(
+		target.ethBlock.Hash(),
+		target.Height(),
+		target.ethBlock.Root(),
+		common.Hash{}, // won't be used
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create new sync summary: %w", err)
+	}
+
+	log.Info("Updating state sync target", "ID", target.ID(), "height", target.Height())
+	for _, syncer := range c.syncers {
+		if err := syncer.UpdateSyncTarget(ctx, &newSyncSummary); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (client *stateSyncerClient) Shutdown() error {
 	if client.cancel != nil {
 		client.cancel()
 	}
-	client.wg.Wait() // wait for the background goroutine to exit
+	if client.eg != nil {
+		client.eg.Wait() // wait for the background goroutine to exit
+	}
 	return nil
+}
+
+func (client *stateSyncerClient) getEVMBlockFromHash(hash common.Hash) (*Block, error) {
+	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(client.syncSummary.BlockHash))
+	if err != nil {
+		return nil, fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
+	}
+
+	wrapper, ok := stateBlock.(*chain.BlockWrapper)
+	if !ok {
+		return nil, fmt.Errorf("could not convert block(%T) to *chain.BlockWrapper", wrapper)
+	}
+	evmBlock, ok := wrapper.Block.(*Block)
+	if !ok {
+		return nil, fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
+	}
+	return evmBlock, nil
 }
 
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
 func (client *stateSyncerClient) finishSync() error {
-	stateBlock, err := client.state.GetBlock(context.TODO(), ids.ID(client.syncSummary.BlockHash))
+	evmBlock, err := client.getEVMBlockFromHash(client.syncSummary.BlockHash)
 	if err != nil {
-		return fmt.Errorf("could not get block by hash from client state: %s", client.syncSummary.BlockHash)
+		return fmt.Errorf("could not get block from client state: %w", err)
 	}
-
-	wrapper, ok := stateBlock.(*chain.BlockWrapper)
-	if !ok {
-		return fmt.Errorf("could not convert block(%T) to *chain.BlockWrapper", wrapper)
-	}
-	evmBlock, ok := wrapper.Block.(*Block)
-	if !ok {
-		return fmt.Errorf("could not convert block(%T) to evm.Block", stateBlock)
-	}
-
 	block := evmBlock.ethBlock
 
 	if block.Hash() != client.syncSummary.BlockHash {
@@ -381,7 +366,12 @@ func (client *stateSyncerClient) finishSync() error {
 	// ApplyToSharedMemory does this, and even if the VM is stopped
 	// (gracefully or ungracefully), since MarkApplyToSharedMemoryCursor
 	// is called, VM will resume ApplyToSharedMemory on Initialize.
-	return client.atomicBackend.ApplyToSharedMemory(block.NumberU64())
+	if err := client.atomicBackend.ApplyToSharedMemory(block.NumberU64()); err != nil {
+		return fmt.Errorf("error applying atomic trie to shared memory, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
+	}
+
+	client.toEngine <- commonEng.StateSyncDone
+	return nil
 }
 
 // updateVMMarkers updates the following markers in the VM's database
