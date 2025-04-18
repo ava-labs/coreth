@@ -58,21 +58,21 @@ func (s *EthereumAPI) SuggestPriceOptions(ctx context.Context) (*PriceOptions, e
 		return nil, nil
 	}
 
-	config := s.b.PriceOptionsConfig()
+	cfg := s.b.PriceOptionsConfig()
 	gasTips := calculateFeeSpeeds(
 		bigMinGasTip,
 		gasTip,
-		new(big.Int).SetUint64(config.MaxTip),
-		new(big.Int).SetUint64(config.SlowFeePercentage),
-		new(big.Int).SetUint64(config.FastFeePercentage),
+		new(big.Int).SetUint64(cfg.MaxTip),
+		new(big.Int).SetUint64(cfg.SlowFeePercentage),
+		new(big.Int).SetUint64(cfg.FastFeePercentage),
 	)
 
 	// Double the baseFee estimate without modifying the original variable.
-	baseFee = new(big.Int).Lsh(baseFee, 1)
+	baseFeeDouble := new(big.Int).Lsh(baseFee, 1)
 
-	slowGasFee := new(big.Int).Add(baseFee, gasTips.slow)
-	normalGasFee := new(big.Int).Add(baseFee, gasTips.normal)
-	fastGasFee := new(big.Int).Add(baseFee, gasTips.fast)
+	slowGasFee := new(big.Int).Add(baseFeeDouble, gasTips.slow)
+	normalGasFee := new(big.Int).Add(baseFeeDouble, gasTips.normal)
+	fastGasFee := new(big.Int).Add(baseFeeDouble, gasTips.fast)
 	return &PriceOptions{
 		Slow: &Price{
 			GasTip: (*hexutil.Big)(gasTips.slow),
@@ -98,28 +98,28 @@ type feeSpeeds struct {
 // calculateFeeSpeeds returns the slow, normal, and fast price options for a
 // given min, estimate, and max,
 //
-// slow   = max(slowFeePercent/100 * min(estimate, maxFee), minFee)
+// slow   = max(slowFeePerc/100 * min(estimate, maxFee), minFee)
 // normal = min(estimate, maxFee)
-// fast   = fastFeePercent/100 * estimate
+// fast   = fastFeePerc/100 * estimate
 func calculateFeeSpeeds(
 	minFee *big.Int,
 	estimate *big.Int,
 	maxFee *big.Int,
-	slowFeePercent *big.Int,
-	fastFeePercent *big.Int,
+	slowFeePerc *big.Int,
+	fastFeePerc *big.Int,
 ) feeSpeeds {
 	// Cap the fee to keep slow and normal options reasonable during fee spikes.
 	cappedFee := math.BigMin(estimate, maxFee)
 
 	slowFee := new(big.Int).Set(cappedFee)
-	slowFee.Mul(slowFee, slowFeePercent)
+	slowFee.Mul(slowFee, slowFeePerc)
 	slowFee.Div(slowFee, bigFeeDenominator)
 	slowFee = math.BigMax(slowFee, minFee)
 
 	normalFee := cappedFee
 
 	fastFee := new(big.Int).Set(estimate)
-	fastFee.Mul(fastFee, fastFeePercent)
+	fastFee.Mul(fastFee, fastFeePerc)
 	fastFee.Div(fastFee, bigFeeDenominator)
 	return feeSpeeds{
 		slow:   slowFee,
