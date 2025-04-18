@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
@@ -24,7 +25,6 @@ const (
 )
 
 type StateSyncerConfig struct {
-	Root                     common.Hash
 	Client                   syncclient.Client
 	DB                       ethdb.Database
 	BatchSize                int
@@ -60,6 +60,8 @@ type stateSync struct {
 	triesInProgressSem chan struct{}
 	done               chan error
 	stats              *trieSyncStats
+	cancel             chan struct{}
+	cancelOnce         sync.Once
 }
 
 func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
@@ -67,7 +69,6 @@ func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
 		batchSize:       config.BatchSize,
 		db:              config.DB,
 		client:          config.Client,
-		root:            config.Root,
 		trieDB:          triedb.NewDatabase(config.DB, nil),
 		snapshot:        snapshot.NewDiskLayer(config.DB),
 		stats:           newTrieSyncStats(),
@@ -84,6 +85,7 @@ func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
 		mainTrieDone:     make(chan struct{}),
 		storageTriesDone: make(chan struct{}),
 		done:             make(chan error, 1),
+		cancel:           make(chan struct{}),
 	}
 	ss.syncer = syncclient.NewCallbackLeafSyncer(config.Client, ss.segments, config.RequestSize)
 	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
@@ -93,19 +95,6 @@ func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
 
-	ss.trieQueue = NewTrieQueue(config.DB)
-	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
-		return nil, err
-	}
-
-	// create a trieToSync for the main trie and mark it as in progress.
-	var err error
-	ss.mainTrie, err = NewTrieToSync(ss, ss.root, common.Hash{}, NewMainTrieTask(ss))
-	if err != nil {
-		return nil, err
-	}
-	ss.addTrieInProgress(ss.root, ss.mainTrie)
-	ss.mainTrie.startSyncing() // start syncing after tracking the trie as in progress
 	return ss, nil
 }
 
@@ -217,9 +206,26 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 	}
 }
 
-func (t *stateSync) Start(ctx context.Context) error {
+func (t *stateSync) Start(ctx context.Context, target *message.SyncSummary) error {
+	t.root = target.BlockRoot
+
+	t.trieQueue = NewTrieQueue(t.db)
+	if err := t.trieQueue.clearIfRootDoesNotMatch(t.root); err != nil {
+		return err
+	}
+
+	// create a trieToSync for the main trie and mark it as in progress.
+	var err error
+	t.mainTrie, err = NewTrieToSync(t, t.root, common.Hash{}, NewMainTrieTask(t))
+	if err != nil {
+		return err
+	}
+	t.addTrieInProgress(t.root, t.mainTrie)
+	t.mainTrie.startSyncing() // start syncing after tracking the trie as in progress
+
 	// Start the code syncer and leaf syncer.
-	eg, egCtx := errgroup.WithContext(ctx)
+	cancelCtx, cancel := context.WithCancel(ctx)
+	eg, egCtx := errgroup.WithContext(cancelCtx)
 	t.codeSyncer.start(egCtx) // start the code syncer first since the leaf syncer may add code tasks
 	t.syncer.Start(egCtx, defaultNumThreads, t.onSyncFailure)
 	eg.Go(func() error {
@@ -236,15 +242,41 @@ func (t *stateSync) Start(ctx context.Context) error {
 		return t.storageTrieProducer(egCtx)
 	})
 
-	// The errgroup wait will take care of returning the first error that occurs, or returning
-	// nil if both finish without an error.
+	// The errgroup ctx will take care of returning the first error that occurs, or returning
+	// nil if all finish without an error.
+	// If  we cancel externally, we still want to cancel the errgroup.
 	go func() {
-		t.done <- eg.Wait()
+		select {
+		case <-egCtx.Done():
+			t.done <- egCtx.Err()
+		case <-t.cancel:
+			// If canceled externally, we should cancel the errgroup
+			cancel()
+		}
 	}()
 	return nil
 }
 
-func (t *stateSync) Done() <-chan error { return t.done }
+func (t *stateSync) Wait(ctx context.Context) error {
+	select {
+	case err := <-t.done:
+		return err
+	case <-ctx.Done():
+		// If the context is done, we should cancel the syncer and return the error.
+		return t.Close()
+	}
+}
+
+func (t *stateSync) Close() error {
+	t.cancelOnce.Do(func() {
+		close(t.cancel)
+	})
+	return nil
+}
+
+func (t *stateSync) UpdateSyncTarget(ctx context.Context, target *message.SyncSummary) error {
+	panic("not implemented")
+}
 
 // addTrieInProgress tracks the root as being currently synced.
 func (t *stateSync) addTrieInProgress(root common.Hash, trie *trieToSync) {

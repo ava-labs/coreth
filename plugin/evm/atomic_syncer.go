@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"sync"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -19,10 +20,7 @@ import (
 	"github.com/ava-labs/libevm/trie"
 )
 
-var (
-	_ Syncer                  = &atomicSyncer{}
-	_ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
-)
+var _ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
 
 // atomicSyncer is used to sync the atomic trie from the network. The CallbackLeafSyncer
 // is responsible for orchestrating the sync while atomicSyncer is responsible for maintaining
@@ -40,6 +38,8 @@ type atomicSyncer struct {
 	// lastHeight is the greatest height for which key / values
 	// were last inserted into the [atomicTrie]
 	lastHeight uint64
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
 }
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
@@ -50,7 +50,7 @@ func addZeroes(height uint64) []byte {
 	return packer.Bytes
 }
 
-func newAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16) (*atomicSyncer, error) {
+func newAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie AtomicTrie, requestSize uint16) (*atomicSyncer, error) {
 	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
 	trie, err := atomicTrie.OpenTrie(lastCommittedRoot)
 	if err != nil {
@@ -58,12 +58,10 @@ func newAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atom
 	}
 
 	atomicSyncer := &atomicSyncer{
-		db:           vdb,
-		atomicTrie:   atomicTrie,
-		trie:         trie,
-		targetRoot:   targetRoot,
-		targetHeight: targetHeight,
-		lastHeight:   lastCommit,
+		db:         vdb,
+		atomicTrie: atomicTrie,
+		trie:       trie,
+		lastHeight: lastCommit,
 	}
 	tasks := make(chan syncclient.LeafSyncTask, 1)
 	tasks <- &atomicSyncerLeafTask{atomicSyncer: atomicSyncer}
@@ -73,7 +71,10 @@ func newAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atom
 }
 
 // Start begins syncing the target atomic root.
-func (s *atomicSyncer) Start(ctx context.Context) error {
+func (s *atomicSyncer) Start(ctx context.Context, target *message.SyncSummary) error {
+	s.targetRoot = target.AtomicRoot
+	s.targetHeight = target.BlockNumber
+	ctx, s.cancel = context.WithCancel(ctx)
 	s.syncer.Start(ctx, 1, s.onSyncFailure)
 	return nil
 }
@@ -158,7 +159,30 @@ func (s *atomicSyncer) onSyncFailure(error) error {
 }
 
 // Done returns a channel which produces any error that occurred during syncing or nil on success.
-func (s *atomicSyncer) Done() <-chan error { return s.syncer.Done() }
+func (s *atomicSyncer) Wait(ctx context.Context) error {
+	select {
+	case err := <-s.syncer.Done():
+		return err
+	case <-ctx.Done():
+		s.cancelOnce.Do(func() {
+			s.cancel()
+		})
+		return ctx.Err()
+	}
+}
+
+// Close closes the syncer and releases any resources.
+func (s *atomicSyncer) Close() error {
+	s.cancelOnce.Do(func() {
+		s.cancel()
+	})
+	return nil
+}
+
+// UpdateSyncTarget should not be called yet.
+func (s *atomicSyncer) UpdateSyncTarget(ctx context.Context, target *message.SyncSummary) error {
+	panic("atomic syncer does not support updating sync target")
+}
 
 type atomicSyncerLeafTask struct {
 	atomicSyncer *atomicSyncer
