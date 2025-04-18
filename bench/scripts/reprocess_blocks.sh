@@ -10,7 +10,7 @@ set -o pipefail
 reprocess_blocks() {
     local sourceDbDir="${1}" # Database to fetch blocks from
     local dbDir="${2}" # Chain's database including metadata, code, etc. (also includes geth merkle trie)
-    local firewoodDBFile="${3}" # Path to the Firewood database file
+    local firewoodDbFile="${3}" # Path to the Firewood database file
     local startBlock="${4}" # First block to execute - root of this block must match the last root of Firewood database
     local endBlock="${5}" # End block
 
@@ -21,5 +21,5 @@ reprocess_blocks() {
         -firewoodDBFile=${firewoodDbFile} -startPProf=true -firewoodMetricsPort=3000
 }
 
-# Usage: ./reprocess_blocks.sh <sourceDbDir> <dbDir> <firewoodDBFile> <startBlock> <endBlock>
+# Usage: ./reprocess_blocks.sh <sourceDbDir> <dbDir> <firewoodDbFile> <startBlock> <endBlock>
 reprocess_blocks "$@"
