@@ -8,6 +8,7 @@ set -o pipefail
 # Cloning this with s5cmd takes ~10 minutes
 
 git clone https://github.com/peak/s5cmd.git
-cd s5cmd
+pushd s5cmd
 CGO_ENABLED=0 make build
-time ./s5cmd cp 's3://statesync-testing/blocks-mainnet-50m/*' .
+time ./s5cmd cp 's3://statesync-testing/blocks-mainnet-50m/*' $1
+popd
