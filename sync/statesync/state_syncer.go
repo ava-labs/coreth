@@ -251,14 +251,13 @@ func (t *stateSync) Start(ctx context.Context, target *message.SyncSummary) erro
 	}()
 	go func() {
 		select {
-		case <-checkDone:
-			t.done <- egCtx.Err()
+		case err := <-checkDone:
+			t.done <- err
 		case <-t.cancel:
 			// If canceled externally, we should cancel the errgroup
 			t.done <- fmt.Errorf("state syncer canceled externally")
 		case <-egCtx.Done():
-			// If the errgroup is done, we should close the done channel
-			// and return the error.
+			// If context canceled internally, should handle correctly
 			t.done <- egCtx.Err()
 			cancel()
 		}
