@@ -67,8 +67,8 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 		target, err := message.NewSyncSummary(
 			common.Hash{},
 			checkpoint.targetHeight,
-			checkpoint.targetRoot,
 			common.Hash{},
+			checkpoint.targetRoot,
 		)
 		if err != nil {
 			t.Fatal("could not create sync summary", err)
@@ -116,8 +116,8 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	target, err := message.NewSyncSummary(
 		common.Hash{},
 		targetHeight,
-		targetRoot,
 		common.Hash{},
+		targetRoot,
 	)
 	if err != nil {
 		t.Fatal("could not create sync summary", err)
