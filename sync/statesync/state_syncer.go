@@ -224,7 +224,7 @@ func (t *stateSync) Start(ctx context.Context, target *message.SyncSummary) erro
 	t.mainTrie.startSyncing() // start syncing after tracking the trie as in progress
 
 	// Start the code syncer and leaf syncer.
-	cancelCtx, cancel := context.WithCancel(ctx)
+	cancelCtx, cancelFunc := context.WithCancel(ctx)
 	eg, egCtx := errgroup.WithContext(cancelCtx)
 	t.codeSyncer.start(egCtx) // start the code syncer first since the leaf syncer may add code tasks
 	t.syncer.Start(egCtx, defaultNumThreads, t.onSyncFailure)
@@ -256,10 +256,10 @@ func (t *stateSync) Start(ctx context.Context, target *message.SyncSummary) erro
 		case <-t.cancel:
 			// If canceled externally, we should cancel the errgroup
 			t.done <- fmt.Errorf("state syncer canceled externally")
-		case <-egCtx.Done():
+		case <-ctx.Done():
 			// If context canceled internally, should handle correctly
-			t.done <- egCtx.Err()
-			cancel()
+			cancelFunc()
+			t.done <- <-checkDone // wait for errgroup to finish
 		}
 	}()
 	return nil
@@ -271,7 +271,9 @@ func (t *stateSync) Wait(ctx context.Context) error {
 		return err
 	case <-ctx.Done():
 		// If the context is done, we should cancel the syncer and return the error.
-		return t.Close()
+		// However, we must wait for it to be done
+		t.Close()
+		return <-t.done
 	}
 }
 

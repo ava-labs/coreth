@@ -219,7 +219,8 @@ func (client *stateSyncerClient) startSync() error {
 		err := client.eg.Wait()
 		if err != nil {
 			log.Crit("State sync failed", "err", err)
-			panic(fmt.Sprintf("state sync failed: %s", err)) // Fail loudly
+			client.toEngine <- commonEng.StateSyncDone
+			return
 		} else {
 			log.Info("State syncer(s) completed", "numSyncers", len(client.syncers))
 		}
