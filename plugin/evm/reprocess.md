@@ -82,3 +82,11 @@ Now try building Firewood and re-running the same commands:
 ```bash
 go test -timeout 30s -run ^TestReprocessGenesis$ github.com/ava-labs/coreth/plugin/evm -timeout=15s
 ```
+
+## Bench Scripts
+
+Scripts have been added [here](../../bench/scripts) to automate the following tasks:
+
+- [Import Blocks from S3](../../bench/scripts/import_s3_blocks.sh)
+- [Reprocess a Specified Range of Blocks](../../bench/scripts/reprocess_blocks.sh)
+- [Clone DB and Reprocess](../../bench/scripts/reprocess_snoopy.sh)

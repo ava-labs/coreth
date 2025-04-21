@@ -4,8 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Assumes suitable golang version to run Coreth has been installed
-# and that a block database is available
+# Assumes suitable golang version to run Coreth has been installed, Firewood has been built,
+# and that a block database is available.
 
 reprocess_blocks() {
     local sourceDbDir="${1}" # Database to fetch blocks from
