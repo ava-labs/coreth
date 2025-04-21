@@ -4,9 +4,11 @@
 package statesync
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math/rand"
+	"runtime/pprof"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -91,18 +93,29 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 // waitFor waits for a result on the [result] channel to match [expected], or a timeout.
 func waitFor(t *testing.T, wait func(context.Context) error, expected error, timeout time.Duration) {
 	t.Helper()
-	ctx, err := context.WithDeadline(context.Background(), time.Now().Add(timeout))
-	if err != nil {
-		t.Fatal("could not create context with deadline", err)
-	}
-	result := wait(ctx)
-	if expected != nil {
-		if result == nil {
-			t.Fatalf("Expected error %s, but got nil", expected)
+	result := make(chan error, 1)
+	go func() {
+		result <- wait(context.Background())
+	}()
+
+	select {
+	case err := <-result:
+		if expected != nil {
+			if err == nil {
+				t.Fatalf("Expected error %s, but got nil", expected)
+			}
+			assert.Contains(t, err.Error(), expected.Error())
+		} else if err != nil {
+			t.Fatal("unexpected error waiting for sync result", err)
 		}
-		assert.Contains(t, result.Error(), expected.Error())
-	} else if result != nil {
-		t.Fatal("unexpected error waiting for sync result", err)
+	case <-time.After(timeout):
+		// print a stack trace to assist with debugging
+		// if the test times out.
+		var stackBuf bytes.Buffer
+		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
+		t.Log(stackBuf.String())
+		// fail the test
+		t.Fatal("unexpected timeout waiting for sync result")
 	}
 }
 
