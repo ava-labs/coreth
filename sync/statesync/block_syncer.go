@@ -4,6 +4,7 @@ package statesync
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
@@ -21,6 +22,11 @@ const (
 
 type blockSyncer struct {
 	*BlockSyncerConfig
+
+	// cancel is used to cancel the syncer
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
+	result     chan error
 }
 
 type BlockSyncerConfig struct {
@@ -29,14 +35,17 @@ type BlockSyncerConfig struct {
 }
 
 func NewBlockSyncer(config *BlockSyncerConfig) (*blockSyncer, error) {
-	return &blockSyncer{BlockSyncerConfig: config}, nil
+	return &blockSyncer{
+		BlockSyncerConfig: config,
+		result:            make(chan error),
+	}, nil
 }
 
 func (syncer *blockSyncer) Start(ctx context.Context, target *message.SyncSummary) error {
+	ctx, cancel := context.WithCancel(ctx)
+	syncer.cancel = cancel
 	go func() {
-		if err := syncer.syncBlocks(ctx, target); err != nil {
-			log.Error("failed to sync blocks", "err", err)
-		}
+		syncer.result <- syncer.syncBlocks(ctx, target)
 	}()
 	return nil
 }
@@ -90,11 +99,13 @@ func (syncer *blockSyncer) syncBlocks(ctx context.Context, target *message.SyncS
 }
 
 func (syncer *blockSyncer) Wait(ctx context.Context) error {
-	return nil
+	return <-syncer.result
 }
 
 func (syncer *blockSyncer) Close() error {
-	// No resources to close
+	syncer.cancelOnce.Do(func() {
+		syncer.cancel()
+	})
 	return nil
 }
 
