@@ -136,7 +136,6 @@ jobs:
         uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@c7351c1ea9ad15f6a65614f158c06ddbb0f722a7
         with:
           run: ./scripts/tests.e2e.sh
-          run_env: E2E_SERIAL=1
           prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
           prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
           loki_username: ${{ secrets.LOKI_ID || '' }}
