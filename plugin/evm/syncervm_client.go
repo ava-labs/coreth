@@ -216,17 +216,16 @@ func (client *stateSyncerClient) startSync() error {
 
 	go func() {
 		log.Info("Waiting for state syncer(s) to complete", "numSyncers", len(client.syncers))
-		err := client.eg.Wait()
-		if err != nil {
-			log.Crit("State sync failed", "err", err)
-			client.toEngine <- commonEng.StateSyncDone
-			return
+		client.stateSyncErr = client.eg.Wait()
+		if client.stateSyncErr != nil {
+			log.Error("State sync failed", "err", err)
 		} else {
 			log.Info("State syncer(s) completed", "numSyncers", len(client.syncers))
+			client.stateSyncErr = client.finishSync()
 		}
 		// client.finish(detachedCtx, err)
-		log.Info("State sync completed")
-		client.finishSync()
+		log.Info("State sync complete", "err", client.stateSyncErr)
+		client.toEngine <- commonEng.StateSyncDone
 	}()
 
 	return nil
@@ -370,8 +369,6 @@ func (client *stateSyncerClient) finishSync() error {
 	if err := client.atomicBackend.ApplyToSharedMemory(block.NumberU64()); err != nil {
 		return fmt.Errorf("error applying atomic trie to shared memory, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
 	}
-
-	client.toEngine <- commonEng.StateSyncDone
 	return nil
 }
 
