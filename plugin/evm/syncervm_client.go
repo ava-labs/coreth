@@ -198,7 +198,6 @@ func (client *stateSyncerClient) startSync() error {
 
 	for _, syncer := range client.syncers {
 		if err := syncer.Start(detachedCtx, &client.syncSummary); err != nil {
-			// client.finish(ctx, err)
 			return err
 		}
 	}
@@ -225,6 +224,8 @@ func (client *stateSyncerClient) startSync() error {
 		}
 		// client.finish(detachedCtx, err)
 		log.Info("State sync complete", "err", client.stateSyncErr)
+
+		// On error, we still can bootstrap from genesis
 		client.toEngine <- commonEng.StateSyncDone
 	}()
 
