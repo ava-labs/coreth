@@ -133,7 +133,7 @@ jobs:
         with:
           go-version-file: "go.mod"
       - name: Run e2e tests
-        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@8c087869a5fced9d14f64add814e6866ba951d64
+        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@3400f10a8f6af8d3f16471e7364ac15bd196b30e
         with:
           run: ./scripts/tests.e2e.sh
           run_env: E2E_SERIAL=1
