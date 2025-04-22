@@ -53,7 +53,10 @@ func TestGossipSubscribe(t *testing.T) {
 	txPool.SetGasTip(common.Big1)
 	txPool.SetMinFee(common.Big0)
 
-	gossipTxPool, err := NewGossipEthTxPool(txPool, prometheus.NewRegistry())
+	metrics, err := gossip.NewMetrics(prometheus.NewRegistry(), "")
+	require.NoError(err)
+
+	gossipTxPool, err := NewGossipEthTxPool(txPool, prometheus.NewRegistry(), metrics)
 	require.NoError(err)
 
 	// use a custom bloom filter to test the bloom filter reset

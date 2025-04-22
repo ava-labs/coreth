@@ -45,7 +45,7 @@ func newTxGossipHandler[T gossip.Gossipable](
 	log logging.Logger,
 	marshaller gossip.Marshaller[T],
 	mempool gossip.Set[T],
-	metrics gossip.Metrics,
+	metrics *gossip.Metrics,
 	maxMessageSize int,
 	throttlingPeriod time.Duration,
 	throttlingLimit int,
@@ -91,7 +91,7 @@ func (t txGossipHandler) AppRequest(ctx context.Context, nodeID ids.NodeID, dead
 	return t.appRequestHandler.AppRequest(ctx, nodeID, deadline, requestBytes)
 }
 
-func NewGossipEthTxPool(mempool *txpool.TxPool, registerer prometheus.Registerer) (*GossipEthTxPool, error) {
+func NewGossipEthTxPool(mempool *txpool.TxPool, registerer prometheus.Registerer, metrics *gossip.Metrics) (*GossipEthTxPool, error) {
 	bloom, err := gossip.NewBloomFilter(
 		registerer,
 		"eth_tx_bloom_filter",
@@ -104,15 +104,17 @@ func NewGossipEthTxPool(mempool *txpool.TxPool, registerer prometheus.Registerer
 	}
 
 	return &GossipEthTxPool{
-		mempool:    mempool,
-		pendingTxs: make(chan core.NewTxsEvent, pendingTxsBuffer),
-		bloom:      bloom,
+		mempool:       mempool,
+		pendingTxs:    make(chan core.NewTxsEvent, pendingTxsBuffer),
+		bloom:         bloom,
+		gossipMetrics: metrics,
 	}, nil
 }
 
 type GossipEthTxPool struct {
-	mempool    *txpool.TxPool
-	pendingTxs chan core.NewTxsEvent
+	mempool       *txpool.TxPool
+	pendingTxs    chan core.NewTxsEvent
+	gossipMetrics *gossip.Metrics
 
 	bloom *gossip.BloomFilter
 	lock  sync.RWMutex
@@ -173,7 +175,12 @@ func (g *GossipEthTxPool) Subscribe(ctx context.Context) {
 // Add enqueues the transaction to the mempool. Subscribe should be called
 // to receive an event if tx is actually added to the mempool or not.
 func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
-	return g.mempool.Add([]*types.Transaction{tx.Tx}, false, false)[0]
+	errs := g.mempool.Add([]*types.Transaction{tx.Tx}, false, false)
+	// if the error is a duplicate transaction, flag it as such.
+	if errs[0] == txpool.ErrAlreadyKnown {
+		g.gossipMetrics.ObserveIncomingGossipable(tx.GossipID(), gossip.DroppedDuplicate)
+	}
+	return errs[0]
 }
 
 // Has should just return whether or not the [txID] is still in the mempool,

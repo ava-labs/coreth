@@ -1090,7 +1090,7 @@ func (vm *VM) initBlockBuilding() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
 	}
-	ethTxPool, err := NewGossipEthTxPool(vm.txPool, vm.sdkMetrics)
+	ethTxPool, err := NewGossipEthTxPool(vm.txPool, vm.sdkMetrics, ethTxGossipMetrics)
 	if err != nil {
 		return fmt.Errorf("failed to initialize gossip eth tx pool: %w", err)
 	}
