@@ -90,7 +90,7 @@ func (vm *ConcreteVM) Initialize(
 		configBytes,
 		chainInput.ToEngine,
 		nil, /* no fxs */
-		nil, /* no appSender */
+		nil, /* no appSender: need to feed this in from AvalancheGo for peer/network.go */
 	); err != nil {
 		return nil, nil, nil, false, err
 	}
@@ -99,6 +99,25 @@ func (vm *ConcreteVM) Initialize(
 	// implement and serve chainIndex from existing code
 	// return last accepted block from VM (how does this work with existing vm initialize?)
 	// is the state available? can I fetch it from state sync client?
+	// Implmenet Build/Verify/Accept/Reject
+	// migrate APIs
+	// set Connector / Networking
+	// set HealthChecker
+	// subscribe for SetState handling
+	// migrate Shutdown logic
+	// migrate version
+	// migrate StateSync + handle dynamic state sync
+	// remove chain state
+	// add SetPreference callbacks because we depend on these notifications to trigger re-orgs early
+
+	// what does this get us?
+	// remove chain state
+	// break services out of conglomerate type and make them clearly define the events they depend on
+	// handle dynamic state sync via the VM SDK instead of re-implementing from scratch
+
+	// cons:
+	// still maintains a large surface area between components that must be woven together in Initialize "shallow abstractions"
+	// need to modify SDK to support static state sync as well
 
 	return nil, nil, nil, false, nil
 }
@@ -112,14 +131,3 @@ func (vm *ConcreteVM) ParseBlock(ctx context.Context, bytes []byte) (*InputBlock
 	}
 	return &InputBlock{Block: ethBlock}, nil
 }
-
-// Build
-// Verify
-// Accept
-// TODO: add Reject
-
-// APIs
-// State sync
-// version
-// warp backend
-// networking
