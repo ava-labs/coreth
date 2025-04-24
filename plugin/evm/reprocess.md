@@ -2,6 +2,24 @@
 
 To stress test the VM, we'd like the ability to grab the current state at a given block height N and benchmark executing a range of blocks starting at that point. This should enable us to compare the performance between different versions of the VM such as comparing the performance with Firewood vs. the original geth pathdb/hashdb + KV database (level/pebble/etc) combination.
 
+## Quick Start
+
+Our current target benchmark is to execute blocks over a pre-specified range for which we have a snapshotted Firewood database at the target start block.
+
+To do this in a single script on Snoopy, you can run the following:
+
+```bash
+ssh -L 8000:localhost:80 ethchallenge.avax-dev.network
+cd coreth
+nohup bash -x ./bench/scripts/reprocess_snoopy.sh &
+```
+
+This will copy the existing Coreth database and Firewood DB file (~200 GB each) and then re-execute the range of blocks `(33134213, 34000000]`.
+
+The existing database that we copy was generated prior to https://github.com/ava-labs/firewood/pull/845, which makes it incompatible with the latest version of Firewood (incompatible header checks).
+
+Grafana has been configured on Snoopy, so after forwarding port 80, you can view the grafana dashboards locally at: `http://localhost:8000/dashboards`.
+
 ## Current DevX
 
 Currently, the unit tests in [reprocess_test.go](./reprocess_test.go) have been set up to provide a CLI-like tool run via golang unit tests. This includes CLI flags set via `TestMain` and the following entrypoints:
