@@ -1549,6 +1549,8 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	}
 	newBlock := newHead
 
+	log.Info("reorg", "oldHead", oldHead.Number, "newHead", newHead.NumberU64())
+
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones

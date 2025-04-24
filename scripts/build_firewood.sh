@@ -50,7 +50,6 @@ import_firewood() {
 
     git fetch origin "${firewood_version}" || return 1
     git checkout "${firewood_version}" || return 1
-    git reset --hard "origin/${firewood_version}" || return 1
     popd
 
     echo "Firewood repo is at version: $(git -C ${firewood_path} rev-parse HEAD)"
