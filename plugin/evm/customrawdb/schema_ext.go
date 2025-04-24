@@ -8,6 +8,8 @@ import (
 	"github.com/ava-labs/libevm/common"
 )
 
+const FirewoodScheme = "firewood"
+
 var (
 	// snapshotBlockHashKey tracks the block hash of the last snapshot.
 	snapshotBlockHashKey = []byte("SnapshotBlockHash")

@@ -48,6 +48,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/triedb/firewooddb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -211,6 +212,11 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			StateHistory:   c.StateHistory,
 			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
+		}.BackendConstructor
+	}
+	if c.StateScheme == customrawdb.FirewoodScheme {
+		config.DBOverride = firewooddb.Config{
+			// TODO: Fill in
 		}.BackendConstructor
 	}
 	return config

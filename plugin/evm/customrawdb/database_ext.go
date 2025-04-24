@@ -5,6 +5,7 @@ package customrawdb
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -60,4 +61,25 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	}
 
 	return rawdb.InspectDatabase(db, keyPrefix, keyStart, options...)
+}
+
+func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
+	// Check for eth scheme
+	scheme, err := rawdb.ParseStateScheme(provided, disk)
+	if err == nil {
+		// Found valid eth scheme
+		return scheme, nil
+	} else if rawdb.ReadStateScheme(disk) != "" {
+		// Valid scheme on disk mismatched
+		return scheme, err
+	}
+
+	// Check for custom scheme
+	if provided == FirewoodScheme {
+		// TODO: Check if the database is a firewood database
+		// Assume valid scheme for now
+		return FirewoodScheme, nil
+	}
+
+	return "", fmt.Errorf("Unknown state scheme %q", provided)
 }

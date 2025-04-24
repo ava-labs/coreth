@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -502,6 +503,13 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	vm.ethConfig.StateScheme = vm.config.StateScheme // If firewood, unexpected in eth code
+
+	// Firewood automatically prunes based on config
+	if vm.ethConfig.Pruning && vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+		vm.ethConfig.Pruning = false
+		log.Info("Pruning is disabled for firewood, setting to false")
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -1259,14 +1267,19 @@ func (vm *VM) setAppRequestHandlers() {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
-	evmTrieDB := triedb.NewDatabase(
-		vm.chaindb,
-		&triedb.Config{
-			DBOverride: hashdb.Config{
-				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			}.BackendConstructor,
-		},
-	)
+	// However, Firewood does not support multiple TrieDBs, so we use the same one.
+	evmTrieDB := vm.eth.BlockChain().TrieDB()
+	if vm.ethConfig.StateScheme != customrawdb.FirewoodScheme {
+		evmTrieDB = triedb.NewDatabase(
+			vm.chaindb,
+			&triedb.Config{
+				DBOverride: hashdb.Config{
+					CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
+				}.BackendConstructor,
+			},
+		)
+	}
+
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
