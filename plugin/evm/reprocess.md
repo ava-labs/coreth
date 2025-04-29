@@ -14,7 +14,29 @@ cd coreth
 nohup bash -x ./bench/scripts/reprocess_snoopy.sh &
 ```
 
-This will copy the existing Coreth database and Firewood DB file (~200 GB each) and then re-execute the range of blocks `(33134213, 34000000]`.
+This will copy the existing Coreth database and Firewood DB file (~200 GB each) and then re-execute the range of blocks `(33134213, 34000000]`. The original databases to be copied are labeled with the suffix `-pristine` to make it clear they should not be deleted or modified.
+
+Note: the database files are not deleted by the script. Due to the size of the databases we need to copy and limited space on the SSD (1.7TB), we will need to regularly clear the execution databases between runs to avoid disk out of space errors.
+
+The initial contents of `/mnt/md0/data` should be:
+
+```bash
+snoopy@snoopy-eth:/mnt/md0/data$ du -sh ./*
+121G	./blocks-mainnet-50m-pristine
+194G	./fw-db-file-pristine
+152G	./fw-metadata-pristine
+```
+
+The re-processing run will create copies of the `fw-db-file` and `fw-metadata` database with the timestamp and `execution` included in the filepath. You should see something that looks like:
+
+```bash
+snoopy@snoopy-eth:/mnt/md0/data$ du -sh ./*
+121G	./blocks-mainnet-50m-pristine
+197G	./fw-db-file-2025-04-24T12:33:30-04:00-execution
+194G	./fw-db-file-pristine
+155G	./fw-metadata-2025-04-24T12:33:30-04:00-execution
+152G	./fw-metadata-pristine
+```
 
 The existing database that we copy was generated prior to https://github.com/ava-labs/firewood/pull/845, which makes it incompatible with the latest version of Firewood (incompatible header checks).
 
