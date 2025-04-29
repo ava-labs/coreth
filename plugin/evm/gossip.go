@@ -178,7 +178,7 @@ func (g *GossipEthTxPool) Add(tx *GossipEthTx) error {
 	errs := g.mempool.Add([]*types.Transaction{tx.Tx}, false, false)
 	// if the error is a duplicate transaction, flag it as such.
 	if errs[0] == txpool.ErrAlreadyKnown {
-		g.gossipMetrics.ObserveIncomingGossipable(tx.GossipID(), gossip.DroppedDuplicate)
+		g.gossipMetrics.AddDropMetric(tx.GossipID(), gossip.DroppedDuplicate)
 	}
 	return errs[0]
 }
