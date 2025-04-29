@@ -683,6 +683,9 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 		opts.MinTip = new(big.Int)
 	}
 	if err := txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
+		if pool.chainconfig.ChainID.Cmp(tx.ChainId()) != 0 {
+			log.Trace("Transaction targets wrong chain", "chainID", tx.ChainId(), "expected", pool.chainconfig.ChainID)
+		}
 		return err
 	}
 	return nil
