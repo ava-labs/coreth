@@ -18,7 +18,7 @@ This will copy the existing Coreth database and Firewood DB file (~200 GB each) 
 
 The existing database that we copy was generated prior to https://github.com/ava-labs/firewood/pull/845, which makes it incompatible with the latest version of Firewood (incompatible header checks).
 
-Grafana has been configured on Snoopy, so after forwarding port 80, you can view the grafana dashboards locally at: `http://localhost:8000/dashboards`.
+Grafana has been configured on Snoopy, so after forwarding port 80, you can view the grafana dashboards locally at: `http://localhost:8000/dashboards`. To sign in, use the combo: (admin, admin) or if it may have been updated to (admin, firewood_is_fast).
 
 ## Current DevX
 
