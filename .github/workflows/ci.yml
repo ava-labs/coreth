@@ -133,7 +133,7 @@ jobs:
         with:
           go-version-file: "go.mod"
       - name: Run e2e tests
-        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@20e9dc7c6a34547bf9ae5d0c83d998e368fd804d
+        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@8aa61c0b6a7a2d8638d6c9a87c8b21f1672c6d70
         with:
           run: ./scripts/tests.e2e.sh
           prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
