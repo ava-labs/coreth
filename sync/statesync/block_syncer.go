@@ -4,6 +4,7 @@ package statesync
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -110,5 +111,5 @@ func (syncer *blockSyncer) Close() error {
 }
 
 func (syncer *blockSyncer) UpdateSyncTarget(ctx context.Context, target *message.SyncSummary) error {
-	panic("not implemented")
+	return errors.New("block syncer does not support updating sync target")
 }

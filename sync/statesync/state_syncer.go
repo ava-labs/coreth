@@ -285,7 +285,7 @@ func (t *stateSync) Close() error {
 }
 
 func (t *stateSync) UpdateSyncTarget(ctx context.Context, target *message.SyncSummary) error {
-	panic("not implemented")
+	return fmt.Errorf("state syncer does not support updating sync target")
 }
 
 // addTrieInProgress tracks the root as being currently synced.

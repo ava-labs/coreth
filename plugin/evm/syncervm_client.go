@@ -57,15 +57,13 @@ type stateSyncerClient struct {
 
 	resumableSummary message.SyncSummary
 
-	cancel context.CancelFunc
-	eg     *errgroup.Group
+	syncers []Syncer[*message.SyncSummary]
+	cancel  context.CancelFunc
+	eg      *errgroup.Group
 
 	// State Sync results
 	syncSummary  message.SyncSummary
 	stateSyncErr error
-
-	// New
-	syncers []Syncer[*message.SyncSummary]
 }
 
 func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {

@@ -7,8 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -39,7 +39,6 @@ type atomicSyncer struct {
 	// were last inserted into the [atomicTrie]
 	lastHeight uint64
 	cancel     context.CancelFunc
-	cancelOnce sync.Once
 }
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
@@ -164,24 +163,20 @@ func (s *atomicSyncer) Wait(ctx context.Context) error {
 	case err := <-s.syncer.Done():
 		return err
 	case <-ctx.Done():
-		s.cancelOnce.Do(func() {
-			s.cancel()
-		})
+		s.cancel()
 		return ctx.Err()
 	}
 }
 
 // Close closes the syncer and releases any resources.
 func (s *atomicSyncer) Close() error {
-	s.cancelOnce.Do(func() {
-		s.cancel()
-	})
+	s.cancel()
 	return nil
 }
 
 // UpdateSyncTarget should not be called yet.
 func (s *atomicSyncer) UpdateSyncTarget(ctx context.Context, target *message.SyncSummary) error {
-	panic("atomic syncer does not support updating sync target")
+	return errors.New("atomic syncer does not support updating sync target")
 }
 
 type atomicSyncerLeafTask struct {
