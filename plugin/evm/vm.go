@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
@@ -78,7 +79,6 @@ import (
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
-	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
@@ -513,11 +513,7 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
-	vm.secpCache = secp256k1.RecoverCache{
-		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpCacheSize,
-		},
-	}
+	vm.secpCache = *secp256k1.NewRecoverCache(secpCacheSize)
 
 	if err := configExtra.Verify(); err != nil {
 		return fmt.Errorf("failed to verify chain config: %w", err)
@@ -549,7 +545,7 @@ func (vm *VM) Initialize(
 	for i, hexMsg := range vm.config.WarpOffChainMessages {
 		offchainWarpMessages[i] = []byte(hexMsg)
 	}
-	warpSignatureCache := &cache.LRU[ids.ID, []byte]{Size: warpSignatureCacheSize}
+	warpSignatureCache := lru.NewCache[ids.ID, []byte](warpSignatureCacheSize)
 	meteredCache, err := metercacher.New("warp_signature_cache", vm.sdkMetrics, warpSignatureCache)
 	if err != nil {
 		return fmt.Errorf("failed to create warp signature cache: %w", err)
