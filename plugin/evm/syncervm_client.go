@@ -5,6 +5,7 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/database"
@@ -17,8 +18,6 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
@@ -34,8 +33,7 @@ type stateSyncClientConfig struct {
 	// Specifies the number of blocks behind the latest state summary that the chain must be
 	// in order to prefer performing state sync over falling back to the normal bootstrapping
 	// algorithm.
-	stateSyncMinBlocks   uint64
-	stateSyncRequestSize uint16 // number of key/value pairs to ask peers for per request
+	stateSyncMinBlocks uint64
 
 	lastAcceptedHeight uint64
 
@@ -46,8 +44,6 @@ type stateSyncClientConfig struct {
 	acceptedBlockDB database.Database
 	db              *versiondb.Database
 	atomicBackend   AtomicBackend
-
-	client syncclient.Client
 
 	toEngine chan<- commonEng.Message
 }
@@ -66,9 +62,10 @@ type stateSyncerClient struct {
 	stateSyncErr error
 }
 
-func NewStateSyncClient(config *stateSyncClientConfig) StateSyncClient {
+func NewStateSyncClient(config *stateSyncClientConfig, syncers []Syncer[*message.SyncSummary]) StateSyncClient {
 	return &stateSyncerClient{
 		stateSyncClientConfig: config,
+		syncers:               syncers,
 	}
 }
 
@@ -183,17 +180,15 @@ func (client *stateSyncerClient) acceptSyncSummary(proposedSummary message.SyncS
 }
 
 func (client *stateSyncerClient) startSync() error {
+	if client.syncers == nil {
+		return errors.New("no syncers available")
+	}
+
 	log.Info("Starting state sync", "summary", client.syncSummary)
 
 	// create a cancellable ctx for the state sync goroutine
 	var detachedCtx context.Context
 	detachedCtx, client.cancel = context.WithCancel(context.Background())
-
-	err := client.initSyncers()
-	if err != nil {
-		return fmt.Errorf("failed to initialize syncers: %w", err)
-	}
-
 	for _, syncer := range client.syncers {
 		if err := syncer.Start(detachedCtx, &client.syncSummary); err != nil {
 			return err
@@ -215,7 +210,7 @@ func (client *stateSyncerClient) startSync() error {
 		log.Info("Waiting for state syncer(s) to complete", "numSyncers", len(client.syncers))
 		client.stateSyncErr = client.eg.Wait()
 		if client.stateSyncErr != nil {
-			log.Error("State sync failed", "err", err)
+			log.Error("State sync failed", "err", client.stateSyncErr)
 		} else {
 			log.Info("State syncer(s) completed", "numSyncers", len(client.syncers))
 			client.stateSyncErr = client.finishSync()
@@ -227,45 +222,6 @@ func (client *stateSyncerClient) startSync() error {
 		client.toEngine <- commonEng.StateSyncDone
 	}()
 
-	return nil
-}
-
-// initSyncers initializes the syncers for the state sync process
-func (client *stateSyncerClient) initSyncers() error {
-	blockSyncer, err := statesync.NewBlockSyncer(&statesync.BlockSyncerConfig{
-		Client:  client.client,
-		ChainDB: client.chaindb,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create block syncer: %w", err)
-	}
-
-	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
-		Client:                   client.client,
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.chaindb,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.stateSyncRequestSize,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create EVM syncer: %w", err)
-	}
-
-	atomicSyncer, err := newAtomicSyncer(
-		client.client,
-		client.db,
-		client.atomicBackend.AtomicTrie(),
-		client.stateSyncRequestSize,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create atomic syncer: %w", err)
-	}
-	client.syncers = []Syncer[*message.SyncSummary]{
-		blockSyncer,
-		evmSyncer,
-		atomicSyncer,
-	}
 	return nil
 }
 

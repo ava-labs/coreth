@@ -57,6 +57,7 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/coreth/warp"
 
 	// Force-load tracer engine to trigger registration
@@ -721,30 +722,35 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
+	backendClient := statesyncclient.NewClient(
+		&statesyncclient.ClientConfig{
+			NetworkClient:    vm.client,
+			Codec:            vm.networkCodec,
+			Stats:            stats.NewClientSyncerStats(),
+			StateSyncNodeIDs: stateSyncIDs,
+			BlockParser:      vm,
+		},
+	)
+
+	syncers, err := vm.initSyncers(backendClient)
+	if err != nil {
+		return fmt.Errorf("failed to initialize syncers: %w", err)
+	}
+
 	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
-		chain: vm.eth,
-		state: vm.State,
-		client: statesyncclient.NewClient(
-			&statesyncclient.ClientConfig{
-				NetworkClient:    vm.client,
-				Codec:            vm.networkCodec,
-				Stats:            stats.NewClientSyncerStats(),
-				StateSyncNodeIDs: stateSyncIDs,
-				BlockParser:      vm,
-			},
-		),
-		enabled:              stateSyncEnabled,
-		skipResume:           vm.config.StateSyncSkipResume,
-		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		stateSyncRequestSize: vm.config.StateSyncRequestSize,
-		lastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		chaindb:              vm.chaindb,
-		metadataDB:           vm.metadataDB,
-		acceptedBlockDB:      vm.acceptedBlockDB,
-		db:                   vm.versiondb,
-		atomicBackend:        vm.atomicBackend,
-		toEngine:             vm.toEngine,
-	})
+		chain:              vm.eth,
+		state:              vm.State,
+		enabled:            stateSyncEnabled,
+		skipResume:         vm.config.StateSyncSkipResume,
+		stateSyncMinBlocks: vm.config.StateSyncMinBlocks,
+		lastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
+		chaindb:            vm.chaindb,
+		metadataDB:         vm.metadataDB,
+		acceptedBlockDB:    vm.acceptedBlockDB,
+		db:                 vm.versiondb,
+		atomicBackend:      vm.atomicBackend,
+		toEngine:           vm.toEngine,
+	}, syncers)
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
 	// sync using a snapshot that has been modified by the node running normal operations.
@@ -753,6 +759,45 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 	}
 
 	return nil
+}
+
+func (vm *VM) initSyncers(client statesyncclient.Client) ([]Syncer[*message.SyncSummary], error) {
+	blockSyncer, err := statesync.NewBlockSyncer(&statesync.BlockSyncerConfig{
+		Client:  client,
+		ChainDB: vm.chaindb,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create block syncer: %w", err)
+	}
+
+	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
+		Client:                   client,
+		BatchSize:                ethdb.IdealBatchSize,
+		DB:                       vm.chaindb,
+		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
+		RequestSize:              vm.config.StateSyncRequestSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EVM syncer: %w", err)
+	}
+
+	atomicSyncer, err := newAtomicSyncer(
+		client,
+		vm.versiondb,
+		vm.atomicBackend.AtomicTrie(),
+		vm.config.StateSyncRequestSize,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create atomic syncer: %w", err)
+	}
+
+	syncers := []Syncer[*message.SyncSummary]{
+		blockSyncer,
+		evmSyncer,
+		atomicSyncer,
+	}
+	return syncers, nil
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
