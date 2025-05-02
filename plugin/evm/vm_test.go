@@ -62,9 +62,9 @@ func defaultExtensions() (*extension.Config, error) {
 			OnFinalizeAndAssemble: nil,
 			OnExtraStateChange:    nil,
 		},
-		SyncExtender:   nil,
-		BlockExtension: nil,
-		ExtraMempool:   nil,
+		SyncExtender:  nil,
+		BlockExtender: nil,
+		ExtraMempool:  nil,
 	}, nil
 }
 
@@ -361,7 +361,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
 	}
 
-	ethBlk1 := blk1.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk1 := blk1.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	if ethBlk1Root := ethBlk1.Root(); !vm.blockChain.HasState(ethBlk1Root) {
 		t.Fatalf("Expected blk1 state root to not yet be pruned after blk2 was accepted because of tip buffer")
 	}
@@ -404,7 +404,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 	}
 
 	// State root should be committed when accepted tip on shutdown
-	ethBlk2 := blk2.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk2 := blk2.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	if ethBlk2Root := ethBlk2.Root(); !restartedVM.blockChain.HasState(ethBlk2Root) {
 		t.Fatalf("Expected blk2 state root to not be pruned after shutdown (last accepted tip should be committed)")
 	}
@@ -950,7 +950,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	vm1.eth.APIBackend.SetAllowUnfinalizedQueries(true)
 
 	blkBHeight := vm1BlkB.Height()
-	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 	if b := vm1.blockChain.GetBlockByNumber(blkBHeight); b.Hash() != blkBHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -991,7 +991,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatalf("Expected accepted block to be indexed by height, but found %s", blkID)
 	}
 
-	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 	if b := vm1.blockChain.GetBlockByNumber(blkBHeight); b.Hash() != blkCHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkCHash.Hex(), b.Hash().Hex())
 	}
@@ -1120,7 +1120,7 @@ func TestStickyPreference(t *testing.T) {
 	vm1.eth.APIBackend.SetAllowUnfinalizedQueries(true)
 
 	blkBHeight := vm1BlkB.Height()
-	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 	if b := vm1.blockChain.GetBlockByNumber(blkBHeight); b.Hash() != blkBHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -1169,14 +1169,14 @@ func TestStickyPreference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error parsing block from vm2: %s", err)
 	}
-	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 
 	vm1BlkD, err := vm1.ParseBlock(context.Background(), vm2BlkD.Bytes())
 	if err != nil {
 		t.Fatalf("Unexpected error parsing block from vm2: %s", err)
 	}
 	blkDHeight := vm1BlkD.Height()
-	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 
 	// Should be no-ops
 	if err := vm1BlkC.Verify(context.Background()); err != nil {
@@ -1228,9 +1228,8 @@ func TestStickyPreference(t *testing.T) {
 	}
 
 	// Attempt to accept out of order
-	if err := vm1BlkD.Accept(context.Background()); !strings.Contains(err.Error(), "expected accepted block to have parent") {
-		t.Fatalf("unexpected error when accepting out of order block: %s", err)
-	}
+	err = vm1BlkD.Accept(context.Background())
+	require.ErrorContains(t, err, "expected accepted block to have parent")
 
 	// Accept in order
 	if err := vm1BlkC.Accept(context.Background()); err != nil {
@@ -1408,8 +1407,8 @@ func TestUncleBlock(t *testing.T) {
 	}
 
 	// Create uncle block from blkD
-	blkDEthBlock := vm2BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	uncles := []*types.Header{vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Header()}
+	blkDEthBlock := vm2BlkD.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+	uncles := []*types.Header{vm1BlkB.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Header()}
 	uncleBlockHeader := types.CopyHeader(blkDEthBlock.Header())
 	uncleBlockHeader.UncleHash = types.CalcUncleHash(uncles)
 
@@ -1422,7 +1421,8 @@ func TestUncleBlock(t *testing.T) {
 		customtypes.BlockExtData(blkDEthBlock),
 		false,
 	)
-	uncleBlock := vm2.newBlock(uncleEthBlock)
+	uncleBlock, err := wrapBlock(uncleEthBlock, vm2)
+	require.NoError(t, err)
 	if err := uncleBlock.Verify(context.Background()); !errors.Is(err, errUnclesUnsupported) {
 		t.Fatalf("VM2 should have failed with %q but got %q", errUnclesUnsupported, err.Error())
 	}
@@ -1613,7 +1613,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatalf("Block failed verification on VM1: %s", err)
 	}
 
-	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 	if b := vm1.blockChain.CurrentBlock(); b.Hash() != blkBHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -1622,7 +1622,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 	if b := vm1.blockChain.CurrentBlock(); b.Hash() != blkCHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkCHash.Hex(), b.Hash().Hex())
 	}
@@ -1633,7 +1633,7 @@ func TestAcceptReorg(t *testing.T) {
 	if err := vm1BlkD.Accept(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 	if b := vm1.blockChain.CurrentBlock(); b.Hash() != blkDHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkDHash.Hex(), b.Hash().Hex())
 	}
@@ -1667,7 +1667,7 @@ func TestFutureBlock(t *testing.T) {
 	}
 
 	// Create empty block from blkA
-	internalBlkA := blkA.(*chain.BlockWrapper).Block.(*Block)
+	internalBlkA := blkA.(*chain.BlockWrapper).Block.(*wrappedBlock)
 	modifiedHeader := types.CopyHeader(internalBlkA.ethBlock.Header())
 	// Set the VM's clock to the time of the produced block
 	vm.clock.Set(time.Unix(int64(modifiedHeader.Time), 0))
@@ -1684,7 +1684,8 @@ func TestFutureBlock(t *testing.T) {
 		false,
 	)
 
-	futureBlock := vm.newBlock(modifiedBlock)
+	futureBlock, err := wrapBlock(modifiedBlock, vm)
+	require.NoError(t, err)
 	if err := futureBlock.Verify(context.Background()); err == nil {
 		t.Fatal("Future block should have failed verification due to block timestamp too far in the future")
 	} else if !strings.Contains(err.Error(), "block timestamp is too far in the future") {
@@ -1840,7 +1841,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	}
 
 	blkHeight := blk.Height()
-	blkHash := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkHash := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock.Hash()
 
 	vm.eth.APIBackend.SetAllowUnfinalizedQueries(true)
 
@@ -2073,12 +2074,13 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			}
 
 			// Modify the block to have a parent beacon root
-			ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+			ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 			header := types.CopyHeader(ethBlock.Header())
 			header.ParentBeaconRoot = test.beaconRoot
 			parentBeaconEthBlock := ethBlock.WithSeal(header)
 
-			parentBeaconBlock := vm.newBlock(parentBeaconEthBlock)
+			parentBeaconBlock, err := wrapBlock(parentBeaconEthBlock, vm)
+			require.NoError(t, err)
 
 			errCheck := func(err error) {
 				if test.expectedError {
@@ -2136,7 +2138,8 @@ func TestNoBlobsAllowed(t *testing.T) {
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail
-	vmBlock := vm.newBlock(blocks[0])
+	vmBlock, err := wrapBlock(blocks[0], vm)
+	require.NoError(err)
 	_, err = vm.ParseBlock(ctx, vmBlock.Bytes())
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = vmBlock.Verify(ctx)

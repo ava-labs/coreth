@@ -117,7 +117,6 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		ctx:          vm.ctx,
 		fx:           &vm.fx,
 		rules:        rules,
-		chainConfig:  vm.Ethereum().BlockChain().Config(),
 		bootstrapped: vm.IsBootstrapped(),
 		blockFetcher: vm,
 		secpCache:    &vm.secpCache,

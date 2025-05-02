@@ -15,8 +15,6 @@ import (
 	"github.com/ava-labs/libevm/trie"
 )
 
-// atomicTrieIterator is an implementation of types.AtomicTrieIterator that serves
-// parsed data with each iteration
 type atomicTrieIterator struct {
 	trieIterator *trie.Iterator // underlying trie.Iterator
 	codec        codec.Manager

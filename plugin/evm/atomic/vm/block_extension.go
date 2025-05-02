@@ -21,7 +21,10 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-var _ extension.BlockExtension = (*blockExtension)(nil)
+var (
+	_ extension.BlockExtension = (*blockExtension)(nil)
+	_ extension.BlockExtender  = (*blockExtender)(nil)
+)
 
 var (
 	errNilEthBlock  = errors.New("nil ethBlock")
@@ -29,17 +32,23 @@ var (
 	errEmptyBlock   = errors.New("empty block")
 )
 
-type blockExtension struct {
+type blockExtender struct {
 	extDataHashes map[common.Hash]common.Hash
 	vm            *VM
 }
 
-// newBlockExtension returns a new block extension.
-func newBlockExtension(
+type blockExtension struct {
+	atomicTxs     []*atomic.Tx
+	blockExtender *blockExtender
+	block         extension.VMBlock
+}
+
+// newBlockExtender returns a new block extender.
+func newBlockExtender(
 	extDataHashes map[common.Hash]common.Hash,
 	vm *VM,
-) *blockExtension {
-	return &blockExtension{
+) *blockExtender {
+	return &blockExtender{
 		extDataHashes: extDataHashes,
 		// Note: we need VM here to access the atomic backend that
 		// could be initialized later in the VM.
@@ -47,10 +56,32 @@ func newBlockExtension(
 	}
 }
 
+// NewBlockExtension returns a new block extension.
+func (be *blockExtender) NewBlockExtension(b extension.VMBlock) (extension.BlockExtension, error) {
+	ethBlock := b.GetEthBlock()
+	if ethBlock == nil {
+		return nil, errNilEthBlock
+	}
+	// Extract atomic transactions from the block
+	isApricotPhase5 := be.vm.chainConfigExtra().IsApricotPhase5(ethBlock.Time())
+	atomicTxs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(ethBlock), isApricotPhase5, atomic.Codec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blockExtension{
+		atomicTxs:     atomicTxs,
+		blockExtender: be,
+		block:         b,
+	}, nil
+}
+
 // SyntacticVerify checks the syntactic validity of the block. This is called by the wrapper
 // block manager's SyntacticVerify method.
-func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rules) error {
+func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
+	b := be.block
 	ethBlock := b.GetEthBlock()
+	blockExtender := be.blockExtender
 	// should not happen
 	if ethBlock == nil {
 		return errNilEthBlock
@@ -61,12 +92,12 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 
 	rulesExtra := params.GetRulesExtra(rules)
 	if !rulesExtra.IsApricotPhase1 {
-		if be.extDataHashes != nil {
+		if blockExtender.extDataHashes != nil {
 			extData := customtypes.BlockExtData(ethBlock)
 			extDataHash := customtypes.CalcExtDataHash(extData)
 			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
 			// have a block that is unexpectedly missing extra data.
-			expectedExtDataHash, ok := be.extDataHashes[blockHash]
+			expectedExtDataHash, ok := blockExtender.extDataHashes[blockHash]
 			if len(extData) == 0 {
 				if ok {
 					return fmt.Errorf("found block with unexpected missing extra data (%s, %d), expected extra data hash: %s", blockHash, b.Height(), expectedExtDataHash)
@@ -99,10 +130,7 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 
 	// Block must not be empty
 	txs := ethBlock.Transactions()
-	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
-	if err != nil {
-		return err
-	}
+	atomicTxs := be.atomicTxs
 	if len(txs) == 0 && len(atomicTxs) == 0 {
 		return errEmptyBlock
 	}
@@ -141,35 +169,29 @@ func (be *blockExtension) SyntacticVerify(b extension.VMBlock, rules params.Rule
 
 // SemanticVerify checks the semantic validity of the block. This is called by the wrapper
 // block manager's SemanticVerify method.
-func (be *blockExtension) SemanticVerify(b extension.VMBlock) error {
+func (be *blockExtension) SemanticVerify() error {
+	vm := be.blockExtender.vm
 	// If the VM is not bootstrapped, we cannot verify atomic transactions
-	if !be.vm.IsBootstrapped() {
+	if !vm.IsBootstrapped() {
 		return nil
 	}
-	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
-	if err != nil {
-		return err
-	}
-	return be.verifyUTXOsPresent(b, atomicTxs)
+	return be.verifyUTXOsPresent(be.atomicTxs)
 }
 
 // OnAccept is called when the block is accepted. This is called by the wrapper
 // block manager's Accept method. The acceptedBatch contains the changes that
 // were made to the database as a result of accepting the block, and it's flushed
 // to the database in this method.
-func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.Batch) error {
-	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
-	if err != nil {
-		return err
-	}
-	for _, tx := range atomicTxs {
+func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
+	vm := be.blockExtender.vm
+	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
-		be.vm.mempool.RemoveTx(tx)
+		vm.mempool.RemoveTx(tx)
 	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Accept
 		return err
@@ -180,19 +202,16 @@ func (be *blockExtension) OnAccept(b extension.VMBlock, acceptedBatch database.B
 
 // OnReject is called when the block is rejected. This is called by the wrapper
 // block manager's Reject method.
-func (be *blockExtension) OnReject(b extension.VMBlock) error {
-	atomicTxs, err := extractAtomicTxsFromBlock(b, be.vm.Ethereum().BlockChain().Config())
-	if err != nil {
-		return err
-	}
-	for _, tx := range atomicTxs {
+func (be *blockExtension) OnReject() error {
+	vm := be.blockExtender.vm
+	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
-		be.vm.mempool.RemoveTx(tx)
-		if err := be.vm.mempool.AddRemoteTx(tx); err != nil {
+		vm.mempool.RemoveTx(tx)
+		if err := vm.mempool.AddRemoteTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
-	atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
 		return err
@@ -201,17 +220,20 @@ func (be *blockExtension) OnReject(b extension.VMBlock) error {
 }
 
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
-func (be *blockExtension) CleanupVerified(b extension.VMBlock) {
-	if atomicState, err := be.vm.atomicBackend.GetVerifiedAtomicState(b.GetEthBlock().Hash()); err == nil {
+func (be *blockExtension) CleanupVerified() {
+	vm := be.blockExtender.vm
+	if atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
 }
 
 // verifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
 // are not present in shared memory.
-func (be *blockExtension) verifyUTXOsPresent(b extension.VMBlock, atomicTxs []*atomic.Tx) error {
+func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
+	b := be.block
 	blockHash := common.Hash(b.ID())
-	if be.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
+	vm := be.blockExtender.vm
+	if vm.atomicBackend.IsBonus(b.Height(), blockHash) {
 		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
 		return nil
 	}
@@ -223,26 +245,9 @@ func (be *blockExtension) verifyUTXOsPresent(b extension.VMBlock, atomicTxs []*a
 		if err != nil {
 			return err
 		}
-		if _, err := be.vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
+		if _, err := vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
 			return fmt.Errorf("%w: %s", errMissingUTXOs, err)
 		}
 	}
 	return nil
-}
-
-// extractAtomicTxsFromBlock extracts atomic transactions from the block's extra data.
-func extractAtomicTxsFromBlock(b extension.VMBlock, chainConfig *params.ChainConfig) ([]*atomic.Tx, error) {
-	ethBlock := b.GetEthBlock()
-	if ethBlock == nil {
-		return nil, errNilEthBlock
-	}
-	extraConf := params.GetExtra(chainConfig)
-	isApricotPhase5 := extraConf.IsApricotPhase5(ethBlock.Time())
-	extData := customtypes.BlockExtData(ethBlock)
-	atomicTxs, err := atomic.ExtractAtomicTxs(extData, isApricotPhase5, atomic.Codec)
-	if err != nil {
-		return nil, err
-	}
-
-	return atomicTxs, nil
 }

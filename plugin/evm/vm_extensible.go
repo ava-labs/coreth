@@ -16,7 +16,6 @@ import (
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 )
 
@@ -47,7 +46,7 @@ func (vm *VM) GetVMBlock(ctx context.Context, blkID ids.ID) (extension.VMBlock, 
 		return nil, err
 	}
 
-	return blk.(*Block), nil
+	return blk.(*wrappedBlock), nil
 }
 
 func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
@@ -55,11 +54,7 @@ func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
 	if lastAcceptedBlock == nil {
 		return nil
 	}
-	return lastAcceptedBlock.(*Block)
-}
-
-func (vm *VM) NewVMBlock(ethBlock *types.Block) extension.VMBlock {
-	return vm.newBlock(ethBlock)
+	return lastAcceptedBlock.(*wrappedBlock)
 }
 
 // IsBootstrapped returns true if the VM has finished bootstrapping

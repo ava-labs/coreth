@@ -142,7 +142,7 @@ func (vm *VM) Initialize(
 
 	// Create the atomic extension structs
 	// some of them need to be initialized after the inner VM is initialized
-	blockExtension := newBlockExtension(extDataHashes, vm)
+	blockExtender := newBlockExtender(extDataHashes, vm)
 	syncExtender := &atomicsync.AtomicSyncExtender{}
 	syncProvider := &atomicsync.AtomicSummaryProvider{}
 	// Create and pass the leaf handler to the atomic extension
@@ -158,7 +158,7 @@ func (vm *VM) Initialize(
 	extensionConfig := &extension.Config{
 		NetworkCodec:               networkCodec,
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
-		BlockExtension:             blockExtension,
+		BlockExtender:              blockExtender,
 		SyncableParser:             atomicsync.NewAtomicSyncSummaryParser(),
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
@@ -439,7 +439,6 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 		ctx:          vm.ctx,
 		fx:           &vm.fx,
 		rules:        rules,
-		chainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
 		bootstrapped: vm.IsBootstrapped(),
 		blockFetcher: vm.InnerVM,
 		secpCache:    &vm.secpCache,
@@ -480,7 +479,6 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		ctx:          vm.ctx,
 		fx:           &vm.fx,
 		rules:        rules,
-		chainConfig:  vm.InnerVM.Ethereum().BlockChain().Config(),
 		bootstrapped: vm.IsBootstrapped(),
 		blockFetcher: vm,
 		secpCache:    &vm.secpCache,
@@ -815,16 +813,16 @@ func (vm *VM) BuildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// Handle errors and signal the mempool to take appropriate action
 	// TODO: decide if we want to directly call the mempool action from innervm
 	switch {
-	case errors.Is(err, vmerrors.ErrGenerateBlockFailed), errors.Is(err, vmerrors.ErrBlockVerificationFailed):
-		log.Debug("cancelling txs due to error generating block", "err", err)
-		vm.mempool.CancelCurrentTxs()
-	case errors.Is(err, vmerrors.ErrMakeNewBlockFailed):
-		log.Debug("discarding txs due to error making new block", "err", err)
-		vm.mempool.DiscardCurrentTxs()
-	case err != nil:
+	case err == nil:
 		// Marks the current transactions from the mempool as being successfully issued
 		// into a block.
 		vm.mempool.IssueCurrentTxs()
+	case errors.Is(err, vmerrors.ErrGenerateBlockFailed), errors.Is(err, vmerrors.ErrBlockVerificationFailed):
+		log.Debug("cancelling txs due to error generating block", "err", err)
+		vm.mempool.CancelCurrentTxs()
+	case errors.Is(err, vmerrors.ErrWrapBlockFailed):
+		log.Debug("discarding txs due to error making new block", "err", err)
+		vm.mempool.DiscardCurrentTxs()
 	}
 	return blk, err
 }

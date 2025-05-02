@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -41,7 +40,6 @@ type verifierBackend struct {
 	ctx          *snow.Context
 	fx           fx.Fx
 	rules        extras.Rules
-	chainConfig  *params.ChainConfig
 	bootstrapped bool
 	blockFetcher BlockFetcher
 	secpCache    *secp256k1.RecoverCache
@@ -147,13 +145,13 @@ func conflicts(backend *verifierBackend, inputs set.Set[ids.ID], ancestor extens
 	lastAcceptedBlock := backend.blockFetcher.LastAcceptedVMBlock()
 	lastAcceptedHeight := lastAcceptedBlock.Height()
 	for ancestor.Height() > lastAcceptedHeight {
-		atomicTxs, err := extractAtomicTxsFromBlock(ancestor, backend.chainConfig)
-		if err != nil {
-			return err
+		blockExtension, ok := ancestor.GetBlockExtension().(*blockExtension)
+		if !ok {
+			return fmt.Errorf("expected block extension to be of type *blockExtension but got %T", ancestor.GetBlockExtension())
 		}
 		// If any of the atomic transactions in the ancestor conflict with [inputs]
 		// return an error.
-		for _, atomicTx := range atomicTxs {
+		for _, atomicTx := range blockExtension.atomicTxs {
 			if inputs.Overlaps(atomicTx.InputUTXOs()) {
 				return errConflictingAtomicInputs
 			}

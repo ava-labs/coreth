@@ -665,7 +665,10 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
-	block := vm.newBlock(lastAcceptedBlock)
+	block, err := wrapBlock(lastAcceptedBlock, vm)
+	if err != nil {
+		return fmt.Errorf("failed to create block wrapper for the last accepted block: %w", err)
+	}
 
 	config := &chain.Config{
 		DecidedCacheSize:      decidedCacheSize,
@@ -878,16 +881,6 @@ func (vm *VM) Shutdown(context.Context) error {
 	return nil
 }
 
-// newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
-func (vm *VM) newBlock(ethBlock *types.Block) *Block {
-	return &Block{
-		id:        ids.ID(ethBlock.Hash()),
-		ethBlock:  ethBlock,
-		extension: vm.extensionConfig.BlockExtension,
-		vm:        vm,
-	}
-}
-
 // buildBlock builds a block to be wrapped by ChainState
 func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
 	return vm.buildBlockWithContext(ctx, nil)
@@ -911,7 +904,10 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	}
 
 	// Note: the status of block is set by ChainState
-	blk := vm.newBlock(block)
+	blk, err := wrapBlock(block, vm)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", vmerrors.ErrWrapBlockFailed, err)
+	}
 	// Verify is called on a non-wrapped block here, such that this
 	// does not add [blk] to the processing blocks map in ChainState.
 	//
@@ -940,7 +936,10 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	}
 
 	// Note: the status of block is set by ChainState
-	block := vm.newBlock(ethBlock)
+	block, err := wrapBlock(ethBlock, vm)
+	if err != nil {
+		return nil, err
+	}
 	// Performing syntactic verification in ParseBlock allows for
 	// short-circuiting bad blocks before they are processed by the VM.
 	if err := block.syntacticVerify(); err != nil {
@@ -955,7 +954,7 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 		return nil, err
 	}
 
-	return block.(*Block).ethBlock, nil
+	return block.(*wrappedBlock).ethBlock, nil
 }
 
 // getBlock attempts to retrieve block [id] from the VM to be wrapped
@@ -968,7 +967,7 @@ func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 		return nil, avalanchedatabase.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
-	return vm.newBlock(ethBlock), nil
+	return wrapBlock(ethBlock, vm)
 }
 
 // GetAcceptedBlock attempts to retrieve block [blkID] from the VM. This method

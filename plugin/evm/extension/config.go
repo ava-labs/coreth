@@ -51,8 +51,6 @@ type ExtensibleVM interface {
 	SetLastAcceptedBlock(lastAcceptedBlock snowman.Block) error
 	// GetVMBlock returns the VMBlock for the given ID or an error if the block is not found
 	GetVMBlock(context.Context, ids.ID) (VMBlock, error)
-	// NewVMBlock returns a new VMBlock for the given Eth block
-	NewVMBlock(*types.Block) VMBlock
 	// LastAcceptedVMBlock returns the last accepted VM block
 	LastAcceptedVMBlock() VMBlock
 	// IsBootstrapped returns true if the VM is bootstrapped
@@ -88,26 +86,32 @@ type InnerVM interface {
 type VMBlock interface {
 	snowman.Block
 	GetEthBlock() *types.Block
+	GetBlockExtension() BlockExtension
+}
+
+type BlockExtender interface {
+	// NewBlockExtension is called when a new block is created
+	NewBlockExtension(b VMBlock) (BlockExtension, error)
 }
 
 // BlockExtension allows the VM extension to handle block processing events.
 type BlockExtension interface {
 	// SyntacticVerify verifies the block syntactically
 	// it can be implemented to extend inner block verification
-	SyntacticVerify(b VMBlock, rules params.Rules) error
+	SyntacticVerify(rules params.Rules) error
 	// SemanticVerify verifies the block semantically
 	// it can be implemented to extend inner block verification
-	SemanticVerify(b VMBlock) error
+	SemanticVerify() error
 	// CleanupVerified is called when a block has passed SemanticVerify and SynctacticVerify,
 	// and should be cleaned up due to error or verification runs under non-write mode. This
 	// does not return an error because the block has already been verified.
-	CleanupVerified(b VMBlock)
+	CleanupVerified()
 	// OnAccept is called when a block is accepted by the block manager. OnAccept takes a
 	// database.Batch that contains the changes that were made to the database as a result
 	// of accepting the block. The changes in the batch should be flushed to the database in this method.
-	OnAccept(b VMBlock, acceptedBatch database.Batch) error
+	OnAccept(acceptedBatch database.Batch) error
 	// OnReject is called when a block is rejected by the block manager
-	OnReject(b VMBlock) error
+	OnReject() error
 }
 
 // BuilderMempool is a mempool that's used in the block builder
@@ -150,9 +154,9 @@ type Config struct {
 	// SyncableParser is to parse summary messages from the network.
 	// It's required and should be non-nil
 	SyncableParser message.SyncableParser
-	// BlockExtension allows the VM extension to handle block processing events.
+	// BlockExtender allows the VM extension to create an extension to handle block processing events.
 	// It's optional and can be nil
-	BlockExtension BlockExtension
+	BlockExtender BlockExtender
 	// ExtraSyncLeafHandlerConfig is the extra configuration to handle leaf requests
 	// in the network and syncer. It's optional and can be nil
 	ExtraSyncLeafHandlerConfig *LeafRequestConfig

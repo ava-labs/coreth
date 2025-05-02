@@ -74,10 +74,13 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			blk, err := vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
-			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
+			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
 			assert.True(ok, "unknown block type")
 
-			atomicTxs, err := extractAtomicTxsFromBlock(evmBlk, vm.Ethereum().BlockChain().Config())
+			blockExtension, ok := wrappedBlock.GetBlockExtension().(*blockExtension)
+			assert.True(ok, "unknown block extension type")
+
+			atomicTxs := blockExtension.atomicTxs
 			assert.NoError(err)
 			assert.Equal(txID, atomicTxs[0].ID(), "block does not include expected transaction")
 

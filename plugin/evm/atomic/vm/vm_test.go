@@ -1052,8 +1052,9 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	}
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
 	require.True(t, ok, "expected block to be a VMBlock")
-	atomicTxs, err := extractAtomicTxsFromBlock(wrappedBlk, vm.Ethereum().BlockChain().Config())
-	require.NoError(t, err)
+	blockExtension, ok := wrappedBlk.GetBlockExtension().(*blockExtension)
+	require.True(t, ok, "expected block to be a blockExtension")
+	atomicTxs := blockExtension.atomicTxs
 	assert.True(t, len(atomicTxs) == len(testutils.TestKeys), "Conflict transactions should be out of the batch")
 	atomicTxIDs := set.Set[ids.ID]{}
 	for _, tx := range atomicTxs {
@@ -1113,11 +1114,12 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
 	require.True(t, ok, "expected block to be a VMBlock")
-	atomicTxs, err := extractAtomicTxsFromBlock(wrappedBlk, vm.Ethereum().BlockChain().Config())
-	require.NoError(t, err)
+	blockExtension, ok := wrappedBlk.GetBlockExtension().(*blockExtension)
+	require.True(t, ok, "expected block to be a blockExtension")
 	// Need to ensure that not all of the transactions in the mempool are included in the block.
 	// This ensures that we hit the atomic gas limit while building the block before we hit the
 	// upper limit on the size of the codec for marshalling the atomic transactions.
+	atomicTxs := blockExtension.atomicTxs
 	if len(atomicTxs) >= mempoolTxs {
 		t.Fatalf("Expected number of atomic transactions included in the block (%d) to be less than the number of transactions added to the mempool (%d)", len(atomicTxs), mempoolTxs)
 	}
@@ -1253,13 +1255,11 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatalf("emptyEthBlock should not have any extra data")
 	}
 
-	emptyBlock := vm.NewVMBlock(emptyEthBlock)
+	emptyBlockBytes, err := rlp.EncodeToBytes(emptyEthBlock)
+	require.NoError(t, err)
 
-	if _, err := vm.ParseBlock(context.Background(), emptyBlock.Bytes()); !errors.Is(err, errEmptyBlock) {
+	if _, err := vm.ParseBlock(context.Background(), emptyBlockBytes); !errors.Is(err, errEmptyBlock) {
 		t.Fatalf("VM should have failed with errEmptyBlock but got %s", err.Error())
-	}
-	if err := emptyBlock.Verify(context.Background()); !errors.Is(err, errEmptyBlock) {
-		t.Fatalf("block should have failed verification with errEmptyBlock but got %s", err.Error())
 	}
 }
 

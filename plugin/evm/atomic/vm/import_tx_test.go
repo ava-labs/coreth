@@ -475,10 +475,9 @@ func TestNewImportTx(t *testing.T) {
 	}
 	checkState := func(t *testing.T, vm *VM) {
 		blk := vm.LastAcceptedVMBlock()
-		txs, err := extractAtomicTxsFromBlock(blk, vm.Ethereum().BlockChain().Config())
-		if err != nil {
-			t.Fatal(err)
-		}
+		blockExtension, ok := blk.GetBlockExtension().(*blockExtension)
+		require.True(t, ok)
+		txs := blockExtension.atomicTxs
 		if len(txs) != 1 {
 			t.Fatalf("Expected one import tx to be in the last accepted block, but found %d", len(txs))
 		}
