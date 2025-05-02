@@ -807,7 +807,6 @@ func (vm *VM) BuildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	blk, err := vm.InnerVM.BuildBlockWithContext(ctx, proposerVMBlockCtx)
 
 	// Handle errors and signal the mempool to take appropriate action
-	// TODO: decide if we want to directly call the mempool action from innervm
 	switch {
 	case err == nil:
 		// Marks the current transactions from the mempool as being successfully issued

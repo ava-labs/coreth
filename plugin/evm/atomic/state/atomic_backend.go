@@ -321,7 +321,6 @@ func (a *AtomicBackend) GetVerifiedAtomicState(blockHash common.Hash) (*atomicSt
 // - a block that has been verified but not accepted or rejected yet.
 // If [blockHash] is neither of the above, an error is returned.
 func (a *AtomicBackend) getAtomicRootAt(blockHash common.Hash) (common.Hash, error) {
-	// TODO: we can implement this in a few ways.
 	if blockHash == a.lastAcceptedHash {
 		return a.atomicTrie.LastAcceptedRoot(), nil
 	}

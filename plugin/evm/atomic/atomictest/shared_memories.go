@@ -68,7 +68,6 @@ func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 	}
 }
 
-// TODO: once tests are moved to atomic package, unexport this function
 func NewSharedMemories(atomicMemory *atomic.Memory, thisChainID, peerChainID ids.ID) *SharedMemories {
 	return &SharedMemories{
 		ThisChain:   atomicMemory.NewSharedMemory(thisChainID),

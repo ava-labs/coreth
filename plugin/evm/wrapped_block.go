@@ -277,7 +277,6 @@ func (b *wrappedBlock) semanticVerify() error {
 }
 
 // syntacticVerify verifies that a *Block is well-formed.
-// TODO: This is kept here to reduce the diff, move this function to block.go
 func (b *wrappedBlock) syntacticVerify() error {
 	if b == nil || b.ethBlock == nil {
 		return errInvalidBlock
@@ -360,7 +359,6 @@ func (b *wrappedBlock) syntacticVerify() error {
 		if ethHeader.BaseFee == nil {
 			return errNilBaseFeeApricotPhase3
 		}
-		// TODO: this should be removed as 256 is the maximum possible bit length of a big int
 		if bfLen := ethHeader.BaseFee.BitLen(); bfLen > 256 {
 			return fmt.Errorf("too large base fee: bitlen %d", bfLen)
 		}
