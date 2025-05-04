@@ -69,7 +69,7 @@ var (
 )
 
 // Client defines interface for typed wrappers for the Ethereum RPC API.
-type Client interface {
+type Client interface { // Q: why do we need this?
 	Client() *rpc.Client
 	Close()
 	ChainID(context.Context) (*big.Int, error)
