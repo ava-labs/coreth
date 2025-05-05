@@ -939,7 +939,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			rules:        test.rules,
 			bootstrapped: vm.IsBootstrapped(),
 			blockFetcher: vm,
-			secpCache:    &vm.secpCache,
+			secpCache:    vm.secpCache,
 		}
 
 		t.Run(test.name, func(t *testing.T) {
@@ -1813,7 +1813,7 @@ func TestNewExportTx(t *testing.T) {
 				rules:        vm.currentRules(),
 				bootstrapped: vm.IsBootstrapped(),
 				blockFetcher: vm,
-				secpCache:    &vm.secpCache,
+				secpCache:    vm.secpCache,
 			}
 
 			if err := exportTx.Visit(&semanticVerifier{
@@ -2028,7 +2028,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				rules:        vm.currentRules(),
 				bootstrapped: vm.IsBootstrapped(),
 				blockFetcher: vm,
-				secpCache:    &vm.secpCache,
+				secpCache:    vm.secpCache,
 			}
 
 			if err := exportTx.Visit(&semanticVerifier{

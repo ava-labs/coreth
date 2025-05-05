@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
@@ -79,7 +78,7 @@ type VM struct {
 	// TODO: decide if we want to directly import the evm package and VM struct
 	extension.InnerVM
 
-	secpCache secp256k1.RecoverCache
+	secpCache *secp256k1.RecoverCache
 	baseCodec codec.Registry
 	mempool   *txpool.Mempool
 	fx        secp256k1fx.Fx
@@ -222,11 +221,7 @@ func (vm *VM) Initialize(
 	syncProvider.Initialize(vm.atomicBackend.AtomicTrie())
 	syncExtender.Initialize(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.Config().StateSyncRequestSize)
 	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, networkCodec)
-	vm.secpCache = secp256k1.RecoverCache{
-		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpCacheSize,
-		},
-	}
+	vm.secpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
@@ -437,7 +432,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 		rules:        rules,
 		bootstrapped: vm.IsBootstrapped(),
 		blockFetcher: vm,
-		secpCache:    &vm.secpCache,
+		secpCache:    vm.secpCache,
 	}
 	if err := tx.UnsignedAtomicTx.Visit(&semanticVerifier{
 		backend: atomicBackend,
@@ -477,7 +472,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		rules:        rules,
 		bootstrapped: vm.IsBootstrapped(),
 		blockFetcher: vm,
-		secpCache:    &vm.secpCache,
+		secpCache:    vm.secpCache,
 	}
 
 	for _, atomicTx := range txs {

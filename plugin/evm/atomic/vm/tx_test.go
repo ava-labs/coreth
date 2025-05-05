@@ -119,7 +119,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		rules:        rules,
 		bootstrapped: vm.IsBootstrapped(),
 		blockFetcher: vm,
-		secpCache:    &vm.secpCache,
+		secpCache:    vm.secpCache,
 	}
 	if err := tx.UnsignedAtomicTx.Visit(
 		&semanticVerifier{

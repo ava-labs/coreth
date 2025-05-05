@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ava-labs/avalanchego/cache"
+	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
@@ -68,7 +68,7 @@ type Mempool struct {
 	issuedTxs map[ids.ID]*atomic.Tx
 	// discardedTxs is an LRU Cache of transactions that have been discarded after failing
 	// verification.
-	discardedTxs *cache.LRU[ids.ID, *atomic.Tx]
+	discardedTxs *lru.Cache[ids.ID, *atomic.Tx]
 	// pending is a channel of length one, which the mempool ensures has an item on
 	// it as long as there is an unissued transaction remaining in [txs]
 	pending chan struct{}
@@ -98,7 +98,7 @@ func (m *Mempool) Initialize(ctx *snow.Context, registerer prometheus.Registerer
 
 	m.ctx = ctx
 	m.issuedTxs = make(map[ids.ID]*atomic.Tx)
-	m.discardedTxs = &cache.LRU[ids.ID, *atomic.Tx]{Size: discardedTxsCacheSize}
+	m.discardedTxs = lru.NewCache[ids.ID, *atomic.Tx](discardedTxsCacheSize)
 	m.currentTxs = make(map[ids.ID]*atomic.Tx)
 	m.pending = make(chan struct{}, 1)
 	m.txHeap = newTxHeap(maxSize)
