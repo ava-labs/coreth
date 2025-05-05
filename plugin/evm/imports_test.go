@@ -58,6 +58,7 @@ func TestMustNotImport(t *testing.T) {
 		// wish to connect to multiple chains.
 		"plugin/evm/atomic": {"plugin/evm/customtypes", "params"},
 		"plugin/evm/client": {"plugin/evm/customtypes", "params"},
+		"plugin/evm/header": {"core", "core/vm", "params"},
 		"ethclient":         {"plugin/evm/customtypes", "params"},
 		"warp":              {"plugin/evm/customtypes", "params"},
 	}
