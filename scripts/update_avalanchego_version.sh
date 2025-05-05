@@ -27,7 +27,6 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
 fi
 CURL_URL="https://api.github.com/repos/ava-labs/avalanchego/commits/${AVALANCHE_VERSION}"
 
-echo "$("${CURL_ARGS[@]}" "${CURL_URL}")"
 FULL_AVALANCHE_VERSION="$("${CURL_ARGS[@]}" "${CURL_URL}" | jq -r .sha)"
 
 # Ensure the custom action version matches the avalanche version
