@@ -78,12 +78,12 @@ for a full description of this API.
 
 <Callout title="info">
 For batched requests on the [public API node](/docs/tooling/rpc-providers) , the maximum
-number of items is 40. We are working on to support a larger batch size.
+number of items is 40.
 </Callout>
 
 #### Exceptions
 
-`eth_getProof` behaves differently than geth, from release [`v0.12.2`](https://github.com/ava-labs/avalanchego/releases/tag/v1.12.2), with the following differences:
+Starting with release [`v0.12.2`](https://github.com/ava-labs/avalanchego/releases/tag/v1.12.2), `eth_getProof` has a different behavior compared to geth:
 
 - On archival nodes (nodes with`pruning-enabled` set to `false`), queries for state proofs older than 24 hours preceding the last accepted block will be rejected by default. This can be adjusted with `historical-proof-query-window`, which defines the number of blocks before the last accepted block that can be queried for state proofs. Set this option to `0` to accept a state query for any block number.
 - On pruning nodes (nodes with `pruning-enabled` set to `true`), queries for state proofs outside the 32 block window after the last accepted block are always rejected.
