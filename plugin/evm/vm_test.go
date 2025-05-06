@@ -45,7 +45,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
@@ -175,25 +174,6 @@ func newPrefundedGenesis(
 		Difficulty: big.NewInt(0),
 		Alloc:      alloc,
 	}
-}
-
-// BuildGenesisTest returns the genesis bytes for Coreth VM to be used in testing
-func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
-	ss := StaticService{}
-
-	genesis := &core.Genesis{}
-	if err := json.Unmarshal([]byte(genesisJSON), genesis); err != nil {
-		t.Fatalf("Problem unmarshaling genesis JSON: %s", err)
-	}
-	genesisReply, err := ss.BuildGenesis(nil, genesis)
-	if err != nil {
-		t.Fatalf("Failed to create test genesis")
-	}
-	genesisBytes, err := formatting.Decode(genesisReply.Encoding, genesisReply.Bytes)
-	if err != nil {
-		t.Fatalf("Failed to decode genesis bytes: %s", err)
-	}
-	return genesisBytes
 }
 
 func NewContext() *snow.Context {
