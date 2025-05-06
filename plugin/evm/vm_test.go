@@ -225,7 +225,6 @@ func setupGenesis(
 	if len(genesisJSON) == 0 {
 		genesisJSON = genesisJSONLatest
 	}
-	genesisBytes := BuildGenesisTest(t, genesisJSON)
 	ctx := NewContext()
 
 	baseDB := memdb.New()
@@ -240,7 +239,7 @@ func setupGenesis(
 
 	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
-	return ctx, prefixedDB, genesisBytes, issuer, atomicMemory
+	return ctx, prefixedDB, []byte(genesisJSON), issuer, atomicMemory
 }
 
 // GenesisVM creates a VM instance with the genesis test bytes and returns
