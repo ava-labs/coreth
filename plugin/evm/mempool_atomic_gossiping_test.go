@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -94,7 +94,8 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	mempool, err := atomic.NewMempool(&snow.Context{}, prometheus.NewRegistry(), 1, nil)
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	mempool, err := atomic.NewMempool(ctx, prometheus.NewRegistry(), 1, nil)
 	assert.NoError(err)
 	// create candidate tx (we will drop before validation)
 	tx := atomic.GenerateTestImportTx()
