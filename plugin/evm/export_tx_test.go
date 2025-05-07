@@ -1089,7 +1089,7 @@ func TestExportTxAccept(t *testing.T) {
 func TestExportTxVerify(t *testing.T) {
 	var exportAmount uint64 = 10000000
 	exportTx := &atomic.UnsignedExportTx{
-		NetworkID:        testNetworkID,
+		NetworkID:        constants.UnitTestID,
 		BlockchainID:     testCChainID,
 		DestinationChain: testXChainID,
 		Ins: []atomic.EVMInput{

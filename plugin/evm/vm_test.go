@@ -70,10 +70,9 @@ import (
 )
 
 var (
-	testNetworkID    uint32 = 10
-	testCChainID            = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
-	testXChainID            = ids.ID{'t', 'e', 's', 't', 'x'}
-	nonExistentID           = ids.ID{'F'}
+	testCChainID     = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
+	testXChainID     = ids.ID{'t', 'e', 's', 't', 'x'}
+	nonExistentID    = ids.ID{'F'}
 	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
@@ -199,7 +198,7 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 func NewContext() *snow.Context {
 	ctx := utils.TestSnowContext()
 	ctx.NodeID = ids.GenerateTestNodeID()
-	ctx.NetworkID = testNetworkID
+	ctx.NetworkID = constantsEng.UnitTestID
 	ctx.ChainID = testCChainID
 	ctx.AVAXAssetID = testAvaxAssetID
 	ctx.XChainID = testXChainID

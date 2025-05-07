@@ -177,7 +177,7 @@ func TestValidateWarpMessage(t *testing.T) {
 		payloadData,
 	)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, addressedPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, addressedPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -203,7 +203,7 @@ func TestValidateInvalidWarpMessage(t *testing.T) {
 		payloadData,
 	)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, addressedPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, addressedPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -222,7 +222,7 @@ func TestValidateWarpBlockHash(t *testing.T) {
 	blockHash := ids.GenerateTestID()
 	blockHashPayload, err := payload.NewHash(blockHash)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, blockHashPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, blockHashPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -243,7 +243,7 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 	blockHash := ids.GenerateTestID()
 	blockHashPayload, err := payload.NewHash(blockHash)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, blockHashPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, blockHashPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -518,7 +518,7 @@ func testReceiveWarpMessage(
 	require.NoError(err)
 
 	vm.ctx.SubnetID = ids.GenerateTestID()
-	vm.ctx.NetworkID = testNetworkID
+	vm.ctx.NetworkID = constants.UnitTestID
 	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(
 		vm.ctx.NetworkID,
 		sourceChainID,
