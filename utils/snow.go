@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/api/metrics"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -18,11 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
-var (
-	testCChainID = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
-	testXChainID = ids.ID{'t', 'e', 's', 't', 'x'}
-	testChainID  = ids.ID{'t', 'e', 's', 't', 'c', 'h', 'a', 'i', 'n'}
-)
+var testChainID = ids.GenerateTestID()
 
 func TestSnowContext() *snow.Context {
 	sk, err := localsigner.New()
@@ -38,8 +35,8 @@ func TestSnowContext() *snow.Context {
 		SubnetID:       ids.Empty,
 		ChainID:        chainID,
 		NodeID:         ids.GenerateTestNodeID(),
-		XChainID:       testXChainID,
-		CChainID:       testCChainID,
+		XChainID:       snowtest.XChainID,
+		CChainID:       snowtest.CChainID,
 		PublicKey:      pk,
 		WarpSigner:     warp.NewSigner(sk, networkID, chainID),
 		Log:            logging.NoLog{},
@@ -60,8 +57,8 @@ func NewTestValidatorState() *validatorstest.State {
 		GetSubnetIDF: func(_ context.Context, chainID ids.ID) (ids.ID, error) {
 			subnetID, ok := map[ids.ID]ids.ID{
 				constants.PlatformChainID: constants.PrimaryNetworkID,
-				testXChainID:              constants.PrimaryNetworkID,
-				testCChainID:              constants.PrimaryNetworkID,
+				snowtest.XChainID:         constants.PrimaryNetworkID,
+				snowtest.CChainID:         constants.PrimaryNetworkID,
 			}[chainID]
 			if !ok {
 				return ids.Empty, errors.New("unknown chain")
