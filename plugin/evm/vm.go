@@ -144,7 +144,7 @@ const (
 
 	// gossip constants
 	pushGossipDiscardedElements = 16_384
-	txGossipTargetMessageSize   = 20 * units.KiB
+	txGossipTargetMessageSize   = 500 * units.KiB
 	maxValidatorSetStaleness    = time.Minute
 	txGossipThrottlingPeriod    = 10 * time.Second
 	txGossipThrottlingLimit     = 2
