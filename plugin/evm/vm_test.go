@@ -41,7 +41,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/upgrade"
-	"github.com/ava-labs/avalanchego/utils/cb58"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
@@ -66,7 +65,7 @@ import (
 )
 
 var (
-	testKeys         []*secp256k1.PrivateKey
+	testKeys         = secp256k1.TestKeys()[:3]
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
 	testAvaxAssetID  = ids.ID{1, 2, 3}
@@ -136,18 +135,9 @@ var (
 )
 
 func init() {
-	var b []byte
-
-	for _, key := range []string{
-		"24jUJ9vZexUM6expyMcT48LBx27k1m7xpraoV62oSQAHdziao5",
-		"2MMvUMsxx6zsHSNXJdFD8yc5XkancvwyKPwpw4xUK3TCGDuNBY",
-		"cxb7KpGWhDMALTjNNSJ7UQkkomPesyWAPUaWRGdyeBNzR6f35",
-	} {
-		b, _ = cb58.Decode(key)
-		pk, _ := secp256k1.ToPrivateKey(b)
-		testKeys = append(testKeys, pk)
-		testEthAddrs = append(testEthAddrs, pk.EthAddress())
-		testShortIDAddrs = append(testShortIDAddrs, pk.Address())
+	for _, key := range testKeys {
+		testEthAddrs = append(testEthAddrs, key.EthAddress())
+		testShortIDAddrs = append(testShortIDAddrs, key.Address())
 	}
 }
 
