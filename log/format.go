@@ -9,7 +9,7 @@
 // Much love to the original authors for their work.
 // **********
 
-package customlog
+package log
 
 import (
 	"bytes"

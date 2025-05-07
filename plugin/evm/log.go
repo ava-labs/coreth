@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ava-labs/coreth/customlog"
+	"github.com/ava-labs/coreth/log"
 	ethlog "github.com/ava-labs/libevm/log"
 	"golang.org/x/exp/slog"
 )
@@ -29,12 +29,12 @@ func InitLogger(alias string, level string, jsonFormat bool, writer io.Writer) (
 	var handler slog.Handler
 	if jsonFormat {
 		chainStr := fmt.Sprintf("%s Chain", alias)
-		handler = customlog.JSONHandlerWithLevel(writer, logLevel)
+		handler = log.JSONHandlerWithLevel(writer, logLevel)
 		handler = &addContext{Handler: handler, logger: chainStr}
 	} else {
 		useColor := false
 		chainStr := fmt.Sprintf("<%s Chain> ", alias)
-		termHandler := customlog.NewTerminalHandlerWithLevel(writer, logLevel, useColor)
+		termHandler := log.NewTerminalHandlerWithLevel(writer, logLevel, useColor)
 		termHandler.Prefix = func(r slog.Record) string {
 			file, line := getSource(r)
 			if file != "" {
@@ -61,7 +61,7 @@ func InitLogger(alias string, level string, jsonFormat bool, writer io.Writer) (
 // SetLogLevel sets the log level of initialized log handler.
 func (c *CorethLogger) SetLogLevel(level string) error {
 	// Set log level
-	logLevel, err := customlog.LvlFromString(level)
+	logLevel, err := log.LvlFromString(level)
 	if err != nil {
 		return err
 	}

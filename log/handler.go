@@ -1,4 +1,4 @@
-package customlog
+package log
 
 import (
 	"context"
