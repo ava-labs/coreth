@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	agoUtils "github.com/ava-labs/avalanchego/utils"
@@ -264,9 +265,8 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 
 	predicateBytes := predicate.PackPredicate(warpMsg.Bytes())
 
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, ids.GenerateTestID())
 	snowCtx.SubnetID = ids.GenerateTestID()
-	snowCtx.ChainID = ids.GenerateTestID()
 	snowCtx.CChainID = cChainID
 	snowCtx.NetworkID = networkID
 	snowCtx.ValidatorState = &validatorstest.State{

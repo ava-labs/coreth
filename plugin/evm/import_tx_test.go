@@ -15,6 +15,7 @@ import (
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -67,7 +68,7 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 }
 
 func TestImportTxVerify(t *testing.T) {
-	ctx := NewContext()
+	ctx := snowtest.Context(t, snowtest.CChainID)
 
 	var importAmount uint64 = 10000000
 	txID := ids.GenerateTestID()

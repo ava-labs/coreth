@@ -40,10 +40,8 @@ import (
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/cb58"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
@@ -56,7 +54,7 @@ import (
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
-	constantsEng "github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -65,14 +63,9 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/core/types"
-
-	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
 var (
-	testCChainID     = ids.ID{'c', 'c', 'h', 'a', 'i', 'n', 't', 'e', 's', 't'}
-	testXChainID     = ids.ID{'t', 'e', 's', 't', 'x'}
-	nonExistentID    = ids.ID{'F'}
 	testKeys         []*secp256k1.PrivateKey
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
@@ -195,41 +188,6 @@ func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
 	return genesisBytes
 }
 
-func NewContext() *snow.Context {
-	ctx := utils.TestSnowContext()
-	ctx.NodeID = ids.GenerateTestNodeID()
-	ctx.NetworkID = constantsEng.UnitTestID
-	ctx.ChainID = testCChainID
-	ctx.AVAXAssetID = testAvaxAssetID
-	ctx.XChainID = testXChainID
-	ctx.SharedMemory = testSharedMemory()
-	aliaser := ctx.BCLookup.(ids.Aliaser)
-	_ = aliaser.Alias(testCChainID, "C")
-	_ = aliaser.Alias(testCChainID, testCChainID.String())
-	_ = aliaser.Alias(testXChainID, "X")
-	_ = aliaser.Alias(testXChainID, testXChainID.String())
-	ctx.ValidatorState = &validatorstest.State{
-		GetSubnetIDF: func(_ context.Context, chainID ids.ID) (ids.ID, error) {
-			subnetID, ok := map[ids.ID]ids.ID{
-				constantsEng.PlatformChainID: constantsEng.PrimaryNetworkID,
-				testXChainID:                 constantsEng.PrimaryNetworkID,
-				testCChainID:                 constantsEng.PrimaryNetworkID,
-			}[chainID]
-			if !ok {
-				return ids.Empty, errors.New("unknown chain")
-			}
-			return subnetID, nil
-		},
-	}
-	blsSecretKey, err := localsigner.New()
-	if err != nil {
-		panic(err)
-	}
-	ctx.WarpSigner = avalancheWarp.NewSigner(blsSecretKey, ctx.NetworkID, ctx.ChainID)
-	ctx.PublicKey = blsSecretKey.PublicKey()
-	return ctx
-}
-
 // setupGenesis sets up the genesis
 // If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
 func setupGenesis(
@@ -245,7 +203,7 @@ func setupGenesis(
 		genesisJSON = genesisJSONLatest
 	}
 	genesisBytes := BuildGenesisTest(t, genesisJSON)
-	ctx := NewContext()
+	ctx := snowtest.Context(t, snowtest.CChainID)
 
 	baseDB := memdb.New()
 
@@ -804,7 +762,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 	restartedVM := &VM{}
 	if err := restartedVM.Initialize(
 		context.Background(),
-		NewContext(),
+		snowtest.Context(t, snowtest.CChainID),
 		dbManager,
 		[]byte(genesisJSONApricotPhase2),
 		[]byte(""),

@@ -12,6 +12,7 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
@@ -1090,8 +1091,8 @@ func TestExportTxVerify(t *testing.T) {
 	var exportAmount uint64 = 10000000
 	exportTx := &atomic.UnsignedExportTx{
 		NetworkID:        constants.UnitTestID,
-		BlockchainID:     testCChainID,
-		DestinationChain: testXChainID,
+		BlockchainID:     snowtest.CChainID,
+		DestinationChain: snowtest.XChainID,
 		Ins: []atomic.EVMInput{
 			{
 				Address: testEthAddrs[0],
@@ -1139,7 +1140,7 @@ func TestExportTxVerify(t *testing.T) {
 	emptySigners := make([][]*secp256k1.PrivateKey, 2)
 	atomic.SortEVMInputsAndSigners(exportTx.Ins, emptySigners)
 
-	ctx := NewContext()
+	ctx := snowtest.Context(t, snowtest.CChainID)
 
 	tests := map[string]atomicTxVerifyTest{
 		"nil tx": {
@@ -1179,7 +1180,7 @@ func TestExportTxVerify(t *testing.T) {
 		"incorrect blockchainID": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
 				tx := *exportTx
-				tx.BlockchainID = nonExistentID
+				tx.BlockchainID = ids.GenerateTestID()
 				return &tx
 			},
 			ctx:         ctx,
@@ -1189,7 +1190,7 @@ func TestExportTxVerify(t *testing.T) {
 		"incorrect destination chain": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
 				tx := *exportTx
-				tx.DestinationChain = nonExistentID
+				tx.DestinationChain = ids.GenerateTestID()
 				return &tx
 			},
 			ctx:         ctx,
@@ -1299,7 +1300,7 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  1,
-						AssetID: nonExistentID,
+						AssetID: ids.GenerateTestID(),
 						Nonce:   0,
 					},
 				}
@@ -1314,7 +1315,7 @@ func TestExportTxVerify(t *testing.T) {
 				tx := *exportTx
 				tx.ExportedOutputs = []*avax.TransferableOutput{
 					{
-						Asset: avax.Asset{ID: nonExistentID},
+						Asset: avax.Asset{ID: ids.GenerateTestID()},
 						Out: &secp256k1fx.TransferOutput{
 							Amt: exportAmount,
 							OutputOwners: secp256k1fx.OutputOwners{
@@ -1338,7 +1339,7 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  1,
-						AssetID: nonExistentID,
+						AssetID: ids.GenerateTestID(),
 						Nonce:   0,
 					},
 				}
@@ -1353,7 +1354,7 @@ func TestExportTxVerify(t *testing.T) {
 				tx := *exportTx
 				tx.ExportedOutputs = []*avax.TransferableOutput{
 					{
-						Asset: avax.Asset{ID: nonExistentID},
+						Asset: avax.Asset{ID: ids.GenerateTestID()},
 						Out: &secp256k1fx.TransferOutput{
 							Amt: exportAmount,
 							OutputOwners: secp256k1fx.OutputOwners{
