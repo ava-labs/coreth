@@ -49,8 +49,6 @@ var (
 	numTestVdrs = 10_000
 	testVdrs    []*testValidator
 	vdrs        map[ids.NodeID]*validators.GetValidatorOutput
-
-	predicateTests = make(map[string]testutils.PredicateTest)
 )
 
 func init() {
@@ -100,8 +98,6 @@ func init() {
 		}
 		blsSignatures = append(blsSignatures, blsSignature)
 	}
-
-	initWarpPredicateTests()
 }
 
 type testValidator struct {
@@ -174,7 +170,7 @@ type validatorRange struct {
 }
 
 // createSnowCtx creates a snow.Context instance with a validator state specified by the given validatorRanges
-func createSnowCtx(validatorRanges []validatorRange) *snow.Context {
+func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Context {
 	getValidatorsOutput := make(map[ids.NodeID]*validators.GetValidatorOutput)
 
 	for _, validatorRange := range validatorRanges {
@@ -190,7 +186,7 @@ func createSnowCtx(validatorRanges []validatorRange) *snow.Context {
 		}
 	}
 
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(tb, snowtest.CChainID)
 	state := &validatorstest.State{
 		GetSubnetIDF: func(ctx context.Context, chainID ids.ID) (ids.ID, error) {
 			return sourceSubnetID, nil
@@ -300,7 +296,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 
 func TestInvalidPredicatePacking(t *testing.T) {
 	numKeys := 1
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       numKeys,
@@ -329,7 +325,7 @@ func TestInvalidPredicatePacking(t *testing.T) {
 
 func TestInvalidWarpMessage(t *testing.T) {
 	numKeys := 1
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       numKeys,
@@ -360,7 +356,7 @@ func TestInvalidWarpMessage(t *testing.T) {
 
 func TestInvalidAddressedPayload(t *testing.T) {
 	numKeys := 1
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       numKeys,
@@ -422,7 +418,7 @@ func TestInvalidBitSet(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 1
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       numKeys,
@@ -448,7 +444,7 @@ func TestInvalidBitSet(t *testing.T) {
 }
 
 func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       100,
@@ -495,7 +491,7 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 
 // multiple messages all correct, multiple messages all incorrect, mixed bag
 func TestWarpMultiplePredicates(t *testing.T) {
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       100,
@@ -553,7 +549,7 @@ func TestWarpMultiplePredicates(t *testing.T) {
 }
 
 func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
-	snowCtx := createSnowCtx([]validatorRange{
+	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
 			end:       100,
@@ -596,12 +592,13 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 	testutils.RunPredicateTests(t, tests)
 }
 
-func initWarpPredicateTests() {
+func makeWarpPredicateTests(tb testing.TB) map[string]testutils.PredicateTest {
+	predicateTests := make(map[string]testutils.PredicateTest)
 	for _, totalNodes := range []int{10, 100, 1_000, 10_000} {
 		testName := fmt.Sprintf("%d signers/%d validators", totalNodes, totalNodes)
 
 		predicateBytes := createPredicate(totalNodes)
-		snowCtx := createSnowCtx([]validatorRange{
+		snowCtx := createSnowCtx(tb, []validatorRange{
 			{
 				start:     0,
 				end:       totalNodes,
@@ -617,7 +614,7 @@ func initWarpPredicateTests() {
 		testName := fmt.Sprintf("%d signers (heavily weighted)/%d validators", numSigners, totalNodes)
 
 		predicateBytes := createPredicate(numSigners)
-		snowCtx := createSnowCtx([]validatorRange{
+		snowCtx := createSnowCtx(tb, []validatorRange{
 			{
 				start:     0,
 				end:       numSigners,
@@ -638,7 +635,7 @@ func initWarpPredicateTests() {
 		testName := fmt.Sprintf("%d signers (heavily weighted)/%d validators (non-signers without registered PublicKey)", numSigners, totalNodes)
 
 		predicateBytes := createPredicate(numSigners)
-		snowCtx := createSnowCtx([]validatorRange{
+		snowCtx := createSnowCtx(tb, []validatorRange{
 			{
 				start:     0,
 				end:       numSigners,
@@ -668,7 +665,7 @@ func initWarpPredicateTests() {
 			}
 		}
 
-		snowCtx := utils.TestSnowContext()
+		snowCtx := snowtest.Context(tb, snowtest.CChainID)
 		state := &validatorstest.State{
 			GetSubnetIDF: func(ctx context.Context, chainID ids.ID) (ids.ID, error) {
 				return sourceSubnetID, nil
@@ -681,12 +678,15 @@ func initWarpPredicateTests() {
 
 		predicateTests[testName] = createValidPredicateTest(snowCtx, uint64(numSigners), predicateBytes)
 	}
+	return predicateTests
 }
 
 func TestWarpPredicate(t *testing.T) {
+	predicateTests := makeWarpPredicateTests(t)
 	testutils.RunPredicateTests(t, predicateTests)
 }
 
 func BenchmarkWarpPredicate(b *testing.B) {
+	predicateTests := makeWarpPredicateTests(b)
 	testutils.RunPredicateBenchmarks(b, predicateTests)
 }
