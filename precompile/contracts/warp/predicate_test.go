@@ -35,7 +35,6 @@ var (
 	_ agoUtils.Sortable[*testValidator] = (*testValidator)(nil)
 
 	errTest        = errors.New("non-nil error")
-	networkID      = uint32(54321)
 	sourceChainID  = ids.GenerateTestID()
 	sourceSubnetID = ids.GenerateTestID()
 
@@ -201,7 +200,6 @@ func createSnowCtx(validatorRanges []validatorRange) *snow.Context {
 		},
 	}
 	snowCtx.ValidatorState = state
-	snowCtx.NetworkID = networkID
 	return snowCtx
 }
 
@@ -268,7 +266,6 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 	snowCtx := snowtest.Context(t, ids.GenerateTestID())
 	snowCtx.SubnetID = ids.GenerateTestID()
 	snowCtx.CChainID = cChainID
-	snowCtx.NetworkID = networkID
 	snowCtx.ValidatorState = &validatorstest.State{
 		GetSubnetIDF: func(ctx context.Context, chainID ids.ID) (ids.ID, error) {
 			require.Equal(chainID, cChainID)
@@ -672,7 +669,6 @@ func initWarpPredicateTests() {
 		}
 
 		snowCtx := utils.TestSnowContext()
-		snowCtx.NetworkID = networkID
 		state := &validatorstest.State{
 			GetSubnetIDF: func(ctx context.Context, chainID ids.ID) (ids.ID, error) {
 				return sourceSubnetID, nil
