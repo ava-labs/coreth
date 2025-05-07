@@ -285,7 +285,7 @@ func (ec *client) getBlock(ctx context.Context, method string, args ...interface
 		Uncles:       uncles,
 	})
 	// Fill the block with the extra data. BlockHook can modify the block.
-	if ec.BlockHook != nil { // only if set
+	if ec.BlockHook != nil {
 		if err := ec.BlockHook.OnBlockDecoded(raw, block); err != nil {
 			return nil, err
 		}
