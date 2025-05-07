@@ -19,8 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
-var testChainID = ids.GenerateTestID()
-
 func TestSnowContext() *snow.Context {
 	sk, err := localsigner.New()
 	if err != nil {
@@ -28,7 +26,7 @@ func TestSnowContext() *snow.Context {
 	}
 	pk := sk.PublicKey()
 	networkID := constants.UnitTestID
-	chainID := testChainID
+	chainID := snowtest.CChainID
 
 	ctx := &snow.Context{
 		NetworkID:      networkID,
