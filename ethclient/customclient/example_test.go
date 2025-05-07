@@ -1,4 +1,4 @@
-package corethclient
+package customclient
 
 import (
 	"context"

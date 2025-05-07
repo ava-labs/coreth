@@ -112,7 +112,12 @@ type Client interface {
 	SendTransaction(context.Context, *types.Transaction) error
 }
 
+// BlockHook is an interface that can be implemented to modify the block
+// after it has been decoded. This is useful for plugins that want to
+// modify the block before it is returned to the caller.
 type BlockHook interface {
+	// OnBlockDecoded is called when a block is decoded. It can be used to
+	// modify the block before it is returned to the caller.
 	OnBlockDecoded(raw json.RawMessage, block *types.Block) error
 }
 
@@ -142,6 +147,7 @@ func NewClient(c *rpc.Client) Client {
 	return &client{c, nil}
 }
 
+// NewClientWithHook creates a client that uses the given RPC client and block hook.
 func NewClientWithHook(c *rpc.Client, hook BlockHook) Client {
 	return &client{c, hook}
 }
@@ -279,7 +285,7 @@ func (ec *client) getBlock(ctx context.Context, method string, args ...interface
 		Uncles:       uncles,
 	})
 	// Fill the block with the extra data. BlockHook can modify the block.
-	if ec.BlockHook != nil {
+	if ec.BlockHook != nil { // only if set
 		if err := ec.BlockHook.OnBlockDecoded(raw, block); err != nil {
 			return nil, err
 		}

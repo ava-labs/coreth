@@ -41,31 +41,16 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 )
 
-// Client is a wrapper around rpc.Client that implements coreth-specific functionality.
-// Client also wraps the ethclient.Client interface to provide extra data types (in header, block body).
-// If you want to use the standardized Ethereum RPC functionality without extra types, use ethclient.Client instead.
+// Client is a wrapper around rpc.Client that implements geth-specific functionality.
+//
+// If you want to use the standardized Ethereum RPC functionality, use ethclient.Client instead.
 type Client struct {
 	c *rpc.Client
-	ethclient.Client
 }
 
 // New creates a client that uses the given RPC client.
 func New(c *rpc.Client) *Client {
-	return &Client{c: c, Client: ethclient.NewClientWithHook(c, &extBlockHook{})}
-}
-
-// Dial connects a client to the given URL.
-func Dial(rawurl string) (*Client, error) {
-	return DialContext(context.Background(), rawurl)
-}
-
-// DialContext connects a client to the given URL with context.
-func DialContext(ctx context.Context, rawurl string) (*Client, error) {
-	c, err := rpc.DialContext(ctx, rawurl)
-	if err != nil {
-		return nil, err
-	}
-	return New(c), nil
+	return &Client{c}
 }
 
 // CreateAccessList tries to create an access list for a specific transaction based on the
