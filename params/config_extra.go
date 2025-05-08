@@ -66,8 +66,6 @@ func SetEthUpgrades(c *ChainConfig) error {
 			c.BerlinBlock = big.NewInt(0)
 		case *extra.ApricotPhase2BlockTimestamp < unscheduledActivation:
 			return fmt.Errorf("%w: AP2 must be either unscheduled or initially activated", errInvalidUpgradeTime)
-		default:
-			return nil
 		}
 
 		switch {
@@ -77,22 +75,18 @@ func SetEthUpgrades(c *ChainConfig) error {
 			c.LondonBlock = big.NewInt(0)
 		case *extra.ApricotPhase3BlockTimestamp < unscheduledActivation:
 			return fmt.Errorf("%w: AP3 must be either unscheduled or initially activated", errInvalidUpgradeTime)
-		default:
-			return nil
 		}
 	}
 
 	// We only mark Shanghai and Cancun as enabled if we have marked them as
 	// scheduled.
-	if extra.DurangoBlockTimestamp == nil || *extra.DurangoBlockTimestamp >= unscheduledActivation {
-		return nil
+	if extra.DurangoBlockTimestamp != nil && *extra.DurangoBlockTimestamp < unscheduledActivation {
+		c.ShanghaiTime = utils.NewUint64(*extra.DurangoBlockTimestamp)
 	}
-	c.ShanghaiTime = utils.NewUint64(*extra.DurangoBlockTimestamp)
 
-	if extra.EtnaTimestamp == nil || *extra.EtnaTimestamp >= unscheduledActivation {
-		return nil
+	if extra.EtnaTimestamp != nil && *extra.EtnaTimestamp < unscheduledActivation {
+		c.CancunTime = utils.NewUint64(*extra.EtnaTimestamp)
 	}
-	c.CancunTime = utils.NewUint64(*extra.EtnaTimestamp)
 	return nil
 }
 
