@@ -23,7 +23,8 @@ awscpu
 # ignore GoLand metafiles directory
 .idea/
 
-logs/
+*logs/
+!*customlogs/
 
 .vscode*
 
