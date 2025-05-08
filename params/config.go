@@ -30,6 +30,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
@@ -354,6 +355,8 @@ var (
 
 	TestRules = TestChainConfig.Rules(new(big.Int), IsMergeTODO, 0)
 )
+
+var _ upgradetest.Fork
 
 // ChainConfig is the core config which determines the blockchain settings.
 //

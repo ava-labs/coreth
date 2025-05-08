@@ -26,47 +26,50 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			assert := assert.New(t)
 
 			// we use AP3 genesis here to not trip any block fees
-			issuer, vm, _, sharedMemory, _ := GenesisVM(t, true, genesisJSONApricotPhase3, "", "")
+			tvm := newVM(t, testVMConfig{
+				finishBootstrapping: true,
+				genesisJSON:         genesisJSONApricotPhase3,
+			})
 			defer func() {
-				err := vm.Shutdown(context.Background())
+				err := tvm.vm.Shutdown(context.Background())
 				assert.NoError(err)
 			}()
-			mempool := vm.mempool
+			mempool := tvm.vm.mempool
 
 			// generate a valid and conflicting tx
 			var (
 				tx, conflictingTx *atomic.Tx
 			)
 			if name == "import" {
-				importTxs := createImportTxOptions(t, vm, sharedMemory)
+				importTxs := createImportTxOptions(t, tvm.vm, tvm.atomicMemory)
 				tx, conflictingTx = importTxs[0], importTxs[1]
 			} else {
-				exportTxs := createExportTxOptions(t, vm, issuer, sharedMemory)
+				exportTxs := createExportTxOptions(t, tvm.vm, tvm.toEngine, tvm.atomicMemory)
 				tx, conflictingTx = exportTxs[0], exportTxs[1]
 			}
 			txID := tx.ID()
 			conflictingTxID := conflictingTx.ID()
 
 			// add a tx to the mempool
-			err := vm.mempool.AddLocalTx(tx)
+			err := tvm.vm.mempool.AddLocalTx(tx)
 			assert.NoError(err)
 			has := mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
 
 			// try to add a conflicting tx
-			err = vm.mempool.AddLocalTx(conflictingTx)
+			err = tvm.vm.mempool.AddLocalTx(conflictingTx)
 			assert.ErrorIs(err, atomic.ErrConflictingAtomicTx)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			<-issuer
+			<-tvm.toEngine
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
 
 			// Show that BuildBlock generates a block containing [txID] and that it is
 			// still present in the mempool.
-			blk, err := vm.BuildBlock(context.Background())
+			blk, err := tvm.vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
 			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(*Block)
@@ -119,10 +122,14 @@ func TestMempoolPriorityDrop(t *testing.T) {
 
 	// we use AP3 genesis here to not trip any block fees
 	importAmount := uint64(50000000)
-	_, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesisJSONApricotPhase3, "", "", map[ids.ShortID]uint64{
-		testShortIDAddrs[0]: importAmount,
-		testShortIDAddrs[1]: importAmount,
-	})
+	vm := newVM(t, testVMConfig{
+		finishBootstrapping: true,
+		genesisJSON:         genesisJSONApricotPhase3,
+		utxos: map[ids.ShortID]uint64{
+			testShortIDAddrs[0]: importAmount,
+			testShortIDAddrs[1]: importAmount,
+		},
+	}).vm
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)

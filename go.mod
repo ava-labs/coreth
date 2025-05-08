@@ -1,6 +1,6 @@
 module github.com/ava-labs/coreth
 
-go 1.23.6
+go 1.23.9
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
@@ -138,3 +138,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/ava-labs/avalanchego => /Users/stephen/go/src/github.com/ava-labs/avalanchego
