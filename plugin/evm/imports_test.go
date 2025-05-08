@@ -56,9 +56,9 @@ func TestMustNotImport(t *testing.T) {
 		// Importing these packages configures libevm globally and it is not
 		// possible to do so for both coreth and subnet-evm, where the client may
 		// wish to connect to multiple chains.
-		"plugin/evm/atomic": {"core", "core/vm", "plugin/evm/customtypes", "params"},
-		"plugin/evm/client": {"core", "core/vm", "plugin/evm/customtypes", "params"},
-		"plugin/evm/config": {"core", "core/vm", "params", "plugin/evm/customtypes"},
+		"plugin/evm/atomic": {"core", "plugin/evm/customtypes", "params"},
+		"plugin/evm/client": {"core", "plugin/evm/customtypes", "params"},
+		"plugin/evm/config": {"core", "params", "plugin/evm/customtypes"},
 		"plugin/evm/header": {"core", "core/vm", "params"},
 		"ethclient":         {"plugin/evm/customtypes", "params"},
 		"warp":              {"plugin/evm/customtypes", "params"},
