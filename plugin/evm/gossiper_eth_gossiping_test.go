@@ -84,8 +84,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	assert.NoError(err)
 
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		genesisJSON:         genesisJSON,
+		genesisJSON: genesisJSON,
 	})
 	defer func() {
 		err := tvm.vm.Shutdown(context.Background())

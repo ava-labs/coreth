@@ -71,8 +71,7 @@ func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -264,8 +263,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -418,8 +416,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -736,8 +733,7 @@ func testReceiveWarpMessage(
 func TestMessageSignatureRequestsToVM(t *testing.T) {
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		err := tvm.vm.Shutdown(context.Background())
@@ -801,8 +797,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 func TestBlockSignatureRequestsToVM(t *testing.T) {
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		err := tvm.vm.Shutdown(context.Background())

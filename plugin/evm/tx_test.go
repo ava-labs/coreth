@@ -99,8 +99,8 @@ type atomicTxTest struct {
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: !test.bootstrapping,
-		fork:                &test.fork,
+		isSyncing: test.bootstrapping,
+		fork:      &test.fork,
 	})
 	rules := tvm.vm.currentRules()
 

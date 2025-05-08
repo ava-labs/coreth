@@ -159,8 +159,8 @@ func newPrefundedGenesis(
 }
 
 type testVMConfig struct {
-	finishBootstrapping bool
-	fork                *upgradetest.Fork
+	isSyncing bool
+	fork      *upgradetest.Fork
 	// If genesisJSON is empty, defaults to the genesis corresponding to the
 	// fork.
 	genesisJSON string
@@ -226,7 +226,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 	)
 	require.NoError(t, err, "error initializing vm")
 
-	if config.finishBootstrapping {
+	if !config.isSyncing {
 		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
 		require.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
 	}
@@ -318,6 +318,7 @@ func TestVMConfig(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	vm := newVM(t, testVMConfig{
+		isSyncing:  true,
 		configJSON: fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0]),
 	}).vm
 	require.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
@@ -329,6 +330,7 @@ func TestVMConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	vm := newVM(t, testVMConfig{
+		isSyncing:  true,
 		configJSON: fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0]),
 	}).vm
 
@@ -341,7 +343,9 @@ func TestVMConfigDefaults(t *testing.T) {
 }
 
 func TestVMNilConfig(t *testing.T) {
-	vm := newVM(t, testVMConfig{}).vm
+	vm := newVM(t, testVMConfig{
+		isSyncing: true,
+	}).vm
 
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
@@ -354,6 +358,7 @@ func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
 	vm := newVM(t, testVMConfig{
+		isSyncing:  true,
 		configJSON: fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir),
 	}).vm
 	require.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
@@ -415,8 +420,7 @@ func TestVMUpgrades(t *testing.T) {
 	for _, test := range genesisTests {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			vm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &test.fork,
+				fork: &test.fork,
 			}).vm
 
 			if gasPrice := vm.txPool.GasTip(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
@@ -474,8 +478,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
 	tvm1 := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -495,8 +498,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 
 	// make another VM which is missing the UTXO in shared memory
 	vm2 := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	}).vm
 	defer func() {
 		err := vm2.Shutdown(context.Background())
@@ -520,8 +522,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -631,9 +632,8 @@ func TestBuildEthTxBlock(t *testing.T) {
 	importAmount := uint64(20000000)
 	fork := upgradetest.ApricotPhase2
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
-		configJSON:          `{"pruning-enabled":true}`,
+		fork:       &fork,
+		configJSON: `{"pruning-enabled":true}`,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -778,8 +778,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 	importAmount := uint64(10000000)
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 			testShortIDAddrs[1]: importAmount,
@@ -1065,8 +1064,7 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fork := upgradetest.ApricotPhase5
 			tvm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &fork,
+				fork: &fork,
 			})
 			issuedTxs, evictedTxs := issueTxs(t, tvm.vm, tvm.atomicMemory)
 
@@ -1113,9 +1111,8 @@ func TestSetPreferenceRace(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
-		configJSON:          `{"pruning-enabled":true}`,
+		fork:       &fork,
+		configJSON: `{"pruning-enabled":true}`,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -1347,8 +1344,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 
 	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			addr0: importAmount,
 			addr1: importAmount,
@@ -1468,8 +1464,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 func TestBonusBlocksTxs(t *testing.T) {
 	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1570,9 +1565,8 @@ func TestReorgProtection(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
-		configJSON:          `{"pruning-enabled":false}`,
+		fork:       &fork,
+		configJSON: `{"pruning-enabled":false}`,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -1742,8 +1736,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -1940,8 +1933,7 @@ func TestStickyPreference(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2202,8 +2194,7 @@ func TestUncleBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2387,8 +2378,7 @@ func TestEmptyBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2457,8 +2447,7 @@ func TestAcceptReorg(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2659,8 +2648,7 @@ func TestFutureBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2723,8 +2711,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2837,8 +2824,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2909,8 +2895,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 func TestReissueAtomicTx(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: 10000000,
 			testShortIDAddrs[1]: 10000000,
@@ -3007,8 +2992,7 @@ func TestReissueAtomicTx(t *testing.T) {
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3058,8 +3042,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 func TestBuildInvalidBlockHead(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3198,8 +3181,7 @@ func TestConfigureLogLevel(t *testing.T) {
 func TestBuildApricotPhase4Block(t *testing.T) {
 	fork := upgradetest.ApricotPhase4
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3371,8 +3353,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 func TestBuildApricotPhase5Block(t *testing.T) {
 	fork := upgradetest.ApricotPhase5
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3537,8 +3518,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3595,8 +3575,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 			testShortIDAddrs[1]: importAmount,
@@ -3666,8 +3645,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3717,13 +3695,11 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// ApricotPhase5.
 	ap4 := upgradetest.ApricotPhase4
 	tvm1 := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &ap4,
+		fork: &ap4,
 	})
 	ap5 := upgradetest.ApricotPhase5
 	tvm2 := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &ap5,
+		fork: &ap5,
 	})
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
@@ -3801,8 +3777,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importAmount := uint64(50000000)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -3896,8 +3871,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			importAmount := uint64(1000000000)
 			tvm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &test.fork,
+				fork: &test.fork,
 				utxos: map[ids.ShortID]uint64{
 					testShortIDAddrs[0]: importAmount,
 				},
@@ -3996,8 +3970,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 
 	// Create a VM with the genesis (will use header verification)
 	vm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		genesisJSON:         genesisJSONCancun,
+		genesisJSON: genesisJSONCancun,
 	}).vm
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 

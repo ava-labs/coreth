@@ -288,8 +288,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		}
 	)
 	server := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		utxos:               alloc,
+		utxos: alloc,
 	})
 	t.Cleanup(func() {
 		log.Info("Shutting down server VM")
@@ -365,6 +364,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// initialise [syncerVM] with blank genesis state
 	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d}`, test.stateSyncMinBlocks, 4)
 	syncer := newVM(t, testVMConfig{
+		isSyncing:  true,
 		configJSON: stateSyncEnabledJSON,
 		utxos:      alloc,
 	})

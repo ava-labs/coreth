@@ -29,8 +29,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			// we use AP3 here to not trip any block fees
 			fork := upgradetest.ApricotPhase3
 			tvm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &fork,
+				fork: &fork,
 			})
 			defer func() {
 				err := tvm.vm.Shutdown(context.Background())
@@ -126,8 +125,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase3
 	vm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 			testShortIDAddrs[1]: importAmount,

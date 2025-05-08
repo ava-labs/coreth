@@ -329,8 +329,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			fork := upgradetest.NoUpgrades
 			tvm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &fork,
+				fork: &fork,
 			})
 			defer func() {
 				if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -450,8 +449,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 func TestExportTxSemanticVerify(t *testing.T) {
 	fork := upgradetest.NoUpgrades
 	vm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	}).vm
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -951,8 +949,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 func TestExportTxAccept(t *testing.T) {
 	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-		fork:                &fork,
+		fork: &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1698,8 +1695,7 @@ func TestNewExportTx(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			tvm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &test.fork,
+				fork: &test.fork,
 			})
 			defer func() {
 				if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1863,8 +1859,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			tvm := newVM(t, testVMConfig{
-				finishBootstrapping: true,
-				fork:                &test.fork,
+				fork: &test.fork,
 			})
 			defer func() {
 				if err := tvm.vm.Shutdown(context.Background()); err != nil {

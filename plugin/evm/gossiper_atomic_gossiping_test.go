@@ -27,9 +27,7 @@ import (
 func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-	})
+	tvm := newVM(t, testVMConfig{})
 	defer func() {
 		assert.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
@@ -120,9 +118,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
-	tvm := newVM(t, testVMConfig{
-		finishBootstrapping: true,
-	})
+	tvm := newVM(t, testVMConfig{})
 	defer func() {
 		assert.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
