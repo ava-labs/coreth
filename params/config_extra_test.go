@@ -34,6 +34,10 @@ func TestSetEthUpgrades(t *testing.T) {
 				PetersburgBlock:     genesisBlock,
 				IstanbulBlock:       genesisBlock,
 				MuirGlacierBlock:    genesisBlock,
+				BerlinBlock:         nil,
+				LondonBlock:         nil,
+				ShanghaiTime:        nil,
+				CancunTime:          nil,
 			},
 		},
 		{
@@ -50,6 +54,10 @@ func TestSetEthUpgrades(t *testing.T) {
 				PetersburgBlock:     genesisBlock,
 				IstanbulBlock:       genesisBlock,
 				MuirGlacierBlock:    genesisBlock,
+				BerlinBlock:         nil,
+				LondonBlock:         nil,
+				ShanghaiTime:        nil,
+				CancunTime:          nil,
 			},
 		},
 		{
@@ -67,6 +75,9 @@ func TestSetEthUpgrades(t *testing.T) {
 				IstanbulBlock:       genesisBlock,
 				MuirGlacierBlock:    genesisBlock,
 				BerlinBlock:         genesisBlock,
+				LondonBlock:         nil,
+				ShanghaiTime:        nil,
+				CancunTime:          nil,
 			},
 		},
 		{
@@ -85,6 +96,8 @@ func TestSetEthUpgrades(t *testing.T) {
 				MuirGlacierBlock:    genesisBlock,
 				BerlinBlock:         genesisBlock,
 				LondonBlock:         genesisBlock,
+				ShanghaiTime:        nil,
+				CancunTime:          nil,
 			},
 		},
 		{
@@ -104,6 +117,7 @@ func TestSetEthUpgrades(t *testing.T) {
 				BerlinBlock:         genesisBlock,
 				LondonBlock:         genesisBlock,
 				ShanghaiTime:        genesisTimestamp,
+				CancunTime:          nil,
 			},
 		},
 		{
