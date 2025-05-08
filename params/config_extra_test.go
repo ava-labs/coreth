@@ -148,17 +148,17 @@ func TestSetEthUpgrades(t *testing.T) {
 			extraConfig := &extras.ChainConfig{
 				NetworkUpgrades: extras.GetNetworkUpgrades(upgradetest.GetConfig(test.fork)),
 			}
-			initial := WithExtra(
+			actual := WithExtra(
 				&ChainConfig{},
 				extraConfig,
 			)
-			require.NoError(SetEthUpgrades(initial))
+			require.NoError(SetEthUpgrades(actual))
 
 			expected := WithExtra(
 				test.expected,
 				extraConfig,
 			)
-			require.Equal(expected, initial)
+			require.Equal(expected, actual)
 		})
 	}
 }
