@@ -3067,41 +3067,33 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 }
 
 func TestConfigureLogLevel(t *testing.T) {
-	configTests := []struct {
-		name                     string
-		logConfig                string
-		genesisJSON, upgradeJSON string
-		expectedErr              error
+	tests := []struct {
+		logLevel    string
+		expectedErr error
 	}{
 		{
-			name:        "Log level info",
-			logConfig:   `{"log-level": "info"}`,
-			genesisJSON: genesisJSONApricotPhase2,
-			upgradeJSON: "",
+			logLevel: "info",
 		},
 		{
-			name:        "Invalid log level",
-			logConfig:   `{"log-level": "cchain"}`,
-			genesisJSON: genesisJSONApricotPhase3,
-			upgradeJSON: "",
+			logLevel:    "cchain", // invalid
 			expectedErr: errInitializingLogger,
 		},
 	}
-	for _, test := range configTests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.logLevel, func(t *testing.T) {
 			require := require.New(t)
 
 			vm := &VM{}
-			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, test.genesisJSON)
+			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, genesisJSONLatest)
 			err := vm.Initialize(
 				context.Background(),
 				ctx,
 				dbManager,
 				genesisBytes,
-				[]byte(""),
-				[]byte(test.logConfig),
+				nil,
+				fmt.Appendf(nil, `{"log-level": "%s"}`, test.logLevel),
 				issuer,
-				[]*commonEng.Fx{},
+				nil,
 				&enginetest.Sender{T: t},
 			)
 			require.ErrorIs(err, test.expectedErr)
