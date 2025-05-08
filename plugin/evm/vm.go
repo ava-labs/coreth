@@ -21,7 +21,6 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
-	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/prometheus/client_golang/prometheus"
@@ -606,13 +605,7 @@ func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
 	configExtra.AvalancheContext = extras.AvalancheContext{
 		SnowCtx: ctx,
 	}
-
-	// TODO: This check should be removed. The upgrade config is always provided
-	// in production. All tests should be updated to correctly provide the
-	// upgrade config.
-	if ctx.NetworkUpgrades != (upgrade.Config{}) {
-		configExtra.NetworkUpgrades = extras.GetNetworkUpgrades(ctx.NetworkUpgrades)
-	}
+	configExtra.NetworkUpgrades = extras.GetNetworkUpgrades(ctx.NetworkUpgrades)
 
 	// If Durango is scheduled, schedule the Warp Precompile at the same time.
 	if configExtra.DurangoBlockTimestamp != nil {
