@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -43,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/statesync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -458,6 +460,12 @@ func (vm *VM) Initialize(
 		return err
 	}
 	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
+	blockchainInitHash, blockchainInitHeight, err := vm.readInitChainState()
+	if err != nil {
+		return err
+	}
+	log.Info(fmt.Sprintf("blockchainInit = %s", blockchainInitHash))
+	stateSyncEnabled := vm.stateSyncEnabled(blockchainInitHeight)
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -491,7 +499,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.PopulateMissingTries = vm.config.PopulateMissingTries
 	vm.ethConfig.PopulateMissingTriesParallelism = vm.config.PopulateMissingTriesParallelism
 	vm.ethConfig.AllowMissingTries = vm.config.AllowMissingTries
-	vm.ethConfig.SnapshotDelayInit = vm.stateSyncEnabled(lastAcceptedHeight)
+	vm.ethConfig.SnapshotDelayInit = stateSyncEnabled
 	vm.ethConfig.SnapshotWait = vm.config.SnapshotWait
 	vm.ethConfig.SnapshotVerify = vm.config.SnapshotVerify
 	vm.ethConfig.HistoricalProofQueryWindow = vm.config.HistoricalProofQueryWindow
@@ -503,6 +511,15 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+
+	///
+	vm.ethConfig.StateScheme = vm.config.StateScheme
+	if vm.config.StateScheme == rawdb.PathScheme {
+		if vm.config.Pruning {
+			return fmt.Errorf("pruning is not supported with path scheme")
+		}
+		log.Warn("Path scheme is enabled, experimental feature, use at your own risk")
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -571,9 +588,12 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
-	if err := vm.initializeChain(lastAcceptedHash); err != nil {
+
+	// Initialize the Ethereum backend
+	if err := vm.initializeChain(blockchainInitHash); err != nil {
 		return err
 	}
+
 	// initialize bonus blocks on mainnet
 	var (
 		bonusBlockHeights map[uint64]ids.ID
@@ -615,6 +635,9 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
+	//////
+	vm.Network.AddHandler(statesync.ProtocolID, statesync.NewHandler(vm.blockChain))
+
 	vm.setAppRequestHandlers()
 
 	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
@@ -622,7 +645,7 @@ func (vm *VM) Initialize(
 		AtomicTrie:       vm.atomicTrie,
 		SyncableInterval: vm.config.StateSyncCommitInterval,
 	})
-	return vm.initializeStateSyncClient(lastAcceptedHeight)
+	return vm.initializeStateSyncClient(lastAcceptedHeight, stateSyncEnabled)
 }
 
 func (vm *VM) initializeMetrics() error {
@@ -691,8 +714,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // initializeStateSyncClient initializes the client for performing state sync.
 // If state sync is disabled, this function will wipe any ongoing summary from
 // disk to ensure that we do not continue syncing from an invalid snapshot.
-func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
-	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
+func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64, stateSyncEnabled bool) error {
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
 	if stateSyncEnabled && len(vm.config.StateSyncIDs) > 0 {
@@ -705,6 +727,11 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 			}
 			stateSyncIDs[i] = nodeID
 		}
+	}
+
+	// If we don't allow state sync resume, shared memory will be incorrect
+	if vm.config.StateSyncUseUpstream && vm.config.StateSyncSkipResume {
+		return fmt.Errorf("StateSyncUseUpstream and StateSyncSkipResume cannot be used together")
 	}
 
 	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
@@ -730,6 +757,11 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		db:                   vm.versiondb,
 		atomicBackend:        vm.atomicBackend,
 		toEngine:             vm.toEngine,
+		network:              vm.Network,
+		appSender:            vm.p2pSender,
+		stateSyncNodes:       stateSyncIDs,
+		useUpstream:          vm.config.StateSyncUseUpstream,
+		scheme:               vm.config.StateScheme,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
@@ -1039,6 +1071,11 @@ func (vm *VM) onBootstrapStarted() error {
 	if err := vm.StateSyncClient.Error(); err != nil {
 		return err
 	}
+
+	// If we are dynamically syncing, don't set the snapshot.
+	if vm.config.StateSyncUseUpstream {
+		return vm.fx.Bootstrapping()
+	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
 	if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
 		return err
@@ -1340,7 +1377,16 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	// We call verify without writes here to avoid generating a reference
 	// to the blk state root in the triedb when we are going to call verify
 	// again from the consensus engine with writes enabled.
-	if err := blk.verify(predicateCtx, false /*=writes*/); err != nil {
+	if err := blk.syntacticVerify(); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("syntactic block verification failed: %w", err)
+	}
+	if err := blk.verifyPredicates(predicateCtx); err != nil {
+		vm.mempool.CancelCurrentTxs()
+		return nil, fmt.Errorf("failed to verify predicates: %w", err)
+	}
+
+	if err := blk.verify(false /*=writes*/); err != nil {
 		vm.mempool.CancelCurrentTxs()
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
@@ -1423,6 +1469,11 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	block, err := vm.GetBlockInternal(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
+	}
+
+	// Ignore all SetPreference requests while dynamically syncing
+	if vm.StateSyncClient.GetSyncQueue() != nil {
+		return nil
 	}
 
 	return vm.blockChain.SetPreference(block.(*Block).ethBlock)
@@ -1781,6 +1832,38 @@ func (vm *VM) readLastAccepted() (common.Hash, uint64, error) {
 		}
 		return lastAcceptedHash, *height, nil
 	}
+}
+
+// This should only be called prior to initializing the backend
+// Afterward, the blockchain should be used
+func (vm *VM) readInitChainState() (common.Hash, uint64, error) {
+	// Check if currently syncing
+	summaryBytes, err := vm.metadataDB.Get(stateSyncSummaryKey)
+	// err != nil expected when syncing finished
+	if err == nil && len(summaryBytes) > 0 {
+		return vm.genesisHash, 0, nil
+	}
+
+	// No summary implies either hasn't synced or finished syncing
+	hash, err := customrawdb.ReadAcceptorTip(vm.chaindb)
+	switch {
+	case err == database.ErrNotFound:
+		// If there is nothing in the database, return the genesis block hash and height
+		return vm.genesisHash, 0, nil
+	case err != nil:
+		return common.Hash{}, 0, fmt.Errorf("failed to read acceptor tip: %w", err)
+	case hash == (common.Hash{}):
+		// havent started syncing yet
+		return vm.genesisHash, 0, nil
+	}
+
+	number := rawdb.ReadHeaderNumber(vm.chaindb, hash)
+	if number == nil {
+		return common.Hash{}, 0, fmt.Errorf("failed to retrieve header number of last accepted block: %s", hash)
+	}
+
+	// Found acceptor tip, should return this
+	return hash, *number, nil
 }
 
 // attachEthService registers the backend RPC services provided by Ethereum
