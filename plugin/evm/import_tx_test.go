@@ -318,7 +318,7 @@ func TestImportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  0,
-						AssetID: testAvaxAssetID,
+						AssetID: snowtest.AVAXAssetID,
 					},
 				}
 				return &tx

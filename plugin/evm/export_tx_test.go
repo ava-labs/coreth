@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
@@ -157,7 +158,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount / 2,
-					AssetID: testAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -174,7 +175,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -191,7 +192,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount + 1,
-					AssetID: testAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -265,7 +266,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -288,7 +289,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   1,
 				},
 			},
@@ -311,7 +312,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: testAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   1,
 				},
 			},
@@ -325,9 +326,10 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			fork := upgradetest.NoUpgrades
 			tvm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         genesisJSONApricotPhase0,
+				fork:                &fork,
 			})
 			defer func() {
 				if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1104,19 +1106,19 @@ func TestExportTxVerify(t *testing.T) {
 			{
 				Address: testEthAddrs[0],
 				Amount:  exportAmount,
-				AssetID: testAvaxAssetID,
+				AssetID: snowtest.AVAXAssetID,
 				Nonce:   0,
 			},
 			{
 				Address: testEthAddrs[2],
 				Amount:  exportAmount,
-				AssetID: testAvaxAssetID,
+				AssetID: snowtest.AVAXAssetID,
 				Nonce:   0,
 			},
 		},
 		ExportedOutputs: []*avax.TransferableOutput{
 			{
-				Asset: avax.Asset{ID: testAvaxAssetID},
+				Asset: avax.Asset{ID: snowtest.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: exportAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -1127,7 +1129,7 @@ func TestExportTxVerify(t *testing.T) {
 				},
 			},
 			{
-				Asset: avax.Asset{ID: testAvaxAssetID},
+				Asset: avax.Asset{ID: snowtest.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: exportAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -1270,7 +1272,7 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testEthAddrs[0],
 						Amount:  0,
-						AssetID: testAvaxAssetID,
+						AssetID: snowtest.AVAXAssetID,
 						Nonce:   0,
 					},
 				}

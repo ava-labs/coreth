@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
@@ -69,7 +68,6 @@ var (
 	testKeys         = secp256k1.TestKeys()[:3]
 	testEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	testShortIDAddrs []ids.ShortID
-	testAvaxAssetID  = ids.ID{1, 2, 3}
 
 	genesisJSON = func(cfg *params.ChainConfig) string {
 		g := new(core.Genesis)
@@ -177,25 +175,6 @@ func newPrefundedGenesis(
 	}
 }
 
-// BuildGenesisTest returns the genesis bytes for Coreth VM to be used in testing
-func BuildGenesisTest(t *testing.T, genesisJSON string) []byte {
-	ss := StaticService{}
-
-	genesis := &core.Genesis{}
-	if err := json.Unmarshal([]byte(genesisJSON), genesis); err != nil {
-		t.Fatalf("Problem unmarshaling genesis JSON: %s", err)
-	}
-	genesisReply, err := ss.BuildGenesis(nil, genesis)
-	if err != nil {
-		t.Fatalf("Failed to create test genesis")
-	}
-	genesisBytes, err := formatting.Decode(genesisReply.Encoding, genesisReply.Bytes)
-	if err != nil {
-		t.Fatalf("Failed to decode genesis bytes: %s", err)
-	}
-	return genesisBytes
-}
-
 type testVMConfig struct {
 	finishBootstrapping bool
 	fork                *upgradetest.Fork
@@ -231,7 +210,6 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 	if len(config.genesisJSON) == 0 {
 		config.genesisJSON = genesisJSON(forkToChainConfig[fork])
 	}
-	genesisBytes := BuildGenesisTest(t, config.genesisJSON)
 
 	baseDB := memdb.New()
 
@@ -256,7 +234,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		context.Background(),
 		ctx,
 		prefixedDB,
-		genesisBytes,
+		[]byte(config.genesisJSON),
 		[]byte(config.upgradeJSON),
 		[]byte(config.configJSON),
 		issuer,
@@ -303,7 +281,6 @@ func setupGenesis(
 	if len(genesisJSON) == 0 {
 		genesisJSON = genesisJSONLatest
 	}
-	genesisBytes := BuildGenesisTest(t, genesisJSON)
 	ctx := snowtest.Context(t, snowtest.CChainID)
 
 	baseDB := memdb.New()
@@ -318,7 +295,7 @@ func setupGenesis(
 
 	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
-	return ctx, prefixedDB, genesisBytes, issuer, atomicMemory
+	return ctx, prefixedDB, []byte(genesisJSON), issuer, atomicMemory
 }
 
 func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.ID, index uint32, assetID ids.ID, amount uint64, addr ids.ShortID) (*avax.UTXO, error) {
@@ -3836,7 +3813,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importAmount := uint64(50000000)
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase1,
+		genesisJSON:         genesisJSONDurango,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -3860,8 +3837,8 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
 	genesisWithUpgrade := &core.Genesis{}
-	require.NoError(t, json.Unmarshal([]byte(genesisJSONApricotPhase1), genesisWithUpgrade))
-	params.GetExtra(genesisWithUpgrade.Config).ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
+	require.NoError(t, json.Unmarshal([]byte(genesisJSONDurango), genesisWithUpgrade))
+	params.GetExtra(genesisWithUpgrade.Config).EtnaTimestamp = utils.TimeToNewUint64(blk.Timestamp())
 	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
 	require.NoError(t, err)
 
@@ -3869,7 +3846,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// this will not be allowed
 	err = reinitVM.Initialize(context.Background(), tvm.vm.ctx, tvm.db, genesisWithUpgradeBytes, []byte{}, []byte{}, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
-	require.ErrorContains(t, err, "mismatching ApricotPhase2 fork block timestamp in database")
+	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
 	resetMetrics(tvm.vm)
 

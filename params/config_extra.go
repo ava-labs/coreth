@@ -6,6 +6,7 @@ package params
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/upgrade"
@@ -21,10 +22,18 @@ const (
 	IsMergeTODO = true
 )
 
-// SetEthUpgrades enables Etheruem network upgrades using the same time as
+var (
+	initiallyActive       = uint64(upgrade.InitiallyActiveTime.Unix())
+	unscheduledActivation = uint64(upgrade.UnscheduledActivationTime.Unix())
+
+	errInvalidUpgradeTime = errors.New("invalid upgrade time")
+)
+
+// SetEthUpgrades enables Ethereum network upgrades using the same time as
 // the Avalanche network upgrade that enables them.
-func SetEthUpgrades(c *ChainConfig) {
-	// Set Ethereum block upgrades to initially activated as they were already activated on launch.
+func SetEthUpgrades(c *ChainConfig) error {
+	// Set Ethereum block upgrades to initially activated as they were already
+	// activated on launch.
 	c.HomesteadBlock = big.NewInt(0)
 	c.DAOForkBlock = big.NewInt(0)
 	c.DAOForkSupport = true
@@ -37,6 +46,9 @@ func SetEthUpgrades(c *ChainConfig) {
 	c.IstanbulBlock = big.NewInt(0)
 	c.MuirGlacierBlock = big.NewInt(0)
 
+	extra := GetExtra(c)
+	// Because Fuji and Mainnet have already accepted the Berlin and London
+	// blocks, it is assumed that they are scheduled for activation.
 	if c.ChainID != nil && AvalancheFujiChainID.Cmp(c.ChainID) == 0 {
 		c.BerlinBlock = big.NewInt(184985) // https://testnet.snowtrace.io/block/184985?chainid=43113, AP2 activation block
 		c.LondonBlock = big.NewInt(805078) // https://testnet.snowtrace.io/block/805078?chainid=43113, AP3 activation block
@@ -44,25 +56,38 @@ func SetEthUpgrades(c *ChainConfig) {
 		c.BerlinBlock = big.NewInt(1640340) // https://snowtrace.io/block/1640340?chainid=43114, AP2 activation block
 		c.LondonBlock = big.NewInt(3308552) // https://snowtrace.io/block/3308552?chainid=43114, AP3 activation block
 	} else {
-		// In testing or local networks, we only support enabling Berlin and London prior
-		// to the initially active time. This is likely to correspond to an intended block
-		// number of 0 as well.
-		initiallyActive := uint64(upgrade.InitiallyActiveTime.Unix())
-		extra := GetExtra(c)
-		if extra.ApricotPhase2BlockTimestamp != nil && *extra.ApricotPhase2BlockTimestamp <= initiallyActive && c.BerlinBlock == nil {
+		// In testing or local networks, we only support enabling Berlin and
+		// London at the initially active time. This corresponds to an intended
+		// block number of 0.
+		switch {
+		case extra.ApricotPhase2BlockTimestamp == nil:
+			return nil
+		case *extra.ApricotPhase2BlockTimestamp <= initiallyActive:
 			c.BerlinBlock = big.NewInt(0)
+		case *extra.ApricotPhase2BlockTimestamp < unscheduledActivation:
+			return fmt.Errorf("%w: AP2 must be either unscheduled or initially activated", errInvalidUpgradeTime)
 		}
-		if extra.ApricotPhase3BlockTimestamp != nil && *extra.ApricotPhase3BlockTimestamp <= initiallyActive && c.LondonBlock == nil {
+
+		switch {
+		case extra.ApricotPhase3BlockTimestamp == nil:
+			return nil
+		case *extra.ApricotPhase3BlockTimestamp <= initiallyActive:
 			c.LondonBlock = big.NewInt(0)
+		case *extra.ApricotPhase3BlockTimestamp < unscheduledActivation:
+			return fmt.Errorf("%w: AP3 must be either unscheduled or initially activated", errInvalidUpgradeTime)
 		}
 	}
-	extra := GetExtra(c)
-	if extra.DurangoBlockTimestamp != nil {
+
+	// We only mark Shanghai and Cancun as enabled if we have marked them as
+	// scheduled.
+	if extra.DurangoBlockTimestamp != nil && *extra.DurangoBlockTimestamp < unscheduledActivation {
 		c.ShanghaiTime = utils.NewUint64(*extra.DurangoBlockTimestamp)
 	}
-	if extra.EtnaTimestamp != nil {
+
+	if extra.EtnaTimestamp != nil && *extra.EtnaTimestamp < unscheduledActivation {
 		c.CancunTime = utils.NewUint64(*extra.EtnaTimestamp)
 	}
+	return nil
 }
 
 func GetExtra(c *ChainConfig) *extras.ChainConfig {
