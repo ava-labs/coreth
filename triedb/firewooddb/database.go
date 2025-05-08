@@ -35,8 +35,6 @@ type ProposalContext struct {
 type IDbView interface {
 	// Returns the data stored at the given key at this revision
 	Get(key []byte) ([]byte, error)
-	// Returns the hash of this view
-	Hash() []byte
 }
 
 type IProposal interface {
@@ -53,17 +51,14 @@ type IProposal interface {
 }
 
 type IFirewood interface {
-	// Read operations on the current database root,
-	// including the current database hash.
-	IDbView
-	// Update takes a root and a set of keys-values and creates a new proposal
+	// Read the current root of the database.
+	Root() []byte
+	// Propose takes a root and a set of keys-values and creates a new proposal
 	// and returns the new root.
 	// If values[i] is nil, the key is deleted.
 	Propose(keys [][]byte, values [][]byte) (IProposal, error)
-	// Returns the cuurrent root of the database.
-	Root() []byte
-	// Revision returns a new proposal that is a copy of the current database
-	// at this revision.
+	// Revision returns a new view that is a copy of the current database
+	// at this historical revision.
 	Revision(root []byte) (IDbView, error)
 	// Close closes the database and releases all resources.
 	Close() error
