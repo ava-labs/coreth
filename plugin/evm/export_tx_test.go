@@ -14,6 +14,7 @@ import (
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
@@ -447,9 +448,10 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 }
 
 func TestExportTxSemanticVerify(t *testing.T) {
+	fork := upgradetest.NoUpgrades
 	vm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 	}).vm
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -508,6 +510,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			},
 		},
 	}
+	avalancheutils.Sort(validExportTx.Ins)
 
 	validAVAXExportTx := &atomic.UnsignedExportTx{
 		NetworkID:        vm.ctx.NetworkID,
@@ -946,9 +949,10 @@ func TestExportTxSemanticVerify(t *testing.T) {
 }
 
 func TestExportTxAccept(t *testing.T) {
+	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1656,60 +1660,46 @@ func TestExportTxGasCost(t *testing.T) {
 
 func TestNewExportTx(t *testing.T) {
 	tests := []struct {
-		name               string
-		genesis            string
-		rules              extras.Rules
+		fork               upgradetest.Fork
 		bal                uint64
 		expectedBurnedAVAX uint64
 	}{
 		{
-			name:               "apricot phase 0",
-			genesis:            genesisJSONApricotPhase0,
-			rules:              apricotRulesPhase0,
+			fork:               upgradetest.NoUpgrades,
 			bal:                44000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
-			name:               "apricot phase 1",
-			genesis:            genesisJSONApricotPhase1,
-			rules:              apricotRulesPhase1,
+			fork:               upgradetest.ApricotPhase1,
 			bal:                44000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
-			name:               "apricot phase 2",
-			genesis:            genesisJSONApricotPhase2,
-			rules:              apricotRulesPhase2,
+			fork:               upgradetest.ApricotPhase2,
 			bal:                43000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
-			name:               "apricot phase 3",
-			genesis:            genesisJSONApricotPhase3,
-			rules:              apricotRulesPhase3,
+			fork:               upgradetest.ApricotPhase3,
 			bal:                44446500,
 			expectedBurnedAVAX: 276750,
 		},
 		{
-			name:               "apricot phase 4",
-			genesis:            genesisJSONApricotPhase4,
-			rules:              apricotRulesPhase4,
+			fork:               upgradetest.ApricotPhase4,
 			bal:                44446500,
 			expectedBurnedAVAX: 276750,
 		},
 		{
-			name:               "apricot phase 5",
-			genesis:            genesisJSONApricotPhase5,
-			rules:              apricotRulesPhase5,
+			fork:               upgradetest.ApricotPhase5,
 			bal:                39946500,
 			expectedBurnedAVAX: 2526750,
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.fork.String(), func(t *testing.T) {
 			tvm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         test.genesis,
+				fork:                &test.fork,
 			})
 			defer func() {
 				if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1785,7 +1775,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(tvm.vm.ctx, test.rules, state, tvm.vm.ctx.AVAXAssetID, exportAmount, tvm.vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			tx, err = atomic.NewExportTx(tvm.vm.ctx, tvm.vm.currentRules(), state, tvm.vm.ctx.AVAXAssetID, exportAmount, tvm.vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1845,46 +1835,36 @@ func TestNewExportTx(t *testing.T) {
 
 func TestNewExportTxMulticoin(t *testing.T) {
 	tests := []struct {
-		name    string
-		genesis string
-		rules   extras.Rules
-		bal     uint64
-		balmc   uint64
+		fork  upgradetest.Fork
+		bal   uint64
+		balmc uint64
 	}{
 		{
-			name:    "apricot phase 0",
-			genesis: genesisJSONApricotPhase0,
-			rules:   apricotRulesPhase0,
-			bal:     49000000,
-			balmc:   25000000,
+			fork:  upgradetest.NoUpgrades,
+			bal:   49000000,
+			balmc: 25000000,
 		},
 		{
-			name:    "apricot phase 1",
-			genesis: genesisJSONApricotPhase1,
-			rules:   apricotRulesPhase1,
-			bal:     49000000,
-			balmc:   25000000,
+			fork:  upgradetest.ApricotPhase1,
+			bal:   49000000,
+			balmc: 25000000,
 		},
 		{
-			name:    "apricot phase 2",
-			genesis: genesisJSONApricotPhase2,
-			rules:   apricotRulesPhase2,
-			bal:     48000000,
-			balmc:   25000000,
+			fork:  upgradetest.ApricotPhase2,
+			bal:   48000000,
+			balmc: 25000000,
 		},
 		{
-			name:    "apricot phase 3",
-			genesis: genesisJSONApricotPhase3,
-			rules:   apricotRulesPhase3,
-			bal:     48947900,
-			balmc:   25000000,
+			fork:  upgradetest.ApricotPhase3,
+			bal:   48947900,
+			balmc: 25000000,
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.fork.String(), func(t *testing.T) {
 			tvm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         test.genesis,
+				fork:                &test.fork,
 			})
 			defer func() {
 				if err := tvm.vm.Shutdown(context.Background()); err != nil {

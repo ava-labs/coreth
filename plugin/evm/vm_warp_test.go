@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	avagoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -68,9 +69,10 @@ const (
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
+	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONDurango,
+		fork:                &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -260,9 +262,10 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 
 func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
+	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONDurango,
+		fork:                &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -413,9 +416,10 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 
 func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
+	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONDurango,
+		fork:                &fork,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -730,9 +734,10 @@ func testReceiveWarpMessage(
 }
 
 func TestMessageSignatureRequestsToVM(t *testing.T) {
+	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONDurango,
+		fork:                &fork,
 	})
 	defer func() {
 		err := tvm.vm.Shutdown(context.Background())
@@ -794,9 +799,10 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 }
 
 func TestBlockSignatureRequestsToVM(t *testing.T) {
+	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONDurango,
+		fork:                &fork,
 	})
 	defer func() {
 		err := tvm.vm.Shutdown(context.Background())
@@ -854,7 +860,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 }
 
 func TestClearWarpDB(t *testing.T) {
-	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, genesisJSONLatest)
+	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, upgradetest.Latest)
 	vm := &VM{}
 	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
@@ -880,7 +886,7 @@ func TestClearWarpDB(t *testing.T) {
 	// Restart VM with the same database default should not prune the warp db
 	vm = &VM{}
 	// we need new context since the previous one has registered metrics.
-	ctx, _, _, _, _ = setupGenesis(t, genesisJSONLatest)
+	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
 	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
 
@@ -896,7 +902,7 @@ func TestClearWarpDB(t *testing.T) {
 	// restart the VM with pruning enabled
 	vm = &VM{}
 	config := `{"prune-warp-db-enabled": true}`
-	ctx, _, _, _, _ = setupGenesis(t, genesisJSONLatest)
+	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
 	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
 

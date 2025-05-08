@@ -20,6 +20,7 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
@@ -91,24 +92,15 @@ type atomicTxTest struct {
 
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool
-	// genesisJSON to use for the VM genesis (also defines the rule set that will be used in verification)
-	// If this is left empty, [genesisJSONApricotPhase0], will be used
-	genesisJSON string
-
-	// passed directly into GenesisVM
-	configJSON, upgradeJSON string
+	// fork to use for the VM rules and genesis
+	// If this is left empty, [upgradetest.NoUpgrades], will be used
+	fork upgradetest.Fork
 }
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
-	genesisJSON := test.genesisJSON
-	if len(genesisJSON) == 0 {
-		genesisJSON = genesisJSONApricotPhase0
-	}
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: !test.bootstrapping,
-		genesisJSON:         genesisJSON,
-		configJSON:          test.configJSON,
-		upgradeJSON:         test.upgradeJSON,
+		fork:                &test.fork,
 	})
 	rules := tvm.vm.currentRules()
 

@@ -105,22 +105,6 @@ var (
 		return &cpy
 	}
 
-	genesisJSONApricotPhase0     = genesisJSON(params.TestLaunchConfig)
-	genesisJSONApricotPhase1     = genesisJSON(params.TestApricotPhase1Config)
-	genesisJSONApricotPhase2     = genesisJSON(params.TestApricotPhase2Config)
-	genesisJSONApricotPhase3     = genesisJSON(params.TestApricotPhase3Config)
-	genesisJSONApricotPhase4     = genesisJSON(params.TestApricotPhase4Config)
-	genesisJSONApricotPhase5     = genesisJSON(params.TestApricotPhase5Config)
-	genesisJSONApricotPhasePre6  = genesisJSON(params.TestApricotPhasePre6Config)
-	genesisJSONApricotPhase6     = genesisJSON(params.TestApricotPhase6Config)
-	genesisJSONApricotPhasePost6 = genesisJSON(params.TestApricotPhasePost6Config)
-	genesisJSONBanff             = genesisJSON(params.TestBanffChainConfig)
-	genesisJSONCortina           = genesisJSON(params.TestCortinaChainConfig)
-	genesisJSONDurango           = genesisJSON(params.TestDurangoChainConfig)
-	genesisJSONEtna              = genesisJSON(params.TestEtnaChainConfig)
-	genesisJSONFortuna           = genesisJSON(params.TestFortunaChainConfig)
-	genesisJSONLatest            = genesisJSONFortuna
-
 	forkToChainConfig = map[upgradetest.Fork]*params.ChainConfig{
 		upgradetest.NoUpgrades:        params.TestLaunchConfig,
 		upgradetest.ApricotPhase1:     params.TestApricotPhase1Config,
@@ -144,7 +128,6 @@ var (
 	apricotRulesPhase1 = *params.GetRulesExtra(params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0))
 	apricotRulesPhase2 = *params.GetRulesExtra(params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0))
 	apricotRulesPhase3 = *params.GetRulesExtra(params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase4 = *params.GetRulesExtra(params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0))
 	apricotRulesPhase5 = *params.GetRulesExtra(params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0))
 	apricotRulesPhase6 = *params.GetRulesExtra(params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0))
 	banffRules         = *params.GetRulesExtra(params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
@@ -241,7 +224,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		nil,
 		appSender,
 	)
-	require.NoError(t, err, "error initializing GenesisVM")
+	require.NoError(t, err, "error initializing vm")
 
 	if config.finishBootstrapping {
 		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
@@ -268,20 +251,17 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 }
 
 // setupGenesis sets up the genesis
-// If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
 func setupGenesis(
 	t *testing.T,
-	genesisJSON string,
+	fork upgradetest.Fork,
 ) (*snow.Context,
 	*prefixdb.Database,
 	[]byte,
 	chan commonEng.Message,
 	*avalancheatomic.Memory,
 ) {
-	if len(genesisJSON) == 0 {
-		genesisJSON = genesisJSONLatest
-	}
 	ctx := snowtest.Context(t, snowtest.CChainID)
+	ctx.NetworkUpgrades = upgradetest.GetConfig(fork)
 
 	baseDB := memdb.New()
 
@@ -295,6 +275,7 @@ func setupGenesis(
 
 	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
+	genesisJSON := genesisJSON(forkToChainConfig[fork])
 	return ctx, prefixedDB, []byte(genesisJSON), issuer, atomicMemory
 }
 
@@ -331,12 +312,6 @@ func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.I
 	}
 
 	return utxo, nil
-}
-
-// resetMetrics resets the vm avalanchego metrics, and allows
-// for the VM to be re-initialized in tests.
-func resetMetrics(vm *VM) {
-	vm.ctx.Metrics = metrics.NewPrefixGatherer()
 }
 
 func TestVMConfig(t *testing.T) {
@@ -397,61 +372,51 @@ func TestVMContinuousProfiler(t *testing.T) {
 
 func TestVMUpgrades(t *testing.T) {
 	genesisTests := []struct {
-		name             string
-		genesis          string
+		fork             upgradetest.Fork
 		expectedGasPrice *big.Int
 	}{
 		{
-			name:             "Apricot Phase 3",
-			genesis:          genesisJSONApricotPhase3,
+			fork:             upgradetest.ApricotPhase3,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 4",
-			genesis:          genesisJSONApricotPhase4,
+			fork:             upgradetest.ApricotPhase4,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 5",
-			genesis:          genesisJSONApricotPhase5,
+			fork:             upgradetest.ApricotPhase5,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase Pre 6",
-			genesis:          genesisJSONApricotPhasePre6,
+			fork:             upgradetest.ApricotPhasePre6,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 6",
-			genesis:          genesisJSONApricotPhase6,
+			fork:             upgradetest.ApricotPhase6,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase Post 6",
-			genesis:          genesisJSONApricotPhasePost6,
+			fork:             upgradetest.ApricotPhasePost6,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Banff",
-			genesis:          genesisJSONBanff,
+			fork:             upgradetest.Banff,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Cortina",
-			genesis:          genesisJSONCortina,
+			fork:             upgradetest.Cortina,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Durango",
-			genesis:          genesisJSONDurango,
+			fork:             upgradetest.Durango,
 			expectedGasPrice: big.NewInt(0),
 		},
 	}
 	for _, test := range genesisTests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.fork.String(), func(t *testing.T) {
 			vm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         test.genesis,
+				fork:                &test.fork,
 			}).vm
 
 			if gasPrice := vm.txPool.GasTip(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
@@ -507,9 +472,10 @@ func TestVMUpgrades(t *testing.T) {
 func TestImportMissingUTXOs(t *testing.T) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
 	importAmount := uint64(50000000)
+	fork := upgradetest.ApricotPhase2
 	tvm1 := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase2,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -530,7 +496,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 	// make another VM which is missing the UTXO in shared memory
 	vm2 := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase2,
+		fork:                &fork,
 	}).vm
 	defer func() {
 		err := vm2.Shutdown(context.Background())
@@ -552,9 +518,10 @@ func TestImportMissingUTXOs(t *testing.T) {
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
 	importAmount := uint64(50000000)
+	fork := upgradetest.ApricotPhase2
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase2,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -662,9 +629,10 @@ func TestIssueAtomicTxs(t *testing.T) {
 
 func TestBuildEthTxBlock(t *testing.T) {
 	importAmount := uint64(20000000)
+	fork := upgradetest.ApricotPhase2
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase2,
+		fork:                &fork,
 		configJSON:          `{"pruning-enabled":true}`,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -779,11 +747,13 @@ func TestBuildEthTxBlock(t *testing.T) {
 	}
 
 	restartedVM := &VM{}
+	newCTX := snowtest.Context(t, snowtest.CChainID)
+	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
 	if err := restartedVM.Initialize(
 		context.Background(),
-		snowtest.Context(t, snowtest.CChainID),
+		newCTX,
 		tvm.db,
-		[]byte(genesisJSONApricotPhase2),
+		[]byte(genesisJSON(forkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(`{"pruning-enabled":true}`),
 		tvm.toEngine,
@@ -1093,9 +1063,10 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			fork := upgradetest.ApricotPhase5
 			tvm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         genesisJSONApricotPhase5,
+				fork:                &fork,
 			})
 			issuedTxs, evictedTxs := issueTxs(t, tvm.vm, tvm.atomicMemory)
 
@@ -1140,9 +1111,10 @@ func TestSetPreferenceRace(t *testing.T) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		configJSON:          `{"pruning-enabled":true}`,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -1373,9 +1345,10 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 
 	importAmount := uint64(1000000000)
 
+	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			addr0: importAmount,
 			addr1: importAmount,
@@ -1493,9 +1466,10 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
+	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -1594,9 +1568,10 @@ func TestBonusBlocksTxs(t *testing.T) {
 // get rejected.
 func TestReorgProtection(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		configJSON:          `{"pruning-enabled":false}`,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
@@ -1765,9 +1740,10 @@ func TestReorgProtection(t *testing.T) {
 //	B   C
 func TestNonCanonicalAccept(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -1962,9 +1938,10 @@ func TestNonCanonicalAccept(t *testing.T) {
 //	    D
 func TestStickyPreference(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2223,9 +2200,10 @@ func TestStickyPreference(t *testing.T) {
 //	    D
 func TestUncleBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2407,9 +2385,10 @@ func TestUncleBlock(t *testing.T) {
 // contains no transactions.
 func TestEmptyBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2476,9 +2455,10 @@ func TestEmptyBlock(t *testing.T) {
 //	    D
 func TestAcceptReorg(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvmConfig := testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2677,9 +2657,10 @@ func TestAcceptReorg(t *testing.T) {
 
 func TestFutureBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2740,9 +2721,10 @@ func TestFutureBlock(t *testing.T) {
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase1,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2853,9 +2835,10 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	importAmount := uint64(1000000000)
+	fork := upgradetest.NoUpgrades
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase0,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -2924,9 +2907,10 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 // that does not conflict. Accepts [blkB] and rejects [blkA], then asserts that the virtuous atomic
 // transaction in [blkA] is correctly re-issued into the atomic transaction mempool.
 func TestReissueAtomicTx(t *testing.T) {
+	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase1,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: 10000000,
 			testShortIDAddrs[1]: 10000000,
@@ -3021,9 +3005,10 @@ func TestReissueAtomicTx(t *testing.T) {
 }
 
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
+	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase1,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3071,9 +3056,10 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 }
 
 func TestBuildInvalidBlockHead(t *testing.T) {
+	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase1,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3138,30 +3124,25 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 
 func TestConfigureLogLevel(t *testing.T) {
 	configTests := []struct {
-		name                     string
-		logConfig                string
-		genesisJSON, upgradeJSON string
-		expectedErr              string
+		name        string
+		config      string
+		expectedErr string
 	}{
 		{
 			name:        "Log level info",
-			logConfig:   `{"log-level": "info"}`,
-			genesisJSON: genesisJSONApricotPhase2,
-			upgradeJSON: "",
+			config:      `{"log-level": "info"}`,
 			expectedErr: "",
 		},
 		{
 			name:        "Invalid log level",
-			logConfig:   `{"log-level": "cchain"}`,
-			genesisJSON: genesisJSONApricotPhase3,
-			upgradeJSON: "",
+			config:      `{"log-level": "cchain"}`,
 			expectedErr: "failed to initialize logger due to",
 		},
 	}
 	for _, test := range configTests {
 		t.Run(test.name, func(t *testing.T) {
 			vm := &VM{}
-			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, test.genesisJSON)
+			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, upgradetest.Latest)
 			appSender := &enginetest.Sender{T: t}
 			appSender.CantSendAppGossip = true
 			appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
@@ -3170,8 +3151,8 @@ func TestConfigureLogLevel(t *testing.T) {
 				ctx,
 				dbManager,
 				genesisBytes,
-				[]byte(""),
-				[]byte(test.logConfig),
+				nil,
+				[]byte(test.config),
 				issuer,
 				[]*commonEng.Fx{},
 				appSender,
@@ -3215,9 +3196,10 @@ func TestConfigureLogLevel(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 4 ruleset in genesis.
 func TestBuildApricotPhase4Block(t *testing.T) {
+	fork := upgradetest.ApricotPhase4
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase4,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3387,9 +3369,10 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 5 ruleset in genesis.
 func TestBuildApricotPhase5Block(t *testing.T) {
+	fork := upgradetest.ApricotPhase5
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase5,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3552,9 +3535,10 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 // in onFinalizeAndAssemble it will not cause a panic due to calling RevertToSnapshot(revID) on the
 // same revision ID twice.
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
+	fork := upgradetest.ApricotPhase1
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase1,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3609,9 +3593,10 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 
 func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	importAmount := uint64(10000000)
+	fork := upgradetest.ApricotPhase5
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase5,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 			testShortIDAddrs[1]: importAmount,
@@ -3679,9 +3664,10 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 
 func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	importAmount := uint64(10000000)
+	fork := upgradetest.ApricotPhase5
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase5,
+		fork:                &fork,
 	})
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
@@ -3729,13 +3715,15 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// We create two VMs one in ApriotPhase4 and one in ApricotPhase5, so that we can construct a block
 	// containing a large enough atomic transaction that it will exceed the atomic gas limit in
 	// ApricotPhase5.
+	ap4 := upgradetest.ApricotPhase4
 	tvm1 := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase4,
+		fork:                &ap4,
 	})
+	ap5 := upgradetest.ApricotPhase5
 	tvm2 := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase5,
+		fork:                &ap5,
 	})
 	defer func() {
 		if err := tvm1.vm.Shutdown(context.Background()); err != nil {
@@ -3811,9 +3799,10 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importAmount := uint64(50000000)
+	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONDurango,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 		},
@@ -3836,23 +3825,20 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	reinitVM := &VM{}
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
-	genesisWithUpgrade := &core.Genesis{}
-	require.NoError(t, json.Unmarshal([]byte(genesisJSONDurango), genesisWithUpgrade))
-	params.GetExtra(genesisWithUpgrade.Config).EtnaTimestamp = utils.TimeToNewUint64(blk.Timestamp())
-	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
-	require.NoError(t, err)
-
-	resetMetrics(tvm.vm)
-
-	// this will not be allowed
-	err = reinitVM.Initialize(context.Background(), tvm.vm.ctx, tvm.db, genesisWithUpgradeBytes, []byte{}, []byte{}, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
+	newCTX := snowtest.Context(t, tvm.vm.ctx.ChainID)
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
+	genesis := []byte(genesisJSON(forkToChainConfig[fork]))
+	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, []byte{}, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
-	resetMetrics(tvm.vm)
+	reinitVM = &VM{}
+	newCTX.Metrics = metrics.NewPrefixGatherer()
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)
-	err = reinitVM.Initialize(context.Background(), tvm.vm.ctx, tvm.db, genesisWithUpgradeBytes, []byte{}, config, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
+	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, config, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
 	require.NoError(t, err)
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
@@ -3860,46 +3846,46 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 func TestParentBeaconRootBlock(t *testing.T) {
 	tests := []struct {
 		name          string
-		genesisJSON   string
+		fork          upgradetest.Fork
 		beaconRoot    *common.Hash
 		expectedError bool
 		errString     string
 	}{
 		{
 			name:          "non-empty parent beacon root in Durango",
-			genesisJSON:   genesisJSONDurango,
+			fork:          upgradetest.Durango,
 			beaconRoot:    &common.Hash{0x01},
 			expectedError: true,
 			// err string wont work because it will also fail with blob gas is non-empty (zeroed)
 		},
 		{
 			name:          "empty parent beacon root in Durango",
-			genesisJSON:   genesisJSONDurango,
+			fork:          upgradetest.Durango,
 			beaconRoot:    &common.Hash{},
 			expectedError: true,
 		},
 		{
 			name:          "nil parent beacon root in Durango",
-			genesisJSON:   genesisJSONDurango,
+			fork:          upgradetest.Durango,
 			beaconRoot:    nil,
 			expectedError: false,
 		},
 		{
 			name:          "non-empty parent beacon root in E-Upgrade (Cancun)",
-			genesisJSON:   genesisJSONEtna,
+			fork:          upgradetest.Etna,
 			beaconRoot:    &common.Hash{0x01},
 			expectedError: true,
 			errString:     "expected empty hash",
 		},
 		{
 			name:          "empty parent beacon root in E-Upgrade (Cancun)",
-			genesisJSON:   genesisJSONEtna,
+			fork:          upgradetest.Etna,
 			beaconRoot:    &common.Hash{},
 			expectedError: false,
 		},
 		{
 			name:          "nil parent beacon root in E-Upgrade (Cancun)",
-			genesisJSON:   genesisJSONEtna,
+			fork:          upgradetest.Etna,
 			beaconRoot:    nil,
 			expectedError: true,
 			errString:     "header is missing parentBeaconRoot",
@@ -3911,7 +3897,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			importAmount := uint64(1000000000)
 			tvm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         test.genesisJSON,
+				fork:                &test.fork,
 				utxos: map[ids.ShortID]uint64{
 					testShortIDAddrs[0]: importAmount,
 				},

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -25,10 +26,11 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			assert := assert.New(t)
 
-			// we use AP3 genesis here to not trip any block fees
+			// we use AP3 here to not trip any block fees
+			fork := upgradetest.ApricotPhase3
 			tvm := newVM(t, testVMConfig{
 				finishBootstrapping: true,
-				genesisJSON:         genesisJSONApricotPhase3,
+				fork:                &fork,
 			})
 			defer func() {
 				err := tvm.vm.Shutdown(context.Background())
@@ -120,11 +122,12 @@ func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 func TestMempoolPriorityDrop(t *testing.T) {
 	assert := assert.New(t)
 
-	// we use AP3 genesis here to not trip any block fees
+	// we use AP3 here to not trip any block fees
 	importAmount := uint64(50000000)
+	fork := upgradetest.ApricotPhase3
 	vm := newVM(t, testVMConfig{
 		finishBootstrapping: true,
-		genesisJSON:         genesisJSONApricotPhase3,
+		fork:                &fork,
 		utxos: map[ids.ShortID]uint64{
 			testShortIDAddrs[0]: importAmount,
 			testShortIDAddrs[1]: importAmount,
