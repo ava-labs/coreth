@@ -58,7 +58,6 @@ func testSync(t *testing.T, test syncTest) {
 
 	s, err := NewStateSyncer(&StateSyncerConfig{
 		Client:                   mockClient,
-		Root:                     root,
 		DB:                       clientDB,
 		BatchSize:                1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
@@ -69,8 +68,12 @@ func testSync(t *testing.T, test syncTest) {
 		t.Fatal(err)
 	}
 	// begin sync
-	s.Start(ctx)
-	waitFor(t, s.Done(), test.expectedError, testSyncTimeout)
+	summary, err := message.NewSyncSummary(common.Hash{}, 0, root, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Start(ctx, &summary)
+	waitFor(t, s.Wait, test.expectedError, testSyncTimeout)
 	if test.expectedError != nil {
 		return
 	}
@@ -88,8 +91,13 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 }
 
 // waitFor waits for a result on the [result] channel to match [expected], or a timeout.
-func waitFor(t *testing.T, result <-chan error, expected error, timeout time.Duration) {
+func waitFor(t *testing.T, wait func(context.Context) error, expected error, timeout time.Duration) {
 	t.Helper()
+	result := make(chan error, 1)
+	go func() {
+		result <- wait(context.Background())
+	}()
+
 	select {
 	case err := <-result:
 		if expected != nil {
