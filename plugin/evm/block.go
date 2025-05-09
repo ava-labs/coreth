@@ -340,8 +340,8 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 			return err
 		}
 
-		// Verify that all the warp messages are correctly marked as either
-		// valid or invalid.
+		// Verify that all the ICM messages are correctly marked as either valid
+		// or invalid.
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
