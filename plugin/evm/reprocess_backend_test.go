@@ -28,7 +28,7 @@ import (
 	"github.com/ava-labs/coreth/shim/merkledb"
 	"github.com/ava-labs/coreth/shim/nomt"
 	"github.com/ava-labs/coreth/triedb"
-	firewood "github.com/ava-labs/firewood/ffi/v2"
+	firewood "github.com/ava-labs/firewood/ffi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"

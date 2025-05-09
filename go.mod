@@ -8,7 +8,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
 	github.com/Yiling-J/theine-go v0.6.0
 	github.com/ava-labs/avalanchego v1.13.0
-	github.com/ava-labs/firewood/ffi/v2 v2.0.0-20250214032638-36fc157b6436
+	github.com/ava-labs/firewood/ffi v0.0.0-20250509180959-6b28c0f375e6
 	github.com/cespare/cp v0.1.0
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
@@ -145,7 +145,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
-
-// replace github.com/ava-labs/firewood/ffi/v2 => /Users/aaronbuchwald/code/ava-labs/firewood/ffi
-
-replace github.com/ava-labs/firewood/ffi/v2 => ./build/firewood/ffi
