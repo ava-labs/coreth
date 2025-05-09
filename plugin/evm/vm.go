@@ -459,8 +459,8 @@ func (vm *VM) Initialize(
 		return err
 	}
 	log.Info("read last accepted",
-		"lastAccepted", lastAcceptedHash,
-		"lastAcceptedHeight", lastAcceptedHeight,
+		"hash", lastAcceptedHash,
+		"height", lastAcceptedHeight,
 	)
 
 	// Set minimum price for mining and default gas price oracle value to the min
