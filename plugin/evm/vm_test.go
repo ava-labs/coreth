@@ -318,7 +318,6 @@ func TestVMConfig(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	vm := newVM(t, testVMConfig{
-		isSyncing:  true,
 		configJSON: fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0]),
 	}).vm
 	require.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
@@ -330,7 +329,6 @@ func TestVMConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
 	vm := newVM(t, testVMConfig{
-		isSyncing:  true,
 		configJSON: fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0]),
 	}).vm
 
@@ -343,9 +341,7 @@ func TestVMConfigDefaults(t *testing.T) {
 }
 
 func TestVMNilConfig(t *testing.T) {
-	vm := newVM(t, testVMConfig{
-		isSyncing: true,
-	}).vm
+	vm := newVM(t, testVMConfig{}).vm
 
 	// VM Config should match defaults if no config is passed in
 	var vmConfig config.Config
@@ -358,7 +354,6 @@ func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
 	vm := newVM(t, testVMConfig{
-		isSyncing:  true,
 		configJSON: fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir),
 	}).vm
 	require.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
