@@ -419,56 +419,28 @@ func TestVMUpgrades(t *testing.T) {
 	}
 	for _, test := range genesisTests {
 		t.Run(test.fork.String(), func(t *testing.T) {
+			require := require.New(t)
+
 			vm := newVM(t, testVMConfig{
 				fork: &test.fork,
 			}).vm
-
-			if gasPrice := vm.txPool.GasTip(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
-				t.Fatalf("Expected pool gas price to be %d but found %d", test.expectedGasPrice, gasPrice)
-			}
 			defer func() {
-				shutdownChan := make(chan error, 1)
-				shutdownFunc := func() {
-					err := vm.Shutdown(context.Background())
-					shutdownChan <- err
-				}
-
-				go shutdownFunc()
-				shutdownTimeout := 250 * time.Millisecond
-				ticker := time.NewTicker(shutdownTimeout)
-				defer ticker.Stop()
-
-				select {
-				case <-ticker.C:
-					t.Fatalf("VM shutdown took longer than timeout: %v", shutdownTimeout)
-				case err := <-shutdownChan:
-					if err != nil {
-						t.Fatalf("Shutdown errored: %s", err)
-					}
-				}
+				require.NoError(vm.Shutdown(context.Background()))
 			}()
 
-			lastAcceptedID, err := vm.LastAccepted(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.Equal(test.expectedGasPrice, vm.txPool.GasTip())
 
-			if lastAcceptedID != ids.ID(vm.genesisHash) {
-				t.Fatal("Expected last accepted block to match the genesis block hash")
-			}
+			// Verify that the genesis is correctly managed.
+			lastAcceptedID, err := vm.LastAccepted(context.Background())
+			require.NoError(err)
+			require.Equal(ids.ID(vm.genesisHash), lastAcceptedID)
 
 			genesisBlk, err := vm.GetBlock(context.Background(), lastAcceptedID)
-			if err != nil {
-				t.Fatalf("Failed to get genesis block due to %s", err)
-			}
+			require.NoError(err)
+			require.Zero(genesisBlk.Height())
 
-			if height := genesisBlk.Height(); height != 0 {
-				t.Fatalf("Expected height of geneiss block to be 0, found: %d", height)
-			}
-
-			if _, err := vm.ParseBlock(context.Background(), genesisBlk.Bytes()); err != nil {
-				t.Fatalf("Failed to parse genesis block due to %s", err)
-			}
+			_, err = vm.ParseBlock(context.Background(), genesisBlk.Bytes())
+			require.NoError(err)
 		})
 	}
 }
@@ -3106,72 +3078,41 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 }
 
 func TestConfigureLogLevel(t *testing.T) {
-	configTests := []struct {
-		name        string
-		config      string
-		expectedErr string
+	tests := []struct {
+		logLevel    string
+		expectedErr error
 	}{
 		{
-			name:        "Log level info",
-			config:      `{"log-level": "info"}`,
-			expectedErr: "",
+			logLevel: "info",
 		},
 		{
-			name:        "Invalid log level",
-			config:      `{"log-level": "cchain"}`,
-			expectedErr: "failed to initialize logger due to",
+			logLevel:    "cchain", // invalid
+			expectedErr: errInitializingLogger,
 		},
 	}
-	for _, test := range configTests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.logLevel, func(t *testing.T) {
+			require := require.New(t)
+
 			vm := &VM{}
 			ctx, dbManager, genesisBytes, issuer, _ := setupGenesis(t, upgradetest.Latest)
-			appSender := &enginetest.Sender{T: t}
-			appSender.CantSendAppGossip = true
-			appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 			err := vm.Initialize(
 				context.Background(),
 				ctx,
 				dbManager,
 				genesisBytes,
 				nil,
-				[]byte(test.config),
+				fmt.Appendf(nil, `{"log-level": "%s"}`, test.logLevel),
 				issuer,
-				[]*commonEng.Fx{},
-				appSender,
+				nil,
+				&enginetest.Sender{T: t},
 			)
-			if len(test.expectedErr) == 0 && err != nil {
-				t.Fatal(err)
-			} else if len(test.expectedErr) > 0 {
-				if err == nil {
-					t.Fatalf("initialize should have failed due to %s", test.expectedErr)
-				} else if !strings.Contains(err.Error(), test.expectedErr) {
-					t.Fatalf("Expected initialize to fail due to %s, but failed with %s", test.expectedErr, err.Error())
-				}
+			require.ErrorIs(err, test.expectedErr)
+			if err != nil {
+				return
 			}
 
-			// If the VM was not initialized, do not attempt to shut it down
-			if err == nil {
-				shutdownChan := make(chan error, 1)
-				shutdownFunc := func() {
-					err := vm.Shutdown(context.Background())
-					shutdownChan <- err
-				}
-				go shutdownFunc()
-
-				shutdownTimeout := 250 * time.Millisecond
-				ticker := time.NewTicker(shutdownTimeout)
-				defer ticker.Stop()
-
-				select {
-				case <-ticker.C:
-					t.Fatalf("VM shutdown took longer than timeout: %v", shutdownTimeout)
-				case err := <-shutdownChan:
-					if err != nil {
-						t.Fatalf("Shutdown errored: %s", err)
-					}
-				}
-			}
+			require.NoError(err, vm.Shutdown(context.Background()))
 		})
 	}
 }

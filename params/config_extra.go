@@ -61,7 +61,6 @@ func SetEthUpgrades(c *ChainConfig) error {
 		// block number of 0.
 		switch ap2 := extra.ApricotPhase2BlockTimestamp; {
 		case ap2 == nil:
-			return nil
 		case *ap2 <= initiallyActive:
 			c.BerlinBlock = big.NewInt(0)
 		case *ap2 < unscheduledActivation:
@@ -70,7 +69,6 @@ func SetEthUpgrades(c *ChainConfig) error {
 
 		switch ap3 := extra.ApricotPhase3BlockTimestamp; {
 		case ap3 == nil:
-			return nil
 		case *ap3 <= initiallyActive:
 			c.LondonBlock = big.NewInt(0)
 		case *ap3 < unscheduledActivation:
