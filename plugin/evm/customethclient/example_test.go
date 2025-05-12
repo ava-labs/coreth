@@ -1,4 +1,4 @@
-package customclient
+package customethclient
 
 import (
 	"context"
