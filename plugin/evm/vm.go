@@ -334,7 +334,7 @@ func (vm *VM) Initialize(
 	chainCtx *snow.Context,
 	db database.Database,
 	genesisBytes []byte,
-	upgradeBytes []byte,
+	_ []byte,
 	configBytes []byte,
 	toEngine chan<- commonEng.Message,
 	_ []*commonEng.Fx,
