@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // newTrue returns a pointer to a bool that is true
@@ -106,12 +108,6 @@ func TestUnmarshalConfig(t *testing.T) {
 			true,
 		},
 		{
-			"deprecated tx lookup limit",
-			[]byte(`{"tx-lookup-limit": 1}`),
-			Config{TransactionHistory: 1, TxLookupLimit: 1},
-			false,
-		},
-		{
 			"allow unprotected tx hashes",
 			[]byte(`{"allow-unprotected-tx-hashes": ["0x803351deb6d745e91545a6a3e1c0ea3e9a6a02a1a4193b70edfcd2f40f71a01c"]}`),
 			Config{AllowUnprotectedTxHashes: []common.Hash{common.HexToHash("0x803351deb6d745e91545a6a3e1c0ea3e9a6a02a1a4193b70edfcd2f40f71a01c")}},
@@ -127,9 +123,38 @@ func TestUnmarshalConfig(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				tmp.Deprecate()
+				tmp.deprecate()
 				assert.Equal(t, tt.expected, tmp)
 			}
 		})
 	}
+}
+
+func TestGetConfig(t *testing.T) {
+	txFeeCap := float64(11)
+	enabledEthAPIs := []string{"debug"}
+	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0])
+	config, _, err := GetConfig([]byte(configJSON), constants.TestnetID)
+	require.NoError(t, err)
+	require.Equal(t, config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
+	require.Equal(t, config.EthAPIs(), enabledEthAPIs, "EnabledEthAPIs should be set")
+}
+
+func TestConfigDefaults(t *testing.T) {
+	txFeeCap := float64(11)
+	enabledEthAPIs := []string{"debug"}
+	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0])
+	config, _, err := GetConfig([]byte(configJSON), constants.TestnetID)
+	require.NoError(t, err)
+	defaultConfig := getDefaultConfig()
+	require.Equal(t, config.PriceOptionMaxTip, defaultConfig.PriceOptionMaxTip)
+	require.Equal(t, config.RPCTxFeeCap, txFeeCap)
+	require.Equal(t, config.EthAPIs(), enabledEthAPIs)
+}
+
+func TestNilConfigBytes(t *testing.T) {
+	config, _, err := GetConfig(nil, constants.TestnetID)
+	require.NoError(t, err)
+	defaultConfig := getDefaultConfig()
+	require.Equal(t, config, defaultConfig)
 }

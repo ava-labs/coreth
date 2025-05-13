@@ -340,21 +340,12 @@ func (vm *VM) Initialize(
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
-	vm.config.SetDefaults(defaultTxPoolConfig)
-	if len(configBytes) > 0 {
-		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
-			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
-		}
-	}
 	vm.ctx = chainCtx
-
-	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
-		return err
+	cfg, deprecateMsg, err := config.GetConfig(configBytes, vm.ctx.NetworkID)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
 	}
-	// We should deprecate config flags as the first thing, before we do anything else
-	// because this can set old flags to new flags. log the message after we have
-	// initialized the logger.
-	deprecateMsg := vm.config.Deprecate()
+	vm.config = cfg
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -453,6 +444,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TxPool.AccountQueue = vm.config.TxPoolAccountQueue
 	vm.ethConfig.TxPool.GlobalQueue = vm.config.TxPoolGlobalQueue
 	vm.ethConfig.TxPool.Lifetime = vm.config.TxPoolLifetime.Duration
+	vm.ethConfig.TxPool.Journal = "" // disable journal
 
 	vm.ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
 	vm.ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
