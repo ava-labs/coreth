@@ -71,7 +71,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/avalanchego/upgrade"
 	avalancheUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
@@ -139,13 +138,13 @@ var (
 )
 
 var (
-	errUnsupportedFXs                = errors.New("unsupported feature extensions")
 	errInvalidBlock                  = errors.New("invalid block")
 	errInvalidNonce                  = errors.New("invalid nonce")
 	errUnclesUnsupported             = errors.New("uncles unsupported")
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
+	errInitializingLogger            = errors.New("failed to initialize logger")
 )
 
 var originalStderr *os.File
@@ -269,10 +268,10 @@ func (vm *VM) Initialize(
 	chainCtx *snow.Context,
 	db avalanchedatabase.Database,
 	genesisBytes []byte,
-	upgradeBytes []byte,
+	_ []byte,
 	configBytes []byte,
 	toEngine chan<- commonEng.Message,
-	fxs []*commonEng.Fx,
+	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
 	if err := vm.extensionConfig.Validate(); err != nil {
@@ -315,7 +314,7 @@ func (vm *VM) Initialize(
 
 	corethLogger, err := InitLogger(vm.chainAlias, vm.config.LogLevel, vm.config.LogJSONFormat, writer)
 	if err != nil {
-		return fmt.Errorf("failed to initialize logger due to: %w ", err)
+		return fmt.Errorf("%w: %w ", errInitializingLogger, err)
 	}
 	vm.logger = corethLogger
 
@@ -323,10 +322,6 @@ func (vm *VM) Initialize(
 
 	if deprecateMsg != "" {
 		log.Warn("Deprecation Warning", "msg", deprecateMsg)
-	}
-
-	if len(fxs) > 0 {
-		return errUnsupportedFXs
 	}
 
 	// Enable debug-level metrics that might impact runtime performance
@@ -349,32 +344,12 @@ func (vm *VM) Initialize(
 		}
 	}
 
-	g := new(core.Genesis)
-	if err := json.Unmarshal(genesisBytes, g); err != nil {
-		return fmt.Errorf("failed to unmarshal genesis %s", err)
-	}
-
-	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
-	// normally it should not be empty, but some tests may not set it
-	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		params.GetExtra(g.Config).NetworkUpgrades = extras.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
-	}
-	// If the Durango is activated, activate the Warp Precompile at the same time
-	configExtra := params.GetExtra(g.Config)
-	if configExtra.DurangoBlockTimestamp != nil {
-		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, extras.PrecompileUpgrade{
-			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
-		})
-	}
-
-	// Set the Avalanche Context on the ChainConfig
-	configExtra.AvalancheContext = extras.AvalancheContext{
-		SnowCtx: chainCtx,
+	g, err := parseGenesis(chainCtx, genesisBytes)
+	if err != nil {
+		return err
 	}
 
 	vm.chainID = g.Config.ChainID
-
-	params.SetEthUpgrades(g.Config)
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
@@ -384,7 +359,10 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
+	log.Info("read last accepted",
+		"hash", lastAcceptedHash,
+		"height", lastAcceptedHeight,
+	)
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -442,10 +420,6 @@ func (vm *VM) Initialize(
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
 
-	if err := configExtra.Verify(); err != nil {
-		return fmt.Errorf("failed to verify chain config: %w", err)
-	}
-
 	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
@@ -495,6 +469,36 @@ func (vm *VM) Initialize(
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
 	return vm.initializeStateSync(lastAcceptedHeight)
+}
+
+func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
+	g := new(core.Genesis)
+	if err := json.Unmarshal(bytes, g); err != nil {
+		return nil, fmt.Errorf("parsing genesis: %w", err)
+	}
+
+	// Populate the Avalanche config extras.
+	configExtra := params.GetExtra(g.Config)
+	configExtra.AvalancheContext = extras.AvalancheContext{
+		SnowCtx: ctx,
+	}
+	configExtra.NetworkUpgrades = extras.GetNetworkUpgrades(ctx.NetworkUpgrades)
+
+	// If Durango is scheduled, schedule the Warp Precompile at the same time.
+	if configExtra.DurangoBlockTimestamp != nil {
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, extras.PrecompileUpgrade{
+			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
+		})
+	}
+	if err := configExtra.Verify(); err != nil {
+		return nil, fmt.Errorf("invalid chain config: %w", err)
+	}
+
+	// Align all the Ethereum upgrades to the Avalanche upgrades
+	if err := params.SetEthUpgrades(g.Config); err != nil {
+		return nil, fmt.Errorf("setting eth upgrades: %w", err)
+	}
+	return g, nil
 }
 
 func (vm *VM) initializeMetrics() error {
@@ -792,11 +796,6 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder = vm.NewBlockBuilder(vm.toEngine, vm.extensionConfig.ExtraMempool)
 	vm.builder.awaitSubmittedTxs()
 
-	var p2pValidators p2p.ValidatorSet = &gossip.ValidatorSet{}
-	if vm.config.PullGossipFrequency.Duration > 0 {
-		p2pValidators = vm.p2pValidators
-	}
-
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
 			vm.ctx.Log,
@@ -806,7 +805,7 @@ func (vm *VM) initBlockBuilding() error {
 			config.TxGossipTargetMessageSize,
 			config.TxGossipThrottlingPeriod,
 			config.TxGossipThrottlingLimit,
-			p2pValidators,
+			vm.p2pValidators,
 		)
 	}
 
@@ -831,20 +830,16 @@ func (vm *VM) initBlockBuilding() error {
 		}
 	}
 
-	if vm.config.PushGossipFrequency.Duration > 0 {
-		vm.shutdownWg.Add(1)
-		go func() {
-			avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-			vm.shutdownWg.Done()
-		}()
-	}
-	if vm.config.PullGossipFrequency.Duration > 0 {
-		vm.shutdownWg.Add(1)
-		go func() {
-			avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-			vm.shutdownWg.Done()
-		}()
-	}
+	vm.shutdownWg.Add(1)
+	go func() {
+		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
+		vm.shutdownWg.Done()
+	}()
+	vm.shutdownWg.Add(1)
+	go func() {
+		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		vm.shutdownWg.Done()
+	}()
 
 	vm.shutdownWg.Add(2)
 	go func() {
@@ -924,7 +919,9 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 		return nil, fmt.Errorf("%w: %w", vmerrors.ErrBlockVerificationFailed, err)
 	}
 
-	log.Debug(fmt.Sprintf("Built block %s", blk.ID()))
+	log.Debug("built block",
+		"id", blk.ID(),
+	)
 	return blk, nil
 }
 
@@ -1057,7 +1054,9 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		enabledAPIs = append(enabledAPIs, "warp")
 	}
 
-	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
+	log.Info("enabling apis",
+		"apis", enabledAPIs,
+	)
 	apis[ethRPCEndpoint] = handler
 	apis[ethWSEndpoint] = handler.WebsocketHandlerWithDuration(
 		[]string{"*"},

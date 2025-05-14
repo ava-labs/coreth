@@ -21,6 +21,7 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
@@ -63,7 +64,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func(t *testing.T) atomic.UnsignedAtomicTx
-	rules       extras.Rules
+	rules       *extras.Rules
 	expectedErr string
 }
 
@@ -71,7 +72,7 @@ type atomicTxVerifyTest struct {
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
 	atomicTx := test.generate(t)
-	err := atomicTx.Verify(test.ctx, test.rules)
+	err := atomicTx.Verify(test.ctx, *test.rules)
 	if len(test.expectedErr) == 0 {
 		require.NoError(err)
 	} else {
@@ -92,18 +93,20 @@ type atomicTxTest struct {
 
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool
-	// genesisJSON to use for the VM genesis (also defines the rule set that will be used in verification)
-	genesisJSON string
-
-	// passed directly into GenesisVM
-	configJSON, upgradeJSON string
+	// fork to use for the VM rules and genesis
+	// If this is left empty, [upgradetest.NoUpgrades], will be used
+	fork upgradetest.Fork
 }
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, !test.bootstrapping, test.genesisJSON, test.configJSON, test.upgradeJSON)
+	vm := newAtomicTestVM()
+	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+		IsSyncing: test.bootstrapping,
+		Fork:      &test.fork,
+	})
 	rules := vm.currentRules()
 
-	tx := test.setup(t, vm, sharedMemory)
+	tx := test.setup(t, vm, tvm.AtomicMemory)
 
 	var baseFee *big.Int
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
@@ -158,19 +161,14 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		return
 	}
 
-	if test.bootstrapping {
-		// If the test is in bootstrapping mode, we return early as we don't expect the transaction to be accepted
-		return
-	}
-
-	if err := vm.SetState(context.Background(), snow.NormalOp); err != nil {
-		t.Fatal(err)
-	}
-
 	if err := vm.mempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+
+	if test.bootstrapping {
+		return
+	}
+	<-tvm.ToEngine
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
 	blk, err := vm.BuildBlock(context.Background())

@@ -20,7 +20,6 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
@@ -31,14 +30,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/avalanchego/api/metrics"
-	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/vms/components/chain"
-
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	"github.com/ava-labs/avalanchego/vms/components/chain"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -47,6 +45,17 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/core/types"
+)
+
+var (
+	genesisJSONCancun = testutils.GenesisJSON(activateCancun(params.TestChainConfig))
+
+	activateCancun = func(cfg *params.ChainConfig) *params.ChainConfig {
+		cpy := *cfg
+		cpy.ShanghaiTime = utils.NewUint64(0)
+		cpy.CancunTime = utils.NewUint64(0)
+		return &cpy
+	}
 )
 
 func defaultExtensions() (*extension.Config, error) {
@@ -83,72 +92,21 @@ func newDefaultTestVM() *VM {
 	return vm
 }
 
-// GenesisVM creates a VM instance with the genesis test bytes and returns
-// the channel use to send messages to the engine, the VM, database manager,
-// sender, and atomic memory.
-// If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
-func GenesisVM(t *testing.T,
-	finishBootstrapping bool,
-	genesisJSON string,
-	configJSON string,
-	upgradeJSON string,
-) (
-	chan commonEng.Message,
-	*VM,
-	database.Database,
-	*avalancheatomic.Memory,
-	*enginetest.Sender,
-) {
+func setupDefaultTestVM(t *testing.T, cfg testutils.TestVMConfig) (*VM, *testutils.TestVMSuite) {
 	vm := newDefaultTestVM()
-	ch, dbManager, m, sender, _ := testutils.SetupVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON, vm)
-	return ch, vm, dbManager, m, sender
-}
-
-// resetMetrics resets the vm avalanchego metrics, and allows
-// for the VM to be re-initialized in tests.
-func resetMetrics(vm *VM) {
-	vm.ctx.Metrics = metrics.NewPrefixGatherer()
-}
-
-func TestVMConfig(t *testing.T) {
-	txFeeCap := float64(11)
-	enabledEthAPIs := []string{"debug"}
-	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": %s}`, txFeeCap, fmt.Sprintf("[%q]", enabledEthAPIs[0]))
-	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, configJSON, "")
-	require.Equal(t, vm.config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
-	require.Equal(t, vm.config.EthAPIs(), enabledEthAPIs, "EnabledEthAPIs should be set")
-	require.NoError(t, vm.Shutdown(context.Background()))
-}
-
-func TestVMConfigDefaults(t *testing.T) {
-	txFeeCap := float64(11)
-	enabledEthAPIs := []string{"debug"}
-	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": %s}`, txFeeCap, fmt.Sprintf("[%q]", enabledEthAPIs[0]))
-	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, configJSON, "")
-
-	var vmConfig config.Config
-	vmConfig.SetDefaults(defaultTxPoolConfig)
-	vmConfig.RPCTxFeeCap = txFeeCap
-	vmConfig.EnabledEthAPIs = enabledEthAPIs
-	require.Equal(t, vmConfig, vm.Config(), "VM Config should match default with overrides")
-	require.NoError(t, vm.Shutdown(context.Background()))
-}
-
-func TestVMNilConfig(t *testing.T) {
-	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, "", "")
-
-	// VM Config should match defaults if no config is passed in
-	var vmConfig config.Config
-	vmConfig.SetDefaults(defaultTxPoolConfig)
-	require.Equal(t, vmConfig, vm.Config(), "VM Config should match default config")
-	require.NoError(t, vm.Shutdown(context.Background()))
+	tvm := testutils.SetupTestVM(t, vm, cfg)
+	return vm, tvm
 }
 
 func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
 	configJSON := fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir)
-	_, vm, _, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, configJSON, "")
+	fork := upgradetest.Latest
+	vm, _ := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: configJSON,
+	})
 	require.Equal(t, vm.config.ContinuousProfilerDir, profilerDir, "profiler dir should be set")
 	require.Equal(t, vm.config.ContinuousProfilerFrequency.Duration, profilerFrequency, "profiler frequency should be set")
 
@@ -165,112 +123,80 @@ func TestVMContinuousProfiler(t *testing.T) {
 
 func TestVMUpgrades(t *testing.T) {
 	genesisTests := []struct {
-		name             string
-		genesis          string
+		fork             upgradetest.Fork
 		expectedGasPrice *big.Int
 	}{
 		{
-			name:             "Apricot Phase 3",
-			genesis:          testutils.GenesisJSONApricotPhase3,
+			fork:             upgradetest.ApricotPhase3,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 4",
-			genesis:          testutils.GenesisJSONApricotPhase4,
+			fork:             upgradetest.ApricotPhase4,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 5",
-			genesis:          testutils.GenesisJSONApricotPhase5,
+			fork:             upgradetest.ApricotPhase5,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase Pre 6",
-			genesis:          testutils.GenesisJSONApricotPhasePre6,
+			fork:             upgradetest.ApricotPhasePre6,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase 6",
-			genesis:          testutils.GenesisJSONApricotPhase6,
+			fork:             upgradetest.ApricotPhase6,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Apricot Phase Post 6",
-			genesis:          testutils.GenesisJSONApricotPhasePost6,
+			fork:             upgradetest.ApricotPhasePost6,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Banff",
-			genesis:          testutils.GenesisJSONBanff,
+			fork:             upgradetest.Banff,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Cortina",
-			genesis:          testutils.GenesisJSONCortina,
+			fork:             upgradetest.Cortina,
 			expectedGasPrice: big.NewInt(0),
 		},
 		{
-			name:             "Durango",
-			genesis:          testutils.GenesisJSONDurango,
+			fork:             upgradetest.Durango,
 			expectedGasPrice: big.NewInt(0),
 		},
 	}
 	for _, test := range genesisTests {
-		t.Run(test.name, func(t *testing.T) {
-			_, vm, _, _, _ := GenesisVM(t, true, test.genesis, "", "")
+		t.Run(test.fork.String(), func(t *testing.T) {
+			require := require.New(t)
+			vm, _ := setupDefaultTestVM(t, testutils.TestVMConfig{
+				Fork: &test.fork,
+			})
 
-			if gasPrice := vm.txPool.GasTip(); gasPrice.Cmp(test.expectedGasPrice) != 0 {
-				t.Fatalf("Expected pool gas price to be %d but found %d", test.expectedGasPrice, gasPrice)
-			}
 			defer func() {
-				shutdownChan := make(chan error, 1)
-				shutdownFunc := func() {
-					err := vm.Shutdown(context.Background())
-					shutdownChan <- err
-				}
-
-				go shutdownFunc()
-				shutdownTimeout := 250 * time.Millisecond
-				ticker := time.NewTicker(shutdownTimeout)
-				defer ticker.Stop()
-
-				select {
-				case <-ticker.C:
-					t.Fatalf("VM shutdown took longer than timeout: %v", shutdownTimeout)
-				case err := <-shutdownChan:
-					if err != nil {
-						t.Fatalf("Shutdown errored: %s", err)
-					}
-				}
+				require.NoError(vm.Shutdown(context.Background()))
 			}()
 
-			lastAcceptedID, err := vm.LastAccepted(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.Equal(test.expectedGasPrice, vm.txPool.GasTip())
 
-			if lastAcceptedID != ids.ID(vm.genesisHash) {
-				t.Fatal("Expected last accepted block to match the genesis block hash")
-			}
+			// Verify that the genesis is correctly managed.
+			lastAcceptedID, err := vm.LastAccepted(context.Background())
+			require.NoError(err)
+			require.Equal(ids.ID(vm.genesisHash), lastAcceptedID)
 
 			genesisBlk, err := vm.GetBlock(context.Background(), lastAcceptedID)
-			if err != nil {
-				t.Fatalf("Failed to get genesis block due to %s", err)
-			}
+			require.NoError(err)
+			require.Zero(genesisBlk.Height())
 
-			if height := genesisBlk.Height(); height != 0 {
-				t.Fatalf("Expected height of geneiss block to be 0, found: %d", height)
-			}
-
-			if _, err := vm.ParseBlock(context.Background(), genesisBlk.Bytes()); err != nil {
-				t.Fatalf("Failed to parse genesis block due to %s", err)
-			}
+			_, err = vm.ParseBlock(context.Background(), genesisBlk.Bytes())
+			require.NoError(err)
 		})
 	}
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
-	issuer, vm, dbManager, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase2, `{"pruning-enabled":true}`, "")
+	fork := upgradetest.ApricotPhase2
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: `{"pruning-enabled":true}`,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -293,7 +219,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk1, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -333,7 +259,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk2, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -384,14 +310,16 @@ func TestBuildEthTxBlock(t *testing.T) {
 	}
 
 	restartedVM := newDefaultTestVM()
+	newCTX := snowtest.Context(t, snowtest.CChainID)
+	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
 	if err := restartedVM.Initialize(
 		context.Background(),
-		utils.TestSnowContext(),
-		dbManager,
-		[]byte(testutils.GenesisJSONApricotPhase2),
+		newCTX,
+		tvm.DB,
+		[]byte(testutils.GenesisJSON(testutils.ForkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(`{"pruning-enabled":true}`),
-		issuer,
+		tvm.ToEngine,
 		[]*commonEng.Fx{},
 		nil,
 	); err != nil {
@@ -423,8 +351,13 @@ func TestBuildEthTxBlock(t *testing.T) {
 func TestSetPreferenceRace(t *testing.T) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
-	issuer1, vm1, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, `{"pruning-enabled":true}`, "")
-	issuer2, vm2, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, `{"pruning-enabled":true}`, "")
+	fork := upgradetest.NoUpgrades
+	conf := testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: `{"pruning-enabled":true}`,
+	}
+	vm1, tvm1 := setupDefaultTestVM(t, conf)
+	vm2, tvm2 := setupDefaultTestVM(t, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -453,7 +386,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -515,7 +448,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -540,7 +473,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -567,7 +500,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -652,8 +585,13 @@ func TestSetPreferenceRace(t *testing.T) {
 // accept block C, which should be an orphaned block at this point and
 // get rejected.
 func TestReorgProtection(t *testing.T) {
-	issuer1, vm1, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, `{"pruning-enabled":false}`, "")
-	issuer2, vm2, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, `{"pruning-enabled":false}`, "")
+	fork := upgradetest.NoUpgrades
+	conf := testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: `{"pruning-enabled":true}`,
+	}
+	vm1, tvm1 := setupDefaultTestVM(t, conf)
+	vm2, tvm2 := setupDefaultTestVM(t, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -685,7 +623,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -747,7 +685,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -772,7 +710,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -816,8 +754,12 @@ func TestReorgProtection(t *testing.T) {
 //	 / \
 //	B   C
 func TestNonCanonicalAccept(t *testing.T) {
-	issuer1, vm1, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
-	issuer2, vm2, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	conf := testutils.TestVMConfig{
+		Fork: &fork,
+	}
+	vm1, tvm1 := setupDefaultTestVM(t, conf)
+	vm2, tvm2 := setupDefaultTestVM(t, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -849,7 +791,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -928,7 +870,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -962,7 +904,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1007,8 +949,13 @@ func TestNonCanonicalAccept(t *testing.T) {
 //	    |
 //	    D
 func TestStickyPreference(t *testing.T) {
-	issuer1, vm1, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
-	issuer2, vm2, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	conf := testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: `{"pruning-enabled":true}`,
+	}
+	vm1, tvm1 := setupDefaultTestVM(t, conf)
+	vm2, tvm2 := setupDefaultTestVM(t, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1040,7 +987,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1102,7 +1049,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1132,7 +1079,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1158,7 +1105,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -1261,8 +1208,13 @@ func TestStickyPreference(t *testing.T) {
 //	    |
 //	    D
 func TestUncleBlock(t *testing.T) {
-	issuer1, vm1, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
-	issuer2, vm2, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	conf := testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: `{"pruning-enabled":true}`,
+	}
+	vm1, tvm1 := setupDefaultTestVM(t, conf)
+	vm2, tvm2 := setupDefaultTestVM(t, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1293,7 +1245,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1352,7 +1304,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1374,7 +1326,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1400,7 +1352,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -1443,8 +1395,13 @@ func TestUncleBlock(t *testing.T) {
 //	    |
 //	    D
 func TestAcceptReorg(t *testing.T) {
-	issuer1, vm1, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
-	issuer2, vm2, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	conf := testutils.TestVMConfig{
+		Fork:       &fork,
+		ConfigJSON: `{"pruning-enabled":true}`,
+	}
+	vm1, tvm1 := setupDefaultTestVM(t, conf)
+	vm2, tvm2 := setupDefaultTestVM(t, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1476,7 +1433,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkA, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1539,7 +1496,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer1
+	<-tvm1.ToEngine
 
 	vm1BlkB, err := vm1.BuildBlock(context.Background())
 	if err != nil {
@@ -1561,7 +1518,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 
 	vm2BlkC, err := vm2.BuildBlock(context.Background())
 	if err != nil {
@@ -1588,7 +1545,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	<-issuer2
+	<-tvm2.ToEngine
 
 	vm2BlkD, err := vm2.BuildBlock(context.Background())
 	if err != nil {
@@ -1640,7 +1597,10 @@ func TestAcceptReorg(t *testing.T) {
 }
 
 func TestFutureBlock(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1659,7 +1619,7 @@ func TestFutureBlock(t *testing.T) {
 			t.Fatalf("Failed to add tx at index %d: %s", i, err)
 		}
 	}
-	<-issuer
+	<-tvm.ToEngine
 
 	blkA, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1696,7 +1656,10 @@ func TestFutureBlock(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase1, "", "")
+	fork := upgradetest.ApricotPhase1
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -1721,7 +1684,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1769,7 +1732,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1805,7 +1768,10 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 }
 
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1825,7 +1791,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1870,84 +1836,11 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	}
 }
 
-func TestConfigureLogLevel(t *testing.T) {
-	configTests := []struct {
-		name                     string
-		logConfig                string
-		genesisJSON, upgradeJSON string
-		expectedErr              string
-	}{
-		{
-			name:        "Log level info",
-			logConfig:   `{"log-level": "info"}`,
-			genesisJSON: testutils.GenesisJSONApricotPhase2,
-			upgradeJSON: "",
-			expectedErr: "",
-		},
-		{
-			name:        "Invalid log level",
-			logConfig:   `{"log-level": "cchain"}`,
-			genesisJSON: testutils.GenesisJSONApricotPhase3,
-			upgradeJSON: "",
-			expectedErr: "failed to initialize logger due to",
-		},
-	}
-	for _, test := range configTests {
-		t.Run(test.name, func(t *testing.T) {
-			vm := newDefaultTestVM()
-			ctx, dbManager, genesisBytes, issuer, _ := testutils.SetupGenesis(t, test.genesisJSON)
-			appSender := &enginetest.Sender{T: t}
-			appSender.CantSendAppGossip = true
-			appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
-			err := vm.Initialize(
-				context.Background(),
-				ctx,
-				dbManager,
-				genesisBytes,
-				[]byte(""),
-				[]byte(test.logConfig),
-				issuer,
-				[]*commonEng.Fx{},
-				appSender,
-			)
-			if len(test.expectedErr) == 0 && err != nil {
-				t.Fatal(err)
-			} else if len(test.expectedErr) > 0 {
-				if err == nil {
-					t.Fatalf("initialize should have failed due to %s", test.expectedErr)
-				} else if !strings.Contains(err.Error(), test.expectedErr) {
-					t.Fatalf("Expected initialize to fail due to %s, but failed with %s", test.expectedErr, err.Error())
-				}
-			}
-
-			// If the VM was not initialized, do not attempt to shut it down
-			if err == nil {
-				shutdownChan := make(chan error, 1)
-				shutdownFunc := func() {
-					err := vm.Shutdown(context.Background())
-					shutdownChan <- err
-				}
-				go shutdownFunc()
-
-				shutdownTimeout := 250 * time.Millisecond
-				ticker := time.NewTicker(shutdownTimeout)
-				defer ticker.Stop()
-
-				select {
-				case <-ticker.C:
-					t.Fatalf("VM shutdown took longer than timeout: %v", shutdownTimeout)
-				case err := <-shutdownChan:
-					if err != nil {
-						t.Fatalf("Shutdown errored: %s", err)
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
-	issuer, vm, dbManager, _, appSender := GenesisVM(t, true, testutils.GenesisJSONApricotPhase1, "", "")
+	fork := upgradetest.Durango
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	// Since rewinding is permitted for last accepted height of 0, we must
 	// accept one block to test the SkipUpgradeCheck functionality.
@@ -1962,7 +1855,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 			t.Fatalf("Failed to add tx at index %d: %s", i, err)
 		}
 	}
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	require.NoError(t, err)
@@ -1970,27 +1863,24 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(t, blk.Accept(context.Background()))
 
+	require.NoError(t, vm.Shutdown(context.Background()))
+
 	reinitVM := newDefaultTestVM()
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
-	genesisWithUpgrade := &core.Genesis{}
-	require.NoError(t, json.Unmarshal([]byte(testutils.GenesisJSONApricotPhase1), genesisWithUpgrade))
-	params.GetExtra(genesisWithUpgrade.Config).ApricotPhase2BlockTimestamp = utils.TimeToNewUint64(blk.Timestamp())
-	genesisWithUpgradeBytes, err := json.Marshal(genesisWithUpgrade)
-	require.NoError(t, err)
-
-	require.NoError(t, vm.Shutdown(context.Background()))
-	resetMetrics(vm)
-
-	// this will not be allowed
-	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, appSender)
-	require.ErrorContains(t, err, "mismatching ApricotPhase2 fork block timestamp in database")
-
-	resetMetrics(vm)
+	newCTX := snowtest.Context(t, vm.ctx.ChainID)
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
+	genesis := []byte(testutils.GenesisJSON(testutils.ForkToChainConfig[fork]))
+	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, []byte{}, tvm.ToEngine, []*commonEng.Fx{}, tvm.AppSender)
+	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
 	// try again with skip-upgrade-check
+	reinitVM = newDefaultTestVM()
+	testutils.ResetMetrics(newCTX)
 	config := []byte(`{"skip-upgrade-check": true}`)
-	err = reinitVM.Initialize(context.Background(), vm.ctx, dbManager, genesisWithUpgradeBytes, []byte{}, config, issuer, []*commonEng.Fx{}, appSender)
+	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, config, tvm.ToEngine, []*commonEng.Fx{}, tvm.AppSender)
 	require.NoError(t, err)
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
@@ -1998,46 +1888,46 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 func TestParentBeaconRootBlock(t *testing.T) {
 	tests := []struct {
 		name          string
-		genesisJSON   string
+		fork          upgradetest.Fork
 		beaconRoot    *common.Hash
 		expectedError bool
 		errString     string
 	}{
 		{
 			name:          "non-empty parent beacon root in Durango",
-			genesisJSON:   testutils.GenesisJSONDurango,
+			fork:          upgradetest.Durango,
 			beaconRoot:    &common.Hash{0x01},
 			expectedError: true,
 			// err string wont work because it will also fail with blob gas is non-empty (zeroed)
 		},
 		{
 			name:          "empty parent beacon root in Durango",
-			genesisJSON:   testutils.GenesisJSONDurango,
+			fork:          upgradetest.Durango,
 			beaconRoot:    &common.Hash{},
 			expectedError: true,
 		},
 		{
 			name:          "nil parent beacon root in Durango",
-			genesisJSON:   testutils.GenesisJSONDurango,
+			fork:          upgradetest.Durango,
 			beaconRoot:    nil,
 			expectedError: false,
 		},
 		{
 			name:          "non-empty parent beacon root in E-Upgrade (Cancun)",
-			genesisJSON:   testutils.GenesisJSONEtna,
+			fork:          upgradetest.Etna,
 			beaconRoot:    &common.Hash{0x01},
 			expectedError: true,
 			errString:     "expected empty hash",
 		},
 		{
 			name:          "empty parent beacon root in E-Upgrade (Cancun)",
-			genesisJSON:   testutils.GenesisJSONEtna,
+			fork:          upgradetest.Etna,
 			beaconRoot:    &common.Hash{},
 			expectedError: false,
 		},
 		{
 			name:          "nil parent beacon root in E-Upgrade (Cancun)",
-			genesisJSON:   testutils.GenesisJSONEtna,
+			fork:          upgradetest.Etna,
 			beaconRoot:    nil,
 			expectedError: true,
 			errString:     "header is missing parentBeaconRoot",
@@ -2046,7 +1936,10 @@ func TestParentBeaconRootBlock(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, _, _ := GenesisVM(t, true, test.genesisJSON, "", "")
+			fork := test.fork
+			vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+				Fork: &fork,
+			})
 
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
@@ -2066,7 +1959,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				}
 			}
 
-			<-issuer
+			<-tvm.ToEngine
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
@@ -2107,7 +2000,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require := require.New(t)
 
 	gspec := new(core.Genesis)
-	err := json.Unmarshal([]byte(testutils.GenesisJSONEtna), gspec)
+	err := json.Unmarshal([]byte(genesisJSONCancun), gspec)
 	require.NoError(err)
 
 	// Make one block with a single blob tx
@@ -2134,7 +2027,9 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.NoError(err)
 
 	// Create a VM with the genesis (will use header verification)
-	_, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONEtna, "", "")
+	vm, _ := setupDefaultTestVM(t, testutils.TestVMConfig{
+		GenesisJSON: genesisJSONCancun,
+	})
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail

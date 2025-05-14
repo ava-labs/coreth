@@ -25,6 +25,7 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/libevm/core/types"
 )
 
@@ -83,7 +84,10 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
 	assert.NoError(err)
 
-	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, "", "")
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		GenesisJSON: genesisJSON,
+	})
+
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
@@ -95,13 +99,13 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 		wg          sync.WaitGroup
 		txRequested bool
 	)
-	sender.CantSendAppGossip = false
-	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
+	tvm.AppSender.CantSendAppGossip = false
+	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
 	wg.Add(1)
-	sender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
+	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
 		wg.Done()
 		return nil
 	}

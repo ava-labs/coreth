@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	agoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -41,7 +42,7 @@ import (
 func TestAtomicTxGossip(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
@@ -178,7 +179,7 @@ func TestAtomicTxGossip(t *testing.T) {
 func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
@@ -248,7 +249,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState

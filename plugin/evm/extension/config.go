@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	errNilConfig              = errors.New("nil config")
+	errNilConfig              = errors.New("nil extension config")
 	errNilNetworkCodec        = errors.New("nil network codec")
 	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
 	errNilSyncableParser      = errors.New("nil syncable parser")

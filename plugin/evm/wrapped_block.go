@@ -81,8 +81,12 @@ func (b *wrappedBlock) Accept(context.Context) error {
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
 
-	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
-
+	blkID := b.ID()
+	log.Debug("accepting block",
+		"hash", blkID.Hex(),
+		"id", blkID,
+		"height", b.Height(),
+	)
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
 	// take place before the accepted log is emitted to subscribers.
@@ -91,18 +95,18 @@ func (b *wrappedBlock) Accept(context.Context) error {
 		return err
 	}
 	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
-		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
+		return fmt.Errorf("chain could not accept %s: %w", blkID, err)
 	}
 
-	if err := vm.PutLastAcceptedID(b.id); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	if err := vm.PutLastAcceptedID(blkID); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", blkID, err)
 	}
 
 	// Get pending operations on the vm's versionDB so we can apply them atomically
 	// with the block extension's changes.
 	vdbBatch, err := vm.versiondb.CommitBatch()
 	if err != nil {
-		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+		return fmt.Errorf("could not create commit batch processing block[%s]: %w", blkID, err)
 	}
 
 	if b.extension != nil {
@@ -153,7 +157,13 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *wrappedBlock) Reject(context.Context) error {
-	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
+	blkID := b.ID()
+	log.Debug("rejecting block",
+		"hash", blkID.Hex(),
+		"id", blkID,
+		"height", b.Height(),
+	)
+
 	if b.extension != nil {
 		if err := b.extension.OnReject(); err != nil {
 			return err
@@ -234,11 +244,13 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 		return fmt.Errorf("failed to verify block: %w", err)
 	}
 
-	// Only enforce predicates if the chain has already bootstrapped.
-	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
-	// been accepted by the network (so the predicate was validated by the network when the
-	// block was originally verified).
+	// If the VM is not marked as bootstrapped the other chains may also be
+	// bootstrapping and not have populated the required indices. Since
+	// bootstrapping only verifies blocks that have been canonically accepted by
+	// the network, these checks would be guaranteed to pass on a synced node.
 	if b.vm.bootstrapped.Get() {
+		// Verify that all the ICM messages are correctly marked as either valid
+		// or invalid.
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}

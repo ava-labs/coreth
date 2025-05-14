@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	avagoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -68,16 +69,14 @@ const (
 	signersPrimary
 )
 
-const (
-	testNetworkID uint32 = 10
-)
-
 var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
-	issuer, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONDurango, "", "")
-
+	fork := upgradetest.Durango
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -110,7 +109,7 @@ func TestSendWarpMessage(t *testing.T) {
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{signedTx0})
 	require.NoError(errs[0])
 
-	<-issuer
+	<-tvm.ToEngine
 	blk, err := vm.BuildBlock(context.Background())
 	require.NoError(err)
 
@@ -185,7 +184,7 @@ func TestValidateWarpMessage(t *testing.T) {
 		payloadData,
 	)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, addressedPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, addressedPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -211,7 +210,7 @@ func TestValidateInvalidWarpMessage(t *testing.T) {
 		payloadData,
 	)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, addressedPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, addressedPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -230,7 +229,7 @@ func TestValidateWarpBlockHash(t *testing.T) {
 	blockHash := ids.GenerateTestID()
 	blockHashPayload, err := payload.NewHash(blockHash)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, blockHashPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, blockHashPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -251,7 +250,7 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 	blockHash := ids.GenerateTestID()
 	blockHashPayload, err := payload.NewHash(blockHash)
 	require.NoError(err)
-	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(testNetworkID, sourceChainID, blockHashPayload.Bytes())
+	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, sourceChainID, blockHashPayload.Bytes())
 	require.NoError(err)
 
 	exampleWarpABI := contract.ParseABI(exampleWarpABI)
@@ -266,8 +265,10 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 
 func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
-	issuer, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONDurango, "", "")
-
+	fork := upgradetest.Durango
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -376,7 +377,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 		blockCtx.PChainHeight = minimumValidPChainHeight
 	}
 	vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
-	<-issuer
+	<-tvm.ToEngine
 
 	warpBlock, err := vm.BuildBlockWithContext(context.Background(), blockCtx)
 	require.NoError(err)
@@ -417,8 +418,10 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 
 func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
-	issuer, vm, _, _, _ := GenesisVM(t, true, testutils.GenesisJSONDurango, "", "")
-
+	fork := upgradetest.Durango
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -506,7 +509,7 @@ func TestReceiveWarpMessage(t *testing.T) {
 	// time and cannot, eg be run in parallel or a separate golang test.
 	for _, test := range tests {
 		testReceiveWarpMessage(
-			t, issuer, vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
+			t, tvm.ToEngine, vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
 		)
 	}
 }
@@ -526,7 +529,7 @@ func testReceiveWarpMessage(
 	require.NoError(err)
 
 	vm.ctx.SubnetID = ids.GenerateTestID()
-	vm.ctx.NetworkID = testNetworkID
+	vm.ctx.NetworkID = constants.UnitTestID
 	unsignedMessage, err := avalancheWarp.NewUnsignedMessage(
 		vm.ctx.NetworkID,
 		sourceChainID,
@@ -732,8 +735,10 @@ func testReceiveWarpMessage(
 }
 
 func TestMessageSignatureRequestsToVM(t *testing.T) {
-	_, vm, _, _, appSender := GenesisVM(t, true, testutils.GenesisJSONDurango, "", "")
-
+	fork := upgradetest.Durango
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		require.NoError(t, err)
@@ -767,7 +772,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 
 	for name, test := range tests {
 		calledSendAppResponseFn := false
-		appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
+		tvm.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			calledSendAppResponseFn = true
 			var response message.SignatureResponse
 			_, err := networkCodec.Unmarshal(responseBytes, &response)
@@ -794,8 +799,10 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 }
 
 func TestBlockSignatureRequestsToVM(t *testing.T) {
-	_, vm, _, _, appSender := GenesisVM(t, true, testutils.GenesisJSONDurango, "", "")
-
+	fork := upgradetest.Durango
+	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		require.NoError(t, err)
@@ -825,7 +832,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 
 	for name, test := range tests {
 		calledSendAppResponseFn := false
-		appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
+		tvm.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			calledSendAppResponseFn = true
 			var response message.SignatureResponse
 			_, err := networkCodec.Unmarshal(responseBytes, &response)
@@ -852,7 +859,10 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 }
 
 func TestClearWarpDB(t *testing.T) {
-	issuer, vm, db, _, _ := GenesisVM(t, false, testutils.GenesisJSONLatest, "", "")
+	ctx, db, genesisBytes, issuer, _ := testutils.SetupGenesis(t, upgradetest.Latest)
+	vm := newDefaultTestVM()
+	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
+	require.NoError(t, err)
 
 	// use multiple messages to test that all messages get cleared
 	payloads := [][]byte{[]byte("test1"), []byte("test2"), []byte("test3"), []byte("test4"), []byte("test5")}
@@ -874,9 +884,9 @@ func TestClearWarpDB(t *testing.T) {
 
 	// Restart VM with the same database default should not prune the warp db
 	vm = newDefaultTestVM()
-	// we need new context since the previous one has registered metrics.
-	ctx := utils.TestSnowContext()
-	err := vm.Initialize(context.Background(), ctx, db, []byte(testutils.GenesisJSONLatest), []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
+	// we need to reset context since the previous one has registered metrics.
+	testutils.ResetMetrics(ctx)
+	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
 
 	// check messages are still present
@@ -891,8 +901,8 @@ func TestClearWarpDB(t *testing.T) {
 	// restart the VM with pruning enabled
 	vm = newDefaultTestVM()
 	config := `{"prune-warp-db-enabled": true}`
-	ctx = utils.TestSnowContext()
-	err = vm.Initialize(context.Background(), ctx, db, []byte(testutils.GenesisJSONLatest), []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})
+	testutils.ResetMetrics(ctx)
+	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})
 	require.NoError(t, err)
 
 	it := vm.warpDB.NewIterator()

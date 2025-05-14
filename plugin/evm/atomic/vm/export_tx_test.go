@@ -12,12 +12,14 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
@@ -25,19 +27,6 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
-)
-
-var nonExistentID = ids.ID{'F'}
-
-var (
-	apricotRulesPhase0 = *params.GetRulesExtra(params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase1 = *params.GetRulesExtra(params.TestApricotPhase1Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase2 = *params.GetRulesExtra(params.TestApricotPhase2Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase3 = *params.GetRulesExtra(params.TestApricotPhase3Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase4 = *params.GetRulesExtra(params.TestApricotPhase4Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase5 = *params.GetRulesExtra(params.TestApricotPhase5Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	apricotRulesPhase6 = *params.GetRulesExtra(params.TestApricotPhase6Config.Rules(common.Big0, params.IsMergeTODO, 0))
-	banffRules         = *params.GetRulesExtra(params.TestBanffChainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
 )
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
@@ -176,7 +165,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount / 2,
-					AssetID: utils.TestAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -193,7 +182,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: utils.TestAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -210,7 +199,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount + 1,
-					AssetID: utils.TestAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -284,7 +273,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: utils.TestAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   0,
 				},
 			},
@@ -307,7 +296,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: utils.TestAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   1,
 				},
 			},
@@ -330,7 +319,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				{
 					Address: ethAddr,
 					Amount:  avaxAmount,
-					AssetID: utils.TestAvaxAssetID,
+					AssetID: snowtest.AVAXAssetID,
 					Nonce:   1,
 				},
 			},
@@ -344,7 +333,11 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+			fork := upgradetest.NoUpgrades
+			vm := newAtomicTestVM()
+			tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+				Fork: &fork,
+			})
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
@@ -373,7 +366,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+			xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 			if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{
 				{
 					Key:   avaxInputID[:],
@@ -402,7 +395,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			<-tvm.ToEngine
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
@@ -461,8 +454,11 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 }
 
 func TestExportTxSemanticVerify(t *testing.T) {
-	_, vm, _, _, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
-
+	fork := upgradetest.NoUpgrades
+	vm := newAtomicTestVM()
+	_ = testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -520,6 +516,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			},
 		},
 	}
+	avalancheutils.Sort(validExportTx.Ins)
 
 	validAVAXExportTx := &atomic.UnsignedExportTx{
 		NetworkID:        vm.ctx.NetworkID,
@@ -552,7 +549,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		tx        *atomic.Tx
 		signers   [][]*secp256k1.PrivateKey
 		baseFee   *big.Int
-		rules     extras.Rules
+		rules     *extras.Rules
 		shouldErr bool
 	}{
 		{
@@ -564,7 +561,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: false,
 		},
 		{
@@ -578,7 +575,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -592,7 +589,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase5,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase5),
 			shouldErr: false,
 		},
 		{
@@ -606,7 +603,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase5,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase5),
 			shouldErr: true,
 		},
 		{
@@ -622,7 +619,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -638,7 +635,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase5,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase5),
 			shouldErr: true,
 		},
 		{
@@ -654,7 +651,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase5,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase5),
 			shouldErr: true,
 		},
 		{
@@ -670,7 +667,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -686,7 +683,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -702,7 +699,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -719,7 +716,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -744,7 +741,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -785,7 +782,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -802,7 +799,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -829,7 +826,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -856,7 +853,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -869,7 +866,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -880,7 +877,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -892,7 +889,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -904,7 +901,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -916,7 +913,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				{key},
 			},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 		{
@@ -924,7 +921,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			tx:        &atomic.Tx{UnsignedAtomicTx: validExportTx},
 			signers:   [][]*secp256k1.PrivateKey{},
 			baseFee:   testutils.InitialBaseFee,
-			rules:     apricotRulesPhase3,
+			rules:     testutils.ForkToRules(upgradetest.ApricotPhase3),
 			shouldErr: true,
 		},
 	}
@@ -936,7 +933,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		backend := &verifierBackend{
 			ctx:          vm.ctx,
 			fx:           &vm.fx,
-			rules:        test.rules,
+			rules:        *test.rules,
 			bootstrapped: vm.IsBootstrapped(),
 			blockFetcher: vm,
 			secpCache:    vm.secpCache,
@@ -963,15 +960,18 @@ func TestExportTxSemanticVerify(t *testing.T) {
 }
 
 func TestExportTxAccept(t *testing.T) {
-	_, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
-
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
-
+	fork := upgradetest.NoUpgrades
+	vm := newAtomicTestVM()
+	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 	}()
+
+	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 
 	key := testutils.TestKeys[0]
 	addr := key.Address()
@@ -1113,28 +1113,27 @@ func TestExportTxAccept(t *testing.T) {
 
 func TestExportTxVerify(t *testing.T) {
 	var exportAmount uint64 = 10000000
-	ctx := utils.TestSnowContext()
 	exportTx := &atomic.UnsignedExportTx{
-		NetworkID:        ctx.NetworkID,
-		BlockchainID:     ctx.CChainID,
-		DestinationChain: ctx.XChainID,
+		NetworkID:        constants.UnitTestID,
+		BlockchainID:     snowtest.CChainID,
+		DestinationChain: snowtest.XChainID,
 		Ins: []atomic.EVMInput{
 			{
 				Address: testutils.TestEthAddrs[0],
 				Amount:  exportAmount,
-				AssetID: ctx.AVAXAssetID,
+				AssetID: snowtest.AVAXAssetID,
 				Nonce:   0,
 			},
 			{
 				Address: testutils.TestEthAddrs[2],
 				Amount:  exportAmount,
-				AssetID: ctx.AVAXAssetID,
+				AssetID: snowtest.AVAXAssetID,
 				Nonce:   0,
 			},
 		},
 		ExportedOutputs: []*avax.TransferableOutput{
 			{
-				Asset: avax.Asset{ID: ctx.AVAXAssetID},
+				Asset: avax.Asset{ID: snowtest.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: exportAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -1145,7 +1144,7 @@ func TestExportTxVerify(t *testing.T) {
 				},
 			},
 			{
-				Asset: avax.Asset{ID: ctx.AVAXAssetID},
+				Asset: avax.Asset{ID: snowtest.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: exportAmount,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -1165,13 +1164,15 @@ func TestExportTxVerify(t *testing.T) {
 	emptySigners := make([][]*secp256k1.PrivateKey, 2)
 	atomic.SortEVMInputsAndSigners(exportTx.Ins, emptySigners)
 
+	ctx := snowtest.Context(t, snowtest.CChainID)
+
 	tests := map[string]atomicTxVerifyTest{
 		"nil tx": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
 				return (*atomic.UnsignedExportTx)(nil)
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNilTx.Error(),
 		},
 		"valid export tx": {
@@ -1179,7 +1180,7 @@ func TestExportTxVerify(t *testing.T) {
 				return exportTx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "",
 		},
 		"valid export tx banff": {
@@ -1187,7 +1188,7 @@ func TestExportTxVerify(t *testing.T) {
 				return exportTx
 			},
 			ctx:         ctx,
-			rules:       banffRules,
+			rules:       testutils.ForkToRules(upgradetest.Banff),
 			expectedErr: "",
 		},
 		"incorrect networkID": {
@@ -1197,27 +1198,27 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongNetworkID.Error(),
 		},
 		"incorrect blockchainID": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
 				tx := *exportTx
-				tx.BlockchainID = nonExistentID
+				tx.BlockchainID = ids.GenerateTestID()
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"incorrect destination chain": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
 				tx := *exportTx
-				tx.DestinationChain = nonExistentID
+				tx.DestinationChain = ids.GenerateTestID()
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongChainID.Error(), // TODO make this error more specific to destination not just chainID
 		},
 		"no exported outputs": {
@@ -1227,7 +1228,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNoExportOutputs.Error(),
 		},
 		"unsorted outputs": {
@@ -1240,7 +1241,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrOutputsNotSorted.Error(),
 		},
 		"invalid exported output": {
@@ -1250,7 +1251,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "nil transferable output is not valid",
 		},
 		"unsorted EVM inputs before AP1": {
@@ -1263,7 +1264,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "",
 		},
 		"unsorted EVM inputs after AP1": {
@@ -1276,7 +1277,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase1,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase1),
 			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
 		},
 		"EVM input with amount 0": {
@@ -1286,14 +1287,14 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testutils.TestEthAddrs[0],
 						Amount:  0,
-						AssetID: ctx.AVAXAssetID,
+						AssetID: snowtest.AVAXAssetID,
 						Nonce:   0,
 					},
 				}
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNoValueInput.Error(),
 		},
 		"non-unique EVM input before AP1": {
@@ -1303,7 +1304,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "",
 		},
 		"non-unique EVM input after AP1": {
@@ -1313,7 +1314,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase1,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase1),
 			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
 		},
 		"non-AVAX input Apricot Phase 6": {
@@ -1323,14 +1324,14 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testutils.TestEthAddrs[0],
 						Amount:  1,
-						AssetID: nonExistentID,
+						AssetID: ids.GenerateTestID(),
 						Nonce:   0,
 					},
 				}
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase6,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase6),
 			expectedErr: "",
 		},
 		"non-AVAX output Apricot Phase 6": {
@@ -1338,7 +1339,7 @@ func TestExportTxVerify(t *testing.T) {
 				tx := *exportTx
 				tx.ExportedOutputs = []*avax.TransferableOutput{
 					{
-						Asset: avax.Asset{ID: nonExistentID},
+						Asset: avax.Asset{ID: ids.GenerateTestID()},
 						Out: &secp256k1fx.TransferOutput{
 							Amt: exportAmount,
 							OutputOwners: secp256k1fx.OutputOwners{
@@ -1352,7 +1353,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase6,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase6),
 			expectedErr: "",
 		},
 		"non-AVAX input Banff": {
@@ -1362,14 +1363,14 @@ func TestExportTxVerify(t *testing.T) {
 					{
 						Address: testutils.TestEthAddrs[0],
 						Amount:  1,
-						AssetID: nonExistentID,
+						AssetID: ids.GenerateTestID(),
 						Nonce:   0,
 					},
 				}
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       banffRules,
+			rules:       testutils.ForkToRules(upgradetest.Banff),
 			expectedErr: atomic.ErrExportNonAVAXInputBanff.Error(),
 		},
 		"non-AVAX output Banff": {
@@ -1377,7 +1378,7 @@ func TestExportTxVerify(t *testing.T) {
 				tx := *exportTx
 				tx.ExportedOutputs = []*avax.TransferableOutput{
 					{
-						Asset: avax.Asset{ID: nonExistentID},
+						Asset: avax.Asset{ID: ids.GenerateTestID()},
 						Out: &secp256k1fx.TransferOutput{
 							Amt: exportAmount,
 							OutputOwners: secp256k1fx.OutputOwners{
@@ -1391,7 +1392,7 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       banffRules,
+			rules:       testutils.ForkToRules(upgradetest.Banff),
 			expectedErr: atomic.ErrExportNonAVAXOutputBanff.Error(),
 		},
 	}
@@ -1673,59 +1674,47 @@ func TestNewExportTx(t *testing.T) {
 	require.NoError(t, err)
 	ethAddress := key.PublicKey().EthAddress()
 	tests := []struct {
-		name               string
-		genesis            string
-		rules              extras.Rules
+		fork               upgradetest.Fork
 		bal                uint64
 		expectedBurnedAVAX uint64
 	}{
 		{
-			name:               "apricot phase 0",
-			genesis:            testutils.GenesisJSONApricotPhase0,
-			rules:              apricotRulesPhase0,
+			fork:               upgradetest.NoUpgrades,
 			bal:                44000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
-			name:               "apricot phase 1",
-			genesis:            testutils.GenesisJSONApricotPhase1,
-			rules:              apricotRulesPhase1,
+			fork:               upgradetest.ApricotPhase1,
 			bal:                44000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
-			name:               "apricot phase 2",
-			genesis:            testutils.GenesisJSONApricotPhase2,
-			rules:              apricotRulesPhase2,
+			fork:               upgradetest.ApricotPhase2,
 			bal:                43000000,
 			expectedBurnedAVAX: 1000000,
 		},
 		{
-			name:               "apricot phase 3",
-			genesis:            testutils.GenesisJSONApricotPhase3,
-			rules:              apricotRulesPhase3,
+			fork:               upgradetest.ApricotPhase3,
 			bal:                44446500,
 			expectedBurnedAVAX: 276750,
 		},
 		{
-			name:               "apricot phase 4",
-			genesis:            testutils.GenesisJSONApricotPhase4,
-			rules:              apricotRulesPhase4,
+			fork:               upgradetest.ApricotPhase4,
 			bal:                44446500,
 			expectedBurnedAVAX: 276750,
 		},
 		{
-			name:               "apricot phase 5",
-			genesis:            testutils.GenesisJSONApricotPhase5,
-			rules:              apricotRulesPhase5,
+			fork:               upgradetest.ApricotPhase5,
 			bal:                39946500,
 			expectedBurnedAVAX: 2526750,
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, test.genesis, "", "")
-
+		t.Run(test.fork.String(), func(t *testing.T) {
+			vm := newAtomicTestVM()
+			tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+				Fork: &test.fork,
+			})
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
@@ -1752,7 +1741,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+			xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 			inputID := utxo.InputID()
 			if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 				Key:   inputID[:],
@@ -1773,7 +1762,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			<-tvm.ToEngine
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1800,7 +1789,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, test.rules, state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, key.Address(), testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
+			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, key.Address(), testutils.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1867,45 +1856,37 @@ func TestNewExportTxMulticoin(t *testing.T) {
 	require.NoError(t, err)
 	ethAddress := key.PublicKey().EthAddress()
 	tests := []struct {
-		name    string
-		genesis string
-		rules   extras.Rules
-		bal     uint64
-		balmc   uint64
+		fork  upgradetest.Fork
+		bal   uint64
+		balmc uint64
 	}{
 		{
-			name:    "apricot phase 0",
-			genesis: testutils.GenesisJSONApricotPhase0,
-			rules:   apricotRulesPhase0,
-			bal:     49000000,
-			balmc:   25000000,
+			fork:  upgradetest.NoUpgrades,
+			bal:   49000000,
+			balmc: 25000000,
 		},
 		{
-			name:    "apricot phase 1",
-			genesis: testutils.GenesisJSONApricotPhase1,
-			rules:   apricotRulesPhase1,
-			bal:     49000000,
-			balmc:   25000000,
+			fork:  upgradetest.ApricotPhase1,
+			bal:   49000000,
+			balmc: 25000000,
 		},
 		{
-			name:    "apricot phase 2",
-			genesis: testutils.GenesisJSONApricotPhase2,
-			rules:   apricotRulesPhase2,
-			bal:     48000000,
-			balmc:   25000000,
+			fork:  upgradetest.ApricotPhase2,
+			bal:   48000000,
+			balmc: 25000000,
 		},
 		{
-			name:    "apricot phase 3",
-			genesis: testutils.GenesisJSONApricotPhase3,
-			rules:   apricotRulesPhase3,
-			bal:     48947900,
-			balmc:   25000000,
+			fork:  upgradetest.ApricotPhase3,
+			bal:   48947900,
+			balmc: 25000000,
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, test.genesis, "", "")
-
+		t.Run(test.fork.String(), func(t *testing.T) {
+			vm := newAtomicTestVM()
+			tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+				Fork: &test.fork,
+			})
 			defer func() {
 				if err := vm.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
@@ -1953,7 +1934,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+			xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 			inputID2 := utxo2.InputID()
 			if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{
 				{
@@ -1983,7 +1964,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			<-issuer
+			<-tvm.ToEngine
 
 			blk, err := vm.BuildBlock(context.Background())
 			if err != nil {

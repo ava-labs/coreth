@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -75,4 +77,9 @@ func NewSharedMemories(atomicMemory *atomic.Memory, thisChainID, peerChainID ids
 		thisChainID: thisChainID,
 		peerChainID: peerChainID,
 	}
+}
+
+func TestSharedMemory() atomic.SharedMemory {
+	m := atomic.NewMemory(memdb.New())
+	return m.NewSharedMemory(snowtest.CChainID)
 }

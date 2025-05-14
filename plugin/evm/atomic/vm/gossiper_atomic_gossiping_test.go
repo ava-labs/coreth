@@ -28,7 +28,8 @@ import (
 func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	vm := newAtomicTestVM()
+	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{})
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -40,21 +41,21 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 		txGossipedLock sync.Mutex
 		txRequested    bool
 	)
-	sender.CantSendAppGossip = false
-	sender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
+	tvm.AppSender.CantSendAppGossip = false
+	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
 		txGossipedLock.Lock()
 		defer txGossipedLock.Unlock()
 
 		txGossiped++
 		return nil
 	}
-	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
+	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
 
 	// Create conflicting transactions
-	importTxs := createImportTxOptions(t, vm, sharedMemory)
+	importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 	tx, conflictingTx := importTxs[0], importTxs[1]
 
 	// gossip tx and check it is accepted and gossiped
@@ -119,7 +120,8 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
-	_, vm, _, sharedMemory, sender := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	vm := newAtomicTestVM()
+	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{})
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -130,21 +132,21 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 		txGossipedLock sync.Mutex
 		txRequested    bool
 	)
-	sender.CantSendAppGossip = false
-	sender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
+	tvm.AppSender.CantSendAppGossip = false
+	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
 		txGossipedLock.Lock()
 		defer txGossipedLock.Unlock()
 
 		txGossiped++
 		return nil
 	}
-	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
+	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
 
 	// Create a transaction and mark it as invalid by discarding it
-	importTxs := createImportTxOptions(t, vm, sharedMemory)
+	importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 	tx, conflictingTx := importTxs[0], importTxs[1]
 	txID := tx.ID()
 

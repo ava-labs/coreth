@@ -17,6 +17,8 @@ import (
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -69,7 +71,7 @@ func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 }
 
 func TestImportTxVerify(t *testing.T) {
-	ctx := utils.TestSnowContext()
+	ctx := snowtest.Context(t, snowtest.CChainID)
 
 	var importAmount uint64 = 10000000
 	txID := ids.GenerateTestID()
@@ -130,7 +132,7 @@ func TestImportTxVerify(t *testing.T) {
 				return importTx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNilTx.Error(),
 		},
 		"valid import tx": {
@@ -138,7 +140,7 @@ func TestImportTxVerify(t *testing.T) {
 				return importTx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "", // Expect this transaction to be valid in Apricot Phase 0
 		},
 		"valid import tx banff": {
@@ -146,7 +148,7 @@ func TestImportTxVerify(t *testing.T) {
 				return importTx
 			},
 			ctx:         ctx,
-			rules:       banffRules,
+			rules:       testutils.ForkToRules(upgradetest.Banff),
 			expectedErr: "", // Expect this transaction to be valid in Banff
 		},
 		"invalid network ID": {
@@ -156,7 +158,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongNetworkID.Error(),
 		},
 		"invalid blockchain ID": {
@@ -166,7 +168,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"P-chain source before AP5": {
@@ -176,7 +178,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"P-chain source after AP5": {
@@ -186,7 +188,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: apricotRulesPhase5,
+			rules: testutils.ForkToRules(upgradetest.ApricotPhase5),
 		},
 		"invalid source chain ID": {
 			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
@@ -195,7 +197,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase5,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase5),
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"no inputs": {
@@ -205,7 +207,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNoImportInputs.Error(),
 		},
 		"inputs sorted incorrectly": {
@@ -218,7 +220,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
 		},
 		"invalid input": {
@@ -231,7 +233,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "atomic input failed verification",
 		},
 		"unsorted outputs phase 0 passes verification": {
@@ -244,7 +246,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "",
 		},
 		"non-unique outputs phase 0 passes verification": {
@@ -257,7 +259,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "",
 		},
 		"unsorted outputs phase 1 fails verification": {
@@ -270,7 +272,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase1,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase1),
 			expectedErr: atomic.ErrOutputsNotSorted.Error(),
 		},
 		"non-unique outputs phase 1 passes verification": {
@@ -283,7 +285,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase1,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase1),
 			expectedErr: "",
 		},
 		"outputs not sorted and unique phase 2 fails verification": {
@@ -296,7 +298,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase2,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase2),
 			expectedErr: atomic.ErrOutputsNotSortedUnique.Error(),
 		},
 		"outputs not sorted phase 2 fails verification": {
@@ -309,7 +311,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase2,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase2),
 			expectedErr: atomic.ErrOutputsNotSortedUnique.Error(),
 		},
 		"invalid EVMOutput fails verification": {
@@ -319,13 +321,13 @@ func TestImportTxVerify(t *testing.T) {
 					{
 						Address: testutils.TestEthAddrs[0],
 						Amount:  0,
-						AssetID: ctx.AVAXAssetID,
+						AssetID: snowtest.AVAXAssetID,
 					},
 				}
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase0,
+			rules:       testutils.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: "EVM Output failed verification",
 		},
 		"no outputs apricot phase 3": {
@@ -335,7 +337,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase3,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase3),
 			expectedErr: atomic.ErrNoEVMOutputs.Error(),
 		},
 		"non-AVAX input Apricot Phase 6": {
@@ -359,7 +361,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase6,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase6),
 			expectedErr: "",
 		},
 		"non-AVAX output Apricot Phase 6": {
@@ -375,7 +377,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       apricotRulesPhase6,
+			rules:       testutils.ForkToRules(upgradetest.ApricotPhase6),
 			expectedErr: "",
 		},
 		"non-AVAX input Banff": {
@@ -399,7 +401,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       banffRules,
+			rules:       testutils.ForkToRules(upgradetest.Banff),
 			expectedErr: atomic.ErrImportNonAVAXInputBanff.Error(),
 		},
 		"non-AVAX output Banff": {
@@ -415,7 +417,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       banffRules,
+			rules:       testutils.ForkToRules(upgradetest.Banff),
 			expectedErr: atomic.ErrImportNonAVAXOutputBanff.Error(),
 		},
 	}
@@ -513,24 +515,24 @@ func TestNewImportTx(t *testing.T) {
 	}
 	tests2 := map[string]atomicTxTest{
 		"apricot phase 0": {
-			setup:       createNewImportAVAXTx,
-			checkState:  checkState,
-			genesisJSON: testutils.GenesisJSONApricotPhase0,
+			setup:      createNewImportAVAXTx,
+			checkState: checkState,
+			fork:       upgradetest.NoUpgrades,
 		},
 		"apricot phase 1": {
-			setup:       createNewImportAVAXTx,
-			checkState:  checkState,
-			genesisJSON: testutils.GenesisJSONApricotPhase1,
+			setup:      createNewImportAVAXTx,
+			checkState: checkState,
+			fork:       upgradetest.ApricotPhase1,
 		},
 		"apricot phase 2": {
-			setup:       createNewImportAVAXTx,
-			checkState:  checkState,
-			genesisJSON: testutils.GenesisJSONApricotPhase2,
+			setup:      createNewImportAVAXTx,
+			checkState: checkState,
+			fork:       upgradetest.ApricotPhase2,
 		},
 		"apricot phase 3": {
-			setup:       createNewImportAVAXTx,
-			checkState:  checkState,
-			genesisJSON: testutils.GenesisJSONApricotPhase3,
+			setup:      createNewImportAVAXTx,
+			checkState: checkState,
+			fork:       upgradetest.ApricotPhase3,
 		},
 	}
 
@@ -907,7 +909,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:   testutils.GenesisJSONApricotPhase0,
 			bootstrapping: true,
 		},
 		"UTXO not present": {
@@ -937,7 +938,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "failed to fetch import UTXOs from",
 		},
 		"garbage UTXO": {
@@ -978,7 +978,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "failed to unmarshal UTXO",
 		},
 		"UTXO AssetID mismatch": {
@@ -1013,7 +1012,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: errAssetIDMismatch.Error(),
 		},
 		"insufficient AVAX funds": {
@@ -1047,7 +1045,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx flow check failed due to",
 		},
 		"insufficient non-AVAX funds": {
@@ -1082,7 +1079,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx flow check failed due to",
 		},
 		"no signatures": {
@@ -1116,7 +1112,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx contained mismatched number of inputs/credentials",
 		},
 		"incorrect signature": {
@@ -1151,7 +1146,6 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase0,
 			semanticVerifyErr: "import tx transfer failed verification",
 		},
 		"non-unique EVM Outputs": {
@@ -1192,7 +1186,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			genesisJSON:       testutils.GenesisJSONApricotPhase3,
+			fork:              upgradetest.ApricotPhase3,
 			semanticVerifyErr: atomic.ErrOutputsNotSortedUnique.Error(),
 		},
 	}
@@ -1254,7 +1248,6 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 					t.Fatalf("Expected AVAX balance to be %d, found balance: %d", *atomic.X2CRate, avaxBalance)
 				}
 			},
-			genesisJSON: testutils.GenesisJSONApricotPhase0,
 		},
 		"non-AVAX UTXO": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -1303,7 +1296,6 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 					t.Fatalf("Expected AVAX balance to be 0, found balance: %d", avaxBalance)
 				}
 			},
-			genesisJSON: testutils.GenesisJSONApricotPhase0,
 		},
 	}
 

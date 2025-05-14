@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -21,6 +22,7 @@ import (
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // shows that a locally generated AtomicTx can be added to mempool and then
@@ -30,8 +32,12 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			assert := assert.New(t)
 
-			// we use AP3 genesis here to not trip any block fees
-			issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase3, "", "")
+			// we use AP3 here to not trip any block fees
+			fork := upgradetest.ApricotPhase3
+			vm := newAtomicTestVM()
+			tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+				Fork: &fork,
+			})
 			defer func() {
 				err := vm.Shutdown(context.Background())
 				assert.NoError(err)
@@ -43,10 +49,10 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				tx, conflictingTx *atomic.Tx
 			)
 			if name == "import" {
-				importTxs := createImportTxOptions(t, vm, sharedMemory)
+				importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 				tx, conflictingTx = importTxs[0], importTxs[1]
 			} else {
-				exportTxs := createExportTxOptions(t, vm, issuer, sharedMemory)
+				exportTxs := createExportTxOptions(t, vm, tvm.ToEngine, tvm.AtomicMemory)
 				tx, conflictingTx = exportTxs[0], exportTxs[1]
 			}
 			txID := tx.ID()
@@ -64,7 +70,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			<-issuer
+			<-tvm.ToEngine
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
@@ -105,7 +111,8 @@ func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 	assert := assert.New(t)
 
 	mempool := atomictxpool.Mempool{}
-	err := mempool.Initialize(&snow.Context{}, prometheus.NewRegistry(), 1, nil)
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	err := mempool.Initialize(ctx, prometheus.NewRegistry(), 1, nil)
 	assert.NoError(err)
 	// create candidate tx (we will drop before validation)
 	tx := atomictest.GenerateTestImportTx()
@@ -127,12 +134,18 @@ func TestMempoolMaxMempoolSizeHandling(t *testing.T) {
 func TestMempoolPriorityDrop(t *testing.T) {
 	assert := assert.New(t)
 
-	// we use AP3 genesis here to not trip any block fees
+	// we use AP3 here to not trip any block fees
 	importAmount := uint64(50000000)
-	_, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase3, "", "", map[ids.ShortID]uint64{
+	fork := upgradetest.ApricotPhase3
+	vm := newAtomicTestVM()
+	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+		Fork: &fork,
+	})
+	utxos := map[ids.ShortID]uint64{
 		testutils.TestShortIDAddrs[0]: importAmount,
 		testutils.TestShortIDAddrs[1]: importAmount,
-	})
+	}
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.ctx, utxos))
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)

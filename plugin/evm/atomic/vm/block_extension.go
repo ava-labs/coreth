@@ -171,11 +171,19 @@ func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
 // block manager's SemanticVerify method.
 func (be *blockExtension) SemanticVerify() error {
 	vm := be.blockExtender.vm
-	// If the VM is not bootstrapped, we cannot verify atomic transactions
-	if !vm.IsBootstrapped() {
-		return nil
+	if vm.IsBootstrapped() {
+		// Verify that the UTXOs named in import txs are present in shared
+		// memory.
+		//
+		// This does not fully verify that this block can spend these UTXOs.
+		// However, it guarantees that any block that fails the later checks was
+		// built by an incorrect block proposer. This ensures that we only mark
+		// blocks as BAD BLOCKs if they were incorrectly generated.
+		if err := be.verifyUTXOsPresent(be.atomicTxs); err != nil {
+			return err
+		}
 	}
-	return be.verifyUTXOsPresent(be.atomicTxs)
+	return nil
 }
 
 // OnAccept is called when the block is accepted. This is called by the wrapper
@@ -227,8 +235,8 @@ func (be *blockExtension) CleanupVerified() {
 	}
 }
 
-// verifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
-// are not present in shared memory.
+// verifyUTXOsPresent verifies all atomic UTXOs consumed by the block are
+// present in shared memory.
 func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 	b := be.block
 	blockHash := common.Hash(b.ID())
