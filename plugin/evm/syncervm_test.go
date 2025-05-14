@@ -288,8 +288,10 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			testShortIDAddrs[0]: importAmount,
 		}
 	)
+	configJSON := fmt.Sprintf(`{"commit-interval": %d, "state-sync-commit-interval": %d}`, test.syncableInterval, test.syncableInterval)
 	server := newVM(t, testVMConfig{
-		utxos: alloc,
+		utxos:      alloc,
+		configJSON: configJSON,
 	})
 	t.Cleanup(func() {
 		log.Info("Shutting down server VM")
@@ -336,7 +338,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// creates a commit at the height [syncableInterval]. This is necessary to support
 	// fetching a state summary.
 	serverAtomicTrie := server.vm.atomicTrie
-	serverAtomicTrie.CommitInterval = test.syncableInterval
 	require.NoError(serverAtomicTrie.Commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
 	require.NoError(server.vm.versiondb.Commit())
 
@@ -367,7 +368,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	server.vm.StateSyncServer.(*stateSyncServer).syncableInterval = test.syncableInterval
 
 	// initialise [syncerVM] with blank genesis state
-	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d}`, test.stateSyncMinBlocks, 4)
+	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d, "commit-interval": %d}`, test.stateSyncMinBlocks, 4, test.syncableInterval)
 	syncer := newVM(t, testVMConfig{
 		isSyncing:  true,
 		configJSON: stateSyncEnabledJSON,
@@ -381,9 +382,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	enabled, err := syncer.vm.StateSyncEnabled(context.Background())
 	require.NoError(err)
 	require.True(enabled)
-
-	// override [syncerVM]'s commit interval so the atomic trie works correctly.
-	syncer.vm.atomicTrie.CommitInterval = test.syncableInterval
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	server.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {

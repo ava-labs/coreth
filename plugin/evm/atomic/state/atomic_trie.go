@@ -37,7 +37,7 @@ var lastCommittedKey = []byte("atomicTrieLastCommittedBlock")
 
 // AtomicTrie implements the AtomicTrie interface
 type AtomicTrie struct {
-	CommitInterval      uint64                     // commit interval, same as commitHeightInterval by default
+	commitInterval      uint64                     // commit interval, same as commitHeightInterval by default
 	metadataDB          avalanchedatabase.Database // Underlying database containing the atomic trie metadata
 	trieDB              *triedb.Database           // Trie database
 	lastCommittedRoot   common.Hash                // trie root of the most recent commit
@@ -81,7 +81,7 @@ func newAtomicTrie(
 	)
 
 	return &AtomicTrie{
-		CommitInterval:      commitHeightInterval,
+		commitInterval:      commitHeightInterval,
 		metadataDB:          metadataDB,
 		trieDB:              trieDB,
 		codec:               codec,
@@ -264,7 +264,7 @@ func (a *AtomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 	hasCommitted := false
 	// Because we do not accept the trie at every height, we may need to
 	// populate roots at prior commit heights that were skipped.
-	for nextCommitHeight := a.lastCommittedHeight + a.CommitInterval; nextCommitHeight < height; nextCommitHeight += a.CommitInterval {
+	for nextCommitHeight := a.lastCommittedHeight + a.commitInterval; nextCommitHeight < height; nextCommitHeight += a.commitInterval {
 		if err := a.Commit(nextCommitHeight, a.lastAcceptedRoot); err != nil {
 			return false, err
 		}
@@ -272,7 +272,7 @@ func (a *AtomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 	}
 
 	// Commit this root if we have reached the [commitInterval].
-	if height%a.CommitInterval == 0 {
+	if height%a.commitInterval == 0 {
 		if err := a.Commit(height, root); err != nil {
 			return false, err
 		}
