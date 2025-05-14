@@ -180,7 +180,7 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	}
 
 	// Find all proposals with the correct parent height.
-	// We must create a new proposal for each one.
+	// We must create a new proposal for each one, since we don't know which one will be used.
 	pCount := 0
 	for _, parentProposal := range possibleProposals {
 		// Check if the parent proposal is at the correct height.
@@ -213,13 +213,12 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 }
 
 func (db *Database) Close() error {
-	// First we should close all proposals.
-	for _, pCtx := range db.proposalTree.Children {
-		if err := db.dereference(pCtx); err != nil {
-			// We should still close the database on error.
-			log.Error("firewooddb: error closing proposal %s", pCtx.Root.Hex())
-		}
-	}
+	db.proposalLock.Lock()
+	defer db.proposalLock.Unlock()
+
+	// We don't need to explicitly dereference the proposals, since they will be cleaned up
+	// within the firewood close method.
+	db.proposalMap = nil
 	db.proposalTree.Children = nil
 	// Close the database
 	return db.fwDisk.Close()
@@ -233,13 +232,16 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 
 	// Find the proposal with the given root.
 	// I.e. the proposal in which the parent root is the root of the database.
-	// This is guaranteed to be unique, since it's only height +1 from the disk.
+	// Is this true??? - This is guaranteed to be unique, since it's only height +1 from the disk.
 	var pCtx *ProposalContext
 	for _, possible := range db.proposalMap[root] {
 		if possible.Parent.Root == db.proposalTree.Root && possible.Parent.Block == db.proposalTree.Block {
 			// We found the proposal with the correct parent.
+			if pCtx != nil {
+				// TODO: Is this possible?
+				return fmt.Errorf("firewooddb: multiple proposals found for %s", root.Hex())
+			}
 			pCtx = possible
-			break
 		}
 	}
 	if pCtx == nil {
@@ -274,7 +276,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	db.proposalMap[root] = rootList
 
 	for _, childCtx := range oldChildren {
-		// TODO: Depending on FFI, we may want to dereference the committed proposal as well.
+		// Don't dereference the recently commit proposal.
 		if childCtx != pCtx {
 			db.dereference(childCtx)
 		}
@@ -286,6 +288,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 // layer and the dirty nodes buffered within the disk layer
 func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	// TODO: Do we even need this? Only used for metrics and Commit intervals in APIs.
+	// This will be implemented in the firewood database eventually.
 	return 0, 0
 }
 
@@ -312,7 +315,7 @@ func (db *Database) Dereference(root common.Hash) error {
 	// as we do not know the parent or height.
 	if count > 1 {
 		log.Debug("Cannot dereference root with multiple proposals", "root", root.Hex(), "count", count)
-		return nil // will be cleaned up eventually on later commit
+		return nil // will be cleaned up eventually on later commit, when it is no longer possible to be committed.
 	} else if count == 0 {
 		log.Debug("No proposal to dereference found", "root", root.Hex())
 		return nil // no error, may have already been dropped
@@ -366,30 +369,21 @@ func (db *Database) Cap(limit common.StorageSize) error {
 // viewAtRoot returns a view of the database at the given root.
 // An error will be returned if the requested state is not available.
 func (db *Database) viewAtRoot(root common.Hash) (IDbView, error) {
-	view, err := db.fwDisk.Revision(root.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("firewooddb: error retrieving revision for state root %s", root.Hex())
-	}
-
-	if view != nil {
-		// Found valid revision
-		return view, nil
-	}
-
 	// Check if the state root corresponds with a proposal.
 	db.proposalLock.RLock()
 	defer db.proposalLock.RUnlock()
 	proposals, ok := db.proposalMap[root]
-	if !ok || len(proposals) == 0 {
-		return nil, fmt.Errorf("firewooddb: requested state root %s not found", root.Hex())
+	if ok && len(proposals) > 0 {
+		// If there are multiple proposals with the same root, we can use the first one.
+		if len(proposals) > 1 {
+			log.Debug("Multiple proposals found for root", "root", root.Hex(), "count", len(proposals))
+		}
+		// Use the first proposal
+		return proposals[0].Proposal, nil
 	}
 
-	// If there are multiple proposals with the same root, we can use the first one.
-	if len(proposals) > 1 {
-		log.Debug("Multiple proposals found for root", "root", root.Hex(), "count", len(proposals))
-	}
-	// Use the first proposal
-	return proposals[0].Proposal, nil
+	// No proposal found, check revisions
+	return db.fwDisk.Revision(root.Bytes())
 }
 
 // Reader retrieves a node reader belonging to the given state root.
