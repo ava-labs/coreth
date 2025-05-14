@@ -144,7 +144,9 @@ func DialContext(ctx context.Context, rawurl string) (Client, error) {
 
 // NewClient creates a client that uses the given RPC client.
 func NewClient(c *rpc.Client) Client {
-	return &client{c, nil}
+	return &client{
+		c: c,
+	}
 }
 
 // NewClientWithHook creates a client that uses the given RPC client and block hook.
