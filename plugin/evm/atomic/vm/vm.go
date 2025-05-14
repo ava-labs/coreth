@@ -144,7 +144,7 @@ func (vm *VM) Initialize(
 	syncProvider := &atomicsync.AtomicSummaryProvider{}
 	// Create and pass the leaf handler to the atomic extension
 	// it will be initialized after the inner VM is initialized
-	leafHandler := NewAtomicLeafHandler()
+	leafHandler := atomicsync.NewAtomicLeafHandler()
 	atomicLeafTypeConfig := &extension.LeafRequestConfig{
 		LeafType:   atomicsync.AtomicTrieNode,
 		MetricName: "sync_atomic_trie_leaves",
