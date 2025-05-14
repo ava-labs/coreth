@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
@@ -334,14 +335,18 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
 	// creates a commit at the height [syncableInterval]. This is necessary to support
 	// fetching a state summary.
-	serverAtomicTrie := server.vm.atomicTrie.(*atomicTrie)
-	serverAtomicTrie.commitInterval = test.syncableInterval
-	require.NoError(serverAtomicTrie.commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
+	serverAtomicTrie := server.vm.atomicTrie
+	serverAtomicTrie.CommitInterval = test.syncableInterval
+	require.NoError(serverAtomicTrie.Commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
 	require.NoError(server.vm.versiondb.Commit())
 
-	serverSharedMemories := newSharedMemories(server.atomicMemory, server.vm.ctx.ChainID, server.vm.ctx.XChainID)
-	serverSharedMemories.assertOpsApplied(t, mustAtomicOps(importTx))
-	serverSharedMemories.assertOpsApplied(t, mustAtomicOps(exportTx))
+	serverSharedMemories := atomictest.NewSharedMemories(server.atomicMemory, server.vm.ctx.ChainID, server.vm.ctx.XChainID)
+	importOps, err := atomictest.ConvertToAtomicOps(importTx)
+	require.NoError(err)
+	exportOps, err := atomictest.ConvertToAtomicOps(exportTx)
+	require.NoError(err)
+	serverSharedMemories.AssertOpsApplied(t, importOps)
+	serverSharedMemories.AssertOpsApplied(t, exportOps)
 
 	// make some accounts
 	trieDB := triedb.NewDatabase(server.vm.chaindb, nil)
@@ -378,7 +383,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	require.True(enabled)
 
 	// override [syncerVM]'s commit interval so the atomic trie works correctly.
-	syncer.vm.atomicTrie.(*atomicTrie).commitInterval = test.syncableInterval
+	syncer.vm.atomicTrie.CommitInterval = test.syncableInterval
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	server.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
@@ -563,10 +568,12 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	require.True(syncerVM.bootstrapped.Get())
 
 	// check atomic memory was synced properly
-	syncerSharedMemories := newSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
+	syncerSharedMemories := atomictest.NewSharedMemories(syncerAtomicMemory, syncerVM.ctx.ChainID, syncerVM.ctx.XChainID)
 
 	for _, tx := range includedAtomicTxs {
-		syncerSharedMemories.assertOpsApplied(t, mustAtomicOps(tx))
+		atomicOps, err := atomictest.ConvertToAtomicOps(tx)
+		require.NoError(err)
+		syncerSharedMemories.AssertOpsApplied(t, atomicOps)
 	}
 
 	// Generate blocks after we have entered normal consensus as well
