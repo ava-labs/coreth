@@ -10,14 +10,13 @@ import (
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
 	"github.com/ava-labs/coreth/plugin/evm/testutils"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
 
@@ -30,10 +29,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 	testutils.WithMetrics(t)
 
 	database := memdb.New()
-	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.New()
-	require.NoError(t, err)
-	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 
 	addressedPayload, err := payload.NewAddressedCall([]byte{1, 2, 3}, []byte{1, 2, 3})
 	require.NoError(t, err)
@@ -41,7 +37,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	messageSignatureCache := lru.NewCache[ids.ID, []byte](100)
-	backend, err := warp.NewBackend(snowCtx.NetworkID, snowCtx.ChainID, warpSigner, warptest.EmptyBlockClient, database, messageSignatureCache, [][]byte{offchainMessage.Bytes()})
+	backend, err := warp.NewBackend(snowCtx.NetworkID, snowCtx.ChainID, snowCtx.WarpSigner, warptest.EmptyBlockClient, database, messageSignatureCache, [][]byte{offchainMessage.Bytes()})
 	require.NoError(t, err)
 
 	msg, err := avalancheWarp.NewUnsignedMessage(snowCtx.NetworkID, snowCtx.ChainID, []byte("test"))
@@ -136,18 +132,15 @@ func TestBlockSignatureHandler(t *testing.T) {
 	testutils.WithMetrics(t)
 
 	database := memdb.New()
-	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.New()
-	require.NoError(t, err)
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 
-	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
 	blkID := ids.GenerateTestID()
 	blockClient := warptest.MakeBlockClient(blkID)
 	messageSignatureCache := lru.NewCache[ids.ID, []byte](100)
 	backend, err := warp.NewBackend(
 		snowCtx.NetworkID,
 		snowCtx.ChainID,
-		warpSigner,
+		snowCtx.WarpSigner,
 		blockClient,
 		database,
 		messageSignatureCache,

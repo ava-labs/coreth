@@ -78,7 +78,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 				return vm, vm.createConsensusCallbacks()
 			}
 
-			afterInit := func(t *testing.T, params testutils.SyncTestParams, vmSetup testutils.VMSetup, isServer bool) {
+			afterInit := func(t *testing.T, params testutils.SyncTestParams, vmSetup testutils.SyncVMSetup, isServer bool) {
 				atomicVM, ok := vmSetup.VM.(*VM)
 				require.True(t, ok)
 
@@ -109,7 +109,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 				NewVM:     newVMFn,
 				GenFn:     genFn,
 				AfterInit: afterInit,
-				ExtraSyncerVMTest: func(t *testing.T, syncerVMSetup testutils.VMSetup) {
+				ExtraSyncerVMTest: func(t *testing.T, syncerVMSetup testutils.SyncVMSetup) {
 					// check atomic memory was synced properly
 					syncerVM := syncerVMSetup.VM
 					atomicVM, ok := syncerVM.(*VM)

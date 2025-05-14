@@ -12,7 +12,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,11 +29,9 @@ func TestIteratorCanIterate(t *testing.T) {
 	operationsMap := make(map[uint64]map[ids.ID]*avalancheatomic.Requests)
 	writeTxs(t, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
-	snowCtx := utils.TestSnowContext()
-
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
-	atomicBackend, err := NewAtomicBackend(snowCtx.SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie1 := atomicBackend.AtomicTrie()
 
@@ -47,7 +44,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// iterate on a new atomic trie to make sure there is no resident state affecting the data and the
 	// iterator
-	atomicBackend2, err := NewAtomicBackend(snowCtx.SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend2, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie2 := atomicBackend2.AtomicTrie()
 	lastCommittedHash2, lastCommittedHeight2 := atomicTrie2.LastCommitted()
@@ -73,10 +70,8 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
-	snowCtx := utils.TestSnowContext()
-
 	commitInterval := uint64(100)
-	atomicBackend, err := NewAtomicBackend(snowCtx.SharedMemory, nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
 	require.NoError(err)
 	atomicTrie := atomicBackend.AtomicTrie()
 

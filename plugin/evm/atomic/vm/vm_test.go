@@ -13,11 +13,9 @@ import (
 	"time"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -52,6 +50,18 @@ func newAtomicTestVM() *VM {
 	return WrapVM(&evm.VM{})
 }
 
+func setupAtomicTestVM(t *testing.T, cfg testutils.TestVMConfig) (*VM, *testutils.TestVMSuite) {
+	vm := newAtomicTestVM()
+	tvm := testutils.SetupTestVM(t, vm, cfg)
+	return vm, tvm
+}
+
+func setupAtomicTestVMWithUtxos(t *testing.T, cfg testutils.TestVMConfig, utxos map[ids.ShortID]uint64) (*VM, *testutils.TestVMSuite) {
+	vm, tvm := setupAtomicTestVM(t, cfg)
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.ctx, utxos))
+	return vm, tvm
+}
+
 func (vm *VM) newImportTx(
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
@@ -69,23 +79,6 @@ func (vm *VM) newImportTx(
 	}
 
 	return atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
-}
-
-func GenesisAtomicVM(t *testing.T,
-	finishBootstrapping bool,
-	genesisJSON string,
-	configJSON string,
-	upgradeJSON string,
-) (
-	chan commonEng.Message,
-	*VM,
-	database.Database,
-	*avalancheatomic.Memory,
-	*enginetest.Sender,
-) {
-	vm := newAtomicTestVM()
-	ch, db, m, sender, _ := testutils.SetupVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON, vm)
-	return ch, vm, db, m, sender
 }
 
 func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.ID, index uint32, assetID ids.ID, amount uint64, addr ids.ShortID) (*avax.UTXO, error) {
@@ -123,45 +116,49 @@ func addUTXO(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, txID ids.I
 	return utxo, nil
 }
 
-// GenesisVMWithUTXOs creates a GenesisVM and generates UTXOs in the X-Chain Shared Memory containing AVAX based on the [utxos] map
-// Generates UTXOIDs by using a hash of the address in the [utxos] map such that the UTXOs will be generated deterministically.
-// If [testutils.GenesisJSON] is empty, defaults to using [testutils.GenesisJSONLatest]
-func GenesisVMWithUTXOs(t *testing.T, finishBootstrapping bool, genesisJSON string, configJSON string, upgradeJSON string, utxos map[ids.ShortID]uint64) (chan commonEng.Message, *VM, database.Database, *avalancheatomic.Memory, *enginetest.Sender) {
-	issuer, vm, db, sharedMemory, sender := GenesisAtomicVM(t, finishBootstrapping, genesisJSON, configJSON, upgradeJSON)
+func addUTXOs(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, utxos map[ids.ShortID]uint64) error {
 	for addr, avaxAmount := range utxos {
 		txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
 		if err != nil {
-			t.Fatalf("Failed to generate txID from addr: %s", err)
+			return fmt.Errorf("Failed to generate txID from addr: %s", err)
 		}
-		if _, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, avaxAmount, addr); err != nil {
-			t.Fatalf("Failed to add UTXO to shared memory: %s", err)
+		if _, err := addUTXO(sharedMemory, ctx, txID, 0, ctx.AVAXAssetID, avaxAmount, addr); err != nil {
+			return fmt.Errorf("Failed to add UTXO to shared memory: %s", err)
 		}
 	}
-
-	return issuer, vm, db, sharedMemory, sender
+	return nil
 }
 
 func TestImportMissingUTXOs(t *testing.T) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
 	importAmount := uint64(50000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
-		testutils.TestShortIDAddrs[0]: importAmount,
-	})
+	fork := upgradetest.ApricotPhase2
+	vm1, tvm1 := setupAtomicTestVMWithUtxos(
+		t,
+		testutils.TestVMConfig{
+			Fork: &fork,
+		},
+		map[ids.ShortID]uint64{
+			testutils.TestShortIDAddrs[0]: importAmount,
+		},
+	)
 	defer func() {
-		err := vm.Shutdown(context.Background())
+		err := vm1.Shutdown(context.Background())
 		require.NoError(t, err)
 	}()
 
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
+	importTx, err := vm1.newImportTx(vm1.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
 	require.NoError(t, err)
-	err = vm.mempool.AddLocalTx(importTx)
+	err = vm1.mempool.AddLocalTx(importTx)
 	require.NoError(t, err)
-	<-issuer
-	blk, err := vm.BuildBlock(context.Background())
+	<-tvm1.ToEngine
+	blk, err := vm1.BuildBlock(context.Background())
 	require.NoError(t, err)
 
 	// make another VM which is missing the UTXO in shared memory
-	_, vm2, _, _, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase2, "", "")
+	vm2, _ := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 	defer func() {
 		err := vm2.Shutdown(context.Background())
 		require.NoError(t, err)
@@ -182,10 +179,15 @@ func TestImportMissingUTXOs(t *testing.T) {
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
 	importAmount := uint64(50000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase2, "", "", map[ids.ShortID]uint64{
-		testutils.TestShortIDAddrs[0]: importAmount,
+	vm := newAtomicTestVM()
+	fork := upgradetest.ApricotPhase2
+	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+		Fork: &fork,
 	})
-
+	utxos := map[ids.ShortID]uint64{
+		testutils.TestShortIDAddrs[0]: importAmount,
+	}
+	addUTXOs(tvm.AtomicMemory, vm.ctx, utxos)
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -201,7 +203,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -241,7 +243,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk2, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -276,9 +278,11 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
 
-func testConflictingImportTxs(t *testing.T, genesis string) {
+func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 	importAmount := uint64(10000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, genesis, "", "", map[ids.ShortID]uint64{
+	vm, tvm := setupAtomicTestVMWithUtxos(t, testutils.TestVMConfig{
+		Fork: &fork,
+	}, map[ids.ShortID]uint64{
 		testutils.TestShortIDAddrs[0]: importAmount,
 		testutils.TestShortIDAddrs[1]: importAmount,
 		testutils.TestShortIDAddrs[2]: importAmount,
@@ -316,7 +320,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 			t.Fatal(err)
 		}
 
-		<-issuer
+		<-tvm.ToEngine
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 		blk, err := vm.BuildBlock(context.Background())
@@ -349,7 +353,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 		if err := vm.mempool.ForceAddTx(tx); err != nil {
 			t.Fatal(err)
 		}
-		<-issuer
+		<-tvm.ToEngine
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 		_, err = vm.BuildBlock(context.Background())
@@ -367,7 +371,7 @@ func testConflictingImportTxs(t *testing.T, genesis string) {
 	if err := vm.mempool.AddLocalTx(importTxs[2]); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	<-tvm.ToEngine
 	vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 
 	validBlock, err := vm.BuildBlock(context.Background())
@@ -561,8 +565,11 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase5, "", "")
-			issuedTxs, evictedTxs := issueTxs(t, vm, sharedMemory)
+			fork := upgradetest.ApricotPhase5
+			vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+				Fork: &fork,
+			})
+			issuedTxs, evictedTxs := issueTxs(t, vm, tvm.AtomicMemory)
 
 			for i, tx := range issuedTxs {
 				_, issued := vm.mempool.GetPendingTx(tx.ID())
@@ -578,15 +585,15 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 }
 
 func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
-	for name, genesis := range map[string]string{
-		"apricotPhase1": testutils.GenesisJSONApricotPhase1,
-		"apricotPhase2": testutils.GenesisJSONApricotPhase2,
-		"apricotPhase3": testutils.GenesisJSONApricotPhase3,
-		"apricotPhase4": testutils.GenesisJSONApricotPhase4,
-		"apricotPhase5": testutils.GenesisJSONApricotPhase5,
+	for _, fork := range []upgradetest.Fork{
+		upgradetest.ApricotPhase1,
+		upgradetest.ApricotPhase2,
+		upgradetest.ApricotPhase3,
+		upgradetest.ApricotPhase4,
+		upgradetest.ApricotPhase5,
 	} {
-		t.Run(name, func(t *testing.T) {
-			testConflictingImportTxs(t, genesis)
+		t.Run(fork.String(), func(t *testing.T) {
+			testConflictingImportTxs(t, fork)
 		})
 	}
 }
@@ -601,12 +608,13 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	addr1 := key1.Address()
 
 	importAmount := uint64(1000000000)
-
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase0, "", "",
-		map[ids.ShortID]uint64{
-			addr0: importAmount,
-			addr1: importAmount,
-		})
+	fork := upgradetest.NoUpgrades
+	vm, tvm := setupAtomicTestVMWithUtxos(t, testutils.TestVMConfig{
+		Fork: &fork,
+	}, map[ids.ShortID]uint64{
+		addr0: importAmount,
+		addr1: importAmount,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -631,7 +639,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatalf("Failed to issue importTx0A: %s", err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk0, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -665,7 +673,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk1, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -689,7 +697,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk2, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -711,7 +719,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	if err := vm.mempool.ForceAddTx(importTx0B); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	<-tvm.ToEngine
 
 	_, err = vm.BuildBlock(context.Background())
 	if err == nil {
@@ -720,7 +728,10 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -747,7 +758,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 	inputID := utxo.InputID()
 	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
@@ -768,7 +779,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -808,7 +819,10 @@ func TestBonusBlocksTxs(t *testing.T) {
 // that does not conflict. Accepts [blkB] and rejects [blkA], then asserts that the virtuous atomic
 // transaction in [blkA] is correctly re-issued into the atomic transaction mempool.
 func TestReissueAtomicTx(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase1, "", "", map[ids.ShortID]uint64{
+	fork := upgradetest.ApricotPhase1
+	vm, tvm := setupAtomicTestVMWithUtxos(t, testutils.TestVMConfig{
+		Fork: &fork,
+	}, map[ids.ShortID]uint64{
 		testutils.TestShortIDAddrs[0]: 10000000,
 		testutils.TestShortIDAddrs[1]: 10000000,
 	})
@@ -833,7 +847,7 @@ func TestReissueAtomicTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blkA, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -864,7 +878,7 @@ func TestReissueAtomicTx(t *testing.T) {
 	// than [blkA] so that the block will be unique. This is necessary since we have marked [blkA]
 	// as Rejected.
 	time.Sleep(2 * time.Second)
-	<-issuer
+	<-tvm.ToEngine
 	blkB, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -902,7 +916,10 @@ func TestReissueAtomicTx(t *testing.T) {
 }
 
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase1, "", "")
+	fork := upgradetest.ApricotPhase1
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -910,13 +927,13 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 		}
 	}()
 
-	exportTxs := createExportTxOptions(t, vm, issuer, sharedMemory)
+	exportTxs := createExportTxOptions(t, vm, tvm.ToEngine, tvm.AtomicMemory)
 	exportTx1, exportTx2 := exportTxs[0], exportTxs[1]
 
 	if err := vm.mempool.AddLocalTx(exportTx1); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	<-tvm.ToEngine
 	exportBlk1, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -941,7 +958,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	if err := vm.mempool.ForceAddTx(exportTx2); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+	<-tvm.ToEngine
 
 	_, err = vm.BuildBlock(context.Background())
 	if err == nil {
@@ -953,7 +970,10 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 // in onFinalizeAndAssemble it will not cause a panic due to calling RevertToSnapshot(revID) on the
 // same revision ID twice.
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase1, "", "")
+	fork := upgradetest.ApricotPhase1
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -965,14 +985,14 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	vm.Ethereum().TxPool().SubscribeNewReorgEvent(newTxPoolHeadChan)
 
 	// Create three conflicting import transactions
-	importTxs := createImportTxOptions(t, vm, sharedMemory)
+	importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 
 	// Issue the first import transaction, build, and accept the block.
 	if err := vm.mempool.AddLocalTx(importTxs[0]); err != nil {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1008,7 +1028,10 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 
 func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	importAmount := uint64(10000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase5, "", "", map[ids.ShortID]uint64{
+	fork := upgradetest.ApricotPhase5
+	vm, tvm := setupAtomicTestVMWithUtxos(t, testutils.TestVMConfig{
+		Fork: &fork,
+	}, map[ids.ShortID]uint64{
 		testutils.TestShortIDAddrs[0]: importAmount,
 		testutils.TestShortIDAddrs[1]: importAmount,
 		testutils.TestShortIDAddrs[2]: importAmount,
@@ -1043,7 +1066,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		vm.mempool.ForceAddTx(conflictTx)
 		conflictSets[index].Add(conflictTx.ID())
 	}
-	<-issuer
+	<-tvm.ToEngine
 	// Note: this only checks the path through OnFinalizeAndAssemble, we should make sure to add a test
 	// that verifies blocks received from the network will also fail verification
 	blk, err := vm.BuildBlock(context.Background())
@@ -1079,7 +1102,10 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 
 func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	importAmount := uint64(10000000)
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase5, "", "")
+	fork := upgradetest.ApricotPhase5
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1094,7 +1120,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 
 	mempoolTxs := 200
 	for i := 0; i < mempoolTxs; i++ {
-		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
+		utxo, err := addUTXO(tvm.AtomicMemory, vm.ctx, txID, uint32(i), vm.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
 		assert.NoError(t, err)
 
 		importTx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, kc, []*avax.UTXO{utxo})
@@ -1106,7 +1132,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -1130,9 +1156,14 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// We create two VMs one in ApriotPhase4 and one in ApricotPhase5, so that we can construct a block
 	// containing a large enough atomic transaction that it will exceed the atomic gas limit in
 	// ApricotPhase5.
-	issuer, vm1, _, sharedMemory1, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase4, "", "")
-	_, vm2, _, sharedMemory2, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase5, "", "")
-
+	fork1 := upgradetest.ApricotPhase4
+	vm1, tvm1 := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork1,
+	})
+	fork2 := upgradetest.ApricotPhase5
+	vm2, tvm2 := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork2,
+	})
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -1150,10 +1181,10 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// Add enough UTXOs, such that the created import transaction will attempt to consume more gas than allowed
 	// in ApricotPhase5.
 	for i := 0; i < 100; i++ {
-		_, err := addUTXO(sharedMemory1, vm1.ctx, txID, uint32(i), vm1.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
+		_, err := addUTXO(tvm1.AtomicMemory, vm1.ctx, txID, uint32(i), vm1.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
 		assert.NoError(t, err)
 
-		_, err = addUTXO(sharedMemory2, vm2.ctx, txID, uint32(i), vm2.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
+		_, err = addUTXO(tvm2.AtomicMemory, vm2.ctx, txID, uint32(i), vm2.ctx.AVAXAssetID, importAmount, testutils.TestShortIDAddrs[0])
 		assert.NoError(t, err)
 	}
 
@@ -1167,7 +1198,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm1.ToEngine
 	blk1, err := vm1.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -1210,7 +1241,10 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 // contains no transactions.
 func TestEmptyBlock(t *testing.T) {
 	importAmount := uint64(1000000000)
-	issuer, vm, _, _, _ := GenesisVMWithUTXOs(t, true, testutils.GenesisJSONApricotPhase0, "", "", map[ids.ShortID]uint64{
+	fork := upgradetest.NoUpgrades
+	vm, tvm := setupAtomicTestVMWithUtxos(t, testutils.TestVMConfig{
+		Fork: &fork,
+	}, map[ids.ShortID]uint64{
 		testutils.TestShortIDAddrs[0]: importAmount,
 	})
 
@@ -1229,7 +1263,7 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1266,7 +1300,10 @@ func TestEmptyBlock(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 5 ruleset in genesis.
 func TestBuildApricotPhase5Block(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase5, "", "")
+	fork := upgradetest.ApricotPhase5
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1299,7 +1336,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 	inputID := utxo.InputID()
 	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
@@ -1320,7 +1357,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1377,7 +1414,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1432,7 +1469,10 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 4 ruleset in genesis.
 func TestBuildApricotPhase4Block(t *testing.T) {
-	issuer, vm, _, sharedMemory, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase4, "", "")
+	fork := upgradetest.ApricotPhase4
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1465,7 +1505,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.ctx.XChainID)
 	inputID := utxo.InputID()
 	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
@@ -1486,7 +1526,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1552,7 +1592,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		}
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	blk, err = vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1605,7 +1645,10 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 }
 
 func TestBuildInvalidBlockHead(t *testing.T) {
-	issuer, vm, _, _, _ := GenesisAtomicVM(t, true, testutils.GenesisJSONApricotPhase0, "", "")
+	fork := upgradetest.NoUpgrades
+	vm, tvm := setupAtomicTestVM(t, testutils.TestVMConfig{
+		Fork: &fork,
+	})
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1655,7 +1698,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	<-tvm.ToEngine
 
 	if _, err := vm.BuildBlock(context.Background()); err == nil {
 		t.Fatalf("Unexpectedly created a block")

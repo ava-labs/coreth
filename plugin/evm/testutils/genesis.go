@@ -9,44 +9,42 @@ import (
 	"testing"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/snow"
-	commoneng "github.com/ava-labs/avalanchego/snow/engine/common"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade"
-	"github.com/ava-labs/avalanchego/utils/cb58"
-	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/params/extras"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 )
 
-var (
-	GenesisJSONApricotPhase0     = genesisJSON(params.TestLaunchConfig)
-	GenesisJSONApricotPhase1     = genesisJSON(params.TestApricotPhase1Config)
-	GenesisJSONApricotPhase2     = genesisJSON(params.TestApricotPhase2Config)
-	GenesisJSONApricotPhase3     = genesisJSON(params.TestApricotPhase3Config)
-	GenesisJSONApricotPhase4     = genesisJSON(params.TestApricotPhase4Config)
-	GenesisJSONApricotPhase5     = genesisJSON(params.TestApricotPhase5Config)
-	GenesisJSONApricotPhasePre6  = genesisJSON(params.TestApricotPhasePre6Config)
-	GenesisJSONApricotPhase6     = genesisJSON(params.TestApricotPhase6Config)
-	GenesisJSONApricotPhasePost6 = genesisJSON(params.TestApricotPhasePost6Config)
-	GenesisJSONBanff             = genesisJSON(params.TestBanffChainConfig)
-	GenesisJSONCortina           = genesisJSON(params.TestCortinaChainConfig)
-	GenesisJSONDurango           = genesisJSON(params.TestDurangoChainConfig)
-	GenesisJSONEtna              = genesisJSON(params.TestEtnaChainConfig)
+var ForkToChainConfig = map[upgradetest.Fork]*params.ChainConfig{
+	upgradetest.NoUpgrades:        params.TestLaunchConfig,
+	upgradetest.ApricotPhase1:     params.TestApricotPhase1Config,
+	upgradetest.ApricotPhase2:     params.TestApricotPhase2Config,
+	upgradetest.ApricotPhase3:     params.TestApricotPhase3Config,
+	upgradetest.ApricotPhase4:     params.TestApricotPhase4Config,
+	upgradetest.ApricotPhase5:     params.TestApricotPhase5Config,
+	upgradetest.ApricotPhasePre6:  params.TestApricotPhasePre6Config,
+	upgradetest.ApricotPhase6:     params.TestApricotPhase6Config,
+	upgradetest.ApricotPhasePost6: params.TestApricotPhasePost6Config,
+	upgradetest.Banff:             params.TestBanffChainConfig,
+	upgradetest.Cortina:           params.TestCortinaChainConfig,
+	upgradetest.Durango:           params.TestDurangoChainConfig,
+	upgradetest.Etna:              params.TestEtnaChainConfig,
+	upgradetest.Fortuna:           params.TestFortunaChainConfig,
+}
 
-	GenesisJSONLatest = GenesisJSONEtna
-)
-
-// genesisJSON returns the JSON representation of the genesis block
+// GenesisJSON returns the JSON representation of the genesis block
 // for the given chain configuration, with pre-funded accounts.
-func genesisJSON(cfg *params.ChainConfig) string {
+func GenesisJSON(cfg *params.ChainConfig) string {
 	g := new(core.Genesis)
 	g.Difficulty = big.NewInt(0)
 	g.GasLimit = 0x5f5e100
@@ -70,11 +68,9 @@ func genesisJSON(cfg *params.ChainConfig) string {
 
 	// Fund the test keys
 	var b []byte
-	for _, key := range keys {
-		b, _ = cb58.Decode(key)
-		pk, _ := secp256k1.ToPrivateKey(b)
+	for _, ethAddr := range TestEthAddrs {
 		balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
-		g.Alloc[pk.EthAddress()] = types.Account{Balance: balance}
+		g.Alloc[ethAddr] = types.Account{Balance: balance}
 	}
 
 	b, err := json.Marshal(g)
@@ -103,18 +99,17 @@ func NewPrefundedGenesis(
 }
 
 // SetupGenesis sets up the genesis
-// If [genesisJSON] is empty, defaults to using [genesisJSONLatest]
 func SetupGenesis(
 	t *testing.T,
-	genesisJSON string,
+	fork upgradetest.Fork,
 ) (*snow.Context,
-	database.Database,
+	*prefixdb.Database,
 	[]byte,
-	chan commoneng.Message,
+	chan commonEng.Message,
 	*avalancheatomic.Memory,
 ) {
-	genesisBytes := []byte(genesisJSON)
-	ctx := utils.TestSnowContext()
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	ctx.NetworkUpgrades = upgradetest.GetConfig(fork)
 
 	baseDB := memdb.New()
 
@@ -126,7 +121,13 @@ func SetupGenesis(
 	// The caller of this function is responsible for unlocking.
 	ctx.Lock.Lock()
 
-	issuer := make(chan commoneng.Message, 1)
+	issuer := make(chan commonEng.Message, 1)
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
-	return ctx, prefixedDB, genesisBytes, issuer, atomicMemory
+	genesisJSON := GenesisJSON(ForkToChainConfig[fork])
+	return ctx, prefixedDB, []byte(genesisJSON), issuer, atomicMemory
+}
+
+func ForkToRules(fork upgradetest.Fork) *extras.Rules {
+	chainConfig := ForkToChainConfig[fork]
+	return params.GetRulesExtra(chainConfig.Rules(common.Big0, params.IsMergeTODO, 0))
 }
