@@ -6,6 +6,7 @@
 - Add metrics for ACP-176
 - Removed the `"price-options-max-base-fee"` config flag
 - Removed extra type support in "ethclient.BlockByHash", "ethclient.BlockByNumber".
+- Removed deprecated flags `coreth-admin-api-enabled`, `coreth-admin-api-dir`, `tx-regossip-frequency`, `tx-lookup-limit`. Use `admin-api-enabled`, `admin-api-dir`, `regossip-frequency`, `transaction-history` instead.
 
 ## [v0.15.0](https://github.com/ava-labs/coreth/releases/tag/v0.15.0)
 

@@ -156,7 +156,7 @@ type Config struct {
 
 	// SkipTxIndexing skips indexing transactions.
 	// This is useful for validators that don't need to index transactions.
-	// TxLookupLimit can be still used to control unindexing old transactions.
+	// TransactionHistory can be still used to control unindexing old transactions.
 	SkipTxIndexing bool `json:"skip-tx-indexing"`
 
 	// WarpOffChainMessages encodes off-chain messages (unrelated to any on-chain event ie. block or AddressedCall)
