@@ -30,15 +30,10 @@ type atomicLeafHandler struct {
 	handlers.LeafRequestHandler
 }
 
-// NewAtomicLeafHandler returns a new uninitialzied atomicLeafHandler that can be later initialized
-func NewAtomicLeafHandler() *atomicLeafHandler {
-	return &atomicLeafHandler{
-		LeafRequestHandler: &uninitializedHandler{},
-	}
-}
-
 // Initialize initializes the atomicLeafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
-func (a *atomicLeafHandler) Initialize(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) {
+func NewAtomicLeafHandler(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) *atomicLeafHandler {
 	handlerStats := stats.GetOrRegisterHandlerStats(metrics.Enabled)
-	a.LeafRequestHandler = handlers.NewLeafsRequestHandler(atomicTrieDB, trieKeyLength, nil, networkCodec, handlerStats)
+	return &atomicLeafHandler{
+		LeafRequestHandler: handlers.NewLeafsRequestHandler(atomicTrieDB, trieKeyLength, nil, networkCodec, handlerStats),
+	}
 }

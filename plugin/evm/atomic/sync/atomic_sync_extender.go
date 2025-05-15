@@ -16,7 +16,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-var _ sync.Extender = (*AtomicSyncExtender)(nil)
+var _ sync.Extender = (*atomicSyncExtender)(nil)
 
 type AtomicBackend interface {
 	// ApplyToSharedMemory applies the atomic operations that have been indexed into the trie
@@ -37,20 +37,22 @@ type AtomicBackend interface {
 	SetLastAccepted(lastAcceptedHash common.Hash)
 }
 
-type AtomicSyncExtender struct {
+type atomicSyncExtender struct {
 	backend              AtomicBackend
 	atomicTrie           AtomicTrie
 	stateSyncRequestSize uint16
 }
 
 // Initialize initializes the atomic sync extender with the atomic backend and atomic trie.
-func (a *AtomicSyncExtender) Initialize(backend AtomicBackend, atomicTrie AtomicTrie, stateSyncRequestSize uint16) {
-	a.backend = backend
-	a.atomicTrie = atomicTrie
-	a.stateSyncRequestSize = stateSyncRequestSize
+func NewAtomicSyncExtender(backend AtomicBackend, atomicTrie AtomicTrie, stateSyncRequestSize uint16) *atomicSyncExtender {
+	return &atomicSyncExtender{
+		backend:              backend,
+		atomicTrie:           atomicTrie,
+		stateSyncRequestSize: stateSyncRequestSize,
+	}
 }
 
-func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {
+func (a *atomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {
 	atomicSyncSummary, ok := syncSummary.(*AtomicSyncSummary)
 	if !ok {
 		return fmt.Errorf("expected *AtomicBlockSyncSummary, got %T", syncSummary)
@@ -75,7 +77,7 @@ func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafCli
 	return err
 }
 
-func (a *AtomicSyncExtender) OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error {
+func (a *atomicSyncExtender) OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block when ApplyToSharedMemory
 	// is called.
@@ -86,7 +88,7 @@ func (a *AtomicSyncExtender) OnFinishBeforeCommit(lastAcceptedHeight uint64, syn
 	return nil
 }
 
-func (a *AtomicSyncExtender) OnFinishAfterCommit(summaryHeight uint64) error {
+func (a *atomicSyncExtender) OnFinishAfterCommit(summaryHeight uint64) error {
 	// the chain state is already restored, and, from this point on,
 	// the block synced to is the accepted block. The last operation
 	// is updating shared memory with the atomic trie.

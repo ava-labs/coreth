@@ -17,10 +17,7 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 )
 
-var (
-	_ message.Syncable       = (*AtomicSyncSummary)(nil)
-	_ message.SyncableParser = (*AtomicSyncSummaryParser)(nil)
-)
+var _ message.Syncable = (*AtomicSyncSummary)(nil)
 
 // codecWithAtomicSync is the codec manager that contains the codec for AtomicBlockSyncSummary and
 // other message types that are used in the network protocol. This is to ensure that the codec
@@ -46,30 +43,6 @@ type AtomicSyncSummary struct {
 	summaryID  ids.ID
 	bytes      []byte
 	acceptImpl message.AcceptImplFn
-}
-
-type AtomicSyncSummaryParser struct{}
-
-func NewAtomicSyncSummaryParser() *AtomicSyncSummaryParser {
-	return &AtomicSyncSummaryParser{}
-}
-
-func (a *AtomicSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
-	summary := AtomicSyncSummary{}
-	if codecVersion, err := codecWithAtomicSync.Unmarshal(summaryBytes, &summary); err != nil {
-		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
-	} else if codecVersion != message.Version {
-		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (got %d, expected %d)", codecVersion, message.Version)
-	}
-
-	summary.bytes = summaryBytes
-	summaryID, err := ids.ToID(crypto.Keccak256(summaryBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute summary ID: %w", err)
-	}
-	summary.summaryID = summaryID
-	summary.acceptImpl = acceptImpl
-	return &summary, nil
 }
 
 func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (*AtomicSyncSummary, error) {
