@@ -8,7 +8,6 @@ import (
 
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/txpool/legacypool"
 )
 
 const (
@@ -86,12 +85,12 @@ func GetDefaultConfig() Config {
 		PriceOptionFastFeePercentage: uint64(105),
 		PriceOptionMaxTip:            uint64(20 * utils.GWei),
 		// Mempool settings
-		TxPoolPriceLimit:   legacypool.DefaultConfig.PriceLimit,
-		TxPoolPriceBump:    legacypool.DefaultConfig.PriceBump,
-		TxPoolAccountSlots: legacypool.DefaultConfig.AccountSlots,
-		TxPoolGlobalSlots:  legacypool.DefaultConfig.GlobalSlots,
-		TxPoolAccountQueue: legacypool.DefaultConfig.AccountQueue,
-		TxPoolGlobalQueue:  legacypool.DefaultConfig.GlobalQueue,
+		TxPoolPriceLimit:   1,
+		TxPoolPriceBump:    10,
+		TxPoolAccountSlots: 16,
+		TxPoolGlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio,
+		TxPoolAccountQueue: 64,
+		TxPoolGlobalQueue:  1024,
 		TxPoolLifetime:     timeToDuration(10 * time.Minute),
 	}
 }
