@@ -7,6 +7,7 @@
 - Removed the `"price-options-max-base-fee"` config flag
 - Removed extra type support in "ethclient.BlockByHash", "ethclient.BlockByNumber".
 - Removed deprecated flags `coreth-admin-api-enabled`, `coreth-admin-api-dir`, `tx-regossip-frequency`, `tx-lookup-limit`. Use `admin-api-enabled`, `admin-api-dir`, `regossip-frequency`, `transaction-history` instead.
+- Moved extra types returned in `ethclient` package to a new package `plugin/evm/customethclient` which supports the same functionality as `ethclient` but with the new types registered in header and block.
 
 ## [v0.15.0](https://github.com/ava-labs/coreth/releases/tag/v0.15.0)
 
