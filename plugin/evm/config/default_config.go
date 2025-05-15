@@ -7,20 +7,38 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/txpool/legacypool"
 )
 
-func getDefaultConfig() Config {
+const (
+	defaultCommitInterval = 4096
+)
+
+func GetDefaultConfig() Config {
 	return Config{
+		AllowUnprotectedTxHashes: []common.Hash{
+			common.HexToHash("0xfefb2da535e927b85fe68eb81cb2e4a5827c905f78381a01ef2322aa9b0aee8e"), // EIP-1820: https://eips.ethereum.org/EIPS/eip-1820
+		},
+		EnabledEthAPIs: []string{
+			"eth",
+			"eth-filter",
+			"net",
+			"web3",
+			"internal-eth",
+			"internal-blockchain",
+			"internal-transaction",
+		},
 		// Provides 2 minutes of buffer (2s block target) for a commit delay
 		AcceptorQueueLimit:        64,
 		Pruning:                   true,
-		CommitInterval:            4096,
+		CommitInterval:            defaultCommitInterval,
 		TrieCleanCache:            512,
 		TrieDirtyCache:            512,
 		TrieDirtyCommitTarget:     20,
 		TriePrefetcherParallelism: 16,
 		SnapshotCache:             256,
-		StateSyncCommitInterval:   DefaultCommitInterval * 4,
+		StateSyncCommitInterval:   defaultCommitInterval * 4,
 		SnapshotWait:              false,
 		RPCGasCap:                 50_000_000, // 50M Gas Limit
 		RPCTxFeeCap:               100,        // 100 AVAX
@@ -68,7 +86,13 @@ func getDefaultConfig() Config {
 		PriceOptionFastFeePercentage: uint64(105),
 		PriceOptionMaxTip:            uint64(20 * utils.GWei),
 		// Mempool settings
-		TxPoolLifetime: timeToDuration(3 * time.Hour),
+		TxPoolPriceLimit:   legacypool.DefaultConfig.PriceLimit,
+		TxPoolPriceBump:    legacypool.DefaultConfig.PriceBump,
+		TxPoolAccountSlots: legacypool.DefaultConfig.AccountSlots,
+		TxPoolGlobalSlots:  legacypool.DefaultConfig.GlobalSlots,
+		TxPoolAccountQueue: legacypool.DefaultConfig.AccountQueue,
+		TxPoolGlobalQueue:  legacypool.DefaultConfig.GlobalQueue,
+		TxPoolLifetime:     timeToDuration(10 * time.Minute),
 	}
 }
 

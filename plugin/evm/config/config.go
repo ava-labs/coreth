@@ -15,21 +15,6 @@ import (
 	"github.com/spf13/cast"
 )
 
-var (
-	defaultEnabledAPIs = []string{
-		"eth",
-		"eth-filter",
-		"net",
-		"web3",
-		"internal-eth",
-		"internal-blockchain",
-		"internal-transaction",
-	}
-	defaultAllowUnprotectedTxHashes = []common.Hash{
-		common.HexToHash("0xfefb2da535e927b85fe68eb81cb2e4a5827c905f78381a01ef2322aa9b0aee8e"), // EIP-1820: https://eips.ethereum.org/EIPS/eip-1820
-	}
-)
-
 type Duration struct {
 	time.Duration
 }
@@ -184,25 +169,13 @@ type Config struct {
 	HttpBodyLimit uint64 `json:"http-body-limit"`
 }
 
-// TxPoolConfig contains the transaction pool config to be passed
-// to [Config.setDefaults].
-type TxPoolConfig struct {
-	PriceLimit   uint64
-	PriceBump    uint64
-	AccountSlots uint64
-	GlobalSlots  uint64
-	AccountQueue uint64
-	GlobalQueue  uint64
-	Lifetime     time.Duration
-}
-
 // GetConfig returns a new config object with the default values set and the
 // deprecation message.
 // If configBytes is not empty, it will be unmarshalled into the config object.
 // If the unmarshalling fails, an error is returned.
 // If the config is invalid, an error is returned.
 func GetConfig(configBytes []byte, networkID uint32) (Config, string, error) {
-	config := getDefaultConfig()
+	config := GetDefaultConfig()
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &config); err != nil {
 			return Config{}, "", fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
@@ -246,7 +219,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 func (c *Config) validate(networkID uint32) error {
 	// Ensure that non-standard commit interval is not allowed for production networks
 	if constants.ProductionNetworkIDs.Contains(networkID) {
-		defaultConfig := getDefaultConfig()
+		defaultConfig := GetDefaultConfig()
 		if c.CommitInterval != defaultConfig.CommitInterval {
 			return fmt.Errorf("cannot start non-local network with commit interval %d different than %d", c.CommitInterval, defaultConfig.CommitInterval)
 		}

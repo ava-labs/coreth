@@ -27,7 +27,10 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
-const commitInterval = 1024
+const (
+	commitInterval = 1024
+	syncInterval   = 4 * commitInterval
+)
 
 type atomicSyncTestCheckpoint struct {
 	expectedNumLeavesSynced int64       // expected number of leaves to have synced at this checkpoint
@@ -64,7 +67,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	// next trie.
 	for i, checkpoint := range checkpoints {
 		// Create syncer targeting the current [syncTrie].
-		syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, commitInterval*4)
+		syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, syncInterval)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,7 +94,7 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 	}
 
 	// Create syncer targeting the current [targetRoot].
-	syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, commitInterval*4)
+	syncer, err := newAtomicSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, syncInterval)
 	if err != nil {
 		t.Fatal(err)
 	}

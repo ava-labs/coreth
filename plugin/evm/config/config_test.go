@@ -143,18 +143,20 @@ func TestGetConfig(t *testing.T) {
 func TestConfigDefaults(t *testing.T) {
 	txFeeCap := float64(11)
 	enabledEthAPIs := []string{"debug"}
-	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0])
+	txPoolPriceLimit := uint64(100)
+	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q], "tx-pool-price-limit": %d }`, txFeeCap, enabledEthAPIs[0], txPoolPriceLimit)
 	config, _, err := GetConfig([]byte(configJSON), constants.TestnetID)
 	require.NoError(t, err)
-	defaultConfig := getDefaultConfig()
+	defaultConfig := GetDefaultConfig()
 	require.Equal(t, config.PriceOptionMaxTip, defaultConfig.PriceOptionMaxTip)
 	require.Equal(t, config.RPCTxFeeCap, txFeeCap)
 	require.Equal(t, config.EthAPIs(), enabledEthAPIs)
+	require.Equal(t, config.TxPoolPriceLimit, txPoolPriceLimit)
 }
 
 func TestNilConfigBytes(t *testing.T) {
 	config, _, err := GetConfig(nil, constants.TestnetID)
 	require.NoError(t, err)
-	defaultConfig := getDefaultConfig()
+	defaultConfig := GetDefaultConfig()
 	require.Equal(t, config, defaultConfig)
 }
