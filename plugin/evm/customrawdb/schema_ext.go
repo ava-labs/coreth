@@ -8,8 +8,6 @@ import (
 	"github.com/ava-labs/libevm/common"
 )
 
-const FirewoodScheme = "firewood"
-
 var (
 	// snapshotBlockHashKey tracks the block hash of the last snapshot.
 	snapshotBlockHashKey = []byte("SnapshotBlockHash")
@@ -52,4 +50,10 @@ var (
 	// syncPerformedKeyLength is the length of the key for the sync performed metadata key,
 	// and is equal to [syncPerformedPrefix] + block number as uint64.
 	syncPerformedKeyLength = len(syncPerformedPrefix) + wrappers.LongLen
+)
+
+// Firewood keys
+var (
+	FirewoodScheme = "firewood"
+	statePathKey   = []byte("state_path")
 )

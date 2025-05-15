@@ -65,6 +65,8 @@ import (
 
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
+
+	firewood "github.com/ava-labs/firewood-go/ffi"
 )
 
 // ====== If resolving merge conflicts ======
@@ -215,8 +217,11 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		}.BackendConstructor
 	}
 	if c.StateScheme == customrawdb.FirewoodScheme {
-		config.DBOverride = firewooddb.Config{
-			// TODO: Fill in
+		config.DBOverride = firewooddb.TrieDBConfig{
+			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
+			Revisions:         uint(c.StateHistory),
+			ReadCacheStrategy: firewood.CacheAllReads,
+			MetricsPort:       0, // use any open port from OS
 		}.BackendConstructor
 	}
 	return config

@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+	"github.com/ava-labs/coreth/triedb/firewooddb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -506,9 +507,16 @@ func (vm *VM) Initialize(
 	vm.ethConfig.StateScheme = vm.config.StateScheme // If firewood, unexpected in eth code
 
 	// Firewood automatically prunes based on config
-	if vm.ethConfig.Pruning && vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
-		vm.ethConfig.Pruning = false
-		log.Info("Pruning is disabled for firewood, setting to false")
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+		if vm.ethConfig.Pruning {
+			vm.ethConfig.Pruning = false
+			vm.config.Pruning = false
+			log.Warn("Pruning is disabled for firewood, setting to false")
+		}
+		if err := firewooddb.ValidatePath(vm.chaindb, vm.config.StatePath); err != nil {
+			log.Error("failed to validate firewood path", "error", err)
+			return err
+		}
 	}
 
 	// Create directory for offline pruning

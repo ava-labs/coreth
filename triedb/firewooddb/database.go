@@ -6,6 +6,8 @@ package firewooddb
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
@@ -16,6 +18,14 @@ import (
 	"github.com/ava-labs/libevm/trie/triestate"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
+
+	firewood "github.com/ava-labs/firewood-go/ffi"
+)
+
+var (
+	_ IFirewood = &firewood.Database{}
+	_ IProposal = &firewood.Proposal{}
+	_ IDbView   = &firewood.Revision{}
 )
 
 type ProposalContext struct {
@@ -43,7 +53,7 @@ type IProposal interface {
 	// Propose takes a root and a set of keys-values and creates a new proposal
 	// and returns the new root.
 	// If values[i] is nil, the key is deleted.
-	Propose(keys [][]byte, values [][]byte) (IProposal, error)
+	Propose(keys [][]byte, values [][]byte) (*firewood.Proposal, error)
 	// Commit commits the proposal as a new revision
 	Commit() error
 	// Drop drops the proposal; this object may no longer be used after this call.
@@ -52,33 +62,29 @@ type IProposal interface {
 
 type IFirewood interface {
 	// Read the current root of the database.
-	Root() []byte
+	Root() ([]byte, error)
 	// Propose takes a root and a set of keys-values and creates a new proposal
 	// and returns the new root.
 	// If values[i] is nil, the key is deleted.
-	Propose(keys [][]byte, values [][]byte) (IProposal, error)
+	Propose(keys [][]byte, values [][]byte) (*firewood.Proposal, error)
 	// Revision returns a new view that is a copy of the current database
 	// at this historical revision.
-	Revision(root []byte) (IDbView, error)
+	Revision(root []byte) (*firewood.Revision, error)
 	// Close closes the database and releases all resources.
 	Close() error
 }
 
 // Config contains the settings for database.
-type Config struct {
-	Create            bool
-	NodeCacheEntries  uint
+type TrieDBConfig struct {
+	CleanCacheSize    int // Size of the clean cache in bytes
 	Revisions         uint
-	ReadCacheStrategy uint8
+	ReadCacheStrategy firewood.CacheStrategy
 	MetricsPort       uint16
 }
 
-func (c Config) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
+func (c TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
 	return New(diskdb, &c)
 }
-
-// Defaults is the default setting for database if it's not specified.
-var Defaults = &Config{}
 
 type Database struct {
 	fwDisk IFirewood
@@ -88,9 +94,49 @@ type Database struct {
 	proposalTree *ProposalContext
 }
 
-func New(diskdb ethdb.Database, config *Config) *Database {
+func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
+	if trieConfig == nil {
+		log.Error("firewooddb: no config provided")
+		return nil
+	}
+
+	// Create the Firewood config from the provided config.
+	config := &firewood.Config{
+		NodeCacheEntries:  uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
+		Revisions:         trieConfig.Revisions,
+		ReadCacheStrategy: trieConfig.ReadCacheStrategy,
+		MetricsPort:       trieConfig.MetricsPort,
+	}
+
+	// Get the path from the database
+	path, err := customrawdb.ReadStatePath(diskdb)
+	if err != nil {
+		log.Error("firewooddb: error reading state path", "error", err)
+		return nil
+	}
+
+	// We already verified that the path is not a directory.
+	_, err = os.Stat(path)
+	// If directory doesn't exist, we need to create it.
+	if os.IsNotExist(err) {
+		// Parent directory path
+		dir := filepath.Dir(path)
+		// Create all necessary parent directories
+		if mkErr := os.MkdirAll(dir, 0755); mkErr != nil {
+			log.Error("firewooddb: error creating state path", "error", mkErr, "path", path)
+			return nil
+		}
+		config.Create = true
+	}
+
+	fw, err := firewood.New(path, config)
+	if err != nil {
+		log.Error("firewooddb: error creating firewood database", "error", err)
+		return nil
+	}
+
 	return &Database{
-		fwDisk:      nil, // TODO: Initialize with the actual Firewood database.
+		fwDisk:      fw, // TODO: Initialize with the actual Firewood database.
 		proposalMap: make(map[common.Hash][]*ProposalContext),
 		proposalTree: &ProposalContext{
 			Proposal: nil,
@@ -102,6 +148,22 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	}
 }
 
+func ValidatePath(diskdb ethdb.Database, path string) error {
+	// Some lightweight checks, not sure if these are sufficient or necessary.
+	if path == "" {
+		return errors.New("firewooddb: empty path")
+	}
+
+	cleanedPath := filepath.Clean(path)
+	info, err := os.Stat(cleanedPath)
+	if err == nil && info.IsDir() {
+		return fmt.Errorf("firewooddb: path %q is already a directory", cleanedPath)
+	}
+
+	// store file path
+	return customrawdb.WriteStatePath(diskdb, cleanedPath)
+}
+
 // Scheme returns the scheme of the database.
 func (db *Database) Scheme() string {
 	return customrawdb.FirewoodScheme
@@ -111,7 +173,14 @@ func (db *Database) Scheme() string {
 // matches the given root.
 func (db *Database) Initialized(root common.Hash) bool {
 	// Shouldn't use proposal tree root here, since it may be empty.
-	return common.BytesToHash(db.fwDisk.Root()) == root
+	rootBytes, err := db.fwDisk.Root()
+	if err != nil {
+		// TODO: Is this the correct log level?
+		log.Warn("firewooddb: error getting root", "error", err)
+		return false
+	}
+
+	return common.BytesToHash(rootBytes) == root
 }
 
 // Update takes a root and a set of keys-values and creates a new proposal.

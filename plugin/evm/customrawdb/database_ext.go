@@ -63,6 +63,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	return rawdb.InspectDatabase(db, keyPrefix, keyStart, options...)
 }
 
+// ParseStateSchemeExt parses the state scheme from the provided string.
+// It checks the rawdb package for HashDB or PathDB schemes.
+// If it's neither of those, it checks to see if the string is set to FirewoodScheme.
 func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	// Check for eth scheme
 	scheme, err := rawdb.ParseStateScheme(provided, disk)
@@ -82,4 +85,28 @@ func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	}
 
 	return "", fmt.Errorf("Unknown state scheme %q", provided)
+}
+
+func WriteStatePath(db ethdb.KeyValueWriter, path string) error {
+	// Check if the path is valid
+	if path == "" {
+		return fmt.Errorf("Invalid state path %q", path)
+	}
+
+	// Write the state path to the database
+	return db.Put(statePathKey, []byte(path))
+}
+
+func ReadStatePath(db ethdb.KeyValueReader) (string, error) {
+	has, err := db.Has(statePathKey)
+	if err != nil || !has {
+		return "", err
+	}
+	// Read the state path from the database
+	path, err := db.Get(statePathKey)
+	if err != nil {
+		return "", err
+	}
+
+	return string(path), nil
 }
