@@ -4,17 +4,8 @@
 package extension
 
 import (
-	"errors"
-
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
-)
-
-var (
-	errNilConfig              = errors.New("nil extension config")
-	errNilNetworkCodec        = errors.New("nil network codec")
-	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
-	errNilSyncableParser      = errors.New("nil syncable parser")
 )
 
 type LeafRequestConfig struct {
