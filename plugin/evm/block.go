@@ -33,7 +33,15 @@ import (
 var (
 	_ snowman.Block           = (*Block)(nil)
 	_ block.WithVerifyContext = (*Block)(nil)
+	_ EthBlockWrapper         = (*Block)(nil)
 )
+
+// EthBlockWrapper can be implemented by a concrete block wrapper type to
+// return *types.Block, which is needed to update chain pointers at the
+// end of the sync operation.
+type EthBlockWrapper interface {
+	GetEthBlock() *types.Block
+}
 
 var errMissingUTXOs = errors.New("missing UTXOs")
 
@@ -445,3 +453,7 @@ func (b *Block) Bytes() []byte {
 }
 
 func (b *Block) String() string { return fmt.Sprintf("EVM block, ID = %s", b.ID()) }
+
+func (b *Block) GetEthBlock() *types.Block {
+	return b.ethBlock
+}
