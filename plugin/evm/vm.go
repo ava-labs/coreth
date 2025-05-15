@@ -259,7 +259,7 @@ type VM struct {
 
 	toEngine chan<- commonEng.Message
 
-	syntacticBlockValidator BlockValidator
+	syntacticBlockValidator *blockValidator
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
@@ -415,7 +415,7 @@ func (vm *VM) Initialize(
 	case avalanchegoConstants.FujiID:
 		extDataHashes = fujiExtDataHashes
 	}
-	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
+	vm.syntacticBlockValidator = newBlockValidator(extDataHashes)
 
 	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
 	// config, free fuji)

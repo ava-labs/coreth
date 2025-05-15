@@ -29,15 +29,11 @@ var (
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
 
-type BlockValidator interface {
-	SyntacticVerify(b *Block, rules params.Rules) error
-}
-
 type blockValidator struct {
 	extDataHashes map[common.Hash]common.Hash
 }
 
-func NewBlockValidator(extDataHashes map[common.Hash]common.Hash) BlockValidator {
+func newBlockValidator(extDataHashes map[common.Hash]common.Hash) *blockValidator {
 	return &blockValidator{
 		extDataHashes: extDataHashes,
 	}
