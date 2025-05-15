@@ -25,7 +25,7 @@ type stateSyncServer struct {
 	chain *core.BlockChain
 
 	provider         SummaryProvider
-	SyncableInterval uint64
+	syncableInterval uint64
 }
 
 type Server interface {
@@ -36,7 +36,7 @@ type Server interface {
 func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
 	return &stateSyncServer{
 		chain:            chain,
-		SyncableInterval: syncableInterval,
+		syncableInterval: syncableInterval,
 		provider:         provider,
 	}
 }
@@ -47,7 +47,7 @@ func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterv
 // If no summary is available, [database.ErrNotFound] must be returned.
 func (server *stateSyncServer) GetLastStateSummary(context.Context) (block.StateSummary, error) {
 	lastHeight := server.chain.LastAcceptedBlock().NumberU64()
-	lastSyncSummaryNumber := lastHeight - lastHeight%server.SyncableInterval
+	lastSyncSummaryNumber := lastHeight - lastHeight%server.syncableInterval
 
 	summary, err := server.stateSummaryAtHeight(lastSyncSummaryNumber)
 	if err != nil {
@@ -65,7 +65,7 @@ func (server *stateSyncServer) GetStateSummary(_ context.Context, height uint64)
 	summaryBlock := server.chain.GetBlockByNumber(height)
 	if summaryBlock == nil ||
 		summaryBlock.NumberU64() > server.chain.LastAcceptedBlock().NumberU64() ||
-		summaryBlock.NumberU64()%server.SyncableInterval != 0 {
+		summaryBlock.NumberU64()%server.syncableInterval != 0 {
 		return nil, database.ErrNotFound
 	}
 
