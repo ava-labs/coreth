@@ -36,7 +36,6 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
@@ -44,11 +43,12 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
 	"github.com/ava-labs/libevm/log"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
 
 var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
+	maxBlobsPerTransaction = ethparams.MaxBlobGasPerBlock / ethparams.BlobTxBlobGasPerBlob
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -195,7 +195,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 type feeBackend interface {
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	CurrentHeader() *types.Header
-	ChainConfig() *params.ChainConfig
+	ChainConfig() *ethparams.ChainConfig
 }
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
