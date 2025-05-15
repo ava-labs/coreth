@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -40,10 +41,12 @@ import (
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/triedb/hashdb"
@@ -59,6 +62,8 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/sync/handlers"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/warp"
 
 	// Force-load tracer engine to trigger registration
@@ -296,8 +301,8 @@ type VM struct {
 
 	logger corethlog.Logger
 	// State sync server and client
-	StateSyncServer
-	StateSyncClient
+	vmsync.Server
+	vmsync.Client
 
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
@@ -508,7 +513,12 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
 	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.networkCodec = message.Codec
+	networkCodec, err := message.NewCodec(atomicsync.AtomicSyncSummary{})
+	if err != nil {
+		return fmt.Errorf("failed to create codec manager: %w", err)
+	}
+	vm.networkCodec = networkCodec
+
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)
 
@@ -586,14 +596,7 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
-	vm.setAppRequestHandlers()
-
-	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
-		Chain:            vm.blockChain,
-		AtomicTrie:       vm.atomicTrie,
-		SyncableInterval: vm.config.StateSyncCommitInterval,
-	})
-	return vm.initializeStateSyncClient(lastAcceptedHeight)
+	return vm.initializeStateSync(lastAcceptedHeight)
 }
 
 func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
@@ -692,7 +695,55 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 // initializeStateSyncClient initializes the client for performing state sync.
 // If state sync is disabled, this function will wipe any ongoing summary from
 // disk to ensure that we do not continue syncing from an invalid snapshot.
-func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
+func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
+	// Create standalone EVM TrieDB (read only) for serving leafs requests.
+	// We create a standalone TrieDB here, so that it has a standalone cache from the one
+	// used by the node when processing blocks.
+	evmTrieDB := triedb.NewDatabase(
+		vm.chaindb,
+		&triedb.Config{
+			DBOverride: hashdb.Config{
+				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
+			}.BackendConstructor,
+		},
+	)
+	var leafHandlerConfigs []*extension.LeafRequestConfig
+	syncStats := handlerstats.GetOrRegisterHandlerStats(metrics.Enabled)
+	// register default leaf request handler for state trie
+	leafHandlerConfigs = append(leafHandlerConfigs, &extension.LeafRequestConfig{
+		LeafType:   message.StateTrieNode,
+		MetricName: "sync_state_trie_leaves",
+		Handler: handlers.NewLeafsRequestHandler(evmTrieDB,
+			message.StateTrieKeyLength,
+			vm.blockChain, vm.networkCodec,
+			syncStats,
+		),
+	})
+	leafHandler := atomicsync.NewAtomicLeafHandler()
+	leafHandlerConfigs = append(leafHandlerConfigs, &extension.LeafRequestConfig{
+		LeafType:   atomicsync.AtomicTrieNode,
+		MetricName: "sync_atomic_trie_leaves",
+		Handler:    leafHandler,
+	})
+
+	leafHandlers := make(LeafHandlers, len(leafHandlerConfigs))
+	for _, leafConfig := range leafHandlerConfigs {
+		if _, exists := leafHandlers[leafConfig.LeafType]; exists {
+			return fmt.Errorf("duplicate leaf type %v", leafConfig.LeafType)
+		}
+		leafHandlers[leafConfig.LeafType] = leafConfig.Handler
+	}
+	networkHandler := newNetworkHandler(
+		vm.blockChain,
+		vm.chaindb,
+		vm.warpBackend,
+		vm.networkCodec,
+		leafHandlers,
+		syncStats,
+	)
+	vm.Network.SetRequestHandler(networkHandler)
+
+	vm.Server = vmsync.SyncServer(vm.blockChain, &atomicsync.AtomicSummaryProvider{}, vm.config.StateSyncCommitInterval)
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
@@ -708,35 +759,41 @@ func (vm *VM) initializeStateSyncClient(lastAcceptedHeight uint64) error {
 		}
 	}
 
-	vm.StateSyncClient = NewStateSyncClient(&stateSyncClientConfig{
-		chain: vm.eth,
-		state: vm.State,
-		client: statesyncclient.NewClient(
+	// Initialize the state sync client
+	leafMetricsNames := make(map[message.NodeType]string, len(leafHandlerConfigs))
+	for _, leafConfig := range leafHandlerConfigs {
+		leafMetricsNames[leafConfig.LeafType] = leafConfig.MetricName
+	}
+	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
+		Chain: vm.eth,
+		State: vm.State,
+		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.client,
 				Codec:            vm.networkCodec,
-				Stats:            stats.NewClientSyncerStats(),
+				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
 				BlockParser:      vm,
 			},
 		),
-		enabled:              stateSyncEnabled,
-		skipResume:           vm.config.StateSyncSkipResume,
-		stateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		stateSyncRequestSize: vm.config.StateSyncRequestSize,
-		lastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		chaindb:              vm.chaindb,
-		metadataDB:           vm.metadataDB,
-		acceptedBlockDB:      vm.acceptedBlockDB,
-		db:                   vm.versiondb,
-		atomicBackend:        vm.atomicBackend,
-		toEngine:             vm.toEngine,
+		Enabled:              stateSyncEnabled,
+		SkipResume:           vm.config.StateSyncSkipResume,
+		StateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
+		StateSyncRequestSize: vm.config.StateSyncRequestSize,
+		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
+		ChaindDB:             vm.chaindb,
+		VerDB:                vm.versiondb,
+		MetadataDB:           vm.metadataDB,
+		ToEngine:             vm.toEngine,
+		Acceptor:             vm,
+		SyncableParser:       atomicsync.NewAtomicSyncSummaryParser(),
+		SyncExtender:         &atomicsync.AtomicSyncExtender{},
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
 	// sync using a snapshot that has been modified by the node running normal operations.
 	if !stateSyncEnabled {
-		return vm.StateSyncClient.ClearOngoingSummary()
+		return vm.Client.ClearOngoingSummary()
 	}
 
 	return nil
@@ -1037,11 +1094,11 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 // onBootstrapStarted marks this VM as bootstrapping
 func (vm *VM) onBootstrapStarted() error {
 	vm.bootstrapped.Set(false)
-	if err := vm.StateSyncClient.Error(); err != nil {
+	if err := vm.Client.Error(); err != nil {
 		return err
 	}
 	// After starting bootstrapping, do not attempt to resume a previous state sync.
-	if err := vm.StateSyncClient.ClearOngoingSummary(); err != nil {
+	if err := vm.Client.ClearOngoingSummary(); err != nil {
 		return err
 	}
 	// Ensure snapshots are initialized before bootstrapping (i.e., if state sync is skipped).
@@ -1238,31 +1295,6 @@ func (vm *VM) initBlockBuilding() error {
 	return nil
 }
 
-// setAppRequestHandlers sets the request handlers for the VM to serve state sync
-// requests.
-func (vm *VM) setAppRequestHandlers() {
-	// Create standalone EVM TrieDB (read only) for serving leafs requests.
-	// We create a standalone TrieDB here, so that it has a standalone cache from the one
-	// used by the node when processing blocks.
-	evmTrieDB := triedb.NewDatabase(
-		vm.chaindb,
-		&triedb.Config{
-			DBOverride: hashdb.Config{
-				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			}.BackendConstructor,
-		},
-	)
-	networkHandler := newNetworkHandler(
-		vm.blockChain,
-		vm.chaindb,
-		evmTrieDB,
-		vm.atomicTrie.TrieDB(),
-		vm.warpBackend,
-		vm.networkCodec,
-	)
-	vm.Network.SetRequestHandler(networkHandler)
-}
-
 // Shutdown implements the snowman.ChainVM interface
 func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
@@ -1272,7 +1304,7 @@ func (vm *VM) Shutdown(context.Context) error {
 		vm.cancel()
 	}
 	vm.Network.Shutdown()
-	if err := vm.StateSyncClient.Shutdown(); err != nil {
+	if err := vm.Client.Shutdown(); err != nil {
 		log.Error("error stopping state syncer", "err", err)
 	}
 	close(vm.shutdownChan)
@@ -1873,4 +1905,8 @@ func (vm *VM) newExportTx(
 	}
 
 	return tx, nil
+}
+
+func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
 }
