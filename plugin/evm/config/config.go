@@ -245,7 +245,6 @@ type Config struct {
 
 	// Database Scheme
 	StateScheme string `json:"state-scheme"`
-	StatePath   string `json:"state-path"`
 }
 
 // TxPoolConfig contains the transaction pool config to be passed

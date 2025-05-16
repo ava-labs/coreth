@@ -218,6 +218,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 	}
 	if c.StateScheme == customrawdb.FirewoodScheme {
 		config.DBOverride = firewooddb.TrieDBConfig{
+			FileName:          "firewood_state",
 			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
 			Revisions:         uint(c.StateHistory),
 			ReadCacheStrategy: firewood.CacheAllReads,

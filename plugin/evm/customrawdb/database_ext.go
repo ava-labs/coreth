@@ -87,7 +87,9 @@ func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	return "", fmt.Errorf("Unknown state scheme %q", provided)
 }
 
-func WriteStatePath(db ethdb.KeyValueWriter, path string) error {
+// WriteDatabasePath writes the path to the database files.
+// This should only be written once.
+func WriteDatabasePath(db ethdb.KeyValueWriter, path string) error {
 	// Check if the path is valid
 	if path == "" {
 		return fmt.Errorf("Invalid state path %q", path)
@@ -97,7 +99,8 @@ func WriteStatePath(db ethdb.KeyValueWriter, path string) error {
 	return db.Put(statePathKey, []byte(path))
 }
 
-func ReadStatePath(db ethdb.KeyValueReader) (string, error) {
+// ReadDatabasePath reads the path to the database files.
+func ReadDatabasePath(db ethdb.KeyValueReader) (string, error) {
 	has, err := db.Has(statePathKey)
 	if err != nil || !has {
 		return "", err

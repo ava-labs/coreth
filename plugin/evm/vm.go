@@ -46,7 +46,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/ava-labs/coreth/triedb/firewooddb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -407,6 +406,12 @@ func (vm *VM) Initialize(
 		}
 	}
 
+	// Write where the database files are located to be used by any Firewood
+	// databases set up later.
+	if err := customrawdb.WriteDatabasePath(vm.chaindb, chainCtx.ChainDataDir); err != nil {
+		return fmt.Errorf("failed to write database path: %w", err)
+	}
+
 	g := new(core.Genesis)
 	if err := json.Unmarshal(genesisBytes, g); err != nil {
 		return err
@@ -504,19 +509,12 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
-	vm.ethConfig.StateScheme = vm.config.StateScheme // If firewood, unexpected in eth code
 
 	// Firewood automatically prunes based on config
-	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
-		if vm.ethConfig.Pruning {
-			vm.ethConfig.Pruning = false
-			vm.config.Pruning = false
-			log.Warn("Pruning is disabled for firewood, setting to false")
-		}
-		if err := firewooddb.ValidatePath(vm.chaindb, vm.config.StatePath); err != nil {
-			log.Error("failed to validate firewood path", "error", err)
-			return err
-		}
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme && vm.ethConfig.Pruning {
+		log.Warn("Pruning is disabled for firewood, setting to false")
+		vm.ethConfig.Pruning = false
+		vm.config.Pruning = false
 	}
 
 	// Create directory for offline pruning

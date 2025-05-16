@@ -76,7 +76,8 @@ type IFirewood interface {
 
 // Config contains the settings for database.
 type TrieDBConfig struct {
-	CleanCacheSize    int // Size of the clean cache in bytes
+	FileName          string // File name of the database
+	CleanCacheSize    int    // Size of the clean cache in bytes
 	Revisions         uint
 	ReadCacheStrategy firewood.CacheStrategy
 	MetricsPort       uint16
@@ -100,33 +101,10 @@ func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
 		return nil
 	}
 
-	// Create the Firewood config from the provided config.
-	config := &firewood.Config{
-		NodeCacheEntries:  uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
-		Revisions:         trieConfig.Revisions,
-		ReadCacheStrategy: trieConfig.ReadCacheStrategy,
-		MetricsPort:       trieConfig.MetricsPort,
-	}
-
-	// Get the path from the database
-	path, err := customrawdb.ReadStatePath(diskdb)
+	config, path, err := validateConfig(diskdb, trieConfig)
 	if err != nil {
-		log.Error("firewooddb: error reading state path", "error", err)
+		log.Error("firewooddb: error validating config", "error", err)
 		return nil
-	}
-
-	// We already verified that the path is not a directory.
-	_, err = os.Stat(path)
-	// If directory doesn't exist, we need to create it.
-	if os.IsNotExist(err) {
-		// Parent directory path
-		dir := filepath.Dir(path)
-		// Create all necessary parent directories
-		if mkErr := os.MkdirAll(dir, 0755); mkErr != nil {
-			log.Error("firewooddb: error creating state path", "error", mkErr, "path", path)
-			return nil
-		}
-		config.Create = true
 	}
 
 	fw, err := firewood.New(path, config)
@@ -148,20 +126,47 @@ func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
 	}
 }
 
-func ValidatePath(diskdb ethdb.Database, path string) error {
-	// Some lightweight checks, not sure if these are sufficient or necessary.
-	if path == "" {
-		return errors.New("firewooddb: empty path")
+func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*firewood.Config, string, error) {
+	// Get the path from the database
+	path, err := customrawdb.ReadDatabasePath(diskdb)
+	if err != nil {
+		return nil, "", fmt.Errorf("firewooddb: error reading database path: %w", err)
 	}
 
-	cleanedPath := filepath.Clean(path)
-	info, err := os.Stat(cleanedPath)
-	if err == nil && info.IsDir() {
-		return fmt.Errorf("firewooddb: path %q is already a directory", cleanedPath)
+	// Check that the directory exists
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("firewooddb: error checking database path: %w", err)
+	} else if !info.IsDir() {
+		return nil, "", fmt.Errorf("firewooddb: database path is not a directory: %s", path)
 	}
 
-	// store file path
-	return customrawdb.WriteStatePath(diskdb, cleanedPath)
+	// Append the filename to the path
+	if trieConfig.FileName == "" {
+		return nil, "", errors.New("firewooddb: no filename provided")
+	}
+	path = filepath.Join(path, trieConfig.FileName)
+
+	// Check if the file exists
+	info, err = os.Stat(path)
+	exists := false
+	if err != nil {
+		if info.IsDir() {
+			return nil, "", fmt.Errorf("firewooddb: database path is a directory: %s", path)
+		}
+		exists = true
+	}
+
+	// Create the Firewood config from the provided config.
+	config := &firewood.Config{
+		Create:            !exists,                               // Use any existing file
+		NodeCacheEntries:  uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
+		Revisions:         trieConfig.Revisions,
+		ReadCacheStrategy: trieConfig.ReadCacheStrategy,
+		MetricsPort:       trieConfig.MetricsPort,
+	}
+
+	return config, path, nil
 }
 
 // Scheme returns the scheme of the database.
