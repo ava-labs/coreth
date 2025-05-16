@@ -19,6 +19,8 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 )
 
+const testCodecVersion = 0
+
 var TestTxCodec codec.Manager
 
 func init() {
@@ -28,7 +30,7 @@ func init() {
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		TestTxCodec.RegisterCodec(CodecVersion, c),
+		TestTxCodec.RegisterCodec(testCodecVersion, c),
 	)
 
 	if errs.Errored() {
