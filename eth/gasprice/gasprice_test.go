@@ -47,6 +47,7 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/event"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/require"
 )
 
@@ -235,7 +236,7 @@ func testGenBlock(t *testing.T, tip int64, numTx int) func(int, *core.BlockGen) 
 				ChainID:   params.TestChainConfig.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
-				Gas:       params.TxGas,
+				Gas:       ethparams.TxGas,
 				GasFeeCap: feeCap,
 				GasTipCap: txTip,
 				Data:      []byte{},
@@ -294,7 +295,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 					ChainID:   params.TestChainConfig.ChainID,
 					Nonce:     b.TxNonce(addr),
 					To:        &common.Address{},
-					Gas:       params.TxGas,
+					Gas:       ethparams.TxGas,
 					GasFeeCap: feeCap,
 					GasTipCap: tip,
 					Data:      []byte{},
@@ -308,7 +309,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 					ChainID:   params.TestChainConfig.ChainID,
 					Nonce:     b.TxNonce(addr),
 					To:        &common.Address{},
-					Gas:       params.TxGas,
+					Gas:       ethparams.TxGas,
 					GasFeeCap: feeCap,
 					GasTipCap: common.Big1,
 					Data:      []byte{},
@@ -361,7 +362,7 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 			tx := types.NewTx(&types.LegacyTx{
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
-				Gas:      params.TxGas,
+				Gas:      ethparams.TxGas,
 				GasPrice: gasPrice,
 				Data:     []byte{},
 			})
@@ -403,7 +404,7 @@ func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       1000,
-		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(params.TxGas)),
+		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(ethparams.TxGas)),
 		// The tip on the transaction is very large to pay the block gas cost.
 		genBlock: testGenBlock(t, 100_000, 1),
 		// The actual tip doesn't matter, we just want to ensure that the tip is
