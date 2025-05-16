@@ -262,8 +262,6 @@ type VM struct {
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
 	atomicTxRepository *atomicstate.AtomicRepository
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie *atomicstate.AtomicTrie
 	// [atomicBackend] abstracts verification and processing of atomic transactions
 	atomicBackend *atomicstate.AtomicBackend
 
@@ -569,7 +567,6 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
-	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
@@ -590,7 +587,7 @@ func (vm *VM) Initialize(
 
 	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
 		Chain:            vm.blockChain,
-		AtomicTrie:       vm.atomicTrie,
+		AtomicTrie:       vm.atomicBackend.AtomicTrie(),
 		SyncableInterval: vm.config.StateSyncCommitInterval,
 	})
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
@@ -1256,7 +1253,7 @@ func (vm *VM) setAppRequestHandlers() {
 		vm.blockChain,
 		vm.chaindb,
 		evmTrieDB,
-		vm.atomicTrie.TrieDB(),
+		vm.atomicBackend.AtomicTrie().TrieDB(),
 		vm.warpBackend,
 		vm.networkCodec,
 	)

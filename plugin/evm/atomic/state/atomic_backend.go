@@ -24,7 +24,7 @@ const (
 	progressLogFrequency       = 30 * time.Second
 )
 
-// AtomicBackend implements the AtomicBackend interface using
+// AtomicBackend provides an interface to the atomic trie and shared memory.
 // the AtomicTrie, AtomicRepository, and the VM's shared memory.
 type AtomicBackend struct {
 	codec        codec.Manager
