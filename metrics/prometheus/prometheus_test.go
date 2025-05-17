@@ -20,8 +20,7 @@ func TestGatherer_Gather(t *testing.T) {
 	registry := metrics.NewRegistry()
 	register := func(t *testing.T, name string, collector any) {
 		t.Helper()
-		err := registry.Register(name, collector)
-		require.NoError(t, err)
+		require.NoError(t, registry.Register(name, collector))
 	}
 
 	counter := metrics.NewCounter()
