@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	_               Client         = &MockClient{}
-	mockBlockParser EthBlockParser = &testBlockParser{}
+	_               Client         = (*MockClient)(nil)
+	mockBlockParser EthBlockParser = (*testBlockParser)(nil)
 )
 
 // TODO replace with gomock library

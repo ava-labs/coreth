@@ -171,7 +171,7 @@ func TestLeafsRequestValidation(t *testing.T) {
 	}
 }
 
-var _ RequestHandler = &mockHandler{}
+var _ RequestHandler = (*mockHandler)(nil)
 
 type mockHandler struct {
 	handleStateTrieCalled,

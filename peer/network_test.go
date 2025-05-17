@@ -41,18 +41,18 @@ var (
 		Patch: 0,
 	}
 
-	_ message.Request = &HelloRequest{}
-	_                 = &HelloResponse{}
-	_                 = &GreetingRequest{}
-	_                 = &GreetingResponse{}
-	_                 = &TestMessage{}
+	_ message.Request = (*HelloRequest)(nil)
+	_                 = (*HelloResponse)(nil)
+	_                 = (*GreetingRequest)(nil)
+	_                 = (*GreetingResponse)(nil)
+	_                 = (*TestMessage)(nil)
 
-	_ message.RequestHandler = &HelloGreetingRequestHandler{}
-	_ message.RequestHandler = &testRequestHandler{}
+	_ message.RequestHandler = (*HelloGreetingRequestHandler)(nil)
+	_ message.RequestHandler = (*testRequestHandler)(nil)
 
-	_ common.AppSender = testAppSender{}
+	_ common.AppSender = (*testAppSender)(nil)
 
-	_ p2p.Handler = &testSDKHandler{}
+	_ p2p.Handler = (*testSDKHandler)(nil)
 )
 
 func TestNetworkDoesNotConnectToItself(t *testing.T) {

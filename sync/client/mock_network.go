@@ -13,7 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 )
 
-var _ peer.NetworkClient = &mockNetwork{}
+var _ peer.NetworkClient = (*mockNetwork)(nil)
 
 // TODO replace with gomock library
 type mockNetwork struct {
