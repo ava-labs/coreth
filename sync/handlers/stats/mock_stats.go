@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var _ HandlerStats = &MockHandlerStats{}
+var _ HandlerStats = (*MockHandlerStats)(nil)
 
 // MockHandlerStats is mock for capturing and asserting on handler metrics in test
 type MockHandlerStats struct {

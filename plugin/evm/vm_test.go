@@ -211,7 +211,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		CantSendAppGossip: true,
 		SendAppGossipF:    func(context.Context, commonEng.SendConfig, []byte) error { return nil },
 	}
-	err := vm.Initialize(
+	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,
 		prefixedDB,
@@ -221,8 +221,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		issuer,
 		nil,
 		appSender,
-	)
-	require.NoError(t, err, "error initializing vm")
+	), "error initializing vm")
 
 	if !config.isSyncing {
 		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
@@ -449,14 +448,12 @@ func TestImportMissingUTXOs(t *testing.T) {
 		},
 	})
 	defer func() {
-		err := tvm1.vm.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, tvm1.vm.Shutdown(context.Background()))
 	}()
 
 	importTx, err := tvm1.vm.newImportTx(tvm1.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
-	err = tvm1.vm.mempool.AddLocalTx(importTx)
-	require.NoError(t, err)
+	require.NoError(t, tvm1.vm.mempool.AddLocalTx(importTx))
 	<-tvm1.toEngine
 	blk, err := tvm1.vm.BuildBlock(context.Background())
 	require.NoError(t, err)
@@ -466,8 +463,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 		fork: &fork,
 	}).vm
 	defer func() {
-		err := vm2.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, vm2.Shutdown(context.Background()))
 	}()
 
 	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
@@ -3707,8 +3703,16 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)
-	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, config, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
-	require.NoError(t, err)
+	require.NoError(t, reinitVM.Initialize(
+		context.Background(),
+		newCTX,
+		tvm.db,
+		genesis,
+		[]byte{},
+		config,
+		tvm.toEngine,
+		[]*commonEng.Fx{},
+		tvm.appSender))
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
 
@@ -3836,8 +3840,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require := require.New(t)
 
 	gspec := new(core.Genesis)
-	err := json.Unmarshal([]byte(genesisJSONCancun), gspec)
-	require.NoError(err)
+	require.NoError(json.Unmarshal([]byte(genesisJSONCancun), gspec))
 
 	// Make one block with a single blob tx
 	signer := types.NewCancunSigner(gspec.Config.ChainID)
