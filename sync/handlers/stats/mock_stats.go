@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package stats
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var _ HandlerStats = &MockHandlerStats{}
+var _ HandlerStats = (*MockHandlerStats)(nil)
 
 // MockHandlerStats is mock for capturing and asserting on handler metrics in test
 type MockHandlerStats struct {

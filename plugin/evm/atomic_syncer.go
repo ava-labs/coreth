@@ -1,4 +1,4 @@
-// (c) 2019-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	_ Syncer                  = &atomicSyncer{}
-	_ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
+	_ Syncer                  = (*atomicSyncer)(nil)
+	_ syncclient.LeafSyncTask = (*atomicSyncerLeafTask)(nil)
 )
 
 // atomicSyncer is used to sync the atomic trie from the network. The CallbackLeafSyncer

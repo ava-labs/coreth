@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -84,7 +84,6 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	atomicTrie := atomicBackend.AtomicTrie()
 
 	lastCommittedHash, lastCommittedHeight := atomicTrie.LastCommitted()
-	require.NoError(err)
 	require.NotEqual(common.Hash{}, lastCommittedHash)
 	require.EqualValues(1000, lastCommittedHeight)
 
@@ -98,8 +97,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 
 	nextRoot, nodes, err := atomicTrieSnapshot.Commit(false)
 	require.NoError(err)
-	err = atomicTrie.InsertTrie(nodes, nextRoot)
-	require.NoError(err)
+	require.NoError(atomicTrie.InsertTrie(nodes, nextRoot))
 	isCommit, err := atomicTrie.AcceptTrie(lastCommittedHeight+commitInterval, nextRoot)
 	require.NoError(err)
 	require.True(isCommit)

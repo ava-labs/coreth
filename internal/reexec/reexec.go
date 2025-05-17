@@ -1,3 +1,6 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 // This file originates from Docker/Moby,
 // https://github.com/moby/moby/blob/master/pkg/reexec/reexec.go
 // Licensed under Apache License 2.0: https://github.com/moby/moby/blob/master/LICENSE

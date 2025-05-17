@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomic
@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	_                           UnsignedAtomicTx       = &UnsignedImportTx{}
-	_                           secp256k1fx.UnsignedTx = &UnsignedImportTx{}
+	_                           UnsignedAtomicTx       = (*UnsignedImportTx)(nil)
+	_                           secp256k1fx.UnsignedTx = (*UnsignedImportTx)(nil)
 	ErrImportNonAVAXInputBanff                         = errors.New("import input cannot contain non-AVAX in Banff")
 	ErrImportNonAVAXOutputBanff                        = errors.New("import output cannot contain non-AVAX in Banff")
 	ErrNoImportInputs                                  = errors.New("tx has no imported inputs")

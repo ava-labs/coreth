@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package prometheus
@@ -7,21 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/libevm/metrics"
 )
 
 func TestGatherer_Gather(t *testing.T) {
-	testutils.WithMetrics(t)
+	metricstest.WithMetrics(t)
 
 	registry := metrics.NewRegistry()
 	register := func(t *testing.T, name string, collector any) {
 		t.Helper()
-		err := registry.Register(name, collector)
-		require.NoError(t, err)
+		require.NoError(t, registry.Register(name, collector))
 	}
 
 	counter := metrics.NewCounter()

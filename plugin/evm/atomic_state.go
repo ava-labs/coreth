@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-var _ AtomicState = &atomicState{}
+var _ AtomicState = (*atomicState)(nil)
 
 // AtomicState is an abstraction created through AtomicBackend
 // and can be used to apply the VM's state change for atomic txs

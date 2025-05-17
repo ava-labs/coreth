@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesyncclient
@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	_               Client         = &MockClient{}
-	mockBlockParser EthBlockParser = &testBlockParser{}
+	_               Client         = (*MockClient)(nil)
+	mockBlockParser EthBlockParser = (*testBlockParser)(nil)
 )
 
 // TODO replace with gomock library
