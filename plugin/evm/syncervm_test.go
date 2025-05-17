@@ -39,8 +39,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/statesync"
-	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
+	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -344,7 +344,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 
 	// make some accounts
 	trieDB := triedb.NewDatabase(server.vm.chaindb, nil)
-	root, accounts := statesync.FillAccountsWithOverlappingStorage(t, trieDB, types.EmptyRootHash, 1000, 16)
+	root, accounts := statesynctest.FillAccountsWithOverlappingStorage(t, trieDB, types.EmptyRootHash, 1000, 16)
 
 	// patch serverVM's lastAcceptedBlock to have the new root
 	// and update the vm's state so the trie with accounts will
@@ -430,7 +430,7 @@ type syncVMSetup struct {
 	serverAppSender *enginetest.Sender
 
 	includedAtomicTxs []*atomic.Tx
-	fundedAccounts    map[*utils.Key]*types.StateAccount
+	fundedAccounts    map[*utilstest.Key]*types.StateAccount
 
 	syncerVM             *VM
 	syncerDB             avalanchedatabase.Database

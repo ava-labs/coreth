@@ -21,16 +21,20 @@ grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
 # Read excluded directories into arrays usable by find/grep
 function read_excluded_dirs {
   EXCLUDE_DIRS_FILE="./scripts/lint-excluded-dirs.txt"
-  FIND_EXCLUDE_ARGS=()
+  PRUNE_EXPR=()
   GREP_EXCLUDE_ARGS=()
+  ROOT=$(git rev-parse --show-toplevel)
 
   if [[ -f "$EXCLUDE_DIRS_FILE" ]]; then
     while IFS= read -r line || [[ -n "$line" ]]; do
       [[ -n "$line" ]] || continue
-      FIND_EXCLUDE_ARGS+=(! -path "./$line/*")
+      abs_path="$ROOT/$line"
+      PRUNE_EXPR+=(-path "$abs_path" -o)
       GREP_EXCLUDE_ARGS+=(--exclude-dir=""$line"")
     done <"$EXCLUDE_DIRS_FILE"
   fi
+  # remove trailing -o
+  PRUNE_EXPR=(\( "${PRUNE_EXPR[@]:0:${#PRUNE_EXPR[@]}-1}" \) -prune -false -o)
 }
 
 if [ "$#" -eq 0 ]; then
@@ -103,7 +107,11 @@ function test_interface_compliance_nil {
 
 function test_import_testing_only_in_tests {
   ROOT=$(git rev-parse --show-toplevel)
-  NON_TEST_GO_FILES=$(find "${ROOT}" -iname '*.go' ! -iname '*_test.go' ! -path "${ROOT}/tests/*")
+  NON_TEST_GO_FILES=$(find "${ROOT}" \
+    "${PRUNE_EXPR[@]}" \
+    -iname '*.go' \
+    ! -iname '*_test.go' \
+    ! -path "${ROOT}/tests/*")
 
   IMPORT_TESTING=$(echo "${NON_TEST_GO_FILES}" | xargs grep -lP '^\s*(import\s+)?"testing"')
   IMPORT_TESTIFY=$(echo "${NON_TEST_GO_FILES}" | xargs grep -l '"github.com/stretchr/testify')

@@ -28,6 +28,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/ava-labs/libevm/trie"
 
 	"github.com/stretchr/testify/assert"
@@ -1293,7 +1294,7 @@ func TestSetPreferenceRace(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	key := utils.NewKey(t)
+	key := utilstest.NewKey(t)
 
 	key0 := testKeys[0]
 	addr0 := key0.Address()
@@ -3472,7 +3473,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 			testShortIDAddrs[2]: importAmount,
 		},
 	})
-	conflictKey := utils.NewKey(t)
+	conflictKey := utilstest.NewKey(t)
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)

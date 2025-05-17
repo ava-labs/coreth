@@ -13,7 +13,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
-	"github.com/ava-labs/coreth/sync/syncutils"
+	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -30,17 +30,17 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	memdb := rawdb.NewMemoryDatabase()
 	trieDB := triedb.NewDatabase(memdb, nil)
 
-	corruptedTrieRoot, _, _ := syncutils.GenerateTrie(t, trieDB, 100, common.HashLength)
+	corruptedTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 100, common.HashLength)
 	tr, err := trie.New(trie.TrieID(corruptedTrieRoot), trieDB)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Corrupt [corruptedTrieRoot]
-	syncutils.CorruptTrie(t, memdb, tr, 5)
+	statesynctest.CorruptTrie(t, memdb, tr, 5)
 
-	largeTrieRoot, largeTrieKeys, _ := syncutils.GenerateTrie(t, trieDB, 10_000, common.HashLength)
-	smallTrieRoot, _, _ := syncutils.GenerateTrie(t, trieDB, 500, common.HashLength)
-	accountTrieRoot, accounts := syncutils.FillAccounts(
+	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 500, common.HashLength)
+	accountTrieRoot, accounts := statesynctest.FillAccounts(
 		t,
 		trieDB,
 		common.Hash{},
