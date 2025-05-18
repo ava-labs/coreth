@@ -75,8 +75,6 @@ function test_license_header {
   # Remove the last '-o' from the arrays
   unset 'upstream_licensed_find_args[${#upstream_licensed_find_args[@]}-1]'
 
-  echo "exclude: ${upstream_licensed_exclude_args[@]}"
-
   # Find upstream_licensed files
   mapfile -t upstream_licensed_files < <(
     find . \
@@ -97,6 +95,7 @@ function test_license_header {
   # Run license tool
   if [[ ${#upstream_licensed_files[@]} -gt 0 ]]; then
     echo "Running license tool on upstream_licensed files with header for upstream..."
+    # shellcheck disable=SC2086
     go run github.com/palantir/go-license@v1.25.0 \
       --config=./license_header_for_upstream.yml \
       ${_addlicense_flags} \
@@ -105,6 +104,7 @@ function test_license_header {
 
   if [[ ${#default_files[@]} -gt 0 ]]; then
     echo "Running license tool on remaining files with default header..."
+    # shellcheck disable=SC2086
     go run github.com/palantir/go-license@v1.25.0 \
       --config=./license_header.yml \
       ${_addlicense_flags} \
