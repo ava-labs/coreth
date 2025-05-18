@@ -42,7 +42,7 @@ jobs:
           go clean -modcache
       - run: ./scripts/lint_allowed_eth_imports.sh
         shell: bash
-      - name:
+      - name: Run linters
         run: ./scripts/lint.sh
       - name: Run shellcheck
         shell: bash
