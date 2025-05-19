@@ -838,7 +838,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 	require.NoError(t, err, "creating iterator")
 
 	// Generate map of the marshalled atomic operations on the interval [from, to]
-	// based on [operationsMap].
+	// based on `operationsMap`.
 	marshalledOperationsMap := make(map[uint64]map[ids.ID][]byte)
 	for height, blockRequests := range operationsMap {
 		if height < from || height > to {
