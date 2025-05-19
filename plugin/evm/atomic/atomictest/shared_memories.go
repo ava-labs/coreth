@@ -45,7 +45,7 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 		// should not be able to get remove requests
 		for _, key := range reqs.RemoveRequests {
 			_, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
-			assert.EqualError(t, err, "not found")
+			assert.ErrorIs(t, err, database.ErrNotFound)
 		}
 	}
 }
