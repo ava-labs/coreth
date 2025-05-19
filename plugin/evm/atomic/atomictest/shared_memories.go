@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var removeValue = []byte{0x1}
+
 type SharedMemories struct {
 	ThisChain   atomic.SharedMemory
 	PeerChain   atomic.SharedMemory
@@ -22,8 +24,7 @@ func (s *SharedMemories) AddItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 		puts := make(map[ids.ID]*atomic.Requests)
 		puts[s.thisChainID] = &atomic.Requests{}
 		for _, key := range reqs.RemoveRequests {
-			val := []byte{0x1}
-			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
+			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: removeValue})
 		}
 		if err := s.PeerChain.Apply(puts); err != nil {
 			return err
@@ -65,7 +66,7 @@ func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 		for _, key := range reqs.RemoveRequests {
 			val, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
 			assert.NoError(t, err)
-			assert.Equal(t, []byte{0x1}, val[0])
+			assert.Equal(t, removeValue, val[0])
 		}
 	}
 }
