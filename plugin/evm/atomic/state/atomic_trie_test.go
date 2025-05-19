@@ -880,9 +880,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 			iteratorMarshalledOperationsMap[height] = requestsMap
 		}
 	}
-	if err := iter.Error(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, iter.Error(), "iterator error")
 
 	assert.Equal(t, marshalledOperationsMap, iteratorMarshalledOperationsMap)
 }
