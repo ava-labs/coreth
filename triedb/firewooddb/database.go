@@ -150,15 +150,11 @@ func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*firewood.
 	// Check if the file exists
 	info, err = os.Stat(path)
 	exists := false
-	if err != nil {
+	if err == nil {
 		if info.IsDir() {
 			return nil, "", fmt.Errorf("firewooddb: database path is a directory: %s", path)
-		} else if os.IsNotExist(err) {
-			log.Info("No database file found", "path", path)
-		} else {
-			return nil, "", fmt.Errorf("firewooddb: error checking database file: %w", err)
 		}
-	} else {
+		// File exists
 		log.Info("Database file found", "path", path)
 		exists = true
 	}
@@ -373,12 +369,12 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 }
 
 // This isn't called anywhere in coreth
-func (db *Database) Reference(_ common.Hash) error {
-	return fmt.Errorf("firewooddb: Reference not implemented")
+func (db *Database) Reference(_ common.Hash, _ common.Hash) {
+	panic("firewooddb: Reference not implemented")
 }
 
 // Dereference drops a proposal from the database.
-func (db *Database) Dereference(root common.Hash) error {
+func (db *Database) Dereference(root common.Hash) {
 	// We need to lock the proposal tree to prevent concurrent writes.
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
@@ -395,13 +391,16 @@ func (db *Database) Dereference(root common.Hash) error {
 	// as we do not know the parent or height.
 	if count > 1 {
 		log.Debug("Cannot dereference root with multiple proposals", "root", root.Hex(), "count", count)
-		return nil // will be cleaned up eventually on later commit, when it is no longer possible to be committed.
+		return // will be cleaned up eventually on later commit, when it is no longer possible to be committed.
 	} else if count == 0 {
 		log.Debug("No proposal to dereference found", "root", root.Hex())
-		return nil // no error, may have already been dropped
+		return // no error, may have already been dropped
 	}
 
-	return db.dereference(pCtx)
+	if err := db.dereference(pCtx); err != nil {
+		log.Error("firewooddb: error dereferencing proposal", "error", err)
+		return
+	}
 }
 
 // dereference drops a proposal from the database.
