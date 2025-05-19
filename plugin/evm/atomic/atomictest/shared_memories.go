@@ -38,9 +38,7 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 		// should be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			val, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			if err != nil {
-				t.Fatalf("error finding puts in peerChainMemory: %s", err)
-			}
+			require.NoError(t, err)
 			assert.Equal(t, [][]byte{elem.Value}, val)
 		}
 
