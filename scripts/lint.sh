@@ -30,7 +30,7 @@ function read_excluded_dirs {
       [[ -n "$line" ]] || continue
       abs_path="$ROOT/$line"
       PRUNE_EXPR+=(-path "$abs_path" -o)
-      GREP_EXCLUDE_ARGS+=(--exclude-dir=""$line"")
+      GREP_EXCLUDE_ARGS+=(--exclude-dir="$line")
     done <"$EXCLUDE_DIRS_FILE"
   fi
   # remove trailing -o
