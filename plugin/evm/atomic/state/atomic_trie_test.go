@@ -835,9 +835,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 	fromBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(fromBytes, from)
 	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "creating iterator")
 
 	// Generate map of the marshalled atomic operations on the interval [from, to]
 	// based on [operationsMap].
