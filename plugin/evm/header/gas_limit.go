@@ -8,11 +8,13 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/utils/math"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 var (
@@ -24,7 +26,7 @@ var (
 // GasLimit takes the previous header and the timestamp of its child block and
 // calculates the gas limit for the child block.
 func GasLimit(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (uint64, error) {
@@ -57,20 +59,21 @@ func GasLimit(
 // VerifyGasUsed verifies that the gas used is less than or equal to the gas
 // limit.
 func VerifyGasUsed(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	header *types.Header,
 ) error {
 	gasUsed := header.GasUsed
-	if config.IsFortuna(header.Time) && header.ExtDataGasUsed != nil {
-		if !header.ExtDataGasUsed.IsUint64() {
+	extDataGasUsed := customtypes.GetHeaderExtra(header).ExtDataGasUsed
+	if config.IsFortuna(header.Time) && extDataGasUsed != nil {
+		if !extDataGasUsed.IsUint64() {
 			return fmt.Errorf("%w: %d is not a uint64",
 				errInvalidExtraDataGasUsed,
-				header.ExtDataGasUsed,
+				extDataGasUsed,
 			)
 		}
 		var err error
-		gasUsed, err = math.Add(gasUsed, header.ExtDataGasUsed.Uint64())
+		gasUsed, err = math.Add(gasUsed, extDataGasUsed.Uint64())
 		if err != nil {
 			return fmt.Errorf("%w while calculating gas used", err)
 		}
@@ -92,7 +95,7 @@ func VerifyGasUsed(
 
 // VerifyGasLimit verifies that the gas limit for the header is valid.
 func VerifyGasLimit(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	header *types.Header,
 ) error {
@@ -127,18 +130,18 @@ func VerifyGasLimit(
 			)
 		}
 	default:
-		if header.GasLimit < params.MinGasLimit || header.GasLimit > params.MaxGasLimit {
+		if header.GasLimit < ap0.MinGasLimit || header.GasLimit > ap0.MaxGasLimit {
 			return fmt.Errorf("%w: %d not in range [%d, %d]",
 				errInvalidGasLimit,
 				header.GasLimit,
-				params.MinGasLimit,
-				params.MaxGasLimit,
+				ap0.MinGasLimit,
+				ap0.MaxGasLimit,
 			)
 		}
 
 		// Verify that the gas limit remains within allowed bounds
 		diff := math.AbsDiff(parent.GasLimit, header.GasLimit)
-		limit := parent.GasLimit / params.GasLimitBoundDivisor
+		limit := parent.GasLimit / ap0.GasLimitBoundDivisor
 		if diff >= limit {
 			return fmt.Errorf("%w: have %d, want %d += %d",
 				errInvalidGasLimit,
@@ -154,7 +157,7 @@ func VerifyGasLimit(
 // GasCapacity takes the previous header and the timestamp of its child block
 // and calculates the available gas that can be consumed in the child block.
 func GasCapacity(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (uint64, error) {
@@ -174,7 +177,7 @@ func GasCapacity(
 // on `header` while still being valid based on the initial capacity and
 // consumed gas.
 func RemainingAtomicGasCapacity(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	header *types.Header,
 ) (uint64, error) {

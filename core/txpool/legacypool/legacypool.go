@@ -39,16 +39,19 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/prque"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
+
+	// Force libevm metrics of the same name to be registered first.
+	_ "github.com/ava-labs/libevm/core/txpool/legacypool"
 )
 
 const (
@@ -79,42 +82,48 @@ var (
 	baseFeeUpdateInterval = 10 * time.Second // Time interval at which to schedule a base fee update for the tx pool after ApricotPhase3 is enabled
 )
 
+// ====== If resolving merge conflicts ======
+//
+// All calls to metrics.NewRegistered*() for metrics also defined in libevm/core/txpool/legacypool
+// have been replaced with metrics.GetOrRegister*() to get metrics already registered in
+// libevm/core/txpool/legacypool or register them here otherwise. These replacements ensure the
+// same metrics are shared between the two packages.
 var (
 	// Metrics for the pending pool
-	pendingDiscardMeter   = metrics.NewRegisteredMeter("txpool/pending/discard", nil)
-	pendingReplaceMeter   = metrics.NewRegisteredMeter("txpool/pending/replace", nil)
-	pendingRateLimitMeter = metrics.NewRegisteredMeter("txpool/pending/ratelimit", nil) // Dropped due to rate limiting
-	pendingNofundsMeter   = metrics.NewRegisteredMeter("txpool/pending/nofunds", nil)   // Dropped due to out-of-funds
+	pendingDiscardMeter   = metrics.GetOrRegisterMeter("txpool/pending/discard", nil)
+	pendingReplaceMeter   = metrics.GetOrRegisterMeter("txpool/pending/replace", nil)
+	pendingRateLimitMeter = metrics.GetOrRegisterMeter("txpool/pending/ratelimit", nil) // Dropped due to rate limiting
+	pendingNofundsMeter   = metrics.GetOrRegisterMeter("txpool/pending/nofunds", nil)   // Dropped due to out-of-funds
 
 	// Metrics for the queued pool
-	queuedDiscardMeter   = metrics.NewRegisteredMeter("txpool/queued/discard", nil)
-	queuedReplaceMeter   = metrics.NewRegisteredMeter("txpool/queued/replace", nil)
-	queuedRateLimitMeter = metrics.NewRegisteredMeter("txpool/queued/ratelimit", nil) // Dropped due to rate limiting
-	queuedNofundsMeter   = metrics.NewRegisteredMeter("txpool/queued/nofunds", nil)   // Dropped due to out-of-funds
-	queuedEvictionMeter  = metrics.NewRegisteredMeter("txpool/queued/eviction", nil)  // Dropped due to lifetime
+	queuedDiscardMeter   = metrics.GetOrRegisterMeter("txpool/queued/discard", nil)
+	queuedReplaceMeter   = metrics.GetOrRegisterMeter("txpool/queued/replace", nil)
+	queuedRateLimitMeter = metrics.GetOrRegisterMeter("txpool/queued/ratelimit", nil) // Dropped due to rate limiting
+	queuedNofundsMeter   = metrics.GetOrRegisterMeter("txpool/queued/nofunds", nil)   // Dropped due to out-of-funds
+	queuedEvictionMeter  = metrics.GetOrRegisterMeter("txpool/queued/eviction", nil)  // Dropped due to lifetime
 
 	// General tx metrics
-	knownTxMeter       = metrics.NewRegisteredMeter("txpool/known", nil)
-	validTxMeter       = metrics.NewRegisteredMeter("txpool/valid", nil)
-	invalidTxMeter     = metrics.NewRegisteredMeter("txpool/invalid", nil)
-	underpricedTxMeter = metrics.NewRegisteredMeter("txpool/underpriced", nil)
-	overflowedTxMeter  = metrics.NewRegisteredMeter("txpool/overflowed", nil)
+	knownTxMeter       = metrics.GetOrRegisterMeter("txpool/known", nil)
+	validTxMeter       = metrics.GetOrRegisterMeter("txpool/valid", nil)
+	invalidTxMeter     = metrics.GetOrRegisterMeter("txpool/invalid", nil)
+	underpricedTxMeter = metrics.GetOrRegisterMeter("txpool/underpriced", nil)
+	overflowedTxMeter  = metrics.GetOrRegisterMeter("txpool/overflowed", nil)
 
 	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
 	// txpool reorgs.
-	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
+	throttleTxMeter = metrics.GetOrRegisterMeter("txpool/throttle", nil)
 	// reorgDurationTimer measures how long time a txpool reorg takes.
-	reorgDurationTimer = metrics.NewRegisteredTimer("txpool/reorgtime", nil)
+	reorgDurationTimer = metrics.GetOrRegisterTimer("txpool/reorgtime", nil)
 	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
 	// that this number is pretty low, since txpool reorgs happen very frequently.
-	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
+	dropBetweenReorgHistogram = metrics.GetOrRegisterHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	pendingGauge = metrics.NewRegisteredGauge("txpool/pending", nil)
-	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
-	localGauge   = metrics.NewRegisteredGauge("txpool/local", nil)
-	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
+	pendingGauge = metrics.GetOrRegisterGauge("txpool/pending", nil)
+	queuedGauge  = metrics.GetOrRegisterGauge("txpool/queued", nil)
+	localGauge   = metrics.GetOrRegisterGauge("txpool/local", nil)
+	slotsGauge   = metrics.GetOrRegisterGauge("txpool/slots", nil)
 
-	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
+	reheapTimer = metrics.GetOrRegisterTimer("txpool/reheap", nil)
 )
 
 // BlockChain defines the minimal set of methods needed to back a tx pool with
@@ -686,6 +695,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 		State: pool.currentState,
 		Rules: pool.chainconfig.Rules(
 			pool.currentHead.Load().Number,
+			params.IsMergeTODO,
 			pool.currentHead.Load().Time,
 		),
 		MinimumFee: pool.minimumFee,
@@ -1363,7 +1373,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil {
-			if pool.chainconfig.IsApricotPhase3(reset.newHead.Time) {
+			if pool.chainconfig.IsLondon(reset.newHead.Number) {
 				if err := pool.updateBaseFeeAt(reset.newHead); err != nil {
 					log.Error("error at updating base fee in tx pool", "error", err)
 				}
@@ -1768,13 +1778,14 @@ func (pool *LegacyPool) demoteUnexecutables() {
 }
 
 func (pool *LegacyPool) startPeriodicFeeUpdate() {
-	if pool.chainconfig.ApricotPhase3BlockTimestamp == nil {
+	ap3Timestamp := params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp
+	if ap3Timestamp == nil {
 		return
 	}
 
 	// Call updateBaseFee here to ensure that there is not a [baseFeeUpdateInterval] delay
 	// when starting up in ApricotPhase3 before the base fee is updated.
-	if time.Now().After(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp)) {
+	if time.Now().After(utils.Uint64ToTime(ap3Timestamp)) {
 		pool.updateBaseFee()
 	}
 
@@ -1786,8 +1797,9 @@ func (pool *LegacyPool) periodicBaseFeeUpdate() {
 	defer pool.wg.Done()
 
 	// Sleep until its time to start the periodic base fee update or the tx pool is shutting down
+	ap3Time := utils.Uint64ToTime(params.GetExtra(pool.chainconfig).ApricotPhase3BlockTimestamp)
 	select {
-	case <-time.After(time.Until(utils.Uint64ToTime(pool.chainconfig.ApricotPhase3BlockTimestamp))):
+	case <-time.After(time.Until(ap3Time)):
 	case <-pool.generalShutdownChan:
 		return // Return early if shutting down
 	}
@@ -1816,7 +1828,8 @@ func (pool *LegacyPool) updateBaseFee() {
 
 // assumes lock is already held
 func (pool *LegacyPool) updateBaseFeeAt(head *types.Header) error {
-	baseFeeEstimate, err := header.EstimateNextBaseFee(pool.chainconfig, head, uint64(time.Now().Unix()))
+	config := params.GetExtra(pool.chainconfig)
+	baseFeeEstimate, err := header.EstimateNextBaseFee(config, head, uint64(time.Now().Unix()))
 	if err != nil {
 		return err
 	}

@@ -21,34 +21,39 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
-	"github.com/ava-labs/avalanchego/upgrade"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/utils"
+
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/metrics"
+	ethparams "github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/triedb"
 
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/rpc"
@@ -61,21 +66,21 @@ import (
 	// We must import this package (not referenced elsewhere) so that the native "callTracer"
 	// is added to a map of client-accessible tracers. In geth, this is done
 	// inside of cmd/geth.
-	_ "github.com/ava-labs/coreth/eth/tracers/js"
-	_ "github.com/ava-labs/coreth/eth/tracers/native"
+	_ "github.com/ava-labs/libevm/eth/tracers/js"
+	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	// Force-load precompiles to trigger registration
 	_ "github.com/ava-labs/coreth/precompile/registry"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 
 	avalancheRPC "github.com/gorilla/rpc/v2"
 
-	"github.com/ava-labs/avalanchego/cache"
+	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
@@ -172,7 +177,6 @@ var (
 
 var (
 	errEmptyBlock                    = errors.New("empty block")
-	errUnsupportedFXs                = errors.New("unsupported feature extensions")
 	errInvalidBlock                  = errors.New("invalid block")
 	errInvalidNonce                  = errors.New("invalid nonce")
 	errUnclesUnsupported             = errors.New("uncles unsupported")
@@ -180,6 +184,7 @@ var (
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
+	errInitializingLogger            = errors.New("failed to initialize logger")
 )
 
 var originalStderr *os.File
@@ -270,13 +275,13 @@ type VM struct {
 
 	baseCodec codec.Registry
 	clock     mockable.Clock
-	mempool   *atomic.Mempool
+	mempool   *atomictxpool.Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
 
 	fx        secp256k1fx.Fx
-	secpCache secp256k1.RecoverCache
+	secpCache *secp256k1.RecoverCache
 
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
@@ -293,7 +298,7 @@ type VM struct {
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
 
-	logger CorethLogger
+	logger corethlog.Logger
 	// State sync server and client
 	StateSyncServer
 	StateSyncClient
@@ -325,27 +330,16 @@ func (vm *VM) Clock() *mockable.Clock { return &vm.clock }
 // Logger implements the secp256k1fx interface
 func (vm *VM) Logger() logging.Logger { return vm.ctx.Log }
 
-/*
- ******************************************************************************
- ********************************* Snowman API ********************************
- ******************************************************************************
- */
-
-// implements SnowmanPlusPlusVM interface
-func (vm *VM) GetActivationTime() time.Time {
-	return utils.Uint64ToTime(vm.chainConfig.ApricotPhase4BlockTimestamp)
-}
-
 // Initialize implements the snowman.ChainVM interface
 func (vm *VM) Initialize(
 	_ context.Context,
 	chainCtx *snow.Context,
 	db database.Database,
 	genesisBytes []byte,
-	upgradeBytes []byte,
+	_ []byte,
 	configBytes []byte,
 	toEngine chan<- commonEng.Message,
-	fxs []*commonEng.Fx,
+	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
 	vm.config.SetDefaults(defaultTxPoolConfig)
@@ -377,20 +371,16 @@ func (vm *VM) Initialize(
 		writer = originalStderr
 	}
 
-	corethLogger, err := InitLogger(vm.chainAlias, vm.config.LogLevel, vm.config.LogJSONFormat, writer)
+	corethLogger, err := corethlog.InitLogger(vm.chainAlias, vm.config.LogLevel, vm.config.LogJSONFormat, writer)
 	if err != nil {
-		return fmt.Errorf("failed to initialize logger due to: %w ", err)
+		return fmt.Errorf("%w: %w ", errInitializingLogger, err)
 	}
 	vm.logger = corethLogger
 
-	log.Info("Initializing Coreth VM", "Version", Version, "Config", vm.config)
+	log.Info("Initializing Coreth VM", "Version", Version, "libevm version", ethparams.LibEVMVersion, "Config", vm.config)
 
 	if deprecateMsg != "" {
 		log.Warn("Deprecation Warning", "msg", deprecateMsg)
-	}
-
-	if len(fxs) > 0 {
-		return errUnsupportedFXs
 	}
 
 	// Enable debug-level metrics that might impact runtime performance
@@ -413,8 +403,8 @@ func (vm *VM) Initialize(
 		}
 	}
 
-	g := new(core.Genesis)
-	if err := json.Unmarshal(genesisBytes, g); err != nil {
+	g, err := parseGenesis(chainCtx, genesisBytes)
+	if err != nil {
 		return err
 	}
 
@@ -426,24 +416,6 @@ func (vm *VM) Initialize(
 	case avalanchegoConstants.FujiID:
 		extDataHashes = fujiExtDataHashes
 	}
-
-	// if the chainCtx.NetworkUpgrades is not empty, set the chain config
-	// normally it should not be empty, but some tests may not set it
-	if chainCtx.NetworkUpgrades != (upgrade.Config{}) {
-		g.Config.NetworkUpgrades = params.GetNetworkUpgrades(chainCtx.NetworkUpgrades)
-	}
-
-	// If the Durango is activated, activate the Warp Precompile at the same time
-	if g.Config.DurangoBlockTimestamp != nil {
-		g.Config.PrecompileUpgrades = append(g.Config.PrecompileUpgrades, params.PrecompileUpgrade{
-			Config: warpcontract.NewDefaultConfig(g.Config.DurangoBlockTimestamp),
-		})
-	}
-
-	// Set the Avalanche Context on the ChainConfig
-	g.Config.AvalancheContext = params.AvalancheContext{
-		SnowCtx: chainCtx,
-	}
 	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
 
 	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
@@ -453,8 +425,6 @@ func (vm *VM) Initialize(
 
 	vm.chainID = g.Config.ChainID
 
-	g.Config.SetEthUpgrades()
-
 	vm.ethConfig = ethconfig.NewDefaultConfig()
 	vm.ethConfig.Genesis = g
 	vm.ethConfig.NetworkId = vm.chainID.Uint64()
@@ -463,7 +433,10 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("lastAccepted = %s", lastAcceptedHash))
+	log.Info("read last accepted",
+		"hash", lastAcceptedHash,
+		"height", lastAcceptedHeight,
+	)
 
 	// Set minimum price for mining and default gas price oracle value to the min
 	// gas price to prevent so transactions and blocks all use the correct fees
@@ -472,7 +445,6 @@ func (vm *VM) Initialize(
 	vm.ethConfig.RPCTxFeeCap = vm.config.RPCTxFeeCap
 	vm.ethConfig.PriceOptionConfig.SlowFeePercentage = vm.config.PriceOptionSlowFeePercentage
 	vm.ethConfig.PriceOptionConfig.FastFeePercentage = vm.config.PriceOptionFastFeePercentage
-	vm.ethConfig.PriceOptionConfig.MaxBaseFee = vm.config.PriceOptionMaxBaseFee
 	vm.ethConfig.PriceOptionConfig.MaxTip = vm.config.PriceOptionMaxTip
 
 	vm.ethConfig.TxPool.NoLocals = !vm.config.LocalTxsEnabled
@@ -521,18 +493,10 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 	vm.networkID = vm.ethConfig.NetworkId
-	vm.secpCache = secp256k1.RecoverCache{
-		LRU: cache.LRU[ids.ID, *secp256k1.PublicKey]{
-			Size: secpCacheSize,
-		},
-	}
-
-	if err := vm.chainConfig.Verify(); err != nil {
-		return fmt.Errorf("failed to verify chain config: %w", err)
-	}
+	vm.secpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
 	// TODO: read size from settings
-	vm.mempool, err = atomic.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -557,7 +521,7 @@ func (vm *VM) Initialize(
 	for i, hexMsg := range vm.config.WarpOffChainMessages {
 		offchainWarpMessages[i] = []byte(hexMsg)
 	}
-	warpSignatureCache := &cache.LRU[ids.ID, []byte]{Size: warpSignatureCacheSize}
+	warpSignatureCache := lru.NewCache[ids.ID, []byte](warpSignatureCacheSize)
 	meteredCache, err := metercacher.New("warp_signature_cache", vm.sdkMetrics, warpSignatureCache)
 	if err != nil {
 		return fmt.Errorf("failed to create warp signature cache: %w", err)
@@ -634,6 +598,36 @@ func (vm *VM) Initialize(
 		SyncableInterval: vm.config.StateSyncCommitInterval,
 	})
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
+}
+
+func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
+	g := new(core.Genesis)
+	if err := json.Unmarshal(bytes, g); err != nil {
+		return nil, fmt.Errorf("parsing genesis: %w", err)
+	}
+
+	// Populate the Avalanche config extras.
+	configExtra := params.GetExtra(g.Config)
+	configExtra.AvalancheContext = extras.AvalancheContext{
+		SnowCtx: ctx,
+	}
+	configExtra.NetworkUpgrades = extras.GetNetworkUpgrades(ctx.NetworkUpgrades)
+
+	// If Durango is scheduled, schedule the Warp Precompile at the same time.
+	if configExtra.DurangoBlockTimestamp != nil {
+		configExtra.PrecompileUpgrades = append(configExtra.PrecompileUpgrades, extras.PrecompileUpgrade{
+			Config: warpcontract.NewDefaultConfig(configExtra.DurangoBlockTimestamp),
+		})
+	}
+	if err := configExtra.Verify(); err != nil {
+		return nil, fmt.Errorf("invalid chain config: %w", err)
+	}
+
+	// Align all the Ethereum upgrades to the Avalanche upgrades
+	if err := params.SetEthUpgrades(g.Config); err != nil {
+		return nil, fmt.Errorf("setting eth upgrades: %w", err)
+	}
+	return g, nil
 }
 
 func (vm *VM) initializeMetrics() error {
@@ -803,7 +797,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
 		// once.
 		snapshot := state.Snapshot()
-		rules := vm.chainConfig.Rules(header.Number, header.Time)
+		rules := vm.rules(header.Number, header.Time)
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
@@ -850,11 +844,11 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
 		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
+		rules                      = vm.rules(header.Number, header.Time)
 		size              int
 	)
 
-	atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfig, parent, header)
+	atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -955,7 +949,7 @@ func (vm *VM) onFinalizeAndAssemble(
 	state *state.StateDB,
 	txs []*types.Transaction,
 ) ([]byte, *big.Int, *big.Int, error) {
-	if !vm.chainConfig.IsApricotPhase5(header.Time) {
+	if !vm.chainConfigExtra().IsApricotPhase5(header.Time) {
 		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
 	}
 	return vm.postBatchOnFinalizeAndAssemble(header, parent, state, txs)
@@ -966,10 +960,10 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
-		rules                      = vm.chainConfig.Rules(header.Number, header.Time)
+		rules                      = vm.rules(header.Number, header.Time)
 	)
 
-	txs, err := atomic.ExtractAtomicTxs(block.ExtData(), rules.IsApricotPhase5, atomic.Codec)
+	txs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(block), rules.IsApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1018,7 +1012,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
 	// atomic gas limit.
 	if rules.IsApricotPhase5 {
-		atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfig, parent, header)
+		atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1155,11 +1149,6 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder = vm.NewBlockBuilder(vm.toEngine)
 	vm.builder.awaitSubmittedTxs()
 
-	var p2pValidators p2p.ValidatorSet = &validatorSet{}
-	if vm.config.PullGossipFrequency.Duration > 0 {
-		p2pValidators = vm.p2pValidators
-	}
-
 	if vm.ethTxGossipHandler == nil {
 		vm.ethTxGossipHandler = newTxGossipHandler[*GossipEthTx](
 			vm.ctx.Log,
@@ -1169,7 +1158,7 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipTargetMessageSize,
 			txGossipThrottlingPeriod,
 			txGossipThrottlingLimit,
-			p2pValidators,
+			vm.p2pValidators,
 		)
 	}
 
@@ -1186,7 +1175,7 @@ func (vm *VM) initBlockBuilding() error {
 			txGossipTargetMessageSize,
 			txGossipThrottlingPeriod,
 			txGossipThrottlingLimit,
-			p2pValidators,
+			vm.p2pValidators,
 		)
 	}
 
@@ -1211,20 +1200,16 @@ func (vm *VM) initBlockBuilding() error {
 		}
 	}
 
-	if vm.config.PushGossipFrequency.Duration > 0 {
-		vm.shutdownWg.Add(1)
-		go func() {
-			gossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-			vm.shutdownWg.Done()
-		}()
-	}
-	if vm.config.PullGossipFrequency.Duration > 0 {
-		vm.shutdownWg.Add(1)
-		go func() {
-			gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-			vm.shutdownWg.Done()
-		}()
-	}
+	vm.shutdownWg.Add(1)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
+		vm.shutdownWg.Done()
+	}()
+	vm.shutdownWg.Add(1)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		vm.shutdownWg.Done()
+	}()
 
 	if vm.atomicTxPullGossiper == nil {
 		atomicTxPullGossiper := gossip.NewPullGossiper[*atomic.GossipAtomicTx](
@@ -1243,20 +1228,16 @@ func (vm *VM) initBlockBuilding() error {
 		}
 	}
 
-	if vm.config.PushGossipFrequency.Duration > 0 {
-		vm.shutdownWg.Add(1)
-		go func() {
-			gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-			vm.shutdownWg.Done()
-		}()
-	}
-	if vm.config.PullGossipFrequency.Duration > 0 {
-		vm.shutdownWg.Add(1)
-		go func() {
-			gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-			vm.shutdownWg.Done()
-		}()
-	}
+	vm.shutdownWg.Add(1)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, vm.config.PushGossipFrequency.Duration)
+		vm.shutdownWg.Done()
+	}()
+	vm.shutdownWg.Add(1)
+	go func() {
+		gossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		vm.shutdownWg.Done()
+	}()
 
 	return nil
 }
@@ -1270,9 +1251,9 @@ func (vm *VM) setAppRequestHandlers() {
 	evmTrieDB := triedb.NewDatabase(
 		vm.chaindb,
 		&triedb.Config{
-			HashDB: &hashdb.Config{
+			DBOverride: hashdb.Config{
 				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			},
+			}.BackendConstructor,
 		},
 	)
 	networkHandler := newNetworkHandler(
@@ -1356,7 +1337,9 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 		return nil, fmt.Errorf("block failed verification due to: %w", err)
 	}
 
-	log.Debug(fmt.Sprintf("Built block %s", blk.ID()))
+	log.Debug("built block",
+		"id", blk.ID(),
+	)
 	// Marks the current transactions from the mempool as being successfully issued
 	// into a block.
 	vm.mempool.IssueCurrentTxs()
@@ -1439,12 +1422,6 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	return vm.blockChain.SetPreference(block.(*Block).ethBlock)
 }
 
-// VerifyHeightIndex always returns a nil error since the index is maintained by
-// vm.blockChain.
-func (vm *VM) VerifyHeightIndex(context.Context) error {
-	return nil
-}
-
 // GetBlockIDAtHeight returns the canonical block at [height].
 // Note: the engine assumes that if a block is not found at [height], then
 // [database.ErrNotFound] will be returned. This indicates that the VM has state
@@ -1515,13 +1492,16 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}
 
 	if vm.config.WarpAPIEnabled {
-		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx.NetworkID, vm.ctx.SubnetID, vm.ctx.ChainID, vm.ctx.ValidatorState, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)); err != nil {
+		warpAPI := warp.NewAPI(vm.ctx, vm.networkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
+		if err := handler.RegisterName("warp", warpAPI); err != nil {
 			return nil, err
 		}
 		enabledAPIs = append(enabledAPIs, "warp")
 	}
 
-	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))
+	log.Info("enabling apis",
+		"apis", enabledAPIs,
+	)
 	apis[ethRPCEndpoint] = handler
 	apis[ethWSEndpoint] = handler.WebsocketHandlerWithDuration(
 		[]string{"*"},
@@ -1532,22 +1512,6 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 
 	vm.rpcHandlers = append(vm.rpcHandlers, handler)
 	return apis, nil
-}
-
-// CreateStaticHandlers makes new http handlers that can handle API calls
-func (vm *VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
-	handler := rpc.NewServer(0)
-	if vm.config.HttpBodyLimit > 0 {
-		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
-	}
-	if err := handler.RegisterName("static", &StaticService{}); err != nil {
-		return nil, err
-	}
-
-	vm.rpcHandlers = append(vm.rpcHandlers, handler)
-	return map[string]http.Handler{
-		"/rpc": handler,
-	}, nil
 }
 
 /*
@@ -1625,8 +1589,8 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
 	timestamp := uint64(vm.clock.Time().Unix())
-	if vm.chainConfig.IsApricotPhase3(timestamp) {
-		nextBaseFee, err = customheader.EstimateNextBaseFee(vm.chainConfig, parentHeader, timestamp)
+	if vm.chainConfigExtra().IsApricotPhase3(timestamp) {
+		nextBaseFee, err = customheader.EstimateNextBaseFee(vm.chainConfigExtra(), parentHeader, timestamp)
 		if err != nil {
 			// Return extremely detailed error since CalcBaseFee should never encounter an issue here
 			return fmt.Errorf("failed to calculate base fee with parent timestamp (%d), parent ExtraData: (0x%x), and current timestamp (%d): %w", parentHeader.Time, parentHeader.Extra, timestamp, err)
@@ -1643,7 +1607,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // Note: verifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules params.Rules) error {
+func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
 	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -1658,7 +1622,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 		Rules:        rules,
 		Bootstrapped: vm.bootstrapped.Get(),
 		BlockFetcher: vm,
-		SecpCache:    &vm.secpCache,
+		SecpCache:    vm.secpCache,
 	}
 	if err := tx.UnsignedAtomicTx.SemanticVerify(atomicBackend, tx, parent, baseFee); err != nil {
 		return err
@@ -1668,7 +1632,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
 // using [rules] as the current rule set.
-func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules params.Rules) error {
+func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.Int, height uint64, rules extras.Rules) error {
 	// Ensure that the parent was verified and inserted correctly.
 	if !vm.blockChain.HasBlock(parentHash, height-1) {
 		return errRejectedParent
@@ -1697,7 +1661,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		Rules:        rules,
 		Bootstrapped: vm.bootstrapped.Get(),
 		BlockFetcher: vm,
-		SecpCache:    &vm.secpCache,
+		SecpCache:    vm.secpCache,
 	}
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
@@ -1737,17 +1701,26 @@ func (vm *VM) GetAtomicUTXOs(
 	)
 }
 
+func (vm *VM) chainConfigExtra() *extras.ChainConfig {
+	return params.GetExtra(vm.chainConfig)
+}
+
+func (vm *VM) rules(number *big.Int, time uint64) extras.Rules {
+	ethrules := vm.chainConfig.Rules(number, params.IsMergeTODO, time)
+	return *params.GetRulesExtra(ethrules)
+}
+
 // currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() params.Rules {
+func (vm *VM) currentRules() extras.Rules {
 	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.chainConfig.Rules(header.Number, header.Time)
+	return vm.rules(header.Number, header.Time)
 }
 
 // requirePrimaryNetworkSigners returns true if warp messages from the primary
 // network must be signed by the primary network validators.
 // This is necessary when the subnet is not validating the primary network.
 func (vm *VM) requirePrimaryNetworkSigners() bool {
-	switch c := vm.currentRules().ActivePrecompiles[warpcontract.ContractAddress].(type) {
+	switch c := vm.currentRules().Precompiles[warpcontract.ContractAddress].(type) {
 	case *warpcontract.Config:
 		return c.RequirePrimaryNetworkSigners
 	default: // includes nil due to non-presence

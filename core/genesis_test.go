@@ -34,19 +34,21 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/ethdb"
+	ethparams "github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,8 +70,8 @@ func TestSetupGenesis(t *testing.T) {
 }
 
 func testSetupGenesis(t *testing.T, scheme string) {
-	apricotPhase1Config := *params.TestApricotPhase1Config
-	apricotPhase1Config.ApricotPhase1BlockTimestamp = utils.NewUint64(100)
+	apricotPhase1Config := params.Copy(params.TestApricotPhase1Config)
+	params.GetExtra(&apricotPhase1Config).ApricotPhase1BlockTimestamp = utils.NewUint64(100)
 	var (
 		customghash = common.HexToHash("0x1099a11e9e454bd3ef31d688cf21936671966407bc330f051d754b5ce401e7ed")
 		customg     = Genesis{
@@ -81,8 +83,8 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		oldcustomg = customg
 	)
 
-	rollbackApricotPhase1Config := apricotPhase1Config
-	rollbackApricotPhase1Config.ApricotPhase1BlockTimestamp = utils.NewUint64(90)
+	rollbackApricotPhase1Config := params.Copy(&apricotPhase1Config)
+	params.GetExtra(&rollbackApricotPhase1Config).ApricotPhase1BlockTimestamp = utils.NewUint64(90)
 	oldcustomg.Config = &rollbackApricotPhase1Config
 	tests := []struct {
 		name       string
@@ -158,7 +160,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
-			wantErr: &params.ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:         "ApricotPhase1 fork block timestamp",
 				StoredTime:   u64(90),
 				NewTime:      u64(100),
@@ -223,8 +225,8 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 
 	activatedGenesis := customg
 	apricotPhase2Timestamp := utils.NewUint64(51)
-	updatedApricotPhase2Config := *params.TestApricotPhase1Config
-	updatedApricotPhase2Config.ApricotPhase2BlockTimestamp = apricotPhase2Timestamp
+	updatedApricotPhase2Config := params.Copy(params.TestApricotPhase1Config)
+	params.GetExtra(&updatedApricotPhase2Config).ApricotPhase2BlockTimestamp = apricotPhase2Timestamp
 
 	activatedGenesis.Config = &updatedApricotPhase2Config
 
@@ -243,7 +245,7 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 
 func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	require := require.New(t)
-	config := *params.TestChainConfig
+	config := params.Copy(params.TestChainConfig)
 	genesis := &Genesis{
 		Config: &config,
 		Alloc: types.GenesisAlloc{
@@ -258,7 +260,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	_, _, err := SetupGenesisBlock(db, trieDB, genesis, genesisBlock.Hash(), false)
 	require.NoError(err)
 
-	genesis.Config.UpgradeConfig.PrecompileUpgrades = []params.PrecompileUpgrade{
+	params.GetExtra(genesis.Config).UpgradeConfig.PrecompileUpgrades = []extras.PrecompileUpgrade{
 		{
 			Config: warp.NewConfig(utils.NewUint64(51), 0, false),
 		},
@@ -286,7 +288,7 @@ func newDbConfig(scheme string) *triedb.Config {
 	if scheme == rawdb.HashScheme {
 		return triedb.HashDefaults
 	}
-	return &triedb.Config{PathDB: pathdb.Defaults}
+	return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
 }
 
 func TestVerkleGenesisCommit(t *testing.T) {
@@ -326,7 +328,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, DBOverride: pathdb.Defaults.BackendConstructor})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)

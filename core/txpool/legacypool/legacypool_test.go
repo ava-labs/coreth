@@ -40,16 +40,15 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -65,8 +64,8 @@ var (
 func init() {
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
-	eip1559Config.ApricotPhase2BlockTimestamp = utils.NewUint64(0)
-	eip1559Config.ApricotPhase3BlockTimestamp = utils.NewUint64(0)
+	eip1559Config.BerlinBlock = common.Big0
+	eip1559Config.LondonBlock = common.Big0
 }
 
 type testBlockChain struct {

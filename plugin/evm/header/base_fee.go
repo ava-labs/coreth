@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
@@ -19,7 +19,7 @@ var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee f
 //
 // Prior to AP3, the returned base fee will be nil.
 func BaseFee(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (*big.Int, error) {
@@ -48,7 +48,7 @@ func BaseFee(
 // Warning: This function should only be used in estimation and should not be
 // used when calculating the canonical base fee for a block.
 func EstimateNextBaseFee(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (*big.Int, error) {

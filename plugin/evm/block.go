@@ -10,18 +10,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
@@ -119,8 +121,8 @@ type Block struct {
 
 // newBlock returns a new Block wrapping the ethBlock type and implementing the snowman.Block interface
 func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
-	isApricotPhase5 := vm.chainConfig.IsApricotPhase5(ethBlock.Time())
-	atomicTxs, err := atomic.ExtractAtomicTxs(ethBlock.ExtData(), isApricotPhase5, atomic.Codec)
+	isApricotPhase5 := vm.chainConfigExtra().IsApricotPhase5(ethBlock.Time())
+	atomicTxs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(ethBlock), isApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, err
 	}
@@ -146,21 +148,26 @@ func (b *Block) Accept(context.Context) error {
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
 
-	log.Debug(fmt.Sprintf("Accepting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
+	blkID := b.ID()
+	log.Debug("accepting block",
+		"hash", blkID.Hex(),
+		"id", blkID,
+		"height", b.Height(),
+	)
 
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
 	// take place before the accepted log is emitted to subscribers.
-	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp())
+	rules := b.vm.rules(b.ethBlock.Number(), b.ethBlock.Time())
 	if err := b.handlePrecompileAccept(rules); err != nil {
 		return err
 	}
 	if err := vm.blockChain.Accept(b.ethBlock); err != nil {
-		return fmt.Errorf("chain could not accept %s: %w", b.ID(), err)
+		return fmt.Errorf("chain could not accept %s: %w", blkID, err)
 	}
 
-	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, b.id[:]); err != nil {
-		return fmt.Errorf("failed to put %s as the last accepted block: %w", b.ID(), err)
+	if err := vm.acceptedBlockDB.Put(lastAcceptedKey, blkID[:]); err != nil {
+		return fmt.Errorf("failed to put %s as the last accepted block: %w", blkID, err)
 	}
 
 	for _, tx := range b.atomicTxs {
@@ -170,7 +177,7 @@ func (b *Block) Accept(context.Context) error {
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(blkID))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Accept
 		return err
@@ -179,7 +186,7 @@ func (b *Block) Accept(context.Context) error {
 	// with the shared memory changes.
 	vdbBatch, err := b.vm.versiondb.CommitBatch()
 	if err != nil {
-		return fmt.Errorf("could not create commit batch processing block[%s]: %w", b.ID(), err)
+		return fmt.Errorf("could not create commit batch processing block[%s]: %w", blkID, err)
 	}
 
 	// Apply any shared memory changes atomically with other pending changes to
@@ -189,7 +196,7 @@ func (b *Block) Accept(context.Context) error {
 
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
 // contract.Accepter
-func (b *Block) handlePrecompileAccept(rules params.Rules) error {
+func (b *Block) handlePrecompileAccept(rules extras.Rules) error {
 	// Short circuit early if there are no precompile accepters to execute
 	if len(rules.AccepterPrecompiles) == 0 {
 		return nil
@@ -224,7 +231,13 @@ func (b *Block) handlePrecompileAccept(rules params.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *Block) Reject(context.Context) error {
-	log.Debug(fmt.Sprintf("Rejecting block %s (%s) at height %d", b.ID().Hex(), b.ID(), b.Height()))
+	blkID := b.ID()
+	log.Debug("rejecting block",
+		"hash", blkID.Hex(),
+		"id", blkID,
+		"height", b.Height(),
+	)
+
 	for _, tx := range b.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
 		b.vm.mempool.RemoveTx(tx)
@@ -232,7 +245,7 @@ func (b *Block) Reject(context.Context) error {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
-	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(b.ID()))
+	atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(common.Hash(blkID))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
 		return err
@@ -265,7 +278,7 @@ func (b *Block) syntacticVerify() error {
 	}
 
 	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.Rules(header.Number, header.Time)
+	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
 	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
 }
 
@@ -279,7 +292,8 @@ func (b *Block) Verify(context.Context) error {
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
-	predicates := b.vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp()).Predicaters
+	rules := b.vm.rules(b.ethBlock.Number(), b.ethBlock.Time())
+	predicates := rules.Predicaters
 	// Short circuit early if there are no predicates to verify
 	if len(predicates) == 0 {
 		return false, nil
@@ -321,16 +335,24 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
 
-	// verify UTXOs named in import txs are present in shared memory.
-	if err := b.verifyUTXOsPresent(); err != nil {
-		return err
-	}
-
-	// Only enforce predicates if the chain has already bootstrapped.
-	// If the chain is still bootstrapping, we can assume that all blocks we are verifying have
-	// been accepted by the network (so the predicate was validated by the network when the
-	// block was originally verified).
+	// If the VM is not marked as bootstrapped the other chains may also be
+	// bootstrapping and not have populated the required indices. Since
+	// bootstrapping only verifies blocks that have been canonically accepted by
+	// the network, these checks would be guaranteed to pass on a synced node.
 	if b.vm.bootstrapped.Get() {
+		// Verify that the UTXOs named in import txs are present in shared
+		// memory.
+		//
+		// This does not fully verify that this block can spend these UTXOs.
+		// However, it guarantees that any block that fails the later checks was
+		// built by an incorrect block proposer. This ensures that we only mark
+		// blocks as BAD BLOCKs if they were incorrectly generated.
+		if err := b.verifyUTXOsPresent(); err != nil {
+			return err
+		}
+
+		// Verify that all the ICM messages are correctly marked as either valid
+		// or invalid.
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
@@ -359,12 +381,13 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 
 // verifyPredicates verifies the predicates in the block are valid according to predicateContext.
 func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateContext) error {
-	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), b.ethBlock.Timestamp())
+	rules := b.vm.chainConfig.Rules(b.ethBlock.Number(), params.IsMergeTODO, b.ethBlock.Time())
+	rulesExtra := params.GetRulesExtra(rules)
 
 	switch {
-	case !rules.IsDurango && rules.PredicatersExist():
+	case !rulesExtra.IsDurango && rulesExtra.PredicatersExist():
 		return errors.New("cannot enable predicates before Durango activation")
-	case !rules.IsDurango:
+	case !rulesExtra.IsDurango:
 		return nil
 	}
 
@@ -382,15 +405,16 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 		return fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
 	extraData := b.ethBlock.Extra()
-	headerPredicateResultsBytes := header.PredicateBytesFromExtra(rules.AvalancheRules, extraData)
+	avalancheRules := rulesExtra.AvalancheRules
+	headerPredicateResultsBytes := header.PredicateBytesFromExtra(avalancheRules, extraData)
 	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {
 		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, headerPredicateResultsBytes, predicateResultsBytes)
 	}
 	return nil
 }
 
-// verifyUTXOsPresent returns an error if any of the atomic transactions name UTXOs that
-// are not present in shared memory.
+// verifyUTXOsPresent verifies all atomic UTXOs consumed by the block are
+// present in shared memory.
 func (b *Block) verifyUTXOsPresent() error {
 	blockHash := common.Hash(b.ID())
 	if b.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
@@ -398,11 +422,6 @@ func (b *Block) verifyUTXOsPresent() error {
 		return nil
 	}
 
-	if !b.vm.bootstrapped.Get() {
-		return nil
-	}
-
-	// verify UTXOs named in import txs are present in shared memory.
 	for _, atomicTx := range b.atomicTxs {
 		utx := atomicTx.UnsignedAtomicTx
 		chainID, requests, err := utx.AtomicOps()

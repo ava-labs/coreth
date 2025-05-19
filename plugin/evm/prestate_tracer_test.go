@@ -13,13 +13,14 @@ import (
 	"unicode"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/tests"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	ethtypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 )
 
 func TestPrestateWithDiffModeANTTracer(t *testing.T) {
@@ -57,16 +58,18 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = vm.BlockContext{
-					CanTransfer:       core.CanTransfer,
-					CanTransferMC:     core.CanTransferMC,
-					Transfer:          core.Transfer,
-					TransferMultiCoin: core.TransferMultiCoin,
-					Coinbase:          test.Context.Miner,
-					BlockNumber:       new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:              uint64(test.Context.Time),
-					Difficulty:        (*big.Int)(test.Context.Difficulty),
-					GasLimit:          uint64(test.Context.GasLimit),
-					BaseFee:           test.Genesis.BaseFee,
+					CanTransfer: core.CanTransfer,
+					Transfer:    core.Transfer,
+					Coinbase:    test.Context.Miner,
+					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
+					Time:        uint64(test.Context.Time),
+					Difficulty:  (*big.Int)(test.Context.Difficulty),
+					GasLimit:    uint64(test.Context.GasLimit),
+					BaseFee:     test.Genesis.BaseFee,
+					Header: &ethtypes.Header{
+						Number: new(big.Int).SetUint64(uint64(test.Context.Number)),
+						Time:   uint64(test.Context.Time),
+					},
 				}
 				state = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)

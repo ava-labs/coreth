@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	ethcommon "github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -24,9 +24,9 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 const pendingTxsBuffer = 10
