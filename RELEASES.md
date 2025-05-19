@@ -4,6 +4,8 @@
 
 - Major refactor to use [`libevm`](https://github.com/ava-labs/libevm) for EVM execution, database access, types & chain configuration. This improves maintainability and enables keeping up with upstream changes more easily.
 - Add metrics for ACP-176
+- Removed the `"price-options-max-base-fee"` config flag
+- Moved extra types returned in `ethclient` package to a new package `plugin/evm/customethclient` which supports the same functionality as `ethclient` but with the new types registered in header and block.
 
 ## [v0.15.0](https://github.com/ava-labs/coreth/releases/tag/v0.15.0)
 
@@ -13,7 +15,7 @@
 - Add `GasTarget` to the chain config to allow modifying the chain's `GasTarget` based on the ACP-176 rules
 
 - Added `eth_suggestPriceOptions` API to suggest gas prices (slow, normal, fast) based on the current network conditions
-- Added `"po-slow-fee-percentage"`, `"po-fast-fee-percentage"`, `"po-max-base-fee"`, and `"po-max-tip"` config flags to configure the new `eth_suggestPriceOptions` API
+- Added `"price-options-slow-fee-percentage"`, `"price-options-fast-fee-percentage"`, `"price-options-max-base-fee"`, and `"price-options-max-tip"` config flags to configure the new `eth_suggestPriceOptions` API
 
 ## [v0.14.1](https://github.com/ava-labs/coreth/releases/tag/v0.14.1)
 

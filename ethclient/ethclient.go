@@ -36,7 +36,6 @@ import (
 
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
@@ -113,9 +112,20 @@ type Client interface {
 	SendTransaction(context.Context, *types.Transaction) error
 }
 
+// BlockHook is an interface that can be implemented to modify the block
+// after it has been decoded. This is useful for plugins that want to
+// modify the block before it is returned to the caller.
+type BlockHook interface {
+	// OnBlockDecoded is called when a block is decoded. It can be used to
+	// modify the block before it is returned to the caller.
+	OnBlockDecoded(raw json.RawMessage, block *types.Block) error
+}
+
 // client defines implementation for typed wrappers for the Ethereum RPC API.
 type client struct {
 	c *rpc.Client
+	// blockHook is called when a block is decoded.
+	blockHook BlockHook
 }
 
 // Dial connects a client to the given URL.
@@ -134,7 +144,17 @@ func DialContext(ctx context.Context, rawurl string) (Client, error) {
 
 // NewClient creates a client that uses the given RPC client.
 func NewClient(c *rpc.Client) Client {
-	return &client{c}
+	return &client{
+		c: c,
+	}
+}
+
+// NewClientWithHook creates a client that uses the given RPC client and block hook.
+func NewClientWithHook(c *rpc.Client, hook BlockHook) Client {
+	return &client{
+		c:         c,
+		blockHook: hook,
+	}
 }
 
 // Close closes the underlying RPC connection.
@@ -194,11 +214,9 @@ func (ec *client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 }
 
 type rpcBlock struct {
-	Hash           common.Hash      `json:"hash"`
-	Transactions   []rpcTransaction `json:"transactions"`
-	UncleHashes    []common.Hash    `json:"uncles"`
-	Version        uint32           `json:"version"`
-	BlockExtraData *hexutil.Bytes   `json:"blockExtraData"`
+	Hash         common.Hash      `json:"hash"`
+	Transactions []rpcTransaction `json:"transactions"`
+	UncleHashes  []common.Hash    `json:"uncles"`
 }
 
 func (ec *client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
@@ -267,17 +285,16 @@ func (ec *client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-
-	block := types.NewBlockWithHeader(head).WithBody(
-		types.Body{
-			Transactions: txs,
-			Uncles:       uncles,
-		})
-	extra := &customtypes.BlockBodyExtra{
-		Version: body.Version,
-		ExtData: (*[]byte)(body.BlockExtraData),
+	block := types.NewBlockWithHeader(head).WithBody(types.Body{
+		Transactions: txs,
+		Uncles:       uncles,
+	})
+	// Fill the block with the extra data. BlockHook can modify the block.
+	if ec.blockHook != nil {
+		if err := ec.blockHook.OnBlockDecoded(raw, block); err != nil {
+			return nil, err
+		}
 	}
-	customtypes.SetBlockExtra(block, extra)
 	return block, nil
 }
 
