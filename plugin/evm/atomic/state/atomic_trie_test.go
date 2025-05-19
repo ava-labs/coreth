@@ -831,7 +831,7 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
 	t.Helper()
 
-	// Start the iterator at [from]
+	// Start the iterator at `from`
 	fromBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(fromBytes, from)
 	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
