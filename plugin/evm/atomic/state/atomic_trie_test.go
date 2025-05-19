@@ -846,9 +846,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 		}
 		for blockchainID, atomicRequests := range blockRequests {
 			b, err := codec.Marshal(0, atomicRequests)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err, "marshaling atomic requests")
 			if requestsMap, exists := marshalledOperationsMap[height]; exists {
 				requestsMap[blockchainID] = b
 			} else {
