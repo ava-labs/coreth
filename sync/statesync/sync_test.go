@@ -52,13 +52,13 @@ func testSync(t *testing.T, test syncTest) {
 	clientDB, serverDB, serverTrieDB, root := test.prepareForTest(t)
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, nil, message.Codec, handlerstats.NewNoopHandlerStats())
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewMockClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
-	// Set intercept functions for the mock client
-	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
-	mockClient.GetCodeIntercept = test.GetCodeIntercept
+	testClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
+	// Set intercept functions for the test client
+	testClient.GetLeafsIntercept = test.GetLeafsIntercept
+	testClient.GetCodeIntercept = test.GetCodeIntercept
 
 	s, err := NewStateSyncer(&StateSyncerConfig{
-		Client:                   mockClient,
+		Client:                   testClient,
 		Root:                     root,
 		DB:                       clientDB,
 		BatchSize:                1000, // Use a lower batch size in order to get test coverage of batches being written early.
@@ -240,7 +240,7 @@ type interruptLeafsIntercept struct {
 	root           common.Hash
 }
 
-// getLeafsIntercept can be passed to mockClient and returns an unmodified
+// getLeafsIntercept can be passed to testClient and returns an unmodified
 // response for the first [numRequest] requests for leafs from [root].
 // After that, all requests for leafs from [root] return [errInterrupted].
 func (i *interruptLeafsIntercept) getLeafsIntercept(request message.LeafsRequest, response message.LeafsResponse) (message.LeafsResponse, error) {
