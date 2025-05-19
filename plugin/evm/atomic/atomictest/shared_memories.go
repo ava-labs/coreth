@@ -41,7 +41,7 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 			if err != nil {
 				t.Fatalf("error finding puts in peerChainMemory: %s", err)
 			}
-			assert.Equal(t, elem.Value, val[0])
+			assert.Equal(t, [][]byte{elem.Value}, val)
 		}
 
 		// should not be able to get remove requests
