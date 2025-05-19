@@ -39,16 +39,14 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 		// should be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			val, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			if err != nil {
-				t.Fatalf("error finding puts in peerChainMemory: %s", err)
-			}
-			assert.Equal(t, elem.Value, val[0])
+			require.NoError(t, err)
+			assert.Equal(t, [][]byte{elem.Value}, val)
 		}
 
 		// should not be able to get remove requests
 		for _, key := range reqs.RemoveRequests {
 			_, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
-			assert.EqualError(t, err, "not found")
+			assert.ErrorIs(t, err, database.ErrNotFound)
 		}
 	}
 }
@@ -59,7 +57,7 @@ func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			_, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			assert.EqualError(t, err, "not found")
+			assert.ErrorIs(t, err, database.ErrNotFound)
 		}
 
 		// should be able to get remove requests (these were previously added as puts on peerChain)
