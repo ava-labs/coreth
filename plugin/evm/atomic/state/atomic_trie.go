@@ -186,7 +186,7 @@ func (a *AtomicTrie) updateLastCommitted(root common.Hash, height uint64) error 
 	return nil
 }
 
-// Iterator returns an atomicTrieIterator that iterates the trie from the given
+// Iterator returns an [atomicTrieIterator] that iterates the trie from the given
 // atomic trie root, starting at the specified [cursor].
 func (a *AtomicTrie) Iterator(root common.Hash, cursor []byte) (*atomicTrieIterator, error) {
 	t, err := trie.New(trie.TrieID(root), a.trieDB)

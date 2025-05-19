@@ -823,16 +823,14 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
 	t.Helper()
 
-	// Start the iterator at [from]
+	// Start the iterator at `from`
 	fromBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(fromBytes, from)
 	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "creating iterator")
 
 	// Generate map of the marshalled atomic operations on the interval [from, to]
-	// based on [operationsMap].
+	// based on `operationsMap`.
 	marshalledOperationsMap := make(map[uint64]map[ids.ID][]byte)
 	for height, blockRequests := range operationsMap {
 		if height < from || height > to {
@@ -840,9 +838,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 		}
 		for blockchainID, atomicRequests := range blockRequests {
 			b, err := codec.Marshal(0, atomicRequests)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err, "marshaling atomic requests")
 			if requestsMap, exists := marshalledOperationsMap[height]; exists {
 				requestsMap[blockchainID] = b
 			} else {
@@ -867,9 +863,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 
 		blockchainID := iter.BlockchainID()
 		b, err := codec.Marshal(0, iter.AtomicOps())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err, "marshaling atomic operations")
 		if requestsMap, exists := iteratorMarshalledOperationsMap[height]; exists {
 			requestsMap[blockchainID] = b
 		} else {
@@ -878,9 +872,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 			iteratorMarshalledOperationsMap[height] = requestsMap
 		}
 	}
-	if err := iter.Error(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, iter.Error(), "iterator error")
 
 	assert.Equal(t, marshalledOperationsMap, iteratorMarshalledOperationsMap)
 }
