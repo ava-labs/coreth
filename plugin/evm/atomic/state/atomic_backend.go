@@ -24,6 +24,8 @@ const (
 	progressLogFrequency       = 30 * time.Second
 )
 
+var errNilBonusBlocks = fmt.Errorf("bonus blocks cannot be nil")
+
 // AtomicBackend provides an interface to the atomic trie and shared memory.
 // the AtomicTrie, AtomicRepository, and the VM's shared memory.
 type AtomicBackend struct {
@@ -51,7 +53,7 @@ func NewAtomicBackend(
 		return nil, err
 	}
 	if bonusBlocks == nil {
-		bonusBlocks = make(map[uint64]ids.ID) // Ensure it's always non-nil
+		return nil, errNilBonusBlocks
 	}
 	atomicBackend := &AtomicBackend{
 		codec:            codec,

@@ -45,7 +45,7 @@ type atomicSyncer struct {
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
 func addZeroes(height uint64) []byte {
-	packer := wrappers.Packer{Bytes: make([]byte, atomicstate.AtomicTrieKeyLength)}
+	packer := wrappers.Packer{Bytes: make([]byte, atomicstate.TrieKeyLength)}
 	packer.PackLong(height)
 	packer.PackFixedBytes(bytes.Repeat([]byte{0x00}, common.HashLength))
 	return packer.Bytes
@@ -82,7 +82,7 @@ func (s *atomicSyncer) Start(ctx context.Context) error {
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
 func (s *atomicSyncer) onLeafs(keys [][]byte, values [][]byte) error {
 	for i, key := range keys {
-		if len(key) != atomicstate.AtomicTrieKeyLength {
+		if len(key) != atomicstate.TrieKeyLength {
 			return fmt.Errorf("unexpected key len (%d) in atomic trie sync", len(key))
 		}
 		// key = height + blockchainID

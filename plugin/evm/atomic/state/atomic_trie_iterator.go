@@ -50,8 +50,8 @@ func (a *atomicTrieIterator) Next() bool {
 	keyLen := len(a.trieIterator.Key)
 	// If the key has an unexpected length, set the error and stop the iteration since the data is
 	// no longer reliable.
-	if keyLen != AtomicTrieKeyLength {
-		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", AtomicTrieKeyLength, keyLen))
+	if keyLen != TrieKeyLength {
+		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", TrieKeyLength, keyLen))
 		return false
 	}
 

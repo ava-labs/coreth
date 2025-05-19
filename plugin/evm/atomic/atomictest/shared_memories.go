@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var removeValue = []byte{0x1}
@@ -40,13 +41,13 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 		for _, elem := range reqs.PutRequests {
 			val, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
 			require.NoError(t, err)
-			assert.Equal(t, [][]byte{elem.Value}, val)
+			require.Equal(t, [][]byte{elem.Value}, val)
 		}
 
 		// should not be able to get remove requests
 		for _, key := range reqs.RemoveRequests {
 			_, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
-			assert.ErrorIs(t, err, database.ErrNotFound)
+			require.ErrorIs(t, err, database.ErrNotFound)
 		}
 	}
 }
@@ -57,14 +58,14 @@ func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			_, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			assert.ErrorIs(t, err, database.ErrNotFound)
+			require.ErrorIs(t, err, database.ErrNotFound)
 		}
 
 		// should be able to get remove requests (these were previously added as puts on peerChain)
 		for _, key := range reqs.RemoveRequests {
 			val, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
-			assert.NoError(t, err)
-			assert.Equal(t, removeValue, val[0])
+			require.NoError(t, err)
+			require.Equal(t, [][]byte{removeValue}, val)
 		}
 	}
 }
