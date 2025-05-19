@@ -511,10 +511,10 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 
 	// Firewood automatically prunes based on config
-	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme && vm.ethConfig.Pruning {
-		log.Warn("Pruning is disabled for firewood, setting to false")
-		vm.ethConfig.Pruning = false
-		vm.config.Pruning = false
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme && !vm.ethConfig.Pruning {
+		log.Warn("Pruning must be enabled for Firewood, setting to true")
+		vm.ethConfig.Pruning = true
+		vm.config.Pruning = true
 	}
 
 	// Create directory for offline pruning

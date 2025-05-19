@@ -153,7 +153,13 @@ func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*firewood.
 	if err != nil {
 		if info.IsDir() {
 			return nil, "", fmt.Errorf("firewooddb: database path is a directory: %s", path)
+		} else if os.IsNotExist(err) {
+			log.Info("No database file found", "path", path)
+		} else {
+			return nil, "", fmt.Errorf("firewooddb: error checking database file: %w", err)
 		}
+	} else {
+		log.Info("Database file found", "path", path)
 		exists = true
 	}
 
@@ -327,11 +333,11 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 		return fmt.Errorf("firewooddb: error committing proposal %s", root.Hex())
 	}
 
-	logger := log.Info
-	if !report {
-		logger = log.Debug
+	if report {
+		log.Info("Persisted trie from memory database", "node", root)
+	} else {
+		log.Info("Persisted trie from memory database", "node", root)
 	}
-	logger("Persisted trie from memory database", "node", root)
 
 	// Committing removed the proposal in the backend.
 	// We can now remove our reference and promote the context.
