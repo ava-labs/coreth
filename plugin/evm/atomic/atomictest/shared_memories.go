@@ -56,7 +56,7 @@ func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			_, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			assert.EqualError(t, err, "not found")
+			assert.ErrorIs(t, err, database.ErrNotFound)
 		}
 
 		// should be able to get remove requests (these were previously added as puts on peerChain)
