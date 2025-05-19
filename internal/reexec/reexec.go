@@ -10,7 +10,7 @@
 // Much love to the original authors for their work.
 // **********
 // This file originates from Docker/Moby,
-// https://github.com/moby/moby/blob/master/pkg/reexec/reexec.go
+// https://github.com/moby/moby/blob/master/pkg/reexec/reexec_deprecated.go
 // Licensed under Apache License 2.0: https://github.com/moby/moby/blob/master/LICENSE
 // Copyright 2013-2018 Docker, Inc.
 //
