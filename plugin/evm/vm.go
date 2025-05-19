@@ -509,6 +509,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	vm.ethConfig.StateScheme = vm.config.StateScheme
 
 	// Firewood automatically prunes based on config
 	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme && !vm.ethConfig.Pruning {
