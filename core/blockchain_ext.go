@@ -7,7 +7,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core"
+	ethcore "github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/metrics"
 )
@@ -33,8 +33,8 @@ func getOrOverrideAsRegisteredCounter(name string, r metrics.Registry) metrics.C
 	return metrics.NewRegisteredCounter(name, r)
 }
 
-func (b *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status core.WriteStatus, err error) {
-	return core.NonStatTy, nil
+func (b *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status ethcore.WriteStatus, err error) {
+	return ethcore.NonStatTy, nil
 }
 
 func (b *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
