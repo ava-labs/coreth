@@ -188,7 +188,6 @@ type VM struct {
 	config config.Config
 
 	chainID     *big.Int
-	networkID   uint64
 	genesisHash common.Hash
 	chainConfig *params.ChainConfig
 	ethConfig   ethconfig.Config
@@ -419,7 +418,6 @@ func (vm *VM) Initialize(
 	}
 
 	vm.chainConfig = g.Config
-	vm.networkID = vm.ethConfig.NetworkId
 
 	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
 	if err != nil {
