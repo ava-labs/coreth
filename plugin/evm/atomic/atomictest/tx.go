@@ -54,8 +54,6 @@ type TestUnsignedTx struct {
 	EVMStateTransferV           error
 }
 
-var _ atomic.UnsignedAtomicTx = &TestUnsignedTx{}
-
 // GasUsed implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) GasUsed(fixedFee bool) (uint64, error) { return t.GasUsedV, nil }
 
