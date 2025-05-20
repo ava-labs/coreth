@@ -312,7 +312,7 @@ type VM struct {
 	ethTxPushGossiper     avalancheUtils.Atomic[*gossip.PushGossiper[*GossipEthTx]]
 	ethTxPullGossiper     gossip.Gossiper
 	atomicTxGossipHandler p2p.Handler
-	atomicTxPushGossiper  *gossip.PushGossiper[*atomic.GossipAtomicTx]
+	atomicTxPushGossiper  *gossip.PushGossiper[*atomic.Tx]
 	atomicTxPullGossiper  gossip.Gossiper
 
 	chainAlias string
@@ -1088,7 +1088,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	atomicTxGossipMarshaller := atomic.GossipAtomicTxMarshaller{}
+	atomicTxGossipMarshaller := &atomic.TxMarshaller{}
 	atomicTxGossipClient := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.p2pValidators))
 	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
 	if err != nil {
@@ -1126,7 +1126,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.GossipAtomicTx](
+		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.Tx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
 			vm.p2pValidators,
@@ -1165,7 +1165,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler = newTxGossipHandler[*atomic.GossipAtomicTx](
+		vm.atomicTxGossipHandler = newTxGossipHandler[*atomic.Tx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1210,7 +1210,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.atomicTxPullGossiper == nil {
-		atomicTxPullGossiper := gossip.NewPullGossiper[*atomic.GossipAtomicTx](
+		atomicTxPullGossiper := gossip.NewPullGossiper[*atomic.Tx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,

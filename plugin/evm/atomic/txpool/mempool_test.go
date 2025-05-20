@@ -20,13 +20,11 @@ func TestMempoolAddTx(t *testing.T) {
 	m, err := NewMempool(ctx, prometheus.NewRegistry(), 5_000, nil)
 	require.NoError(err)
 
-	txs := make([]*atomic.GossipAtomicTx, 0)
+	txs := make([]*atomic.Tx, 0)
 	for i := 0; i < 3_000; i++ {
-		tx := &atomic.GossipAtomicTx{
-			Tx: &atomic.Tx{
-				UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-					IDV: ids.GenerateTestID(),
-				},
+		tx := &atomic.Tx{
+			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
+				IDV: ids.GenerateTestID(),
 			},
 		}
 
@@ -46,11 +44,9 @@ func TestMempoolAdd(t *testing.T) {
 	m, err := NewMempool(ctx, prometheus.NewRegistry(), 5_000, nil)
 	require.NoError(err)
 
-	tx := &atomic.GossipAtomicTx{
-		Tx: &atomic.Tx{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
+	tx := &atomic.Tx{
+		UnsignedAtomicTx: &atomictest.TestUnsignedTx{
+			IDV: ids.GenerateTestID(),
 		},
 	}
 
@@ -60,41 +56,37 @@ func TestMempoolAdd(t *testing.T) {
 }
 
 func TestAtomicMempoolIterate(t *testing.T) {
-	txs := []*atomic.GossipAtomicTx{
+	txs := []*atomic.Tx{
 		{
-			Tx: &atomic.Tx{
-				UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-					IDV: ids.GenerateTestID(),
-				},
+			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
+				IDV: ids.GenerateTestID(),
 			},
 		},
 		{
-			Tx: &atomic.Tx{
-				UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-					IDV: ids.GenerateTestID(),
-				},
+			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
+				IDV: ids.GenerateTestID(),
 			},
 		},
 	}
 
 	tests := []struct {
 		name        string
-		add         []*atomic.GossipAtomicTx
-		f           func(tx *atomic.GossipAtomicTx) bool
-		expectedTxs []*atomic.GossipAtomicTx
+		add         []*atomic.Tx
+		f           func(tx *atomic.Tx) bool
+		expectedTxs []*atomic.Tx
 	}{
 		{
 			name: "func matches nothing",
 			add:  txs,
-			f: func(*atomic.GossipAtomicTx) bool {
+			f: func(*atomic.Tx) bool {
 				return false
 			},
-			expectedTxs: []*atomic.GossipAtomicTx{},
+			expectedTxs: []*atomic.Tx{},
 		},
 		{
 			name: "func matches all",
 			add:  txs,
-			f: func(*atomic.GossipAtomicTx) bool {
+			f: func(*atomic.Tx) bool {
 				return true
 			},
 			expectedTxs: txs,
@@ -102,10 +94,10 @@ func TestAtomicMempoolIterate(t *testing.T) {
 		{
 			name: "func matches subset",
 			add:  txs,
-			f: func(tx *atomic.GossipAtomicTx) bool {
-				return tx.Tx == txs[0].Tx
+			f: func(tx *atomic.Tx) bool {
+				return tx == txs[0]
 			},
-			expectedTxs: []*atomic.GossipAtomicTx{txs[0]},
+			expectedTxs: []*atomic.Tx{txs[0]},
 		},
 	}
 
@@ -120,8 +112,8 @@ func TestAtomicMempoolIterate(t *testing.T) {
 				require.NoError(m.Add(add))
 			}
 
-			matches := make([]*atomic.GossipAtomicTx, 0)
-			f := func(tx *atomic.GossipAtomicTx) bool {
+			matches := make([]*atomic.Tx, 0)
+			f := func(tx *atomic.Tx) bool {
 				match := tt.f(tx)
 
 				if match {
