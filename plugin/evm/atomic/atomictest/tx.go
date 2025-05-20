@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomictest
@@ -19,7 +19,11 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
-var TestTxCodec codec.Manager
+var (
+	_ atomic.UnsignedAtomicTx = (*TestUnsignedTx)(nil)
+
+	TestTxCodec codec.Manager
+)
 
 func init() {
 	TestTxCodec = codec.NewDefaultManager()

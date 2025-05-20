@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -723,13 +723,11 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 				encoder.WriteBytes(make([]byte, 32)) // value
 				encoder.ListEnd(offset)
 				testBlob := encoder.ToBytes()
-				err := encoder.Flush()
-				require.NoError(t, err)
+				require.NoError(t, encoder.Flush())
 
 				nodeSet := trienode.NewNodeSet(testCase.lastAcceptedRoot)
 				nodeSet.AddNode([]byte("any"), trienode.New(testCase.lastAcceptedRoot, testBlob)) // dirty node
-				err = atomicTrie.InsertTrie(nodeSet, testCase.lastAcceptedRoot)
-				require.NoError(t, err)
+				require.NoError(t, atomicTrie.InsertTrie(nodeSet, testCase.lastAcceptedRoot))
 
 				_, storageSize, _ := atomicTrie.trieDB.Size()
 				require.NotZero(t, storageSize, "there should be a dirty node taking up storage space")

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package txpool
@@ -158,7 +158,8 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 
 	// try to add one more tx
 	tx2 := atomictest.GenerateTestImportTx()
-	require.ErrorIs(mempool.AddRemoteTx(tx2), ErrTooManyAtomicTx)
+	err = mempool.AddRemoteTx(tx2)
+	require.ErrorIs(err, ErrTooManyAtomicTx)
 	require.False(mempool.Has(tx2.ID()))
 }
 
@@ -175,7 +176,8 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	require.True(mempool.Has(tx1.ID()))
 
 	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
-	require.ErrorIs(mempool.AddRemoteTx(tx2), ErrInsufficientAtomicTxFee)
+	err = mempool.AddRemoteTx(tx2)
+	require.ErrorIs(err, ErrInsufficientAtomicTxFee)
 	require.True(mempool.Has(tx1.ID()))
 	require.False(mempool.Has(tx2.ID()))
 
