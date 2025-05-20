@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/coretest"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
@@ -520,7 +521,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if syncerVM.ethConfig.TransactionHistory != 0 {
 		tail := lastSyncedBlock.NumberU64()
 
-		core.CheckTxIndices(t, &tail, tail, syncerVM.chaindb, true)
+		coretest.CheckTxIndices(t, &tail, tail, tail, tail, syncerVM.chaindb, true)
 	}
 
 	blocksToBuild := 10
@@ -551,7 +552,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 				if tail < lastSyncedBlock.NumberU64() {
 					tail = lastSyncedBlock.NumberU64()
 				}
-				core.CheckTxIndices(t, &tail, block.NumberU64(), syncerVM.chaindb, true)
+				coretest.CheckTxIndices(t, &tail, tail, block.NumberU64(), block.NumberU64(), syncerVM.chaindb, true)
 			}
 		},
 	)
@@ -593,7 +594,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 				if tail < lastSyncedBlock.NumberU64() {
 					tail = lastSyncedBlock.NumberU64()
 				}
-				core.CheckTxIndices(t, &tail, block.NumberU64(), syncerVM.chaindb, true)
+				coretest.CheckTxIndices(t, &tail, tail, block.NumberU64(), block.NumberU64(), syncerVM.chaindb, true)
 			}
 		},
 	)

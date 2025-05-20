@@ -140,24 +140,23 @@ function test_interface_compliance_nil {
 }
 
 function test_import_testing_only_in_tests {
-  mapfile -t NON_TEST_GO_FILES < <(
-    printf "%s\n" "${DEFAULT_FILES[@]}" |
+  NON_TEST_GO_FILES=$(
+    echo "${DEFAULT_FILES[@]}" | tr ' ' '\n' |
       grep -i '\.go$' |
       grep -vi '_test\.go$' |
       grep -v '^./tests/'
   )
 
-  IMPORT_TESTING=$(echo "${NON_TEST_GO_FILES[@]}" | xargs grep -lP '^\s*(import\s+)?"testing"')
-  IMPORT_TESTIFY=$(echo "${NON_TEST_GO_FILES[@]}" | xargs grep -l '"github.com/stretchr/testify')
-  IMPORT_FROM_TESTS=$(echo "${NON_TEST_GO_FILES[@]}" | xargs grep -l '"github.com/ava-labs/coreth/tests/')
-  IMPORT_TEST_PKG=$(echo "${NON_TEST_GO_FILES[@]}" | xargs grep -lP '"github.com/ava-labs/coreth/.*?test"')
+  IMPORT_TESTING=$(echo "${NON_TEST_GO_FILES}" | xargs grep -lP '^\s*(import\s+)?"testing"')
+  IMPORT_TESTIFY=$(echo "${NON_TEST_GO_FILES}" | xargs grep -l '"github.com/stretchr/testify')
+  IMPORT_FROM_TESTS=$(echo "${NON_TEST_GO_FILES}" | xargs grep -l '"github.com/ava-labs/coreth/tests/')
+  IMPORT_TEST_PKG=$(echo "${NON_TEST_GO_FILES}" | xargs grep -lP '"github.com/ava-labs/coreth/.*?test"')
 
   # TODO(arr4n): send a PR to add support for build tags in `mockgen` and then enable this.
   # IMPORT_GOMOCK=$( echo "${NON_TEST_GO_FILES}" | xargs grep -l '"go.uber.org/mock');
   HAVE_TEST_LOGIC=$(printf "%s\n%s\n%s\n%s" "${IMPORT_TESTING}" "${IMPORT_TESTIFY}" "${IMPORT_FROM_TESTS}" "${IMPORT_TEST_PKG}")
 
-  IN_TEST_PKG=$(echo "${NON_TEST_GO_FILES[@]}" | grep -P '.*test/[^/]+\.go$') # directory (hence package name) ends in "test"
-
+  IN_TEST_PKG=$(echo "${NON_TEST_GO_FILES}" | grep -P '.*test/[^/]+\.go$') # directory (hence package name) ends in "test"
   # Files in /tests/ are already excluded by the `find ... ! -path`
   INTENDED_FOR_TESTING="${IN_TEST_PKG}"
 
