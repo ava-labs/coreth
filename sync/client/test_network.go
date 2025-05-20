@@ -15,7 +15,6 @@ import (
 
 var _ peer.NetworkClient = (*testNetwork)(nil)
 
-// TODO replace with gotest library
 type testNetwork struct {
 	// captured request data
 	numCalls         uint
