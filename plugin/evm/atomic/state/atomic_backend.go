@@ -24,11 +24,11 @@ const (
 	progressLogFrequency       = 30 * time.Second
 )
 
-// AtomicBackend implements the AtomicBackend interface using
+// AtomicBackend provides an interface to the atomic trie and shared memory.
 // the AtomicTrie, AtomicRepository, and the VM's shared memory.
 type AtomicBackend struct {
 	codec        codec.Manager
-	BonusBlocks  map[uint64]ids.ID // Map of height to blockID for blocks to skip indexing
+	bonusBlocks  map[uint64]ids.ID // Map of height to blockID for blocks to skip indexing
 	sharedMemory avalancheatomic.SharedMemory
 
 	repo       *AtomicRepository
@@ -56,7 +56,7 @@ func NewAtomicBackend(
 	atomicBackend := &AtomicBackend{
 		codec:            codec,
 		sharedMemory:     sharedMemory,
-		BonusBlocks:      bonusBlocks,
+		bonusBlocks:      bonusBlocks,
 		repo:             repo,
 		atomicTrie:       atomicTrie,
 		lastAcceptedHash: lastAcceptedHash,
@@ -230,7 +230,7 @@ func (a *AtomicBackend) ApplyToSharedMemory(lastAcceptedBlock uint64) error {
 		}
 
 		// If [height] is a bonus block, do not apply the atomic operations to shared memory
-		if _, found := a.BonusBlocks[height]; found {
+		if _, found := a.bonusBlocks[height]; found {
 			log.Debug(
 				"skipping bonus block in applying atomic ops from atomic trie to shared memory",
 				"height", height,
@@ -394,7 +394,7 @@ func (a *AtomicBackend) InsertTxs(blockHash common.Hash, blockHeight uint64, par
 
 // IsBonus returns true if the block for atomicState is a bonus block
 func (a *AtomicBackend) IsBonus(blockHeight uint64, blockHash common.Hash) bool {
-	if bonusID, found := a.BonusBlocks[blockHeight]; found {
+	if bonusID, found := a.bonusBlocks[blockHeight]; found {
 		return bonusID == ids.ID(blockHash)
 	}
 	return false
@@ -439,5 +439,5 @@ func mergeAtomicOpsToMap(output map[ids.ID]*avalancheatomic.Requests, chainID id
 
 // AddBonusBlock adds a bonus block to the atomic backend
 func (a *AtomicBackend) AddBonusBlock(height uint64, blockID ids.ID) {
-	a.BonusBlocks[height] = blockID
+	a.bonusBlocks[height] = blockID
 }

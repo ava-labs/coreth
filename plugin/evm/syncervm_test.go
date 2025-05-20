@@ -335,7 +335,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
 	// creates a commit at the height [syncableInterval]. This is necessary to support
 	// fetching a state summary.
-	serverAtomicTrie := server.vm.atomicTrie
+	serverAtomicTrie := server.vm.atomicBackend.AtomicTrie()
 	require.NoError(serverAtomicTrie.Commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
 	require.NoError(server.vm.versiondb.Commit())
 
