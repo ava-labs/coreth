@@ -22,7 +22,7 @@ grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
 DEFAULT_FILES=()
 UPSTREAM_FILES=()
 function read_dirs {
-  local upstream_folders_file="./scripts/UPSTREAM_FILES.txt"
+  local upstream_folders_file="./scripts/upstream_files.txt"
   # Read the upstream_folders file into an array
   mapfile -t upstream_folders <"$upstream_folders_file"
 
