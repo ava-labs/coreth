@@ -9,6 +9,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func TestMempoolAddTx(t *testing.T) {
 	for i := 0; i < 3_000; i++ {
 		tx := &atomic.GossipAtomicTx{
 			Tx: &atomic.Tx{
-				UnsignedAtomicTx: &atomic.TestUnsignedTx{
+				UnsignedAtomicTx: &atomictest.TestUnsignedTx{
 					IDV: ids.GenerateTestID(),
 				},
 			},
@@ -47,7 +48,7 @@ func TestMempoolAdd(t *testing.T) {
 
 	tx := &atomic.GossipAtomicTx{
 		Tx: &atomic.Tx{
-			UnsignedAtomicTx: &atomic.TestUnsignedTx{
+			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
 				IDV: ids.GenerateTestID(),
 			},
 		},
@@ -62,14 +63,14 @@ func TestAtomicMempoolIterate(t *testing.T) {
 	txs := []*atomic.GossipAtomicTx{
 		{
 			Tx: &atomic.Tx{
-				UnsignedAtomicTx: &atomic.TestUnsignedTx{
+				UnsignedAtomicTx: &atomictest.TestUnsignedTx{
 					IDV: ids.GenerateTestID(),
 				},
 			},
 		},
 		{
 			Tx: &atomic.Tx{
-				UnsignedAtomicTx: &atomic.TestUnsignedTx{
+				UnsignedAtomicTx: &atomictest.TestUnsignedTx{
 					IDV: ids.GenerateTestID(),
 				},
 			},
@@ -146,7 +147,7 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 	mempool, err := NewMempool(ctx, prometheus.NewRegistry(), 1, nil)
 	require.NoError(err)
 	// create candidate tx (we will drop before validation)
-	tx := atomic.GenerateTestImportTx()
+	tx := atomictest.GenerateTestImportTx()
 
 	require.NoError(mempool.AddRemoteTx(tx))
 	require.True(mempool.Has(tx.ID()))
@@ -156,7 +157,7 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 	mempool.IssueCurrentTxs()
 
 	// try to add one more tx
-	tx2 := atomic.GenerateTestImportTx()
+	tx2 := atomictest.GenerateTestImportTx()
 	require.ErrorIs(mempool.AddRemoteTx(tx2), ErrTooManyAtomicTx)
 	require.False(mempool.Has(tx2.ID()))
 }
@@ -169,16 +170,16 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	mempool, err := NewMempool(ctx, prometheus.NewRegistry(), 1, nil)
 	require.NoError(err)
 
-	tx1 := atomic.GenerateTestImportTxWithGas(1, 2) // lower fee
+	tx1 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
 	require.NoError(mempool.AddRemoteTx(tx1))
 	require.True(mempool.Has(tx1.ID()))
 
-	tx2 := atomic.GenerateTestImportTxWithGas(1, 2) // lower fee
+	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
 	require.ErrorIs(mempool.AddRemoteTx(tx2), ErrInsufficientAtomicTxFee)
 	require.True(mempool.Has(tx1.ID()))
 	require.False(mempool.Has(tx2.ID()))
 
-	tx3 := atomic.GenerateTestImportTxWithGas(1, 5) // higher fee
+	tx3 := atomictest.GenerateTestImportTxWithGas(1, 5) // higher fee
 	require.NoError(mempool.AddRemoteTx(tx3))
 	require.False(mempool.Has(tx1.ID()))
 	require.False(mempool.Has(tx2.ID()))
