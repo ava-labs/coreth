@@ -21,6 +21,7 @@ import (
 
 const testCodecVersion = 0
 
+// TODO: Remove this and use actual codec and transactions (export, import)
 var TestTxCodec codec.Manager
 
 func init() {
