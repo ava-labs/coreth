@@ -33,7 +33,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
-	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), map[uint64]ids.ID{}, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie1 := atomicBackend.AtomicTrie()
 
@@ -46,7 +46,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	// iterate on a new atomic trie to make sure there is no resident state affecting the data and the
 	// iterator
-	atomicBackend2, err := NewAtomicBackend(atomictest.TestSharedMemory(), map[uint64]ids.ID{}, repo, lastAcceptedHeight, common.Hash{}, 100)
+	atomicBackend2, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 100)
 	assert.NoError(t, err)
 	atomicTrie2 := atomicBackend2.AtomicTrie()
 	lastCommittedHash2, lastCommittedHeight2 := atomicTrie2.LastCommitted()
@@ -73,7 +73,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	// create an atomic trie
 	// on create it will initialize all the transactions from the above atomic repository
 	commitInterval := uint64(100)
-	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), map[uint64]ids.ID{}, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, commitInterval)
 	require.NoError(err)
 	atomicTrie := atomicBackend.AtomicTrie()
 
