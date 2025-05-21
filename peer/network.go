@@ -241,7 +241,8 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
-		return fmt.Errorf("failed to unmarshal request: %w", err)
+		log.Debug("failed to unmarshal AppRequest", "nodeID", nodeID, "requestID", requestID, "err", err)
+		return nil
 	}
 
 	log.Debug("processing incoming request", "nodeID", nodeID, "requestID", requestID, "req", req)
