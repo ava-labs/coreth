@@ -86,10 +86,6 @@ type Network interface {
 	// Size returns the size of the network in number of connected peers
 	Size() uint32
 
-	// TrackBandwidth should be called for each valid request with the bandwidth
-	// (length of response divided by request time), and with 0 if the response is invalid.
-	TrackBandwidth(nodeID ids.NodeID, bandwidth float64)
-
 	// NewClient returns a client to send messages with for the given protocol
 	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
