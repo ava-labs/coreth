@@ -644,19 +644,6 @@ func (t testAppSender) SendAppError(ctx context.Context, nodeID ids.NodeID, requ
 	panic("not implemented")
 }
 
-type testResponseHandler struct {
-	onResponseFn func([]byte) error
-	onFailureFn  func() error
-}
-
-func (t testResponseHandler) OnResponse(response []byte) error {
-	return t.onResponseFn(response)
-}
-
-func (t testResponseHandler) OnFailure() error {
-	return t.onFailureFn()
-}
-
 type HelloRequest struct {
 	Message string `serialize:"true"`
 }
