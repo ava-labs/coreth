@@ -106,12 +106,12 @@ type network struct {
 	requestIDGen               uint32                             // requestID counter used to track outbound requests
 	outstandingRequestHandlers map[uint32]message.ResponseHandler // maps avalanchego requestID => message.ResponseHandler
 	activeAppRequests          *semaphore.Weighted                // controls maximum number of active outbound requests
-	p2pNetwork                 *p2p.Network
-	appSender                  common.AppSender          // avalanchego AppSender for sending messages
-	codec                      codec.Manager             // Codec used for parsing messages
-	appRequestHandler          message.RequestHandler    // maps request type => handler
-	peers                      *peerTracker              // tracking of peers & bandwidth
-	appStats                   stats.RequestHandlerStats // Provide request handler metrics
+	sdkNetwork                 *p2p.Network                       // SDK network (avalanchego p2p) for sending messages to peers
+	appSender                  common.AppSender                   // avalanchego AppSender for sending messages
+	codec                      codec.Manager                      // Codec used for parsing messages
+	appRequestHandler          message.RequestHandler             // maps request type => handler
+	peers                      *peerTracker                       // tracking of peers & bandwidth
+	appStats                   stats.RequestHandlerStats          // Provide request handler metrics
 
 	// Set to true when Shutdown is called, after which all operations on this
 	// struct are no-ops.
@@ -143,7 +143,7 @@ func NewNetwork(
 		self:                       ctx.NodeID,
 		outstandingRequestHandlers: make(map[uint32]message.ResponseHandler),
 		activeAppRequests:          semaphore.NewWeighted(maxActiveAppRequests),
-		p2pNetwork:                 p2pNetwork,
+		sdkNetwork:                 p2pNetwork,
 		appRequestHandler:          message.NoopRequestHandler{},
 		peers:                      NewPeerTracker(),
 		appStats:                   stats.NewRequestHandlerStats(),
@@ -270,7 +270,7 @@ func (n *network) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID u
 	var req message.Request
 	if _, err := n.codec.Unmarshal(request, &req); err != nil {
 		log.Debug("forwarding AppRequest to SDK network", "nodeID", nodeID, "requestID", requestID, "requestLen", len(request), "err", err)
-		return n.p2pNetwork.AppRequest(ctx, nodeID, requestID, deadline, request)
+		return n.sdkNetwork.AppRequest(ctx, nodeID, requestID, deadline, request)
 	}
 
 	bufferedDeadline, err := calculateTimeUntilDeadline(deadline, n.appStats)
@@ -306,7 +306,7 @@ func (n *network) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID 
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
 		log.Debug("forwarding AppResponse to SDK network", "nodeID", nodeID, "requestID", requestID, "responseLen", len(response))
-		return n.p2pNetwork.AppResponse(ctx, nodeID, requestID, response)
+		return n.sdkNetwork.AppResponse(ctx, nodeID, requestID, response)
 	}
 
 	// We must release the slot
@@ -327,7 +327,7 @@ func (n *network) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, reque
 	handler, exists := n.markRequestFulfilled(requestID)
 	if !exists {
 		log.Debug("forwarding AppRequestFailed to SDK network", "nodeID", nodeID, "requestID", requestID)
-		return n.p2pNetwork.AppRequestFailed(ctx, nodeID, requestID, appErr)
+		return n.sdkNetwork.AppRequestFailed(ctx, nodeID, requestID, appErr)
 	}
 
 	// We must release the slot
@@ -379,7 +379,7 @@ func (n *network) markRequestFulfilled(requestID uint32) (message.ResponseHandle
 // from a peer. An error returned by this function is treated as fatal by the
 // engine.
 func (n *network) AppGossip(ctx context.Context, nodeID ids.NodeID, gossipBytes []byte) error {
-	return n.p2pNetwork.AppGossip(ctx, nodeID, gossipBytes)
+	return n.sdkNetwork.AppGossip(ctx, nodeID, gossipBytes)
 }
 
 // Connected adds the given nodeID to the peer list so that it can receive messages
@@ -398,7 +398,7 @@ func (n *network) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion 
 		n.peers.Connected(nodeID, nodeVersion)
 	}
 
-	return n.p2pNetwork.Connected(ctx, nodeID, nodeVersion)
+	return n.sdkNetwork.Connected(ctx, nodeID, nodeVersion)
 }
 
 // Disconnected removes given [nodeID] from the peer list
@@ -416,7 +416,7 @@ func (n *network) Disconnected(ctx context.Context, nodeID ids.NodeID) error {
 		n.peers.Disconnected(nodeID)
 	}
 
-	return n.p2pNetwork.Disconnected(ctx, nodeID)
+	return n.sdkNetwork.Disconnected(ctx, nodeID)
 }
 
 // Shutdown disconnects all peers
@@ -480,11 +480,11 @@ func (n *network) SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeID, r
 }
 
 func (n *network) NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client {
-	return n.p2pNetwork.NewClient(protocol, options...)
+	return n.sdkNetwork.NewClient(protocol, options...)
 }
 
 func (n *network) AddHandler(protocol uint64, handler p2p.Handler) error {
-	return n.p2pNetwork.AddHandler(protocol, handler)
+	return n.sdkNetwork.AddHandler(protocol, handler)
 }
 
 // P2PValidators returns the p2p validators
