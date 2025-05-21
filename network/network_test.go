@@ -300,7 +300,7 @@ func TestAppRequestOnShutdown(t *testing.T) {
 	require.True(t, called)
 }
 
-func TestAppRequestAnyOnCtxCancellation(t *testing.T) {
+func TestSyncedAppRequestAnyOnCtxCancellation(t *testing.T) {
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
 	type reqInfo struct {
 		nodeID    ids.NodeID
@@ -345,7 +345,7 @@ func TestAppRequestAnyOnCtxCancellation(t *testing.T) {
 	// cancel context prior to sending
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = net.SendAppRequestAny(ctx, defaultPeerVersion, requestBytes, nil)
+	_, _, err = net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
 	assert.ErrorIs(t, err, context.Canceled)
 	// Assert we didn't send anything
 	select {
@@ -359,7 +359,7 @@ func TestAppRequestAnyOnCtxCancellation(t *testing.T) {
 	ctx, cancel = context.WithCancel(context.Background())
 	doneChan := make(chan struct{})
 	go func() {
-		_, err = net.SendAppRequestAny(ctx, defaultPeerVersion, requestBytes, nil)
+		_, _, err = net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
 		assert.ErrorIs(t, err, context.Canceled)
 		close(doneChan)
 	}()
@@ -642,6 +642,19 @@ func (t testAppSender) SendAppGossip(_ context.Context, config common.SendConfig
 
 func (t testAppSender) SendAppError(ctx context.Context, nodeID ids.NodeID, requestID uint32, errorCode int32, errorMessage string) error {
 	panic("not implemented")
+}
+
+type testResponseHandler struct {
+	onResponseFn func([]byte) error
+	onFailureFn  func() error
+}
+
+func (t testResponseHandler) OnResponse(response []byte) error {
+	return t.onResponseFn(response)
+}
+
+func (t testResponseHandler) OnFailure() error {
+	return t.onFailureFn()
 }
 
 type HelloRequest struct {
