@@ -24,6 +24,7 @@ import (
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -69,7 +70,44 @@ func createBlockChain(
 		lastAcceptedHash,
 		false,
 	)
+	fmt.Printf("Created blockchain with config: %v\n", cacheConfig)
 	return blockchain, err
+}
+
+func TestFirewoodBlockChain(t *testing.T) {
+	for _, tt := range tests {
+		// Create a unique temporary directory for each test
+		tempDir, err := os.MkdirTemp("", "firewood-blockchain-*")
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Fatalf("failed to remove temp dir: %v", err)
+			}
+		})
+
+		// Use the temporary directory for the database
+		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+			customrawdb.WriteDatabasePath(db, tempDir)
+			return createBlockChain(
+				db,
+				&CacheConfig{
+					TrieCleanLimit:     256,
+					Pruning:            true,
+					SnapshotLimit:      0, // Disable snapshots
+					AcceptorQueueLimit: 64,
+					StateScheme:        customrawdb.FirewoodScheme,
+					StateHistory:       2, // minimum supported by Firewood
+				},
+				gspec,
+				lastAcceptedHash,
+			)
+		}
+		// Run the test with the temporary database
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, createFirewoodBlockChain)
+		})
+		break
+	}
 }
 
 func TestArchiveBlockChain(t *testing.T) {
