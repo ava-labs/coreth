@@ -50,7 +50,7 @@ func TestWithBlockGasLimitOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve head block: %v", err)
 	}
-	if head.GasLimit() != acp176.MinMaxCapacity {
+	if head.GasLimit() != uint64(acp176.MinMaxCapacity) {
 		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), acp176.MinMaxCapacity)
 	}
 }

@@ -32,8 +32,8 @@ var (
 				},
 				TargetExcess: 0,
 			},
-			target:      MinTargetPerSecond,
-			maxCapacity: MinMaxCapacity,
+			target:      gas.Gas(MinTargetPerSecond),
+			maxCapacity: gas.Gas(MinMaxCapacity),
 			gasPrice:    MinGasPrice,
 		},
 		{
@@ -45,8 +45,8 @@ var (
 				TargetExcess: 33, // Largest excess that doesn't increase the target
 			},
 			skipTestDesiredTargetExcess: true,
-			target:                      MinTargetPerSecond,
-			maxCapacity:                 MinMaxCapacity,
+			target:                      gas.Gas(MinTargetPerSecond),
+			maxCapacity:                 gas.Gas(MinMaxCapacity),
 			gasPrice:                    2 * MinGasPrice,
 		},
 		{
@@ -57,8 +57,8 @@ var (
 				},
 				TargetExcess: 34, // Smallest excess that increases the target
 			},
-			target:      MinTargetPerSecond + 1,
-			maxCapacity: TargetToMaxCapacity * (MinTargetPerSecond + 1),
+			target:      gas.Gas(MinTargetPerSecond + 1),
+			maxCapacity: gas.Gas(TargetToMaxCapacity * (MinTargetPerSecond + 1)),
 			gasPrice:    2 * MinGasPrice,
 		},
 		{
@@ -70,8 +70,8 @@ var (
 				TargetExcess: MaxTargetExcessDiff,
 			},
 			skipTestDesiredTargetExcess: true,
-			target:                      MinTargetPerSecond + 977,
-			maxCapacity:                 TargetToMaxCapacity * (MinTargetPerSecond + 977),
+			target:                      gas.Gas(MinTargetPerSecond + 977),
+			maxCapacity:                 gas.Gas(TargetToMaxCapacity * (MinTargetPerSecond + 977)),
 			gasPrice:                    3 * MinGasPrice,
 		},
 		{
