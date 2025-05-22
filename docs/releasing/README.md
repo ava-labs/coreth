@@ -1,9 +1,5 @@
 # Releasing
 
-## When to release
-
-- When Coreth needs to release a new feature or bug fix.
-
 ## Procedure
 
 ### Release candidate
